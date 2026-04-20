@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/lib/auth/check-admin";
 import { KubernetesCustomDomainService } from "@/lib/services/kubernetes-custom-domain";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 /**
  * POST /api/admin/cluster/fix-coredns
@@ -23,8 +24,7 @@ export async function POST() {
     await KubernetesCustomDomainService.runClusterDnsBootstrap();
     return NextResponse.json({ success: true, message: "CoreDNS patched to use public DNS resolvers." });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[admin/cluster/fix-coredns] Failed:", message);
-    return NextResponse.json({ error: "Failed to patch CoreDNS", detail: message }, { status: 500 });
+    logError("POST /api/admin/cluster/fix-coredns", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

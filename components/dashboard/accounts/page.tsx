@@ -1,56 +1,54 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { twMerge } from "tailwind-merge";
 import {
   Github,
   Loader2,
   Link2,
-  Shield,
   Unplug,
+  GitBranch,
+  RefreshCw,
 } from "lucide-react";
 
 import api from "@/lib/axios/axios";
 import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
+import { toast } from "sonner";
 
-type OAuthProvider = "github" | "google" | "gitlab" | "bitbucket" | "email";
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+type OAuthProvider = "github" | "gitlab" | "bitbucket";
 
 type ProviderItem = {
   provider: string;
   status: boolean;
   identity_linked?: boolean;
   integration_connected?: boolean;
+  integration_username?: string;
 };
 
-const PROVIDER_META: Record<Exclude<OAuthProvider, "email">, {
+/* ------------------------------------------------------------------ */
+/*  Provider metadata                                                  */
+/* ------------------------------------------------------------------ */
+
+const PROVIDER_META: Record<OAuthProvider, {
   label: string;
-  description: string;
+  repoDescription: string;
   accentClassName: string;
   icon: React.ReactNode;
 }> = {
   github: {
     label: "GitHub",
-    description: "Use GitHub for sign-in continuity and developer workflow access.",
+    repoDescription: "Access your GitHub repositories for deployments.",
     accentClassName: "text-white",
     icon: <Github className="h-5 w-5" />,
   },
-  google: {
-    label: "Google",
-    description: "Link your Google identity for streamlined authentication.",
-    accentClassName: "text-blue-300",
-    icon: (
-      <svg viewBox="0 0 48 48" aria-hidden="true" className="h-5 w-5">
-        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.6 31.9 29.2 35 24 35c-6.6 0-12-5.4-12-12S17.4 11 24 11c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 5.3 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21c10.5 0 19.4-7.6 20.9-17.5.1-.8.1-1.6.1-2.4 0-1-.1-2-.4-2.6Z" />
-        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.9C14.3 15.8 18.8 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.4 5.3 29.5 3 24 3 16.1 3 9.2 7.4 6.3 14.7Z" />
-        <path fill="#4CAF50" d="M24 45c5.2 0 9.9-2 13.5-5.2l-6.2-5.1C29.2 35 26.7 36 24 36c-5.1 0-9.5-3-11.6-7.3l-6.5 5C9 41 16 45 24 45Z" />
-        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.7 3.9-6.1 7-11.3 7-5.1 0-9.5-3-11.6-7.3l-6.5 5C9 41 16 45 24 45c10.5 0 19.4-7.6 20.9-17.5.1-.8.1-1.6.1-2.4 0-1-.1-2-.4-2.6Z" opacity=".1" />
-      </svg>
-    ),
-  },
   gitlab: {
     label: "GitLab",
-    description: "Keep GitLab-based delivery and identity flows connected.",
+    repoDescription: "Connect a GitLab account to access repositories for deployments.",
     accentClassName: "text-amber-300",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -60,7 +58,7 @@ const PROVIDER_META: Record<Exclude<OAuthProvider, "email">, {
   },
   bitbucket: {
     label: "Bitbucket",
-    description: "Support Bitbucket-driven source and repository integrations.",
+    repoDescription: "Connect a Bitbucket account to access repositories for deployments.",
     accentClassName: "text-sky-300",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -70,30 +68,30 @@ const PROVIDER_META: Record<Exclude<OAuthProvider, "email">, {
   },
 };
 
-function ProviderRow({
+/* ------------------------------------------------------------------ */
+/*  Repo Connection Row                                                */
+/* ------------------------------------------------------------------ */
+
+function RepoConnectionRow({
   item,
   loading,
   onConnect,
   onDisconnect,
+  onReconnect,
   index,
 }: {
   item: ProviderItem;
   loading: boolean;
   onConnect: (provider: OAuthProvider) => void;
   onDisconnect: (provider: OAuthProvider) => void;
+  onReconnect: (provider: OAuthProvider) => void;
   index: number;
 }) {
-  const meta = PROVIDER_META[item.provider as keyof typeof PROVIDER_META];
+  const meta = PROVIDER_META[item.provider as OAuthProvider];
+  if (!meta) return null;
 
-  if (!meta) {
-    return null;
-  }
-
-  const isIdentityLinked = item.identity_linked ?? item.status;
-  const isIntegrationConnected = item.integration_connected ?? item.status;
-  const isGitProvider = item.provider === "gitlab" || item.provider === "bitbucket";
-  const btnText = isIdentityLinked ? "Disconnect" : "Connect";
-  const btnAction = isIdentityLinked ? onDisconnect : onConnect;
+  const connected = item.integration_connected ?? false;
+  const username = item.integration_username;
 
   return (
     <motion.div
@@ -109,137 +107,181 @@ function ProviderRow({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-semibold text-white">{meta.label}</div>
+              <div className="text-sm font-semibold text-white">{meta.label}</div>
               <span
                 className={twMerge(
                   "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                  isIdentityLinked
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                  connected
+                    ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
                     : "border-white/[0.08] bg-white/[0.04] text-white/55"
                 )}
               >
-                {isIdentityLinked ? "Identity linked" : "Identity not linked"}
+                {connected ? "Connected" : "Not connected"}
               </span>
-              {isGitProvider && (
-                <span
-                  className={twMerge(
-                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                    isIntegrationConnected
-                      ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
-                      : "border-white/[0.08] bg-white/[0.04] text-white/55"
-                  )}
-                >
-                  {isIntegrationConnected ? "Repo connected" : "Repo not connected"}
-                </span>
+              {connected && username && (
+                <span className="text-[11px] text-white/40">@{username}</span>
               )}
             </div>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{meta.description}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{meta.repoDescription}</p>
           </div>
         </div>
 
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => btnAction(item.provider as OAuthProvider)}
-          className={twMerge(
-            "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
-            isIdentityLinked
-              ? "border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
-              : "border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500",
-            loading && "cursor-not-allowed opacity-60"
-          )}
-        >
-          {loading ? (
+        <div className="flex items-center gap-2">
+          {connected ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Please wait...
-            </>
-          ) : isIdentityLinked ? (
-            <>
-              <Unplug className="h-4 w-4" />
-              {btnText}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => onReconnect(item.provider as OAuthProvider)}
+                className={twMerge(
+                  "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
+                  "border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]",
+                  loading && "cursor-not-allowed opacity-60"
+                )}
+              >
+                {loading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Please wait...</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4" /> Reconnect</>
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => onDisconnect(item.provider as OAuthProvider)}
+                className={twMerge(
+                  "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
+                  "border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20",
+                  loading && "cursor-not-allowed opacity-60"
+                )}
+              >
+                <Unplug className="h-4 w-4" /> Disconnect
+              </button>
             </>
           ) : (
-            <>
-              <Link2 className="h-4 w-4" />
-              {btnText}
-            </>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => onConnect(item.provider as OAuthProvider)}
+              className={twMerge(
+                "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
+                "border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500",
+                loading && "cursor-not-allowed opacity-60"
+              )}
+            >
+              {loading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Please wait...</>
+              ) : (
+                <><Link2 className="h-4 w-4" /> Connect</>
+              )}
+            </button>
           )}
-        </button>
+        </div>
       </div>
     </motion.div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Main Component                                                     */
+/* ------------------------------------------------------------------ */
+
 const Accounts = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [loadingSection, setLoadingSection] = useState<"repo" | null>(null);
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const autoRepoConnectStartedRef = useRef(false);
+  const connectInProgressRef = useRef(false);
+  // Stores the page the user should return to after reconnecting a git provider
+  const returnToRef = useRef<string | null>(null);
 
   const fetchProviders = async () => {
     try {
       const response = await api.get("/auth/providers");
       if (response.status === 200) {
-        setProviders(response.data.providers);
+        setProviders(response?.data?.providers ?? []);
       }
     } catch (error) {
       console.error("Failed to fetch providers:", error);
+      toast.error("Failed to load provider status. Please refresh the page.");
     }
   };
 
-  const { connectProvider: performConnection } = useProviderConnection({
-    returnTo: "/dashboard/settings",
-    mode: "identity",
-  });
-  const { connectProvider: performIntegrationConnection } = useProviderConnection({
+  const { connectProvider: performIntegrationAction } = useProviderConnection({
     returnTo: "/dashboard/settings",
     mode: "integration",
   });
 
-  const handleConnect = async (provider: OAuthProvider) => {
+  const handleConnectRepo = async (provider: OAuthProvider) => {
+    if (connectInProgressRef.current) return;
+    connectInProgressRef.current = true;
     setLoadingProvider(provider);
+    setLoadingSection("repo");
     try {
-      const providerState = providers.find((item) => item.provider === provider);
-      const integrationConnected =
-        providerState?.integration_connected ?? providerState?.status ?? false;
-      const shouldChainRepoConnect =
-        (provider === "gitlab" || provider === "bitbucket") && !integrationConnected;
-      const returnTo = shouldChainRepoConnect
-        ? `/dashboard/settings?auto_repo_connect=${provider}`
-        : "/dashboard/settings";
-
-      await performConnection(provider, "connect", {
-        returnTo,
-        mode: "identity",
+      await performIntegrationAction(provider, "connect", {
+        returnTo: returnToRef.current ?? "/dashboard/settings",
       });
     } catch (error) {
-      console.error("Connect failed:", error);
-      setLoadingProvider(null);
-    }
-  };
-
-  const handleDisconnect = async (provider: OAuthProvider) => {
-    setLoadingProvider(provider);
-    try {
-      const result = await performConnection(provider, "disconnect");
-
-      if (result.success) {
-        setProviders((prev) =>
-          prev.map((item) =>
-            item.provider === provider ? { ...item, status: false } : item
-          )
-        );
-        await fetchProviders();
-      }
-    } catch (error) {
-      console.error("Disconnect failed:", error);
+      console.error("Connect repo failed:", error);
     } finally {
       setLoadingProvider(null);
+      setLoadingSection(null);
+      connectInProgressRef.current = false;
     }
   };
+
+  const handleDisconnectRepo = async (provider: OAuthProvider) => {
+    setLoadingProvider(provider);
+    setLoadingSection("repo");
+    try {
+      const result = await performIntegrationAction(provider, "disconnect");
+      if (result.success) await fetchProviders();
+    } catch (error) {
+      console.error("Disconnect repo failed:", error);
+    } finally {
+      setLoadingProvider(null);
+      setLoadingSection(null);
+    }
+  };
+
+  const handleReconnectRepo = async (provider: OAuthProvider) => {
+    if (connectInProgressRef.current) return;
+    connectInProgressRef.current = true;
+    setLoadingProvider(provider);
+    setLoadingSection("repo");
+    try {
+      await performIntegrationAction(provider, "connect", {
+        returnTo: returnToRef.current ?? "/dashboard/settings",
+      });
+    } catch (error) {
+      console.error("Reconnect repo failed:", error);
+    } finally {
+      setLoadingProvider(null);
+      setLoadingSection(null);
+      connectInProgressRef.current = false;
+    }
+  };
+
+  /* ---------- Auto-connect on redirect ---------- */
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Redirected here because a git token expired before a redeploy
+    const reconnectProvider = params.get("reconnect");
+    if (reconnectProvider && ["github", "gitlab", "bitbucket"].includes(reconnectProvider)) {
+      const rawReturnTo = params.get("returnTo") ?? "";
+      // Only allow internal dashboard paths to prevent open-redirect abuse
+      if (rawReturnTo.startsWith("/dashboard/")) {
+        returnToRef.current = rawReturnTo;
+      }
+      params.delete("reconnect");
+      params.delete("returnTo");
+      window.history.replaceState({}, "", window.location.pathname);
+      const label = reconnectProvider.charAt(0).toUpperCase() + reconnectProvider.slice(1);
+      toast.warning(`Your ${label} token has expired. Please reconnect your account below, then return to redeploy.`);
+    }
+
     const autoRepoConnect = params.get("auto_repo_connect");
     const shouldAutoConnectRepo =
       !autoRepoConnectStartedRef.current &&
@@ -249,7 +291,6 @@ const Accounts = () => {
 
     if (shouldAutoConnectRepo) {
       autoRepoConnectStartedRef.current = true;
-
       params.delete("auto_repo_connect");
       const nextQuery = params.toString();
       const nextUrl = nextQuery
@@ -257,16 +298,15 @@ const Accounts = () => {
         : window.location.pathname;
       window.history.replaceState({}, "", nextUrl);
 
-      const provider = autoRepoConnect;
-      setLoadingProvider(provider);
+      setLoadingProvider(autoRepoConnect);
+      setLoadingSection("repo");
       void (async () => {
-        const result = await performIntegrationConnection(provider, "connect", {
+        const result = await performIntegrationAction(autoRepoConnect, "connect", {
           returnTo: "/dashboard/settings",
-          mode: "integration",
         });
-
         if (!result.success) {
           setLoadingProvider(null);
+          setLoadingSection(null);
         }
       })();
       return;
@@ -274,82 +314,57 @@ const Accounts = () => {
 
     if (
       params.get("gitlab_connected") === "true" ||
-      params.get("bitbucket_connected") === "true"
+      params.get("bitbucket_connected") === "true" ||
+      params.get("github_connected") === "true"
     ) {
+      const connectedProvider =
+        params.get("github_connected") === "true"
+          ? "GitHub"
+          : params.get("gitlab_connected") === "true"
+          ? "GitLab"
+          : "Bitbucket";
       window.history.replaceState({}, "", window.location.pathname);
-      setTimeout(() => {
-        fetchProviders();
-      }, 500);
+      toast.success(`${connectedProvider} connected successfully`);
+      setTimeout(() => fetchProviders(), 500);
     }
-  }, [performIntegrationConnection]);
+  }, [performIntegrationAction]);
 
-  const visibleProviders = useMemo(
-    () => providers.filter((item) => item.provider !== "email"),
-    [providers]
+  /* ---------- Derived data ---------- */
+
+  const gitProviders: OAuthProvider[] = ["github", "gitlab", "bitbucket"];
+
+  const repoConnections = providers.filter((p) =>
+    gitProviders.includes(p.provider as OAuthProvider)
   );
 
-  const linkedProviders = visibleProviders.filter(
-    (item) => item.identity_linked ?? item.status
-  ).length;
-  const availableProviders = visibleProviders.length;
-
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
-        <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-300">
-              <Shield className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-sm font-medium text-white">Connected Accounts</div>
-              <p className="mt-2 text-sm leading-6 text-white/45">
-                Link external identity providers for faster sign-in and cleaner account recovery.
-                Connected providers can also support integrations across developer workflows.
-              </p>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+        <div className="flex h-10 w-10 items-center justify-center border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+          <GitBranch className="h-4 w-4" />
         </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
-          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-              Connected
-            </div>
-            <div className="mt-2 text-xl font-semibold text-white">{linkedProviders}</div>
-          </div>
-          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-              Providers
-            </div>
-            <div className="mt-2 text-xl font-semibold text-white">{availableProviders}</div>
-          </div>
+        <div>
+          <div className="text-sm font-medium text-white">Repository Connections</div>
+          <p className="mt-1 text-sm leading-6 text-white/45">
+            Connect a Git provider to access repositories for application deployments.
+            These can be different accounts from your login method.
+          </p>
         </div>
       </div>
 
-      {visibleProviders.length > 0 ? (
-        <div className="space-y-3">
-          {visibleProviders.map((item, index) => (
-            <ProviderRow
-              key={item.provider}
-              index={index}
-              item={item}
-              loading={loadingProvider === item.provider}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-12 text-center">
-          <Shield className="h-10 w-10 text-white/22" />
-          <h3 className="mt-4 text-lg font-semibold text-white">No identity providers found</h3>
-          <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
-            Provider availability is currently empty. Once enabled, connected accounts will appear
-            here for sign-in and access management.
-          </p>
-        </div>
-      )}
+      <div className="space-y-3">
+        {repoConnections.map((item, index) => (
+          <RepoConnectionRow
+            key={item.provider}
+            index={index}
+            item={item}
+            loading={loadingSection === "repo" && loadingProvider === item.provider}
+            onConnect={handleConnectRepo}
+            onDisconnect={handleDisconnectRepo}
+            onReconnect={handleReconnectRepo}
+          />
+        ))}
+      </div>
     </div>
   );
 };

@@ -1,200 +1,20 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Code,
-  Cpu,
-  FolderKanban,
-  GitBranch,
-  Globe2,
-  Layers3,
-  Loader2,
-  Settings2,
-} from "lucide-react";
 import Image from "next/image";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
-import { EnvVarsEditor, EnvVar } from "./env-vars-editor";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 import { Tables } from "@/lib/supabase/types";
-
-interface Repository {
-  id: string;
-  name: string;
-  fullName: string;
-  description: string;
-  private: boolean;
-  defaultBranch: string;
-  language: string;
-  updatedAt: string;
-  provider: "github" | "gitlab" | "bitbucket";
-}
-
-interface Branch {
-  name: string;
-  commitSha: string;
-  protected: boolean;
-}
-
-interface GitProvider {
-  id: "github" | "gitlab" | "bitbucket";
-  name: string;
-  icon: string;
-  connected: boolean;
-}
-
-interface ProviderConnection {
-  provider: string;
-  status: boolean;
-}
-
-// Framework detection and build settings
-const frameworkConfigs = {
-  "simple-test": {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "",
-    description: "Test pipeline - no deployment",
-  },
-  Dockerfile: {
-    buildCommand: "docker build",
-    outputDir: "",
-    installCommand: "",
-    description:
-      "Uses your existing Dockerfile - supports any language/runtime",
-  },
-  Java: {
-    buildCommand: "mvn package",
-    outputDir: "target",
-    installCommand: "mvn install",
-    description: "Auto-generates Dockerfile with Maven multi-stage build",
-  },
-  "Next.js": {
-    buildCommand: "npm run build",
-    outputDir: ".next",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile",
-  },
-  "Nuxt.js": {
-    buildCommand: "npm run build",
-    outputDir: ".output",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile",
-  },
-  "Vite-React": {
-    buildCommand: "npm run build",
-    outputDir: "dist",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile (Vite)",
-  },
-  React: {
-    buildCommand: "npm run build",
-    outputDir: "build",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile (CRA)",
-  },
-  "Vue.js": {
-    buildCommand: "npm run build",
-    outputDir: "dist",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile (Vite)",
-  },
-  Angular: {
-    buildCommand: "npm run build",
-    outputDir: "dist",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile (Angular CLI)",
-  },
-  SvelteKit: {
-    buildCommand: "npm run build",
-    outputDir: "build",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile (Node adapter)",
-  },
-  Svelte: {
-    buildCommand: "npm run build",
-    outputDir: "public/build",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile",
-  },
-  "Node.js": {
-    buildCommand: "npm run build",
-    outputDir: ".",
-    installCommand: "npm install",
-    description: "Auto-generates Dockerfile",
-  },
-  express: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "npm ci --only=production",
-    description: "Auto-generates Dockerfile",
-  },
-  python: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "pip install -r requirements.txt",
-    description: "Auto-generates Dockerfile",
-  },
-  django: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "pip install -r requirements.txt",
-    description: "Auto-generates Dockerfile",
-  },
-  flask: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "pip install -r requirements.txt",
-    description: "Auto-generates Dockerfile",
-  },
-  fastapi: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "pip install -r requirements.txt",
-    description: "Auto-generates Dockerfile",
-  },
-  Static: {
-    buildCommand: "",
-    outputDir: ".",
-    installCommand: "",
-    description: "Static files only",
-  },
-};
-
-// Instance size configurations with resource specs
-const instanceSizeConfigs = {
-  small: { cpu: "250m", ram: "256Mi", replicas: 1 },
-  medium: { cpu: "500m", ram: "512Mi", replicas: 2 },
-  large: { cpu: "1", ram: "1Gi", replicas: 3 },
-};
-
-interface PricingRates {
-  initialCost: number;
-  hourlyRate: number;
-  price: number; // Monthly price
-}
+import { EnvVar } from "./env-vars-editor";
+import {
+  Repository, Branch, GitProvider, ProviderConnection, PricingRates,
+  STEP_META, FRAMEWORK_MAP,
+} from "./new-types";
+import { StepProvider } from "./new-step-provider";
+import { StepRepository } from "./new-step-repository";
+import { StepConfigure } from "./new-step-configure";
+import { StepReview } from "./new-step-review";
+import { SummarySidebar } from "./new-summary-sidebar";
 
 interface PageProps {
   projects: Tables<"projects">[];
@@ -249,582 +69,255 @@ function SummaryRow({ label, value, icon, empty }: { label: string; value: React
 }
 
 const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
+  const router = useRouter();
+
+  // ── Navigation ──────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [connectingProvider, setConnectingProvider] = useState<string | null>(
-    null,
-  ); // Track which provider is being connected
-  const [connectionError, setConnectionError] = useState<{
-    provider: string;
-    message: string;
-  } | null>(null); // Inline error
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [loadingRepos, setLoadingRepos] = useState(false);
-  const [loadingBranches, setLoadingBranches] = useState(false);
+  const progressPct = (currentStep / STEP_META.length) * 100;
+
+  // ── Provider ─────────────────────────────────────────────────
   const [gitProviders, setGitProviders] = useState<GitProvider[]>([
-    { id: "github", name: "GitHub", icon: "/github.png", connected: false },
-    { id: "gitlab", name: "GitLab", icon: "/gitlab.png", connected: false },
-    {
-      id: "bitbucket",
-      name: "Bitbucket",
-      icon: "/BitBucket.png",
-      connected: false,
-    },
+    { id: "github",    name: "GitHub",    icon: "/github.png",     connected: false },
+    { id: "gitlab",    name: "GitLab",    icon: "/gitlab.png",     connected: false },
+    { id: "bitbucket", name: "Bitbucket", icon: "/BitBucket.png",  connected: false },
   ]);
   const [loadingProviders, setLoadingProviders] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<{ provider: string; message: string } | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState("");
 
-  // Form state
-  const [selectedProvider, setSelectedProvider] = useState<string>("");
-  const [selectedRepo, setSelectedRepo] = useState<string>("");
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
-  const [selectedProject, setSelectedProject] = useState<string>("");
-  const [appName, setAppName] = useState("");
-  const [framework, setFramework] = useState<string>("");
-  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
-  const [size, setSize] = useState<string>("small");
-  const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
-  const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
-  const [containerPort, setContainerPort] = useState<number | undefined>(
-    undefined,
-  ); // User-specified port
-  const [detectedPort, setDetectedPort] = useState<number | undefined>(
-    undefined,
-  ); // Port detected from Dockerfile
-  const [detectingFramework, setDetectingFramework] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  // ── Repository ───────────────────────────────────────────────
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [repoSearchTerm, setRepoSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const reposPerPage = 3;
-  const [repoSearchTerm, setRepoSearchTerm] = useState<string>("");
 
-  // Fetch real provider connection status
+  // ── Branch ───────────────────────────────────────────────────
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState("");
+
+  // ── Configure ────────────────────────────────────────────────
+  const [selectedProject, setSelectedProject] = useState("");
+  const [appName, setAppName] = useState("");
+  const [framework, setFramework] = useState("");
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [size, setSize] = useState("small");
+  const [autoDeploy, setAutoDeploy] = useState(true);
+  const [hasDockerfile, setHasDockerfile] = useState(false);
+  const [containerPort, setContainerPort] = useState<number | undefined>(undefined);
+  const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined);
+  const [detectingFramework, setDetectingFramework] = useState(false);
+
+  // ── Derived ──────────────────────────────────────────────────
+  const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
+  const selectedProviderData = gitProviders.find((p) => p.id === selectedProvider);
+  const activeStepMeta = STEP_META[currentStep - 1];
+
+  // ── API: Providers ───────────────────────────────────────────
   const fetchProviderStatus = useCallback(async () => {
     setLoadingProviders(true);
     try {
-      const response = await fetch("/api/auth/providers");
-      if (response.ok) {
-        const data = await response.json();
-        const providers = data.providers || [];
-
-        // Update git providers with real connection status - replace 'any' with proper type
+      const res = await fetch("/api/auth/providers");
+      if (res.ok) {
+        const data = await res.json();
         setGitProviders((prev) =>
-          prev.map((provider) => ({
-            ...provider,
-            connected:
-              providers.find(
-                (p: ProviderConnection) => p.provider === provider.id,
-              )?.status || false,
-          })),
+          prev.map((p) => {
+            const match = (data.providers ?? []).find((x: ProviderConnection) => x.provider === p.id);
+            return { ...p, connected: match?.integration_connected ?? false, username: match?.integration_username ?? null };
+          }),
         );
-      } else {
-        toast.error("Failed to fetch provider status");
-      }
-    } catch {
-      toast.error("Failed to check provider connections");
-    } finally {
-      setLoadingProviders(false);
-    }
+      } else { toast.error("Failed to fetch provider status"); }
+    } catch { toast.error("Failed to check provider connections"); }
+    finally { setLoadingProviders(false); }
   }, []);
 
-  // Fetch repositories from API when provider is selected
   const fetchRepositories = useCallback(async (provider: string) => {
-    const supportedProviders = ["github", "gitlab", "bitbucket"];
-
-    if (!supportedProviders.includes(provider)) {
-      setRepositories([]);
-      toast.error("Provider not supported yet");
-      return;
-    }
-
+    if (!["github", "gitlab", "bitbucket"].includes(provider)) { toast.error("Provider not supported"); return; }
     setLoadingRepos(true);
     try {
-      const apiEndpoint = `/api/${provider}/repositories`;
-      const response = await fetch(apiEndpoint);
-
-      if (response.ok) {
-        const data = await response.json();
-        setRepositories(data.repositories || []);
-
-        if (data.repositories?.length === 0) {
-          toast.info(
-            `No repositories found in your ${provider.charAt(0).toUpperCase() + provider.slice(1)} account`,
-          );
-        } else if (data.note) {
-          toast.success(data.note);
-        } else if (data.warning) {
-          toast.warning(data.warning);
-        } else if (data.message && data.needsAppAuth) {
-          toast.info(data.message);
-        }
+      const res = await fetch(`/api/${provider}/repositories`);
+      const data = await res.json();
+      if (res.ok) {
+        setRepositories(data.repositories ?? []);
+        if (!data.repositories?.length) toast.info(`No repositories found in your ${provider} account`);
+        else if (data.note) toast.success(data.note);
+        else if (data.warning) toast.warning(data.warning);
       } else {
-        const errorData = await response.json();
-        console.error("Repository fetch error:", errorData);
-
-        if (response.status === 400 && errorData.needsAppAuth) {
-          // Show GitHub App connect option
-          setRepositories([]);
-          toast.error(
-            errorData.message ||
-              `${provider.charAt(0).toUpperCase() + provider.slice(1)} App connection required for private repositories`,
-          );
-        } else {
-          toast.error(errorData.message || "Failed to fetch repositories");
-          setRepositories([]);
-        }
+        toast.error(data.message || "Failed to fetch repositories");
+        setRepositories([]);
       }
-    } catch {
-      toast.error("Network error while fetching repositories");
-      setRepositories([]);
-    } finally {
-      setLoadingRepos(false);
-    }
+    } catch { toast.error("Network error fetching repositories"); setRepositories([]); }
+    finally { setLoadingRepos(false); }
   }, []);
 
-  // Fetch branches from API when repository is selected
-  const fetchBranches = useCallback(
-    async (provider: string, repo: Repository) => {
-      if (!provider || !repo) {
-        setBranches([]);
-        return;
-      }
-
-      setLoadingBranches(true);
-      try {
-        let apiEndpoint = "";
-
-        if (provider === "github") {
-          apiEndpoint = `/api/github/branches?repo=${encodeURIComponent(repo.fullName)}`;
-        } else if (provider === "gitlab") {
-          apiEndpoint = `/api/gitlab/branches?project_id=${encodeURIComponent(repo.id)}`;
-        } else if (provider === "bitbucket") {
-          apiEndpoint = `/api/bitbucket/branches?repo=${encodeURIComponent(repo.fullName)}`;
-        } else {
-          setBranches([]);
-          toast.error("Provider not supported for branch fetching");
-          return;
-        }
-
-        const response = await fetch(apiEndpoint);
-
-        if (response.ok) {
-          const data = await response.json();
-          setBranches(data.branches || []);
-
-          if (data.branches?.length === 0) {
-            toast.info(`No branches found in the selected repository`);
-          } else if (data.note) {
-            toast.success(data.note);
-          }
-        } else {
-          const errorData = await response.json();
-          console.error("Branch fetch error:", errorData);
-          toast.error(errorData.message || "Failed to fetch branches");
-          setBranches([]);
-        }
-      } catch {
-        toast.error("Network error while fetching branches");
-        setBranches([]);
-      } finally {
-        setLoadingBranches(false);
-      }
-    },
-    [],
-  );
-
-  // Detect framework from repository files
-  const detectFramework = useCallback(
-    async (provider: string, repo: Repository, branch: string) => {
-      if (!provider || !repo) {
-        return;
-      }
-      setDetectingFramework(true);
-      try {
-        const response = await fetch("/api/detect-framework", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            provider,
-            repoFullName: repo.fullName,
-            branch,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.framework) {
-            // Handle Unknown framework (no framework detected, no Dockerfile)
-            if (data.framework === "Unknown") {
-              toast.error("Framework not detected", {
-                description:
-                  "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually.",
-              });
-              setFramework(""); // Don't auto-select anything
-              setHasDockerfile(false);
-              return;
-            }
-
-            // Normalize framework name to match our configs
-            let normalizedFramework = data.framework;
-
-            // Map detected frameworks to our config keys
-            // Note: Backend should already normalize Laravel/PHP/Ruby/Sinatra to "Dockerfile" or "Unknown"
-            // This mapping acts as a safety fallback in case backend sends raw framework names
-            const frameworkMap: Record<string, string> = {
-              "Next.js": "Next.js",
-              "Nuxt.js": "Nuxt.js",
-              "Vite-React": "Vite-React",
-              React: "React",
-              "Vue.js": "Vue.js",
-              Angular: "Angular",
-              SvelteKit: "SvelteKit",
-              Svelte: "Svelte",
-              Express: "express",
-              "Node.js": "Node.js",
-              Django: "django",
-              Flask: "flask",
-              FastAPI: "fastapi",
-              Dockerfile: "Dockerfile",
-              Python: "python",
-              python: "python",
-              // Java / Maven detection: map backend values to our UI option 'Java'
-              Java: "Java",
-              java: "Java",
-              Maven: "Java",
-              maven: "Java",
-              mvn: "Java",
-              Mvn: "Java",
-              // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
-              Laravel: "Dockerfile",
-              Symfony: "Dockerfile",
-              "Ruby on Rails": "Dockerfile",
-              PHP: "Dockerfile",
-              Ruby: "Dockerfile",
-              Sinatra: "Dockerfile",
-            };
-
-            normalizedFramework =
-              frameworkMap[data.framework] || data.framework;
-
-            setFramework(normalizedFramework);
-
-            // Store Dockerfile detection result
-            setHasDockerfile(data.hasDockerfile || false);
-
-            // Handle detected port from Dockerfile
-            if (data.detectedPort) {
-              setDetectedPort(data.detectedPort);
-              // Prefill containerPort if user hasn't manually set it
-              if (containerPort === undefined) {
-                setContainerPort(data.detectedPort);
-              }
-            } else {
-              setDetectedPort(undefined);
-            }
-
-            if (data.buildSystem) {
-              console.log("Detected build system:", data.buildSystem);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Framework detection error:", error);
-      } finally {
-        setDetectingFramework(false);
-      }
-    },
-    [containerPort],
-  );
-
-  // Load provider status on component mount
-  useEffect(() => {
-    fetchProviderStatus();
-  }, [fetchProviderStatus]);
-
-  // Load repositories when provider is selected
-  useEffect(() => {
-    if (selectedProvider) {
-      fetchRepositories(selectedProvider);
-      setCurrentPage(1);
-    } else {
-      setRepositories([]);
-    }
-    // Clear branches when provider changes
-    setBranches([]);
-    setSelectedBranch("");
-  }, [selectedProvider, fetchRepositories]);
-
-  // Auto-fill app name when repository is selected
-  useEffect(() => {
-    if (selectedRepo) {
-      const repo = repositories.find((r) => r.id === selectedRepo);
-      if (repo) {
-        setAppName(repo.name);
-        // Only set the deploy branch to the repo default if the user hasn't selected one
-        if (!selectedBranch) {
-          setSelectedBranch(repo.defaultBranch);
-        }
-        // Fetch branches for the selected repository
-        fetchBranches(selectedProvider, repo);
-        // Detect framework for the selected repository (use currently selected branch or default)
-        const branchToDetect = selectedBranch || repo.defaultBranch;
-        detectFramework(selectedProvider, repo, branchToDetect);
-      }
-    } else {
-      setBranches([]);
-      setSelectedBranch("");
-    }
-  }, [
-    selectedRepo,
-    selectedProvider,
-    fetchBranches,
-    detectFramework,
-    selectedBranch,
-    repositories,
-  ]);
-
-  // Re-run framework detection whenever the selected branch changes
-  useEffect(() => {
-    if (!selectedRepo) return;
-
-    const repo = repositories.find((r) => r.id === selectedRepo);
-    if (!repo) return;
-
-    // Only attempt detection when a branch is selected
-    const branchToDetect = selectedBranch || repo.defaultBranch;
-    if (!branchToDetect) return;
-
-    detectFramework(selectedProvider, repo, branchToDetect);
-  }, [
-    selectedBranch,
-    selectedRepo,
-    selectedProvider,
-    repositories,
-    detectFramework,
-  ]);
-
-  const { connectProvider: performConnection } = useProviderConnection({
-    returnTo: "/dashboard/services/apps/new",
-  });
-
-  const connectProvider = async (providerId: string) => {
-    setIsLoading(true);
-    setConnectingProvider(providerId);
-    setConnectionError(null); // Clear previous errors
+  const fetchBranches = useCallback(async (provider: string, repo: Repository) => {
+    if (!provider || !repo) { setBranches([]); return; }
+    setLoadingBranches(true);
     try {
-      const result = await performConnection(providerId, "connect");
-      if (!result.success && result.error) {
-        setConnectionError({ provider: providerId, message: result.error });
+      const endpoints: Record<string, string> = {
+        github:    `/api/github/branches?repo=${encodeURIComponent(repo.fullName)}`,
+        gitlab:    `/api/gitlab/branches?project_id=${encodeURIComponent(repo.id)}`,
+        bitbucket: `/api/bitbucket/branches?repo=${encodeURIComponent(repo.fullName)}`,
+      };
+      const endpoint = endpoints[provider];
+      if (!endpoint) { toast.error("Provider not supported for branch fetching"); setBranches([]); return; }
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (res.ok) { setBranches(data.branches ?? []); if (data.note) toast.success(data.note); }
+      else { toast.error(data.message || "Failed to fetch branches"); setBranches([]); }
+    } catch { toast.error("Network error fetching branches"); setBranches([]); }
+    finally { setLoadingBranches(false); }
+  }, []);
+
+  const detectFramework = useCallback(async (provider: string, repo: Repository, branch: string) => {
+    if (!provider || !repo) return;
+    setDetectingFramework(true);
+    try {
+      const res = await fetch("/api/detect-framework", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, repoFullName: repo.fullName, branch }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.framework || data.framework === "Unknown") {
+        toast.error("Framework not detected", { description: "No supported framework or Dockerfile found. Select manually." });
+        setFramework(""); setHasDockerfile(false); return;
       }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Connection failed";
-      setConnectionError({ provider: providerId, message: errorMessage });
-    } finally {
-      setIsLoading(false);
-      setConnectingProvider(null);
-    }
-  };
+      const normalized = FRAMEWORK_MAP[data.framework] ?? data.framework;
+      const dockerfileDetected = data.hasDockerfile ?? false;
+      if (["React", "Svelte", "Static"].includes(normalized)) {
+        if (dockerfileDetected) { toast.info("Using Dockerfile pipeline for this framework."); setFramework("Dockerfile"); }
+        else { toast.error("Framework not directly supported. Add a Dockerfile or choose a pipeline."); setFramework(""); }
+      } else { setFramework(normalized); }
+      setHasDockerfile(dockerfileDetected);
+      if (data.detectedPort) { setDetectedPort(data.detectedPort); if (containerPort === undefined) setContainerPort(data.detectedPort); }
+      else { setDetectedPort(undefined); }
+    } catch (e) { console.error("Framework detection error:", e); }
+    finally { setDetectingFramework(false); }
+  }, [containerPort]);
 
-  // Auto-refresh provider status when window regains focus (after OAuth redirect)
+  // ── Effects ──────────────────────────────────────────────────
+  useEffect(() => { fetchProviderStatus(); }, [fetchProviderStatus]);
+
   useEffect(() => {
-    const handleFocus = () => {
-      // Refresh provider status when user returns from OAuth
-      fetchProviderStatus();
-    };
-
+    const handleFocus = () => fetchProviderStatus();
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, [fetchProviderStatus]);
 
-  const handleNextStep = () => {
-    if (currentStep === 1 && !selectedProvider) {
-      toast.error("Please select a Git provider");
-      return;
+  useEffect(() => {
+    if (selectedProvider) { fetchRepositories(selectedProvider); setCurrentPage(1); }
+    else setRepositories([]);
+    setBranches([]); setSelectedBranch("");
+  }, [selectedProvider, fetchRepositories]);
+
+  // Auto-fill app name ONLY when repo changes (not on branch changes)
+  useEffect(() => {
+    if (!selectedRepo) return;
+    const repo = repositories.find((r) => r.id === selectedRepo);
+    if (repo) setAppName(repo.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRepo]);
+
+  useEffect(() => {
+    if (!selectedRepo) { setBranches([]); setSelectedBranch(""); return; }
+    const repo = repositories.find((r) => r.id === selectedRepo);
+    if (!repo) return;
+    if (!selectedBranch) setSelectedBranch(repo.defaultBranch);
+    fetchBranches(selectedProvider, repo);
+    detectFramework(selectedProvider, repo, selectedBranch || repo.defaultBranch);
+  }, [selectedRepo, selectedProvider, fetchBranches, detectFramework, selectedBranch, repositories]);
+
+  useEffect(() => {
+    if (!selectedRepo) return;
+    const repo = repositories.find((r) => r.id === selectedRepo);
+    if (!repo || !selectedBranch) return;
+    detectFramework(selectedProvider, repo, selectedBranch);
+  }, [selectedBranch, selectedRepo, selectedProvider, repositories, detectFramework]);
+
+  // ── Provider connection ──────────────────────────────────────
+  const { connectProvider: performConnection } = useProviderConnection({ returnTo: "/dashboard/services/apps/new", mode: "integration" });
+
+  const connectProvider = async (providerId: string) => {
+    setIsLoading(true); setConnectingProvider(providerId); setConnectionError(null);
+    const result = await performConnection(providerId, "connect");
+    if (!result.success && result.error) {
+      setConnectionError({ provider: providerId, message: result.error });
+      setIsLoading(false); setConnectingProvider(null);
     }
-    if (currentStep === 2 && !selectedRepo) {
-      toast.error("Please select a repository");
-      return;
-    }
+  };
+
+  // ── Step navigation ──────────────────────────────────────────
+  const handleNext = () => {
+    if (currentStep === 1 && !selectedProvider) { toast.error("Please select a Git provider"); return; }
+    if (currentStep === 2 && !selectedRepo) { toast.error("Please select a repository"); return; }
     if (currentStep === 3) {
-      if (!appName.trim()) {
-        toast.error("Please enter an app name");
-        return;
-      }
-      if (!framework) {
-        toast.error("Please select a framework");
-        return;
-      }
-      // Validate app name format
-      const normalizedName = appName.toLowerCase().trim();
-      if (normalizedName.length < 3) {
-        toast.error("App name must be at least 3 characters long");
-        return;
-      }
-      if (normalizedName.length > 63) {
-        toast.error("App name must be at most 63 characters long");
-        return;
-      }
+      if (!appName.trim()) { toast.error("Please enter an app name"); return; }
+      if (!framework) { toast.error("Please select a framework"); return; }
+      const n = appName.toLowerCase().trim();
+      if (n.length < 3) { toast.error("App name must be at least 3 characters"); return; }
+      if (n.length > 63) { toast.error("App name must be at most 63 characters"); return; }
     }
-
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    }
+    if (currentStep < 4) setCurrentStep((s) => s + 1);
   };
 
-  const handlePrevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const router = useRouter();
-
+  // ── Submit ───────────────────────────────────────────────────
   const onSubmit = async () => {
-    if (!selectedRepo || !selectedProvider || !appName || !framework) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
+    if (!selectedRepo || !selectedProvider || !appName || !framework) { toast.error("Please fill in all required fields"); return; }
+    if (!selectedRepoData) { toast.error("Selected repository not found"); return; }
     setIsLoading(true);
     try {
-      const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
-      if (!selectedRepoData) {
-        toast.error("Selected repository not found");
-        setIsLoading(false);
-        return;
-      }
+      const normalizedName = appName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-");
+      const validName = (normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/)) ? normalizedName : `app-${normalizedName}`.replace(/^-+|-+$/g, "");
+      if (validName.length < 3) { toast.error("App name too short after normalization"); return; }
 
-      // Normalize app name to meet validation requirements
-      const normalizedName = appName
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "-")
-        .replace(/^-+|-+$/g, "") // Remove leading/trailing hyphens
-        .replace(/-+/g, "-"); // Replace multiple hyphens with single hyphen
-
-      // Ensure name starts and ends with alphanumeric
-      const validName =
-        normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/)
-          ? normalizedName
-          : `app-${normalizedName}`.replace(/^-+|-+$/g, "");
-
-      if (validName.length < 3) {
-        toast.error("App name must be at least 3 characters long");
-        setIsLoading(false);
-        return;
-      }
-
-      // Construct proper repository URL based on provider
-      const repoUrlMap: Record<string, string> = {
+      const repoUrls: Record<string, string> = {
         github: `https://github.com/${selectedRepoData.fullName}`,
         gitlab: `https://gitlab.com/${selectedRepoData.fullName}`,
         bitbucket: `https://bitbucket.org/${selectedRepoData.fullName}`,
       };
 
-      const payload = {
-        name: validName,
-        git_provider: selectedProvider as "github" | "gitlab" | "bitbucket",
-        repository_id: selectedRepoData.id,
-        repository_name: selectedRepoData.fullName,
-        repository_url:
-          repoUrlMap[selectedProvider] ||
-          `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
-        branch: selectedBranch || selectedRepoData.defaultBranch || "main",
-        framework: framework as
-          | "simple-test"
-          | "Next.js"
-          | "React"
-          | "Vue.js"
-          | "Node.js"
-          | "express"
-          | "python"
-          | "django"
-          | "flask"
-          | "fastapi"
-          | "Static"
-          | "Java"
-          | "Dockerfile",
-        env_vars: envVars.filter((ev) => ev.key && ev.value),
-        size: size || "small",
-        auto_deploy: autoDeploy,
-        deploy_branch:
-          selectedBranch || selectedRepoData.defaultBranch || "main",
-        project_id:
-          selectedProject && selectedProject !== "none"
-            ? selectedProject
-            : undefined,
-        container_port: containerPort, // Optional: only sent if user has Dockerfile
-      };
-
-      const response = await fetch("/api/services/platform-apps/create", {
+      const res = await fetch("/api/services/platform-apps/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `app-create:${crypto.randomUUID()}` },
+        body: JSON.stringify({
+          name: validName,
+          git_provider: selectedProvider,
+          repository_id: selectedRepoData.id,
+          repository_name: selectedRepoData.fullName,
+          repository_url: repoUrls[selectedProvider] ?? `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+          branch: selectedBranch || selectedRepoData.defaultBranch || "main",
+          framework,
+          env_vars: envVars.filter((ev) => ev.key && ev.value),
+          size: size || "small",
+          auto_deploy: autoDeploy,
+          deploy_branch: selectedBranch || selectedRepoData.defaultBranch || "main",
+          project_id: selectedProject && selectedProject !== "none" ? selectedProject : undefined,
+          container_port: containerPort,
+        }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      const data = await res.json();
+      if (!res.ok) {
         if (data.partial_success && data.app_id) {
-          toast.warning(
-            data.message ||
-              "Deployment started, but billing registration needs attention.",
-          );
+          toast.warning(data.message ?? "Deployment started, billing needs attention.");
           router.push(`/dashboard/services/apps/${data.app_id}`);
           return;
         }
-
-        throw new Error(
-          data.message || data.error || "Failed to create application",
-        );
+        throw new Error(data.message ?? data.error ?? "Failed to create application");
       }
 
       toast.success("Application deployment started successfully!");
-
-      // Redirect to apps list page after a short delay
-      setTimeout(() => {
-        router.push("/dashboard/services/apps");
-      }, 1500);
-    } catch (error: unknown) {
-      console.error("Deployment error:", error);
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to start deployment. Please try again.";
-      toast.error(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+      setTimeout(() => router.push(data.app_id ? `/dashboard/services/apps/${data.app_id}` : "/dashboard/services/apps"), 1500);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to start deployment. Please try again.");
+    } finally { setIsLoading(false); }
   };
-
-  const steps = STEP_META;
-
-  const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
-  const selectedProviderData = gitProviders.find(
-    (p) => p.id === selectedProvider,
-  );
-  const activeStepMeta = STEP_META[currentStep - 1];
-  const progressPercentage = (currentStep / STEP_META.length) * 100;
-  const selectedSizeConfig =
-    instanceSizeConfigs[size as keyof typeof instanceSizeConfigs] || instanceSizeConfigs.small;
-  const selectedSizePrice = pricing?.[size];
-  const selectedFrameworkConfig = framework
-    ? frameworkConfigs[framework as keyof typeof frameworkConfigs]
-    : undefined;
-  const selectedProjectName =
-    selectedProject && selectedProject !== "none"
-      ? projects.find((project) => project.id === selectedProject)?.name || "Assigned"
-      : "Not attached";
-
-  // Filter repositories based on search term
-  const filteredRepositories = repositories.filter((repo) => {
-    const searchLower = repoSearchTerm.toLowerCase();
-    return (
-      repo.name.toLowerCase().includes(searchLower) ||
-      repo.fullName.toLowerCase().includes(searchLower) ||
-      (repo.description && repo.description.toLowerCase().includes(searchLower))
-    );
-  });
 
   return (
     <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
@@ -852,47 +345,32 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
-              style={{ width: `${progressPercentage}%` }}
-            />
+          <div className="mb-3 h-1 w-full overflow-hidden bg-white/[0.05]">
+            <div className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300" style={{ width: `${progressPct}%` }} />
           </div>
-
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            {steps.map((step) => {
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {STEP_META.map((step) => {
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
-
               return (
                 <button
                   key={step.id}
                   type="button"
-                  onClick={() => {
-                    if (step.id < currentStep) {
-                      setCurrentStep(step.id);
-                    }
-                  }}
-                  className={`border px-3 py-3 text-left transition-colors ${
-                    isActive
-                      ? "border-blue-400/30 bg-blue-500/10"
-                      : isCompleted
-                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                        : "border-white/[0.06] bg-transparent"
-                  } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
+                  onClick={() => { if (step.id < currentStep) setCurrentStep(step.id); }}
+                  className={`border px-3 py-3 text-left transition-colors ${isActive ? "border-blue-400/30 bg-blue-500/10" : isCompleted ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]" : "border-white/[0.06] bg-transparent"} ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex flex-col h-full">
+                  <div className="flex h-full flex-col">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
-                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-2">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">{step.name}</div>
-                        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
+                        <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-white/40">{step.title}</div>
                       </div>
-                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={40} height={40} className="h-10 w-10 object-contain" />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                           </span>
                         )}
                       </div>
@@ -905,434 +383,43 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          {/* Step 1: Git Provider */}
+      {/* ── Main content + sidebar ──────────────────────────────── */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div>
           {currentStep === 1 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Select Git Provider
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingProviders ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
-                    <p className="text-white/60">
-                      Checking connected providers...
-                    </p>
-                  </div>
-                ) : (
-                  <RadioGroup
-                    value={selectedProvider}
-                    onValueChange={setSelectedProvider}
-                    className="grid grid-cols-1 gap-4"
-                  >
-                    {gitProviders.map((provider) => (
-                      <div key={provider.id}>
-                        <RadioGroupItem
-                          value={provider.id}
-                          id={provider.id}
-                          className="peer sr-only"
-                          disabled={!provider.connected}
-                        />
-                        <Label
-                          htmlFor={provider.id}
-                          className="flex items-center gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                selectedProvider === provider.id
-                                  ? "border-blue-500 bg-blue-500"
-                                  : "border-white/30"
-                              }`}
-                            >
-                              {selectedProvider === provider.id && (
-                                <div className="w-2 h-2 rounded-full bg-white"></div>
-                              )}
-                            </div>
-                            <Image
-                              src={provider.icon}
-                              alt={provider.name}
-                              width={32}
-                              height={32}
-                              className="rounded"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-white">
-                              {provider.name}
-                            </div>
-                            <div className="text-sm text-white/60">
-                              {provider.connected
-                                ? "Connected and ready to use"
-                                : "Not connected"}
-                            </div>
-                          </div>
-                          {provider.connected ? (
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                              Connected
-                            </Badge>
-                          ) : (
-                            <div className="flex flex-col items-end gap-1">
-                              <Button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  connectProvider(provider.id);
-                                }}
-                                size="sm"
-                                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                                disabled={
-                                  isLoading || connectingProvider !== null
-                                }
-                              >
-                                {connectingProvider === provider.id ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Connecting...
-                                  </>
-                                ) : (
-                                  "Connect"
-                                )}
-                              </Button>
-                              {connectionError?.provider === provider.id && (
-                                <span className="text-xs text-red-400 max-w-[150px] text-right">
-                                  {connectionError.message}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                )}
-                <div className="flex justify-between items-center mt-4">
-                  <p className="text-xs text-white/60">
-                    Connect your Git provider to access your repositories
-                  </p>
-                  <Button
-                    onClick={fetchProviderStatus}
-                    size="sm"
-                    variant="outline"
-                    className="border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                    disabled={loadingProviders}
-                  >
-                    {loadingProviders ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Refresh Status"
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button
-                  onClick={handleNextStep}
-                  disabled={loadingProviders || !selectedProvider}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
+            <StepProvider
+              gitProviders={gitProviders}
+              loadingProviders={loadingProviders}
+              selectedProvider={selectedProvider}
+              onSelectProvider={setSelectedProvider}
+              isLoading={isLoading}
+              connectingProvider={connectingProvider}
+              connectionError={connectionError}
+              onConnect={connectProvider}
+              onRefresh={fetchProviderStatus}
+              onNext={handleNext}
+            />
           )}
-
-          {/* Step 2: Repository Selection */}
           {currentStep === 2 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white">Select Repository</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingRepos ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
-                    <p className="text-white/60">
-                      Loading repositories from {selectedProviderData?.name}...
-                    </p>
-                  </div>
-                ) : repositories.length > 0 ? (
-                  <div>
-                    <div className="mb-4">
-                      <input
-                        type="text"
-                        placeholder="Search repositories..."
-                        value={repoSearchTerm}
-                        onChange={(e) => {
-                          setRepoSearchTerm(e.target.value);
-                          setCurrentPage(1); // Reset to first page when searching
-                        }}
-                        className="w-full bg-white/10 border border-white/20 rounded-md text-white placeholder:text-white/50 p-3 focus:outline-none focus:border-blue-500 transition-colors"
-                      />
-                    </div>
-                    {filteredRepositories.length > 0 ? (
-                      <div>
-                        <RadioGroup
-                          value={selectedRepo}
-                          onValueChange={setSelectedRepo}
-                          className="grid grid-cols-1 gap-4"
-                        >
-                          {filteredRepositories
-                            .slice(
-                              (currentPage - 1) * reposPerPage,
-                              currentPage * reposPerPage,
-                            )
-                            .map((repo) => (
-                              <div key={repo.id}>
-                                <RadioGroupItem
-                                  value={repo.id}
-                                  id={repo.id}
-                                  className="peer sr-only"
-                                />
-                                <Label
-                                  htmlFor={repo.id}
-                                  className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
-                                      selectedRepo === repo.id
-                                        ? "border-blue-500 bg-blue-500"
-                                        : "border-white/30"
-                                    }`}
-                                  >
-                                    {selectedRepo === repo.id && (
-                                      <div className="w-2 h-2 rounded-full bg-white"></div>
-                                    )}
-                                  </div>
-                                  <Code className="w-6 h-6 text-blue-400 mt-1" />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className="font-semibold text-white">
-                                        {repo.name}
-                                      </div>
-                                      {repo.private && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-xs text-white/70 border-white/30"
-                                        >
-                                          Private
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="text-sm text-white/60 mt-1">
-                                      {repo.fullName}
-                                    </div>
-                                    {repo.description && (
-                                      <div className="text-xs text-white/50 mt-1">
-                                        {repo.description}
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
-                                      <span>{repo.language}</span>
-                                      <span>
-                                        Updated{" "}
-                                        {new Date(
-                                          repo.updatedAt,
-                                        ).toLocaleDateString()}
-                                      </span>
-                                      <span>Default: {repo.defaultBranch}</span>
-                                    </div>
-                                  </div>
-                                </Label>
-                              </div>
-                            ))}
-                        </RadioGroup>
-
-                        {/* Repository List Pagination */}
-                        {filteredRepositories.length > reposPerPage &&
-                          (() => {
-                            const totalPages = Math.ceil(
-                              filteredRepositories.length / reposPerPage,
-                            );
-
-                            // Generate page numbers with ellipsis for large page counts
-                            const getPageNumbers = () => {
-                              const pages: (number | string)[] = [];
-
-                              if (totalPages <= 7) {
-                                // Show all pages if 7 or fewer
-                                for (let i = 1; i <= totalPages; i++) {
-                                  pages.push(i);
-                                }
-                              } else {
-                                // Always show first page
-                                pages.push(1);
-
-                                if (currentPage > 3) {
-                                  pages.push("...");
-                                }
-
-                                // Show pages around current page
-                                const start = Math.max(2, currentPage - 1);
-                                const end = Math.min(
-                                  totalPages - 1,
-                                  currentPage + 1,
-                                );
-
-                                for (let i = start; i <= end; i++) {
-                                  pages.push(i);
-                                }
-
-                                if (currentPage < totalPages - 2) {
-                                  pages.push("...");
-                                }
-
-                                // Always show last page
-                                pages.push(totalPages);
-                              }
-
-                              return pages;
-                            };
-
-                            return (
-                              <div className="mt-4 pt-4 border-t border-white/10">
-                                <p className="text-xs text-white/40 text-center mb-2">
-                                  Page {currentPage} of {totalPages} - {filteredRepositories.length} repositories
-                                  {filteredRepositories.length} repositories
-                                </p>
-                                <div className="flex items-center justify-center gap-1">
-                                  {/* Previous Page */}
-                                  <Button
-                                    onClick={() =>
-                                      setCurrentPage((prev) =>
-                                        Math.max(1, prev - 1),
-                                      )
-                                    }
-                                    disabled={currentPage === 1}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  >
-                                    Prev
-                                  </Button>
-
-                                  {/* Page Numbers */}
-                                  <div className="flex items-center gap-1">
-                                    {getPageNumbers().map((pageNum, idx) =>
-                                      pageNum === "..." ? (
-                                        <span
-                                          key={`ellipsis-${idx}`}
-                                          className="px-2 text-white/40"
-                                        >
-                                          ...
-                                        </span>
-                                      ) : (
-                                        <Button
-                                          key={pageNum}
-                                          onClick={() =>
-                                            setCurrentPage(pageNum as number)
-                                          }
-                                          variant="ghost"
-                                          size="sm"
-                                          className={`
-                                        min-w-[32px] h-8
-                                        ${
-                                          currentPage === pageNum
-                                            ? "bg-white/20 text-white"
-                                            : "text-white/50 hover:text-white hover:bg-white/10"
-                                        }
-                                      `}
-                                        >
-                                          {pageNum}
-                                        </Button>
-                                      ),
-                                    )}
-                                  </div>
-
-                                  {/* Next Page */}
-                                  <Button
-                                    onClick={() =>
-                                      setCurrentPage((prev) =>
-                                        Math.min(totalPages, prev + 1),
-                                      )
-                                    }
-                                    disabled={currentPage === totalPages}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                                  >
-                                    Next
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <Code className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                        <p className="text-sm text-white/50">
-                          No repositories match &quot;{repoSearchTerm}&quot;
-                        </p>
-                        <Button
-                          onClick={() => setRepoSearchTerm("")}
-                          size="sm"
-                          variant="outline"
-                          className="mt-3 border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                        >
-                          Clear Search
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Code className="w-12 h-12 text-white/30 mx-auto mb-4" />
-                    <p className="text-white/60 mb-4">No repositories found</p>
-                    <p className="text-sm text-white/50 mb-4">
-                      {selectedProvider === "github"
-                        ? "For private repository access, connect GitHub App with repository permissions"
-                        : `Make sure you have repositories in your connected ${selectedProviderData?.name} account`}
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                      <Button
-                        onClick={() => fetchRepositories(selectedProvider)}
-                        className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                      >
-                        Refresh Repositories
-                      </Button>
-                      {selectedProvider === "github" && (
-                        <Button
-                          onClick={() => connectProvider("github")}
-                          className="bg-blue-500 text-white hover:bg-blue-600"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            "Connect GitHub App"
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  disabled={loadingRepos}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
+            <StepRepository
+              repositories={repositories}
+              loadingRepos={loadingRepos}
+              selectedRepo={selectedRepo}
+              onSelectRepo={setSelectedRepo}
+              selectedProvider={selectedProvider}
+              selectedProviderData={selectedProviderData}
+              repoSearchTerm={repoSearchTerm}
+              onSearchChange={setRepoSearchTerm}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              reposPerPage={reposPerPage}
+              isLoading={isLoading}
+              onConnect={connectProvider}
+              onRefreshRepos={() => fetchRepositories(selectedProvider)}
+              onPrev={() => setCurrentStep((s) => s - 1)}
+              onNext={handleNext}
+            />
           )}
-
-
-          {/* Step 3: Configuration */}
           {currentStep === 3 && (
             <Card className={panelClassName}>
               <CardHeader className="border-b border-white/[0.06] px-6 py-5 sm:px-7">

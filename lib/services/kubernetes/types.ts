@@ -2,6 +2,9 @@
  * Kubernetes Service Types
  */
 
+import type { EncryptedData } from "@/config/functions";
+import type { AuditContext } from "@/lib/audit/types";
+
 // import { NextRequest } from "next/server";
 
 // Base result type
@@ -96,4 +99,35 @@ export interface ListKubernetesClustersByOwnerRequest {
 
 export interface ListKubernetesClustersByOwnerResult extends ServiceResult {
   data?: Array<Record<string, unknown>>;
+}
+
+export interface RemoveKubernetesNodeRequest {
+  clusterId: string;
+  dropletId: string;
+  userId: string;
+  userEmail?: string | null;
+  auditContext?: AuditContext;
+}
+
+export interface RemoveKubernetesNodeResult extends ServiceResult {
+  workers?: Array<Record<string, unknown>>;
+}
+
+export interface AddKubernetesNodeRequest {
+  clusterId: string;
+  planId?: string;
+  userId: string;
+  userEmail?: string | null;
+  /** Whitelisted fields to forward to DigitalOcean droplet creation API */
+  dropletPayload: Record<string, unknown>;
+  /** Upfront balance required (caller-supplied, used for pre-flight check) */
+  initialCost?: number;
+  /** Expected node count AFTER this node is added (caller-supplied to avoid race condition) */
+  expectedNodeCount?: number;
+  auditContext?: AuditContext;
+}
+
+export interface AddKubernetesNodeResult extends ServiceResult {
+  dropletData?: Record<string, unknown>;
+  vmPassword?: EncryptedData;
 }

@@ -64,7 +64,7 @@ const WebHostingPage = () => {
     tags: ["Compute", "App-deploy", "Database", "Object-storage", "Security"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -86,7 +86,7 @@ const WebHostingPage = () => {
         badge={["Auto Deploy", "CI/CD Pipelines", "Managed DB", "Global CDN"]}
         title="Web Hosting & SaaS Deployment Infrastructure"
         description="Launch modern web applications and SaaS platforms with reliable compute, managed databases, CI/CD pipelines, and enterprise-grade security."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-web-host.png", alt: "Web Hosting & SaaS Deployment Infrastructure" }}

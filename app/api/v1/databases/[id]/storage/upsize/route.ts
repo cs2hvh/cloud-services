@@ -43,6 +43,7 @@ export const PUT = withV1Auth("databases:storage:upsize", async (req, auth, cont
     {
       clusterId,
       storageSizeMib: validation.data.storage_size_mib,
+      userId: auth.userId,
     },
     req
   );

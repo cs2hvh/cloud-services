@@ -87,8 +87,8 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: Adm
       try {
         setLoadingTypes(true);
         const response = await api.get("/database-types");
-        if (response.data.success) {
-          setDatabaseTypes(response.data.data);
+        if (response?.data?.success) {
+          setDatabaseTypes(response?.data?.data ?? []);
         }
       } catch (error) {
         console.error("Error fetching database types:", error);
@@ -200,7 +200,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: Adm
       setIsLoading(true);
       const response = await submitDatabaseAssignment(state, availablePlans, termsAccepted);
       if (response.status === 200) {
-        toast.success(response.data.message || "creating database for user");
+        toast.success(response?.data?.message || "creating database for user");
         router.push("/dashboard/admin/databases");
       }
     } catch (error: unknown) {

@@ -44,6 +44,29 @@ interface PageProps {
   all_coupons: Coupon[];
 }
 
+function formatDateStable(value: string) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "-";
+
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear());
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateTimeStable(value: string) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "-";
+
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear());
+  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${hour}:${minute} UTC`;
+}
+
 export default function AdminCoupons({ all_coupons }: PageProps) {
   const [coupons, setCoupons] = useState<Coupon[]>(all_coupons);
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,13 +95,13 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
       setLoading(true);
       const res = await api.delete(`/admin/coupons?id=${couponToDelete.id}`);
       
-      if (res.data.success) {
+      if (res?.data?.success) {
         setCoupons(coupons.filter((c) => c.id !== couponToDelete.id));
         toast.success("Coupon deleted successfully");
         setDeleteDialogOpen(false);
         setCouponToDelete(null);
       } else {
-        toast.error(res.data.error || "Failed to delete coupon");
+        toast.error(res?.data?.error || "Failed to delete coupon");
       }
     } catch (error: unknown) {
       console.error("Error deleting coupon:", error);
@@ -104,14 +127,36 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
 
   const handleCouponUpdated = (updatedCoupon: Coupon) => {
     setCoupons(
-      coupons.map((c) => (c.id === updatedCoupon.id ? updatedCoupon : c))
+      coupons.map((c) => {
+        if (c.id !== updatedCoupon.id) {
+          return c;
+        }
+
+        const fallbackCount = Array.isArray(c.redeem_by) ? c.redeem_by.length : 0;
+        const updatedCount = Array.isArray(updatedCoupon.redeem_by)
+          ? updatedCoupon.redeem_by.length
+          : fallbackCount;
+
+        return {
+          ...c,
+          ...updatedCoupon,
+          redemption_count: updatedCoupon.redemption_count ?? updatedCount,
+        };
+      })
     );
+  };
+
+  const getRedemptionCount = (coupon: Coupon) => {
+    if (typeof coupon.redemption_count === "number") {
+      return coupon.redemption_count;
+    }
+    return Array.isArray(coupon.redeem_by) ? coupon.redeem_by.length : 0;
   };
 
   const isExpired = (validTill: string) => new Date(validTill) < new Date();
 
   const totalActive = coupons.filter((c) => c.is_active && !isExpired(c.valid_till)).length;
-  const totalRedemptions = coupons.reduce((sum, c) => sum + (c.redemption_count || 0), 0);
+  const totalRedemptions = coupons.reduce((sum, c) => sum + getRedemptionCount(c), 0);
 
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
@@ -239,12 +284,12 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
                         </td>
                         <td className="py-3 px-4">
                           <span className="text-sm text-neutral-300">
-                            {new Date(coupon.valid_till).toLocaleDateString()}
+                            {formatDateStable(coupon.valid_till)}
                           </span>
                         </td>
                         <td className="py-3 px-4">
                           <span className="text-sm text-neutral-300">
-                            {coupon.redemption_count || 0}
+                            {getRedemptionCount(coupon)}
                             {coupon.max_redemptions && ` / ${coupon.max_redemptions}`}
                           </span>
                         </td>
@@ -363,13 +408,7 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
                     <div className="text-right">
                       <div className="text-xs text-neutral-400">Redeemed on</div>
                       <div className="text-sm text-white">
-                        {new Date(user.redeemedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatDateTimeStable(user.redeemedAt)}
                       </div>
                     </div>
                   </div>

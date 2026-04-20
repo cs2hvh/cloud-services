@@ -14,13 +14,9 @@ const AdminObjectStorageSuspense = async () => {
     notFound();
   }
 
-  // Fetch both buckets and products in parallel
-  const [buckets] = await Promise.all([
-    ObjectSpaces.get_all_for_admin(),
-    //Products.get_by_type("object-storage").catch(() => []), // For future plans tab - handle if no products exist yet
-  ]);
+  const buckets = await ObjectSpaces.get_all_for_admin();
 
-  return <AdminObjectStorage all_buckets={buckets}  />;
+  return <AdminObjectStorage all_buckets={buckets} />;
 };
 
 const AdminObjectStoragePage = async () => {

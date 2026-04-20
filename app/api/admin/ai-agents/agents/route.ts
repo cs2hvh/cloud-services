@@ -6,8 +6,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/supabase/auth';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 
 export const dynamic = 'force-dynamic';
+
+const AGENT_SORT_COLUMNS = new Set([
+  'created_at',
+  'updated_at',
+  'name',
+  'status',
+  'endpoint_id',
+  'user_id',
+]);
+
+function sanitizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9@._\-\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 export async function GET(request: NextRequest) {
   // Check admin access
@@ -20,12 +38,13 @@ export async function GET(request: NextRequest) {
     const supabase = await createServiceClient();
     const { searchParams } = new URL(request.url);
     
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const search = searchParams.get('search') || '';
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
+    const search = sanitizeSearchTerm(searchParams.get('search') || '');
     const status = searchParams.get('status') || '';
-    const sortBy = searchParams.get('sortBy') || 'created_at';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const requestedSortBy = searchParams.get('sortBy') || 'created_at';
+    const sortBy = AGENT_SORT_COLUMNS.has(requestedSortBy) ? requestedSortBy : 'created_at';
+    const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc';
 
     const offset = (page - 1) * limit;
 
@@ -109,9 +128,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('[Admin AI Agents List] Error:', err);
+    logError('GET /api/admin/ai-agents/agents', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to fetch agents' },
+      { error: sanitizeError(err) },
       { status: 500 }
     );
   }

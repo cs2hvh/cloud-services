@@ -36,9 +36,9 @@ const ProfileSettings: React.FC = () => {
     async function fetchProfile() {
       try {
         const res = await api.get("/auth/profile/read");
-        console.log(res.data, "....res.data..");
+        console.log(res?.data, "....res?.data?..");
         if (res.status != 200) throw new Error("Failed to load profile");
-        const data: UserProfile = res.data;
+        const data: UserProfile = res?.data;
         setProfile(data);
       } catch (err) {
         console.error("Failed to fetch profile:", err);

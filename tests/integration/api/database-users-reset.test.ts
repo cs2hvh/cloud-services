@@ -39,6 +39,10 @@ describe('POST /api/services/database/users/reset', () => {
     
     // Setup default mocks for Database_Clusters
     const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read).mockResolvedValue({
+      success: true,
+      data: mockDatabaseCluster,
+    });
     vi.mocked(Database_Clusters.get_users).mockResolvedValue({
       success: true,
       data: [],
@@ -271,7 +275,7 @@ describe('POST /api/services/database/users/reset', () => {
 
       const response = await POST(request as NextRequest);
       // API returns 400 for all DO errors
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 404);
 
       expect(data.error).toBeDefined();
     });
@@ -293,7 +297,6 @@ describe('POST /api/services/database/users/reset', () => {
       );
 
       const response = await POST(request as NextRequest);
-      // API returns 400 for all DO errors
       const data = await expectResponseStatus(response!, 400);
 
       expect(data.error).toBeDefined();
@@ -316,7 +319,7 @@ describe('POST /api/services/database/users/reset', () => {
       );
 
       const response = await POST(request as NextRequest);
-      // API returns 400 for all DO errors
+      // Provider/API validation failures are surfaced as client errors.
       const data = await expectResponseStatus(response!, 400);
 
       expect(data.error).toBeDefined();
@@ -337,16 +340,13 @@ describe('POST /api/services/database/users/reset', () => {
       );
 
       const response = await POST(request as NextRequest);
-      // API returns 400 for unknown errors
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 500);
 
       expect(data.error).toBeDefined();
     });
   });
 
   describe('Authorization Tests', () => {
-    // NOTE: Route does not perform ownership verification — relies on DO API auth.
-
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       const { NextResponse } = await import('next/server');

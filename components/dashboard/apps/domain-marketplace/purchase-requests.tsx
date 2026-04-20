@@ -1,4 +1,4 @@
-import { Ban, CheckCircle2, Clock3, Loader2, RefreshCw, XCircle } from 'lucide-react';
+import { Ban, CheckCircle2, Clock3, Loader2, Mail, RefreshCw, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DomainAttachAction, type DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
@@ -143,6 +143,29 @@ export function PurchaseRequests({
                 >
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium font-mono text-white">{request.domain}</span>
+                    {request.status === 'completed' && (() => {
+                      const withinIcannWindow = request.created_at
+                        ? Date.now() - new Date(request.created_at).getTime() < 15 * 24 * 60 * 60 * 1000
+                        : false;
+                      const isSandboxSentinel = request.registrant_email?.endsWith('@not-found.invalid');
+                      const displayEmail = isSandboxSentinel ? null : request.registrant_email;
+                      if (!displayEmail && !withinIcannWindow) return null;
+                      return (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <Mail className="w-2.5 h-2.5 shrink-0 text-white/25" />
+                          {displayEmail ? (
+                            <span className="text-[10px] text-white/35" title="ICANN verification email was sent to this address">
+                              Verification email sent to{' '}
+                              <span className="text-white/55 font-mono">{displayEmail}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-400/70" title="Verification email routing is pending — will retry automatically">
+                              Verification email routing pending…
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {request.last_error && (
                       <p className="text-[10px] text-red-400/70 mt-0.5">{request.last_error}</p>
                     )}

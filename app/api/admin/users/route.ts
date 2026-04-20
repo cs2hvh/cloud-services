@@ -1,6 +1,14 @@
 import { createClient, createSSRClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+function sanitizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9@._\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Helper function to check if user is admin
 async function checkAdminAuth() {
   const supabase = await createClient();
@@ -37,9 +45,9 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "10");
-  const search = searchParams.get("search") || "";
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10) || 10));
+  const search = sanitizeSearchTerm(searchParams.get("search") || "");
   const roleFilter = searchParams.get("role") || "";
 
   const from = (page - 1) * limit;
@@ -58,7 +66,7 @@ export async function GET(request: Request) {
     // Build query
     let query = supabase
       .from("user_profiles")
-      .select("*", { count: "exact" });
+      .select("id, username, display_name, avatar, roles, suspend, created_at", { count: "exact" });
 
     // Apply search filter
     if (search) {
@@ -190,7 +198,7 @@ export async function PATCH(request: Request) {
       .from("user_profiles")
       .update(updates)
       .eq("id", userId)
-      .select("*")
+      .select("id, username, display_name, avatar, roles, suspend, created_at")
       .single();
 
     if (error) {

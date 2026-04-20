@@ -55,7 +55,7 @@ describe("scalingResourceOperations", () => {
     vi.mocked(Projects.add_log).mockResolvedValue(undefined as never);
     vi.mocked(axios.put).mockResolvedValue({ status: 202 } as never);
 
-    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-2vcpu-4gb");
+    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-2vcpu-4gb", "user-1");
 
     expect(result.success).toBe(true);
     expect(axios.put).toHaveBeenCalledWith(
@@ -89,6 +89,7 @@ describe("scalingResourceOperations", () => {
     const result = await scalingResourceOperations.upsizeStorage({
       clusterId: "cluster-1",
       storageSizeMib: 30720,
+      userId: "user-1",
     });
 
     expect(result.success).toBe(true);
@@ -109,7 +110,7 @@ describe("scalingResourceOperations", () => {
       error: "not found",
     } as never);
 
-    const result = await scalingResourceOperations.updateStorage("missing-cluster", "db-s-1vcpu-2gb");
+    const result = await scalingResourceOperations.updateStorage("missing-cluster", "db-s-1vcpu-2gb", "user-1");
 
     expect(result.success).toBe(false);
     expect(result.errorCode).toBe("NOT_FOUND");
@@ -131,6 +132,7 @@ describe("scalingResourceOperations", () => {
     const result = await scalingResourceOperations.upsizeStorage({
       clusterId: "cluster-1",
       storageSizeMib: 20480,
+      userId: "user-1",
     });
 
     expect(result.success).toBe(false);
@@ -155,7 +157,7 @@ describe("scalingResourceOperations", () => {
     });
     vi.mocked(axios.put).mockRejectedValue(providerError as never);
 
-    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-2vcpu-4gb");
+    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-2vcpu-4gb", "user-1");
 
     expect(result.success).toBe(false);
     expect(result.errorCode).toBe("DIGITALOCEAN_API_ERROR");
@@ -184,7 +186,7 @@ describe("scalingResourceOperations", () => {
       .mockRejectedValueOnce(firstError as never)
       .mockResolvedValueOnce({ status: 202 } as never);
 
-    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-1vcpu-2gb");
+    const result = await scalingResourceOperations.updateStorage("cluster-1", "db-s-1vcpu-2gb", "user-1");
 
     expect(result.success).toBe(true);
     expect(vi.mocked(axios.put)).toHaveBeenCalledTimes(2);
@@ -210,10 +212,11 @@ describe("scalingResourceOperations", () => {
     const result = await scalingResourceOperations.upsizeStorage({
       clusterId: "cluster-1",
       storageSizeMib: 26624, // 26GiB > mongodb 1gb max 25GiB
+      userId: "user-1",
     });
 
     expect(result.success).toBe(false);
-    expect(result.errorCode).toBe("INVALID_PARAMETER");
-    expect(result.error).toContain("cannot exceed 25 GiB");
+    expect(result.errorCode).toBe("UNSUPPORTED_OPERATION");
+    expect(result.error).toContain("not supported");
   });
 });

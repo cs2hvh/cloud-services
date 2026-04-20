@@ -620,4 +620,187 @@ export class ObjectStorageIntegrationService {
 
     return { success: true, data: linkedApps };
   }
+
+  /**
+   * Unlink all object storage integrations for an app during app deletion.
+   *
+   * Skips env-var removal and K8s reconciliation — those are unnecessary when the
+   * app itself is being destroyed. Only marks each active integration as "unlinked"
+   * so the bucket is freed for other apps.
+   *
+   * Best-effort: individual failures are collected and returned but never thrown.
+   */
+  static async unlinkAllFromApp(app_id: string, user_id: string): Promise<{
+    unlinked: number;
+    errors: string[];
+  }> {
+    console.log(`[ObjectStorageIntegrationService] Unlinking all storage integrations for app ${app_id}`);
+
+    const result = await ObjectStorage_Integrations.get_by_app(app_id, false);
+    if (!result.success || !result.data || result.data.length === 0) {
+      return { unlinked: 0, errors: [] };
+    }
+
+    let unlinked = 0;
+    const errors: string[] = [];
+
+    for (const integration of result.data) {
+      try {
+        await ObjectStorage_Integrations.mark_unlinked(integration.id, user_id);
+        unlinked++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`integration ${integration.id}: ${msg}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      console.warn(`[ObjectStorageIntegrationService] ⚠️ ${errors.length} integration(s) failed to unlink for app ${app_id}:`, errors);
+    } else {
+      console.log(`[ObjectStorageIntegrationService] ✅ Unlinked ${unlinked} storage integration(s) for app ${app_id}`);
+    }
+
+    return { unlinked, errors };
+  }
+
+  /**
+   * Update an existing storage integration's env var key names
+   *
+   * Renames injected env vars in-place without requiring unlink + re-link.
+   * Fetches fresh credentials and re-injects with the new key names.
+   */
+  static async updateIntegration(request: {
+    app_id: string;
+    bucket_id: string;
+    user_id: string;
+    env_mapping: Record<string, string>;
+  }): Promise<{
+    success: boolean;
+    old_vars?: string[];
+    new_vars?: string[];
+    requires_redeploy?: boolean;
+    apply_mode?: string;
+    hint?: string;
+    error?: string;
+    code?: string;
+  }> {
+    const { app_id, bucket_id, user_id, env_mapping } = request;
+
+    console.log(`[ObjectStorageIntegrationService] Updating integration ${bucket_id} ↔ ${app_id}`);
+
+    try {
+      // Step 1: Find existing integration
+      const integrationResult = await ObjectStorage_Integrations.get_active(app_id, bucket_id);
+      if (!integrationResult.success || !integrationResult.data) {
+        return { success: false, error: "No active integration found", code: "NOT_LINKED" };
+      }
+      const integration = integrationResult.data;
+
+      // Step 2: Verify app ownership
+      const appResult = await Platform_Apps.get(app_id);
+      if (!appResult.success || !appResult.data) {
+        return { success: false, error: "App not found", code: "APP_NOT_FOUND" };
+      }
+      if (appResult.data.user_id !== user_id) {
+        return { success: false, error: "Permission denied", code: "PERMISSION_DENIED" };
+      }
+      const app = appResult.data;
+
+      // Step 3: Fetch fresh bucket credentials
+      const bucket = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id, true);
+      if (!bucket) {
+        return { success: false, error: "Bucket not found", code: "BUCKET_NOT_FOUND" };
+      }
+
+      // Step 4: Generate fresh env vars with the original prefix
+      const originalPrefix = integration.env_prefix !== "CUSTOM" ? integration.env_prefix : "S3";
+      const freshGenerated = this.generateEnvVars(bucket as ObjectSpaceBucket, originalPrefix, false);
+
+      // Apply the key renaming mapping
+      const oldKeys = new Set(integration.injected_env_keys || []);
+      let renamedVars: Array<{ key: string; value: string }>;
+
+      if (integration.env_prefix === "CUSTOM") {
+        // For CUSTOM integrations the env_mapping contains old_custom_key → new_custom_key pairs.
+        // freshGenerated uses the S3_* prefix so its keys won't match env_mapping directly.
+        // Instead, use suffix-based matching to find the fresh credential value for each custom key.
+        const freshByS3Key: Record<string, string> = {};
+        freshGenerated.vars.forEach(v => { freshByS3Key[v.key] = v.value; });
+
+        // Order matters: check _BUCKET_NAME before _BUCKET to avoid partial match
+        const suffixToS3Key: Array<[string, string]> = [
+          ["_BUCKET_NAME", "S3_BUCKET_NAME"],
+          ["_BUCKET", "S3_BUCKET"],
+          ["_ENDPOINT_URL", "S3_ENDPOINT"],
+          ["_ENDPOINT", "S3_ENDPOINT"],
+          ["_REGION", "S3_REGION"],
+          ["_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"],
+          ["_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY"],
+        ];
+
+        renamedVars = (integration.injected_env_keys || []).map((oldKey) => {
+          const upperKey = oldKey.toUpperCase();
+          let freshValue = "";
+          for (const [suffix, s3Key] of suffixToS3Key) {
+            if (upperKey.endsWith(suffix)) {
+              freshValue = freshByS3Key[s3Key] ?? "";
+              break;
+            }
+          }
+          return {
+            key: env_mapping[oldKey] ?? oldKey,
+            value: freshValue,
+          };
+        });
+      } else {
+        renamedVars = freshGenerated.vars.map((v) => ({
+          key: env_mapping[v.key] ?? v.key,
+          value: v.value,
+        }));
+      }
+
+      const newKeys = renamedVars.map((v) => v.key);
+
+      // Step 5: Remove old vars, inject renamed ones
+      const existingEnvVars = await Platform_Apps.get_env_vars(app_id);
+      const filteredVars = existingEnvVars.filter((ev) => !oldKeys.has(ev.key));
+      const mergedVars = [...filteredVars, ...renamedVars];
+
+      const setResult = await Platform_Apps.set_env_vars(app_id, mergedVars);
+      if (!setResult.success) {
+        return { success: false, error: "Failed to update env vars", code: "ENV_UPDATE_FAILED" };
+      }
+
+      // Step 6: Update integration record with new keys
+      await ObjectStorage_Integrations.mark_linked(integration.id, newKeys);
+
+      // Step 7: Sync env vars to running app
+      const syncOutcome = await applyLifecycleAwareIntegrationEnvSync({
+        appId: app_id,
+        appName: app.name,
+        appStatus: app.status,
+        framework: app.framework,
+        envVars: mergedVars,
+        logPrefix: "ObjectStorageIntegrationService.update",
+      });
+
+      console.log(`[ObjectStorageIntegrationService] ✅ Integration updated successfully`);
+
+      return {
+        success: true,
+        old_vars: integration.injected_env_keys || [],
+        new_vars: newKeys,
+        requires_redeploy: syncOutcome.requiresRedeploy,
+        apply_mode: syncOutcome.applyMode,
+        hint: syncOutcome.hint,
+      };
+    } catch (error) {
+      console.error("[ObjectStorageIntegrationService] Update error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        code: "INTERNAL_ERROR",
+      };
+    }
+  }
 }

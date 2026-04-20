@@ -161,6 +161,8 @@ interface DomainConnectionsTabProps {
   settingPrimaryConnectionId: string | null;
   removingConnectionId: string | null;
   checkingSslId: string | null;
+  /** True when ANY operation across any connection is in progress. */
+  anyOperationRunning: boolean;
   onSubdomainChange: (value: string) => void;
   onAttached: () => void;
   onVerify: (id: string) => void;
@@ -187,6 +189,7 @@ export function DomainConnectionsTab({
   settingPrimaryConnectionId,
   removingConnectionId,
   checkingSslId,
+  anyOperationRunning,
   onSubdomainChange,
   onAttached,
   onVerify,
@@ -306,6 +309,7 @@ export function DomainConnectionsTab({
               appOptions={appOptions}
               buttonLabel="Add Connection"
               onAttached={onAttached}
+              disabled={anyOperationRunning}
             />
             <p className="text-[10px] text-white/30 flex items-center gap-1">
               <Globe className="h-2.5 w-2.5 shrink-0" />
@@ -324,6 +328,9 @@ export function DomainConnectionsTab({
             {connections.length > 0 && (
               <span className="ml-1.5 text-white/30 font-normal">({connections.length})</span>
             )}
+          </p>
+          <p className="text-[10px] text-white/25">
+            Max 5 per app
           </p>
         </div>
 
@@ -368,7 +375,7 @@ export function DomainConnectionsTab({
                         size="sm"
                         variant="outline"
                         className="h-7 border-white/[0.1] text-white/70 hover:bg-white/[0.06] hover:text-white text-xs"
-                        disabled={verifyingConnectionId === connection.id}
+                        disabled={anyOperationRunning}
                         onClick={() => onVerify(connection.id)}
                       >
                         {verifyingConnectionId === connection.id ? (
@@ -382,7 +389,7 @@ export function DomainConnectionsTab({
                       <Button
                         size="sm"
                         className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs border-0"
-                        disabled={activatingConnectionId === connection.id || connection.appStatus !== 'running'}
+                        disabled={anyOperationRunning || connection.appStatus !== 'running'}
                         onClick={() => onActivate(connection.id)}
                         title={connection.appStatus !== 'running' ? 'App must be running first' : undefined}
                       >
@@ -398,7 +405,7 @@ export function DomainConnectionsTab({
                         size="sm"
                         variant="outline"
                         className="h-7 border-white/[0.1] text-white/70 hover:bg-white/[0.06] hover:text-white text-xs"
-                        disabled={settingPrimaryConnectionId === connection.id}
+                        disabled={anyOperationRunning}
                         onClick={() => onSetPrimary(connection.id)}
                       >
                         {settingPrimaryConnectionId === connection.id ? (
@@ -412,7 +419,7 @@ export function DomainConnectionsTab({
                       <Button
                         size="sm"
                         className="h-7 bg-orange-600 hover:bg-orange-700 text-white text-xs border-0"
-                        disabled={activatingConnectionId === connection.id || connection.appStatus !== 'running'}
+                        disabled={anyOperationRunning || connection.appStatus !== 'running'}
                         onClick={() => onActivate(connection.id)}
                         title="Re-activate to retry SSL setup"
                       >
@@ -436,7 +443,7 @@ export function DomainConnectionsTab({
                       size="sm"
                       variant="ghost"
                       className="h-7 w-7 p-0 text-red-400/40 hover:text-red-300 hover:bg-red-500/[0.06]"
-                      disabled={removingConnectionId === connection.id}
+                      disabled={anyOperationRunning}
                       onClick={() => onRemoveRequest(connection.id)}
                     >
                       {removingConnectionId === connection.id ? (
@@ -472,7 +479,7 @@ export function DomainConnectionsTab({
                   <SslStatusBadge
                     sslStatus={connection.sslStatus}
                     id={connection.id}
-                    onCheck={connection.status === 'active' ? onCheckSsl : undefined}
+                    onCheck={connection.status === 'active' && !anyOperationRunning ? onCheckSsl : undefined}
                     checkingId={checkingSslId}
                     variant="row"
                     dnsMessage={connection.dnsReady === false ? connection.dnsMessage : undefined}
@@ -601,7 +608,7 @@ export function DomainConnectionsTab({
       {/* Remove confirmation dialog */}
       <AlertDialog
         open={removeConfirmConnectionId !== null}
-        onOpenChange={(open) => { if (!open) onRemoveCancel(); }}
+        onOpenChange={(open) => { if (!open && !removingConnectionId) onRemoveCancel(); }}
       >
         <AlertDialogContent className="bg-[#0d0d0d] border border-white/[0.08] text-white">
           <AlertDialogHeader>
@@ -622,16 +629,22 @@ export function DomainConnectionsTab({
             <AlertDialogCancel
               className="border-white/[0.12] text-white/70 hover:bg-white/[0.06] hover:text-white"
               onClick={onRemoveCancel}
+              disabled={removingConnectionId !== null}
             >
               Keep it
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white border-0"
+              disabled={removingConnectionId !== null}
               onClick={() => {
                 if (removeConfirmConnectionId) onRemoveConfirm(removeConfirmConnectionId);
               }}
             >
-              Disconnect
+              {removingConnectionId !== null ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Disconnecting…</>
+              ) : (
+                'Disconnect'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

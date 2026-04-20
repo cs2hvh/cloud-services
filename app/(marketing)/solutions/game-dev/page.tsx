@@ -64,7 +64,7 @@ const GameDevPage = () => {
     tags: ["Compute", "Kubernetes", "Database", "Object Storage", "Security"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -86,7 +86,7 @@ const GameDevPage = () => {
         badge={["Low Latency", "Game Servers", "Asset Storage", "Burst Scale"]}
         title="Game Development & Hosting Infrastructure"
         description="Build and host multiplayer game servers with low-latency networking, GPU-accelerated rendering, scalable backends, and massive asset storage."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-web-host.png", alt: "Game Development infrastructure" }}

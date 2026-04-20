@@ -68,14 +68,18 @@ export async function fetchUserRepositories(): Promise<RepositoriesResponse> {
       
       if (session?.provider_token && isGitHubSession) {
         token = session.provider_token;
-        console.log('[GitHub Utils] Using session.provider_token (GitHub session)');
+        console.log('[GitHub Utils] Using session.provider_token (GitHub session) — storing for future use');
         
-        // Store this token for future use (so cross-provider auth works)
-        await provider.storeToken(user.id, { 
-          accessToken: token, 
-          tokenType: 'bearer', 
-          scope: 'repo user:email' 
-        });
+        // Store for future cross-provider auth. Pass username if available in session metadata.
+        const ghLogin = session.user?.user_metadata?.user_name || session.user?.user_metadata?.preferred_username;
+        const ghId = session.user?.user_metadata?.provider_id
+          ? Number(session.user.user_metadata.provider_id)
+          : undefined;
+        await provider.storeToken(user.id, {
+          accessToken: token,
+          tokenType: 'bearer',
+          scope: 'repo user:email',
+        }, ghLogin ? { username: ghLogin, githubUserId: ghId } : undefined);
       }
     }
 

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 /**
  * GET /api/jenkins/build-logs?app=myapp&build=1&start=0
@@ -20,6 +22,11 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get("start") || "0";
 
   try {
+    const auth = await authenticateUser();
+    if (!auth.authenticated) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!appName) {
       return NextResponse.json(
         { error: "Missing 'app' parameter" },
@@ -92,10 +99,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.error("[API] Error getting build logs:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get build logs";
+    logError("[API] Error getting build logs", error);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

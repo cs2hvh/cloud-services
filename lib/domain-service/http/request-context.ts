@@ -13,11 +13,13 @@ export function createDomainActor(params: {
   req: Request;
   userId: string;
   userEmail?: string;
+  userName?: string;
   userRole?: ActorContext["userRole"];
 }): ActorContext {
   return {
     userId: params.userId,
     userEmail: params.userEmail,
+    userName: params.userName,
     userRole: params.userRole || "user",
     auditContext: getDomainAuditContextFromRequest(params.req),
   };

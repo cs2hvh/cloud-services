@@ -197,6 +197,7 @@ export class ObjectStorageService {
           initialCost,
           hourlyRate,
           serviceId,
+          serviceType: "objectspace",
           addActive: Billing.add_active_objectspace,
         });
         console.log(`[ObjectStorageService.createBucket] Billing setup complete`);

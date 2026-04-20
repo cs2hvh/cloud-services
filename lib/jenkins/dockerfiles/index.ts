@@ -451,6 +451,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# CUSTOM_SERVER_COPY_PLACEHOLDER
 
 USER nextjs
 
@@ -961,6 +962,36 @@ DOCKERFILE_EOF
   
   # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
+  
+  # Detect custom server (server.ts / server.js / server.mjs) and inject extra COPY lines
+  # This supports Next.js apps with custom servers (e.g. WebSocket proxies, custom routing)
+  # without breaking standard Next.js apps that use the default server
+  CUSTOM_SERVER_FILE=""
+  if [ -f server.ts ] || [ -f server.js ] || [ -f server.mjs ]; then
+    CUSTOM_SERVER_FILE=$(ls server.ts server.js server.mjs 2>/dev/null | head -1)
+    echo "Detected custom server: $CUSTOM_SERVER_FILE — adding to Dockerfile"
+  fi
+
+  if [ -n "$CUSTOM_SERVER_FILE" ]; then
+    # Write each COPY line to a temp file to avoid multi-line shell variables in sed
+    # (sed cannot handle newlines embedded in replacement strings)
+    echo "COPY --from=builder --chown=nextjs:nodejs /app/$CUSTOM_SERVER_FILE ./$CUSTOM_SERVER_FILE" > /tmp/custom_copies.txt
+    # If custom server imports from lib/, copy that too
+    if [ -d lib ] && (grep -rFq "./lib" "$CUSTOM_SERVER_FILE" || grep -rFq "@/lib" "$CUSTOM_SERVER_FILE") 2>/dev/null; then
+      echo "Custom server imports from lib/ — including lib directory"
+      echo "COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib" >> /tmp/custom_copies.txt
+    fi
+    # If using tsx/ts-node, we need tsconfig.json for TypeScript resolution
+    if [ -f tsconfig.json ] && (echo "$CUSTOM_SERVER_FILE" | grep -Fq ".ts"); then
+      echo "TypeScript custom server detected — including tsconfig.json"
+      echo "COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json" >> /tmp/custom_copies.txt
+    fi
+    # Use awk for multi-line placeholder replacement — reads lines from temp file
+    awk 'FNR==NR{lines[NR]=$0;count=NR;next} /^# CUSTOM_SERVER_COPY_PLACEHOLDER$/{for(i=1;i<=count;i++) print lines[i];next}1' /tmp/custom_copies.txt Dockerfile > /tmp/Dockerfile.new && mv /tmp/Dockerfile.new Dockerfile
+  else
+    # No custom server — remove the placeholder line entirely
+    sed -i "/# CUSTOM_SERVER_COPY_PLACEHOLDER/d" Dockerfile 2>/dev/null || sed -i "" "/# CUSTOM_SERVER_COPY_PLACEHOLDER/d" Dockerfile
+  fi
   
   echo "Dockerfile generated successfully"
   echo "Node.js version: $NODE_VERSION"

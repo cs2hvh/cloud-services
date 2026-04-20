@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function GET() {
   try {
@@ -20,16 +21,16 @@ export async function GET() {
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
     if (error) {
-      console.error("Get AAL error:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      logError("GET /api/auth/mfa/status AAL", error);
+      return NextResponse.json({ error: sanitizeAuthError(error) }, { status: 400 });
     }
 
     // List all factors
     const factors = await supabase.auth.mfa.listFactors();
     if (factors.error) {
-      console.error("List factors error:", factors.error);
+      logError("GET /api/auth/mfa/status listFactors", factors.error);
       return NextResponse.json(
-        { error: factors.error.message },
+        { error: sanitizeAuthError(factors.error) },
         { status: 400 }
       );
     }
@@ -51,10 +52,10 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("MFA status error:", error);
+    logError("GET /api/auth/mfa/status", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to get MFA status",
+        error: sanitizeAuthError(error),
       },
       { status: 500 }
     );

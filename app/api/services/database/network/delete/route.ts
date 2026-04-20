@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
     const result = await DatabaseService.deleteFirewallRule({
       clusterId: validatedData.id,
       ruleUuid: validatedData.rule_uuid,
+      userId: auth.user.id,
     });
 
     if (!result.success) {
@@ -62,16 +64,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Unknown error occurred" },
-      { status: 500 }
-    );
+    logError("services/database/network/delete", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

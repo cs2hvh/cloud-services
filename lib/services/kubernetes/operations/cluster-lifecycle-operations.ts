@@ -7,9 +7,10 @@ import { NextRequest } from "next/server";
 
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { Encryption, generateStrongPassword } from "@/config/functions";
-import { getRatesForKubernetes } from "@/config/pricing";
+import { getRatesForKubernetes, getRatesForKubernetesExisting } from "@/config/pricing";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { createServiceClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
@@ -28,6 +29,10 @@ import type {
   InitKubernetesClusterResult,
   UpdateKubernetesClusterRequest,
   ServiceResult,
+  AddKubernetesNodeRequest,
+  AddKubernetesNodeResult,
+  RemoveKubernetesNodeRequest,
+  RemoveKubernetesNodeResult,
 } from "../types";
 
 /**
@@ -40,15 +45,21 @@ function resolveAuditUserRole(isAdmin?: boolean): "user" | "admin" {
 /**
  * Generate node names for the cluster
  */
+// Node names must not exceed 20 characters (DigitalOcean / Kubernetes hostname limit).
+// Format: {name8}-{uuid4}-cp (16 chars) or {name8}-{uuid4}-w{i} (up to 18 chars for i<100)
 function makeNodeKeys(workers: number, clusterName: string): string[] {
+  const MAX_PREFIX = 8; // safe prefix length to fit within 20 chars for any reasonable worker count
+  const namePrefix = clusterName.slice(0, MAX_PREFIX).replace(/[^a-z0-9]/gi, "-").toLowerCase();
   const nodeNames: string[] = [];
   for (let i = 0; i <= workers; i++) {
-    const uuid = crypto.randomUUID();
-    if (i === 0) {
-      nodeNames.push(`${clusterName}-${uuid}-cp-1`);
-    } else {
-      nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
+    const shortId = crypto.randomUUID().replace(/-/g, "").slice(0, 4);
+    const name = i === 0
+      ? `${namePrefix}-${shortId}-cp`
+      : `${namePrefix}-${shortId}-w${i}`;
+    if (name.length > 20) {
+      throw new Error(`Generated node name "${name}" exceeds 20 characters`);
     }
+    nodeNames.push(name);
   }
   return nodeNames;
 }
@@ -74,9 +85,11 @@ export const clusterLifecycleOperations = {
     let clusterId: string | null = null;
 
     try {
+      const totalNodes = Math.max(request.node_pool.count, 1);
+
       // Check billing
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
-        await getRatesForKubernetes(request.plan_id);
+        await getRatesForKubernetes(request.plan_id, totalNodes);
 
       const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
       if (!balCheck.ok) {
@@ -305,6 +318,7 @@ export const clusterLifecycleOperations = {
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
           serviceId: clusterId,
+          serviceType: "kubernetes",
           addActive: Billing.add_active_kubernetes,
         });
       } catch (billingErr) {
@@ -520,6 +534,7 @@ export const clusterLifecycleOperations = {
 
       const clusterName = cluster.cluster_name || "Unknown";
       const projectId = cluster.project_id ?? null;
+      const clusterStatus = cluster.status as string | undefined;
       const dropletDeletionErrors: string[] = [];
 
       // Close billing first (proration + cleanup)
@@ -532,6 +547,35 @@ export const clusterLifecycleOperations = {
       } catch (billErr) {
         console.warn(`[deleteCluster] Billing close failed:`, billErr);
         // proceed with deletion regardless
+      }
+
+      // Refund setup charge if cluster never reached "ready" (provision failure)
+      if (clusterStatus && clusterStatus !== "ready" && clusterStatus !== "deleted") {
+        const nodeConfig = (cluster as Record<string, unknown>).node_config as Record<string, unknown> | undefined;
+        const provisionConfig = nodeConfig?.provision_config as Record<string, unknown> | undefined;
+        const planId = provisionConfig?.plan_id as string | undefined;
+
+        if (planId) {
+          try {
+            const { initialCost } = await getRatesForKubernetes(planId, 1);
+            if (initialCost > 0) {
+              const refundResult = await Billing.topup(cluster.owner_id, initialCost);
+              await Billing.save_transaction({
+                userId: cluster.owner_id,
+                amount: initialCost,
+                status: "completed",
+                type: "refund",
+                balanceAfter: refundResult.credit_balance,
+                serviceId: request.clusterId,
+                serviceType: "kubernetes",
+                description: `Refund for kubernetes setup charge (cluster never provisioned)`,
+              });
+              console.log(`[deleteCluster] Refunded setup charge $${initialCost} for failed cluster ${request.clusterId}`);
+            }
+          } catch (refundErr) {
+            console.warn(`[deleteCluster] Setup charge refund failed:`, refundErr);
+          }
+        }
       }
 
       // Delete individual droplets from DigitalOcean
@@ -656,6 +700,21 @@ export const clusterLifecycleOperations = {
     req?: NextRequest
   ): Promise<InitKubernetesClusterResult> {
     try {
+      // Early balance check so users with insufficient funds are rejected
+      // before a cluster record is created
+      const { initialCost } = await getRatesForKubernetes(
+        request.planId,
+        Math.max(request.nodeCount, 1)
+      );
+      const balCheck = await ensureBalance(request.ownerId, initialCost);
+      if (!balCheck.ok) {
+        return {
+          success: false,
+          error: "Insufficient credits",
+          errorCode: "INSUFFICIENT_BALANCE",
+        };
+      }
+
       // Verify project ownership
       const project = await Projects.get_by_id(request.projectId);
       if (!project) {
@@ -748,5 +807,251 @@ export const clusterLifecycleOperations = {
         errorCode: "INIT_FAILED",
       };
     }
+  },
+
+  /**
+   * Add a node (DigitalOcean droplet) to an existing cluster.
+   * Handles balance check, DigitalOcean API call, and billing rate update.
+   */
+  async addNode(request: AddKubernetesNodeRequest): Promise<AddKubernetesNodeResult> {
+    const { clusterId, planId, userId, userEmail, dropletPayload, initialCost, expectedNodeCount, auditContext } = request;
+
+    // Resolve cost and hourly rate upfront from plan pricing
+    let resolvedInitialCost: number;
+    let resolvedHourlyRate: number;
+
+    if (planId) {
+      const rates = await getRatesForKubernetesExisting(planId, expectedNodeCount ?? 1);
+      resolvedInitialCost = typeof initialCost === "number" ? initialCost : rates.initialCost;
+      resolvedHourlyRate = rates.hourlyRate;
+    } else {
+      resolvedInitialCost = typeof initialCost === "number" ? initialCost : 5.0;
+      resolvedHourlyRate = 0.01; // safe minimum fallback
+    }
+
+    // Pre-flight balance check
+    const hasBalance = await Billing.has_balance(userId, resolvedInitialCost);
+    if (!hasBalance) {
+      const balance = await Billing.get_balance(userId);
+      return {
+        success: false,
+        error: "Insufficient credits to start this cluster.",
+        errorCode: "INSUFFICIENT_BALANCE",
+        data: { balance, required: resolvedInitialCost },
+      };
+    }
+
+    // Generate VM credentials
+    const vmPassword = generateStrongPassword();
+
+    // Whitelist only the fields DigitalOcean accepts for droplet creation
+    const {
+      names, region, size, image, ssh_keys, backups, ipv6,
+      monitoring, private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+    } = dropletPayload as Record<string, unknown>;
+    const doPayload = {
+      names, region, size, image, ssh_keys, backups, ipv6,
+      monitoring, private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+      user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
+    };
+
+    console.log("[addNode] DO payload:", JSON.stringify({ ...doPayload, user_data: "[redacted]" }));
+
+    // Create droplet on DigitalOcean
+    let response;
+    try {
+      response = await axios.post(
+        "https://api.digitalocean.com/v2/droplets",
+        doPayload,
+        { headers: getDigitalOceanHeaders() }
+      );
+    } catch (doErr: unknown) {
+      const doRes = (doErr as { response?: { data?: unknown; status?: number } })?.response;
+      console.error("[addNode] DigitalOcean API error:", doRes?.status, JSON.stringify(doRes?.data));
+      return { success: false, error: `DigitalOcean API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
+    }
+
+    if (response.status !== 202) {
+      console.error("[addNode] Unexpected DO status:", response.status, JSON.stringify(response.data));
+      return { success: false, error: "DigitalOcean droplet creation failed", errorCode: "DO_ERROR" };
+    }
+
+    const vmPasswordEncrypted = Encryption.encrypt(vmPassword, process.env.ENCRYPTION_KEY!);
+    
+    // Extract droplet ID for cleanup if billing fails
+    const createdDroplet = response.data?.droplet as Record<string, unknown> | undefined;
+    const dropletId = createdDroplet?.id as string | number | undefined;
+
+    // Deduct the cost upfront and register active kubernetes billing
+    try {
+      await postProvisionBilling({
+        userId,
+        initialCost: resolvedInitialCost,
+        hourlyRate: resolvedHourlyRate,
+        serviceId: clusterId,
+        serviceType: "kubernetes",
+        addActive: Billing.add_active_kubernetes,
+      });
+      console.log(`[KubernetesService.addNode] ✅ Billing registered: initial=$${resolvedInitialCost}, hourly=$${resolvedHourlyRate}/hr for ${expectedNodeCount ?? "?"} nodes`);
+    } catch (billingErr) {
+      // Billing failed — clean up droplet from DigitalOcean to prevent orphaned resource
+      if (dropletId) {
+        try {
+          await axios.delete(
+            `https://api.digitalocean.com/v2/droplets/${dropletId}`,
+            { headers: getDigitalOceanHeaders() }
+          );
+          console.error(`[KubernetesService.addNode] ✅ Cleaned up droplet ${dropletId} after billing failure`);
+        } catch (cleanupErr) {
+          console.error(`[KubernetesService.addNode] ⚠️ Failed to clean up droplet ${dropletId} after billing failure:`, cleanupErr);
+          // Continue with error reporting below
+        }
+      }
+      const errorMsg = billingErr instanceof Error ? billingErr.message : String(billingErr);
+      console.error("[KubernetesService.addNode] Failed to register billing:", errorMsg);
+      return {
+        success: false,
+        error: `Failed to register billing after droplet creation: ${errorMsg}. Droplet has been cleaned up.`,
+        errorCode: "BILLING_FAILED",
+      };
+    }
+
+    // Audit log (non-fatal)
+    try {
+      await AuditLogService.create({
+        user_id: userId,
+        user_role: "user",
+        user_email: userEmail ?? undefined,
+        action: "create",
+        service_type: "kubernetes",
+        service_id: clusterId,
+        after_state: { droplet: response.data?.droplet },
+        metadata: { operation: "node_addition", nodes_added: 1 },
+        ip_address: auditContext?.ipAddress,
+        user_agent: auditContext?.userAgent,
+        request_id: auditContext?.requestId,
+      });
+    } catch (auditErr) {
+      console.error("[KubernetesService.addNode] Failed to create audit log:", auditErr);
+    }
+
+    return { success: true, dropletData: response.data, vmPassword: vmPasswordEncrypted };
+  },
+
+  /**
+   * Remove a worker node from an existing cluster.
+   * Updates the cluster workers list and billing rate.
+   */
+  async removeNode(request: RemoveKubernetesNodeRequest): Promise<RemoveKubernetesNodeResult> {
+    const { clusterId, dropletId, userId, userEmail, auditContext } = request;
+    const db = await createServiceClient();
+
+    // Fetch current cluster state
+    const { data, error } = await db
+      .from("clusters")
+      .select("workers, cluster_name, project_id, node_config, owner_id")
+      .eq("cluster_id", clusterId)
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: error?.message ?? "Cluster not found", errorCode: "NOT_FOUND" };
+    }
+
+    // Ownership check
+    if (data.owner_id !== userId) {
+      return { success: false, error: "You do not have permission to modify this cluster", errorCode: "FORBIDDEN" };
+    }
+
+    const workersBefore = (data.workers ?? []) as Array<{ droplet_id: string } & Record<string, unknown>>;
+    const filtered = workersBefore.filter(
+      (w) => String(w.droplet_id) !== String(dropletId)
+    );
+
+    // Verify the node actually existed in the workers array
+    if (filtered.length === workersBefore.length) {
+      return { success: false, error: `Worker node with droplet_id ${dropletId} not found in cluster`, errorCode: "NOT_FOUND" };
+    }
+
+    // Delete droplet from DigitalOcean first
+    try {
+      await axios.delete(
+        `https://api.digitalocean.com/v2/droplets/${dropletId}`,
+        { headers: getDigitalOceanHeaders() }
+      );
+      console.log(`[KubernetesService.removeNode] ✅ Droplet ${dropletId} deleted from DigitalOcean`);
+    } catch (doErr: unknown) {
+      const doRes = (doErr as { response?: { status?: number } })?.response;
+      // 404 means already deleted — that's fine
+      if (doRes?.status !== 404) {
+        console.error("[KubernetesService.removeNode] Failed to delete droplet from DO:", doErr);
+        return { success: false, error: `Failed to delete droplet from DigitalOcean`, errorCode: "DO_ERROR" };
+      }
+      console.log(`[KubernetesService.removeNode] Droplet ${dropletId} already deleted (404)`);
+    }
+
+    // Persist updated workers list
+    const { error: updErr } = await db
+      .from("clusters")
+      .update({ workers: filtered })
+      .eq("cluster_id", clusterId)
+      .single();
+
+    if (updErr) {
+      return { success: false, error: updErr.message, errorCode: "UPDATE_FAILED" };
+    }
+
+    // Activity log
+    if (data.project_id) {
+      await Projects.add_log({
+        project_id: data.project_id as string,
+        event: "Server",
+        text: `Worker node removed from Kubernetes cluster '${data.cluster_name}'`,
+      });
+    }
+
+    // Update billing rate to reflect reduced node count (non-fatal)
+    try {
+      const nodeConfig = data.node_config as Record<string, unknown> | null;
+      const provisionConfig = nodeConfig?.provision_config as Record<string, unknown> | null;
+      const planId = provisionConfig?.plan_id as string | undefined;
+      if (planId) {
+        // filtered = workers only, +1 for control plane
+        const newNodeCount = Math.max(filtered.length + 1, 1);
+        const { hourlyRate: newHourlyRate } = await getRatesForKubernetesExisting(planId, newNodeCount);
+        await Billing.update_active_kubernetes_rate({ serviceId: clusterId, newHourlyRate });
+        console.log(`[KubernetesService.removeNode] ✅ Billing rate updated to ${newHourlyRate}/hr for ${newNodeCount} nodes`);
+      } else {
+        console.warn("[KubernetesService.removeNode] plan_id not found in node_config.provision_config; skipping billing rate update");
+      }
+    } catch (billingErr) {
+      console.error("[KubernetesService.removeNode] Failed to update billing rate (non-fatal):", billingErr);
+    }
+
+    // Audit log (non-fatal)
+    try {
+      await AuditLogService.create({
+        user_id: userId,
+        user_role: "user",
+        user_email: userEmail ?? undefined,
+        action: "delete",
+        service_type: "kubernetes",
+        service_id: clusterId,
+        service_name: data.cluster_name as string | undefined,
+        before_state: { workers: workersBefore },
+        after_state: { workers: filtered },
+        metadata: { operation: "node_deletion", droplet_id: dropletId, nodes_removed: 1 },
+        ip_address: auditContext?.ipAddress,
+        user_agent: auditContext?.userAgent,
+        request_id: auditContext?.requestId,
+      });
+    } catch (auditErr) {
+      console.error("[KubernetesService.removeNode] Failed to create audit log:", auditErr);
+    }
+
+    return {
+      success: true,
+      workers: filtered as Array<Record<string, unknown>>,
+      data: { workers: filtered, clusterName: data.cluster_name },
+    };
   },
 };

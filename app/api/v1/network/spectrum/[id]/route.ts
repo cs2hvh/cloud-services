@@ -4,6 +4,7 @@
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { updateSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { SpectrumService } from "@/lib/services/spectrum-service";
+import { logError } from "@/lib/api/error-sanitizer";
 
 type RouteContext = { params: Promise<{ [key: string]: string | string[] }> };
 
@@ -137,11 +138,11 @@ export const PATCH = withV1Auth(
       if (error.code === "FORBIDDEN") {
         return v1Error("FORBIDDEN", 403, "Access denied");
       }
-      console.error("[PATCH /api/v1/network/spectrum/[id]]", error);
+      logError("[PATCH /api/v1/network/spectrum/[id]]", error);
       return v1Error(
         "INTERNAL_ERROR",
         500,
-        error.message || "Failed to update spectrum app"
+        "Failed to update spectrum app"
       );
     }
   }
@@ -180,11 +181,11 @@ export const DELETE = withV1Auth(
       if (error.code === "FORBIDDEN") {
         return v1Error("FORBIDDEN", 403, "Access denied");
       }
-      console.error("[DELETE /api/v1/network/spectrum/[id]]", error);
+      logError("[DELETE /api/v1/network/spectrum/[id]]", error);
       return v1Error(
         "INTERNAL_ERROR",
         500,
-        error.message || "Failed to delete spectrum app"
+        "Failed to delete spectrum app"
       );
     }
   }

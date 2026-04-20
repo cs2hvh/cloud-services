@@ -16,6 +16,7 @@ import {
 import { Container } from "@/components/ui/container";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Spotlight } from "@/components/ui/spotlight";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 interface Plan {
   nodes: number;
@@ -375,13 +376,14 @@ export default function KubernetesPricingSection({
                     </span>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <a
-                      href="/signup"
+                    <AuthAwareServiceCta
+                      service="kubernetes"
+                      intent="new"
                       className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
                     >
                       Deploy
                       <ArrowRight className="w-3.5 h-3.5" />
-                    </a>
+                    </AuthAwareServiceCta>
                   </td>
                 </tr>
               ))}
@@ -414,13 +416,14 @@ export default function KubernetesPricingSection({
 
         {/* ── CTA ── */}
         <div className="mt-12 flex flex-col items-center">
-          <a
-            href="/signup"
+          <AuthAwareServiceCta
+            service="kubernetes"
+            intent="new"
             className="cursor-pointer inline-flex items-center justify-center gap-2.5 bg-white text-black px-10 h-12 text-[15px] font-[500] hover:bg-white/90 transition-colors"
           >
             Deploy Your First Cluster
             <ArrowRight className="w-4.5 h-4.5" />
-          </a>
+          </AuthAwareServiceCta>
           <p className="mt-4 text-[13px] text-white/30">
             No credit card required &middot; Free control plane on every cluster
           </p>

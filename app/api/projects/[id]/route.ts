@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProjectService } from "@/lib/services/project-service";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { projectSchema } from "@/types/zod/project";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -35,11 +36,10 @@ export async function PATCH(req: Request, { params }: Params) {
 
     return NextResponse.json({ message: "Project updated successfully" });
   } catch (error) {
-    console.error("[PATCH /projects/:id]", error);
+    logError("[PATCH /projects/:id]", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Internal server error",
+        message: sanitizeError(error),
       },
       { status: 500 },
     );
@@ -135,6 +135,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       );
     }
 
+    if (!deleted.success && deleted.errorCode === "LAST_PROJECT") {
+      return NextResponse.json(
+        { message: deleted.error },
+        { status: 409 },
+      );
+    }
+
     if (!deleted.success) {
       return NextResponse.json(
         { message: "Failed to delete project" },
@@ -146,11 +153,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       message: "Project deleted successfully",
     });
   } catch (error) {
-    console.error("[DELETE /projects/:id]", error);
+    logError("[DELETE /projects/:id]", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Internal server error",
+        message: sanitizeError(error),
       },
       { status: 500 },
     );

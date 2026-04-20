@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -41,11 +42,11 @@ export async function POST(req: NextRequest) {
     }
     const validatedData = validation.data;
 
-    const result = await DatabaseService.readNetworkRules(validatedData.id);
+    const result = await DatabaseService.readNetworkRules(validatedData.id, auth.user.id);
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || "Failed to read network rules" },
-        { status: 400 }
+        { status: result.statusCode || 400 }
       );
     }
 
@@ -57,16 +58,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Unknown error occurred" },
-      { status: 400 }
-    );
+    logError("services/database/network/read", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

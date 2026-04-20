@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { logError } from "@/lib/api/error-sanitizer";
 import {
   NameComRegistrarAdapter,
   type NameComRecordType,
@@ -109,13 +110,13 @@ async function ensureOwnedDomain(input: { userId: string; domain: string }): Pro
     }
 
     return { ok: true };
-  } catch (error: unknown) {
+  } catch {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Failed to load domain ownership",
+          message: "Failed to load domain ownership",
         },
         { status: 500 }
       ),
@@ -205,10 +206,11 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/GET", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to load DNS records",
+        message: "Failed to load DNS records",
       },
       { status: 500 }
     );
@@ -293,10 +295,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/POST", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to create DNS record",
+        message: "Failed to create DNS record",
       },
       { status: 500 }
     );
@@ -385,10 +388,11 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/PATCH", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to update DNS record",
+        message: "Failed to update DNS record",
       },
       { status: 500 }
     );
@@ -449,10 +453,11 @@ export async function DELETE(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/DELETE", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to delete DNS record",
+        message: "Failed to delete DNS record",
       },
       { status: 500 }
     );

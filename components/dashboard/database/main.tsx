@@ -153,7 +153,7 @@ const DatabasePage = () => {
         if (!mounted) return;
 
         if (res.status === 200) {
-          setClusters(Array.isArray(res.data.data) ? res.data.data : []);
+          setClusters(Array.isArray(res?.data?.data) ? res?.data?.data : []);
         }
       } catch (error) {
         console.error("Error fetching database clusters:", error);

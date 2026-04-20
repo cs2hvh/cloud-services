@@ -6,7 +6,7 @@
  * 2. Project has a valid pom.xml file
  * 3. Auto-creates Dockerfile if missing, builds with Kaniko, deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml } from './utils';
+import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -18,6 +18,7 @@ export function createJavaPipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
+  deploymentRecordSecret: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
@@ -84,11 +85,6 @@ export function createJavaPipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>RESIZE_ONLY</name>
-          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
-          <defaultValue>false</defaultValue>
-        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -112,6 +108,7 @@ pipeline {
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -137,9 +134,6 @@ pipeline {
     }
 
     stage('Checkout Repository') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -147,12 +141,13 @@ pipeline {
             echo 'Fetching source code from repository'
             sh '''
               echo "Cloning repository..."
-              git clone --branch ${branch} ${gitUrl} .
+              git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
               git config --global --add safe.directory "$(pwd)"
               
               # If COMMIT_SHA parameter is provided, checkout that specific commit
               if [ -n "\${COMMIT_SHA}" ]; then
                 echo "Checking out specific commit: \${COMMIT_SHA}"
+                git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
                 git checkout \${COMMIT_SHA}
               else
                 echo "Using branch HEAD"
@@ -170,9 +165,6 @@ pipeline {
 ${generateSecurityStages({ language: 'docker' })}
 
     stage('Prepare Dockerfile') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -187,9 +179,6 @@ ${generateJavaDockerfileStage()}
     }
 
     stage('Build Docker Image') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('kaniko') {
           script {
@@ -221,6 +210,9 @@ EOF
                   --dockerfile=Dockerfile \\
                   --destination=\${DOCKER_IMAGE_VERSION} \\
                   --destination=\${DOCKER_IMAGE_LATEST} \\
+                  --cache=true \\
+                  --cache-repo=hav0ky/${appName}-cache \\
+                  --use-new-run \\
                   --digest-file=image-digest.txt
                 
                 echo 'Image build completed successfully'
@@ -275,14 +267,7 @@ SECRET_EOF
             
             sh(
               script: '''
-              # Use latest image for resize operations, new build image otherwise
-              if [ "\${RESIZE_ONLY}" = "true" ]; then
-                DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
-                echo "Resize mode: Using existing latest image"
-              else
-                DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
-                echo "Full deploy: Using newly built image"
-              fi
+              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
               
               echo 'Generating Kubernetes deployment manifest'
               cat > deployment.yaml << DEPLOYMENT_EOF
@@ -294,6 +279,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -351,7 +337,9 @@ spec:
     protocol: TCP
     name: http
   type: ClusterIP
----
+DEPLOYMENT_EOF
+
+              cat > ingress.yaml << INGRESS_EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -364,7 +352,7 @@ spec:
   tls:
   - hosts:
     - \${DOMAIN}
-    secretName: \${APP_NAME}-tls
+    secretName: ${name}-tls
   rules:
   - host: \${DOMAIN}
     http:
@@ -376,18 +364,56 @@ spec:
             name: \${SERVICE_NAME}
             port:
               number: 80
-DEPLOYMENT_EOF
+INGRESS_EOF
 
               echo 'Applying Kubernetes manifests'
               kubectl apply -f deployment.yaml
               
-              echo 'Waiting for deployment rollout'
-              kubectl rollout status deployment/\${APP_NAME} --timeout=5m || true
+              echo 'Applying service manifest'
+              kubectl apply -f /dev/stdin <<SERVICE_APPLY_EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: \${SERVICE_NAME}
+  labels:
+    app: \${APP_NAME}
+spec:
+  selector:
+    app: \${APP_NAME}
+  ports:
+  - port: 80
+    targetPort: \${CONTAINER_PORT}
+    protocol: TCP
+    name: http
+  type: ClusterIP
+SERVICE_APPLY_EOF
+
+              echo 'Applying certificate manifest'
+              kubectl apply -f /dev/stdin <<CERT_APPLY_EOF || echo 'WARNING: cert-manager not installed, skipping certificate'
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${name}-cert
+  namespace: default
+spec:
+  secretName: ${name}-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - \${DOMAIN}
+CERT_APPLY_EOF
+              kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }
               
               echo 'Deployment completed'
               kubectl get deployment \${APP_NAME}
               kubectl get service \${SERVICE_NAME}
-              kubectl get ingress \${INGRESS_NAME}
+              ''',
+              returnStatus: false
+            )
+
+            sh(
+              script: '''${generateSmartIngressApplyScript(ingressName, appDomain)}
               ''',
               returnStatus: false
             )
@@ -396,9 +422,44 @@ DEPLOYMENT_EOF
       }
     }
 
+    stage('Verify Deployment') {
+      steps {
+        container('kubectl') {
+          script {
+            echo 'STAGE: Verify Deployment'
+            echo "Checking deployment status for \${env.APP_NAME}"
+
+            echo 'Fetching deployment, service, and ingress status'
+            sh(
+              script: 'kubectl get deployment,service,ingress -l app=\${APP_NAME}',
+              returnStatus: false
+            )
+
+            echo 'Fetching pod status'
+            sh(
+              script: 'kubectl get pods -l app=\${APP_NAME}',
+              returnStatus: false
+            )
+
+            echo 'Checking SSL certificate status'
+            sh(
+              script: 'kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"',
+              returnStatus: true
+            )
+            sh(
+              script: 'kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"',
+              returnStatus: true
+            )
+
+            echo 'Deployment verification completed successfully'
+          }
+        }
+      }
+    }
+
     stage('Send Deployment Notification') {
       when {
-        expression { return env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID }
+        expression { return env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET }
       }
       steps {
         script {
@@ -411,6 +472,7 @@ DEPLOYMENT_EOF
           sh(script: """
             curl -X POST "\${webhookUrl}" \\
               -H "Content-Type: application/json" \\
+              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
               -d '\${payload}' || echo 'Webhook notification failed (non-blocking)'
           """, returnStatus: false)
           
@@ -424,12 +486,13 @@ DEPLOYMENT_EOF
     failure {
       script {
         echo 'Pipeline failed - sending failure notification'
-        if (env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID) {
+        if (env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET) {
           def webhookUrl = "\${env.WEBHOOK_BASE_URL}/api/services/platform-apps/\${env.PLATFORM_APP_ID}/builds"
           def payload = """{"buildNumber":\${env.BUILD_NUMBER},"status":"FAILED","trigger":"\${env.DEPLOY_TRIGGER}","jenkinsUrl":"\${env.BUILD_URL}"}"""
           sh(script: """
             curl -X POST "\${webhookUrl}" \\
               -H "Content-Type: application/json" \\
+              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
               -d '\${payload}' || echo 'Failure webhook failed (non-blocking)'
           """, returnStatus: false)
         }

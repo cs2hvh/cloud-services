@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { RuntimeLogsService } from "@/lib/services/runtime-logs";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/services/platform-apps/pods?app_id=xxx
@@ -102,11 +103,7 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting instances:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get instances";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/pods", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

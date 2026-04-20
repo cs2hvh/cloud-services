@@ -224,7 +224,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
       // Submit order to API
       const response = await api.post("/services/order/game", orderData);
 
-      toast.success(response.data || "Game server ordered successfully!");
+      toast.success(response?.data || "Game server ordered successfully!");
       // Redirect to success page or dashboard
     } catch (error) {
       console.error("Order error:", error);

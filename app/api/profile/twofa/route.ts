@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { Users } from "@/lib/supabase/queries/users";
+import { logError } from "@/lib/api/error-sanitizer";
 import { rateLimit } from "@/lib/rate-limit";
 
 // Rate limiter: 5 requests per minute per user
@@ -70,8 +71,7 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (e: unknown) {
-    const message =
-      e instanceof Error ? e.message : "Failed to update 2FA status.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    logError("profile/twofa", e);
+    return NextResponse.json({ error: "Failed to update 2FA status." }, { status: 500 });
   }
 }

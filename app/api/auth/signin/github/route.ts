@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 const SUPPORTED_PROVIDERS = ["github", "google", "gitlab", "bitbucket"] as const;
 type OAuthProvider = (typeof SUPPORTED_PROVIDERS)[number];
@@ -89,7 +90,8 @@ export async function POST(request: NextRequest) {
     // console.log(data, "..............data............17");
 
     if (error) {
-      return Response.json({ message: error.message }, { status: 400 });
+      logError("auth/signin/github", error);
+      return Response.json({ message: sanitizeAuthError(error) }, { status: 400 });
     }
 
     if (!data.url) {

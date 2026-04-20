@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { updateSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { updateSpectrumApp } from "@/config/spectrum-functions";
+import { logError } from "@/lib/api/error-sanitizer";
 import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -32,14 +33,22 @@ export async function PUT(req: NextRequest) {
     const validation = validateRequest(updateSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
-    // Get before state
+    const adminCheck = await requireAdmin();
+
+    // Get before state and enforce ownership for non-admins
     const beforeState = await Spectrum_Apps.get(validation.data.app_id);
+    if (!beforeState.success || !beforeState.data) {
+      return NextResponse.json({ error: "Spectrum app not found" }, { status: 404 });
+    }
+
+    if (!adminCheck.ok && beforeState.data.owner_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const result = await updateSpectrumApp(validation.data);
 
     // Create audit log
     const auditContext = getAuditContext(req);
-    const adminCheck = await requireAdmin();
     
     if (beforeState.success) {
       await AuditLogService.create({
@@ -60,7 +69,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { errors?: Array<{ message?: string }> } }; message?: string }).response?.data?.errors?.[0]?.message || (err instanceof Error ? err.message : null) || "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    logError("services/spectrum/apps/update", err);
+    return NextResponse.json({ error: "Failed to update spectrum app" }, { status: 400 });
   }
 }

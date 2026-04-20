@@ -27,6 +27,10 @@ import type {
   DomainRecord,
   DomainRecordWithRouting,
 } from "@/lib/domain-service/core/types";
+import {
+  DomainAppMutationGuard,
+  getDomainOperationLockId,
+} from "@/lib/domain-service/application/domain-app-mutation-guard";
 
 // If an activation operation is still "running" beyond this threshold, the
 // server likely restarted mid-Jenkins-job. Auto-fail it so the frontend stops
@@ -65,6 +69,8 @@ type AddDomainResult = {
 };
 
 export class DomainService {
+  private readonly appMutationGuard = new DomainAppMutationGuard();
+
   constructor(private readonly deps: DomainServiceDeps) {}
 
   async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecordWithRouting[]> {
@@ -124,88 +130,96 @@ export class DomainService {
       return normalizeAddDomainResult(fromIdempotency);
     }
 
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    // Load app first (authorization + needed for mutation lock)
+    const app = await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
 
-    const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
-    if (existing) {
-      throw new DomainServiceError({
-        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
-        message:
-          existing.app_id === input.appId
-            ? "This domain is already added to this app"
-            : "This domain is already in use by another app",
-      });
-    }
+    return this.appMutationGuard.withAppMutationLock({
+      app,
+      holder: "domain_add",
+      metadata: { domain: cleanDomain, action: "domain.add" },
+      run: async () => {
+        const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
+        if (existing) {
+          throw new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+            message:
+              existing.app_id === input.appId
+                ? "This domain is already added to this app"
+                : "This domain is already in use by another app",
+          });
+        }
 
-    const ownership = await this.resolveOwnershipMode({
-      domain: cleanDomain,
-      userId: input.actor.userId,
-    });
+        const ownership = await this.resolveOwnershipMode({
+          domain: cleanDomain,
+          userId: input.actor.userId,
+        });
 
-    const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
-    const createdDomain = await this.deps.domains.createPending({
-      appId: input.appId,
-      userId: input.actor.userId,
-      domain: cleanDomain,
-      verificationToken,
-    });
+        const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
+        const createdDomain = await this.deps.domains.createPending({
+          appId: input.appId,
+          userId: input.actor.userId,
+          domain: cleanDomain,
+          verificationToken,
+        });
 
-    const domain = ownership.managedByPlatform
-      ? await this.deps.domains.markVerified(createdDomain.id)
-      : createdDomain;
+        const domain = ownership.managedByPlatform
+          ? await this.deps.domains.markVerified(createdDomain.id)
+          : createdDomain;
 
-    const response = {
-      domain,
-      verification_required: !ownership.managedByPlatform,
-      managed_zone_detected: ownership.managedByPlatform,
-      ownership_source: ownership.source,
-      verification_instructions: ownership.managedByPlatform
-        ? null
-        : {
-            record_type: "TXT" as const,
-            record_name: `galaxyhvh-verify.${cleanDomain}`,
-            record_value: verificationToken,
-            ttl: 300,
-          },
-    };
-
-    await this.persistCompletedIdempotentOperation({
-      action: "domain.add",
-      actorUserId: input.actor.userId,
-      idempotencyKey: input.idempotencyKey,
-      domainId: domain.id,
-      requestData: { app_id: input.appId, domain: cleanDomain },
-      responseData: response as unknown as Record<string, unknown>,
-    });
-
-    await this.emitNonBlocking(async () => {
-      await this.emitAudit({
-        actor: input.actor,
-        action: "create",
-        serviceId: domain.id,
-        serviceName: cleanDomain,
-        metadata: {
-          app_id: input.appId,
-          event: "domain_added",
+        const response = {
+          domain,
+          verification_required: !ownership.managedByPlatform,
           managed_zone_detected: ownership.managedByPlatform,
           ownership_source: ownership.source,
-        },
-      });
-      await this.emitNotification({
-        userId: input.actor.userId,
-        action: "created",
-        serviceName: cleanDomain,
-        serviceId: domain.id,
-        type: "success",
-        metadata: {
-          app_id: input.appId,
-          managed_zone_detected: ownership.managedByPlatform,
-          ownership_source: ownership.source,
-        },
-      });
-    });
+          verification_instructions: ownership.managedByPlatform
+            ? null
+            : {
+                record_type: "TXT" as const,
+                record_name: `galaxyhvh-verify.${cleanDomain}`,
+                record_value: verificationToken,
+                ttl: 300,
+              },
+        };
 
-    return response;
+        await this.persistCompletedIdempotentOperation({
+          action: "domain.add",
+          actorUserId: input.actor.userId,
+          idempotencyKey: input.idempotencyKey,
+          domainId: domain.id,
+          requestData: { app_id: input.appId, domain: cleanDomain },
+          responseData: response as unknown as Record<string, unknown>,
+        });
+
+        await this.emitNonBlocking(async () => {
+          await this.emitAudit({
+            actor: input.actor,
+            action: "create",
+            serviceId: domain.id,
+            serviceName: cleanDomain,
+            metadata: {
+              app_id: input.appId,
+              event: "domain_added",
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+          await this.emitNotification({
+            userId: input.actor.userId,
+            action: "created",
+            serviceName: cleanDomain,
+            serviceId: domain.id,
+            type: "success",
+            metadata: {
+              app_id: input.appId,
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+        });
+
+        return response;
+      },
+    });
   }
 
   async verifyDomain(input: {
@@ -315,6 +329,8 @@ export class DomainService {
     }
 
     const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+    const app = await this.deps.appRead.getOwnedApp(domain.app_id, input.actor.userId);
+    this.appMutationGuard.assertAppRunning(app);
     if (domain.status !== "verified" && domain.status !== "active") {
       throw new DomainServiceError({
         code: DOMAIN_ERROR_CODES.DOMAIN_NOT_VERIFIED,
@@ -322,16 +338,36 @@ export class DomainService {
       });
     }
 
-    const operation = await this.deps.operations.create({
-      userId: input.actor.userId,
-      action: "domain.activate",
-      domainId: domain.id,
-      idempotencyKey: input.idempotencyKey,
-      requestData: { domain_id: input.domainId },
-      status: "pending",
+    const appMutationLock = await this.appMutationGuard.acquireForAsyncDomainOperation({
+      app,
+      holder: "domain_activate",
+      metadata: {
+        domain_id: domain.id,
+        domain: domain.domain,
+        action: "domain.activate",
+      },
+      ttlMs: STALE_OPERATION_MS + 2 * 60 * 1000,
     });
 
-    return operation;
+    try {
+      const operation = await this.deps.operations.create({
+        userId: input.actor.userId,
+        action: "domain.activate",
+        domainId: domain.id,
+        idempotencyKey: input.idempotencyKey,
+        requestData: {
+          domain_id: input.domainId,
+          app_id: app.id,
+          app_mutation_lock_id: appMutationLock.id,
+        },
+        status: "pending",
+      });
+
+      return operation;
+    } catch (error) {
+      await this.appMutationGuard.release(appMutationLock.id).catch(() => {});
+      throw error;
+    }
   }
 
   async setPrimaryDomain(input: {
@@ -360,6 +396,8 @@ export class DomainService {
     const updated = await this.deps.domains.setPrimary(domain.id, domain.app_id, {
       redirectToPrimary: input.redirectToPrimary,
     });
+
+    await this.syncPrimaryDomainCache(domain.app_id, updated.domain);
 
     await this.persistCompletedIdempotentOperation({
       action: "domain.set-primary",
@@ -416,99 +454,111 @@ export class DomainService {
 
     const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
     const app = await this.deps.appRead.getOwnedApp(domain.app_id, input.actor.userId);
-    // Use app.name (not app.slug): the platform DNS A record is <name>.APP_DOMAIN,
-    // not <slug>.APP_DOMAIN. The slug includes a hash suffix that has no specific A record.
-    const cnameTarget = `${app.name}.${APP_DOMAIN}`;
 
-    if (shouldAttemptRoutingCleanup(domain.status)) {
-      try {
-        await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
-      } catch (error: unknown) {
-        const integrationError = toDomainServiceError(error);
-        if (domain.status === "active") {
-          throw new DomainServiceError({
-            code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
-            message: "Failed to remove domain mapping. Please retry.",
-            retryable: integrationError.retryable ?? true,
-          });
-        }
+    return this.appMutationGuard.withAppMutationLock({
+      app,
+      holder: "domain_remove",
+      metadata: {
+        domain_id: domain.id,
+        domain: domain.domain,
+        action: "domain.remove",
+      },
+      run: async () => {
+        // Use app.name (not app.slug): the platform DNS A record is <name>.APP_DOMAIN,
+        // not <slug>.APP_DOMAIN. The slug includes a hash suffix that has no specific A record.
+        const cnameTarget = `${app.name}.${APP_DOMAIN}`;
 
-        console.warn("[DomainService] Ingress cleanup skipped during non-active removal", {
-          domainId: domain.id,
-          domain: domain.domain,
-          status: domain.status,
-          errorCode: integrationError.code,
-          errorMessage: integrationError.message,
-        });
-      }
+        if (shouldAttemptRoutingCleanup(domain.status)) {
+          try {
+            await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
+          } catch (error: unknown) {
+            const integrationError = toDomainServiceError(error);
+            if (domain.status === "active") {
+              throw new DomainServiceError({
+                code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+                message: "Failed to remove domain mapping. Please retry.",
+                retryable: integrationError.retryable ?? true,
+              });
+            }
 
-      try {
-        await this.deps.dns.removeRoutingRecord({
-          fqdn: domain.domain,
-          target: cnameTarget,
-        });
-      } catch (error: unknown) {
-        const dnsError = toDomainServiceError(error);
-        if (!shouldSkipManagedDnsAutomation(dnsError)) {
-          await this.emitNonBlocking(async () => {
-            await this.emitAudit({
-              actor: input.actor,
-              action: "update",
-              serviceId: domain.id,
-              serviceName: domain.domain,
-              metadata: {
-                event: "domain_dns_cleanup_failed",
-                app_id: domain.app_id,
-                error_code: dnsError.code,
-                error_message: dnsError.message,
-              },
+            console.warn("[DomainService] Ingress cleanup skipped during non-active removal", {
+              domainId: domain.id,
+              domain: domain.domain,
+              status: domain.status,
+              errorCode: integrationError.code,
+              errorMessage: integrationError.message,
             });
-          });
+          }
+
+          try {
+            await this.deps.dns.removeRoutingRecord({
+              fqdn: domain.domain,
+              target: cnameTarget,
+            });
+          } catch (error: unknown) {
+            const dnsError = toDomainServiceError(error);
+            if (!shouldSkipManagedDnsAutomation(dnsError)) {
+              await this.emitNonBlocking(async () => {
+                await this.emitAudit({
+                  actor: input.actor,
+                  action: "update",
+                  serviceId: domain.id,
+                  serviceName: domain.domain,
+                  metadata: {
+                    event: "domain_dns_cleanup_failed",
+                    app_id: domain.app_id,
+                    error_code: dnsError.code,
+                    error_message: dnsError.message,
+                  },
+                });
+              });
+            }
+          }
         }
-      }
-    }
 
-    await this.deps.domains.markRemoved(domain.id);
+        await this.deps.domains.markRemoved(domain.id);
 
-    // Update app-level denormalised fields so deployment pipeline stays in sync.
-    await this.emitNonBlocking(async () => {
-      if (this.deps.appWrite) {
-        await this.deps.appWrite.clearCustomDomain(domain.app_id, domain.domain).catch((err) => {
-          console.error("[DomainService] clearCustomDomain failed", err);
+        // Update app-level denormalised fields so deployment pipeline stays in sync.
+        await this.emitNonBlocking(async () => {
+          if (this.deps.appWrite) {
+            await this.deps.appWrite.clearCustomDomain(domain.app_id, domain.domain).catch((err) => {
+              console.error("[DomainService] clearCustomDomain failed", err);
+            });
+          }
         });
-      }
+
+        const response = { deleted: true as const, domain_id: domain.id };
+
+        await this.persistCompletedIdempotentOperation({
+          action: "domain.remove",
+          actorUserId: input.actor.userId,
+          idempotencyKey: input.idempotencyKey,
+          domainId: domain.id,
+          requestData: { domain_id: input.domainId },
+          responseData: response as unknown as Record<string, unknown>,
+        });
+
+        await this.emitNonBlocking(async () => {
+          await this.emitAudit({
+            actor: input.actor,
+            action: "delete",
+            serviceId: domain.id,
+            serviceName: domain.domain,
+            metadata: { event: "domain_removed", app_id: domain.app_id },
+          });
+          await this.emitNotification({
+            userId: input.actor.userId,
+            action: "deleted",
+            serviceName: domain.domain,
+            serviceId: domain.id,
+            type: "warning",
+            metadata: { app_id: domain.app_id },
+          });
+        });
+
+        return response;
+      },
     });
-
-    const response = { deleted: true as const, domain_id: domain.id };
-
-    await this.persistCompletedIdempotentOperation({
-      action: "domain.remove",
-      actorUserId: input.actor.userId,
-      idempotencyKey: input.idempotencyKey,
-      domainId: domain.id,
-      requestData: { domain_id: input.domainId },
-      responseData: response as unknown as Record<string, unknown>,
-    });
-
-    await this.emitNonBlocking(async () => {
-      await this.emitAudit({
-        actor: input.actor,
-        action: "delete",
-        serviceId: domain.id,
-        serviceName: domain.domain,
-        metadata: { event: "domain_removed", app_id: domain.app_id },
-      });
-      await this.emitNotification({
-        userId: input.actor.userId,
-        action: "deleted",
-        serviceName: domain.domain,
-        serviceId: domain.id,
-        type: "warning",
-        metadata: { app_id: domain.app_id },
-      });
-    });
-
-    return response;
   }
 
   async checkSslStatus(input: {
@@ -628,10 +678,13 @@ export class DomainService {
       });
     }
 
-    // If the operation is stuck in "running" (server restarted mid-Jenkins job),
-    // fail it now so the frontend stops polling and the user can retry.
-    if (operation.status === "running" && operation.started_at) {
-      const ageMs = Date.now() - new Date(operation.started_at).getTime();
+    // If the operation is stuck in "pending" or "running" (server restarted before
+    // or during the activation run), fail it now so the frontend stops polling and
+    // the app-level mutation lock is released for retry.
+    if (operation.status === "pending" || operation.status === "running") {
+      const referenceTime =
+        operation.status === "running" ? operation.started_at || operation.created_at : operation.created_at;
+      const ageMs = Date.now() - new Date(referenceTime).getTime();
       if (ageMs > STALE_OPERATION_MS) {
         const errorMessage =
           "Activation did not complete — the server may have restarted. Please try activating again.";
@@ -642,6 +695,10 @@ export class DomainService {
             message: errorMessage,
             retryable: true,
           })
+          .catch(() => {});
+
+        await this.appMutationGuard
+          .release(getDomainOperationLockId(operation.request_data))
           .catch(() => {});
 
         return {
@@ -660,6 +717,7 @@ export class DomainService {
 
   async runActivationOperation(operationId: string, actor: ActorContext): Promise<void> {
     const userId = actor.userId;
+    let appMutationLockId: string | null = null;
     try {
       console.log("[DomainService] Activation run started", {
         operationId,
@@ -673,6 +731,8 @@ export class DomainService {
         });
         return;
       }
+
+      appMutationLockId = getDomainOperationLockId(operation.request_data);
 
       await this.deps.operations.markRunning(operation.id);
       console.log("[DomainService] Activation operation marked running", {
@@ -884,6 +944,15 @@ export class DomainService {
       } catch (markError) {
         console.error("[DomainService] Failed to persist operation failure", markError);
       }
+    } finally {
+      await this.appMutationGuard.release(appMutationLockId).catch((error) => {
+        console.error("[DomainService] Failed to release app mutation lock", {
+          operationId,
+          userId,
+          lockId: appMutationLockId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
   }
 
@@ -977,6 +1046,14 @@ export class DomainService {
       requestData: params.requestData,
       responseData: params.responseData,
       status: "succeeded",
+    });
+  }
+
+  private async syncPrimaryDomainCache(appId: string, domain: string): Promise<void> {
+    if (!this.deps.appWrite) return;
+
+    await this.deps.appWrite.setPrimaryCustomDomain(appId, domain).catch((error) => {
+      console.error("[DomainService] setPrimaryCustomDomain failed", error);
     });
   }
 
@@ -1146,6 +1223,13 @@ type ActivationFailure = {
   retryable: boolean;
 };
 
+// name.com error strings that indicate an ICANN Contact Verification Hold.
+// Centralised here so a name.com wording change only needs one update.
+const CONTACT_VERIFICATION_HOLD_STRINGS = [
+  "contact verification hold",
+  "parameter value error - contact verification hold",
+] as const;
+
 function classifyActivationFailure(error: DomainServiceError): ActivationFailure {
   const raw = error.message || "Domain activation failed.";
   const lower = raw.toLowerCase();
@@ -1228,6 +1312,19 @@ function classifyActivationFailure(error: DomainServiceError): ActivationFailure
       code: DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED,
       retryable: true,
       message: "Domain setup failed. Please retry activation.",
+    };
+  }
+
+  // Contact Verification Hold — ICANN requires the registrant email to be
+  // verified after registration. DNS record mutations are blocked until the
+  // verification link in the registrar admin inbox is clicked.
+  if (CONTACT_VERIFICATION_HOLD_STRINGS.some((s) => lower.includes(s))) {
+    return {
+      code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
+      retryable: false,
+      message:
+        "Domain activation is blocked by a registrar contact-verification hold. " +
+        "A verification email was sent to the registrant email address — click the link in that email, then retry activation.",
     };
   }
 

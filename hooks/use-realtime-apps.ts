@@ -63,6 +63,11 @@ export interface App {
   size?: string;
   last_failure_reason?: string | null;
   can_rollback?: boolean;
+  serving_build_number?: number | null;
+  last_operation_build_number?: number | null;
+  last_operation_trigger?: string | null;
+  rollback_target_build_number?: number | null;
+  rollback_target_commit_sha?: string | null;
 }
 
 interface UseRealtimeAppsOptions {
@@ -96,6 +101,11 @@ function transformApp(record: AppRecord): App {
     size: record.size || undefined,
     last_failure_reason: record.last_failure_reason,
     can_rollback: false, // Can't determine from real-time, set to false
+    serving_build_number: null,
+    last_operation_build_number: null,
+    last_operation_trigger: null,
+    rollback_target_build_number: null,
+    rollback_target_commit_sha: null,
   };
 }
 

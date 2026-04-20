@@ -1,6 +1,26 @@
 import { createClient, createSSRClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+const DATABASE_SORT_COLUMNS = new Set([
+  "created_at",
+  "name",
+  "engine",
+  "version",
+  "region",
+  "cluster_id",
+  "status",
+  "owner_id",
+  "email",
+]);
+
+function sanitizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9@._\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Helper function to check if user is admin
 async function checkAdminAuth() {
   const supabase = await createClient();
@@ -37,10 +57,11 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "10");
-  const search = searchParams.get("search") || "";
-  const sortBy = searchParams.get("sortBy") || "created_at";
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10) || 10));
+  const search = sanitizeSearchTerm(searchParams.get("search") || "");
+  const requestedSortBy = searchParams.get("sortBy") || "created_at";
+  const sortBy = DATABASE_SORT_COLUMNS.has(requestedSortBy) ? requestedSortBy : "created_at";
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -170,7 +191,12 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       message: "Database updated successfully",
-      data,
+      // Strip credentials — never return password or ca_certificate to client
+      data: Object.fromEntries(
+        Object.entries(data as Record<string, unknown>).filter(
+          ([k]) => k !== "password" && k !== "ca_certificate"
+        )
+      ),
     });
   } catch (err) {
     console.error("[Admin API] Unexpected error:", err);

@@ -12,6 +12,7 @@ import { KnowledgeBaseInsert } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 // Validation schema for creating a knowledge base
 const createKBSchema = z.object({
@@ -87,8 +88,9 @@ export async function POST(request: NextRequest) {
     const validation = createKBSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('POST /api/knowledge-bases validation', validation.error);
       return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

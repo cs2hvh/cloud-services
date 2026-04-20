@@ -62,8 +62,8 @@ export class GitHubProvider implements BaseProvider {
   /**
    * Store GitHub token
    */
-  async storeToken(userId: string, token: AuthToken): Promise<boolean> {
-    return await githubTokenManager.storeToken(userId, token.accessToken);
+  async storeToken(userId: string, token: AuthToken, meta?: { username?: string; githubUserId?: number }): Promise<boolean> {
+    return await githubTokenManager.storeToken(userId, token.accessToken, meta);
   }
 
   /**

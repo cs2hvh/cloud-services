@@ -175,7 +175,7 @@ export interface DatabaseUser {
 export interface DatabaseInstance {
   id: string;           // Database name (unique identifier)
   name: string;         // Database name
-  created_at: string;   // ISO timestamp
+  created_at?: string;  // ISO timestamp when known
 }
 
 export interface Database_Connection{
@@ -1417,6 +1417,120 @@ export type Database = {
         Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
         Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
         Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      active_platform_apps: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_session_id: string | null;
+          stripe_payment_intent: string | null;
+          stripe_invoice_id: string | null;
+          amount: number;
+          currency: string;
+          status: string;
+          type: string;
+          balance_after: number | null;
+          description: string | null;
+          receipt_url: string | null;
+          service_id: string | null;
+          service_type: string | null;
+          period_start: string | null;
+          period_end: string | null;
+          metadata: Record<string, unknown> | null;
+          created_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_invoice_id?: string | null;
+          amount: number;
+          currency?: string;
+          status?: string;
+          type?: string;
+          balance_after?: number | null;
+          description?: string | null;
+          receipt_url?: string | null;
+          service_id?: string | null;
+          service_type?: string | null;
+          period_start?: string | null;
+          period_end?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_invoice_id?: string | null;
+          amount?: number;
+          currency?: string;
+          status?: string;
+          type?: string;
+          balance_after?: number | null;
+          description?: string | null;
+          receipt_url?: string | null;
+          service_id?: string | null;
+          service_type?: string | null;
+          period_start?: string | null;
+          period_end?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      recurring_topups: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_subscription_id: string | null;
+          amount: number;
+          currency: string;
+          interval: string;
+          status: string;
+          cancel_at_period_end: boolean;
+          canceled_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_subscription_id?: string | null;
+          amount: number;
+          currency?: string;
+          interval: string;
+          status?: string;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_subscription_id?: string | null;
+          amount?: number;
+          currency?: string;
+          interval?: string;
+          status?: string;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
         Relationships: [];
       };
     };

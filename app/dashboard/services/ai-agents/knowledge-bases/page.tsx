@@ -105,7 +105,7 @@ export default function KnowledgeBasesPage() {
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">Organize document collections, monitor chunk volume, and manage retrieval sources from a cleaner enterprise surface.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={loadKnowledgeBases} variant="outline" disabled={loading} className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+            <Button style={{cursor:'pointer'}} onClick={loadKnowledgeBases} variant="outline" disabled={loading} className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08] ">
               <RotateCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>

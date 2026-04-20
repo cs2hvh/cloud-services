@@ -93,18 +93,25 @@ export function validateRequest<T>(
  * }
  */
 export function serviceErrorResponse(
-  result: { error?: string; errorCode?: string }
+  result: { error?: string; errorCode?: string; data?: unknown }
 ): NextResponse {
   const status =
     result.errorCode === "NOT_FOUND"
       ? 404
       : result.errorCode === "FORBIDDEN"
         ? 403
+        : result.errorCode === "INSUFFICIENT_BALANCE"
+          ? 402
         : 500;
+  const extra =
+    result.data && typeof result.data === "object"
+      ? result.data as Record<string, unknown>
+      : {};
   return NextResponse.json(
     {
       error: result.error,
       message: result.error,
+      ...extra,
     },
     { status }
   );

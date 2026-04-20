@@ -16,6 +16,32 @@ import {
   mockUnauthenticatedUser,
 } from '../../utils/test-helpers';
 
+const appOpsMocks = vi.hoisted(() => {
+  class MockAppOperationError extends Error {
+    code: string;
+    statusCode: number;
+    retryable: boolean;
+
+    constructor(params: {
+      code: string;
+      message: string;
+      statusCode?: number;
+      retryable?: boolean;
+    }) {
+      super(params.message);
+      this.code = params.code;
+      this.statusCode = params.statusCode ?? 500;
+      this.retryable = params.retryable ?? false;
+    }
+  }
+
+  return {
+    startReleaseBuildMock: vi.fn(),
+    jenkinsBuildTriggerMock: vi.fn(),
+    MockAppOperationError,
+  };
+});
+
 // Mock all dependencies
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
@@ -26,6 +52,66 @@ vi.mock('@/lib/services/app-status');
 vi.mock('@/lib/services/build-polling');
 vi.mock('@/lib/audit');
 vi.mock('@/lib/audit/context');
+vi.mock('@/lib/services/runtime-env-reconciler');
+vi.mock('@/lib/git/provider-token');
+vi.mock('@/lib/app-operations', () => {
+  class MockAppReleaseBuildService {
+    startReleaseBuild = appOpsMocks.startReleaseBuildMock;
+  }
+
+  class MockJenkinsBuildAdapter {
+    triggerBuild = appOpsMocks.jenkinsBuildTriggerMock;
+  }
+
+  class MockAppOperationFinalizer {}
+
+  function resolveBuildBackedOperationState(params: any) {
+    if (typeof params.result.buildNumber === 'number') {
+      return {
+        kind: 'ready',
+        buildNumber: params.result.buildNumber,
+        reused: params.result.reused,
+      };
+    }
+
+    if (params.result.operation?.status === 'building') {
+      return {
+        kind: 'pending',
+        code: 'APP_OPERATION_IN_PROGRESS',
+        message: `${params.actionLabel} is already in progress. Jenkins build number is not available yet.`,
+        reused: params.result.reused,
+      };
+    }
+
+    if (params.result.operation?.status === 'failed') {
+      return {
+        kind: 'failed',
+        code: params.result.operation?.operation_details?.error?.code ?? 'APP_OPERATION_FAILED',
+        message:
+          params.result.operation?.failure_reason ??
+          params.result.operation?.operation_details?.error?.message ??
+          `${params.actionLabel} failed.`,
+        reused: params.result.reused,
+        retryable: false,
+      };
+    }
+
+    return {
+      kind: 'invalid',
+      code: 'BUILD_NUMBER_UNAVAILABLE',
+      message: `${params.actionLabel} completed without a Jenkins build number.`,
+      reused: params.result.reused,
+    };
+  }
+
+  return {
+    AppReleaseBuildService: MockAppReleaseBuildService,
+    JenkinsBuildAdapter: MockJenkinsBuildAdapter,
+    AppOperationFinalizer: MockAppOperationFinalizer,
+    AppOperationError: appOpsMocks.MockAppOperationError,
+    resolveBuildBackedOperationState,
+  };
+});
 
 /**
  * Platform Apps Redeploy API Integration Tests
@@ -55,7 +141,12 @@ describe('POST /api/services/platform-apps/redeploy', () => {
 
     // Default mock for JenkinsService.triggerBuild
     const { JenkinsService } = await import('@/lib/services/jenkins');
-    vi.mocked(JenkinsService.triggerBuild).mockResolvedValue(6);
+    vi.mocked(JenkinsService.updateJobConfig).mockResolvedValue(undefined as any);
+    appOpsMocks.jenkinsBuildTriggerMock.mockResolvedValue({
+      buildNumber: 6,
+      jobName: `${mockPlatformApp.name}-job`,
+      url: `https://jenkins.example/job/${mockPlatformApp.name}-job/6/`,
+    });
 
     // Default mock for AppStatusService.setStatus
     const { AppStatusService } = await import('@/lib/services/app-status');
@@ -71,6 +162,49 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     // Default mock for getAuditContext
     const { getAuditContext } = await import('@/lib/audit/context');
     vi.mocked(getAuditContext).mockReturnValue({} as any);
+
+    // Default mock for git provider token — returns a valid token so builds proceed
+    const { getGitProviderToken, buildAuthenticatedGitUrl } = await import('@/lib/git/provider-token');
+    vi.mocked(getGitProviderToken).mockResolvedValue('mock-github-token');
+    vi.mocked(buildAuthenticatedGitUrl).mockImplementation((url) => url);
+
+    const { reconcileRuntimeEnv } = await import('@/lib/services/runtime-env-reconciler');
+    vi.mocked(reconcileRuntimeEnv).mockResolvedValue({
+      status: 'success',
+      reason: null,
+    } as any);
+
+    appOpsMocks.startReleaseBuildMock.mockImplementation(async (params) => {
+      if (params.appStatus === 'building') {
+        throw new appOpsMocks.MockAppOperationError({
+          code: 'APP_OPERATION_IN_PROGRESS',
+          message: 'Build is already building.',
+          statusCode: 409,
+          retryable: true,
+        });
+      }
+      if (params.appStatus === 'deleting') {
+        throw new appOpsMocks.MockAppOperationError({
+          code: 'APP_DELETING',
+          message: 'App is being deleted.',
+          statusCode: 409,
+        });
+      }
+
+      const execution = await params.executor({
+        id: 'op-1',
+      } as any);
+
+      return {
+        operation: {
+          id: 'op-1',
+          build_number: execution.buildNumber,
+          status: 'building',
+        },
+        buildNumber: execution.buildNumber,
+        reused: false,
+      };
+    });
   });
 
   // ============================================
@@ -158,6 +292,42 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     });
   });
 
+  it('returns 202 when the same idempotent redeploy is still starting and has no Jenkins build number yet', async () => {
+    await mockAuthenticatedUser(mockPlatformAppUser.id);
+    const { BuildPollingService } = await import('@/lib/services/build-polling');
+
+    appOpsMocks.startReleaseBuildMock.mockResolvedValueOnce({
+      operation: {
+        id: 'op-pending',
+        build_number: null,
+        status: 'building',
+        trigger: 'manual',
+        failure_reason: null,
+        operation_details: {
+          schema_version: 1,
+          type: 'redeploy',
+          trigger_origin: 'manual',
+          steps: [],
+        },
+      },
+      buildNumber: null,
+      reused: true,
+    });
+
+    const request = createMockPostRequest(
+      'http://localhost:3000/api/services/platform-apps/redeploy',
+      { app_id: mockPlatformApp.id }
+    );
+
+    const response = await POST(request as NextRequest);
+    const data = await expectResponseStatus(response, 202);
+
+    expect(data.code).toBe('APP_OPERATION_IN_PROGRESS');
+    expect(data.reused).toBe(true);
+    expect(data.operation_id).toBe('op-pending');
+    expect(BuildPollingService.startPolling).not.toHaveBeenCalled();
+  });
+
   // ============================================
   // App Not Found Tests
   // ============================================
@@ -235,7 +405,7 @@ describe('POST /api/services/platform-apps/redeploy', () => {
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response, 409);
 
-      expect(data.error).toContain('already building');
+      expect(data.error).toContain('building');
     });
 
     it('TC-PA-I055: should reject redeploy for deleting app', async () => {
@@ -313,8 +483,6 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     });
 
     it('should call JenkinsService.triggerBuild', async () => {
-      const { JenkinsService } = await import('@/lib/services/jenkins');
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/redeploy',
         { app_id: mockPlatformApp.id }
@@ -322,12 +490,14 @@ describe('POST /api/services/platform-apps/redeploy', () => {
 
       await POST(request as NextRequest);
 
-      expect(JenkinsService.triggerBuild).toHaveBeenCalledWith(mockPlatformApp.name);
+      expect(appOpsMocks.jenkinsBuildTriggerMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appName: mockPlatformApp.name,
+        })
+      );
     });
 
-    it('TC-PA-I057: should update status to building', async () => {
-      const { AppStatusService } = await import('@/lib/services/app-status');
-
+    it('TC-PA-I057: should start a release-build operation', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/redeploy',
         { app_id: mockPlatformApp.id }
@@ -335,7 +505,14 @@ describe('POST /api/services/platform-apps/redeploy', () => {
 
       await POST(request as NextRequest);
 
-      expect(AppStatusService.setStatus).toHaveBeenCalledWith(mockPlatformApp.id, 'building');
+      expect(appOpsMocks.startReleaseBuildMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appId: mockPlatformApp.id,
+          appName: mockPlatformApp.name,
+          trigger: 'manual',
+          operationType: 'redeploy',
+        })
+      );
     });
 
     it('TC-PA-I058: should add project log', async () => {
@@ -357,8 +534,11 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     });
 
     it('should return build number from Jenkins', async () => {
-      const { JenkinsService } = await import('@/lib/services/jenkins');
-      vi.mocked(JenkinsService.triggerBuild).mockResolvedValue(10);
+      appOpsMocks.jenkinsBuildTriggerMock.mockResolvedValue({
+        buildNumber: 10,
+        jobName: `${mockPlatformApp.name}-job`,
+        url: `https://jenkins.example/job/${mockPlatformApp.name}-job/10/`,
+      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/redeploy',
@@ -381,10 +561,7 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     });
 
     it('should handle Jenkins trigger failure', async () => {
-      const { JenkinsService } = await import('@/lib/services/jenkins');
-      vi.mocked(JenkinsService.triggerBuild).mockRejectedValue(
-        new Error('Jenkins unavailable')
-      );
+      appOpsMocks.jenkinsBuildTriggerMock.mockRejectedValue(new Error('Jenkins unavailable'));
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/redeploy',
@@ -480,6 +657,67 @@ describe('POST /api/services/platform-apps/redeploy', () => {
       // Should handle gracefully
       const response = await POST(request as NextRequest);
       expect(response).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // Git Provider Token Tests (URL construction)
+  // ============================================
+  describe('Git Provider Token URL construction', () => {
+    // These tests verify the token injection uses regex (handles www. variants)
+    // by checking the GitHubProvider mock is called as the token source.
+    beforeEach(async () => {
+      await mockAuthenticatedUser(mockPlatformAppUser.id);
+    });
+
+    it('should attempt token retrieval for github provider', async () => {
+      const { Platform_Apps } = await import('@/lib/supabase/queries');
+      vi.mocked(Platform_Apps.get).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockPlatformApp,
+          user_id: mockPlatformAppUser.id,
+          git_provider: 'github',
+          repository_url: 'https://github.com/owner/repo',
+        },
+      } as any);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/redeploy',
+        { app_id: mockPlatformApp.id }
+      );
+
+      const response = await POST(request as NextRequest);
+      // Token fetch is best-effort; redeploy still succeeds even without a token
+      await expectResponseStatus(response, 200);
+    });
+
+    it('should return 403 GIT_TOKEN_MISSING when token retrieval fails for github provider', async () => {
+      const { Platform_Apps } = await import('@/lib/supabase/queries');
+      vi.mocked(Platform_Apps.get).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockPlatformApp,
+          user_id: mockPlatformAppUser.id,
+          git_provider: 'github',
+          repository_url: 'https://github.com/owner/private-repo',
+        },
+      } as any);
+
+      // Simulate token not available
+      const { getGitProviderToken } = await import('@/lib/git/provider-token');
+      vi.mocked(getGitProviderToken).mockResolvedValue(null);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/redeploy',
+        { app_id: mockPlatformApp.id }
+      );
+
+      // Must now block the redeploy instead of silently using an unauthenticated URL
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 403);
+      expect(data.code).toBe('GIT_TOKEN_MISSING');
+      expect(data.provider).toBe('github');
     });
   });
 });

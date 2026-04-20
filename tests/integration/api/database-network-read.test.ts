@@ -139,8 +139,6 @@ describe('POST /api/services/database/network/read', () => {
   });
 
   describe('Authorization Tests', () => {
-    // NOTE: Route does not perform ownership verification — relies on Supabase RLS.
-
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       const { NextResponse } = await import('next/server');
@@ -161,12 +159,29 @@ describe('POST /api/services/database/network/read', () => {
       const response = await POST(request as NextRequest);
       await expectResponseStatus(response!, 401);
     });
+
+    it('should reject reading network rules for a cluster owned by another user', async () => {
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockDatabaseCluster,
+          owner_id: '00000000-0000-0000-0000-000000000999',
+        },
+      });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/network/read',
+        { id: mockDatabaseCluster.cluster_id }
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response!, 403);
+      expect(data.error).toContain('not authorized');
+    });
   });
 
   describe('Error Handling', () => {
-    // NOTE: Route returns undefined when cluster not found (Supabase returns no data).
-    // This is handled by Supabase RLS — no explicit error returned.
-
     it('TC-DB-055: should handle database errors', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockRejectedValue(
@@ -179,7 +194,7 @@ describe('POST /api/services/database/network/read', () => {
       );
 
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
+      await expectResponseStatus(response!, 500);
     });
   });
 });

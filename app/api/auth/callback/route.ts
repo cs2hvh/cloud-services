@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
+import { encryptOAuthToken } from "@/lib/security/token-crypto";
 
 function buildRedirectOrigin(request: NextRequest): string {
   const requestUrl = new URL(request.url);
@@ -194,6 +195,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (githubIdentity && data.session.provider_token) {
+        let githubTokenStored = false;
         try {
           // Get GitHub user info
           const userResponse = await fetch("https://api.github.com/user", {
@@ -212,11 +214,11 @@ export async function GET(request: NextRequest) {
               .from("github_tokens")
               .upsert({
                 user_id: user.id,
-                access_token: data.session.provider_token,
+                access_token: encryptOAuthToken(data.session.provider_token),
                 github_username: githubUser.login,
                 github_user_id: githubUser.id,
                 scopes: "repo user:email",
-                refresh_token: data.session.provider_refresh_token || null,
+                refresh_token: encryptOAuthToken(data.session.provider_refresh_token || null),
                 expires_at: null, // GitHub OAuth tokens don't expire
                 updated_at: new Date().toISOString(),
               });
@@ -228,11 +230,21 @@ export async function GET(request: NextRequest) {
                 "Stored GitHub token for repository access:",
                 githubUser.login
               );
+              githubTokenStored = true;
             }
           }
         } catch (error) {
           console.error("Failed to store GitHub token:", error);
           // Don't fail the auth flow if token storage fails
+        }
+
+        // Append ?github_connected=true so the accounts page can show a success toast,
+        // mirroring the ?gitlab_connected=true / ?bitbucket_connected=true behaviour.
+        if (githubTokenStored) {
+          // Append ?github_connected=true so the accounts page can show a success toast,
+          // mirroring the ?gitlab_connected=true / ?bitbucket_connected=true behaviour.
+          const separator = next.includes("?") ? "&" : "?";
+          return NextResponse.redirect(`${redirectOrigin}${next}${separator}github_connected=true`);
         }
       }
 

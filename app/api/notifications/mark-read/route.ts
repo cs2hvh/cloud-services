@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { NotificationService } from "@/lib/notifications/service";
+import { logError } from "@/lib/api/error-sanitizer";
 import { z } from "zod";
 
 const markReadSchema = z.object({
@@ -37,9 +38,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: "No action taken" });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logError("notifications/mark-read", error);
     return NextResponse.json(
-      { error: 'Failed to fetch audit log', details: errorMessage },
+      { error: 'Failed to mark notification as read' },
       { status: 500 }
     );
   }

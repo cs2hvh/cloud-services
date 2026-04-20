@@ -9,7 +9,7 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with Kaniko and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -20,6 +20,7 @@ export function createDockerfilePipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
+  deploymentRecordSecret: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
@@ -56,6 +57,9 @@ export function createDockerfilePipeline(
     replicas = 3;
   }
 
+  // Normalize port — handles null/undefined passed from callers even though signature has = 3000
+  const port = containerPort ?? 3000;
+
   // Generate Kubernetes Secret for environment variables
   const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
@@ -80,11 +84,6 @@ export function createDockerfilePipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>RESIZE_ONLY</name>
-          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
-          <defaultValue>false</defaultValue>
-        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -105,9 +104,10 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -119,19 +119,17 @@ pipeline {
   stages {
 
     stage('Checkout Repo') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
             echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
+            git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
             
             # If COMMIT_SHA parameter is provided, checkout that specific commit
             if [ -n "\${COMMIT_SHA}" ]; then
               echo "Checking out specific commit: \${COMMIT_SHA}"
+              git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
               git checkout \${COMMIT_SHA}
             else
               echo "Using branch HEAD"
@@ -147,9 +145,6 @@ pipeline {
 ${generateSecurityStages({ language: 'docker' })}
 
     stage('Validate Dockerfile') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
@@ -263,9 +258,6 @@ ${generateSecurityStages({ language: 'docker' })}
     }
 
     stage('Build Image with Kaniko') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('kaniko') {
           withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
@@ -292,6 +284,9 @@ EOF
                 --dockerfile=Dockerfile \\
                 --destination=$DOCKER_IMAGE_VERSION \\
                 --destination=$DOCKER_IMAGE_LATEST \\
+                --cache=true \\
+                --cache-repo=hav0ky/${appName}-cache \\
+                --use-new-run \\
                 --digest-file=image-digest.txt
             '''
           }
@@ -368,14 +363,7 @@ SECRET_EOF
           sh '''
             echo "STAGE: Deploy to Kubernetes"
             
-            # Use latest image for resize operations, new build image otherwise
-            if [ "\${RESIZE_ONLY}" = "true" ]; then
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
-              echo "Resize mode: Using existing latest image"
-            else
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
-              echo "Full deploy: Using newly built image"
-            fi
+            DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
             
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
@@ -388,6 +376,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -401,11 +390,11 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
         env:
         - name: PORT
-          value: "${containerPort}"
+          value: "${port}"
         resources:
           requests:
             cpu: ${cpuRequest}
@@ -415,14 +404,14 @@ ${envFromSection}
             memory: ${memoryLimit}
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 6
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -442,7 +431,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 
@@ -492,17 +481,11 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh '''
-            if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
-              echo "Restarting deployment to pull new image"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
-            else
-              echo "First deployment - skipping rollout restart"
-            fi
-          '''
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
-          sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
+          sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
+          '''
         }
       }
     }
@@ -515,6 +498,9 @@ INGRESS_EOF
             echo "Checking deployment status for $APP_NAME"
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
+            echo "Checking SSL certificate status"
+            kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"
+            kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"
             echo "Deployment verification completed successfully"
           '''
         }
@@ -532,8 +518,8 @@ INGRESS_EOF
             echo "Deployment completed successfully for $APP_NAME"
             echo "Service URL: https://$DOMAIN"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -563,6 +549,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
                 -H "content-type: application/json" \\
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -570,6 +557,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \\
                 --header="content-type: application/json" \\
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \\
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -587,8 +575,8 @@ JSON
             echo "PIPELINE: Failure"
             echo "Deployment failed for $APP_NAME"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -618,6 +606,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
                 -H "content-type: application/json" \\
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -625,6 +614,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \\
                 --header="content-type: application/json" \\
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \\
                 "$DEPLOYMENT_RECORD_URL" || true
             else

@@ -5,14 +5,25 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
+import { resolveOwnedCluster } from "./cluster-access";
 
 export const maintenanceResourceOperations = {
   async updateMaintenanceWindow(
     clusterId: string,
     day: string,
-    hour: string
+    hour: string,
+    userId: string
   ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(clusterId, userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
       const response = await axios.put(
         `https://api.digitalocean.com/v2/databases/${clusterId}/maintenance`,
         { day, hour },
@@ -29,31 +40,29 @@ export const maintenanceResourceOperations = {
 
       await Database_Clusters.update_maintenance_window(clusterId, { day, hour });
 
-      const clusterData = await Database_Clusters.read(clusterId);
-      if (clusterData.success && clusterData.data.project_id) {
+      const clusterData = access.cluster;
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Settings",
           text: `Maintenance window updated: ${day} at ${hour}`,
         });
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "updated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: clusterId,
-              metadata: { updateType: "maintenance", day, hour },
-            })
-          );
-        } catch (notifErr) {
-          console.error("[updateMaintenanceWindow] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: String(clusterData.owner_id),
+            type: "info",
+            action: "updated",
+            serviceType: "database",
+            serviceName: String(clusterData.name),
+            serviceId: clusterId,
+            metadata: { updateType: "maintenance", day, hour },
+          })
+        );
+      } catch (notifErr) {
+        console.error("[updateMaintenanceWindow] Failed to create notification:", notifErr);
       }
 
       return { success: true };
@@ -86,19 +95,25 @@ export const maintenanceResourceOperations = {
   },
 
   async readMaintenanceWindow(
-    clusterId: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    clusterId: string,
+    userId: string
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
-      const supabaseResult = await Database_Clusters.read(clusterId);
-      if (!supabaseResult.success || !supabaseResult.data) {
-        return { success: false, error: "Database cluster not found" };
+      const access = await resolveOwnedCluster(clusterId, userId, "access");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+      const supabaseResult = access.cluster;
+
+      if (supabaseResult.window) {
+        return { success: true, data: supabaseResult.window };
       }
 
-      if (supabaseResult.data.window) {
-        return { success: true, data: supabaseResult.data.window };
-      }
-
-      if (supabaseResult.data.status !== "online") {
+      if (supabaseResult.status !== "online") {
         return { success: true, data: null };
       }
 

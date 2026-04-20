@@ -179,3 +179,49 @@ export function generatePythonEnvYaml(
   
   return envYaml;
 }
+
+/**
+ * Generate a shell script that applies ingress.yaml while preserving existing
+ * custom domain rules added via the platform's domain connections feature.
+ *
+ * Problem solved: a bare `kubectl apply -f ingress.yaml` on redeploy writes the
+ * `last-applied-configuration` annotation with only the platform host, which
+ * overwrites any custom-domain host rules previously patched in by the
+ * add-domain Jenkins job.
+ *
+ * Solution: snapshot existing non-platform rules/TLS entries before applying,
+ * then immediately re-attach them using `jq` + `kubectl apply`.
+ *
+ * Requires: `jq` available in the executor container (already used by the
+ * remove-domain pipeline).
+ *
+ * @param ingressName          - Kubernetes ingress resource name (resolved at codegen time)
+ * @param platformDomainSuffix - Platform domain suffix that identifies platform-owned hosts
+ *                               (e.g. "galaxyhvh.com" → matches "*.galaxyhvh.com")
+ */
+export function generateSmartIngressApplyScript(ingressName: string, platformDomainSuffix: string): string {
+  // Note on escaping inside this TypeScript template literal:
+  //   ${ingressName} / ${platformDomainSuffix} → TypeScript interpolation (replaced at codegen time)
+  //   $SHELL_VAR / $(cmd)                      → NOT interpolated by TypeScript (no curly braces)
+  //   '\\n'                                    → produces literal \n in output (for tr)
+  return `              echo 'Applying ingress (preserving custom domain connections)'
+              # Snapshot any non-platform (custom) domain rules before the platform manifest overwrites them
+              if kubectl get ingress ${ingressName} -n default --ignore-not-found=true -o name 2>/dev/null | grep -q .; then
+                kubectl get ingress ${ingressName} -n default -o json > _pre_deploy_ingress.json
+                CUSTOM_RULES=$(jq -c '[.spec.rules // [] | .[] | select((.host | endswith(".${platformDomainSuffix}") | not) and .host != "${platformDomainSuffix}")]' _pre_deploy_ingress.json)
+                CUSTOM_TLS=$(jq -c '[.spec.tls // [] | .[] | select([(.hosts // [])[] | endswith(".${platformDomainSuffix}")] | any | not)]' _pre_deploy_ingress.json)
+                CUSTOM_COUNT=$(echo "$CUSTOM_RULES" | jq 'length')
+              else
+                CUSTOM_RULES='[]'
+                CUSTOM_TLS='[]'
+                CUSTOM_COUNT=0
+              fi
+              kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"
+              # Restore custom domain rules that were stripped by the platform redeploy
+              if [ "$CUSTOM_COUNT" -gt "0" ]; then
+                echo "Restoring $CUSTOM_COUNT custom domain rule(s) stripped by redeploy"
+                kubectl get ingress ${ingressName} -n default -o json | jq --argjson cr "$CUSTOM_RULES" --argjson ct "$CUSTOM_TLS" '.spec.rules += $cr | .spec.tls += $ct' | kubectl apply -f - || echo "WARNING: custom domain restore failed"
+                echo "Active hosts after redeploy:"
+                kubectl get ingress ${ingressName} -n default -o jsonpath='{.spec.rules[*].host}' | tr ' ' '\\n'
+              fi`;
+}

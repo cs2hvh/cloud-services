@@ -29,6 +29,10 @@ import { UsersDbsTab } from "./tabs/users-dbs-tab";
 import { SettingsTab } from "./tabs/settings-tab";
 import { DatabaseIcon } from "./database-icon";
 import {
+  getAccessTabDescription,
+  getAccessTabLabel,
+} from "./engine-capabilities";
+import {
   extractCpu,
   extractRam,
   extractRegion,
@@ -48,37 +52,6 @@ type TabItem = {
   eyebrow: string;
   description: string;
 };
-
-const allTabs: TabItem[] = [
-  {
-    value: "overview",
-    label: "Overview",
-    icon: Server,
-    eyebrow: "Overview",
-    description: "Review connectivity, status, and the deployed service profile.",
-  },
-  {
-    value: "network",
-    label: "Network",
-    icon: Network,
-    eyebrow: "Security",
-    description: "Manage the trusted IP allowlist and inbound access posture.",
-  },
-  {
-    value: "users-dbs",
-    label: "Users & DBs",
-    icon: Users,
-    eyebrow: "Access",
-    description: "Create users, reset credentials, and manage logical databases.",
-  },
-  {
-    value: "settings",
-    label: "Settings",
-    icon: Settings2,
-    eyebrow: "Operations",
-    description: "Handle maintenance, sizing changes, migrations, and deletion.",
-  },
-];
 
 const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const searchParams = useSearchParams();
@@ -112,7 +85,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       });
 
       if (response.status === 200) {
-        const dbData = response.data.data;
+        const dbData = response?.data?.data;
         setDatabase(dbData);
         setLoading(false);
 
@@ -207,12 +180,46 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     };
   }, [database?.status]);
 
+  const allTabs = useMemo<TabItem[]>(
+    () => [
+      {
+        value: "overview",
+        label: "Overview",
+        icon: Server,
+        eyebrow: "Overview",
+        description: "Review connectivity, status, and the deployed service profile.",
+      },
+      {
+        value: "network",
+        label: "Network",
+        icon: Network,
+        eyebrow: "Security",
+        description: "Manage the trusted IP allowlist and inbound access posture.",
+      },
+      {
+        value: "users-dbs",
+        label: getAccessTabLabel(database?.engine),
+        icon: Users,
+        eyebrow: "Access",
+        description: getAccessTabDescription(database?.engine),
+      },
+      {
+        value: "settings",
+        label: "Settings",
+        icon: Settings2,
+        eyebrow: "Operations",
+        description: "Handle maintenance, sizing changes, migrations, and deletion.",
+      },
+    ],
+    [database?.engine]
+  );
+
   const visibleTabs = useMemo(
     () =>
       database?.status === "online"
         ? allTabs
         : allTabs.filter((tab) => tab.value === "overview"),
-    [database?.status]
+    [allTabs, database?.status]
   );
 
   const activeSection =
@@ -506,7 +513,10 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
                 </TabsContent>
 
                 <TabsContent value="users-dbs" className="mt-0">
-                  <UsersDbsTab clusterId={database.cluster_id || ""} />
+                  <UsersDbsTab
+                    clusterId={database.cluster_id || ""}
+                    engine={database.engine}
+                  />
                 </TabsContent>
 
                 <TabsContent value="settings" className="mt-0">

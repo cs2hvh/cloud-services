@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { AuditLogService } from "@/lib/audit";
 import { z } from "zod";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Custom datetime validation that accepts both ISO 8601 and datetime-local format
 const datetimeString = z.string().refine((val) => {
@@ -95,10 +96,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[audit-logs] Query error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logError('GET /api/admin/audit-logs', error);
     return NextResponse.json(
-      { error: 'Failed to query audit logs', details: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

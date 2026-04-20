@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProjectService } from "@/lib/services/project-service";
 import { NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: Request) {
   try {
@@ -39,11 +40,10 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("[POST /projects]", error);
+    logError("[POST /projects]", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Internal server error",
+        message: sanitizeError(error),
       },
       { status: 500 },
     );

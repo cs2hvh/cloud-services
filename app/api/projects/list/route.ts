@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProjectService } from "@/lib/services/project-service";
 import { NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function GET() {
   try {
@@ -37,11 +38,11 @@ export async function GET() {
       data: projects
     });
   } catch (error) {
-    console.error("[GET /projects/list]", error);
+    logError("[GET /projects/list]", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Internal server error",
+        error: sanitizeError(error),
       },
       { status: 500 },
     );

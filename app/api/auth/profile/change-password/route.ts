@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 // Shape of accepted payload
 type ChangePasswordBody = {
@@ -66,8 +67,9 @@ export async function PUT(req: NextRequest) {
     });
 
     if (updateError) {
+      logError("PUT /api/auth/profile/change-password", updateError);
       return NextResponse.json(
-        { message: updateError.message || "Failed to update password" },
+        { message: sanitizeAuthError(updateError) },
         { status: 400 }
       );
     }
@@ -95,8 +97,7 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (e: unknown) {
-    const message =
-      e instanceof Error ? e.message : "Failed to change password.";
-    return NextResponse.json({ message: message }, { status: 500 });
+    logError("PUT /api/auth/profile/change-password", e);
+    return NextResponse.json({ message: sanitizeAuthError(e) }, { status: 500 });
   }
 }

@@ -57,12 +57,14 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   // ── Per-domain action state ───────────────────────────────────────────────
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [checkingSslId, setCheckingSslId] = useState<string | null>(null);
 
   // ── Derived values ────────────────────────────────────────────────────────
+  const anyOperationRunning = !!(verifyingId || activatingId || settingPrimaryId || removingId || checkingSslId);
   const existingDomainOptions = useMemo(() => {
     const unique = new Map<string, DomainInventoryItem>();
     inventoryDomains.forEach((item) => {
@@ -382,6 +384,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
 
   const handleSetPrimary = async (domainId: string) => {
     const primaryDomain = domains.find((d) => d.id === domainId)?.domain;
+    setSettingPrimaryId(domainId);
     try {
       const res = await fetch(`/api/domains/${domainId}/set-primary`, { method: 'POST' });
       const data = await res.json();
@@ -393,6 +396,8 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
       await fetchDomains();
     } catch {
       toast.error('Failed to update primary domain. Please try again.');
+    } finally {
+      setSettingPrimaryId(null);
     }
   };
 
@@ -460,6 +465,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
               onCopy={copyToClipboard}
               onSubmit={() => void submitAddDomain()}
               onClose={closeAddDialog}
+              disabled={anyOperationRunning}
             />
           </div>
         </div>
@@ -523,9 +529,11 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
               appStatus={appStatus}
               verifyingId={verifyingId}
               activatingId={activatingId}
+              settingPrimaryId={settingPrimaryId}
               removingId={removingId}
               copiedField={copiedField}
               checkingSslId={checkingSslId}
+              anyOperationRunning={anyOperationRunning}
               onVerify={(id) => void handleVerifyDomain(id)}
               onActivate={(id) => void handleActivateDomain(id)}
               onSetPrimary={(id) => void handleSetPrimary(id)}
@@ -540,7 +548,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         <AlertDialog
           open={removeConfirmId !== null}
           onOpenChange={(open) => {
-            if (!open) setRemoveConfirmId(null);
+            if (!open && !removingId) setRemoveConfirmId(null);
           }}
         >
           <AlertDialogContent className="border-white/10 bg-zinc-900 text-white">
@@ -555,16 +563,24 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-white/20 bg-transparent text-white hover:bg-white/10">
+              <AlertDialogCancel
+                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                disabled={removingId !== null}
+              >
                 Keep it
               </AlertDialogCancel>
               <AlertDialogAction
                 className="bg-red-600 text-white hover:bg-red-700"
+                disabled={removingId !== null}
                 onClick={() => {
                   if (removeConfirmId) void handleRemoveDomain(removeConfirmId);
                 }}
               >
-                Remove domain
+                {removingId !== null ? (
+                  <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Removing…</>
+                ) : (
+                  'Remove domain'
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

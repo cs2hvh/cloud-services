@@ -112,8 +112,12 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const response = await axios.get("/api/admin/products?type=object-storage");
-        const products = response.data.products;
+        const endpoint =
+          role === "admin"
+            ? "/api/admin/products?type=object-storage"
+            : "/api/products?type=object-storage";
+        const response = await axios.get(endpoint);
+        const products = response?.data?.products;
         
         if (products && products.length > 0) {
           setStoragePrice(parseFloat(products[0].price) || 0);
@@ -128,7 +132,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Steps array with conditional user selection for admin
   const steps = role === "admin"

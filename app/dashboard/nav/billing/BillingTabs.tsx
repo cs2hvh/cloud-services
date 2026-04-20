@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X, Download } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
+import { createDepositPayment } from "@/actions/crypto-deposit";
 
 type Toast = { id: number; type: "success" | "error"; message: string };
 
@@ -52,6 +53,7 @@ export default function BillingTabs({
   const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
   const [amount, setAmount] = useState("");
   const [loadingTopup, setLoadingTopup] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "crypto">("stripe");
   const [balance, setBalance] = useState<number>(initialBalance);
   const [manualCouponCode, setManualCouponCode] = useState("");
   const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
@@ -70,6 +72,8 @@ export default function BillingTabs({
 
   // Show toast on return from Stripe checkout
   useEffect(() => {
+    if (!paymentStatus) return;
+
     if (paymentStatus === "success") {
       pushToast("success", "Payment successful! Your balance will update shortly.");
     } else if (paymentStatus === "cancelled") {
@@ -78,6 +82,15 @@ export default function BillingTabs({
       pushToast("success", "Recurring auto top-up enabled successfully.");
     } else if (paymentStatus === "recurring_cancelled") {
       pushToast("error", "Recurring auto top-up setup was cancelled.");
+    }
+
+    // Remove one-time payment query params so refresh doesn't replay the toast.
+    if (typeof window !== "undefined") {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("status");
+      nextUrl.searchParams.delete("session_id");
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      window.history.replaceState({}, "", nextPath);
     }
   }, [paymentStatus]);
 
@@ -97,17 +110,31 @@ export default function BillingTabs({
     }
     try {
       setLoadingTopup(true);
-      const res = await api.post("/billing/create-checkout-session", {
-        amount: parsed,
-      });
-      const data = res.data;
-      if (data.url) {
-        window.location.href = data.url;
+      if (paymentMethod === "crypto") {
+        const formData = new FormData();
+        formData.set("amount_usd", String(parsed));
+        formData.set("currency", "USDT_TRC20");
+        const result = await createDepositPayment({ values: { amount_usd: parsed, currency: "USDT_TRC20" }, errors: null, success: false }, formData);
+        if (result.success && result.payment_url) {
+          window.location.href = result.payment_url;
+        } else {
+          const msg = result.errors?.amount_usd?.[0] ?? result.errors?.currency?.[0] ?? "Failed to create crypto payment";
+          pushToast("error", msg);
+        }
       } else {
-        throw new Error("No checkout URL returned");
+        const res = await api.post("/billing/create-checkout-session", {
+          amount: parsed,
+        });
+        const data = res?.data;
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error("No checkout URL returned");
+        }
       }
     } catch (_err: unknown) {
-      pushToast("error", _err instanceof Error ? _err.message : "Failed to start payment");
+      pushToast("error", _err instanceof Error ? _err?.message : "Failed to start payment");
+    } finally {
       setLoadingTopup(false);
     }
   };
@@ -115,12 +142,12 @@ export default function BillingTabs({
   const refreshRecurringTopup = async () => {
     const res = await api.get("/billing/recurring");
     if (res?.data?.success) {
-      setRecurringTopup(res.data.data ?? null);
-      if (res.data.data?.amount) {
-        setRecurringAmount(String(res.data.data.amount));
+      setRecurringTopup(res?.data?.data ?? null);
+      if (res?.data?.data?.amount) {
+        setRecurringAmount(String(res?.data?.data?.amount));
       }
-      if (res.data.data?.interval) {
-        setRecurringInterval(res.data.data.interval);
+      if (res?.data?.data?.interval) {
+        setRecurringInterval(res?.data?.data?.interval);
       }
     }
   };
@@ -145,7 +172,7 @@ export default function BillingTabs({
       });
 
       if (res?.data?.url) {
-        window.location.href = res.data.url;
+        window.location.href = res?.data?.url;
         return;
       }
 
@@ -178,13 +205,13 @@ export default function BillingTabs({
     // try {
       const res = await api.post("/billing/coupons/redeem", { code });
       
-      if (res.data.success) {
-        setBalance(res.data.balance);
+      if (res?.data?.success) {
+        setBalance((prev) => res?.data?.balance ?? prev);
         setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
       }
       // } else {
-      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
       // }
     // } catch (error: unknown) {
     //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
@@ -204,13 +231,13 @@ export default function BillingTabs({
       const res = await api.post("/billing/coupons/redeem", { code });
       
       if (res?.data?.success) {
-        setBalance(res.data.balance);
+        setBalance((prev) => res?.data?.balance ?? prev);
         setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
         setManualCouponCode("");
       }
       // } else {
-      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
       // }
     }
     // } catch (error: unknown) {
@@ -263,26 +290,53 @@ export default function BillingTabs({
               <StatCard label="Remaining Balance" value={remaining} highlight />
             </div>
 
-            <form onSubmit={onTopup} className="space-y-3">
-              <label className="block text-sm text-gray-300">Enter amount to top up($)</label>
-              <div className="flex gap-2">
+            <form onSubmit={onTopup} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Enter amount to top up($)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
                   placeholder="e.g. 25"
                 />
-                <button
-                  disabled={loadingTopup}
-                  type="submit"
-                  className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loadingTopup ? "Redirecting to Stripe..." : "Top up"}
-                </button>
               </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Payment method</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="stripe"
+                      checked={paymentMethod === "stripe"}
+                      onChange={() => setPaymentMethod("stripe")}
+                      className="accent-blue-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm text-white">Stripe</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="crypto"
+                      checked={paymentMethod === "crypto"}
+                      onChange={() => setPaymentMethod("crypto")}
+                      className="accent-blue-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm text-white">Crypto</span>
+                  </label>
+                </div>
+              </div>
+              <button
+                disabled={loadingTopup}
+                type="submit"
+                className="cursor-pointer inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loadingTopup ? (paymentMethod === "crypto" ? "Processing..." : "Redirecting to Stripe...") : "Pay"}
+              </button>
             </form>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl space-y-3">
@@ -592,11 +646,26 @@ interface Transaction {
   balance_after: number | null;
   description: string | null;
   receipt_url: string | null;
+  service_id: string | null;
+  service_type: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
+type UsageBreakdown = {
+  serviceName: string;
+  hourlyRate: number | null;
+  hoursUsed: number | null;
+  cost: number;
+};
+
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring";
+type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
+type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
+
+const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
 
 function TransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -608,6 +677,7 @@ function TransactionsTab() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchId, setSearchId] = useState("");
@@ -622,6 +692,7 @@ function TransactionsTab() {
       params.set("limit", String(limit));
       if (statusFilter) params.set("status", statusFilter);
       if (typeFilter) params.set("type", typeFilter);
+      if (serviceTypeFilter) params.set("service_type", serviceTypeFilter);
       if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
       if (dateTo) {
         const end = new Date(dateTo);
@@ -630,7 +701,7 @@ function TransactionsTab() {
       }
 
       const res = await api.get(`/billing/transactions?${params.toString()}`);
-      const data = res.data;
+      const data = res?.data;
       setTransactions(data.data ?? []);
       setTotal(data.pagination?.total ?? 0);
       setTotalPages(data.pagination?.totalPages ?? 1);
@@ -645,17 +716,18 @@ function TransactionsTab() {
   useEffect(() => {
     fetchTransactions(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter, dateFrom, dateTo]);
+  }, [statusFilter, typeFilter, serviceTypeFilter, dateFrom, dateTo]);
 
   const clearFilters = () => {
     setStatusFilter("");
     setTypeFilter("");
+    setServiceTypeFilter("");
     setDateFrom("");
     setDateTo("");
     setSearchId("");
   };
 
-  const hasActiveFilters = statusFilter || typeFilter || dateFrom || dateTo;
+  const hasActiveFilters = statusFilter || typeFilter || serviceTypeFilter || dateFrom || dateTo;
 
   const filteredTransactions = searchId
     ? transactions.filter(
@@ -691,8 +763,104 @@ function TransactionsTab() {
       refund: "bg-purple-500/15 text-purple-300 border-purple-500/20",
       coupon: "bg-amber-500/15 text-amber-300 border-amber-500/20",
       recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
+      setup: "bg-rose-500/15 text-rose-300 border-rose-500/20",
+      usage: "bg-orange-500/15 text-orange-300 border-orange-500/20",
     };
     return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
+  };
+
+  const formatAmount = (txn: Transaction) => {
+    const sign = CREDIT_TRANSACTION_TYPES.has(txn.type) ? "+" : "-";
+    return `${sign}$${txn.amount.toFixed(2)}`;
+  };
+
+  const toNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatCurrency = (value: number | null) =>
+    value == null ? "N/A" : `$${value.toFixed(2)}`;
+
+  const formatHours = (value: number | null) =>
+    value == null ? "N/A" : value.toFixed(2);
+
+  const getServiceTypeLabel = (serviceType: string | null) => {
+    const map: Record<string, string> = {
+      kubernetes: "Kubernetes",
+      database: "Database",
+      objectspace: "Object Storage",
+      spectrum: "Spectrum",
+      platform_apps: "Platform App",
+    };
+    if (!serviceType) return "Service";
+    return map[serviceType] ?? serviceType.replace("_", " ");
+  };
+
+  const getUsageBreakdown = (txn: Transaction): UsageBreakdown | null => {
+    if (txn.type !== "usage") return null;
+
+    const metadata = txn.metadata ?? {};
+    const metadataServiceName =
+      typeof metadata.service_name === "string"
+        ? metadata.service_name
+        : typeof metadata.serviceName === "string"
+          ? metadata.serviceName
+          : null;
+
+    const serviceTail = txn.service_id ? txn.service_id.slice(0, 8) : null;
+    const serviceName =
+      metadataServiceName ??
+      `${getServiceTypeLabel(txn.service_type)}${serviceTail ? ` (${serviceTail}...)` : ""}`;
+
+    let hoursUsed = toNumber(metadata.hours_used);
+    if (hoursUsed == null && txn.period_start && txn.period_end) {
+      const start = new Date(txn.period_start).getTime();
+      const end = new Date(txn.period_end).getTime();
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        hoursUsed = (end - start) / (1000 * 60 * 60);
+      }
+    }
+
+    let hourlyRate = toNumber(metadata.hourly_rate);
+    if (hourlyRate == null && hoursUsed != null && hoursUsed > 0) {
+      hourlyRate = txn.amount / hoursUsed;
+    }
+
+    return {
+      serviceName,
+      hourlyRate,
+      hoursUsed,
+      cost: txn.amount,
+    };
+  };
+
+  const renderUsageBreakdown = (txn: Transaction) => {
+    const breakdown = getUsageBreakdown(txn);
+    if (!breakdown) return null;
+
+    return (
+      <div className="mt-1.5 rounded-md border border-orange-500/25 bg-orange-500/5 p-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+          <span className="text-neutral-400">Service</span>
+          <span className="text-right text-neutral-200 truncate" title={breakdown.serviceName}>
+            {breakdown.serviceName}
+          </span>
+          <span className="text-neutral-400">Hourly rate</span>
+          <span className="text-right text-neutral-200">{formatCurrency(breakdown.hourlyRate)}</span>
+          <span className="text-neutral-400">Hours</span>
+          <span className="text-right text-neutral-200">{formatHours(breakdown.hoursUsed)}</span>
+          <span className="text-neutral-400">Formula</span>
+          <span className="text-right text-neutral-200">
+            {`${formatCurrency(breakdown.hourlyRate)} × ${formatHours(breakdown.hoursUsed)}`}
+          </span>
+          <span className="text-neutral-400">Cost</span>
+          <span className="text-right text-neutral-100 font-medium">
+            {formatCurrency(breakdown.cost)}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -735,6 +903,22 @@ function TransactionsTab() {
             <option value="refund">Refund</option>
             <option value="coupon">Coupon</option>
             <option value="recurring">Recurring</option>
+            <option value="setup">Setup charge</option>
+            <option value="usage">Usage</option>
+          </select>
+
+          {/* Service Type */}
+          <select
+            value={serviceTypeFilter}
+            onChange={(e) => setServiceTypeFilter(e.target.value as ServiceTypeFilter)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+          >
+            <option value="">All Services</option>
+            <option value="kubernetes">Kubernetes</option>
+            <option value="database">Database</option>
+            <option value="objectspace">Object Storage</option>
+            <option value="spectrum">DDoS / Spectrum</option>
+            <option value="platform_apps">Platform Apps</option>
           </select>
 
           {/* Date From */}
@@ -791,7 +975,7 @@ function TransactionsTab() {
           <p className="text-sm text-neutral-500 mt-1">
             {hasActiveFilters
               ? "Try adjusting your filters"
-              : "Transactions will appear here after your first top-up"}
+              : "Transactions will appear here after your first top-up or service charge"}
           </p>
         </div>
       ) : (
@@ -836,14 +1020,20 @@ function TransactionsTab() {
                       </code>
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
-                      >
-                        {txn.type}
-                      </span>
+                      <div className="space-y-1">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
+                        >
+                          {txn.type.replace("_", " ")}
+                        </span>
+                        {txn.description && (
+                          <p className="text-xs text-neutral-500">{txn.description}</p>
+                        )}
+                        {renderUsageBreakdown(txn)}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-white">
-                      {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                      {formatAmount(txn)}
                     </td>
                     <td className="py-3 px-4 text-right text-neutral-300">
                       {txn.balance_after != null ? `$${txn.balance_after.toFixed(2)}` : "—"}
@@ -903,7 +1093,7 @@ function TransactionsTab() {
                     </code>
                   </div>
                   <span className="text-base font-semibold text-white">
-                    {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                    {formatAmount(txn)}
                   </span>
                 </div>
                 {txn.balance_after != null && (
@@ -914,9 +1104,10 @@ function TransactionsTab() {
                 )}
                 {txn.description && (
                   <div className="text-xs text-neutral-500">
-                    Code: {txn.description}
+                    {txn.description}
                   </div>
                 )}
+                {renderUsageBreakdown(txn)}
                 {txn.receipt_url && (
                   <a
                     href={txn.receipt_url}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 import { createClient } from "@/lib/supabase/server";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 
 // Helper function to check if user is admin
@@ -84,13 +85,11 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin bucket delete error:", errorMessage);
-    
+    logError("DELETE /api/admin/object-storage/buckets/delete", error);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

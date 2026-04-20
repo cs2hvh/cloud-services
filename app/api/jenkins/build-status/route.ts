@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BuildPollingService } from "@/lib/services/build-polling";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/jenkins/build-status?app=myapp&build=1
@@ -48,10 +49,9 @@ export async function GET(req: NextRequest) {
       ...buildStatus,
     });
   } catch (error: unknown) {
-    console.error("[API] Error getting build status:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get build status";
+    logError("[API] Error getting build status", error);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

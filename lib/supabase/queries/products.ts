@@ -92,6 +92,32 @@ export const Products = {
     }
   },
 
+  get_by_type_and_slug: async (
+    type: string,
+    slug: string
+  ): Promise<Product | null> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("type", type)
+        .eq("slug", slug)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        handleQueryError("getting product by type and slug", error, "Products");
+        return null;
+      }
+      return data ?? null;
+    } catch (err) {
+      handleQueryError("getting product by type and slug", err, "Products");
+      return null;
+    }
+  },
+
   get_featured_by_service_type: async (
     serviceType: string
   ): Promise<Product[]> => {

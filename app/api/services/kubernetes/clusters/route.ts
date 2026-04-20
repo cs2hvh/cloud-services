@@ -3,9 +3,7 @@ import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Billing } from "@/lib/supabase/queries/billing";
 import { Projects } from "@/lib/supabase/queries/projects";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
@@ -100,14 +98,17 @@ export async function POST(req: NextRequest) {
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
-  // Billing: dynamic from admin pricing (existing cluster import uses default plan)
-  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(parsed.data.planId);
+  const totalNodes = Math.max(parsed.data.nodes.length, 1);
 
-  // Check balance BEFORE provisioning
-  const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);
-  if (!balCheck.ok) {
-    return NextResponse.json({ error: "Insufficient credits", balance: balCheck.balance, required: INITIAL_COST }, { status: 402 });
-  }
+  // Billing: dynamic from admin pricing and scaled by total nodes (workers + control plane)
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(
+    parsed.data.planId,
+    totalNodes
+  );
+
+  // Billing is handled by addNode (createdroplet) which already deducts cost
+  // and inserts the active_kubernetes row. We only need the user ID for audit/notification.
+  const billingUserId = auth.user!.id;
 
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data, decryptedPassword, role: derivedRole });
 
@@ -121,23 +122,10 @@ export async function POST(req: NextRequest) {
     console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
   }
 
-  // Deduct upfront and register active_kubernetes after provisioning
-  try {
-    await postProvisionBilling({
-      userId: parsed.data.ownerId,
-      initialCost: INITIAL_COST,
-      hourlyRate: HOURLY_RATE,
-      serviceId: clusterId,
-      addActive: Billing.add_active_kubernetes,
-    });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: "Post-provision billing failed", details: e instanceof Error ? e.message : String(e) }, { status: 500 });
-  }
-
   // Create audit log
   const auditContext = getAuditContext(req);
   await AuditLogService.create({
-    user_id: parsed.data.ownerId,
+    user_id: billingUserId,
     user_role: derivedRole,
     user_email: auth.user?.email,
     action: 'create',
@@ -162,12 +150,13 @@ export async function POST(req: NextRequest) {
       job_id: job.id,
       initial_cost: INITIAL_COST,
       hourly_rate: HOURLY_RATE,
+      node_count: totalNodes,
     },
   });
 
   // Create notification
   await NotificationService.create({
-    user_id: parsed.data.ownerId,
+    user_id: billingUserId,
     type: "info",
     title: "Kubernetes Cluster Creation",
     message: `kubernetes cluster ${parsed.data.cluster.name} creation started...`,

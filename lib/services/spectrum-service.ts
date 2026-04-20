@@ -1,4 +1,4 @@
-import { ensureBalance } from "@/config/billing-flow";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import {
   createSpectrumApp,
   deleteSpectrumApp,
@@ -51,11 +51,12 @@ export class SpectrumService {
   static async createApp(input: {
     userId: string;
     payload: CreateSpectrumAppPayload;
+    role?: string;
     audit_context?: AuditContext;
   }) {
-    const { userId, payload, audit_context } = input;
+    const { userId, payload, role = 'user', audit_context } = input;
 
-    const { initialCost } = await getRatesForSpectrum();
+    const { initialCost, hourlyRate } = await getRatesForSpectrum();
     const balanceCheck = await ensureBalance(userId, initialCost);
     if (!balanceCheck.ok) {
       throw makeError("INSUFFICIENT_CREDITS", "Insufficient credits", {
@@ -69,8 +70,66 @@ export class SpectrumService {
         ...payload,
         owner_id: userId,
       },
-      "user"
+      role
     );
+
+    const serviceId = result.app?.id ?? result.cloudflare?.id;
+    if (!serviceId) {
+      throw makeError(
+        "BILLING_REGISTRATION_FAILED",
+        "Spectrum app created but missing service id for billing registration"
+      );
+    }
+
+    try {
+      await postProvisionBilling({
+        userId,
+        initialCost,
+        hourlyRate,
+        serviceId,
+        serviceType: "spectrum",
+        addActive: Billing.add_active_spectrum,
+      });
+    } catch {
+      // Billing registration failed — roll back the Cloudflare app so it doesn't run for free
+      const cleanupErrors: string[] = [];
+      
+      try {
+        const cfId = result.cloudflare?.id;
+        if (cfId) {
+          await deleteSpectrumApp(cfId);
+          console.warn('[SpectrumService.createApp] Rolled back Cloudflare app after billing failure');
+        } else {
+          console.error('[SpectrumService.createApp] Cannot roll back CF app: cloudflare.id missing');
+        }
+      } catch (cleanupErr) {
+        const cfErrorMsg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+        cleanupErrors.push(`Cloudflare rollback failed: ${cfErrorMsg}`);
+        console.error('[SpectrumService.createApp] Billing failed AND Cloudflare rollback failed:', cleanupErr);
+      }
+      
+      // Roll back the Supabase row to avoid an orphaned record
+      try {
+        if (result.app?.id) {
+          await Spectrum_Apps.delete(result.app.id);
+          console.warn('[SpectrumService.createApp] Rolled back Supabase spectrum app row after billing failure');
+        }
+      } catch (dbCleanupErr) {
+        const dbErrorMsg = dbCleanupErr instanceof Error ? dbCleanupErr.message : String(dbCleanupErr);
+        cleanupErrors.push(`Supabase rollback failed: ${dbErrorMsg}`);
+        console.error('[SpectrumService.createApp] Billing failed AND Supabase rollback failed:', dbCleanupErr);
+      }
+      
+      // Log rollback issues server-side but do NOT expose internal resource IDs / error details to the client
+      if (cleanupErrors.length > 0) {
+        console.error('[SpectrumService.createApp] Rollback issues:', cleanupErrors.join(' | '));
+      }
+
+      throw makeError(
+        "BILLING_REGISTRATION_FAILED",
+        "Billing registration failed after provisioning. The app has been rolled back."
+      );
+    }
 
     // Audit log
     if (audit_context) {
@@ -81,7 +140,7 @@ export class SpectrumService {
           user_email: audit_context.user_email,
           action: 'create',
           service_type: 'network_ddos',
-          service_id: result.app?.spectrum_id || '',
+          service_id: serviceId,
           service_name: payload.protocol || 'spectrum-app',
           after_state: result.app as unknown as Record<string, unknown>,
           ip_address: audit_context.ip_address,
@@ -103,14 +162,14 @@ export class SpectrumService {
           action: 'created',
           serviceType: 'spectrum',
           serviceName: payload.protocol || 'spectrum-app',
-          serviceId: result.app?.spectrum_id || '',
+          serviceId,
         })
       );
     } catch (notifErr) {
       console.warn('[SpectrumService.createApp] Notification failed:', notifErr);
     }
 
-    return result.app;
+    return result; // { app: Supabase row, cloudflare: Cloudflare response }
   }
 
   static async getApp(input: { appId: string; userId: string }) {
@@ -148,14 +207,16 @@ export class SpectrumService {
     });
   }
 
-  static async deleteApp(input: { appId: string; userId: string; audit_context?: AuditContext }) {
-    const { appId, userId, audit_context } = input;
+  static async deleteApp(input: { appId: string; userId: string; isAdmin?: boolean; audit_context?: AuditContext }) {
+    const { appId, userId, isAdmin = false, audit_context } = input;
 
     const existing = await Spectrum_Apps.get(appId);
     if (!existing.success || !existing.data) {
       throw makeError("NOT_FOUND", "Spectrum app not found");
     }
-    if (existing.data.owner_id !== userId) {
+    const spectrumId = existing.data.spectrum_id || appId;
+    // Admins can delete any user's app; regular users can only delete their own
+    if (!isAdmin && existing.data.owner_id !== userId) {
       throw makeError("FORBIDDEN", "Access denied");
     }
 
@@ -181,27 +242,33 @@ export class SpectrumService {
     }
 
     try {
+      // Use the local Supabase UUID (existing.data.id), NOT appId (Cloudflare spectrum_id)
+      // billing.active_spectrum.service_id is the Supabase row UUID set at create time
+      // Always use the owner's userId for billing lookup (admin delete must still close the owner's billing)
+      const billingUserId = String(existing.data.owner_id);
+      const billingServiceId = (existing.data as { id?: string }).id ?? appId;
       await Billing.close_active_service("spectrum", {
-        userId,
-        serviceId: appId,
+        userId: billingUserId,
+        serviceId: billingServiceId,
         failOnInsufficient: false,
       });
     } catch (billErr) {
       console.warn("[SpectrumService.deleteApp] Billing close failed:", billErr);
     }
 
-    const result = await deleteSpectrumApp(appId);
+    const result = await deleteSpectrumApp(spectrumId);
 
-    // Notification
+    // Notification — always notify the app owner, not the requester (admin may differ)
     try {
+      const notifyUserId = String(existing.data.owner_id);
       await NotificationService.create(
         createServiceNotification({
-          userId,
+          userId: notifyUserId,
           type: 'success',
           action: 'deleted',
           serviceType: 'spectrum',
           serviceName: existing.data.protocol || 'spectrum-app',
-          serviceId: appId,
+          serviceId: spectrumId,
         })
       );
     } catch (notifErr) {

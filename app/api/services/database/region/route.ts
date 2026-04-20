@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest) {
     const result = await DatabaseService.updateRegion(
       validatedData.database_id,
       validatedData.region,
+      auth.user.id,
       "migrating",
       req
     );
@@ -44,8 +45,15 @@ export async function PUT(req: NextRequest) {
     if (!result.success) {
       if (result.errorCode === "NOT_FOUND") {
         return NextResponse.json(
-          { error: "Database cluster not found" },
+          { error: result.error || "Database cluster not found" },
           { status: 404 }
+        );
+      }
+
+      if (result.errorCode === "FORBIDDEN") {
+        return NextResponse.json(
+          { error: result.error || "You are not authorized to modify this database cluster" },
+          { status: 403 }
         );
       }
 

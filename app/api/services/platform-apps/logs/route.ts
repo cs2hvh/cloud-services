@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { JenkinsService } from "@/lib/services/jenkins";
 import jenkins from "@/lib/jenkins";
 
@@ -148,11 +149,7 @@ export async function GET(req: NextRequest) {
       next_start: nextStart,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting logs:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get logs";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/logs", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

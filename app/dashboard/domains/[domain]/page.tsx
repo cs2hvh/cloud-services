@@ -332,6 +332,7 @@ export default function DomainDetailPage() {
                   settingPrimaryConnectionId={connectionsData.settingPrimaryConnectionId}
                   removingConnectionId={connectionsData.removingConnectionId}
                   checkingSslId={connectionsData.checkingSslId}
+                  anyOperationRunning={connectionsData.anyOperationRunning}
                   onSubdomainChange={setSubdomainInput}
                   onAttached={() => { setSubdomainInput(''); void handleRefresh(); }}
                   onVerify={connectionsData.onVerify}

@@ -62,6 +62,7 @@ export interface DeleteDatabaseClusterResult {
   success: boolean;
   error?: string;
   errorCode?: string;
+  statusCode?: number;
   linkedAppsCount?: number;
   linkedAppNames?: string[];
 }
@@ -81,7 +82,7 @@ export interface DeleteDatabaseRequest {
 export interface DeleteDatabaseUserRequest {
   clusterId: string;
   username: string;
-  userId?: string;
+  userId: string;
   userEmail?: string;
 }
 
@@ -107,6 +108,7 @@ export interface ListDatabasesResult {
   data?: DatabaseInstance[];
   error?: string;
   warning?: string;
+  statusCode?: number;
 }
 
 export interface ListDatabaseUsersRequest {
@@ -119,6 +121,7 @@ export interface ListDatabaseUsersResult {
   data?: DatabaseUser[];
   error?: string;
   warning?: string;
+  statusCode?: number;
 }
 
 export interface UpdateDatabaseStatusRequest {
@@ -130,6 +133,7 @@ export interface UpdateDatabaseStatusRequest {
 export interface DeleteFirewallRuleRequest {
   clusterId: string;
   ruleUuid: string;
+  userId: string;
 }
 
 export interface AddFirewallRuleResult {
@@ -149,15 +153,18 @@ export interface DeleteFirewallRuleResult {
 export interface RetrieveDatabaseRequest {
   clusterId: string;
   name: string;
+  userId: string;
 }
 
 export interface InternalListDatabasesRequest {
   clusterId: string;
+  userId: string;
 }
 
 export interface InternalRetrieveDatabaseRequest {
   clusterId: string;
   name: string;
+  userId: string;
 }
 
 export interface InternalCreateDatabaseRequest {
@@ -169,11 +176,13 @@ export interface InternalCreateDatabaseRequest {
 export interface InternalDeleteDatabaseRequest {
   clusterId: string;
   dbName: string;
+  userId: string;
 }
 
 export interface ReadMigrationStatusRequest {
   clusterId: string;
   targetRegion: string;
+  userId: string;
 }
 
 export interface ReadMigrationStatusResult {
@@ -185,9 +194,12 @@ export interface ReadMigrationStatusResult {
     target_region: string;
   };
   error?: string;
+  errorCode?: string;
+  statusCode?: number;
 }
 
 export interface UpsizeStorageRequest {
   clusterId: string;
   storageSizeMib: number;
+  userId: string;
 }

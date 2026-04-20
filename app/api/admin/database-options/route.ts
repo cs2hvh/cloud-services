@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import axios from "axios";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Supported database engines (DO uses 'pg' for PostgreSQL)
 const SUPPORTED_ENGINES = ['mongodb', 'mysql', 'pg'];
@@ -185,20 +186,20 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("[Database Options API] Error fetching options:", error);
+    logError("GET /api/admin/database-options", error);
     
     if (axios.isAxiosError(error)) {
       return NextResponse.json(
         { 
           error: "Failed to fetch database options from provider",
-          details: error.response?.data?.message || error.message,
+          details: sanitizeError(error),
         },
         { status: error.response?.status || 500 }
       );
     }
     
     return NextResponse.json(
-      { error: "Failed to fetch database options" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

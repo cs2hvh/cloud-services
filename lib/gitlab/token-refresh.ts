@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/security/token-crypto";
 
 /**
  * GitLab OAuth Token Information:
@@ -28,33 +29,16 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
   accessToken: string | null;
   newRefreshToken: string | null;
   expiresIn: number | null;
+  isInvalidGrant: boolean;
 }> {
   try {
     const clientId = process.env.GITLAB_CLIENT_ID;
     const clientSecret = process.env.GITLAB_CLIENT_SECRET;
-    const domain = process.env.DOMAIN;
     
     // Validate required configuration
     if (!clientId || !clientSecret) {
       console.error('[GitLab Token Refresh] Missing GITLAB_CLIENT_ID or GITLAB_CLIENT_SECRET');
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
-    }
-    
-    if (!domain) {
-      console.error('[GitLab Token Refresh] Missing DOMAIN  environment variable');
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
-    }
-    
-    // GitLab requires redirect_uri to match the original authorization request
-    // IMPORTANT: Must match the redirect_uri used in /api/gitlab/callback/route.ts
-    const redirectUri = `${domain}/api/gitlab/callback`;
-    
-    console.log('[GitLab Token Refresh] Attempting refresh with redirect_uri:', redirectUri);
-    
-    // IMPORTANT for localhost: GitLab OAuth app must have http://localhost:3000/api/gitlab/callback 
-    // registered as an authorized redirect URI
-    if (domain.includes('localhost')) {
-      console.log('[GitLab Token Refresh] Running on localhost - ensure GitLab OAuth app has localhost redirect URI registered');
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: false };
     }
     
     const response = await fetch('https://gitlab.com/oauth/token', {
@@ -68,7 +52,11 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
         client_secret: clientSecret,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        redirect_uri: redirectUri,
+        // redirect_uri is intentionally omitted: RFC 6749 §6 does not require it on
+        // token refresh, and GitLab's OAuth implementation accepts refreshes without it.
+        // If your GitLab OAuth app has strict redirect_uri enforcement enabled and
+        // refreshes start failing with invalid_grant, add it back here matching the
+        // original callback URL (e.g. `${process.env.DOMAIN}/api/gitlab/callback`).
       }),
     });
 
@@ -76,10 +64,12 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
       const errorText = await response.text();
       console.error('[GitLab Token Refresh] Failed to refresh token:', response.status, errorText);
       
+      let isInvalidGrant = false;
       // Parse error for better debugging
       try {
         const errorJson = JSON.parse(errorText);
         if (errorJson.error === 'invalid_grant') {
+          isInvalidGrant = true;
           console.error('[GitLab Token Refresh] invalid_grant - Common causes:');
           console.error('  1. Refresh token was already used (GitLab rotates refresh tokens)');
           console.error('  2. redirect_uri mismatch - must match original OAuth callback');
@@ -91,14 +81,14 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
         // Not JSON, use raw error
       }
       
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant };
     }
 
     const tokenData = await response.json();
     
     if (tokenData.error) {
       console.error('[GitLab Token Refresh] Error:', tokenData.error, tokenData.error_description);
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: tokenData.error === 'invalid_grant' };
     }
 
     console.log('[GitLab Token Refresh] Successfully refreshed token');
@@ -108,10 +98,11 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
       accessToken: tokenData.access_token || null,
       newRefreshToken: tokenData.refresh_token || null, // MUST save this - old refresh token is now invalid!
       expiresIn: tokenData.expires_in || null,
+      isInvalidGrant: false,
     };
   } catch (error) {
     console.error('[GitLab Token Refresh] Exception:', error);
-    return { accessToken: null, newRefreshToken: null, expiresIn: null };
+    return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: false };
   }
 }
 
@@ -125,7 +116,7 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
  */
 export async function getValidGitLabToken(userId: string): Promise<string | null> {
   try {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     // Get stored token from database
     const { data: tokenData, error } = await supabase
@@ -134,7 +125,10 @@ export async function getValidGitLabToken(userId: string): Promise<string | null
       .eq('user_id', userId)
       .single();
 
-    if (error || !tokenData?.access_token) {
+    const currentAccessToken = decryptOAuthToken(tokenData?.access_token ?? null);
+    const currentRefreshToken = decryptOAuthToken(tokenData?.refresh_token ?? null);
+
+    if (error || !currentAccessToken) {
       console.log('[GitLab Token] No stored token found for user:', userId);
       return null;
     }
@@ -147,43 +141,22 @@ export async function getValidGitLabToken(userId: string): Promise<string | null
     // If no expiration set or token hasn't expired (with 5 min buffer), return current token
     if (!expiresAt || expiresAt > fiveMinutesFromNow) {
       console.log('[GitLab Token] Found valid stored token for user:', userId);
-      return tokenData.access_token;
+      return currentAccessToken;
     }
 
     // Token has expired or will expire soon, try to refresh
     console.log('[GitLab Token] Token expired or expiring soon, attempting refresh for user:', userId);
     console.log('[GitLab Token] Token auth_source:', tokenData.auth_source || 'unknown (legacy)');
     
-    // Check if this token came from Supabase Auth - if so, we cannot refresh it directly
-    // Supabase manages its own OAuth tokens with its own client credentials
+    // Supabase-sourced tokens cannot be refreshed with our OAuth credentials.
+    // User must reconnect via Repository Connections in settings.
     if (tokenData.auth_source === 'supabase') {
-      console.log('[GitLab Token] Token from Supabase Auth - cannot refresh with app credentials');
-      console.log('[GitLab Token] User should refresh their Supabase session or re-connect GitLab');
-      // For Supabase-sourced tokens, try to get a fresh token from Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.provider_token && session.user?.app_metadata?.provider === 'gitlab') {
-        console.log('[GitLab Token] Found fresh token in Supabase session, updating database');
-        // Update the database with the fresh session token
-        await supabase
-          .from('gitlab_tokens')
-          .update({
-            access_token: session.provider_token,
-            refresh_token: session.provider_refresh_token || tokenData.refresh_token,
-            expires_at: new Date(Date.now() + 7200 * 1000).toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', userId);
-        return session.provider_token;
-      }
-      // Delete the expired token - user needs to re-authenticate
-      await supabase
-        .from('gitlab_tokens')
-        .delete()
-        .eq('user_id', userId);
+      console.log('[GitLab Token] Token from Supabase Auth - cannot refresh, user must reconnect');
+      await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
       return null;
     }
     
-    if (!tokenData.refresh_token) {
+    if (!currentRefreshToken) {
       console.log('[GitLab Token] No refresh token available, user needs to re-authenticate');
       // Delete the expired token
       await supabase
@@ -193,15 +166,15 @@ export async function getValidGitLabToken(userId: string): Promise<string | null
       return null;
     }
 
-    const refreshResult = await refreshGitLabToken(tokenData.refresh_token);
+    const refreshResult = await refreshGitLabToken(currentRefreshToken);
     
     if (!refreshResult.accessToken) {
-      console.log('[GitLab Token] Failed to refresh token, user needs to re-authenticate');
-      // Delete the expired/invalid token
-      await supabase
-        .from('gitlab_tokens')
-        .delete()
-        .eq('user_id', userId);
+      if (refreshResult.isInvalidGrant) {
+        console.log('[GitLab Token] Token revoked (invalid_grant) — removing stored token, user must reconnect');
+        await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
+      } else {
+        console.log('[GitLab Token] Token refresh failed (transient error) — keeping stored token for retry');
+      }
       return null;
     }
 
@@ -213,8 +186,8 @@ export async function getValidGitLabToken(userId: string): Promise<string | null
     const { error: updateError } = await supabase
       .from('gitlab_tokens')
       .update({
-        access_token: refreshResult.accessToken,
-        refresh_token: refreshResult.newRefreshToken || tokenData.refresh_token,
+        access_token: encryptOAuthToken(refreshResult.accessToken),
+        refresh_token: encryptOAuthToken(refreshResult.newRefreshToken || currentRefreshToken),
         expires_at: newExpiresAt,
         updated_at: new Date().toISOString(),
       })
@@ -275,7 +248,7 @@ export async function storeGitLabToken(
   scopes: string
 ): Promise<boolean> {
   try {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     // GitLab tokens expire in 7200 seconds (2 hours) by default
     const expiresAt = expiresIn 
@@ -286,8 +259,8 @@ export async function storeGitLabToken(
       .from('gitlab_tokens')
       .upsert({
         user_id: userId,
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: encryptOAuthToken(accessToken),
+        refresh_token: encryptOAuthToken(refreshToken),
         expires_at: expiresAt,
         gitlab_username: gitlabUsername,
         gitlab_user_id: gitlabUserId,
@@ -314,7 +287,7 @@ export async function storeGitLabToken(
  */
 export async function deleteGitLabToken(userId: string): Promise<boolean> {
   try {
-    const supabase = await createClient();
+    const supabase = await createServiceClient();
     
     const { error } = await supabase
       .from('gitlab_tokens')

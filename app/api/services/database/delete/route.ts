@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -46,6 +47,13 @@ export async function POST(req: NextRequest) {
     );
 
     if (!result.success) {
+      if (result.errorCode === "FORBIDDEN" || result.errorCode === "NOT_FOUND") {
+        return NextResponse.json(
+          { error: result.error || "Invalid request" },
+          { status: result.statusCode ?? (result.errorCode === "FORBIDDEN" ? 403 : 404) }
+        );
+      }
+
       if (result.errorCode === "DATABASE_HAS_ACTIVE_LINKS") {
         return NextResponse.json(
           {
@@ -69,7 +77,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         { error: result.error || "Invalid request" },
-        { status: 400 }
+        { status: result.statusCode || 400 }
       );
     }
 
@@ -80,16 +88,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Unknown error occurred" },
-      { status: 400 }
-    );
+    logError("services/database/delete", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

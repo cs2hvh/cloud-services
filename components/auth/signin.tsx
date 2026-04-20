@@ -69,13 +69,13 @@ export function SignInForm() {
         rememberMe,
       });
 
-      if (res.data?.twofastatus) {
+      if (res?.data?.twofastatus) {
         setTwofaRequired(true);
         return;
       }
 
       if (res.status === 200) {
-        toast.success(`Welcome back ${res.data?.name || ""}!`);
+        toast.success(`Welcome back ${res?.data?.name || ""}!`);
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           await supabase.auth.setSession(data.session);
@@ -111,7 +111,7 @@ export function SignInForm() {
       const response = await api.post(endpoint, payload);
 
       if (response?.data?.url) {
-        window.location.href = response.data.url;
+        window.location.href = response?.data?.url;
       }
     } finally {
       setIsLoading(false);
@@ -366,7 +366,7 @@ export function SignInForm() {
               <span>Remember Me</span>
             </label>
 
-            <Link href="/reset-password" className="text-[10px] leading-[11px] text-white hover:text-[#2f8af5]">
+            <Link href="/reset-password" className="text-[10px] leading-[11px] text-white hover:text-[#2f8af5] cursor-pointer">
               Forgot Password
             </Link>
           </div>
@@ -385,7 +385,7 @@ export function SignInForm() {
 
       <p className="mt-3 text-center text-sm text-white">
         New here! Create an account{" "}
-        <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff]">
+        <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
           Sign Up
         </Link>
       </p>

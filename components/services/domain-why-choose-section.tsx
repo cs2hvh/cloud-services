@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   Search,
   Monitor,
@@ -10,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 type FeatureNode = {
   title: string;
@@ -93,13 +93,14 @@ export default function DomainWhyChooseSection() {
                 );
               })}
             </div>
-            <Link
-              href="/signup"
+            <AuthAwareServiceCta
+              service="domain"
+              intent="main"
               className="mt-5 inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-black hover:bg-white"
             >
               Get Started
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
+            </AuthAwareServiceCta>
           </div>
         </div>
 
@@ -141,13 +142,14 @@ export default function DomainWhyChooseSection() {
               Why Choose <span className="text-[#10A3FF]">AhuraCloud</span> for
               Domains
             </h2>
-            <Link
-              href="/signup"
+            <AuthAwareServiceCta
+              service="domain"
+              intent="main"
               className="mt-5 inline-flex items-center rounded-full bg-white/90 px-5 py-2 text-sm font-medium text-black hover:bg-white"
             >
               Get Started
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
+            </AuthAwareServiceCta>
           </div>
         </div>
       </Container>

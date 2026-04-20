@@ -16,26 +16,32 @@ function makeCloseServiceClient(activeRow: {
     error: null,
   });
 
-  const selectEq = vi.fn().mockReturnValue({
+  const selectUserEq = vi.fn().mockReturnValue({
     maybeSingle,
   });
+  const selectServiceEq = vi.fn().mockReturnValue({
+    eq: selectUserEq,
+  });
 
-  const deleteEq = vi.fn().mockResolvedValue({ error: null });
+  const deleteUserEq = vi.fn().mockResolvedValue({ error: null });
+  const deleteServiceEq = vi.fn().mockReturnValue({
+    eq: deleteUserEq,
+  });
 
   const client = {
     schema: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: selectEq,
+          eq: selectServiceEq,
         }),
         delete: vi.fn().mockReturnValue({
-          eq: deleteEq,
+          eq: deleteServiceEq,
         }),
       }),
     }),
   };
 
-  return { client, deleteEq };
+  return { client, deleteServiceEq, deleteUserEq, selectServiceEq, selectUserEq };
 }
 
 describe("Billing lifecycle operations", () => {
@@ -79,7 +85,7 @@ describe("Billing lifecycle operations", () => {
 
   it("TC-LIFECYCLE-003: deletion should proceed when final-charge deduction fails with failOnInsufficient=false", async () => {
     const { createServiceClient } = await import("@/lib/supabase/server");
-    const { client, deleteEq } = makeCloseServiceClient({
+    const { client, deleteServiceEq, deleteUserEq } = makeCloseServiceClient({
       user_id: "user-owner",
       service_id: "svc-2",
       hourly_rate: 1,
@@ -97,13 +103,15 @@ describe("Billing lifecycle operations", () => {
 
     expect(result.charged).toBeCloseTo(1, 4);
     expect(result.newBalance).toBeNull();
-    expect(deleteEq).toHaveBeenCalledWith("service_id", "svc-2");
+    expect(deleteServiceEq).toHaveBeenCalledWith("service_id", "svc-2");
+    expect(deleteUserEq).toHaveBeenCalledWith("user_id", "request-user");
   });
 
   it("TC-LIFECYCLE-004: platform app resize should update hourly rate for active service only", async () => {
     const { createServiceClient } = await import("@/lib/supabase/server");
 
-    const statusEq = vi.fn().mockResolvedValue({ error: null });
+    const select = vi.fn().mockResolvedValue({ data: [{ service_id: "app-1" }], error: null });
+    const statusEq = vi.fn().mockReturnValue({ select });
     const serviceEq = vi.fn().mockReturnValue({
       eq: statusEq,
     });
@@ -120,7 +128,7 @@ describe("Billing lifecycle operations", () => {
     };
     vi.mocked(createServiceClient).mockResolvedValue(client as never);
 
-    await Billing.update_active_platform_app_rate({
+    const result = await Billing.update_active_platform_app_rate({
       serviceId: "app-1",
       newHourlyRate: 0.25,
     });
@@ -133,5 +141,7 @@ describe("Billing lifecycle operations", () => {
     );
     expect(serviceEq).toHaveBeenCalledWith("service_id", "app-1");
     expect(statusEq).toHaveBeenCalledWith("status", "active");
+    expect(select).toHaveBeenCalledWith("service_id");
+    expect(result).toEqual({ updated: true });
   });
 });

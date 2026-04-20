@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
-import { createHmac } from "crypto";
+import { getOAuthStateSecret, createSignedOAuthState, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket App OAuth flow for repository access
@@ -13,30 +13,11 @@ import { createHmac } from "crypto";
  */
 
 function getStateSecret(): string {
-  return (
-    process.env.BITBUCKET_STATE_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    ""
-  );
+  return getOAuthStateSecret(process.env.BITBUCKET_STATE_SECRET, "Bitbucket", "BITBUCKET_STATE_SECRET");
 }
 
 function createSignedState(userId: string, returnTo: string): string {
-  const secret = getStateSecret();
-  if (!secret) {
-    throw new Error(
-      "Missing BITBUCKET_STATE_SECRET (or SUPABASE_SERVICE_ROLE_KEY) for OAuth state signing"
-    );
-  }
-
-  const payload = {
-    userId,
-    returnTo,
-    issuedAt: Date.now(),
-  };
-
-  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const signature = createHmac("sha256", secret).update(payloadB64).digest("base64url");
-  return `${payloadB64}.${signature}`;
+  return createSignedOAuthState(getStateSecret(), userId, returnTo);
 }
 
 export async function POST(request: Request) {
@@ -108,14 +89,8 @@ export async function POST(request: Request) {
     const scopes = 'repository account';
     
     // Generate state parameter for CSRF protection + returnTo path
-    const returnPath = returnTo || '/dashboard/settings';
-    const safeReturnPath =
-      typeof returnPath === "string" &&
-      returnPath.startsWith("/") &&
-      !returnPath.startsWith("//")
-        ? returnPath
-        : "/dashboard/settings";
-    const state = createSignedState(user.id, safeReturnPath);
+    const returnPath = sanitizeReturnTo(returnTo);
+    const state = createSignedState(user.id, returnPath);
     
     // Build Bitbucket authorization URL
     // Bitbucket supports omitting redirect_uri to use the consumer callback URL.

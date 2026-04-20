@@ -395,6 +395,26 @@ describe('POST /api/services/database/network/update', () => {
       const response = await POST(request as NextRequest);
       expect(response?.status).toBe(401);
     });
+
+    it('rejects updating firewall for a cluster owned by another user', async () => {
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockDatabaseCluster,
+          owner_id: '00000000-0000-0000-0000-000000000999',
+        },
+      } as any);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/network/update',
+        validPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response!, 403);
+      expect(data.error).toContain('not authorized');
+    });
   });
 
   describe('Activity Logging', () => {

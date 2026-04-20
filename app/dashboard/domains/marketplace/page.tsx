@@ -1,23 +1,42 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Globe, ShieldCheck, Zap } from 'lucide-react';
 
 import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
+import { PurchaseRequests } from '@/components/dashboard/apps/domain-marketplace/purchase-requests';
+import type { PurchaseRequest } from '@/components/dashboard/apps/domain-marketplace/types';
 import { consumePendingDomain } from '@/lib/domain-intent';
 
 export default function DomainMarketplacePage() {
   const searchParams = useSearchParams();
   const [initialQuery, setInitialQuery] = useState('');
+  const [requests, setRequests] = useState<PurchaseRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
 
   useEffect(() => {
     const pending = consumePendingDomain();
     const domainParam = searchParams.get('domain');
     setInitialQuery(domainParam || pending?.domain || '');
   }, [searchParams]);
+
+  const fetchRequests = useCallback(async () => {
+    setRequestsLoading(true);
+    try {
+      const res = await fetch('/api/domains/market/purchase-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setRequests(data?.data ?? []);
+      }
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchRequests(); }, [fetchRequests]);
 
   return (
     <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
@@ -80,6 +99,23 @@ export default function DomainMarketplacePage() {
       >
         <DomainMarketplaceTab initialQuery={initialQuery} />
       </motion.div>
+
+      {(requestsLoading || requests.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.28 }}
+          className="mt-8"
+        >
+          <PurchaseRequests
+            requests={requests}
+            loading={requestsLoading}
+            showAttachActions={false}
+            attachOptions={[]}
+            onRefresh={fetchRequests}
+          />
+        </motion.div>
+      )}
     </div>
   );
 }

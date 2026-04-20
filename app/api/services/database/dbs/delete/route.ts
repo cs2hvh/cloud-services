@@ -38,9 +38,17 @@ export async function POST(req: NextRequest) {
     const result = await DatabaseService.deleteDatabaseInternal({
       clusterId: validatedData.cluster_id,
       dbName: validatedData.db_name,
+      userId: auth.user.id,
     });
 
     if (!result.success) {
+      if (result.statusCode === 403 || result.statusCode === 404) {
+        return NextResponse.json(
+          { error: result.error || "Invalid request" },
+          { status: result.statusCode }
+        );
+      }
+
       if (result.statusCode === 500 && result.details) {
         return NextResponse.json(
           {

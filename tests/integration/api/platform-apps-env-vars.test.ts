@@ -13,12 +13,43 @@ import {
   mockUnauthenticatedUser,
 } from '../../utils/test-helpers';
 
+const withAppMutationLockMock = vi.fn();
+
 // Mock all dependencies
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/queries');
 vi.mock('@/lib/services/kubernetes-info');
 vi.mock('@/lib/services/app-status');
+vi.mock('@/lib/services/runtime-env-reconciler');
+vi.mock('@/lib/app-operations', () => {
+  class MockResourceMutationLockService {
+    withAppMutationLock = withAppMutationLockMock;
+  }
+
+  class MockAppOperationError extends Error {
+    code: string;
+    statusCode: number;
+    retryable: boolean;
+
+    constructor(params: {
+      code: string;
+      message: string;
+      statusCode?: number;
+      retryable?: boolean;
+    }) {
+      super(params.message);
+      this.code = params.code;
+      this.statusCode = params.statusCode ?? 500;
+      this.retryable = params.retryable ?? false;
+    }
+  }
+
+  return {
+    ResourceMutationLockService: MockResourceMutationLockService,
+    AppOperationError: MockAppOperationError,
+  };
+});
 
 /**
  * Platform Apps Environment Variables API Integration Tests
@@ -51,7 +82,15 @@ describe('POST /api/services/platform-apps/env-vars/update', () => {
       success: true,
     } as any);
 
-    // Default mock for KubernetesInfoService
+    const { reconcileRuntimeEnv } = await import('@/lib/services/runtime-env-reconciler');
+    vi.mocked(reconcileRuntimeEnv).mockResolvedValue({
+      status: 'success',
+      runtimeEnvVars: mockEnvVars,
+      reason: null,
+    } as any);
+
+    withAppMutationLockMock.mockImplementation(async ({ run }) => run());
+
     const { KubernetesInfoService } = await import('@/lib/services/kubernetes-info');
     vi.mocked(KubernetesInfoService.updateEnvVarsAndRestart).mockResolvedValue({
       success: true,
@@ -236,6 +275,27 @@ describe('POST /api/services/platform-apps/env-vars/update', () => {
       vi.mocked(Platform_Apps.get).mockResolvedValue({
         success: false,
         error: 'App not found',
+      } as any);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/env-vars/update',
+        {
+          app_id: '550e8400-e29b-41d4-a716-446655440999',
+          env_vars: mockEnvVars,
+        }
+      );
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response, 404);
+    });
+
+    it('should return 404 when success is true but data is null (null ownership guard)', async () => {
+      const { Platform_Apps } = await import('@/lib/supabase/queries');
+      // Simulates a race condition where the record was deleted between check and fetch,
+      // or a DB adapter that returns success:true with null data.
+      vi.mocked(Platform_Apps.get).mockResolvedValue({
+        success: true,
+        data: null,
       } as any);
 
       const request = createMockPostRequest(

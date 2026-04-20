@@ -13,9 +13,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { AppsList } from "@/components/dashboard/apps";
+import { mergeDeploymentPresentation } from "@/components/dashboard/apps/types";
 import { useRealtimeApps } from "@/hooks/use-realtime-apps";
 import { useAppBuildState } from "@/hooks/use-app-build-state";
 import { createClient } from "@/lib/supabase/client";
+import api from "@/lib/axios/axios";
 
 function MetricCard({
   label,
@@ -93,9 +95,46 @@ export default function ApplicationDeploymentPage() {
     limit: 100,
   });
 
+  // Sync realtime updates while preserving deployment metadata already fetched from the API.
   useEffect(() => {
-    setLocalApps(realtimeApps);
+    setLocalApps(prev => {
+      if (prev.length === 0) return realtimeApps;
+      const prevMap = new Map(prev.map(a => [a.id, a]));
+      return realtimeApps.map(app => mergeDeploymentPresentation(app, prevMap.get(app.id)));
+    });
   }, [realtimeApps]);
+
+  const rollbackRefreshKey = useMemo(
+    () => realtimeApps.map((app) => `${app.id}:${app.status}:${app.updated_at ?? ""}`).join("|"),
+    [realtimeApps]
+  );
+
+  // Re-enrich deployment metadata whenever the live app inventory changes.
+  // Supabase realtime cannot compute rollback targets or serving release info because
+  // they depend on deployment history, so refresh them from the list API whenever
+  // statuses move.
+  useEffect(() => {
+    if (realtimeApps.length === 0) return;
+    api
+      .get("/services/platform-apps/list")
+      .then(res => {
+        if (res?.data?.apps) {
+          const map = new Map(
+            (res?.data?.apps as Array<{
+              id: string;
+              can_rollback?: boolean;
+              serving_build_number?: number | null;
+              last_operation_build_number?: number | null;
+              last_operation_trigger?: string | null;
+              rollback_target_build_number?: number | null;
+              rollback_target_commit_sha?: string | null;
+            }>).map((app) => [app.id, app])
+          );
+          setLocalApps(prev => prev.map(app => mergeDeploymentPresentation(app, map.get(app.id))));
+        }
+      })
+      .catch(() => {}); // non-critical — rollback buttons just stay disabled
+  }, [rollbackRefreshKey, realtimeApps]);
 
   const deployedApps = localApps;
 

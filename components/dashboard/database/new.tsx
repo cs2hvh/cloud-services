@@ -306,8 +306,8 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
       try {
         setLoadingTypes(true);
         const response = await api.get("/database-types");
-        if (response.data.success) {
-          setDatabaseTypes(response.data.data);
+        if (response?.data?.success) {
+          setDatabaseTypes(response?.data?.data ?? []);
         }
       } catch (error) {
         console.error("Error fetching database types:", error);
@@ -498,8 +498,11 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
 
       const response = await api.post("/services/database/create", payload);
       if (response.status === 200) {
-        toast.success(response.data.message || "Database creation started!");
-        router.push(`/dashboard/services/database/clusters/${response.data.data.cluster_id}`);
+        toast.success(response?.data?.message || "Database creation started!");
+        const clusterId = response?.data?.data?.cluster_id;
+        if (clusterId) {
+          router.push(`/dashboard/services/database/clusters/${clusterId}`);
+        }
       }
     } catch (error) {
       console.error(error);

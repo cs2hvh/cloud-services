@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeAuthError, sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 // Shape of accepted payload
 type UpdateBody = {
@@ -65,7 +66,8 @@ export async function PUT(req: NextRequest) {
       // Common causes:
       // - Password change may require AAL2 (MFA) session
       // - Phone change triggers OTP and may need verification
-      return NextResponse.json({ error: updErr.message }, { status: 400 });
+      logError("auth/profile/update", updErr);
+      return NextResponse.json({ error: sanitizeAuthError(updErr) }, { status: 400 });
     }
 
     // If phone was supplied, Supabase will send/require an OTP to confirm the change.
@@ -94,8 +96,7 @@ export async function PUT(req: NextRequest) {
       { status: 200 },
     );
   } catch (e: unknown) {
-    const message =
-      e instanceof Error ? e.message : "Failed to update profile.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    logError("auth/profile/update", e);
+    return NextResponse.json({ error: sanitizeError(e, "server_error") }, { status: 500 });
   }
 }
