@@ -90,8 +90,6 @@ pipeline {
   environment {
     APP_NAME = '${appName}'
     SERVICE_NAME = '${serviceName}'
-    INGRESS_NAME = '${ingressName}'
-    DOMAIN = '${domain}'
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     PLATFORM_OPERATION_ID = '${operationId}'
@@ -189,9 +187,6 @@ DEPLOY_EOF
 
               echo 'Applying deployment manifest'
               kubectl apply -f deployment.yaml
-
-              echo "Restarting deployment to apply new resource limits"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
             ''',
             returnStatus: false
             )
@@ -208,6 +203,11 @@ DEPLOY_EOF
           script {
             echo 'STAGE: Verify Deployment'
             echo "Checking deployment status for \${env.APP_NAME}"
+
+            sh(
+              script: 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true',
+              returnStatus: false
+            )
 
             echo 'Fetching deployment, service, and ingress status'
             sh(

@@ -25,6 +25,8 @@ interface DomainAttachActionProps {
   defaultAppId?: string;
   buttonLabel?: string;
   onAttached?: (appId: string) => void;
+  /** When true, disables the form while a parent operation is in progress. */
+  disabled?: boolean;
 }
 
 export function DomainAttachAction({
@@ -33,6 +35,7 @@ export function DomainAttachAction({
   defaultAppId,
   buttonLabel = 'Add Domain',
   onAttached,
+  disabled = false,
 }: DomainAttachActionProps) {
   const validDefault = useMemo(
     () => (defaultAppId && appOptions.some((app) => app.id === defaultAppId) ? defaultAppId : ''),
@@ -103,7 +106,7 @@ export function DomainAttachAction({
 
   return (
     <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-      <Select value={selectedAppId} onValueChange={setSelectedAppId}>
+      <Select value={selectedAppId} onValueChange={setSelectedAppId} disabled={attaching || disabled}>
         <SelectTrigger className="bg-black/30 border-white/10">
           <SelectValue placeholder="Choose target app" />
         </SelectTrigger>
@@ -116,7 +119,7 @@ export function DomainAttachAction({
         </SelectContent>
       </Select>
 
-      <Button onClick={() => void handleAttach()} disabled={!selectedAppId || attaching}>
+      <Button onClick={() => void handleAttach()} disabled={!selectedAppId || attaching || disabled}>
         {attaching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
         {buttonLabel}
       </Button>

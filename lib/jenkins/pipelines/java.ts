@@ -6,7 +6,7 @@
  * 2. Project has a valid pom.xml file
  * 3. Auto-creates Dockerfile if missing, builds with Kaniko, deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml } from './utils';
+import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -333,7 +333,9 @@ spec:
     protocol: TCP
     name: http
   type: ClusterIP
----
+DEPLOYMENT_EOF
+
+              cat > ingress.yaml << INGRESS_EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -358,7 +360,7 @@ spec:
             name: \${SERVICE_NAME}
             port:
               number: 80
-DEPLOYMENT_EOF
+INGRESS_EOF
 
               echo 'Applying Kubernetes manifests'
               kubectl apply -f deployment.yaml
@@ -369,7 +371,12 @@ DEPLOYMENT_EOF
               echo 'Deployment completed'
               kubectl get deployment \${APP_NAME}
               kubectl get service \${SERVICE_NAME}
-              kubectl get ingress \${INGRESS_NAME}
+              ''',
+              returnStatus: false
+            )
+
+            sh(
+              script: '''${generateSmartIngressApplyScript(ingressName, appDomain)}
               ''',
               returnStatus: false
             )
