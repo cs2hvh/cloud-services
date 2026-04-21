@@ -23,8 +23,10 @@ export default function DomainMarketplacePage() {
     setInitialQuery(domainParam || pending?.domain || '');
   }, [searchParams]);
 
-  const fetchRequests = useCallback(async () => {
-    setRequestsLoading(true);
+  const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setRequestsLoading(true);
     try {
       const res = await fetch('/api/domains/market/purchase-requests');
       if (res.ok) {
@@ -32,11 +34,20 @@ export default function DomainMarketplacePage() {
         setRequests(data?.data ?? []);
       }
     } finally {
-      setRequestsLoading(false);
+      if (!silent) setRequestsLoading(false);
     }
   }, []);
 
   useEffect(() => { void fetchRequests(); }, [fetchRequests]);
+
+  // Poll every 5s while any request is still in-progress
+  useEffect(() => {
+    const hasActive = requests.some((r) => !TERMINAL_STATUSES.has(r.status));
+    if (!hasActive) return;
+    const id = setInterval(() => { void fetchRequests(true); }, 5_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requests]);
 
   return (
     <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
@@ -97,7 +108,7 @@ export default function DomainMarketplacePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.06, duration: 0.28 }}
       >
-        <DomainMarketplaceTab initialQuery={initialQuery} />
+        <DomainMarketplaceTab initialQuery={initialQuery} onPurchaseRequested={fetchRequests} />
       </motion.div>
 
       {(requestsLoading || requests.length > 0) && (
