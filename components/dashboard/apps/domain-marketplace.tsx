@@ -16,6 +16,7 @@ export interface DomainMarketplaceTabProps {
   appOptions?: unknown[];
   defaultAttachAppId?: string;
   onDomainAttached?: (appId: string) => void;
+  onPurchaseRequested?: () => void;
   showAttachActions?: boolean;
   modeLabel?: string;
   purchaseRequestAppIdFilter?: string;
@@ -52,6 +53,7 @@ function buildQuerySuggestions(value: string) {
 export function DomainMarketplaceTab({
   sourceAppId,
   initialQuery,
+  onPurchaseRequested,
 }: DomainMarketplaceTabProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -183,6 +185,7 @@ export function DomainMarketplaceTab({
           : 'Check your email for an ICANN verification link and click it before activating the domain.',
         duration: 8000,
       });
+      onPurchaseRequested?.();
     } catch {
       toast.error('Failed to submit purchase request');
     } finally {

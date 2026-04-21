@@ -662,8 +662,8 @@ type UsageBreakdown = {
 };
 
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
-type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
+type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage" | "purchase";
+type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps" | "domain";
 
 const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
 
@@ -765,6 +765,7 @@ function TransactionsTab() {
       recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
       setup: "bg-rose-500/15 text-rose-300 border-rose-500/20",
       usage: "bg-orange-500/15 text-orange-300 border-orange-500/20",
+      purchase: "bg-violet-500/15 text-violet-300 border-violet-500/20",
     };
     return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
   };
@@ -792,6 +793,7 @@ function TransactionsTab() {
       objectspace: "Object Storage",
       spectrum: "Spectrum",
       platform_apps: "Platform App",
+      domain: "Domain",
     };
     if (!serviceType) return "Service";
     return map[serviceType] ?? serviceType.replace("_", " ");
@@ -863,6 +865,29 @@ function TransactionsTab() {
     );
   };
 
+  const renderDomainBreakdown = (txn: Transaction) => {
+    if (txn.type !== "purchase" || txn.service_type !== "domain") return null;
+    const metadata = txn.metadata ?? {};
+    const domain = typeof metadata.domain === "string" ? metadata.domain : null;
+    const isRenewal = metadata.renewal === true;
+    const currency = typeof metadata.currency === "string" ? metadata.currency.toUpperCase() : "USD";
+    if (!domain) return null;
+    return (
+      <div className="mt-1.5 rounded-md border border-violet-500/25 bg-violet-500/5 p-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+          <span className="text-neutral-400">Domain</span>
+          <span className="text-right text-neutral-200 font-mono truncate" title={domain}>{domain}</span>
+          <span className="text-neutral-400">Action</span>
+          <span className="text-right text-neutral-200">{isRenewal ? "Renewal" : "Registration"}</span>
+          <span className="text-neutral-400">Currency</span>
+          <span className="text-right text-neutral-200">{currency}</span>
+          <span className="text-neutral-400">Amount</span>
+          <span className="text-right text-neutral-100 font-medium">{formatCurrency(txn.amount)}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -905,6 +930,7 @@ function TransactionsTab() {
             <option value="recurring">Recurring</option>
             <option value="setup">Setup charge</option>
             <option value="usage">Usage</option>
+            <option value="purchase">Purchase</option>
           </select>
 
           {/* Service Type */}
@@ -919,6 +945,7 @@ function TransactionsTab() {
             <option value="objectspace">Object Storage</option>
             <option value="spectrum">DDoS / Spectrum</option>
             <option value="platform_apps">Platform Apps</option>
+            <option value="domain">Domains</option>
           </select>
 
           {/* Date From */}
@@ -1030,6 +1057,7 @@ function TransactionsTab() {
                           <p className="text-xs text-neutral-500">{txn.description}</p>
                         )}
                         {renderUsageBreakdown(txn)}
+                        {renderDomainBreakdown(txn)}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-white">
@@ -1108,6 +1136,7 @@ function TransactionsTab() {
                   </div>
                 )}
                 {renderUsageBreakdown(txn)}
+                {renderDomainBreakdown(txn)}
                 {txn.receipt_url && (
                   <a
                     href={txn.receipt_url}
