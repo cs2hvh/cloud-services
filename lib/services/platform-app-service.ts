@@ -881,6 +881,10 @@ export class PlatformAppService {
     }
 
     // Update billing rate (non-fatal)
+    // NOTE: The resize route does NOT call this method directly.
+    // Billing rate update on confirmed success is owned by AppBuildSideEffectsService
+    // (via BuildPollingService → AppOperationFinalizer). This path only runs if
+    // resizeApp() is called directly (e.g. admin tools or future service consumers).
     try {
       const { hourlyRate } = await getRatesForPlatformApp(newSize);
       await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });

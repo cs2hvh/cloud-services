@@ -614,6 +614,224 @@
           "data"
         ]
       },
+      "EnvVarGetResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "key": {
+                "type": "string",
+                "description": "Environment variable key",
+                "example": "DATABASE_URL"
+              },
+              "value": {
+                "type": "string",
+                "description": "Environment variable value",
+                "example": "postgres://user:pass@host:5432/db"
+              }
+            },
+            "required": [
+              "app_id",
+              "key",
+              "value"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "Deployment": {
+        "type": "object",
+        "properties": {
+          "build_number": {
+            "type": "number",
+            "nullable": true,
+            "example": 5
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "BUILDING",
+              "SUCCESS",
+              "FAILURE",
+              "UNKNOWN"
+            ],
+            "example": "SUCCESS"
+          },
+          "started_at": {
+            "type": "string",
+            "example": "2026-04-21T10:00:00Z"
+          },
+          "duration": {
+            "type": "number",
+            "nullable": true,
+            "description": "Build duration in milliseconds",
+            "example": 120000
+          },
+          "commit_sha": {
+            "type": "string",
+            "nullable": true,
+            "example": "abc1234"
+          },
+          "commit_message": {
+            "type": "string",
+            "nullable": true,
+            "example": "Fix login redirect bug"
+          },
+          "trigger": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "manual",
+              "webhook",
+              "rollback",
+              "resize"
+            ],
+            "example": "manual"
+          },
+          "failure_reason": {
+            "type": "string",
+            "nullable": true,
+            "example": "Build script exited with code 1"
+          },
+          "rollback_target_build_number": {
+            "type": "number",
+            "nullable": true,
+            "example": null
+          },
+          "operation_type": {
+            "type": "string",
+            "example": "deploy"
+          },
+          "history_type": {
+            "type": "string",
+            "enum": [
+              "release",
+              "operation",
+              "rollback"
+            ],
+            "example": "release"
+          },
+          "is_release_build": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "build_number",
+          "status",
+          "started_at",
+          "operation_type",
+          "history_type",
+          "is_release_build"
+        ]
+      },
+      "DeploymentListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "app_name": {
+                "type": "string",
+                "example": "my-awesome-app"
+              },
+              "deployments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              },
+              "total": {
+                "type": "number",
+                "example": 10
+              },
+              "pending": {
+                "type": "boolean",
+                "description": "True when app is still pending with no deployments",
+                "example": false
+              }
+            },
+            "required": [
+              "app_id",
+              "app_name",
+              "deployments",
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "RedeployResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "app_name": {
+                "type": "string",
+                "example": "my-awesome-app"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "triggered",
+                  "pending"
+                ],
+                "example": "triggered"
+              },
+              "build_number": {
+                "type": "number",
+                "nullable": true,
+                "example": 5
+              },
+              "operation_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "a1cd4c8d-e891-48ba-8655-5c3d04a59501"
+              },
+              "reused": {
+                "type": "boolean",
+                "description": "True if an existing in-progress operation was reused",
+                "example": false
+              },
+              "message": {
+                "type": "string",
+                "example": "Redeployment started"
+              }
+            },
+            "required": [
+              "app_id",
+              "app_name",
+              "status",
+              "operation_id",
+              "reused"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -3834,6 +4052,397 @@
                 "example": {
                   "error": "DELETE_FAILED",
                   "message": "Failed to delete environment variable"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Get environment variable by key",
+        "description": "Returns the value of a single environment variable. The full plaintext value is returned — use with care.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Environment variable key",
+              "example": "DATABASE_URL"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment variable value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarGetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid key format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_KEY",
+                  "message": "Invalid environment variable key format",
+                  "details": {
+                    "field": "key"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this app"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App or key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Environment variable key not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/deployments": {
+      "get": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "List deployment history",
+        "description": "Returns up to 10 recent deployments for an app, merging Jenkins build data with DB records. Includes releases, operations (resize), and rollbacks.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "Access denied"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch deployments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/redeploy": {
+      "post": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Trigger redeploy",
+        "description": "Triggers a new deployment for the app using the current git branch and configuration. Rebuilds the container and rolls out via Kubernetes. Returns 202 if a build is already in progress.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Redeploy triggered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeployResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted — a build is already in progress; the existing operation was reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeployResponse"
+                },
+                "example": {
+                  "data": {
+                    "app_id": "8bdf284c-d3df-40f0-9565-b6e26f588c83",
+                    "app_name": "my-awesome-app",
+                    "status": "pending",
+                    "operation_id": "a1cd4c8d-e891-48ba-8655-5c3d04a59501",
+                    "reused": true,
+                    "message": "Redeploy already running"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — not the app owner, or git provider token missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "GIT_TOKEN_MISSING",
+                  "message": "Your github account is not connected or the access token has expired."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict — operation lock held or terminal build state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFLICT",
+                  "message": "Another operation is already in progress for this app"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable — repository URL not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFIGURATION_ERROR",
+                  "message": "Repository URL not configured for this app"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to trigger redeploy"
                 }
               }
             }
