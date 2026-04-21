@@ -18,7 +18,7 @@ export interface AuditLogEntry {
   user_email?: string;
   user_username?: string;
   user_role: string;
-  action: "create" | "update" | "delete" | "login" | "logout" | "token_expired" | "token_refreshed" | "webhook_received" | "provider_connect" | "provider_disconnect" | "password_change";
+  action: "create" | "update" | "delete" | "login" | "logout" | "token_expired" | "token_refreshed" | "webhook_received" | "provider_connect" | "provider_disconnect" | "password_change" | "access";
   service_type: string;
   service_id: string;
   service_name?: string;
@@ -51,6 +51,7 @@ const actionColors = {
     provider_connect: "bg-cyan-950/50 text-cyan-400 border border-cyan-900",
     provider_disconnect: "bg-orange-950/50 text-orange-400 border border-orange-900",
     password_change: "bg-pink-950/50 text-pink-400 border border-pink-900",
+    access: "bg-amber-950/50 text-amber-400 border border-amber-900",
 };
 
 const serviceTypeLabels: Record<string, string> = {

@@ -3,6 +3,7 @@ import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { ENV_KEY_REGEX, MAX_ENV_KEY_LENGTH, analyzeEnvLifecycle, type EnvVar } from "@/lib/env/lifecycle";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { PlatformAppEnvService } from "@/lib/services/platform-app-env-service";
+import { AuditLogService } from "@/lib/audit";
 
 async function getOwnedApp(appId: string, userId: string) {
   const result = await PlatformAppEnvService.getOwnedApp(appId, userId);
@@ -45,7 +46,7 @@ async function extractKey(
   return { key, error: null };
 }
 
-export const GET = withV1Auth("apps:env:get", async (_req, auth, context) => {
+export const GET = withV1Auth("apps:env:get", async (req, auth, context) => {
   const idResult = await v1ExtractId(context);
   if (idResult.error) return idResult.error;
 
@@ -63,6 +64,23 @@ export const GET = withV1Auth("apps:env:get", async (_req, auth, context) => {
   if (!found) {
     return v1Error("NOT_FOUND", 404, "Environment variable key not found", { field: "key" });
   }
+
+  // Audit every plaintext secret read — secret reads are a threat model event.
+  void AuditLogService.create({
+    user_id: auth.userId,
+    user_role: "user",
+    action: "access",
+    service_type: "platform_apps",
+    service_id: appId,
+    service_name: ownership.app?.name ?? appId,
+    ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+    user_agent: req.headers.get("user-agent") || "unknown",
+    request_id: crypto.randomUUID(),
+    metadata: {
+      operation: "env_var_read",
+      key,
+    },
+  }).catch((err) => console.warn("[v1/env-vars/key] Audit log failed:", err));
 
   return v1Ok({
     data: {
