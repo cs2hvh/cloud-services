@@ -206,37 +206,40 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // Persist autorenew preference to DB BEFORE calling Name.com.
+    // If the DB write fails we return 500 and the registrar is never touched —
+    // the user can retry. If we called Name.com first and the DB write failed
+    // silently, the renewal cron would still charge the user (stale metadata).
+    const { data: purchaseReq } = await supabase
+      .from("domain_purchase_requests")
+      .select("id, metadata")
+      .eq("user_id", auth.user.id)
+      .eq("domain", domain)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (purchaseReq) {
+      const { error: metaErr } = await supabase
+        .from("domain_purchase_requests")
+        .update({
+          metadata: { ...(purchaseReq.metadata as Record<string, unknown> ?? {}), autorenew_enabled: autorenewEnabled },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", purchaseReq.id);
+
+      if (metaErr) {
+        return NextResponse.json(
+          { error: "INTERNAL_ERROR", message: "Failed to save auto-renew preference" },
+          { status: 500 }
+        );
+      }
+    }
+
     await adapter.updateDomain(managed.zone, { autorenewEnabled });
 
     const updated = await adapter.getDomain(managed.zone);
-
-    // Persist the autorenew preference in domain_purchase_requests.metadata so
-    // the renewal billing cron can skip domains where the user opted out.
-    // Non-blocking — failure here doesn't affect the response.
-    ;(async () => {
-      try {
-        const { data: req } = await supabase
-          .from("domain_purchase_requests")
-          .select("id, metadata")
-          .eq("user_id", auth.user.id)
-          .eq("domain", domain)
-          .eq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (req) {
-          await supabase
-            .from("domain_purchase_requests")
-            .update({
-              metadata: { ...(req.metadata as Record<string, unknown> ?? {}), autorenew_enabled: autorenewEnabled },
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", req.id);
-        }
-      } catch (err) {
-        console.warn("[domains/registrar] Failed to persist autorenew_enabled in metadata:", err);
-      }
-    })();
 
     return NextResponse.json({
       success: true,
