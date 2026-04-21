@@ -12,8 +12,15 @@ import { getDomainRenewalService } from "@/lib/domain-service/renewal";
  * where the user's credit balance has not yet been charged for renewal,
  * deducts the renewal price from their balance, and records the transaction.
  *
- * Name.com handles the actual domain renewal from the platform account.
- * This endpoint purely handles the user-facing credit deduction.
+ * Architecture note — separation of concerns:
+ * Name.com renews domains from the platform account automatically (they charge
+ * the platform's payment method on file). This cron is solely responsible for
+ * the user-facing credit deduction that reimburses the platform for that cost.
+ * We intentionally do not wait for Name.com renewal confirmation here because:
+ *   1. Name.com renewal is triggered by their own scheduler, not this cron.
+ *   2. Polling Name.com for confirmation would require a separate webhook/job.
+ *   3. If Name.com fails to renew (e.g. domain expired), that is a platform-level
+ *      incident handled outside the billing cron.
  *
  * Protected by CRON_SECRET. Called by the cron worker.
  */
@@ -110,6 +117,9 @@ export async function POST(req: Request) {
       // Optimistic lock: set renewal_charged: true BEFORE billing so that if
       // the post-charge metadata update fails (network blip, DB timeout, etc.)
       // the next cron run does NOT double-bill the user.
+      // Also filter on autorenew_enabled != false to guard against a user disabling
+      // auto-renew between our initial query and this lock acquisition — spreading
+      // the stale `meta` would otherwise silently overwrite their preference.
       const { data: lockRow, error: lockError } = await supabase
         .from("domain_purchase_requests")
         .update({
@@ -118,6 +128,7 @@ export async function POST(req: Request) {
         })
         .eq("id", row.id)
         .filter("metadata->>renewal_charged", "eq", "false")
+        .filter("metadata->>autorenew_enabled", "neq", "false")
         .select("id")
         .maybeSingle();
 

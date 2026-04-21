@@ -580,21 +580,20 @@ export class DomainService {
     const managed = await this.deps.registrar.resolveZone(domain.domain);
     if (!managed) return { managed: false as const, domain: domain.domain };
 
+    // Persist autorenew preference BEFORE calling the registrar so that if the
+    // DB write fails the user gets a 500 with no registrar change (retryable).
+    // If we called Name.com first and the DB write failed, the registrar would be
+    // updated but the cron would still charge the user (stale DB value).
+    if (input.updates.autorenew_enabled !== undefined && this.deps.purchaseRequests) {
+      const req = await this.deps.purchaseRequests!.findLatestByDomain({ userId: input.actor.userId, domain: managed.zone });
+      if (req) await this.deps.purchaseRequests!.updateStatus({ requestId: req.id, status: req.status, metadata: { autorenew_enabled: input.updates.autorenew_enabled } });
+    }
+
     const s = await this.deps.registrar.updateRegistrarSettings(managed.zone, {
       autorenewEnabled: input.updates.autorenew_enabled,
       locked: input.updates.locked,
       privacyEnabled: input.updates.privacy_enabled,
     });
-
-    // Persist autorenew opt-out so the renewal cron respects the user's preference.
-    // Must be awaited — if this fails the registrar was updated but the cron would
-    // still charge the user (old autorenew_enabled value in metadata).
-    if (input.updates.autorenew_enabled !== undefined && this.deps.purchaseRequests) {
-      try {
-        const req = await this.deps.purchaseRequests!.findLatestByDomain({ userId: input.actor.userId, domain: managed.zone });
-        if (req) await this.deps.purchaseRequests!.updateStatus({ requestId: req.id, status: req.status, metadata: { autorenew_enabled: input.updates.autorenew_enabled } });
-      } catch (err) { console.warn("[DomainService] Failed to persist autorenew_enabled:", err); throw err; }
-    }
 
     await this.emitNonBlocking(async () => {
       await this.emitAudit({ actor: input.actor, action: "update", serviceId: domain.id, serviceName: domain.domain, metadata: { event: "registrar_settings_updated", ...input.updates } });
