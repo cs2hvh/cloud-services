@@ -53,8 +53,18 @@ export interface DomainMarketplaceRegistrarPort {
   ): Promise<void>;
 }
 
+export interface RegistrarSettings {
+  autorenewEnabled: boolean | null;
+  locked: boolean | null;
+  privacyEnabled: boolean | null;
+  expireDate: string | null;
+}
+
 export interface DomainRegistrarPort {
   getDomainSummary(domainName: string): Promise<{ domainName: string; expiresAt?: string; createdAt?: string } | null>;
+  resolveZone(fqdn: string): Promise<{ zone: string; host: string } | null>;
+  getRegistrarSettings(zone: string): Promise<RegistrarSettings>;
+  updateRegistrarSettings(zone: string, updates: { autorenewEnabled?: boolean; locked?: boolean; privacyEnabled?: boolean }): Promise<RegistrarSettings>;
 }
 
 export interface DnsProviderPort {
@@ -206,6 +216,13 @@ export interface DomainBillingPort {
     amount: number;
     currency: string;
     reason: string;
+  }): Promise<void>;
+  chargeRenewal(params: {
+    userId: string;
+    purchaseRequestId: string;
+    domain: string;
+    amount: number;
+    currency: string;
   }): Promise<void>;
 }
 

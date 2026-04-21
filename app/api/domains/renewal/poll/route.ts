@@ -1,8 +1,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { Billing } from "@/lib/supabase/queries/billing";
 import { logError } from "@/lib/api/error-sanitizer";
+import { getDomainRenewalService } from "@/lib/domain-service/renewal";
 
 /**
  * POST /api/domains/renewal/poll
@@ -80,6 +80,8 @@ export async function POST(req: Request) {
     let skipped = 0;
     const failures: { domain: string; error: string }[] = [];
 
+    const renewalService = getDomainRenewalService();
+
     for (const row of pending) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
 
@@ -101,7 +103,6 @@ export async function POST(req: Request) {
       const expiresAt = typeof meta.expires_at === "string" ? meta.expires_at : null;
 
       if (!renewalPrice || renewalPrice <= 0) {
-        // No renewal price stored — skip silently (can't charge unknown amount)
         skipped++;
         continue;
       }
@@ -109,8 +110,6 @@ export async function POST(req: Request) {
       // Optimistic lock: set renewal_charged: true BEFORE billing so that if
       // the post-charge metadata update fails (network blip, DB timeout, etc.)
       // the next cron run does NOT double-bill the user.
-      // The lock is only meaningful if it writes successfully — if it fails we
-      // skip this domain rather than risk an unprotected charge.
       const { data: lockRow, error: lockError } = await supabase
         .from("domain_purchase_requests")
         .update({
@@ -125,52 +124,27 @@ export async function POST(req: Request) {
       if (lockError) {
         failed++;
         failures.push({ domain: row.domain, error: "Failed to acquire renewal lock: " + lockError.message });
-        console.error("[DomainRenewal] Could not lock record before charging:", {
-          domain: row.domain,
-          error: lockError.message,
-        });
+        console.error("[DomainRenewal] Could not lock record before charging:", { domain: row.domain, error: lockError.message });
         continue;
       }
 
       if (!lockRow) {
-        // Another worker already locked/processed this row; skip safely.
         skipped++;
         continue;
       }
 
       try {
-        // Deduct from user's credit balance
-        const balanceAfter = await Billing.deduct(row.user_id, renewalPrice);
-
-        // Record in billing.transactions (fire-and-forget)
-        Billing.save_transaction({
+        // Service: billing + audit + notification
+        const { nextExpiresAt } = await renewalService.chargeAndNotify({
+          purchaseRequestId: row.id,
           userId: row.user_id,
+          domain: row.domain,
           amount: renewalPrice,
-          status: "completed",
-          type: "purchase",
-          balanceAfter,
-          serviceType: "domain",
-          description: `Domain renewal: ${row.domain}`,
-          metadata: {
-            domain: row.domain,
-            purchase_request_id: row.id,
-            currency: row.currency ?? "USD",
-            renewal: true,
-            expires_at: expiresAt,
-          },
-        }).catch((err: unknown) => {
-          console.warn("[DomainRenewal] Failed to record renewal transaction:", {
-            domain: row.domain,
-            error: err instanceof Error ? err.message : String(err),
-          });
+          currency: row.currency ?? "USD",
+          expiresAt,
         });
 
-        // Advance expiry by 1 year and reset renewal_charged to false so the
-        // cron picks this domain up again in the next renewal cycle.
-        const nextExpiresAt = expiresAt
-          ? new Date(new Date(expiresAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : null;
-
+        // Cron: advance expiry + reset lock so next cycle picks this up again
         await supabase
           .from("domain_purchase_requests")
           .update({
@@ -189,26 +163,16 @@ export async function POST(req: Request) {
         const message = err instanceof Error ? err.message : String(err);
         failed++;
         failures.push({ domain: row.domain, error: message });
-        console.error("[DomainRenewal] Failed to charge renewal:", {
-          domain: row.domain,
-          userId: row.user_id,
-          amount: renewalPrice,
-          error: message,
-        });
-        // Billing failed — restore renewal_charged: false so the next cron run
-        // can retry. If this restore also fails, renewal_charged stays true and
-        // the domain is safely skipped (no double-charge) — operator must fix manually.
+        console.error("[DomainRenewal] Failed to charge renewal:", { domain: row.domain, userId: row.user_id, amount: renewalPrice, error: message });
+
+        // Billing failed — restore renewal_charged: false so the next cron can retry
         await supabase
           .from("domain_purchase_requests")
-          .update({
-            metadata: { ...meta, renewal_charged: false },
-            updated_at: new Date().toISOString(),
-          })
+          .update({ metadata: { ...meta, renewal_charged: false }, updated_at: new Date().toISOString() })
           .eq("id", row.id)
           .then(() => undefined, (restoreErr: unknown) => {
-            console.error("[DomainRenewal] CRITICAL: failed to restore renewal_charged after billing failure — domain is locked until manual fix:", {
-              domain: row.domain,
-              id: row.id,
+            console.error("[DomainRenewal] CRITICAL: failed to restore renewal_charged after billing failure — domain locked until manual fix:", {
+              domain: row.domain, id: row.id,
               restoreError: restoreErr instanceof Error ? restoreErr.message : String(restoreErr),
             });
           });

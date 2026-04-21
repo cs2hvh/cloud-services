@@ -98,6 +98,47 @@ export function createDomainBillingAdapter(): DomainBillingPort {
         });
       }
     },
+
+    async chargeRenewal(params) {
+      const amount = Number(params.amount || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
+          message: `Invalid renewal amount: ${params.amount}`,
+        });
+      }
+
+      const balance = await Billing.get_balance(params.userId);
+      if (balance < amount) {
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS,
+          message: `Insufficient credits for renewal. Required $${amount.toFixed(2)}, available $${balance.toFixed(2)}`,
+          details: { required: amount, available: balance },
+        });
+      }
+
+      try {
+        const balanceAfter = await Billing.deduct(params.userId, amount);
+        Billing.save_transaction({
+          userId: params.userId,
+          amount,
+          status: "completed",
+          type: "purchase",
+          balanceAfter,
+          serviceType: "domain",
+          description: `Domain renewal: ${params.domain}`,
+          metadata: { domain: params.domain, purchase_request_id: params.purchaseRequestId, currency: params.currency, renewal: true },
+        }).catch((err: unknown) => {
+          console.warn("[DomainBilling] Failed to record renewal transaction:", toErrorMessage(err));
+        });
+      } catch (error: unknown) {
+        const message = toErrorMessage(error);
+        throw new DomainServiceError({
+          code: /insufficient balance/i.test(message) ? DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS : DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
+          message: `Domain renewal billing failed: ${message}`,
+        });
+      }
+    },
   };
 }
 

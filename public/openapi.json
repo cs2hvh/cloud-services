@@ -832,6 +832,169 @@
           "data"
         ]
       },
+      "BillingBalanceResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "credit_balance": {
+                "type": "number",
+                "description": "Total credit balance in USD cents",
+                "example": 5000
+              },
+              "promo_credits": {
+                "type": "number",
+                "description": "Promotional credits portion (USD cents)",
+                "example": 1000
+              },
+              "topup_credits": {
+                "type": "number",
+                "description": "Paid top-up credits portion (USD cents)",
+                "example": 4000
+              }
+            },
+            "required": [
+              "credit_balance",
+              "promo_credits",
+              "topup_credits"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "BillingTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Transaction amount in USD cents",
+            "example": 1500
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed"
+            ],
+            "example": "completed"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "topup",
+              "refund",
+              "coupon",
+              "recurring",
+              "setup",
+              "usage",
+              "purchase"
+            ],
+            "example": "purchase"
+          },
+          "service_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "database",
+              "kubernetes",
+              "objectspace",
+              "spectrum",
+              "platform_apps",
+              "domain"
+            ],
+            "example": "domain"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Domain renewal: example.com"
+          },
+          "balance_after": {
+            "type": "number",
+            "nullable": true,
+            "example": 3500
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-11-15T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "amount",
+          "status",
+          "type",
+          "service_type",
+          "description",
+          "balance_after",
+          "metadata",
+          "created_at"
+        ]
+      },
+      "BillingTransactionListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingTransaction"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer",
+                "example": 1
+              },
+              "limit": {
+                "type": "integer",
+                "example": 20
+              },
+              "total": {
+                "type": "integer",
+                "example": 42
+              },
+              "total_pages": {
+                "type": "integer",
+                "example": 3
+              }
+            },
+            "required": [
+              "page",
+              "limit",
+              "total",
+              "total_pages"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -4505,6 +4668,212 @@
                 "example": {
                   "error": "INTERNAL_ERROR",
                   "message": "Failed to trigger redeploy"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/balance": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Get credit balance",
+        "description": "Returns the current credit balance for the authenticated user, split into top-up and promotional credit components.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingBalanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/transactions": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "List billing transactions",
+        "description": "Returns paginated billing transaction history for the authenticated user. Supports filtering by type, service, status, and date range.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Max records per page. Default 20, max 100.",
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based page number. Default 1.",
+              "example": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "topup",
+                "refund",
+                "coupon",
+                "recurring",
+                "setup",
+                "usage",
+                "purchase"
+              ],
+              "description": "Filter by transaction type."
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "database",
+                "kubernetes",
+                "objectspace",
+                "spectrum",
+                "platform_apps",
+                "domain"
+              ],
+              "description": "Filter by service type."
+            },
+            "required": false,
+            "name": "service_type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "failed"
+              ],
+              "description": "Filter by transaction status."
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 8601 — return transactions created after this time.",
+              "example": "2024-01-01T00:00:00Z"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 8601 — return transactions created before this time.",
+              "example": "2024-12-31T23:59:59Z"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTransactionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
