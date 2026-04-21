@@ -25,9 +25,14 @@ export class DomainRenewalService {
 
     await this.deps.billing.chargeRenewal({ userId, purchaseRequestId, domain, amount, currency });
 
-    const nextExpiresAt = expiresAt
-      ? new Date(new Date(expiresAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    // Add exactly 1 year using setFullYear to handle leap years correctly.
+    // Millisecond math (365 * 24 * 60 * 60 * 1000) drifts across leap years.
+    let nextExpiresAt: string | null = null;
+    if (expiresAt) {
+      const d = new Date(expiresAt);
+      d.setFullYear(d.getFullYear() + 1);
+      nextExpiresAt = d.toISOString();
+    }
 
     // Non-blocking — observability failure must never fail the renewal
     void Promise.allSettled([

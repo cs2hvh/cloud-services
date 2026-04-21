@@ -110,6 +110,9 @@ export async function POST(req: Request) {
       // Optimistic lock: set renewal_charged: true BEFORE billing so that if
       // the post-charge metadata update fails (network blip, DB timeout, etc.)
       // the next cron run does NOT double-bill the user.
+      // Also filter on autorenew_enabled != false to guard against a user disabling
+      // auto-renew between our initial query and this lock acquisition — spreading
+      // the stale `meta` would otherwise silently overwrite their preference.
       const { data: lockRow, error: lockError } = await supabase
         .from("domain_purchase_requests")
         .update({
@@ -118,6 +121,7 @@ export async function POST(req: Request) {
         })
         .eq("id", row.id)
         .filter("metadata->>renewal_charged", "eq", "false")
+        .filter("metadata->>autorenew_enabled", "neq", "false")
         .select("id")
         .maybeSingle();
 
