@@ -31,7 +31,24 @@ export function createDomainBillingAdapter(): DomainBillingPort {
       }
 
       try {
-        await Billing.deduct(params.userId, amount);
+        const balanceAfter = await Billing.deduct(params.userId, amount);
+        // Record purchase in billing.transactions (non-blocking)
+        Billing.save_transaction({
+          userId: params.userId,
+          amount,
+          status: "completed",
+          type: "purchase",
+          balanceAfter,
+          serviceType: "domain",
+          description: `Domain purchase: ${params.domain}`,
+          metadata: {
+            domain: params.domain,
+            purchase_request_id: params.purchaseRequestId,
+            currency: params.currency,
+          },
+        }).catch((err: unknown) => {
+          console.warn("[DomainBilling] Failed to record purchase transaction:", toErrorMessage(err));
+        });
       } catch (error: unknown) {
         const message = toErrorMessage(error);
         if (/insufficient balance/i.test(message)) {
@@ -55,7 +72,25 @@ export function createDomainBillingAdapter(): DomainBillingPort {
       }
 
       try {
-        await Billing.topup(params.userId, amount);
+        const result = await Billing.topup(params.userId, amount);
+        // Record refund in billing.transactions (non-blocking)
+        Billing.save_transaction({
+          userId: params.userId,
+          amount,
+          status: "completed",
+          type: "refund",
+          balanceAfter: result.credit_balance,
+          serviceType: "domain",
+          description: `Domain purchase refund: ${params.domain}`,
+          metadata: {
+            domain: params.domain,
+            purchase_request_id: params.purchaseRequestId,
+            reason: params.reason,
+            currency: params.currency,
+          },
+        }).catch((err: unknown) => {
+          console.warn("[DomainBilling] Failed to record refund transaction:", toErrorMessage(err));
+        });
       } catch (error: unknown) {
         throw new DomainServiceError({
           code: DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,

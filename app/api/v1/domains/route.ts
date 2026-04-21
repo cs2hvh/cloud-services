@@ -1,4 +1,5 @@
 import { withV1Auth, v1Ok, v1ValidationError } from "@/lib/api/v1-middleware";
+import { resolveAuthEmail } from "@/lib/api-auth";
 import { getDomainService } from "@/lib/domain-service";
 import {
   AddDomainRequestSchema,
@@ -11,8 +12,9 @@ import { serializeDomain, serializeDomainWithRouting } from "@/lib/domain-servic
 export const GET = withV1Auth("domains:list", async (req, auth) => {
   try {
     const url = new URL(req.url);
+    const rawAppId = url.searchParams.get("app_id");
     const query = {
-      app_id: url.searchParams.get("app_id"),
+      ...(rawAppId !== null ? { app_id: rawAppId } : {}),
     };
 
     const validation = DomainListQuerySchema.safeParse(query);
@@ -28,7 +30,7 @@ export const GET = withV1Auth("domains:list", async (req, auth) => {
     const actor = createDomainActor({
       req,
       userId: auth.userId,
-      userEmail: auth.kind === "session" ? auth.email : undefined,
+      userEmail: await resolveAuthEmail(auth),
     });
     const domains = await service.listDomains({
       actor,
@@ -61,7 +63,7 @@ export const POST = withV1Auth("domains:add", async (req, auth) => {
     const actor = createDomainActor({
       req,
       userId: auth.userId,
-      userEmail: auth.kind === "session" ? auth.email : undefined,
+      userEmail: await resolveAuthEmail(auth),
     });
 
     const result = await service.addDomain({

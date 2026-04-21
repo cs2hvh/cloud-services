@@ -18,6 +18,11 @@ export interface NameComDomainResponse {
   privacyEnabled?: boolean;
   autorenewEnabled?: boolean;
   nameservers?: string[];
+  // Returned by GET /domains/{name}, PATCH /domains/{name}, and POST /domains
+  renewalPrice?: number;
+  // Present in live API responses but not consumed by our code
+  locks?: unknown[];
+  contacts?: Record<string, unknown>;
 }
 
 export interface NameComListDomainsResponse {
@@ -210,6 +215,16 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
     }
     if (typeof input.privacyEnabled === "boolean") {
       body.privacyEnabled = input.privacyEnabled;
+    }
+
+    // Name.com requires at least one of autorenewEnabled/locked/privacyEnabled.
+    // Sending an empty body returns a 400 error. Guard here so callers with
+    // no-op updates fail fast with a clear message instead of a cryptic 400.
+    if (Object.keys(body).length === 0) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+        message: "updateDomain requires at least one field: autorenewEnabled, locked, or privacyEnabled",
+      });
     }
 
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`, {

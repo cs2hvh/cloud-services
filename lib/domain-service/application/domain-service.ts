@@ -73,8 +73,10 @@ export class DomainService {
 
   constructor(private readonly deps: DomainServiceDeps) {}
 
-  async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecordWithRouting[]> {
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+  async listDomains(input: { actor: ActorContext; appId?: string }): Promise<DomainRecordWithRouting[]> {
+    if (input.appId !== undefined) {
+      await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    }
     const records = await this.deps.domains.listByApp(input.appId, input.actor.userId);
 
     if (!this.deps.dnsRouting) {

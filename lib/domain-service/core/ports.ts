@@ -102,7 +102,7 @@ export interface DnsRoutingPort {
 }
 
 export interface DomainRepositoryPort {
-  listByApp(appId: string, userId: string): Promise<DomainRecord[]>;
+  listByApp(appId: string | undefined, userId: string): Promise<DomainRecord[]>;
   findByIdForUser(domainId: string, userId: string): Promise<DomainRecord | null>;
   findActiveByDomain(domain: string): Promise<DomainRecord | null>;
   createPending(params: {
@@ -186,6 +186,8 @@ export interface DomainPurchaseRequestRepositoryPort {
     providerRequestId?: string | null;
     lastError?: string | null;
     registrantEmail?: string | null;
+    /** Shallow-merged into the existing metadata JSONB column. */
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 }
 

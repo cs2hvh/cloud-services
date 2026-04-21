@@ -3188,6 +3188,68 @@
         "required": [
           "domain"
         ]
+      },
+      "DomainRegistrarSettings": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "example": "example.com"
+          },
+          "managed": {
+            "type": "boolean",
+            "description": "True if this domain is registered on the platform Name.com account."
+          },
+          "zone": {
+            "type": "string",
+            "example": "example.com"
+          },
+          "autorenew_enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether Name.com will auto-renew the domain before expiry. null if not a managed domain."
+          },
+          "locked": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the domain is transfer-locked at the registrar."
+          },
+          "privacy_enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether WHOIS privacy protection is active."
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "example": "2027-04-21T00:00:00Z"
+          }
+        },
+        "required": [
+          "domain",
+          "managed",
+          "autorenew_enabled",
+          "locked",
+          "privacy_enabled",
+          "expires_at"
+        ]
+      },
+      "UpdateRegistrarSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "autorenew_enabled": {
+            "type": "boolean",
+            "description": "Enable or disable auto-renew at the registrar."
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "Enable or disable transfer lock."
+          },
+          "privacy_enabled": {
+            "type": "boolean",
+            "description": "Enable or disable WHOIS privacy."
+          }
+        }
       }
     },
     "parameters": {}
@@ -8698,7 +8760,8 @@
         "tags": [
           "Domains"
         ],
-        "summary": "List domains by app",
+        "summary": "List domains",
+        "description": "List all domains owned by the authenticated user. Optionally filter by app using the `app_id` query parameter.",
         "security": [
           {
             "bearerAuth": []
@@ -8711,7 +8774,7 @@
               "format": "uuid",
               "example": "550e8400-e29b-41d4-a716-446655440000"
             },
-            "required": true,
+            "required": false,
             "name": "app_id",
             "in": "query"
           }
@@ -10075,6 +10138,180 @@
           },
           "502": {
             "description": "Registrar or billing upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/registrar": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Get registrar settings",
+        "description": "Returns live registrar settings for a domain including auto-renew status and expiry date. Only applicable to domains purchased through the platform (Name.com-managed). Returns `managed: false` for externally connected domains.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registrar settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DomainRegistrarSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Update registrar settings",
+        "description": "Toggle auto-renew, transfer lock, or WHOIS privacy for a platform-managed domain. Name.com handles the actual renewal — no cron job is required. At least one field must be provided.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistrarSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated registrar settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DomainRegistrarSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or domain not managed by platform registrar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
             "content": {
               "application/json": {
                 "schema": {
