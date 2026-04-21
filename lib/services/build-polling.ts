@@ -277,6 +277,63 @@ export class BuildPollingService {
     } catch (auditErr) {
       console.warn(`[BuildPolling] ⚠️ Failed to create audit log for resize:`, auditErr);
     }
+
+    // Notification fires alongside audit (confirmed outcome, not trigger-time)
+    try {
+      const { NotificationService, createServiceNotification } = await import('@/lib/notifications');
+      await NotificationService.create(
+        createServiceNotification({
+          userId: params.userId,
+          serviceType: 'platform_app',
+          action: params.status === 'success' ? 'resized' : 'failed',
+          serviceName: params.appName,
+          serviceId: params.appId,
+          ...(params.status === 'failed' ? { error: params.failureReason } : {}),
+          metadata: {
+            old_size: params.resizeContext.previousSize,
+            new_size: params.resizeContext.targetSize,
+            status: params.status,
+          },
+        })
+      );
+    } catch (notifErr) {
+      console.warn(`[BuildPolling] ⚠️ Failed to create notification for resize:`, notifErr);
+    }
+  }
+
+  /**
+   * Fire a deployment outcome notification for redeploy/auto-deploy triggers.
+   * Resize has its own logResizeAudit path. Rollback is synchronous (no polling).
+   */
+  private static async logDeployNotification(params: {
+    appId: string;
+    appName: string;
+    userId: string;
+    trigger: string;
+    status: 'success' | 'failed';
+    buildNumber?: number;
+    failureReason?: string;
+  }): Promise<void> {
+    try {
+      const { NotificationService, createServiceNotification } = await import('@/lib/notifications');
+      await NotificationService.create(
+        createServiceNotification({
+          userId: params.userId,
+          serviceType: 'platform_app',
+          action: params.status === 'success' ? 'deployed' : 'failed',
+          serviceName: params.appName,
+          serviceId: params.appId,
+          ...(params.status === 'failed' ? { error: params.failureReason } : {}),
+          metadata: {
+            trigger: params.trigger,
+            build_number: params.buildNumber,
+            status: params.status,
+          },
+        })
+      );
+    } catch (notifErr) {
+      console.warn(`[BuildPolling] ⚠️ Failed to create deploy notification:`, notifErr);
+    }
   }
 
   static async startPolling(config: BuildPollConfig): Promise<void> {
@@ -427,6 +484,8 @@ export class BuildPollingService {
       });
       if (trigger === 'resize' && resizeContext && userId) {
         await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
+      } else if (trigger !== 'resize' && userId) {
+        await this.logDeployNotification({ appId, appName, userId, trigger, status: 'failed', buildNumber, failureReason });
       }
       console.log(`[BuildPolling] App status set to failed for build #${buildNumber ?? 'unknown'}`);
       return;
@@ -491,6 +550,8 @@ export class BuildPollingService {
       // Audit log fires after finalization so it only records confirmed outcomes
       if (trigger === 'resize' && resizeContext && userId) {
         await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'success' });
+      } else if (trigger !== 'resize' && userId) {
+        await this.logDeployNotification({ appId, appName, userId, trigger, status: 'success', buildNumber });
       }
 
       console.log(`[BuildPolling] ✅ Build #${buildNumber} confirmed healthy`);
@@ -518,6 +579,8 @@ export class BuildPollingService {
       });
       if (trigger === 'resize' && resizeContext && userId) {
         await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
+      } else if (trigger !== 'resize' && userId) {
+        await this.logDeployNotification({ appId, appName, userId, trigger, status: 'failed', buildNumber, failureReason });
       }
       
       console.log(`[BuildPolling] 📝 Recorded health-check failure for build #${buildNumber ?? 'unknown'}`);

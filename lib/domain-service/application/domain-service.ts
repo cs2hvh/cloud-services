@@ -73,8 +73,10 @@ export class DomainService {
 
   constructor(private readonly deps: DomainServiceDeps) {}
 
-  async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecordWithRouting[]> {
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+  async listDomains(input: { actor: ActorContext; appId?: string }): Promise<DomainRecordWithRouting[]> {
+    if (input.appId !== undefined) {
+      await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    }
     const records = await this.deps.domains.listByApp(input.appId, input.actor.userId);
 
     if (!this.deps.dnsRouting) {
@@ -559,6 +561,47 @@ export class DomainService {
         return response;
       },
     });
+  }
+
+  async getRegistrarSettings(input: { actor: ActorContext; domainId: string }) {
+    const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+    const managed = await this.deps.registrar.resolveZone(domain.domain);
+    if (!managed) return { managed: false as const, domain: domain.domain };
+    const s = await this.deps.registrar.getRegistrarSettings(managed.zone);
+    return { managed: true as const, domain: domain.domain, zone: managed.zone, autorenew_enabled: s.autorenewEnabled, locked: s.locked, privacy_enabled: s.privacyEnabled, expires_at: s.expireDate };
+  }
+
+  async updateRegistrarSettings(input: {
+    actor: ActorContext;
+    domainId: string;
+    updates: { autorenew_enabled?: boolean; locked?: boolean; privacy_enabled?: boolean };
+  }) {
+    const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+    const managed = await this.deps.registrar.resolveZone(domain.domain);
+    if (!managed) return { managed: false as const, domain: domain.domain };
+
+    const s = await this.deps.registrar.updateRegistrarSettings(managed.zone, {
+      autorenewEnabled: input.updates.autorenew_enabled,
+      locked: input.updates.locked,
+      privacyEnabled: input.updates.privacy_enabled,
+    });
+
+    // Persist autorenew opt-out so the renewal cron respects the user's preference.
+    // Must be awaited — if this fails the registrar was updated but the cron would
+    // still charge the user (old autorenew_enabled value in metadata).
+    if (input.updates.autorenew_enabled !== undefined && this.deps.purchaseRequests) {
+      try {
+        const req = await this.deps.purchaseRequests!.findLatestByDomain({ userId: input.actor.userId, domain: managed.zone });
+        if (req) await this.deps.purchaseRequests!.updateStatus({ requestId: req.id, status: req.status, metadata: { autorenew_enabled: input.updates.autorenew_enabled } });
+      } catch (err) { console.warn("[DomainService] Failed to persist autorenew_enabled:", err); throw err; }
+    }
+
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({ actor: input.actor, action: "update", serviceId: domain.id, serviceName: domain.domain, metadata: { event: "registrar_settings_updated", ...input.updates } });
+      await this.emitNotification({ userId: input.actor.userId, action: "updated", serviceName: domain.domain, serviceId: domain.id, type: "info", metadata: { event: "registrar_settings_updated", ...input.updates } });
+    });
+
+    return { managed: true as const, domain: domain.domain, zone: managed.zone, autorenew_enabled: s.autorenewEnabled, locked: s.locked, privacy_enabled: s.privacyEnabled, expires_at: s.expireDate };
   }
 
   async checkSslStatus(input: {

@@ -45,6 +45,34 @@ async function extractKey(
   return { key, error: null };
 }
 
+export const GET = withV1Auth("apps:env:get", async (_req, auth, context) => {
+  const idResult = await v1ExtractId(context);
+  if (idResult.error) return idResult.error;
+
+  const keyResult = await extractKey(context);
+  if (keyResult.error) return keyResult.error;
+
+  const appId = idResult.id;
+  const key = keyResult.key!;
+
+  const ownership = await getOwnedApp(appId, auth.userId);
+  if (ownership.error) return ownership.error;
+
+  const envVars = await PlatformAppEnvService.getEnvVars(appId);
+  const found = envVars.find((env: { key: string }) => env.key === key);
+  if (!found) {
+    return v1Error("NOT_FOUND", 404, "Environment variable key not found", { field: "key" });
+  }
+
+  return v1Ok({
+    data: {
+      app_id: appId,
+      key: found.key,
+      value: found.value,
+    },
+  });
+});
+
 export const DELETE = withV1Auth("apps:env:delete", async (_req, auth, context) => {
   const idResult = await v1ExtractId(context);
   if (idResult.error) {

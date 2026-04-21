@@ -100,6 +100,13 @@ export async function POST(req: NextRequest) {
 
     const mutationService = new AppRuntimeMutationService();
     const result = await mutationService.rollback({
+      auditContext: {
+        userId,
+        userEmail: auth.user.email,
+        ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+        userAgent: req.headers.get("user-agent") || "unknown",
+        requestId: crypto.randomUUID(),
+      },
       appId: app_id,
       appName: app.name,
       appStatus: appResult.data.status,

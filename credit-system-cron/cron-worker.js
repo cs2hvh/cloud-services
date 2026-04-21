@@ -1471,6 +1471,43 @@ cron.schedule("0 * * * *", async () => {
     console.error("[domain-contact-sync] Reconciliation error:", error.message);
   }
 });
+
+// -----------------------------
+// DOMAIN RENEWAL BILLING
+// Runs daily at 09:00 UTC — charges users' credit balances for domains
+// expiring within the next 30 days. Name.com handles the actual renewal
+// from the platform account. No extra cron needed for the renewal itself.
+// -----------------------------
+cron.schedule("0 9 * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[domain-renewal] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[domain-renewal] Running renewal billing:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/domains/renewal/poll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 50, days_ahead: 30 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[domain-renewal] Renewal billing failed:", data);
+    } else {
+      console.log("[domain-renewal] Renewal billing completed:", data.message);
+    }
+  } catch (error) {
+    console.error("[domain-renewal] Renewal billing error:", error.message);
+  }
+});
+
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +

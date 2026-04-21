@@ -21,8 +21,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url);
+    const rawAppId = url.searchParams.get("app_id");
     const query = {
-      app_id: url.searchParams.get("app_id"),
+      ...(rawAppId !== null ? { app_id: rawAppId } : {}),
     };
 
     const parsed = DomainListQuerySchema.safeParse(query);

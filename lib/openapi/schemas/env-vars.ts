@@ -46,3 +46,11 @@ export const EnvVarDeleteResponseSchema = z.object({
     apply: ApplyStatusSchema,
   }),
 }).openapi('EnvVarDeleteResponse');
+
+export const EnvVarGetResponseSchema = z.object({
+  data: z.object({
+    app_id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
+    key: z.string().openapi({ example: 'DATABASE_URL', description: 'Environment variable key' }),
+    value: z.string().openapi({ example: 'postgres://user:pass@host:5432/db', description: 'Environment variable value' }),
+  }),
+}).openapi('EnvVarGetResponse');
