@@ -4,11 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tables } from "@/lib/supabase/types";
 import { GitProvider, Repository, PricingRates, instanceSizeConfigs } from "./new-types";
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2.5">
-      <span className="shrink-0 text-xs text-white/42">{label}</span>
-      <div className="min-w-0 break-all text-right text-xs font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -32,43 +38,38 @@ export function SummarySidebar({
 }: Props) {
   const sizeConfig = instanceSizeConfigs[size as keyof typeof instanceSizeConfigs] ?? instanceSizeConfigs.small;
   const sizePrice = pricing?.[size];
-  const hasAny = selectedProviderData || selectedRepoData || appName || selectedBranch || framework;
-
   const projectName =
     selectedProject && selectedProject !== "none"
       ? projects.find((p) => p.id === selectedProject)?.name ?? "Assigned"
       : null;
 
   return (
-    <div className="sticky top-6 space-y-4">
-      <Card className="glass-panel overflow-hidden">
-        <CardHeader className="border-b border-white/[0.06] px-5 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Summary</p>
-          <CardTitle className="mt-1 text-base font-semibold text-white">Deployment Config</CardTitle>
-        </CardHeader>
+    <div className="glass-panel overflow-hidden lg:sticky lg:top-8">
+      <div className="border-b border-white/[0.06] px-6 py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
+        <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+      </div>
 
-        <CardContent className="px-5 py-4">
-          {hasAny ? (
-            <div className="divide-y divide-white/[0.05]">
-              {selectedProviderData && <SummaryRow label="Provider" value={selectedProviderData.name} />}
-              {selectedRepoData && <SummaryRow label="Repository" value={selectedRepoData.name} />}
-              {(selectedBranch || selectedRepoData?.defaultBranch) && (
-                <SummaryRow label="Branch" value={selectedBranch || selectedRepoData?.defaultBranch} />
-              )}
-              {appName && <SummaryRow label="App name" value={appName} />}
-              {framework && <SummaryRow label="Framework" value={framework} />}
-              {projectName && <SummaryRow label="Project" value={projectName} />}
-              <SummaryRow
-                label="Instance"
-                value={`${size.charAt(0).toUpperCase()}${size.slice(1)} / ${sizeConfig.cpu} / ${sizeConfig.ram}`}
-              />
-              <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual"} />
-            </div>
-          ) : (
-            <p className="py-4 text-center text-xs text-white/35">Complete the steps to see a summary here.</p>
-          )}
+      <div className="px-6 py-4">
+          <div className="space-y-0.5">
+            <SummaryRow icon="/dashboard icons/provider .png" label="Git provider" value={selectedProviderData?.name ?? "—"} empty={!selectedProviderData} />
+            <SummaryRow icon="/dashboard icons/repository.png" label="Repository" value={selectedRepoData?.name ?? "—"} empty={!selectedRepoData} />
+            <SummaryRow label="Branch" value={(selectedBranch || selectedRepoData?.defaultBranch) ?? "—"} empty={!(selectedBranch || selectedRepoData?.defaultBranch)} />
+            <SummaryRow icon="/dashboard icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
+            <SummaryRow icon="/dashboard icons/apptype .png" label="Framework" value={framework || "—"} empty={!framework} />
+          </div>
 
-          <Separator className="my-4 bg-white/[0.07]" />
+          <div className="my-3 border-t border-white/[0.05]" />
+
+          <div className="space-y-0.5">
+            <SummaryRow icon="/dashboard icons/plan _1.png" label="Instance" value={`${size.charAt(0).toUpperCase()}${size.slice(1)} / ${sizeConfig.cpu} CPU / ${sizeConfig.ram} RAM`} />
+            <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
+            {projectName && (
+              <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={projectName} />
+            )}
+          </div>
+
+          <Separator className="my-4 bg-white/[0.08]" />
 
           <div className="border border-blue-400/20 bg-blue-500/10 p-4">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-200/75">Estimated cost</p>
@@ -92,8 +93,7 @@ export function SummarySidebar({
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
   );
 }
