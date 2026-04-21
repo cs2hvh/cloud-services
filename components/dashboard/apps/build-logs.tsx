@@ -79,31 +79,36 @@ export function BuildLogsPanel({
   // needed is when buildInfo is set but Supabase hasn't delivered the row yet
   // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
-    // Jenkins is authoritative: if it confirms the build is done, override any
-    // stale 'BUILDING' status that Supabase hasn't propagated yet.
-    // However, if Jenkins result is null (health-check phase), keep BUILDING
-    // to avoid a false FAILURE flash before Supabase finalizes.
+    // Jenkins is the authoritative source for build state. Two race windows exist:
+    //
+    // A) Jenkins says done  → Supabase still shows BUILDING (normal completion lag).
+    //    Override to the terminal status Jenkins reported.
+    //    Exception: result=null during the post-build health-check phase — keep BUILDING
+    //    to avoid a false FAILURE flash before Supabase finalizes.
+    //
+    // B) Jenkins says active → Supabase shows a stale terminal status (e.g. FAILURE
+    //    from the previous run, or a webhook that fired before the new build row was
+    //    written). Override to BUILDING so the dropdown reflects reality.
     const opts = deployments.map((d) => {
-      if (
-        d.build_number === buildInfo?.number &&
-        buildInfo.building === false &&
-        d.status === 'BUILDING'
-      ) {
-        // result is null during post-build health verification — don't override yet
-        if (buildInfo.result === null) return d;
-        const terminalStatus =
-          buildInfo.result === 'SUCCESS'
-            ? 'SUCCESS'
-            : buildInfo.result === 'ABORTED'
-            ? 'ABORTED'
-            : buildInfo.result === 'UNSTABLE'
-            ? 'UNSTABLE'
-            : 'FAILURE';
-        return {
-          ...d,
-          status: terminalStatus as DeploymentSummary['status'],
+      if (d.build_number !== buildInfo?.number) return d;
+
+      // Case A: Jenkins done, Supabase still BUILDING
+      if (buildInfo.building === false && d.status === 'BUILDING') {
+        if (buildInfo.result === null) return d; // health-check window — keep BUILDING
+        const RESULT_TO_STATUS: Record<string, DeploymentSummary['status']> = {
+          SUCCESS: 'SUCCESS',
+          ABORTED: 'ABORTED',
+          UNSTABLE: 'UNSTABLE',
         };
+        const terminalStatus = RESULT_TO_STATUS[buildInfo.result] ?? 'FAILURE';
+        return { ...d, status: terminalStatus };
       }
+
+      // Case B: Jenkins active, Supabase shows stale terminal status
+      if (buildInfo.building === true && d.status !== 'BUILDING') {
+        return { ...d, status: 'BUILDING' as DeploymentSummary['status'] };
+      }
+
       return d;
     });
 
