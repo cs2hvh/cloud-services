@@ -158,8 +158,8 @@ export async function POST(req: NextRequest) {
   await NotificationService.create({
     user_id: billingUserId,
     type: "info",
-    title: "Kubernetes Cluster Creation",
-    message: `kubernetes cluster ${parsed.data.cluster.name} creation started...`,
+    title: "Kubernetes Cluster Created",
+    message: `kubernetes cluster ${parsed.data.cluster.name} created successfully!`,
     service_type: "kubernetes",
     service_id: clusterId,
     action: "created",

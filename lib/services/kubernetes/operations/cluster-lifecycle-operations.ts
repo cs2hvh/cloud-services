@@ -788,16 +788,17 @@ export const clusterLifecycleOperations = {
       }
 
       // Notification
-      await NotificationService.create(
-        createServiceNotification({
-          userId: request.ownerId,
-          type: "info",
-          action: "created",
-          serviceType: "kubernetes",
-          serviceName: request.name,
-          serviceId: clusterId,
-        })
-      );
+      await NotificationService.create({
+        user_id: request.ownerId,
+        type: "info",
+        title: "Kubernetes Cluster Creation",
+        message: `kubernetes cluster ${request.name} creation started...`,
+        service_type: "kubernetes",
+        service_id: clusterId,
+        action: "created",
+        metadata: { serviceName: request.name },
+      });
+
 
       return { success: true, clusterId };
     } catch (error) {

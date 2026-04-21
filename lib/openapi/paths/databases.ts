@@ -9,6 +9,13 @@ import {
   CreateDatabaseClusterRequestSchema,
   CreateDatabaseClusterResponseSchema,
   CreateDatabaseUserRequestSchema,
+  AddDatabaseFirewallRuleRequestSchema,
+  DatabaseFirewallRuleDeleteResponseSchema,
+  DatabaseFirewallRuleListResponseSchema,
+  DatabaseFirewallRuleUpdateResponseSchema,
+  DatabaseMaintenanceWindowResponseSchema,
+  DatabaseMaintenanceWindowUpdateResponseSchema,
+  DatabaseRegionMigrationResponseSchema,
   DatabaseStorageUpdateResponseSchema,
   DatabaseStorageUpsizeResponseSchema,
   DatabaseClusterListResponseSchema,
@@ -17,6 +24,8 @@ import {
   DatabaseSubResourceDeleteResponseSchema,
   DatabaseUserListResponseSchema,
   DatabaseUserResponseSchema,
+  MigrateDatabaseRegionRequestSchema,
+  UpdateDatabaseMaintenanceWindowRequestSchema,
   UpdateDatabaseStorageRequestSchema,
   UpsizeDatabaseStorageRequestSchema,
 } from '@/lib/openapi/schemas/databases';
@@ -592,6 +601,247 @@ registry.registerPath({
     404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
     429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
     500: { description: 'Update failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UPDATE_FAILED', message: 'Failed to upsize database storage' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/databases/{id}/network/firewall',
+  tags: ['Databases'],
+  summary: 'List database firewall rules',
+  description: 'Returns all network firewall rules configured for a database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Firewall rules',
+      content: {
+        'application/json': {
+          schema: DatabaseFirewallRuleListResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Invalid ID', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to access this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Fetch failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch firewall rules' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/databases/{id}/network/firewall',
+  tags: ['Databases'],
+  summary: 'Add database firewall rule',
+  description: 'Adds a new IP/CIDR firewall rule to the database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: AddDatabaseFirewallRuleRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Firewall rule added',
+      content: {
+        'application/json': {
+          schema: DatabaseFirewallRuleUpdateResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Validation error', content: { 'application/json': { schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]), example: { error: 'VALIDATION_ERROR', message: 'Invalid request body', validation_errors: [{ path: 'ip_address', message: 'Must be a valid IPv4, IPv6, or CIDR notation' }] } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    409: { description: 'Already exists', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'ALREADY_EXISTS', message: 'This IP address already exists in the firewall rules' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Update failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UPDATE_FAILED', message: 'Failed to add firewall rule' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/databases/{id}/network/firewall/{ruleUuid}',
+  tags: ['Databases'],
+  summary: 'Delete database firewall rule',
+  description: 'Deletes a firewall rule from the database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+      ruleUuid: z.string().uuid().openapi({ example: '90f543fc-cf87-4f77-ab47-acddf8ebde7f' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Firewall rule deleted',
+      content: {
+        'application/json': {
+          schema: DatabaseFirewallRuleDeleteResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Invalid ID', content: { 'application/json': { schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]), example: { error: 'VALIDATION_ERROR', message: 'Invalid request', validation_errors: [{ path: 'rule_uuid', message: 'Rule UUID must be a valid UUID' }] } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this database cluster' } } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Delete failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'DELETE_FAILED', message: 'Failed to delete firewall rule' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/databases/{id}/maintenance',
+  tags: ['Databases'],
+  summary: 'Get database maintenance window',
+  description: 'Returns the configured maintenance window for the database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Maintenance window',
+      content: {
+        'application/json': {
+          schema: DatabaseMaintenanceWindowResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Invalid ID', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to access this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Fetch failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch maintenance window' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/v1/databases/{id}/maintenance',
+  tags: ['Databases'],
+  summary: 'Update database maintenance window',
+  description: 'Updates the maintenance window for the database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateDatabaseMaintenanceWindowRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Maintenance window updated',
+      content: {
+        'application/json': {
+          schema: DatabaseMaintenanceWindowUpdateResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Validation error', content: { 'application/json': { schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]), example: { error: 'VALIDATION_ERROR', message: 'Invalid request body', validation_errors: [{ path: 'hour', message: 'Hour must be in HH:MM format (24-hour)' }] } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Update failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UPDATE_FAILED', message: 'Failed to update maintenance window' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/databases/{id}/region',
+  tags: ['Databases'],
+  summary: 'List available migration regions',
+  description: 'Returns all allowed destination regions for database migration.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Available migration regions',
+      content: {
+        'application/json': {
+          schema: z.object({
+            data: z.object({
+              cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+              available_regions: z.array(z.string()).openapi({
+                example: ['nyc1', 'nyc3', 'sfo1', 'sfo2', 'sfo3', 'ams2', 'ams3', 'sgp1', 'lon1', 'fra1', 'tor1', 'blr1', 'syd1'],
+              }),
+            }),
+          }),
+        },
+      },
+    },
+    400: { description: 'Invalid ID', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to access this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Fetch failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch migration regions' } } } },
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/v1/databases/{id}/region',
+  tags: ['Databases'],
+  summary: 'Migrate database cluster region',
+  description: 'Starts an asynchronous region migration for the database cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: MigrateDatabaseRegionRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Migration started',
+      content: {
+        'application/json': {
+          schema: DatabaseRegionMigrationResponseSchema,
+        },
+      },
+    },
+    400: { description: 'Validation error', content: { 'application/json': { schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]), example: { error: 'VALIDATION_ERROR', message: 'Invalid region. Use one of the available regions.', details: { field: 'region', available_regions: ['nyc1', 'nyc3', 'sfo1', 'sfo2', 'sfo3', 'ams2', 'ams3', 'sgp1', 'lon1', 'fra1', 'tor1', 'blr1', 'syd1'] } } } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this database cluster' } } } },
+    404: { description: 'Cluster not found', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Database cluster not found' } } } },
+    422: { description: 'Unsupported operation', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNSUPPORTED_OPERATION', message: 'Region migration is not supported for MongoDB clusters' } } } },
+    429: { description: 'Too many requests', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } } },
+    500: { description: 'Migration failed', content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UPDATE_FAILED', message: 'Failed to start region migration' } } } },
   },
 });
 

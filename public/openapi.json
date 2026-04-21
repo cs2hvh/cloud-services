@@ -1806,6 +1806,267 @@
           "storage_size_mib"
         ]
       },
+      "DatabaseFirewallRule": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid",
+            "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+          },
+          "type": {
+            "type": "string",
+            "example": "ip_addr"
+          },
+          "value": {
+            "type": "string",
+            "example": "203.0.113.42"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-20T10:00:00Z"
+          }
+        },
+        "required": [
+          "uuid",
+          "cluster_uuid",
+          "type",
+          "value",
+          "created_at"
+        ]
+      },
+      "DatabaseFirewallRuleListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseFirewallRule"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseFirewallRuleUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRule"
+                }
+              },
+              "updated": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "rules",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AddDatabaseFirewallRuleRequest": {
+        "type": "object",
+        "properties": {
+          "ip_address": {
+            "type": "string",
+            "example": "203.0.113.42/32"
+          }
+        },
+        "required": [
+          "ip_address"
+        ]
+      },
+      "DatabaseFirewallRuleDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "rule_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              },
+              "warning": {
+                "type": "string",
+                "example": "IP address deleted from firewall, but failed to update database"
+              }
+            },
+            "required": [
+              "cluster_id",
+              "rule_uuid",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseMaintenanceWindow": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "day": {
+            "type": "string",
+            "example": "monday"
+          },
+          "hour": {
+            "type": "string",
+            "example": "13:00"
+          }
+        },
+        "required": [
+          "day",
+          "hour"
+        ],
+        "example": {
+          "day": "monday",
+          "hour": "13:00"
+        }
+      },
+      "DatabaseMaintenanceWindowResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DatabaseMaintenanceWindow"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseMaintenanceWindowUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "window": {
+                "$ref": "#/components/schemas/DatabaseMaintenanceWindow"
+              },
+              "updated": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "window",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "UpdateDatabaseMaintenanceWindowRequest": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "example": "monday"
+          },
+          "hour": {
+            "type": "string",
+            "example": "13:00"
+          }
+        },
+        "required": [
+          "day",
+          "hour"
+        ]
+      },
+      "DatabaseRegionMigrationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "region": {
+                "type": "string",
+                "example": "nyc1"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "migrating"
+                ],
+                "example": "migrating"
+              },
+              "migration_started": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "region",
+              "status",
+              "migration_started"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "MigrateDatabaseRegionRequest": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "string",
+            "example": "nyc1"
+          }
+        },
+        "required": [
+          "region"
+        ]
+      },
       "DatabaseUserListResponse": {
         "type": "object",
         "properties": {
@@ -6886,6 +7147,1053 @@
                 "example": {
                   "error": "UPDATE_FAILED",
                   "message": "Failed to upsize database storage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/network/firewall": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "List database firewall rules",
+        "description": "Returns all network firewall rules configured for a database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Firewall rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch firewall rules"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Add database firewall rule",
+        "description": "Adds a new IP/CIDR firewall rule to the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDatabaseFirewallRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Firewall rule added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "ip_address",
+                      "message": "Must be a valid IPv4, IPv6, or CIDR notation"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "ALREADY_EXISTS",
+                  "message": "This IP address already exists in the firewall rules"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to add firewall rule"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/network/firewall/{ruleUuid}": {
+      "delete": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Delete database firewall rule",
+        "description": "Deletes a firewall rule from the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+            },
+            "required": true,
+            "name": "ruleUuid",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Firewall rule deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request",
+                  "validation_errors": [
+                    {
+                      "path": "rule_uuid",
+                      "message": "Rule UUID must be a valid UUID"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Delete failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete firewall rule"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/maintenance": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Get database maintenance window",
+        "description": "Returns the configured maintenance window for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Maintenance window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseMaintenanceWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch maintenance window"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Update database maintenance window",
+        "description": "Updates the maintenance window for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabaseMaintenanceWindowRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Maintenance window updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseMaintenanceWindowUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "hour",
+                      "message": "Hour must be in HH:MM format (24-hour)"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to update maintenance window"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/region": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "List available migration regions",
+        "description": "Returns all allowed destination regions for database migration.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available migration regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "cluster_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+                        },
+                        "available_regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "nyc1",
+                            "nyc3",
+                            "sfo1",
+                            "sfo2",
+                            "sfo3",
+                            "ams2",
+                            "ams3",
+                            "sgp1",
+                            "lon1",
+                            "fra1",
+                            "tor1",
+                            "blr1",
+                            "syd1"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "cluster_id",
+                        "available_regions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch migration regions"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Migrate database cluster region",
+        "description": "Starts an asynchronous region migration for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateDatabaseRegionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Migration started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseRegionMigrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid region. Use one of the available regions.",
+                  "details": {
+                    "field": "region",
+                    "available_regions": [
+                      "nyc1",
+                      "nyc3",
+                      "sfo1",
+                      "sfo2",
+                      "sfo3",
+                      "ams2",
+                      "ams3",
+                      "sgp1",
+                      "lon1",
+                      "fra1",
+                      "tor1",
+                      "blr1",
+                      "syd1"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unsupported operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNSUPPORTED_OPERATION",
+                  "message": "Region migration is not supported for MongoDB clusters"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Migration failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to start region migration"
                 }
               }
             }

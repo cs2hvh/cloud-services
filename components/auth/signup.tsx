@@ -48,6 +48,7 @@ export default function SignUpMultiStep({
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
   const [isLoading, setIsLoading] = React.useState(false);
   const [pendingEmail, setPendingEmail] = React.useState<string>("");
+  const submitLockRef = React.useRef(false);
   const router = useRouter();
   const search = useSearchParams();
 
@@ -80,17 +81,31 @@ export default function SignUpMultiStep({
   });
 
   async function onSubmitSignup(data: SignupFormData) {
-    const response = await api.post("/auth/onboarding", data);
-    if (response.status === 200) {
-      toast.success(response?.data?.message);
-      setPendingEmail(data.email);
-      setStep(2);
-    } else {
-      toast.error(response?.data?.message);
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
+    setIsLoading(true);
+    try {
+      const response = await api.post("/auth/onboarding", data);
+      if (response.status === 200) {
+        toast.success(response?.data?.message);
+        setPendingEmail(data.email);
+        setStep(2);
+      } else {
+        toast.error(response?.data?.message);
+      }
+    } finally {
+      setIsLoading(false);
+      submitLockRef.current = false;
     }
   }
 
   async function onSubmitOtp(data: OtpFormData) {
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
     setIsLoading(true);
     try {
       const response = await api.post("/auth/onboarding/verify-otp", {
@@ -104,6 +119,7 @@ export default function SignUpMultiStep({
       }
     } finally {
       setIsLoading(false);
+      submitLockRef.current = false;
     }
   }
 
@@ -114,6 +130,10 @@ export default function SignUpMultiStep({
   }
 
   const handleSignIn = async (type: string) => {
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
     setIsLoading(true);
     try {
       const endpointByProvider: Record<string, string> = {
@@ -139,6 +159,7 @@ export default function SignUpMultiStep({
       }
     } finally {
       setIsLoading(false);
+      submitLockRef.current = false;
     }
   };
 

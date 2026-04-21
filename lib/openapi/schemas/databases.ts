@@ -150,3 +150,73 @@ export const DatabaseStorageUpsizeResponseSchema = z.object({
     updated: z.boolean().openapi({ example: true }),
   }),
 }).openapi('DatabaseStorageUpsizeResponse');
+
+export const DatabaseFirewallRuleSchema = z.object({
+  uuid: z.string().uuid().openapi({ example: '90f543fc-cf87-4f77-ab47-acddf8ebde7f' }),
+  cluster_uuid: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+  type: z.string().openapi({ example: 'ip_addr' }),
+  value: z.string().openapi({ example: '203.0.113.42' }),
+  created_at: z.string().datetime().openapi({ example: '2026-03-20T10:00:00Z' }),
+}).openapi('DatabaseFirewallRule');
+
+export const AddDatabaseFirewallRuleRequestSchema = z.object({
+  ip_address: z.string().openapi({ example: '203.0.113.42/32' }),
+}).openapi('AddDatabaseFirewallRuleRequest');
+
+export const DatabaseFirewallRuleListResponseSchema = z.object({
+  data: z.array(DatabaseFirewallRuleSchema),
+}).openapi('DatabaseFirewallRuleListResponse');
+
+export const DatabaseFirewallRuleUpdateResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    rules: z.array(DatabaseFirewallRuleSchema),
+    updated: z.boolean().openapi({ example: true }),
+  }),
+}).openapi('DatabaseFirewallRuleUpdateResponse');
+
+export const DatabaseFirewallRuleDeleteResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    rule_uuid: z.string().uuid().openapi({ example: '90f543fc-cf87-4f77-ab47-acddf8ebde7f' }),
+    deleted: z.boolean().openapi({ example: true }),
+    warning: z.string().optional().openapi({
+      example: 'IP address deleted from firewall, but failed to update database',
+    }),
+  }),
+}).openapi('DatabaseFirewallRuleDeleteResponse');
+
+export const DatabaseMaintenanceWindowSchema = z.object({
+  day: z.string().openapi({ example: 'monday' }),
+  hour: z.string().openapi({ example: '13:00' }),
+}).openapi('DatabaseMaintenanceWindow');
+
+export const UpdateDatabaseMaintenanceWindowRequestSchema = z.object({
+  day: z.string().openapi({ example: 'monday' }),
+  hour: z.string().openapi({ example: '13:00' }),
+}).openapi('UpdateDatabaseMaintenanceWindowRequest');
+
+export const DatabaseMaintenanceWindowResponseSchema = z.object({
+  data: DatabaseMaintenanceWindowSchema.nullable().openapi({ example: { day: 'monday', hour: '13:00' } }),
+}).openapi('DatabaseMaintenanceWindowResponse');
+
+export const DatabaseMaintenanceWindowUpdateResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    window: DatabaseMaintenanceWindowSchema,
+    updated: z.boolean().openapi({ example: true }),
+  }),
+}).openapi('DatabaseMaintenanceWindowUpdateResponse');
+
+export const MigrateDatabaseRegionRequestSchema = z.object({
+  region: z.string().openapi({ example: 'nyc1' }),
+}).openapi('MigrateDatabaseRegionRequest');
+
+export const DatabaseRegionMigrationResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    region: z.string().openapi({ example: 'nyc1' }),
+    status: z.literal('migrating').openapi({ example: 'migrating' }),
+    migration_started: z.boolean().openapi({ example: true }),
+  }),
+}).openapi('DatabaseRegionMigrationResponse');
