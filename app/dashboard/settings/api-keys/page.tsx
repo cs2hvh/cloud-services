@@ -157,7 +157,7 @@ export default function ApiKeysPage() {
   };
 
   return (
-    <div className="flex-1 bg-black min-h-screen">
+    <div className="flex-1 bg-black min-h-screen [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
       <div className="max-w-6xl mx-auto p-6 sm:p-8">
         {/* Global Error Banner */}
         <AnimatePresence>
