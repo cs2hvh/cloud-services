@@ -1,7 +1,10 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
+import AppDeployHowSection from "@/components/services/app-deploy-how-section";
+import AppDeployWorkloadsSection from "@/components/services/app-deploy-workloads-section";
 import AppDeployFrameworksSection from "@/components/services/app-deploy-frameworks-section";
 import AppDeployShowcaseSection from "@/components/services/app-deploy-showcase-section";
 import AppDeployPricingSection from "@/components/services/app-deploy-pricing-section";
+import AppDeployFinalCtaSection from "@/components/services/app-deploy-final-cta-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 import { getAppDeployPlans } from "@/lib/helpers/app-deploy-plans";
@@ -44,9 +47,14 @@ const AppDeploymentHome = async () => {
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/app-deploy.png", alt: "App Deployment infrastructure" }}
       />
+       <AppDeployShowcaseSection />
+      <AppDeployHowSection />
       <AppDeployFrameworksSection />
-      <AppDeployShowcaseSection />
+      <AppDeployWorkloadsSection />
+      
+     
       <AppDeployPricingSection plans={plans} />
+      
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
         faqs={[
@@ -87,7 +95,8 @@ const AppDeploymentHome = async () => {
           },
         ]}
       />
-      <ServicesHomeSectionSix cases={cases} />
+      {/* <ServicesHomeSectionSix cases={cases} /> */}
+      <AppDeployFinalCtaSection />
     </main>
   );
 };
