@@ -71,14 +71,18 @@ export class JenkinsService {
       xml = xml.replace("</parameterDefinitions>", `${gitAuthParam}      </parameterDefinitions>`);
     }
 
+    // Match the full "git clone --depth=1 ... . || git clone --branch ... ." pattern atomically
+    // and replace with a single GIT_AUTH_URL-aware command that suppresses TTY prompts.
+    // This handles the pattern used by every pipeline template:
+    //   git clone --depth=1 --branch <branch> <url> . || git clone --branch <branch> <url> .
     xml = xml.replace(
-      /git clone --branch ([^\s]+) ([^\s]+) \./g,
+      /git clone --depth=\d+ --branch ([^\s]+) ([^\s]+) \. \|\| git clone --branch [^\s]+ [^\s]+ \./g,
       (_match, branchArg: string, repoUrl: string) => {
         const safeRepoUrl = repoUrl.replace(/"/g, '\\"');
         return [
           `REPO_URL="${'$'}{GIT_AUTH_URL:-${safeRepoUrl}}"`,
           "set +x",
-          `git clone --branch ${branchArg} "$REPO_URL" .`,
+          `GIT_TERMINAL_PROMPT=0 git clone --depth=1 --branch ${branchArg} "$REPO_URL" .`,
           "set -x",
         ].join("\n              ");
       }
