@@ -521,10 +521,10 @@ const NewClusterPage = ({
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
   const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
-  const totalNodes = Math.max(selectedNode + 1, 1);
-  const planMonthlyRate =
-    typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
-  const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
+  // const totalNodes = Math.max(selectedNode + 1, 1);
+  // const planMonthlyRate =
+  //   typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
+  // const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
   const nodePresets = [1, 2, 3, 5];
   const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
 

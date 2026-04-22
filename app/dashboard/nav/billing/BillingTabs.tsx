@@ -953,7 +953,7 @@ function TransactionsTab() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
             placeholder="From"
           />
 
@@ -962,7 +962,7 @@ function TransactionsTab() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
             placeholder="To"
           />
 

@@ -862,7 +862,6 @@ export class JenkinsService {
       appName,
       size,
       appId,
-      APP_DOMAIN,
       webhookBaseUrl,
       deploymentRecordSecret,
       envVars,

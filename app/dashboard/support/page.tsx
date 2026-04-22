@@ -27,7 +27,7 @@ async function SupportTicketsSuspense() {
 
 export default function SupportPage() {
   return (
-    <div className="dashboard-bg flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
+    <div className="dashboard-bg flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9 [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
       <Suspense
         fallback={
           <div className="flex min-h-[60vh] items-center justify-center">

@@ -255,7 +255,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-8 border border-red-500/20 bg-red-500/5 px-3 text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                              className="h-8 border border-red-500/20 bg-red-500/5 px-3 text-red-200 hover:bg-red-500/10 hover:text-red-100 cursor-pointer"
                               onClick={() => handleDeleteClick(app.spectrum_id, app.id)}
                             >
                               <Trash2 className="h-4 w-4" />

@@ -12,7 +12,7 @@ import {
   Loader2,
   Plus,
   RotateCw,
-  Server,
+  // Server,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';

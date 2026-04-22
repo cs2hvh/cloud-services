@@ -21,7 +21,7 @@ export function createResizePipeline(
   name: string,
   size: string = 'small',
   appId: string = '',
-  appDomain: string = 'galaxyhvh.com',
+  // appDomain: string = 'galaxyhvh.com',
   webhookBaseUrl: string = '',
   deploymentRecordSecret: string = '',
   envVars: EnvVar[] = [],
@@ -29,10 +29,10 @@ export function createResizePipeline(
   framework?: string | null,
   operationId: string = '',
 ): string {
-  const domain = `${name}.${appDomain}`;
+  // const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
-  const ingressName = `${name}-ingress`;
+  // const ingressName = `${name}-ingress`;
 
   const sizeKey = (size || 'small').toLowerCase();
   let cpuRequest = '250m';
