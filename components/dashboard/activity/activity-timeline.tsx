@@ -16,37 +16,34 @@ function LogRow({ log, isLast }: { log: ProjectLog; isLast: boolean }) {
 
   return (
     <div
-      className={`flex items-start gap-4 px-5 py-4 hover:bg-white/[0.025] transition-colors group ${
-        !isLast ? "border-b border-white/[0.04]" : ""
+      className={`flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.04] transition-colors group ${
+        !isLast ? "border-b border-white/[0.05]" : ""
       }`}
-      style={{
-        background: `linear-gradient(90deg, ${style.glow} 0%, transparent 35%)`,
-      }}
     >
-      {/* Icon bubble */}
-      <div
-        className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg mt-0.5"
-        style={{ background: style.iconBg }}
-      >
-        <Icon className="w-3.5 h-3.5" style={{ color: style.iconColor }} />
+      {/* Type dot + icon — neutral, no per-type color */}
+      <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded bg-white/[0.05] border border-white/[0.07]">
+        <Icon className="w-3.5 h-3.5 text-white/30" />
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide mb-1.5 ${style.badge}`}
-        >
-          {log.event}
-        </span>
-        <p className="text-[13px] text-white/65 leading-relaxed">{log.text}</p>
+      <div className="flex-1 min-w-0 flex items-baseline gap-2.5">
+        {/* Colored dot — sole type signal */}
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mb-[1px] ${style.dot}`} />
+        <div className="min-w-0">
+          <span className={`text-[13px] font-medium leading-none ${style.label}`}>
+            {log.event}
+          </span>
+          <span className="text-white/[0.06] mx-2 select-none">·</span>
+          <span className="text-[13px] text-white/50 leading-none">{log.text}</span>
+        </div>
       </div>
 
       {/* Timestamp */}
-      <div className="flex-shrink-0 flex flex-col items-end gap-0.5 min-w-[80px]">
-        <span className="text-[12px] text-white/40 group-hover:text-white/60 transition-colors tabular-nums">
+      <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+        <span className="text-[12px] text-white/30 group-hover:text-white/55 transition-colors tabular-nums whitespace-nowrap">
           {log.created_at ? formatTimeAgo(new Date(log.created_at)) : "—"}
         </span>
-        <span className="text-[11px] text-white/20 hidden sm:block tabular-nums">
+        <span className="text-[11px] text-white/18 hidden sm:block tabular-nums">
           {formatShortDate(log.created_at)}
         </span>
       </div>

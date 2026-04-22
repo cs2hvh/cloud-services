@@ -1,5 +1,6 @@
 import { Plus, Trash2, RefreshCw, AlertTriangle, Zap } from "lucide-react";
 import type { Tables } from "@/lib/supabase/types";
+import type React from "react";
 
 export type ProjectLog = Tables<"project_logs">;
 
@@ -24,42 +25,32 @@ export function getEventType(event: string): EventType {
 /* ─── Per-type visual config ─── */
 export const EVENT_STYLES: Record<
   EventType,
-  { badge: string; iconColor: string; icon: React.ElementType; glow: string; iconBg: string }
+  { dot: string; label: string; icon: React.ElementType }
 > = {
   create: {
-    badge: "bg-emerald-500/[0.12] text-emerald-400 border border-emerald-500/20",
-    iconColor: "#34d399",
+    dot: "bg-emerald-500/70",
+    label: "text-emerald-400/90",
     icon: Plus,
-    glow: "rgba(52,211,153,0.07)",
-    iconBg: "rgba(52,211,153,0.14)",
   },
   delete: {
-    badge: "bg-red-500/[0.12] text-red-400 border border-red-500/20",
-    iconColor: "#f87171",
+    dot: "bg-red-500/70",
+    label: "text-red-400/90",
     icon: Trash2,
-    glow: "rgba(248,113,113,0.06)",
-    iconBg: "rgba(248,113,113,0.14)",
   },
   update: {
-    badge: "bg-blue-500/[0.12] text-blue-400 border border-blue-500/20",
-    iconColor: "#60a5fa",
+    dot: "bg-sky-500/70",
+    label: "text-sky-400/90",
     icon: RefreshCw,
-    glow: "rgba(96,165,250,0.06)",
-    iconBg: "rgba(96,165,250,0.14)",
   },
   warn: {
-    badge: "bg-amber-500/[0.12] text-amber-400 border border-amber-500/20",
-    iconColor: "#fbbf24",
+    dot: "bg-amber-500/70",
+    label: "text-amber-400/90",
     icon: AlertTriangle,
-    glow: "rgba(251,191,36,0.06)",
-    iconBg: "rgba(251,191,36,0.14)",
   },
   other: {
-    badge: "bg-white/[0.07] text-white/50 border border-white/[0.09]",
-    iconColor: "rgba(255,255,255,0.35)",
+    dot: "bg-white/25",
+    label: "text-white/50",
     icon: Zap,
-    glow: "rgba(255,255,255,0.02)",
-    iconBg: "rgba(255,255,255,0.07)",
   },
 };
 
