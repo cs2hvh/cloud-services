@@ -146,7 +146,7 @@ export function ServicesSection() {
                     custom={i}
                   >
                     <div className="relative h-14 w-14 self-center xl:self-auto">
-                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
+                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized />
                     </div>
                     <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center xl:text-left">
                       {service.title}
@@ -191,7 +191,7 @@ export function ServicesSection() {
                     custom={i}
                   >
                     <div className="relative h-12 w-12 self-center sm:self-start">
-                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
+                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized />
                     </div>
                     <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center sm:text-left">
                       {service.title}
