@@ -3,59 +3,103 @@
 import Image from "next/image";
 import { motion } from "motion/react";
 
+
 export default function ObjectStorageReleaseSection() {
   return (
     <section className="relative z-10 w-full">
       <motion.div
-        className="flex flex-col sm:flex-row w-full"
+        className="relative w-full overflow-hidden rounded-br-[141px] bg-[#C9C9C9] min-h-[218px] flex items-center"
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
       >
-        {/* Left — dark side (~60%) */}
-        <div className="flex-[3] flex items-center gap-5 bg-gradient-to-r from-[#0a0b12] to-[#12131c] px-6 sm:px-10 lg:px-16 py-8 lg:py-10 min-h-[160px] lg:min-h-[200px]">
-          {/* Small icon badge */}
-          <div className="w-10 h-10 rounded-lg bg-[#0095FF]/10 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-[#0095FF]" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" />
-              <rect x="3" y="3" width="18" height="4" rx="1" />
-              <path d="M7 8v8" />
-              <path d="M12 8v8" />
-              <path d="M17 8v8" />
-            </svg>
-          </div>
-
-          {/* Object Storage logo */}
-          <div className="relative w-14 h-14 shrink-0">
-            <Image
-              src="/images/main-page/object-space.png"
-              alt="Object Storage"
-              fill
-              className="object-contain"
-            />
-          </div>
-
-          <div>
-            <h3 className="text-[20px] lg:text-[24px] font-[600] text-[#0095FF] leading-[1.2]">
-              Explore the
-            </h3>
-            <h3 className="text-[20px] lg:text-[24px] font-[600] text-[#0095FF] leading-[1.2]">
-              Latest Release
-            </h3>
-          </div>
+        {/* Spiral line-art background — blurred, right-center */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <Image
+            src="/a159e753bfb39b7a12ae7b90c019690a05bab577 (1).png"
+            alt=""
+            fill
+            className="object-cover object-center"
+            style={{ filter: "blur(2.5px)", opacity: 0.7 }}
+            unoptimized
+          />
         </div>
 
-        {/* Right — white/light side (~40%) */}
-        <div className="flex-[2] flex items-center bg-gradient-to-r from-[#c8c8d0] to-[#d8d8de] px-6 sm:px-10 lg:px-16 py-8 lg:py-10 min-h-[160px] lg:min-h-[200px]">
-          <div>
-            <span className="text-[18px] lg:text-[22px] font-[700] text-black block mb-2">
-              S3 Pro
-            </span>
-            <div className="flex flex-col gap-1 text-[13px] text-black/50">
-              <span>Unlimited buckets</span>
-              <span>99.999% durability</span>
-              <span>Lifecycle automation</span>
+        {/* Main content row */}
+        <div className="relative z-10 w-full flex flex-col lg:flex-row items-center gap-6 px-6 lg:px-16 py-8 lg:py-0 min-h-[218px]">
+
+          {/* Left — megaphone + title */}
+          <div className="flex items-center gap-6 flex-1 pl-4 lg:pl-[60px]">
+            {/* Megaphone */}
+            <div
+              className="shrink-0 relative w-[90px] h-[90px] lg:w-[111px] lg:h-[111px]"
+              style={{
+                filter: "drop-shadow(0px 15px 15px rgba(0,0,0,0.25))",
+                transform: "matrix(0.95, -0.32, -0.32, -0.95, 0, 0)",
+              }}
+            >
+              <Image
+                src="/e1d5f04fa8af10806f332bf618d0ac4818dbcb78.png"
+                alt="Megaphone"
+                fill
+                className="object-contain"
+                unoptimized
+              />
+            </div>
+
+            {/* Title */}
+            <h3
+              style={{ fontFamily: "'Sansation', system-ui, sans-serif" }}
+              className="text-[28px] lg:text-[40px] font-[700] text-[#1651A9] leading-[1.125] whitespace-nowrap"
+            >
+              Explore the<br />Latest Release
+            </h3>
+          </div>
+
+          {/* Right — two glass cards */}
+          <div className="flex gap-4 lg:gap-6 shrink-0 pb-2 lg:pb-0">
+            {/* Object Pro */}
+            <div
+              className="w-[180px] lg:w-[281px] min-h-[150px] lg:min-h-[187px] rounded-br-[141px] flex flex-col justify-start px-6 lg:px-8 pt-6 lg:pt-8 pb-6"
+              style={{
+                background: "rgba(255, 255, 255, 0.18)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+                border: "1px solid rgba(255, 255, 255, 0.45)",
+                boxShadow:
+                  "0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6)",
+              }}
+            >
+              <h4 className="text-[16px] lg:text-[22px] font-[700] text-black mb-4">
+                Object Pro
+              </h4>
+              <div className="flex flex-col gap-2 text-[12px] lg:text-[14px] text-black/60">
+                <span>10TB</span>
+                <span>1.5GB/s</span>
+              </div>
+            </div>
+
+            {/* Object Ultra */}
+            <div
+              className="w-[180px] lg:w-[281px] min-h-[150px] lg:min-h-[187px] rounded-br-[141px] flex flex-col justify-start px-6 lg:px-8 pt-6 lg:pt-8 pb-6"
+              style={{
+                background: "rgba(255, 255, 255, 0.18)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+                border: "1px solid rgba(255, 255, 255, 0.45)",
+                boxShadow:
+                  "0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6)",
+              }}
+            >
+              <h4 className="text-[16px] lg:text-[22px] font-[700] text-black mb-4">
+                Object Ultra
+              </h4>
+              <div className="flex flex-col gap-2 text-[12px] lg:text-[14px] text-black/60">
+                <span>20TB</span>
+                <span>2GB/s throughput</span>
+                <span>CDN included</span>
+              </div>
             </div>
           </div>
         </div>
