@@ -538,6 +538,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 
@@ -679,6 +680,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-white">{region.city}</div>

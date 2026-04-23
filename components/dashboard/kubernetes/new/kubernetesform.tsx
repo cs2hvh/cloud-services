@@ -560,6 +560,7 @@ const NewClusterPage = ({
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 
@@ -782,6 +783,7 @@ const NewClusterPage = ({
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -1456,7 +1458,7 @@ const NewClusterPage = ({
                   value={selectedLocationDetails ? (
                     <span className="flex items-center justify-end gap-2">
                       {selectedLocationDetails.country_code && (
-                        <Image src={"https://flagsapi.com/" + selectedLocationDetails.country_code + "/flat/64.png"} alt={selectedLocation} width={16} height={12} className="rounded-sm object-contain" />
+                        <Image src={`https://flagsapi.com/${selectedLocationDetails.country_code}/flat/64.png`} alt={selectedLocation} width={16} height={12} className="rounded-sm object-contain" unoptimized />
                       )}
                       {selectedLocationDetails.city}
                     </span>

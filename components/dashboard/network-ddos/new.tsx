@@ -379,6 +379,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 

@@ -68,6 +68,7 @@ export const LocationStep = ({
                   width={32}
                   height={24}
                   className="rounded-sm"
+                  unoptimized
                 />
                 <div>
                   <div className="font-medium text-white">

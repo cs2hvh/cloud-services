@@ -402,6 +402,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                 height={160}
                 className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
                 priority
+                unoptimized
               />
             </div>
 
@@ -554,6 +555,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                                 width={32}
                                 height={32}
                                 className="h-6 w-8 object-cover"
+                                unoptimized
                               />
                             ) : (
                               <MapPin className="h-4 w-4 text-white/60" />

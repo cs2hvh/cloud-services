@@ -416,6 +416,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 
@@ -711,6 +712,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -996,7 +998,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 label="Region"
                 value={selectedLocation ? (
                   <span className="flex items-center justify-end gap-2">
-                    <Image src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`} alt={selectedLocation.city} width={16} height={12} className="rounded-sm" />
+                    <Image src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`} alt={selectedLocation.city} width={16} height={12} className="rounded-sm" unoptimized />
                     {selectedLocation.city}
                   </span>
                 ) : "—"}

@@ -81,6 +81,7 @@ const BucketTabs = ({ bucket, locations }: BucketTabsProps) => {
                     width={16}
                     height={12}
                     className="rounded-sm"
+                    unoptimized
                   />
                 )}
                 <span className="text-sm font-semibold text-white">{city}</span>
