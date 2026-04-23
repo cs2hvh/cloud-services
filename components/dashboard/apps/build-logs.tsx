@@ -160,7 +160,7 @@ export function BuildLogsPanel({
 
   // Filter and search logs
   const filteredLogs = useMemo(() => {
-    if (!buildLogs) return '';
+    if (!buildLogs || buildLogs === 'No logs available') return '';
     
     let lines = buildLogs.split('\n');
     
