@@ -142,10 +142,9 @@ spec:
       echo "[FAIL] Failed to delete Kubernetes resources for ${name}"
     }
     always {
-      sh '''
+      script {
         echo 'PIPELINE: Cleanup'
-        echo 'Cleanup completed'
-      '''
+      }
     }
   }
 }

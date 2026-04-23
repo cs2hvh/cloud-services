@@ -554,10 +554,9 @@ JSON
       }
     }
     always {
-      sh '''
+      script {
         echo 'PIPELINE: Cleanup'
-        echo 'Cleanup completed - temporary files removed during pod termination'
-      '''
+      }
     }
   }
 }
