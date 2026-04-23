@@ -77,7 +77,7 @@ export const SettingsStep = ({
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center">
-                  <Image src="/dashboard icons/agent api keys .png" alt="Advanced Settings" width={36} height={36} className="object-contain" />
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="Advanced Settings" width={36} height={36} className="object-contain" unoptimized />
                 </div>
                 <div>
                   <CardTitle className="text-xl font-semibold tracking-tight text-white">
@@ -124,7 +124,7 @@ export const SettingsStep = ({
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 flex h-10 w-10 items-center justify-center">
-                  <Image src="/dashboard icons/ip acess Rules .png" alt="IP Access Rules" width={36} height={36} className="object-contain" />
+                  <Image src="/dashboard-icons/ip-acess-rules.png" alt="IP Access Rules" width={36} height={36} className="object-contain" unoptimized />
                 </div>
                 <div className="max-w-2xl">
                   <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +159,7 @@ export const SettingsStep = ({
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-10 w-10 items-center justify-center">
-                    <Image src="/dashboard icons/Proxy Protocol .png" alt="Proxy Protocol" width={36} height={36} className="object-contain" />
+                    <Image src="/dashboard-icons/proxy-protocol.png" alt="Proxy Protocol" width={36} height={36} className="object-contain" unoptimized />
                   </div>
                   <div className="max-w-2xl">
                     <div className="text-sm font-semibold text-white">Proxy Protocol</div>

@@ -316,7 +316,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-white/40">{step.title}</div>
                       </div>
                       <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={40} height={40} className="h-10 w-10 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={40} height={40} className="h-10 w-10 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

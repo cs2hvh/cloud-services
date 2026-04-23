@@ -486,7 +486,7 @@ export default function DomainTransferPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2.5">
-                  <Image src="/dashboard icons/domain.png" alt="" width={20} height={20} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                  <Image src="/dashboard-icons/domain.png" alt="" width={20} height={20} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                   <h2 className="text-lg font-semibold text-white">Start a Transfer</h2>
                 </div>
                 <p className="mt-1.5 text-sm text-white/50">
@@ -504,8 +504,8 @@ export default function DomainTransferPage() {
             {/* Step indicators */}
             <div className="grid gap-3 md:grid-cols-2">
               {[
-                { n: 1, title: "Validate domain", desc: "Confirm the domain can enter the transfer flow.", icon: "/dashboard icons/domain.png" },
-                { n: 2, title: "Submit auth code", desc: "Start the registrar transfer with the EPP code.", icon: "/dashboard icons/valid keys .png" },
+                { n: 1, title: "Validate domain", desc: "Confirm the domain can enter the transfer flow.", icon: "/dashboard-icons/domain.png" },
+                { n: 2, title: "Submit auth code", desc: "Start the registrar transfer with the EPP code.", icon: "/dashboard-icons/valid-keys.png" },
               ].map(({ n, title, desc, icon }) => (
                 <div key={n} className={`border p-4 ${stageIndex >= n ? "border-cyan-500/25 bg-cyan-500/[0.08]" : "border-white/[0.07] bg-white/[0.03]"}`}>
                   <div className="flex items-center gap-3">
@@ -516,7 +516,7 @@ export default function DomainTransferPage() {
                       <p className="text-sm font-semibold text-white">{title}</p>
                       <p className="text-xs text-white/45">{desc}</p>
                     </div>
-                    <Image src={icon} alt="" width={28} height={28} className={`h-7 w-7 shrink-0 object-contain ${stageIndex >= n ? "opacity-60" : "opacity-25"}`} />
+                    <Image src={icon} alt="" width={28} height={28} className={`h-7 w-7 shrink-0 object-contain ${stageIndex >= n ? "opacity-60" : "opacity-25"}`} unoptimized />
                   </div>
                 </div>
               ))}
@@ -546,7 +546,7 @@ export default function DomainTransferPage() {
               <div className="space-y-4 p-5">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Image src="/dashboard icons/domain.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55" />
+                  <Image src="/dashboard-icons/domain.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55"  unoptimized />
                   <Label htmlFor="domain" className="text-white/75">Domain name</Label>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -571,7 +571,7 @@ export default function DomainTransferPage() {
                     {checking ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Image src="/dashboard icons/healthy .png" alt="" width={16} height={16} className="mr-2 h-4 w-4 shrink-0 object-contain" />
+                      <Image src="/dashboard-icons/healthy.png" alt="" width={16} height={16} className="mr-2 h-4 w-4 shrink-0 object-contain"  unoptimized />
                     )}
                     Check Eligibility
                   </Button>
@@ -610,7 +610,7 @@ export default function DomainTransferPage() {
                 <div className="border border-white/[0.07] bg-white/[0.02] p-4 space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Image src="/dashboard icons/valid keys .png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55" />
+                      <Image src="/dashboard-icons/valid-keys.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55"  unoptimized />
                       <Label htmlFor="auth-code" className="text-white/75">Authorization code (EPP code)</Label>
                     </div>
                     <div className="relative">
@@ -680,7 +680,7 @@ export default function DomainTransferPage() {
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <Image src="/dashboard icons/ip firewall .png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                <Image src="/dashboard-icons/ip-firewall.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                 <h3 className="text-sm font-semibold text-white">Before You Transfer</h3>
               </div>
               <p className="mt-1 text-xs text-white/45">Complete these steps to avoid preventable failures.</p>
@@ -688,7 +688,7 @@ export default function DomainTransferPage() {
             <div className="px-5 py-4 space-y-2">
               {prepChecklist.map((item) => (
                 <div key={item} className="flex items-start gap-3 border border-white/[0.06] bg-white/[0.02] p-3 text-sm text-white/65">
-                  <Image src="/dashboard icons/healthy .png" alt="" width={14} height={14} className="mt-0.5 h-3.5 w-3.5 shrink-0 object-contain opacity-70" />
+                  <Image src="/dashboard-icons/healthy.png" alt="" width={14} height={14} className="mt-0.5 h-3.5 w-3.5 shrink-0 object-contain opacity-70"  unoptimized />
                   <p>{item}</p>
                 </div>
               ))}
@@ -699,16 +699,16 @@ export default function DomainTransferPage() {
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <Image src="/dashboard icons/configure.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                <Image src="/dashboard-icons/configure.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                 <h3 className="text-sm font-semibold text-white">How It Works</h3>
               </div>
             </div>
             <div className="px-5 py-4 space-y-2">
               {[
-                { ...journeySteps[0], icon: "/dashboard icons/domain.png" },
-                { ...journeySteps[1], icon: "/dashboard icons/valid keys .png" },
-                { ...journeySteps[2], icon: "/dashboard icons/messages .png" },
-                { ...journeySteps[3], icon: "/dashboard icons/pending .png" },
+                { ...journeySteps[0], icon: "/dashboard-icons/domain.png" },
+                { ...journeySteps[1], icon: "/dashboard-icons/valid-keys.png" },
+                { ...journeySteps[2], icon: "/dashboard-icons/messages.png" },
+                { ...journeySteps[3], icon: "/dashboard-icons/pending.png" },
               ].map((step, i) => (
                 <div key={step.title} className="flex gap-3 border border-white/[0.06] bg-white/[0.02] p-3">
                   <div className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/15 bg-white/[0.05] text-xs font-semibold text-white/70">
@@ -776,9 +776,9 @@ export default function DomainTransferPage() {
               </TabsList>
 
               {[
-                { value: "active", items: activeTransfers, emptyIcon: <Image src="/dashboard icons/pending .png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No active transfers", emptyMsg: "Start with the validation step above. Once submitted, progress appears here." },
-                { value: "history", items: historyTransfers, emptyIcon: <Image src="/dashboard icons/review .png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No transfer history yet", emptyMsg: "Completed, failed, and cancelled transfers will stay here for auditing." },
-                { value: "all", items: transfers, emptyIcon: <Image src="/dashboard icons/domain.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No transfer records yet", emptyMsg: "Use the form above to start your first domain transfer request." },
+                { value: "active", items: activeTransfers, emptyIcon: <Image src="/dashboard-icons/pending.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No active transfers", emptyMsg: "Start with the validation step above. Once submitted, progress appears here." },
+                { value: "history", items: historyTransfers, emptyIcon: <Image src="/dashboard-icons/review.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No transfer history yet", emptyMsg: "Completed, failed, and cancelled transfers will stay here for auditing." },
+                { value: "all", items: transfers, emptyIcon: <Image src="/dashboard-icons/domain.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No transfer records yet", emptyMsg: "Use the form above to start your first domain transfer request." },
               ].map(({ value, items, emptyIcon, emptyTitle, emptyMsg }) => (
                 <TabsContent key={value} value={value} className="space-y-3">
                   {items.length > 0 ? (

@@ -72,10 +72,10 @@ export const instanceSizeConfigs = {
 };
 
 export const STEP_META = [
-  { id: 1, name: "Provider", title: "Select source control provider", description: "Connect an approved Git provider and choose the account you want to deploy from.", iconSrc: "/dashboard icons/provider .png" },
-  { id: 2, name: "Repository", title: "Choose repository and branch", description: "Select the repository, review available branches, and confirm the code source for deployment.", iconSrc: "/dashboard icons/repository.png" },
-  { id: 3, name: "Configure", title: "Define runtime and capacity", description: "Set the application name, framework profile, environment variables, and resource sizing.", iconSrc: "/dashboard icons/configure.png" },
-  { id: 4, name: "Deploy", title: "Review and launch", description: "Confirm deployment settings, billing impact, and rollout preferences before provisioning begins.", iconSrc: "/dashboard icons/deploy.png" },
+  { id: 1, name: "Provider", title: "Select source control provider", description: "Connect an approved Git provider and choose the account you want to deploy from.", iconSrc: "/dashboard-icons/provider.png" },
+  { id: 2, name: "Repository", title: "Choose repository and branch", description: "Select the repository, review available branches, and confirm the code source for deployment.", iconSrc: "/dashboard-icons/repository.png" },
+  { id: 3, name: "Configure", title: "Define runtime and capacity", description: "Set the application name, framework profile, environment variables, and resource sizing.", iconSrc: "/dashboard-icons/configure.png" },
+  { id: 4, name: "Deploy", title: "Review and launch", description: "Confirm deployment settings, billing impact, and rollout preferences before provisioning begins.", iconSrc: "/dashboard-icons/deploy.png" },
 ] as const;
 
 export const FRAMEWORK_MAP: Record<string, string> = {

@@ -310,10 +310,10 @@ export default function AIAgentsSettingsPage() {
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">Manage model provider credentials, issue endpoint keys, and share implementation guidance from a more operational settings surface.</p>
           </div>
           <div className="flex items-center gap-5">
-            <Image src="/dashboard-services-icons/da ai aniamtion.png" alt="" width={72} height={72} className="shrink-0 opacity-80 hidden lg:block" />
+            <Image src="/dashboard-services-icons/da ai aniamtion.png" alt="" width={72} height={72} className="shrink-0 opacity-80 hidden lg:block"  unoptimized />
             <Button variant="outline" asChild className="rounded-none border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
               <Link href="/dashboard/services/ai-agents">
-                <Image src="/dashboard icons/settings _1.png" alt="" width={14} height={14} className="mr-2 opacity-70" />
+                <Image src="/dashboard-icons/settings-1.png" alt="" width={14} height={14} className="mr-2 opacity-70"  unoptimized />
                 Back to agents
               </Link>
             </Button>
@@ -322,9 +322,9 @@ export default function AIAgentsSettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><Image src="/dashboard icons/model keys .png" alt="Model Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><Image src="/dashboard icons/valid keys .png" alt="Valid Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><Image src="/dashboard icons/agent api keys .png" alt="Agent API Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><Image src="/dashboard-icons/model-keys.png" alt="Model Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><Image src="/dashboard-icons/valid-keys.png" alt="Valid Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><Image src="/dashboard-icons/agent-api-keys.png" alt="Agent API Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
       </div>
 
       {/* New Key Created Dialog */}
@@ -332,7 +332,7 @@ export default function AIAgentsSettingsPage() {
         <DialogContent className="glass-panel overflow-hidden border border-white/[0.08] bg-[#050816] text-white sm:max-w-md [&>button]:rounded-none">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Image src="/dashboard icons/valid keys .png" alt="" width={18} height={18} className="opacity-90" />
+              <Image src="/dashboard-icons/valid-keys.png" alt="" width={18} height={18} className="opacity-90"  unoptimized />
               API Key Created
             </DialogTitle>
             <DialogDescription>
@@ -377,11 +377,11 @@ export default function AIAgentsSettingsPage() {
       <Tabs defaultValue="model-keys" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 rounded-none border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
           <TabsTrigger value="model-keys" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
-            <Image src="/dashboard icons/model keys .png" alt="" width={14} height={14} className="mr-1.5 opacity-70" />
+            <Image src="/dashboard-icons/model-keys.png" alt="" width={14} height={14} className="mr-1.5 opacity-70"  unoptimized />
             Model API Keys
           </TabsTrigger>
           <TabsTrigger value="agent-api-keys" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
-            <Image src="/dashboard icons/agent api keys .png" alt="" width={14} height={14} className="mr-1.5 opacity-70" />
+            <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={14} height={14} className="mr-1.5 opacity-70"  unoptimized />
             Agent API Keys
           </TabsTrigger>
         </TabsList>
@@ -392,7 +392,7 @@ export default function AIAgentsSettingsPage() {
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <div>
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Image src="/dashboard icons/model keys .png" alt="" width={18} height={18} className="opacity-80" />
+                  <Image src="/dashboard-icons/model-keys.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
                   Model API Keys
                 </h3>
                 <p className="mt-1 text-sm text-white/45">
@@ -486,7 +486,7 @@ export default function AIAgentsSettingsPage() {
                           </>
                         ) : (
                           <>
-                            <Image src="/dashboard icons/valid keys .png" alt="" width={14} height={14} className="mr-2 opacity-80" />
+                            <Image src="/dashboard-icons/valid-keys.png" alt="" width={14} height={14} className="mr-2 opacity-80"  unoptimized />
                             Add Key
                           </>
                         )}
@@ -510,7 +510,7 @@ export default function AIAgentsSettingsPage() {
                       <div className={`absolute left-0 top-0 h-full w-0.5 ${key.is_valid ? 'bg-emerald-500/50' : 'bg-red-500/40'}`} />
                       <div className="flex items-center gap-4">
                         <div className="p-2 bg-white/[0.06] border border-white/[0.08]">
-                          <Image src="/dashboard icons/valid keys .png" alt="" width={16} height={16} className="opacity-75" />
+                          <Image src="/dashboard-icons/valid-keys.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -526,7 +526,7 @@ export default function AIAgentsSettingsPage() {
                       <div className="flex items-center gap-3">
                         {key.is_valid ? (
                           <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30">
-                            <Image src="/dashboard icons/healthy .png" alt="" width={10} height={10} className="mr-1 opacity-90" />
+                            <Image src="/dashboard-icons/healthy.png" alt="" width={10} height={10} className="mr-1 opacity-90"  unoptimized />
                             Valid
                           </Badge>
                         ) : (
@@ -573,7 +573,7 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Image src="/dashboard icons/model keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
+                  <Image src="/dashboard-icons/model-keys.png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
                   <p className="text-white/55 mb-2">No API keys configured</p>
                   <p className="text-sm text-white/40 mb-4">
                     Add an API key to start using AI models
@@ -592,7 +592,7 @@ export default function AIAgentsSettingsPage() {
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                <Image src="/dashboard icons/model.png" alt="" width={18} height={18} className="opacity-80" />
+                <Image src="/dashboard-icons/model.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
                 Supported Providers
               </h3>
               <p className="mt-1 text-sm text-white/45">Get API keys from these providers to use their models</p>
@@ -615,7 +615,7 @@ export default function AIAgentsSettingsPage() {
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <div>
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Image src="/dashboard icons/agent api keys .png" alt="" width={20} height={20} className="opacity-80" />
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={20} height={20} className="opacity-80"  unoptimized />
                   Agent API Keys
                 </h3>
                 <p className="mt-1 text-sm text-white/45">
@@ -676,7 +676,7 @@ export default function AIAgentsSettingsPage() {
                           </>
                         ) : (
                           <>
-                            <Image src="/dashboard icons/agent api keys .png" alt="" width={14} height={14} className="mr-2 opacity-80" />
+                            <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={14} height={14} className="mr-2 opacity-80"  unoptimized />
                             Create Key
                           </>
                         )}
@@ -700,7 +700,7 @@ export default function AIAgentsSettingsPage() {
                       <div className={`absolute left-0 top-0 h-full w-0.5 ${key.is_active ? 'bg-emerald-500/50' : 'bg-red-500/40'}`} />
                       <div className="flex items-center gap-4">
                         <div className="p-2 bg-white/[0.06] border border-white/[0.08]">
-                          <Image src="/dashboard icons/agent api keys .png" alt="" width={16} height={16} className="opacity-75" />
+                          <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -765,7 +765,7 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Image src="/dashboard icons/agent api keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
                   <p className="text-white/55 mb-2">No agent API keys</p>
                   <p className="text-sm text-white/40 mb-4">
                     Create an API key to authenticate requests to your agent endpoints
@@ -785,7 +785,7 @@ export default function AIAgentsSettingsPage() {
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                <Image src="/dashboard icons/configure.png" alt="" width={18} height={18} className="opacity-80" />
+                <Image src="/dashboard-icons/configure.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
                 API Documentation
               </h3>
               <p className="mt-1 text-sm text-white/45">Complete guide to using your agent&apos;s public API endpoint</p>
