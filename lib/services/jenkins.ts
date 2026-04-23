@@ -810,7 +810,11 @@ export class JenkinsService {
   private static updateDockerfileSkip(trimmed: string, skip: boolean): { skip: boolean; hide: boolean } {
     if (skip) {
       // End markers: resume showing output
-      if (/^Detected /.test(trimmed) || trimmed === 'Dockerfile preparation completed') {
+      if (
+        /^Detected /.test(trimmed) ||
+        trimmed === 'Dockerfile preparation completed' ||
+        trimmed === 'Checking for build-time ARG instructions...'  // generic-docker: ARG analysis follows dump
+      ) {
         return { skip: false, hide: false }; // show this line, stop skipping
       }
       return { skip: true, hide: true };
