@@ -229,9 +229,9 @@ ${generateJavaDockerfileStage()}
               sh(
                 script: '''
                   mkdir -p /kaniko/.docker
-                  AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
+                AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
 
-                  cat <<EOF > /kaniko/.docker/config.json
+                cat <<EOF > /kaniko/.docker/config.json
 {
   "auths": {
     "https://index.docker.io/v1/": {

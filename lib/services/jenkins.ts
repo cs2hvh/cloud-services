@@ -830,6 +830,7 @@ export class JenkinsService {
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
       .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
       .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')
+      .replace(/\r/g, '')
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
     const lines = log.split('\n');
@@ -863,6 +864,7 @@ export class JenkinsService {
       .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')           // Jenkins hash markers
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')                // ANSI escape
       .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')              // Unicode ANSI
+      .replace(/\r/g, '')                                    // carriage returns (npm/Gradle progress)
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');        // Control chars
 
     const lines = cleanLog.split('\n');

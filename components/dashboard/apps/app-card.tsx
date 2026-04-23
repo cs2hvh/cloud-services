@@ -396,7 +396,7 @@ export function AppCard({
                 appName={app.name}
                 fetchBuildLogs={(_, buildNumber) => {
                   onFetchLogs(buildNumber);
-                  return Promise.resolve(false as boolean);
+                  return Promise.resolve();
                 }}
               />
             ) : (

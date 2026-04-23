@@ -193,7 +193,7 @@ ${generateSecurityStages({ language: 'docker' })}
             fi
             echo "[OK] Dockerfile found"
             echo ""
-            echo "Dockerfile contents:"
+            echo "Dockerfile review:"
             cat Dockerfile
             echo ""
 
