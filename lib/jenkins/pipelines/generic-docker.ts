@@ -66,11 +66,13 @@ export function createDockerfilePipeline(
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
+  <actions/>
   <description>
     Generic Dockerfile Pipeline for ${name}
     Uses existing Dockerfile from repository
     Accessible at https://${domain} via NGINX Ingress
   </description>
+  <keepDependencies>false</keepDependencies>
 
   <properties>
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
@@ -87,6 +89,15 @@ export function createDockerfilePipeline(
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
+
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/1 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+
+  <disabled>false</disabled>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
     <script><![CDATA[
@@ -118,10 +129,28 @@ pipeline {
 
   stages {
 
-    stage('Checkout Repo') {
+    stage('Initialize') {
+      steps {
+        script {
+          echo 'STAGE: Initialize'
+          echo 'PIPELINE: Generic Dockerfile Deployment Pipeline'
+          echo "Application Name: \${env.APP_NAME}"
+          echo "Git Repository: ${cleanUrl}"
+          echo "Branch: ${branch}"
+          echo "Container Port: \${env.CONTAINER_PORT}"
+          echo "Domain: \${env.DOMAIN}"
+          echo "Build Number: \${env.BUILD_NUMBER}"
+          echo 'Initialization completed'
+        }
+      }
+    }
+
+    stage('Checkout Repository') {
       steps {
         container('git') {
           sh '''
+            echo "STAGE: Checkout Repository"
+            echo "Fetching source code from repository"
             echo "Cloning repository..."
             git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
@@ -137,6 +166,7 @@ pipeline {
             
             echo "Current commit:"
             git log -1 --oneline
+            echo "Source code checkout completed"
           '''
         }
       }
@@ -257,7 +287,7 @@ ${generateSecurityStages({ language: 'docker' })}
       }
     }
 
-    stage('Build Image with Kaniko') {
+    stage('Build Docker Image') {
       steps {
         container('kaniko') {
           withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
@@ -265,6 +295,8 @@ ${generateSecurityStages({ language: 'docker' })}
             passwordVariable: 'DOCKER_PASS')]) {
 
             sh '''
+              echo "STAGE: Build Docker Image"
+              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
               mkdir -p /kaniko/.docker
               AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
 
@@ -278,7 +310,7 @@ ${generateSecurityStages({ language: 'docker' })}
 }
 EOF
 
-              echo "Building Docker image with existing Dockerfile"
+              echo 'Executing Kaniko build'
               /kaniko/executor \\
                 --context=$WORKSPACE \\
                 --dockerfile=Dockerfile \\
@@ -288,6 +320,8 @@ EOF
                 --cache-repo=hav0ky/${appName}-cache \\
                 --use-new-run \\
                 --digest-file=image-digest.txt
+
+              echo 'Image build completed successfully'
             '''
           }
         }
@@ -623,6 +657,12 @@ JSON
           '''
         }
       }
+    }
+    always {
+      sh '''
+        echo 'PIPELINE: Cleanup'
+        echo 'Cleanup completed - temporary files removed during pod termination'
+      '''
     }
   }
 }

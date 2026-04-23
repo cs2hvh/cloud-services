@@ -123,7 +123,12 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
       const chunk: string = res?.data?.logs ?? "";
 
       if (append) {
-        if (chunk) setBuildLogs((prev) => ({ ...prev, [appName]: (prev[appName] ?? "") + chunk }));
+        if (chunk) setBuildLogs((prev) => {
+          const current = prev[appName];
+          // Replace the loading placeholder instead of prepending it to real content
+          const base = (current === 'No logs available' || !current) ? '' : current;
+          return { ...prev, [appName]: base + chunk };
+        });
       } else {
         setBuildLogs((prev) => ({ ...prev, [appName]: chunk || "No logs available" }));
         setLogsError((prev) => ({ ...prev, [appName]: "" }));

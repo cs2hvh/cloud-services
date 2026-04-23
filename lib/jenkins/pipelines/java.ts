@@ -89,6 +89,15 @@ export function createJavaPipeline(
     </hudson.model.ParametersDefinitionProperty>
   </properties>
 
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/1 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+
+  <disabled>false</disabled>
+
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
     <script><![CDATA[
 pipeline {
@@ -118,10 +127,12 @@ pipeline {
   }
 
   stages {
+
     stage('Initialize') {
       steps {
         script {
           echo 'STAGE: Initialize'
+          echo 'PIPELINE: Java Deployment Pipeline'
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
@@ -162,6 +173,32 @@ pipeline {
       }
     }
 
+    stage('Validate Prerequisites') {
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Validate Prerequisites'
+            echo 'Checking required files and project structure'
+            sh(
+              script: '''
+                if [ -f pom.xml ]; then
+                  echo 'Maven project detected (pom.xml found)'
+                elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
+                  echo 'Gradle project detected (build.gradle found)'
+                else
+                  echo 'WARNING: No Java build file found (pom.xml / build.gradle)'
+                fi
+
+                echo 'Prerequisites check completed'
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
+          }
+        }
+      }
+    }
+
 ${generateSecurityStages({ language: 'docker' })}
 
     stage('Prepare Dockerfile') {
@@ -172,7 +209,7 @@ ${generateSecurityStages({ language: 'docker' })}
             sh '''
 ${generateJavaDockerfileStage()}
             '''
-            echo 'Dockerfile prepared successfully'
+            echo 'Dockerfile preparation completed'
           }
         }
       }
@@ -192,9 +229,9 @@ ${generateJavaDockerfileStage()}
               sh(
                 script: '''
                   mkdir -p /kaniko/.docker
-AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
+                  AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
 
-cat <<EOF > /kaniko/.docker/config.json
+                  cat <<EOF > /kaniko/.docker/config.json
 {
   "auths": {
     "https://index.docker.io/v1/": {
@@ -457,45 +494,122 @@ CERT_APPLY_EOF
       }
     }
 
-    stage('Send Deployment Notification') {
-      when {
-        expression { return env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET }
-      }
-      steps {
-        script {
-          echo 'STAGE: Send Deployment Notification'
-          def status = currentBuild.result ?: 'SUCCESS'
-          def buildUrl = "\${env.BUILD_URL}"
-          def webhookUrl = "\${env.WEBHOOK_BASE_URL}/api/services/platform-apps/\${env.PLATFORM_APP_ID}/builds"
-          def payload = """{"buildNumber":\${env.BUILD_NUMBER},"status":"SUCCESS","trigger":"\${env.DEPLOY_TRIGGER}","jenkinsUrl":"\${buildUrl}"}"""
-          
-          sh(script: """
-            curl -X POST "\${webhookUrl}" \\
-              -H "Content-Type: application/json" \\
-              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
-              -d '\${payload}' || echo 'Webhook notification failed (non-blocking)'
-          """, returnStatus: false)
-          
-          echo 'Notification sent'
-        }
-      }
-    }
   }
 
   post {
-    failure {
-      script {
-        echo 'Pipeline failed - sending failure notification'
-        if (env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET) {
-          def webhookUrl = "\${env.WEBHOOK_BASE_URL}/api/services/platform-apps/\${env.PLATFORM_APP_ID}/builds"
-          def payload = """{"buildNumber":\${env.BUILD_NUMBER},"status":"FAILED","trigger":"\${env.DEPLOY_TRIGGER}","jenkinsUrl":"\${env.BUILD_URL}"}"""
-          sh(script: """
-            curl -X POST "\${webhookUrl}" \\
-              -H "Content-Type: application/json" \\
-              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
-              -d '\${payload}' || echo 'Failure webhook failed (non-blocking)'
-          """, returnStatus: false)
+    success {
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Success"
+            echo "Deployment completed successfully for $APP_NAME"
+            echo "Service URL: https://$DOMAIN"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+
+            if [ -f image-digest.txt ]; then
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
+                -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \
+                --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
+                --post-data="$PAYLOAD" \
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
         }
+      }
+    }
+
+    failure {
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Failure"
+            echo "Deployment failed for $APP_NAME"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+
+            if [ -f image-digest.txt ]; then
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
+                -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \
+                --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
+                --post-data="$PAYLOAD" \
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
+        }
+      }
+    }
+
+    always {
+      script {
+        echo 'PIPELINE: Cleanup'
+        echo 'Cleanup completed - temporary files removed during pod termination'
       }
     }
   }

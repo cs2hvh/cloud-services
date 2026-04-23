@@ -151,6 +151,7 @@ pipeline {
       steps {
         script {
           echo 'STAGE: Initialize'
+          echo 'PIPELINE: Angular Deployment Pipeline'
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
@@ -245,7 +246,7 @@ ${generateAngularDockerfileStage(envVars)}
         container('kaniko') {
           script {
             echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE}"
+            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
             withCredentials([usernamePassword(
               credentialsId: 'dockerhublogin',
               usernameVariable: 'DOCKER_USER',
@@ -326,7 +327,7 @@ SECRET_EOF
             
             echo 'Creating namespace if not exists'
             sh(
-              script: 'kubectl create namespace default --dry-run=client -o yaml | kubectl apply -f -',
+              script: 'kubectl get namespace default >/dev/null 2>&1 || true',
               returnStatus: false
             )
             
