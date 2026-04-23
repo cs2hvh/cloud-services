@@ -131,6 +131,7 @@ pipeline {
       steps {
         script {
           echo 'STAGE: Initialize'
+          echo 'PIPELINE: Express Deployment Pipeline'
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
