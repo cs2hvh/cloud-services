@@ -483,23 +483,23 @@ const NewClusterPage = ({
 
   const steps = role === "admin" 
     ? [
-        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
+        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ]
     : [
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ];
 
   const panelClassName = "glass-panel overflow-hidden";
@@ -509,7 +509,7 @@ const NewClusterPage = ({
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="flex items-center gap-2">
           {icon && (
-            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
           )}
           <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
         </div>
@@ -599,7 +599,7 @@ const NewClusterPage = ({
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -1451,9 +1451,9 @@ const NewClusterPage = ({
             </div>
             <div className="px-6 py-4">
               <div className="space-y-0.5">
-                <SummaryRow icon="/dashboard icons/name.png" label="Cluster" value={selectedName || "—"} empty={!selectedName} />
+                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster" value={selectedName || "—"} empty={!selectedName} />
                 <SummaryRow
-                  icon="/dashboard icons/region .png"
+                  icon="/dashboard-icons/region.png"
                   label="Location"
                   value={selectedLocationDetails ? (
                     <span className="flex items-center justify-end gap-2">
@@ -1465,10 +1465,10 @@ const NewClusterPage = ({
                   ) : "—"}
                   empty={!selectedLocation}
                 />
-                <SummaryRow icon="/dashboard icons/number .png" label="Workers" value={selectedNode ? `${selectedNode} (${selectedNode + 1} total)` : "—"} empty={!selectedNode} />
-                <SummaryRow icon="/dashboard icons/versioning .png" label="Version" value={selectedVersion ? `v${selectedVersion}` : "—"} empty={!selectedVersion} />
+                <SummaryRow icon="/dashboard-icons/number.png" label="Workers" value={selectedNode ? `${selectedNode} (${selectedNode + 1} total)` : "—"} empty={!selectedNode} />
+                <SummaryRow icon="/dashboard-icons/versioning.png" label="Version" value={selectedVersion ? `v${selectedVersion}` : "—"} empty={!selectedVersion} />
                 {selectedProject && (
-                  <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || selectedProject} />
+                  <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || selectedProject} />
                 )}
               </div>
 
@@ -1476,12 +1476,12 @@ const NewClusterPage = ({
                 <>
                   <div className="my-3 border-t border-white/[0.05]" />
                   <div className="space-y-0.5">
-                    <SummaryRow icon="/dashboard icons/plan _1.png" label="Plan" value={selectedPlan} />
+                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedPlan} />
                     {selectedPlanDetails && (
                       <>
-                        <SummaryRow icon="/dashboard icons/cpu .png" label="vCPU" value={selectedPlanDetails.resources.cpu} />
-                        <SummaryRow icon="/dashboard icons/ram .png" label="RAM" value={selectedPlanDetails.resources.ram} />
-                        <SummaryRow icon="/dashboard icons/storage .png" label="Disk" value={selectedPlanDetails.resources.storage} />
+                        <SummaryRow icon="/dashboard-icons/cpu.png" label="vCPU" value={selectedPlanDetails.resources.cpu} />
+                        <SummaryRow icon="/dashboard-icons/ram.png" label="RAM" value={selectedPlanDetails.resources.ram} />
+                        <SummaryRow icon="/dashboard-icons/storage.png" label="Disk" value={selectedPlanDetails.resources.storage} />
                       </>
                     )}
                   </div>

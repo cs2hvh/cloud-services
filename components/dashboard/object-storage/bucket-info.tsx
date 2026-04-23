@@ -113,7 +113,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
               <p className="mt-1 text-sm text-white/45">Total data stored</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard icons/storage .png" alt="Storage" width={44} height={44} className="h-11 w-11 object-contain" />
+              <Image src="/dashboard-icons/storage.png" alt="Storage" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </div>
@@ -128,7 +128,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
               <p className="mt-1 text-sm text-white/45">Files in bucket</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard icons/documents .png" alt="Objects" width={44} height={44} className="h-11 w-11 object-contain" />
+              <Image src="/dashboard-icons/documents.png" alt="Objects" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </div>
@@ -143,7 +143,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
               <p className="mt-1 text-sm text-white/45">{bucketData.acl === "public-read" ? "Public read access" : "Private access only"}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard icons/public acess .png" alt="Access" width={44} height={44} className="h-11 w-11 object-contain" />
+              <Image src="/dashboard-icons/public-acess.png" alt="Access" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </div>

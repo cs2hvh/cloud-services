@@ -237,25 +237,25 @@ export default function ApplicationDeploymentPage() {
           label="Total Apps"
           value={deployedApps.length}
           meta="Managed deployment targets"
-          iconSrc="/dashboard icons/total apps.png"
+          iconSrc="/dashboard-icons/total-apps.png"
         />
         <MetricCard
           label="Healthy"
           value={runningApps}
           meta="Applications serving live traffic"
-          iconSrc="/dashboard icons/healthy .png"
+          iconSrc="/dashboard-icons/healthy.png"
         />
         <MetricCard
           label="Active Builds"
           value={buildingApps}
           meta="Builds or rollouts currently in progress"
-          iconSrc="/dashboard icons/active builds.png"
+          iconSrc="/dashboard-icons/active-builds.png"
         />
         <MetricCard
           label="Success Rate"
           value={successRate}
           meta="Running apps relative to total inventory"
-          iconSrc="/dashboard icons/sucess rate .png"
+          iconSrc="/dashboard-icons/sucess-rate.png"
         />
       </motion.div>
 

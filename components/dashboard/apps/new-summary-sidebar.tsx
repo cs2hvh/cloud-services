@@ -52,20 +52,20 @@ export function SummarySidebar({
 
       <div className="px-6 py-4">
           <div className="space-y-0.5">
-            <SummaryRow icon="/dashboard icons/provider .png" label="Git provider" value={selectedProviderData?.name ?? "—"} empty={!selectedProviderData} />
-            <SummaryRow icon="/dashboard icons/repository.png" label="Repository" value={selectedRepoData?.name ?? "—"} empty={!selectedRepoData} />
+            <SummaryRow icon="/dashboard-icons/provider.png" label="Git provider" value={selectedProviderData?.name ?? "—"} empty={!selectedProviderData} />
+            <SummaryRow icon="/dashboard-icons/repository.png" label="Repository" value={selectedRepoData?.name ?? "—"} empty={!selectedRepoData} />
             <SummaryRow label="Branch" value={(selectedBranch || selectedRepoData?.defaultBranch) ?? "—"} empty={!(selectedBranch || selectedRepoData?.defaultBranch)} />
-            <SummaryRow icon="/dashboard icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
-            <SummaryRow icon="/dashboard icons/apptype .png" label="Framework" value={framework || "—"} empty={!framework} />
+            <SummaryRow icon="/dashboard-icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
+            <SummaryRow icon="/dashboard-icons/apptype.png" label="Framework" value={framework || "—"} empty={!framework} />
           </div>
 
           <div className="my-3 border-t border-white/[0.05]" />
 
           <div className="space-y-0.5">
-            <SummaryRow icon="/dashboard icons/plan _1.png" label="Instance" value={`${size.charAt(0).toUpperCase()}${size.slice(1)} / ${sizeConfig.cpu} CPU / ${sizeConfig.ram} RAM`} />
+            <SummaryRow icon="/dashboard-icons/plan-1.png" label="Instance" value={`${size.charAt(0).toUpperCase()}${size.slice(1)} / ${sizeConfig.cpu} CPU / ${sizeConfig.ram} RAM`} />
             <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
             {projectName && (
-              <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={projectName} />
+              <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projectName} />
             )}
           </div>
 
