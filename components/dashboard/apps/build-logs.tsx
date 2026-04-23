@@ -12,6 +12,7 @@ import {
   Search,
   X,
   ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export function BuildLogsPanel({
   const [showFilters, setShowFilters] = useState(false);
   const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
   const [showJumpButton, setShowJumpButton] = useState(false);
+  const [showJumpTopButton, setShowJumpTopButton] = useState(false);
 
   const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
     if (deployment.trigger === 'resize') {
@@ -141,6 +143,7 @@ export function BuildLogsPanel({
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     wasAtBottomRef.current = atBottom;
     setShowJumpButton(!atBottom && buildLogs.length > 0);
+    setShowJumpTopButton(el.scrollTop > 80 && buildLogs.length > 0);
   }, [buildLogs.length]);
 
   // After every log update: scroll to bottom only if the user was already there
@@ -155,6 +158,14 @@ export function BuildLogsPanel({
       preRef.current.scrollTop = preRef.current.scrollHeight;
       wasAtBottomRef.current = true;
       setShowJumpButton(false);
+    }
+  };
+
+  const jumpToTop = () => {
+    if (preRef.current) {
+      preRef.current.scrollTop = 0;
+      wasAtBottomRef.current = false;
+      setShowJumpTopButton(false);
     }
   };
 
@@ -491,17 +502,32 @@ export function BuildLogsPanel({
             </pre>
           )}
 
-          {/* Jump-to-bottom pill — appears when user scrolled up during live streaming */}
-          {showJumpButton && (
-            <button
-              onClick={jumpToBottom}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5
-                bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
-                text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
-            >
-              <ArrowDown className="w-3 h-3" />
-              Jump to latest
-            </button>
+          {/* Jump pills — top and bottom */}
+          {(showJumpTopButton || showJumpButton) && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              {showJumpTopButton && (
+                <button
+                  onClick={jumpToTop}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                  Jump to top
+                </button>
+              )}
+              {showJumpButton && (
+                <button
+                  onClick={jumpToBottom}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                  Jump to latest
+                </button>
+              )}
+            </div>
           )}
         </div>
       </CardContent>
