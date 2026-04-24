@@ -9,6 +9,97 @@
 import { CoreV1Api, AppsV1Api } from '@kubernetes/client-node';
 import kubeConfig from '@/lib/kubernetes';
 
+// ─── K8s quantity parsers ────────────────────────────────────────────────────
+
+function parseCpuQuantity(cpu: string): number {
+  if (!cpu) return 0;
+  if (cpu.endsWith('m')) return parseFloat(cpu) / 1000;
+  if (cpu.endsWith('n')) return parseFloat(cpu) / 1e9;
+  return parseFloat(cpu) || 0;
+}
+
+function parseMemoryQuantity(mem: string): number {
+  if (!mem) return 0;
+  const units: [string, number][] = [
+    ['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4],
+    ['K', 1000],  ['M', 1000 ** 2],  ['G', 1000 ** 3],  ['T', 1000 ** 4],
+  ];
+  for (const [suffix, mult] of units) {
+    if (mem.endsWith(suffix)) return parseFloat(mem) * mult;
+  }
+  return parseFloat(mem) || 0;
+}
+
+// ─── Inline diagnosis helpers ─────────────────────────────────────────────────
+
+function normaliseReason(r: string): string {
+  const map: Record<string, string> = {
+    CrashLoopBackOff:          'CrashLoopBackOff',
+    OOMKilled:                 'OOMKilled',
+    ImagePullBackOff:          'Image pull failed',
+    ErrImagePull:              'Image pull failed',
+    CreateContainerConfigError:'Config error',
+    CreateContainerError:      'Container create failed',
+    RunContainerError:         'Container run failed',
+    InvalidImageName:          'Invalid image name',
+    RegistryUnavailable:       'Registry unavailable',
+  };
+  return map[r] ?? r;
+}
+
+type PodLike = {
+  status?: {
+    phase?: string;
+    containerStatuses?: Array<{ state?: { waiting?: { reason?: string }; terminated?: { reason?: string } } }>;
+    conditions?: Array<{ type?: string; status?: string; message?: string }>;
+  };
+};
+
+function buildInlineDiagnosis(
+  pods: PodLike[],
+  health: 'healthy' | 'degraded' | 'failing' | 'progressing' | 'unknown',
+  ready: number,
+  desired: number,
+  updated: number,
+  totalRestarts: number,
+): string {
+  if (health === 'healthy' || health === 'unknown' || health === 'progressing') return '';
+
+  const reasons = new Set<string>();
+
+  for (const pod of pods) {
+    for (const cs of (pod.status?.containerStatuses ?? [])) {
+      const wr = cs.state?.waiting?.reason;
+      if (wr) reasons.add(normaliseReason(wr));
+      const tr = cs.state?.terminated?.reason;
+      if (tr && tr !== 'Completed') reasons.add(normaliseReason(tr));
+    }
+    if (pod.status?.phase === 'Pending') {
+      const sc = (pod.status?.conditions ?? []).find((c) => c.type === 'PodScheduled');
+      if (sc?.status === 'False') {
+        const msg = sc.message ?? '';
+        if (msg.includes('Insufficient cpu'))    reasons.add('Insufficient CPU');
+        else if (msg.includes('Insufficient memory')) reasons.add('Insufficient memory');
+        else if (msg.includes('Insufficient')) {
+          const m = msg.match(/Insufficient (\w+)/);
+          reasons.add(m ? `Insufficient ${m[1]}` : 'Unschedulable');
+        } else reasons.add('Unschedulable');
+      }
+    }
+  }
+
+  if (reasons.size > 0) {
+    let msg = Array.from(reasons).slice(0, 2).join(', ');
+    if (totalRestarts > 0) msg += ` \u2014 ${totalRestarts} restart${totalRestarts !== 1 ? 's' : ''}`;
+    return msg;
+  }
+
+  const parts: string[] = [];
+  if (ready   < desired) parts.push(`${ready}/${desired} ready`);
+  if (updated < desired) parts.push(`${updated}/${desired} updated`);
+  return parts.join(' \u00b7 ');
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface DeploymentHealth {
@@ -19,8 +110,18 @@ export interface DeploymentHealth {
   availableReplicas: number;
   updatedReplicas: number;
   status: 'healthy' | 'degraded' | 'failing' | 'progressing' | 'unknown';
-  conditions: Array<{ type: string; status: string; reason: string; message: string }>;
+  conditions: Array<{ type: string; status: string; reason: string; message: string; lastTransitionTime: string }>;
   createdAt: string;
+  /** Sum of container restart counts across all pods (from K8s API container statuses) */
+  totalRestarts: number;
+  /** Sum of CPU requests (cores) across running/pending pods */
+  cpuRequested: number;
+  /** Sum of memory requests (bytes) across running/pending pods */
+  memoryRequested: number;
+  /** ISO timestamp of last rollout — from Progressing condition lastTransitionTime */
+  lastRolloutTime: string;
+  /** Pre-computed human-readable failure reason (empty when healthy or progressing) */
+  inlineDiagnosis: string;
 }
 
 export interface ClusterEvent {
@@ -76,26 +177,39 @@ export class KubernetesMonitor {
    */
   static async getDeploymentHealth(namespace?: string): Promise<DeploymentHealth[]> {
     const appsApi = this.getAppsApi();
+    const coreApi = this.getCoreApi();
 
-    const response = namespace
-      ? await appsApi.listNamespacedDeployment({ namespace })
-      : await appsApi.listDeploymentForAllNamespaces();
+    // Fetch deployments + pods in parallel — pods are needed to compute
+    // restart counts, resource requests, and inline diagnosis without a
+    // separate per-deployment API call.
+    const [deployResponse, podResponse] = await Promise.all([
+      namespace
+        ? appsApi.listNamespacedDeployment({ namespace })
+        : appsApi.listDeploymentForAllNamespaces(),
+      namespace
+        ? coreApi.listNamespacedPod({ namespace })
+        : coreApi.listPodForAllNamespaces(),
+    ]);
 
-    const deployments = response.items ?? [];
+    const deployments = deployResponse.items ?? [];
+    const allPods     = podResponse.items ?? [];
 
     return deployments.map((d) => {
-      const spec = d.spec;
+      const spec   = d.spec;
       const status = d.status;
       const desired   = spec?.replicas ?? 0;
       const ready     = status?.readyReplicas ?? 0;
       const available = status?.availableReplicas ?? 0;
       const updated   = status?.updatedReplicas ?? 0;
+      const dName     = d.metadata?.name ?? '';
+      const dNs       = d.metadata?.namespace ?? '';
 
       const conditions = (status?.conditions ?? []).map((c) => ({
-        type: c.type ?? '',
-        status: c.status ?? '',
-        reason: c.reason ?? '',
-        message: c.message ?? '',
+        type:               c.type ?? '',
+        status:             c.status ?? '',
+        reason:             c.reason ?? '',
+        message:            c.message ?? '',
+        lastTransitionTime: c.lastTransitionTime?.toISOString() ?? '',
       }));
 
       let health: DeploymentHealth['status'] = 'unknown';
@@ -106,21 +220,65 @@ export class KubernetesMonitor {
       } else if (ready > 0) {
         health = 'degraded';
       } else {
-        // Check if it's actively rolling out
         const progressing = conditions.find((c) => c.type === 'Progressing' && c.status === 'True');
         health = progressing ? 'progressing' : 'failing';
       }
 
+      // Last rollout: prefer Progressing condition lastTransitionTime
+      const progressingCond = conditions.find((c) => c.type === 'Progressing');
+      const lastRolloutTime = progressingCond?.lastTransitionTime
+        ?? d.metadata?.creationTimestamp?.toISOString()
+        ?? '';
+
+      // Match pods to this deployment via selector labels
+      const selectorLabels = d.spec?.selector?.matchLabels ?? {};
+      const deployPods = allPods.filter((p) => {
+        if (p.metadata?.namespace !== dNs) return false;
+        const podLabels = p.metadata?.labels ?? {};
+        return Object.entries(selectorLabels).every(([k, v]) => podLabels[k] === v);
+      });
+
+      // Restart count from container statuses across all pods
+      let totalRestarts = 0;
+      deployPods.forEach((p) => {
+        (p.status?.containerStatuses ?? []).forEach((cs) => {
+          totalRestarts += cs.restartCount ?? 0;
+        });
+      });
+
+      // CPU + memory requests from running/pending pods (what K8s uses for scheduling)
+      let cpuRequested    = 0;
+      let memoryRequested = 0;
+      deployPods
+        .filter((p) => p.status?.phase === 'Running' || p.status?.phase === 'Pending')
+        .forEach((p) => {
+          (p.spec?.containers ?? []).forEach((c) => {
+            if (c.resources?.requests?.cpu)
+              cpuRequested    += parseCpuQuantity(c.resources.requests.cpu);
+            if (c.resources?.requests?.memory)
+              memoryRequested += parseMemoryQuantity(c.resources.requests.memory);
+          });
+        });
+
+      const inlineDiagnosis = buildInlineDiagnosis(
+        deployPods, health, ready, desired, updated, totalRestarts,
+      );
+
       return {
-        name: d.metadata?.name ?? '',
-        namespace: d.metadata?.namespace ?? '',
-        desiredReplicas: desired,
-        readyReplicas: ready,
+        name:             dName,
+        namespace:        dNs,
+        desiredReplicas:  desired,
+        readyReplicas:    ready,
         availableReplicas: available,
-        updatedReplicas: updated,
-        status: health,
+        updatedReplicas:  updated,
+        status:           health,
         conditions,
-        createdAt: d.metadata?.creationTimestamp?.toISOString() ?? '',
+        createdAt:        d.metadata?.creationTimestamp?.toISOString() ?? '',
+        totalRestarts,
+        cpuRequested,
+        memoryRequested,
+        lastRolloutTime,
+        inlineDiagnosis,
       };
     });
   }
