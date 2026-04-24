@@ -8,13 +8,11 @@ import { Tables } from "@/lib/supabase/types";
 import { EnvVar } from "./env-vars-editor";
 import {
   Repository, Branch, GitProvider, ProviderConnection, PricingRates,
-  STEP_META, FRAMEWORK_MAP,
+  FRAMEWORK_MAP,
 } from "./new-types";
 import { StepProvider } from "./new-step-provider";
 import { StepRepository } from "./new-step-repository";
-import { StepConfigure } from "./new-step-configure";
-import { StepReview } from "./new-step-review";
-import { SummarySidebar } from "./new-summary-sidebar";
+
 
 interface PageProps {
   projects: Tables<"projects">[];
