@@ -17,6 +17,8 @@ import {
   XCircle,
   Clock,
   Globe,
+  RotateCcw,
+  Activity,
 } from "lucide-react";
 import api from "@/lib/axios/axios";
 import type { PlatformAppResource } from "@/app/api/admin/cluster/platform-apps/route";
@@ -27,7 +29,7 @@ function fmtCpu(cores: number): string {
   if (cores === 0) return "—";
   if (cores < 0.001) return `${(cores * 1_000_000).toFixed(0)}μ`;
   if (cores < 1) return `${(cores * 1000).toFixed(0)}m`;
-  return `${cores.toFixed(2)}`;
+  return `${cores.toFixed(2)}c`;
 }
 
 function fmtMem(bytes: number): string {
@@ -127,6 +129,64 @@ function SizeBadge({ size }: { size: string | null }) {
   );
 }
 
+function UsageCell({
+  actual,
+  requested,
+  limited,
+  fmt,
+}: {
+  actual: number;
+  requested: number;
+  limited?: number;
+  fmt: (v: number) => string;
+}) {
+  if (requested === 0) {
+    return <span className="font-mono text-xs text-neutral-400">{actual > 0 ? fmt(actual) : "\u2014"}</span>;
+  }
+  const pctReq = (actual / requested) * 100;
+  // Color and bar based on limit % when available; fall back to request %
+  const pctLimit = limited && limited > 0 ? (actual / limited) * 100 : null;
+  const effectivePct = pctLimit ?? pctReq;
+  const isHigh = effectivePct > 80;
+  const isAboveReq = pctReq > 100 && !isHigh; // over request but under limit — normal K8s burstable
+  const isLow = pctReq < 20;
+  const color = isHigh ? "text-red-400" : isAboveReq ? "text-orange-400" : isLow ? "text-amber-400" : "text-emerald-400";
+  const barColor = isHigh ? "bg-red-500" : isAboveReq ? "bg-orange-500" : isLow ? "bg-amber-500" : "bg-emerald-500";
+  const barW = Math.min(effectivePct, 100);
+  const pctDisplay = pctLimit !== null
+    ? (pctLimit < 1 ? "<1%" : `${Math.round(pctLimit)}%`)
+    : (pctReq < 1 ? "<1%" : `${Math.round(pctReq)}%`);
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[72px]">
+      <span className="font-mono text-xs text-neutral-200">{fmt(actual)}</span>
+      <div className="flex items-center gap-1.5">
+        <div className="w-10 h-1 bg-neutral-700 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full ${barColor}`} style={{ width: `${barW}%` }} />
+        </div>
+        <span className={`text-[10px] font-semibold ${color}`}>
+          {pctDisplay}
+          {isLow && " \u26a0"}
+        </span>
+      </div>
+      <span className="text-[10px] text-neutral-600">/ {fmt(requested)} req</span>
+    </div>
+  );
+}
+
+function RestartBadge({ count }: { count: number }) {
+  if (count === 0) return <span className="text-neutral-600 text-xs">{"\u2014"}</span>;
+  const cls =
+    count >= 5
+      ? "text-red-400 bg-red-500/10 border-red-500/20"
+      : "text-yellow-400 bg-yellow-500/10 border-yellow-500/20";
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium ${cls}`}>
+      <RotateCcw className="h-2.5 w-2.5" />
+      {count}
+    </span>
+  );
+}
+
 // ─── Detail Row ───────────────────────────────────────────────────────────────
 
 function DetailRow({ app }: { app: PlatformAppResource }) {
@@ -198,8 +258,19 @@ function DetailRow({ app }: { app: PlatformAppResource }) {
           CPU Usage
         </p>
         <p className="text-sm text-neutral-300 font-mono">
-          {fmtCpu(app.cpuCores)} <span className="text-neutral-500 text-xs">cores</span>
+          {fmtCpu(app.cpuCores)}
+          {app.cpuRequested > 0 && (
+            <span className="text-neutral-500 text-xs"> / {fmtCpu(app.cpuRequested)} req</span>
+          )}
+          {app.cpuLimited > 0 && (
+            <span className="text-neutral-600 text-xs"> ({fmtCpu(app.cpuLimited)} limit)</span>
+          )}
         </p>
+        {app.cpuLimited > 0 && (
+          <p className={`text-xs mt-0.5 ${app.cpuCores / app.cpuLimited > 0.8 ? "text-red-400" : app.cpuCores / app.cpuRequested < 0.2 ? "text-amber-400" : "text-emerald-400"}`}>
+            {Math.round((app.cpuCores / app.cpuLimited) * 100)}% of limit
+          </p>
+        )}
       </div>
 
       {/* Memory */}
@@ -208,7 +279,20 @@ function DetailRow({ app }: { app: PlatformAppResource }) {
           <MemoryStick className="h-3 w-3" />
           Memory Usage
         </p>
-        <p className="text-sm text-neutral-300 font-mono">{fmtMem(app.memoryBytes)}</p>
+        <p className="text-sm text-neutral-300 font-mono">
+          {fmtMem(app.memoryBytes)}
+          {app.memoryRequested > 0 && (
+            <span className="text-neutral-500 text-xs"> / {fmtMem(app.memoryRequested)} req</span>
+          )}
+          {app.memoryLimited > 0 && (
+            <span className="text-neutral-600 text-xs"> ({fmtMem(app.memoryLimited)} limit)</span>
+          )}
+        </p>
+        {app.memoryLimited > 0 && (
+          <p className={`text-xs mt-0.5 ${app.memoryBytes / app.memoryLimited > 0.8 ? "text-red-400" : app.memoryBytes / app.memoryRequested < 0.2 ? "text-amber-400" : "text-emerald-400"}`}>
+            {Math.round((app.memoryBytes / app.memoryLimited) * 100)}% of limit
+          </p>
+        )}
       </div>
 
       {/* Owner */}
@@ -231,6 +315,27 @@ function DetailRow({ app }: { app: PlatformAppResource }) {
         <p className="text-xs text-neutral-500 mb-1">Created</p>
         <p className="text-sm text-neutral-300">{fmtDate(app.created_at)}</p>
       </div>
+
+      {/* Last Deploy */}
+      {app.lastRolloutTime && (
+        <div>
+          <p className="text-xs text-neutral-500 mb-1 flex items-center gap-1">
+            <Activity className="h-3 w-3" />
+            Last Deploy
+          </p>
+          <p className="text-sm text-neutral-300">{fmtDate(app.lastRolloutTime)}</p>
+        </div>
+      )}
+
+      {/* Diagnosis */}
+      {app.inlineDiagnosis && (
+        <div className="sm:col-span-2 lg:col-span-3">
+          <p className="text-xs text-neutral-500 mb-1">Diagnosis</p>
+          <p className="text-xs text-yellow-300/80 bg-yellow-500/5 border border-yellow-500/10 rounded px-2 py-1.5">
+            {app.inlineDiagnosis}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,7 +344,7 @@ function DetailRow({ app }: { app: PlatformAppResource }) {
 
 const REFRESH_INTERVAL = 30_000;
 
-type SortKey = "name" | "cpu" | "memory" | "status";
+type SortKey = "name" | "cpu" | "memory" | "status" | "restarts" | "owner";
 
 export default function PlatformAppsTab() {
   const [apps, setApps] = useState<PlatformAppResource[]>([]);
@@ -302,6 +407,8 @@ export default function PlatformAppsTab() {
       else if (sortKey === "cpu") diff = a.cpuCores - b.cpuCores;
       else if (sortKey === "memory") diff = a.memoryBytes - b.memoryBytes;
       else if (sortKey === "status") diff = a.k8sStatus.localeCompare(b.k8sStatus);
+      else if (sortKey === "restarts") diff = a.totalRestarts - b.totalRestarts;
+      else if (sortKey === "owner") diff = (a.owner_email ?? "").localeCompare(b.owner_email ?? "");
       return sortAsc ? diff : -diff;
     });
 
@@ -319,12 +426,14 @@ export default function PlatformAppsTab() {
     ) : null;
 
   // Summary stats
-  const totalCpu = apps.reduce((s, a) => s + a.cpuCores, 0);
-  const totalMem = apps.reduce((s, a) => s + a.memoryBytes, 0);
   const healthyCount = apps.filter((a) => a.k8sStatus === "healthy").length;
   const unhealthyCount = apps.filter((a) =>
     ["failing", "degraded"].includes(a.k8sStatus),
   ).length;
+  const overProvisionedCount = apps.filter(
+    (a) => a.cpuRequested > 0 && a.cpuCores / a.cpuRequested < 0.2,
+  ).length;
+  const totalRestartCount = apps.reduce((s, a) => s + a.totalRestarts, 0);
 
   return (
     <div className="space-y-4">
@@ -349,34 +458,21 @@ export default function PlatformAppsTab() {
 
       {/* Summary cards */}
       {!loading && apps.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: "Total Apps", value: apps.length.toString(), color: "text-white" },
-            { label: "Healthy", value: healthyCount.toString(), color: "text-emerald-400" },
-            { label: "Unhealthy", value: unhealthyCount.toString(), color: unhealthyCount > 0 ? "text-red-400" : "text-neutral-400" },
-            { label: "Total CPU", value: fmtCpu(totalCpu) + " cores", color: "text-sky-400" },
+            { label: "Total Apps", value: apps.length.toString(), color: "text-white", sub: null },
+            { label: "Healthy", value: healthyCount.toString(), color: "text-emerald-400", sub: null },
+            { label: "Issues", value: unhealthyCount.toString(), color: unhealthyCount > 0 ? "text-red-400" : "text-neutral-400", sub: null },
+            { label: "Not Deployed", value: apps.filter((a) => a.k8sStatus === "not_deployed").length.toString(), color: "text-neutral-400", sub: null },
+            { label: "Over-provisioned", value: overProvisionedCount.toString(), color: overProvisionedCount > 0 ? "text-amber-400" : "text-neutral-400", sub: "CPU < 20% util" },
+            { label: "Total Restarts", value: totalRestartCount.toString(), color: totalRestartCount > 0 ? "text-orange-400" : "text-neutral-400", sub: null },
           ].map((card) => (
             <div key={card.label} className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
               <p className="text-xs text-neutral-500 mb-0.5">{card.label}</p>
               <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+              {card.sub && <p className="text-[10px] text-neutral-600 mt-0.5">{card.sub}</p>}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Second summary row */}
-      {!loading && apps.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
-            <p className="text-xs text-neutral-500 mb-0.5">Total Memory</p>
-            <p className="text-xl font-bold text-purple-400">{fmtMem(totalMem)}</p>
-          </div>
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
-            <p className="text-xs text-neutral-500 mb-0.5">Not Deployed</p>
-            <p className="text-xl font-bold text-neutral-400">
-              {apps.filter((a) => a.k8sStatus === "not_deployed").length}
-            </p>
-          </div>
         </div>
       )}
 
@@ -444,9 +540,15 @@ export default function PlatformAppsTab() {
                 </th>
                 <th
                   className="text-left px-4 py-3 text-xs font-medium text-neutral-400 uppercase tracking-wider cursor-pointer hover:text-neutral-200 select-none"
+                  onClick={() => toggleSort("restarts")}
+                >
+                  Restarts <SortIcon k="restarts" />
+                </th>
+                <th
+                  className="text-left px-4 py-3 text-xs font-medium text-neutral-400 uppercase tracking-wider cursor-pointer hover:text-neutral-200 select-none"
                   onClick={() => toggleSort("status")}
                 >
-                  K8s Status <SortIcon k="status" />
+                  Status <SortIcon k="status" />
                 </th>
                 <th className="px-4 py-3 w-10" />
               </tr>
@@ -454,7 +556,7 @@ export default function PlatformAppsTab() {
             <tbody className="divide-y divide-neutral-800/50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-neutral-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-neutral-500">
                     {apps.length === 0 ? "No platform apps found." : "No apps match your search."}
                   </td>
                 </tr>
@@ -517,18 +619,30 @@ export default function PlatformAppsTab() {
                       </td>
 
                       {/* CPU */}
-                      <td className="px-4 py-3 font-mono text-xs text-neutral-300">
-                        {fmtCpu(app.cpuCores)}
+                      <td className="px-4 py-3">
+                        <UsageCell actual={app.cpuCores} requested={app.cpuRequested} limited={app.cpuLimited} fmt={fmtCpu} />
                       </td>
 
                       {/* Memory */}
-                      <td className="px-4 py-3 font-mono text-xs text-neutral-300">
-                        {fmtMem(app.memoryBytes)}
+                      <td className="px-4 py-3">
+                        <UsageCell actual={app.memoryBytes} requested={app.memoryRequested} limited={app.memoryLimited} fmt={fmtMem} />
+                      </td>
+
+                      {/* Restarts */}
+                      <td className="px-4 py-3">
+                        <RestartBadge count={app.totalRestarts} />
                       </td>
 
                       {/* K8s status */}
                       <td className="px-4 py-3">
-                        <K8sStatusBadge status={app.k8sStatus} />
+                        <div className="flex flex-col gap-1">
+                          <K8sStatusBadge status={app.k8sStatus} />
+                          {app.inlineDiagnosis && (
+                            <span className="text-[10px] text-neutral-500 max-w-[140px] leading-tight">
+                              {app.inlineDiagnosis}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Expand button */}
@@ -550,7 +664,7 @@ export default function PlatformAppsTab() {
                     {/* Expanded detail */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={8} className="px-4 pb-3 pt-0">
+                        <td colSpan={9} className="px-4 pb-3 pt-0">
                           <DetailRow app={app} />
                         </td>
                       </tr>

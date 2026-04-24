@@ -29,6 +29,14 @@ export interface PlatformAppResource {
   // Prometheus
   cpuCores: number;
   memoryBytes: number;
+  // K8s enriched
+  totalRestarts: number;
+  cpuRequested: number;
+  memoryRequested: number;
+  cpuLimited: number;
+  memoryLimited: number;
+  lastRolloutTime: string | null;
+  inlineDiagnosis: string;
 }
 
 export async function GET() {
@@ -53,7 +61,18 @@ export async function GET() {
     // Build a deployment lookup: appName -> { desired, ready, k8sStatus }
     const deploymentMap = new Map<
       string,
-      { desiredReplicas: number; readyReplicas: number; k8sStatus: string }
+      {
+        desiredReplicas: number;
+        readyReplicas: number;
+        k8sStatus: string;
+        totalRestarts: number;
+        cpuRequested: number;
+        memoryRequested: number;
+        cpuLimited: number;
+        memoryLimited: number;
+        lastRolloutTime: string;
+        inlineDiagnosis: string;
+      }
     >();
     for (const d of deploymentList) {
       // Convention: deployment name is "{appName}-app"
@@ -63,6 +82,13 @@ export async function GET() {
           desiredReplicas: d.desiredReplicas,
           readyReplicas: d.readyReplicas,
           k8sStatus: d.status,
+          totalRestarts: d.totalRestarts,
+          cpuRequested: d.cpuRequested,
+          memoryRequested: d.memoryRequested,
+          cpuLimited: d.cpuLimited,
+          memoryLimited: d.memoryLimited,
+          lastRolloutTime: d.lastRolloutTime,
+          inlineDiagnosis: d.inlineDiagnosis,
         });
       }
     }
@@ -104,6 +130,13 @@ export async function GET() {
         k8sStatus: k8s?.k8sStatus ?? "not_deployed",
         cpuCores: appCpu.get(app.name) ?? 0,
         memoryBytes: appMem.get(app.name) ?? 0,
+        totalRestarts: k8s?.totalRestarts ?? 0,
+        cpuRequested: k8s?.cpuRequested ?? 0,
+        memoryRequested: k8s?.memoryRequested ?? 0,
+        cpuLimited: k8s?.cpuLimited ?? 0,
+        memoryLimited: k8s?.memoryLimited ?? 0,
+        lastRolloutTime: k8s?.lastRolloutTime ?? null,
+        inlineDiagnosis: k8s?.inlineDiagnosis ?? "",
       };
     });
 

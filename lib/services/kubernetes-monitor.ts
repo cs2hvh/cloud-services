@@ -118,6 +118,10 @@ export interface DeploymentHealth {
   cpuRequested: number;
   /** Sum of memory requests (bytes) across running/pending pods */
   memoryRequested: number;
+  /** Sum of CPU limits (cores) across running/pending pods */
+  cpuLimited: number;
+  /** Sum of memory limits (bytes) across running/pending pods */
+  memoryLimited: number;
   /** ISO timestamp of last rollout — from Progressing condition lastTransitionTime */
   lastRolloutTime: string;
   /** Pre-computed human-readable failure reason (empty when healthy or progressing) */
@@ -249,6 +253,8 @@ export class KubernetesMonitor {
       // CPU + memory requests from running/pending pods (what K8s uses for scheduling)
       let cpuRequested    = 0;
       let memoryRequested = 0;
+      let cpuLimited      = 0;
+      let memoryLimited   = 0;
       deployPods
         .filter((p) => p.status?.phase === 'Running' || p.status?.phase === 'Pending')
         .forEach((p) => {
@@ -257,6 +263,10 @@ export class KubernetesMonitor {
               cpuRequested    += parseCpuQuantity(c.resources.requests.cpu);
             if (c.resources?.requests?.memory)
               memoryRequested += parseMemoryQuantity(c.resources.requests.memory);
+            if (c.resources?.limits?.cpu)
+              cpuLimited      += parseCpuQuantity(c.resources.limits.cpu);
+            if (c.resources?.limits?.memory)
+              memoryLimited   += parseMemoryQuantity(c.resources.limits.memory);
           });
         });
 
@@ -277,6 +287,8 @@ export class KubernetesMonitor {
         totalRestarts,
         cpuRequested,
         memoryRequested,
+        cpuLimited,
+        memoryLimited,
         lastRolloutTime,
         inlineDiagnosis,
       };
