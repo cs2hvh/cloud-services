@@ -877,12 +877,12 @@ export class PrometheusService {
       cpu: {
         ...cpu,
         requested: totalCpuRequested,
-        requestedPercentage: cpu.total > 0 ? Math.round((totalCpuRequested / cpu.total) * 100) : 0,
+        requestedPercentage: cpu.total > 0 ? Math.min(100, Math.round((totalCpuRequested / cpu.total) * 100)) : 0,
       },
       memory: {
         ...memory,
         requested: totalMemRequested,
-        requestedPercentage: memory.total > 0 ? Math.round((totalMemRequested / memory.total) * 100) : 0,
+        requestedPercentage: memory.total > 0 ? Math.min(100, Math.round((totalMemRequested / memory.total) * 100)) : 0,
       },
       pods: {
         ...pods,

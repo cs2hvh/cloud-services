@@ -236,7 +236,10 @@ export class KubernetesMonitor {
 
       // Match pods to this deployment via selector labels
       const selectorLabels = d.spec?.selector?.matchLabels ?? {};
+      // Guard: if no matchLabels, don't match any pods (Object.entries([]).every() is vacuously true)
+      const hasSelectorLabels = Object.keys(selectorLabels).length > 0;
       const deployPods = allPods.filter((p) => {
+        if (!hasSelectorLabels) return false;
         if (p.metadata?.namespace !== dNs) return false;
         const podLabels = p.metadata?.labels ?? {};
         return Object.entries(selectorLabels).every(([k, v]) => podLabels[k] === v);
