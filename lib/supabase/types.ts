@@ -124,6 +124,9 @@ export type Admin_PlatformApp = {
   owner_username: string | null;
   created_at: string | null;
   project_id: string | null;
+  size: string | null;
+  deployment_url: string | null;
+  ip: string | null;
 }
 
 // User-facing platform app type (without admin fields)

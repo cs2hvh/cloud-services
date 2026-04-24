@@ -333,6 +333,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     { name: "Object Storage", href: "/dashboard/admin/object-storage", current: pathname === "/dashboard/admin/object-storage" || pathname.startsWith("/dashboard/admin/object-storage/"), icon: Archive },
     { name: "Network DDoS", href: "/dashboard/admin/network-ddos", current: pathname === "/dashboard/admin/network-ddos" || pathname.startsWith("/dashboard/admin/network-ddos/"), icon: Shield },
     { name: "Kubernetes", href: "/dashboard/admin/kubernetes", current: pathname === "/dashboard/admin/kubernetes" || pathname.startsWith("/dashboard/admin/kubernetes/"), icon: Box },
+    { name: "Cluster Monitor", href: "/dashboard/admin/cluster-monitor", current: pathname === "/dashboard/admin/cluster-monitor" || pathname.startsWith("/dashboard/admin/cluster-monitor/"), icon: Activity },
     { name: "Platform Apps", href: "/dashboard/admin/platform-apps", current: pathname === "/dashboard/admin/platform-apps" || pathname.startsWith("/dashboard/admin/platform-apps/"), icon: Rocket },
     { name: "Coupons", href: "/dashboard/admin/coupons", current: pathname === "/dashboard/admin/coupons" || pathname.startsWith("/dashboard/admin/coupons/"), icon: Ticket },
     { name: "Audit Logs", href: "/dashboard/admin/audit-logs", current: pathname === "/dashboard/admin/audit-logs" || pathname.startsWith("/dashboard/admin/audit-logs/"), icon: ShieldCheck },

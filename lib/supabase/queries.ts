@@ -2888,7 +2888,10 @@ export const Platform_Apps = {
           auto_deploy,
           user_id,
           created_at,
-          project_id
+          project_id,
+          size,
+          deployment_url,
+          ip
         `)
         .order("created_at", { ascending: false });
 
@@ -2948,6 +2951,9 @@ export const Platform_Apps = {
             owner_username: usernameMap.get(app.user_id ?? "") ?? null,
             created_at: app.created_at ?? null,
             project_id: app.project_id ?? null,
+            size: (app as Record<string, unknown>).size as string | null ?? null,
+            deployment_url: (app as Record<string, unknown>).deployment_url as string | null ?? null,
+            ip: (app as Record<string, unknown>).ip as string | null ?? null,
           } as Admin_PlatformApp;
         })
         .filter((item): item is Admin_PlatformApp => Boolean(item));
