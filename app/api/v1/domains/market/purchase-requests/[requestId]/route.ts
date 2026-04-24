@@ -1,5 +1,6 @@
 import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { withV1Auth, v1Ok } from "@/lib/api/v1-middleware";
+import { resolveAuthEmail } from "@/lib/api-auth";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor } from "@/lib/domain-service/http/request-context";
@@ -17,7 +18,7 @@ export const GET = withV1Auth(
         actor: createDomainActor({
           req,
           userId: auth.userId,
-          userEmail: auth.kind === "session" ? auth.email : undefined,
+          userEmail: await resolveAuthEmail(auth),
         }),
         requestId: idResult.id,
       });

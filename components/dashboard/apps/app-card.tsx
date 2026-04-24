@@ -38,6 +38,7 @@ import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
 import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
 import { AppStatusBadge } from './app-status-badge';
+import { BuildLogsPanel } from './build-logs';
 
 interface AppCardProps {
   app: App;
@@ -388,59 +389,16 @@ export function AppCard({
           <div className="p-4 bg-black/50">
             {activeTab === 'logs' ? (
               /* Build Logs Tab */
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold text-white/70 flex items-center">
-                    <Terminal className="w-3 h-3 mr-1.5" />
-                    Build Logs {build && `#${build.number}`}
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => copyToClipboard(logs || '', 'logs')}
-                      className="h-6 px-2 text-white/50 hover:text-white hover:bg-white/10"
-                      title="Copy logs"
-                    >
-                      {copiedField === 'logs' ? (
-                        <Check className="w-3 h-3 text-green-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </Button>
-                    {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-                  </div>
-                </div>
-                  <div className="bg-[#0c0c0c] rounded border border-white/5 font-mono text-xs">
-                    <pre className="p-3 text-white/70 overflow-auto max-h-96 whitespace-pre w-full [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
-                      {logsLoading ? (
-                        <div className="flex items-center gap-2 text-white/50 italic">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Loading build logs...
-                        </div>
-                      ) : logsError ? (
-                        <div className="text-red-400">
-                          <div className="flex items-center gap-2 mb-2">
-                            <AlertTriangle className="w-4 h-4" />
-                            {logsError}
-                          </div>
-                          {build && (
-                            <button
-                              onClick={() => onFetchLogs(build.number)}
-                              className="text-xs text-blue-400 hover:text-blue-300 underline"
-                            >
-                              Click to retry
-                            </button>
-                          )}
-                        </div>
-                      ) : logs ? (
-                        logs
-                      ) : (
-                        <span className="text-white/30 italic">No logs available</span>
-                      )}
-                    </pre>
-                  </div>
-              </div>
+              <BuildLogsPanel
+                buildInfo={build ?? null}
+                buildLogs={logs ?? ''}
+                initialLoading={!!logsLoading}
+                appName={app.name}
+                fetchBuildLogs={(_, buildNumber) => {
+                  onFetchLogs(buildNumber);
+                  return Promise.resolve();
+                }}
+              />
             ) : (
               /* Metrics Tab */
               <div>

@@ -221,6 +221,7 @@ function SingleCluster({
   const alertedRef = useRef(false);
   const dropletStartRef = useRef(false);
   const dropletFailureHandledRef = useRef(false);
+  const readyStatusSyncRef = useRef(false);
   const router = useRouter();
 
   // Handler to open node delete confirmation dialog
@@ -586,6 +587,24 @@ function SingleCluster({
         data.createStatus &&
         data.verifyStatus
       ) {
+        if (data.clusterInfo?.status !== "ready" && !readyStatusSyncRef.current) {
+          readyStatusSyncRef.current = true;
+          try {
+            await fetch("/api/services/kubernetes/clusters/update-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                cluster_id: clusterId,
+                status: "ready",
+              }),
+            });
+            setClusterLifecycleStatus("ready");
+          } catch (readyStatusErr) {
+            console.error("[pollOnce] Failed to sync ready status:", readyStatusErr);
+            readyStatusSyncRef.current = false;
+          }
+        }
+
         setClusterData(data as CheckStatus);
         const workers = data?.clusterInfo?.workers ?? [];
         const controlPlane = data?.clusterInfo?.control_plane;

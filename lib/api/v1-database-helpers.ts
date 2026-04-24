@@ -88,6 +88,8 @@ export function v1DatabaseServiceError(
       });
     case "DIGITALOCEAN_API_ERROR":
       return v1Error("INVALID_PARAMETER", 400, message);
+    case "UNSUPPORTED_OPERATION":
+      return v1Error("UNSUPPORTED_OPERATION", 422, message);
     case "POST_PROVISION_BILLING_FAILED":
     case "SUPABASE_INSERT_FAILED":
     case "SUPABASE_DELETE_FAILED":

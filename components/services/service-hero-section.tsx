@@ -134,7 +134,7 @@ export function ServiceHeroSection({
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden bg-[#0E0F0F] ",
+        "relative w-full overflow-x-hidden ",
         "min-h-screen flex flex-col",
         className,
       )}

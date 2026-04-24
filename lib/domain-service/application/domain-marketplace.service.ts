@@ -185,14 +185,10 @@ export class DomainMarketplaceService {
       await this.appRead.getOwnedApp(input.appId, input.actor.userId);
     }
 
-    const existingByDomain = await this.purchaseRequests.findLatestByDomain({
-      userId: input.actor.userId,
-      domain: cleanDomain,
-    });
-    if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
-      return toPublicPurchaseRequest(existingByDomain);
-    }
-
+    // Check idempotency key FIRST — if the same key was already used for this
+    // exact payload, return the existing request immediately without checking
+    // domain availability or ownership again. This ensures clients get a stable
+    // response on retry even after the first request completed.
     if (input.idempotencyKey) {
       const existing = await this.purchaseRequests.findByIdempotencyKey(
         input.actor.userId,
@@ -211,6 +207,18 @@ export class DomainMarketplaceService {
         }
         return toPublicPurchaseRequest(existing);
       }
+    }
+
+    const existingByDomain = await this.purchaseRequests.findLatestByDomain({
+      userId: input.actor.userId,
+      domain: cleanDomain,
+    });
+    if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+        message: `A purchase request for "${cleanDomain}" already exists with status: ${existingByDomain.status}`,
+        details: { request_id: existingByDomain.id, status: existingByDomain.status, domain: cleanDomain },
+      });
     }
 
     const check = await this.registrar.checkAvailability([cleanDomain]);
@@ -355,6 +363,47 @@ export class DomainMarketplaceService {
       status: "completed",
       providerRequestId: purchase.order ? String(purchase.order) : null,
       lastError: null,
+    });
+
+    // Store expiry date from Name.com in metadata so the renewal cron can find
+    // domains approaching expiry without making live API calls per domain.
+    // Also flag renewal_charged: false so the cron knows it hasn't billed yet.
+    // Fire-and-forget — failure here does not affect the purchase result.
+    const purchaseDomain = (purchase as { domain?: { expireDate?: string; renewalPrice?: number } }).domain;
+    const expiresAt = purchaseDomain?.expireDate ?? null;
+    // Name.com confirms the authoritative renewal price in the purchase response.
+    // Prefer this over the availability-check estimate (they can differ for premium domains).
+    const purchaseRenewalPrice = purchaseDomain?.renewalPrice ?? null;
+    this.emitNonBlocking(async () => {
+      try {
+        // If the purchase response didn't include expireDate, fetch it via getDomain.
+        // NameComApiService exposes getDomain() but not getDomainSummary(), so we
+        // duck-type against the method that is actually present on the service.
+        type WithGetDomain = { getDomain?: (d: string) => Promise<{ expireDate?: string; renewalPrice?: number } | null> };
+        const fetchedDomain = expiresAt == null
+          ? await (this.registrar as unknown as WithGetDomain).getDomain?.(cleanDomain)
+          : null;
+        const resolvedExpiresAt = expiresAt ?? fetchedDomain?.expireDate ?? null;
+        // Use the authoritative renewal price from purchase → fallback to getDomain → fallback to availability check
+        const resolvedRenewalPrice = purchaseRenewalPrice ?? fetchedDomain?.renewalPrice ?? first.renewalPrice ?? null;
+        await this.purchaseRequests.updateStatus({
+          requestId: request.id,
+          status: "completed",
+          metadata: {
+            expires_at: resolvedExpiresAt,
+            renewal_charged: false,
+            renewal_price: resolvedRenewalPrice,
+            // Store the initial auto-renew state explicitly so the cron and PATCH
+            // registrar routes always have a concrete value to read and merge.
+            autorenew_enabled: true,
+          },
+        });
+      } catch (err) {
+        console.warn("[DomainMarketplace] Failed to store expires_at in metadata (non-fatal)", {
+          domain: cleanDomain,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     });
 
     // After a successful purchase the name.com account-level contacts are used as

@@ -217,6 +217,8 @@ export async function POST(req: NextRequest) {
           appId: app.id,
           appName: app.name,
           buildNumber,
+          userId: auth.user!.id,
+          userEmail: auth.user!.email,
           trigger: 'manual',
         });
       } catch (pollingError) {

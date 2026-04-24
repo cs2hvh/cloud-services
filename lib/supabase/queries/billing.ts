@@ -111,13 +111,15 @@ type BillingTransactionType =
   | "coupon"
   | "recurring"
   | "setup"
-  | "usage";
+  | "usage"
+  | "purchase";
 type BillableServiceType =
   | "database"
   | "kubernetes"
   | "objectspace"
   | "spectrum"
-  | "platform_apps";
+  | "platform_apps"
+  | "domain";
 
 type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
@@ -131,6 +133,7 @@ const LEGACY_TRANSACTION_TYPES = new Set<BillingTransactionType>([
 const SERVICE_LEDGER_TRANSACTION_TYPES = new Set<BillingTransactionType>([
   "setup",
   "usage",
+  "purchase",
 ]);
 
 let transactionHistoryMode: TransactionHistoryMode = "unknown";
@@ -1338,13 +1341,13 @@ export const Billing = {
       }
       if (
         opts?.type &&
-        ["topup", "refund", "coupon", "recurring", "setup", "usage"].includes(opts.type)
+        ["topup", "refund", "coupon", "recurring", "setup", "usage", "purchase"].includes(opts.type)
       ) {
         nextQuery = nextQuery.eq("type", opts.type);
       }
       if (
         opts?.serviceType &&
-        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps"].includes(opts.serviceType)
+        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain"].includes(opts.serviceType)
       ) {
         nextQuery = nextQuery.eq("service_type", opts.serviceType);
       }

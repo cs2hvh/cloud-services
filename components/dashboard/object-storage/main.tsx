@@ -37,7 +37,7 @@ function MetricCard({
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -98,25 +98,25 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           label="Buckets"
           value={stats.totalBuckets}
           meta="Provisioned object storage buckets"
-          iconSrc="/dashboard icons/buckets .png"
+          iconSrc="/dashboard-icons/buckets.png"
         />
         <MetricCard
           label="Active"
           value={stats.activeBuckets}
           meta="Buckets currently available for traffic"
-          iconSrc="/dashboard icons/active _1.png"
+          iconSrc="/dashboard-icons/active-1.png"
         />
         <MetricCard
           label="Public Access"
           value={stats.publicBuckets}
           meta="Buckets with public read access"
-          iconSrc="/dashboard icons/public acess .png"
+          iconSrc="/dashboard-icons/public-acess.png"
         />
         <MetricCard
           label="Versioning"
           value={stats.versionedBuckets}
           meta="Buckets with object versioning enabled"
-          iconSrc="/dashboard icons/versioning .png"
+          iconSrc="/dashboard-icons/versioning.png"
         />
       </motion.div>
 

@@ -1,12 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { NotificationService } from "@/lib/notifications";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
+import { getRatesForKubernetesExisting } from "@/config/pricing";
+import { postProvisionBilling } from "@/config/billing-flow";
+import { Billing } from "@/lib/supabase/queries/billing";
+
+async function activateKubernetesBillingOnReady(params: {
+  clusterId: string;
+  ownerId: string;
+  nodeConfig?: unknown;
+  workers?: unknown;
+  controlPlane?: unknown;
+}) {
+  const supabase = await createServiceClient();
+
+  const { data: activeRow, error: activeRowError } = await supabase
+    .schema("billing")
+    .from("active_kubernetes")
+    .select("service_id")
+    .eq("service_id", params.clusterId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (activeRowError) {
+    throw new Error(`Failed to check active kubernetes billing: ${activeRowError.message}`);
+  }
+
+  if (activeRow?.service_id) {
+    return { activated: false, alreadyActive: true };
+  }
+
+  const nodeConfig = (params.nodeConfig ?? null) as Record<string, unknown> | null;
+  const provisionConfig = (nodeConfig?.provision_config ?? null) as Record<string, unknown> | null;
+  const planId = typeof provisionConfig?.plan_id === "string" ? provisionConfig.plan_id : null;
+
+  if (!planId) {
+    throw new Error("Missing plan_id in cluster node configuration");
+  }
+
+  const workerCount = Array.isArray(params.workers) ? params.workers.length : 0;
+  const hasControlPlane = Boolean(params.controlPlane);
+  const configuredNodeCount =
+    typeof provisionConfig?.node_count === "number" ? Number(provisionConfig.node_count) : null;
+
+  const totalNodes = Math.max(
+    hasControlPlane ? workerCount + 1 : workerCount,
+    configuredNodeCount !== null ? configuredNodeCount + 1 : 1
+  );
+
+  const { initialCost, hourlyRate } = await getRatesForKubernetesExisting(planId, totalNodes);
+
+  await postProvisionBilling({
+    userId: params.ownerId,
+    initialCost,
+    hourlyRate,
+    serviceId: params.clusterId,
+    serviceType: "kubernetes",
+    addActive: Billing.add_active_kubernetes,
+  });
+
+  return { activated: true, alreadyActive: false };
+}
 
 export async function POST(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
     return auth.response;
@@ -21,29 +80,21 @@ export async function POST(req: NextRequest) {
     };
 
     if (!cluster_id) {
-      return NextResponse.json(
-        { error: "cluster_id is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "cluster_id is required" }, { status: 400 });
     }
 
     const supabase = await createServiceClient();
 
-    // Get current cluster data
     const { data: cluster, error: fetchError } = await supabase
       .from("clusters")
-      .select("cluster_id, status, owner_id, create_droplet, project_id, cluster_name")
+      .select("cluster_id, status, owner_id, create_droplet, project_id, cluster_name, node_config, workers, control_plane")
       .eq("cluster_id", cluster_id)
       .single();
 
     if (fetchError || !cluster) {
-      return NextResponse.json(
-        { error: "Cluster not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Cluster not found" }, { status: 404 });
     }
 
-    // Update cluster status fields if provided
     if (status || typeof create_droplet === "boolean") {
       const updatePayload: Record<string, unknown> = {};
       if (status) updatePayload.status = status;
@@ -58,39 +109,51 @@ export async function POST(req: NextRequest) {
 
       if (updateError) {
         console.error("[updateClusterStatus] Update failed:", updateError.message);
-        return NextResponse.json(
-          { error: "Failed to update cluster status" },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to update cluster status" }, { status: 500 });
       }
 
-      // If status changed to "ready", create notification
       if (status === "ready" && cluster.status !== "ready") {
-        // Add activity log
+        try {
+          const billingState = await activateKubernetesBillingOnReady({
+            clusterId: cluster_id,
+            ownerId: cluster.owner_id,
+            nodeConfig: cluster.node_config,
+            workers: cluster.workers,
+            controlPlane: cluster.control_plane,
+          });
+
+          if (billingState.alreadyActive) {
+            console.log(`[updateClusterStatus] Active kubernetes billing already exists for ${cluster_id}`);
+          } else {
+            console.log(`[updateClusterStatus] Kubernetes billing activated for ${cluster_id}`);
+          }
+        } catch (billingErr) {
+          console.error("[updateClusterStatus] Failed to activate kubernetes billing:", billingErr);
+        }
+
         if (cluster.project_id) {
           await Projects.add_log({
             project_id: cluster.project_id,
             event: "CheckCircle",
-            text: `Kubernetes cluster '${cluster.cluster_name}' is ready`
+            text: `Kubernetes cluster '${cluster.cluster_name}' is ready`,
           });
-          console.log(`[updateClusterStatus] ✅ Activity log added for cluster ready`);
+          console.log("[updateClusterStatus] Activity log added for cluster ready");
         }
 
-        // Create notification
         try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: cluster.owner_id,
-              type: 'success',
-              action: 'deployed',
-              serviceType: 'kubernetes',
-              serviceName: cluster.cluster_name,
-              serviceId: cluster_id,
-            })
-          );
-          console.log(`[updateClusterStatus] ✅ Notification sent for cluster ready`);
+          await NotificationService.create({
+            user_id: cluster.owner_id,
+            type: "success",
+            title: "Kubernetes Cluster Ready",
+            message: `Kubernetes cluster ${cluster.cluster_name} is ready.`,
+            service_type: "kubernetes",
+            service_id: cluster_id,
+            action: "deployed",
+            metadata: { serviceName: cluster.cluster_name },
+          });
+          console.log("[updateClusterStatus] Notification sent for cluster ready");
         } catch (notifErr) {
-          console.error('[updateClusterStatus] Failed to create notification:', notifErr);
+          console.error("[updateClusterStatus] Failed to create notification:", notifErr);
         }
       }
     }
@@ -99,7 +162,7 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         message: "Cluster status updated successfully",
-        status: status || cluster.status
+        status: status || cluster.status,
       },
       { status: 200 }
     );

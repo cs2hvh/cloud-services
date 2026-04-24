@@ -30,13 +30,17 @@ const ProfileSettings: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const labelClassName =
+    "text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45";
+  const inputClassName =
+    "h-10 border-white/10 bg-white/[0.03] text-white placeholder:text-white/35 focus-visible:ring-1 focus-visible:ring-blue-500/40";
+  const iconInputClassName = `${inputClassName} pl-9`;
 
   // ✅ Fetch user data (example API call)
   useEffect(() => {
     async function fetchProfile() {
       try {
         const res = await api.get("/auth/profile/read");
-        console.log(res?.data, "....res?.data?..");
         if (res.status != 200) throw new Error("Failed to load profile");
         const data: UserProfile = res?.data;
         setProfile(data);
@@ -102,7 +106,7 @@ const ProfileSettings: React.FC = () => {
       <motion.h2 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-2xl font-semibold"
+        className="text-2xl font-semibold text-white"
       >
         Profile Settings
       </motion.h2>
@@ -114,7 +118,7 @@ const ProfileSettings: React.FC = () => {
         transition={{ delay: 0.1 }}
         className="flex flex-col gap-2"
       >
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email" className={labelClassName}>Email</Label>
         <div className="relative">
           <Input
             id="email"
@@ -123,9 +127,9 @@ const ProfileSettings: React.FC = () => {
             value={profile.email}
             onChange={handleChange}
             placeholder="you@example.com"
-            className="pl-9"
+            className={iconInputClassName}
           />
-          <Mail className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+          <Mail className="absolute left-2 top-3 h-4 w-4 text-white/35" />
         </div>
       </motion.div>
 
@@ -136,7 +140,7 @@ const ProfileSettings: React.FC = () => {
         transition={{ delay: 0.2 }}
         className="flex flex-col gap-2"
       >
-        <Label htmlFor="username">Username</Label>
+        <Label htmlFor="userName" className={labelClassName}>Username</Label>
         <div className="relative">
           <Input
             id="userName"
@@ -145,9 +149,9 @@ const ProfileSettings: React.FC = () => {
             value={profile.userName}
             onChange={handleChange}
             placeholder="userName"
-            className="pl-9"
+            className={iconInputClassName}
           />
-          <User className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+          <User className="absolute left-2 top-3 h-4 w-4 text-white/35" />
         </div>
       </motion.div>
 
@@ -158,7 +162,7 @@ const ProfileSettings: React.FC = () => {
         transition={{ delay: 0.3 }}
         className="flex flex-col gap-2"
       >
-        <Label htmlFor="displayName">Display Name</Label>
+        <Label htmlFor="displayName" className={labelClassName}>Display Name</Label>
         <Input
           id="displayName"
           type="text"
@@ -166,6 +170,7 @@ const ProfileSettings: React.FC = () => {
           value={profile.displayName}
           onChange={handleChange}
           placeholder="Display name"
+          className={inputClassName}
         />
       </motion.div>
 
@@ -176,7 +181,7 @@ const ProfileSettings: React.FC = () => {
         transition={{ delay: 0.4 }}
         className="flex flex-col gap-2"
       >
-        <Label htmlFor="phone">Phone</Label>
+        <Label htmlFor="phone" className={labelClassName}>Phone</Label>
         <div className="relative">
           <Input
             id="phone"
@@ -185,9 +190,9 @@ const ProfileSettings: React.FC = () => {
             value={profile.phone}
             onChange={handleChange}
             placeholder="+1 123 456 7890"
-            className="pl-9"
+            className={iconInputClassName}
           />
-          <Phone className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+          <Phone className="absolute left-2 top-3 h-4 w-4 text-white/35" />
         </div>
       </motion.div>
 
@@ -196,10 +201,12 @@ const ProfileSettings: React.FC = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
+        className="flex"
       >
         <Button 
           variant="outline" 
-          className="w-full" 
+          size="sm"
+          className="cursor-pointer border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" 
           type="button" 
           onClick={() => setPasswordDialogOpen(true)}
         >
@@ -213,10 +220,12 @@ const ProfileSettings: React.FC = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
+        className="flex"
       >
         <Button 
           variant="outline" 
-          className="w-full" 
+          size="sm"
+          className="cursor-pointer border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" 
           type="button" 
           onClick={handleResetPasswordByEmail}
         >
@@ -242,9 +251,14 @@ const ProfileSettings: React.FC = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
-        className="pt-4"
+        className="pt-4 flex"
       >
-        <Button onClick={handleUpdate} disabled={loading} className="w-full">
+        <Button
+          onClick={handleUpdate}
+          disabled={loading}
+          size="sm"
+          className="cursor-pointer bg-white text-black hover:bg-white/90"
+        >
           {loading ? "Updating..." : "Update Profile"}
         </Button>
       </motion.div>

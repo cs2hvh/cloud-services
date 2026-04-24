@@ -124,6 +124,14 @@ export class AppRuntimeMutationService {
     imageDigest?: string | null;
     idempotencyKey?: string | null;
     executor: () => Promise<void>;
+    /** HTTP request context forwarded from the API layer for audit logging. */
+    auditContext?: {
+      userId: string;
+      userEmail?: string;
+      ipAddress?: string;
+      userAgent?: string;
+      requestId?: string;
+    };
   }): Promise<AppOperationResult> {
     if (params.idempotencyKey) {
       const existing = await this.deployments.findByIdempotencyKey(
@@ -276,6 +284,60 @@ export class AppRuntimeMutationService {
       logger.info("Rollback applied", {
         active_deployment_id: params.targetDeploymentId,
       });
+
+      // Fire-and-forget audit + notification (service layer owns observability for rollback).
+      if (params.auditContext?.userId) {
+        const ctx = params.auditContext;
+        void (async () => {
+          try {
+            const { AuditLogService } = await import('@/lib/audit');
+            await AuditLogService.create({
+              user_id: ctx.userId,
+              user_role: 'user',
+              ...(ctx.userEmail ? { user_email: ctx.userEmail } : {}),
+              action: 'update',
+              service_type: 'platform_apps',
+              service_id: params.appId,
+              service_name: params.appName,
+              after_state: { active_deployment_id: params.targetDeploymentId } as Record<string, unknown>,
+              ip_address: ctx.ipAddress ?? 'unknown',
+              user_agent: ctx.userAgent ?? 'unknown',
+              request_id: ctx.requestId ?? crypto.randomUUID(),
+              metadata: {
+                operation: 'rollback',
+                rolled_back_to_deployment: params.targetDeploymentId,
+                rolled_back_to_build: params.rollbackTargetBuildNumber,
+                previous_deployment: params.activeDeploymentId ?? null,
+                image: params.imageRef,
+                operation_id: updated.id,
+              },
+            });
+          } catch (err) {
+            this.logger.warn('[Rollback] Audit log failed', { error: err instanceof Error ? err.message : String(err) });
+          }
+        })();
+
+        void (async () => {
+          try {
+            const { NotificationService, createServiceNotification } = await import('@/lib/notifications');
+            await NotificationService.create(
+              createServiceNotification({
+                userId: ctx.userId,
+                serviceType: 'platform_app',
+                action: 'deployed',
+                serviceName: params.appName,
+                serviceId: params.appId,
+                metadata: {
+                  rolled_back_to_build: params.rollbackTargetBuildNumber,
+                  image: params.imageRef,
+                },
+              })
+            );
+          } catch (err) {
+            this.logger.warn('[Rollback] Notification failed', { error: err instanceof Error ? err.message : String(err) });
+          }
+        })();
+      }
 
       return {
         operation: updated,

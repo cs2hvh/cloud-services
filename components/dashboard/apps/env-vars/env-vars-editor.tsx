@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 
 import {
   type EnvVar,
@@ -157,14 +157,14 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars, onReveal, 
     }
   };
 
-  const copyAll = () => {
-    // Only copy revealed values; masked vars emit KEY= (empty) to avoid exporting ••••••
-    const text = vars
-      .filter(e => e.key)
-      .map(e => `${e.key}=${e.revealed ? e.value : ''}`)
-      .join('\n');
-    copyToClipboard(text, 'all variables');
-  };
+  // const copyAll = () => {
+  //   // Only copy revealed values; masked vars emit KEY= (empty) to avoid exporting ••••••
+  //   const text = vars
+  //     .filter(e => e.key)
+  //     .map(e => `${e.key}=${e.revealed ? e.value : ''}`)
+  //     .join('\n');
+  //   copyToClipboard(text, 'all variables');
+  // };
 
   const copyRow = (env: IndexedEnvVar) =>
     copyToClipboard(`${env.key}=${env.revealed ? env.value : ''}`, env.key);

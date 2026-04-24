@@ -24,6 +24,7 @@ export const DatabaseIcon = ({ engine, className = "h-8 w-8" }: DatabaseIconProp
           width={20}
           height={20}
           className="object-contain"
+          unoptimized
         />
       </div>
     );
@@ -52,6 +53,7 @@ export const DatabaseIcon = ({ engine, className = "h-8 w-8" }: DatabaseIconProp
           width={20}
           height={20}
            className="object-contain"
+           unoptimized
         />
       </div>
     );
@@ -76,6 +78,7 @@ export const DatabaseIcon = ({ engine, className = "h-8 w-8" }: DatabaseIconProp
           width={20}
           height={20}
            className="text-white"
+           unoptimized
         />
       </div>
     );

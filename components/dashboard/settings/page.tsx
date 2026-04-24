@@ -77,7 +77,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4 [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

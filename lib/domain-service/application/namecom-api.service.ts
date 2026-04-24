@@ -64,7 +64,17 @@ export class NameComApiService implements DomainMarketplaceRegistrarPort {
     input: NameComCreateDomainInput,
     options?: { idempotencyKey?: string }
   ): Promise<NameComCreateDomainResponse> {
-    return this.client.createDomain(input, options);
+    const result = await this.client.createDomain(input, options);
+    // Enable auto-renew immediately after purchase so the domain never silently
+    // expires. Name.com handles the actual renewal — no cron job needed for this.
+    // Fire-and-forget: a failure here is non-fatal (domain is already purchased).
+    this.client.updateDomain(input.domainName, { autorenewEnabled: true }).catch((err: unknown) => {
+      console.warn("[NameComApiService] Failed to enable auto-renew after purchase:", {
+        domain: input.domainName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    return result;
   }
 
   async setRegistrantContact(

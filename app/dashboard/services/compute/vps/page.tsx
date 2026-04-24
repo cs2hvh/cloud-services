@@ -12,7 +12,7 @@ import {
   Loader2,
   Plus,
   RotateCw,
-  Server,
+  // Server,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -215,6 +215,7 @@ export default function VPSPage() {
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[210px] xl:w-[210px]"
             priority
+            unoptimized
           />
         </div>
       </motion.div>
@@ -227,10 +228,10 @@ export default function VPSPage() {
         className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4"
       >
         {[
-          { label: 'Fleet Size',    value: servers.length,                          sub: 'Total instances',   icon: '/dashboard icons/total clusters _1.png' },
-          { label: 'Healthy',       value: runningCount,                            sub: 'Currently running', icon: '/dashboard icons/healthy .png' },
-          { label: 'Provisioning',  value: provisioningCount,                       sub: 'In progress',       icon: '/dashboard icons/active builds.png' },
-          { label: 'Est. Monthly',  value: `$${estimatedMonthlySpend.toFixed(2)}`,  sub: 'Hourly pricing',    icon: '/dashboard icons/payment .png' },
+          { label: 'Fleet Size',    value: servers.length,                          sub: 'Total instances',   icon: '/dashboard-icons/total-clusters-1.png' },
+          { label: 'Healthy',       value: runningCount,                            sub: 'Currently running', icon: '/dashboard-icons/healthy.png' },
+          { label: 'Provisioning',  value: provisioningCount,                       sub: 'In progress',       icon: '/dashboard-icons/active-builds.png' },
+          { label: 'Est. Monthly',  value: `$${estimatedMonthlySpend.toFixed(2)}`,  sub: 'Hourly pricing',    icon: '/dashboard-icons/payment.png' },
         ].map((stat) => (
           <div key={stat.label} className="glass-panel p-5">
             <div className="flex items-start justify-between gap-4">
@@ -362,17 +363,17 @@ export default function VPSPage() {
                       {/* Resources */}
                       <div className="flex items-center gap-3 text-xs text-white/50">
                         <span className="flex items-center gap-1.5">
-                          <Image src="/dashboard icons/cpu .png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50" />
+                          <Image src="/dashboard-icons/cpu.png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50"  unoptimized />
                           {server.cpu_cores} cores
                         </span>
                         <span className="text-white/15">·</span>
                         <span className="flex items-center gap-1.5">
-                          <Image src="/dashboard icons/ram .png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50" />
+                          <Image src="/dashboard-icons/ram.png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50"  unoptimized />
                           {memGB} GB
                         </span>
                         <span className="text-white/15">·</span>
                         <span className="flex items-center gap-1.5">
-                          <Image src="/dashboard icons/storage .png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50" />
+                          <Image src="/dashboard-icons/storage.png" alt="" width={12} height={12} className="h-3 w-3 object-contain opacity-50"  unoptimized />
                           {server.disk_gb} GB
                         </span>
                       </div>
@@ -402,6 +403,7 @@ export default function VPSPage() {
                 width={120}
                 height={120}
                 className="mb-5 h-28 w-28 object-contain opacity-60"
+                unoptimized
               />
               <h3 className="mb-2 text-lg font-semibold text-white">No servers yet</h3>
               <p className="mb-6 max-w-sm text-sm text-white/40">

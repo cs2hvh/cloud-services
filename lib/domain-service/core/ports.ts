@@ -53,8 +53,18 @@ export interface DomainMarketplaceRegistrarPort {
   ): Promise<void>;
 }
 
+export interface RegistrarSettings {
+  autorenewEnabled: boolean | null;
+  locked: boolean | null;
+  privacyEnabled: boolean | null;
+  expireDate: string | null;
+}
+
 export interface DomainRegistrarPort {
   getDomainSummary(domainName: string): Promise<{ domainName: string; expiresAt?: string; createdAt?: string } | null>;
+  resolveZone(fqdn: string): Promise<{ zone: string; host: string } | null>;
+  getRegistrarSettings(zone: string): Promise<RegistrarSettings>;
+  updateRegistrarSettings(zone: string, updates: { autorenewEnabled?: boolean; locked?: boolean; privacyEnabled?: boolean }): Promise<RegistrarSettings>;
 }
 
 export interface DnsProviderPort {
@@ -102,7 +112,7 @@ export interface DnsRoutingPort {
 }
 
 export interface DomainRepositoryPort {
-  listByApp(appId: string, userId: string): Promise<DomainRecord[]>;
+  listByApp(appId: string | undefined, userId: string): Promise<DomainRecord[]>;
   findByIdForUser(domainId: string, userId: string): Promise<DomainRecord | null>;
   findActiveByDomain(domain: string): Promise<DomainRecord | null>;
   createPending(params: {
@@ -186,6 +196,8 @@ export interface DomainPurchaseRequestRepositoryPort {
     providerRequestId?: string | null;
     lastError?: string | null;
     registrantEmail?: string | null;
+    /** Shallow-merged into the existing metadata JSONB column. */
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 }
 
@@ -204,6 +216,13 @@ export interface DomainBillingPort {
     amount: number;
     currency: string;
     reason: string;
+  }): Promise<void>;
+  chargeRenewal(params: {
+    userId: string;
+    purchaseRequestId: string;
+    domain: string;
+    amount: number;
+    currency: string;
   }): Promise<void>;
 }
 

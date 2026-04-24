@@ -1,4 +1,5 @@
 import { withV1Auth, v1Ok, v1ValidationError } from "@/lib/api/v1-middleware";
+import { resolveAuthEmail } from "@/lib/api-auth";
 import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { getDomainService } from "@/lib/domain-service";
 import { VerifyDomainRequestSchema } from "@/lib/domain-service/contracts/schemas";
@@ -26,7 +27,7 @@ export const POST = withV1Auth("domains:verify", async (req, auth, context) => {
     const actor = createDomainActor({
       req,
       userId: auth.userId,
-      userEmail: auth.kind === "session" ? auth.email : undefined,
+      userEmail: await resolveAuthEmail(auth),
     });
 
     const domain = await service.verifyDomain({

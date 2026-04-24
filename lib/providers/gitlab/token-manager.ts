@@ -13,7 +13,7 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
-import { AuditLogService, createAuditContext } from '@/lib/audit';
+// import { AuditLogService, createAuditContext } from '@/lib/audit';
 import { encryptOAuthToken } from '@/lib/security/token-crypto';
 import { getValidGitLabToken } from '@/lib/gitlab/token-refresh';
 

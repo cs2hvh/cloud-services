@@ -12,6 +12,7 @@ import {
   Search,
   X,
   ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export function BuildLogsPanel({
   const [showFilters, setShowFilters] = useState(false);
   const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
   const [showJumpButton, setShowJumpButton] = useState(false);
+  const [showJumpTopButton, setShowJumpTopButton] = useState(false);
 
   const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
     if (deployment.trigger === 'resize') {
@@ -79,31 +81,36 @@ export function BuildLogsPanel({
   // needed is when buildInfo is set but Supabase hasn't delivered the row yet
   // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
-    // Jenkins is authoritative: if it confirms the build is done, override any
-    // stale 'BUILDING' status that Supabase hasn't propagated yet.
-    // However, if Jenkins result is null (health-check phase), keep BUILDING
-    // to avoid a false FAILURE flash before Supabase finalizes.
+    // Jenkins is the authoritative source for build state. Two race windows exist:
+    //
+    // A) Jenkins says done  → Supabase still shows BUILDING (normal completion lag).
+    //    Override to the terminal status Jenkins reported.
+    //    Exception: result=null during the post-build health-check phase — keep BUILDING
+    //    to avoid a false FAILURE flash before Supabase finalizes.
+    //
+    // B) Jenkins says active → Supabase shows a stale terminal status (e.g. FAILURE
+    //    from the previous run, or a webhook that fired before the new build row was
+    //    written). Override to BUILDING so the dropdown reflects reality.
     const opts = deployments.map((d) => {
-      if (
-        d.build_number === buildInfo?.number &&
-        buildInfo.building === false &&
-        d.status === 'BUILDING'
-      ) {
-        // result is null during post-build health verification — don't override yet
-        if (buildInfo.result === null) return d;
-        const terminalStatus =
-          buildInfo.result === 'SUCCESS'
-            ? 'SUCCESS'
-            : buildInfo.result === 'ABORTED'
-            ? 'ABORTED'
-            : buildInfo.result === 'UNSTABLE'
-            ? 'UNSTABLE'
-            : 'FAILURE';
-        return {
-          ...d,
-          status: terminalStatus as DeploymentSummary['status'],
+      if (d.build_number !== buildInfo?.number) return d;
+
+      // Case A: Jenkins done, Supabase still BUILDING
+      if (buildInfo.building === false && d.status === 'BUILDING') {
+        if (buildInfo.result === null) return d; // health-check window — keep BUILDING
+        const RESULT_TO_STATUS: Record<string, DeploymentSummary['status']> = {
+          SUCCESS: 'SUCCESS',
+          ABORTED: 'ABORTED',
+          UNSTABLE: 'UNSTABLE',
         };
+        const terminalStatus = RESULT_TO_STATUS[buildInfo.result] ?? 'FAILURE';
+        return { ...d, status: terminalStatus };
       }
+
+      // Case B: Jenkins active, Supabase shows stale terminal status
+      if (buildInfo.building === true && d.status !== 'BUILDING') {
+        return { ...d, status: 'BUILDING' as DeploymentSummary['status'] };
+      }
+
       return d;
     });
 
@@ -136,6 +143,7 @@ export function BuildLogsPanel({
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     wasAtBottomRef.current = atBottom;
     setShowJumpButton(!atBottom && buildLogs.length > 0);
+    setShowJumpTopButton(el.scrollTop > 80 && buildLogs.length > 0);
   }, [buildLogs.length]);
 
   // After every log update: scroll to bottom only if the user was already there
@@ -153,9 +161,17 @@ export function BuildLogsPanel({
     }
   };
 
+  const jumpToTop = () => {
+    if (preRef.current) {
+      preRef.current.scrollTop = 0;
+      wasAtBottomRef.current = false;
+      setShowJumpTopButton(false);
+    }
+  };
+
   // Filter and search logs
   const filteredLogs = useMemo(() => {
-    if (!buildLogs) return '';
+    if (!buildLogs || buildLogs === 'No logs available') return '';
     
     let lines = buildLogs.split('\n');
     
@@ -486,17 +502,32 @@ export function BuildLogsPanel({
             </pre>
           )}
 
-          {/* Jump-to-bottom pill — appears when user scrolled up during live streaming */}
-          {showJumpButton && (
-            <button
-              onClick={jumpToBottom}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5
-                bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
-                text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
-            >
-              <ArrowDown className="w-3 h-3" />
-              Jump to latest
-            </button>
+          {/* Jump pills — top and bottom */}
+          {(showJumpTopButton || showJumpButton) && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              {showJumpTopButton && (
+                <button
+                  onClick={jumpToTop}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                  Jump to top
+                </button>
+              )}
+              {showJumpButton && (
+                <button
+                  onClick={jumpToBottom}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                  Jump to latest
+                </button>
+              )}
+            </div>
           )}
         </div>
       </CardContent>

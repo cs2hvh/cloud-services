@@ -41,7 +41,7 @@ function SummaryRow({ label, value, icon, empty }: { label: string; value: React
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="flex items-center gap-2">
         {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
         )}
         <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
       </div>
@@ -123,7 +123,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Filter users based on search query
   const filteredUsers = allUsers.filter(
@@ -302,35 +302,35 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const steps = role === "admin"
     ? (isSSHorRDP
         ? [
-            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard icons/users & DBs .png" },
-            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard icons/project _1.png" }
+            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 0, name: "User",      iconSrc: "/dashboard icons/users & DBs .png" },
-            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
+            { id: 0, name: "User",      iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ])
     : (isSSHorRDP
         ? [
-            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard icons/project _1.png" }
+            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ]);
 
   // Filter projects based on selected user (admin mode) or current user
@@ -379,6 +379,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 
@@ -422,7 +423,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -667,19 +668,19 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
           </div>
           <div className="px-6 py-4">
             <div className="space-y-0.5">
-              <SummaryRow icon="/dashboard icons/apptype .png" label="Application" value={formData.appType ? <span className="uppercase">{formData.appType}</span> : "—"} empty={!formData.appType} />
-              <SummaryRow icon="/dashboard icons/domain.png" label="Domain" value={formData.domain || "—"} empty={!formData.domain} />
-              <SummaryRow icon="/dashboard icons/edge port .png" label="Edge Port" value={formData.edgePort > 0 ? formData.edgePort : "—"} empty={!(formData.edgePort > 0)} />
-              <SummaryRow icon="/dashboard icons/origin.png" label="Origin" value={formData.originIP ? `${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}` : "—"} empty={!formData.originIP} />
+              <SummaryRow icon="/dashboard-icons/apptype.png" label="Application" value={formData.appType ? <span className="uppercase">{formData.appType}</span> : "—"} empty={!formData.appType} />
+              <SummaryRow icon="/dashboard-icons/domain.png" label="Domain" value={formData.domain || "—"} empty={!formData.domain} />
+              <SummaryRow icon="/dashboard-icons/edge-port.png" label="Edge Port" value={formData.edgePort > 0 ? formData.edgePort : "—"} empty={!(formData.edgePort > 0)} />
+              <SummaryRow icon="/dashboard-icons/origin.png" label="Origin" value={formData.originIP ? `${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}` : "—"} empty={!formData.originIP} />
               {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
                 <SummaryRow
-                  icon="/dashboard icons/ip firewall .png"
+                  icon="/dashboard-icons/ip-firewall.png"
                   label="Protection"
                   value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
                 />
               )}
               {selectedProject && (
-                <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={selectedProject.name} />
+                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
               )}
             </div>
             <Separator className="my-4 bg-white/[0.08]" />

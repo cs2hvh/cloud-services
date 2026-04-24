@@ -215,6 +215,8 @@ export default function AppDetailPage() {
   const logOffsetRef = useRef(0);
   const prevBuildingRef = useRef<boolean | undefined>(undefined);
   const prevBuildNumberRef = useRef<number | null>(null);
+  // Tracks the last-seen resize operation id so we only call fetchApp() when a NEW resize completes
+  const prevResizeOpIdRef = useRef<string | null>(null);
   // Which build's logs the user is viewing — null means "show the active/latest build".
   // Separate from buildInfo so polling doesn't hijack the user's selection.
   const [viewingBuildNumber, setViewingBuildNumber] = useState<number | null>(null);
@@ -648,10 +650,33 @@ export default function AppDetailPage() {
 
   useEffect(() => {
     if (!isBuilding) {
-      setPendingResizeSize(null);
       stalePollingCountRef.current = 0;
     }
   }, [isBuilding]);
+
+  // When the latest resize operation transitions to SUCCESS/FAILURE, refresh app data
+  // so the header reflects the updated size. This is needed because resize runs on a
+  // separate Jenkins job (build_number = null) and never sets isBuilding, so the
+  // normal build-completion effect never fires for resize.
+  useEffect(() => {
+    const latestResize = operationDeployments.find((d) => d.trigger === 'resize');
+    if (!latestResize) return;
+
+    // Seed the ref on first render so we don't react to already-completed operations
+    if (prevResizeOpIdRef.current === null) {
+      prevResizeOpIdRef.current = latestResize.id;
+      return;
+    }
+
+    // A new resize operation appeared and it's no longer building
+    if (latestResize.id !== prevResizeOpIdRef.current && latestResize.status !== 'BUILDING') {
+      prevResizeOpIdRef.current = latestResize.id;
+      setPendingResizeSize(null);
+      if (latestResize.status === 'SUCCESS') {
+        fetchApp();
+      }
+    }
+  }, [operationDeployments, fetchApp]);
 
   useEffect(() => {
     if (operationDeployments.length === 0) {

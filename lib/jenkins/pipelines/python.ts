@@ -135,6 +135,7 @@ pipeline {
       steps {
         script {
           echo 'STAGE: Initialize'
+          echo 'PIPELINE: Python Deployment Pipeline'
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
@@ -147,7 +148,6 @@ pipeline {
     }
 
     stage('Checkout Repository') {
-
       steps {
         container('git') {
           script {
@@ -176,6 +176,30 @@ pipeline {
       }
     }
 
+    stage('Validate Prerequisites') {
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Validate Prerequisites'
+            echo 'Checking required files and project structure'
+            sh(
+              script: '''
+                if [ ! -f requirements.txt ] && [ ! -f pyproject.toml ] && [ ! -f setup.py ]; then
+                  echo 'WARNING: No Python dependency file found (requirements.txt / pyproject.toml / setup.py)'
+                else
+                  echo 'Python dependency file found'
+                fi
+
+                echo 'Prerequisites check completed'
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
+          }
+        }
+      }
+    }
+
 ${generateSecurityStages({ language: 'python' })}
 
     stage('Prepare Dockerfile') {
@@ -186,7 +210,7 @@ ${generateSecurityStages({ language: 'python' })}
             sh '''
 ${generatePythonDockerfileStage()}
             '''
-            echo 'Dockerfile prepared successfully'
+            echo 'Dockerfile preparation completed'
           }
         }
       }

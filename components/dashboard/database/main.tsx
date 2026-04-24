@@ -105,7 +105,7 @@ function MetricCard({
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
         <div className="flex-shrink-0">
-          <Image src={iconSrc} alt={label} width={56} height={56} className="object-contain" />
+          <Image src={iconSrc} alt={label} width={56} height={56} className="object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -248,19 +248,19 @@ const DatabasePage = () => {
           label="Total Clusters"
           value={clusters.length}
           meta="Managed database environments"
-          iconSrc="/dashboard icons/total clusters .png"
+          iconSrc="/dashboard-icons/total-clusters.png"
         />
         <MetricCard
           label="Healthy"
           value={onlineClusters}
           meta="Currently online and serving"
-          iconSrc="/dashboard icons/healthy .png"
+          iconSrc="/dashboard-icons/healthy.png"
         />
         <MetricCard
           label="Provisioning"
           value={provisioningClusters}
           meta="In progress or updating"
-          iconSrc="/dashboard icons/provisioning.png"
+          iconSrc="/dashboard-icons/provisioning.png"
         />
         <MetricCard
           label="Footprint"
@@ -270,7 +270,7 @@ const DatabasePage = () => {
               ? `${totalNodes} total node${totalNodes === 1 ? "" : "s"}`
               : "No deployed capacity yet"
           }
-          iconSrc="/dashboard icons/foot print.png"
+          iconSrc="/dashboard-icons/foot-print.png"
         />
       </motion.div>
 
@@ -387,7 +387,7 @@ const DatabasePage = () => {
           className="glass-panel px-6 py-16 text-center sm:px-10"
         >
           <div className="mx-auto flex h-16 w-16 items-center justify-center">
-            <Image src="/dashboard icons/total clusters .png" alt="Database" width={48} height={48} className="object-contain" />
+            <Image src="/dashboard-icons/total-clusters.png" alt="Database" width={48} height={48} className="object-contain" unoptimized />
           </div>
           <h2 className="mt-6 text-xl font-semibold text-white">No database clusters yet</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-white/45">

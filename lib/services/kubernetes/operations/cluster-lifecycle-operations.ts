@@ -373,7 +373,7 @@ export const clusterLifecycleOperations = {
         user_id: request.owner_id,
         type: "info",
         title: "Kubernetes Cluster Creation",
-        message: `kubernetes cluster ${request.name} creation started...`,
+        message: "Kubernetes Cluster Creation started.",
         service_type: "kubernetes",
         service_id: clusterId,
         action: "created",
@@ -788,16 +788,17 @@ export const clusterLifecycleOperations = {
       }
 
       // Notification
-      await NotificationService.create(
-        createServiceNotification({
-          userId: request.ownerId,
-          type: "info",
-          action: "created",
-          serviceType: "kubernetes",
-          serviceName: request.name,
-          serviceId: clusterId,
-        })
-      );
+      await NotificationService.create({
+        user_id: request.ownerId,
+        type: "info",
+        title: "Kubernetes Cluster Creation",
+        message: "Kubernetes Cluster Creation started.",
+        service_type: "kubernetes",
+        service_id: clusterId,
+        action: "created",
+        metadata: { serviceName: request.name },
+      });
+
 
       return { success: true, clusterId };
     } catch (error) {
@@ -814,7 +815,7 @@ export const clusterLifecycleOperations = {
    * Handles balance check, DigitalOcean API call, and billing rate update.
    */
   async addNode(request: AddKubernetesNodeRequest): Promise<AddKubernetesNodeResult> {
-    const { clusterId, planId, userId, userEmail, dropletPayload, initialCost, expectedNodeCount, auditContext } = request;
+    const { clusterId, planId, userId, userEmail, deferBillingUntilReady = false, dropletPayload, initialCost, expectedNodeCount, auditContext } = request;
 
     // Resolve cost and hourly rate upfront from plan pricing
     let resolvedInitialCost: number;
@@ -877,43 +878,46 @@ export const clusterLifecycleOperations = {
     }
 
     const vmPasswordEncrypted = Encryption.encrypt(vmPassword, process.env.ENCRYPTION_KEY!);
-    
-    // Extract droplet ID for cleanup if billing fails
-    const createdDroplet = response.data?.droplet as Record<string, unknown> | undefined;
-    const dropletId = createdDroplet?.id as string | number | undefined;
+    if (!deferBillingUntilReady) {
+      // Extract droplet ID for cleanup if billing fails
+      const createdDroplet = response.data?.droplet as Record<string, unknown> | undefined;
+      const dropletId = createdDroplet?.id as string | number | undefined;
 
-    // Deduct the cost upfront and register active kubernetes billing
-    try {
-      await postProvisionBilling({
-        userId,
-        initialCost: resolvedInitialCost,
-        hourlyRate: resolvedHourlyRate,
-        serviceId: clusterId,
-        serviceType: "kubernetes",
-        addActive: Billing.add_active_kubernetes,
-      });
-      console.log(`[KubernetesService.addNode] ✅ Billing registered: initial=$${resolvedInitialCost}, hourly=$${resolvedHourlyRate}/hr for ${expectedNodeCount ?? "?"} nodes`);
-    } catch (billingErr) {
-      // Billing failed — clean up droplet from DigitalOcean to prevent orphaned resource
-      if (dropletId) {
-        try {
-          await axios.delete(
-            `https://api.digitalocean.com/v2/droplets/${dropletId}`,
-            { headers: getDigitalOceanHeaders() }
-          );
-          console.error(`[KubernetesService.addNode] ✅ Cleaned up droplet ${dropletId} after billing failure`);
-        } catch (cleanupErr) {
-          console.error(`[KubernetesService.addNode] ⚠️ Failed to clean up droplet ${dropletId} after billing failure:`, cleanupErr);
-          // Continue with error reporting below
+      // Deduct the cost upfront and register active kubernetes billing
+      try {
+        await postProvisionBilling({
+          userId,
+          initialCost: resolvedInitialCost,
+          hourlyRate: resolvedHourlyRate,
+          serviceId: clusterId,
+          serviceType: "kubernetes",
+          addActive: Billing.add_active_kubernetes,
+        });
+        console.log(`[KubernetesService.addNode] Billing registered: initial=${resolvedInitialCost}, hourly=${resolvedHourlyRate}/hr for ${expectedNodeCount ?? "?"} nodes`);
+      } catch (billingErr) {
+        // Billing failed, clean up droplet from DigitalOcean to prevent orphaned resource
+        if (dropletId) {
+          try {
+            await axios.delete(
+              `https://api.digitalocean.com/v2/droplets/${dropletId}`,
+              { headers: getDigitalOceanHeaders() }
+            );
+            console.error(`[KubernetesService.addNode] Cleaned up droplet ${dropletId} after billing failure`);
+          } catch (cleanupErr) {
+            console.error(`[KubernetesService.addNode] Failed to clean up droplet ${dropletId} after billing failure:`, cleanupErr);
+            // Continue with error reporting below
+          }
         }
+        const errorMsg = billingErr instanceof Error ? billingErr.message : String(billingErr);
+        console.error("[KubernetesService.addNode] Failed to register billing:", errorMsg);
+        return {
+          success: false,
+          error: `Failed to register billing after droplet creation: ${errorMsg}. Droplet has been cleaned up.`,
+          errorCode: "BILLING_FAILED",
+        };
       }
-      const errorMsg = billingErr instanceof Error ? billingErr.message : String(billingErr);
-      console.error("[KubernetesService.addNode] Failed to register billing:", errorMsg);
-      return {
-        success: false,
-        error: `Failed to register billing after droplet creation: ${errorMsg}. Droplet has been cleaned up.`,
-        errorCode: "BILLING_FAILED",
-      };
+    } else {
+      console.log(`[KubernetesService.addNode] Billing deferred until cluster is ready for ${clusterId}`);
     }
 
     // Audit log (non-fatal)

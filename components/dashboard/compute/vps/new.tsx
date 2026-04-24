@@ -423,7 +423,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                         htmlFor={region.city}
                         className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
                       >
-                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" />
+                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" unoptimized />
                         <div>
                           <div className="font-medium text-white">{region.city}</div>
                           <div className="text-xs text-white/60">{region.country}</div>
@@ -553,6 +553,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                             width={40}
                             height={40}
                             className="object-contain"
+                            unoptimized
                           />
                         </div>
                         <div className="flex-1">
@@ -705,6 +706,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                       width={16} 
                       height={12} 
                       className="rounded-sm" 
+                      unoptimized
                     />
                     <span className="text-white">{selectedLocationData.city}</span>
                   </div>

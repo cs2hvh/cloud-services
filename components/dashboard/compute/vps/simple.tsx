@@ -75,35 +75,35 @@ const STEP_META: Array<{
     label: "Name",
     title: "Hostname",
     description: "Set server hostname",
-    iconSrc: "/dashboard icons/name.png",
+    iconSrc: "/dashboard-icons/name.png",
   },
   {
     id: 1,
     label: "Region",
     title: "Deployment region",
     description: "Choose deployment location",
-    iconSrc: "/dashboard icons/region .png",
+    iconSrc: "/dashboard-icons/region.png",
   },
   {
     id: 2,
     label: "Operating System",
     title: "Image",
     description: "Image & access type",
-    iconSrc: "/dashboard icons/Operating System .png",
+    iconSrc: "/dashboard-icons/operating-system.png",
   },
   {
     id: 3,
     label: "Configuration",
     title: "Resources",
     description: "CPU, RAM & storage",
-    iconSrc: "/dashboard icons/Configuration .png",
+    iconSrc: "/dashboard-icons/configuration.png",
   },
   {
     id: 4,
     label: "Access",
     title: "Access",
     description: "Set root password",
-    iconSrc: "/dashboard icons/Acess.png",
+    iconSrc: "/dashboard-icons/acess.png",
   },
 ];
 
@@ -136,7 +136,7 @@ function SummaryRow({ label, value, icon, empty }: { label: string; value: React
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="flex items-center gap-2">
         {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
         )}
         <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
       </div>
@@ -402,6 +402,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                 height={160}
                 className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
                 priority
+                unoptimized
               />
             </div>
 
@@ -461,6 +462,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                               width={44}
                               height={44}
                               className="h-11 w-11 object-contain"
+                              unoptimized
                             />
                             {isCompleted && (
                               <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
@@ -554,6 +556,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                                 width={32}
                                 height={32}
                                 className="h-6 w-8 object-cover"
+                                unoptimized
                               />
                             ) : (
                               <MapPin className="h-4 w-4 text-white/60" />
@@ -858,19 +861,19 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                   {/* Identity */}
                   <div className="space-y-0.5">
                     <SummaryRow
-                      icon="/dashboard icons/name.png"
+                      icon="/dashboard-icons/name.png"
                       label="Hostname"
                       value={hostname.trim() || "—"}
                       empty={!hostname.trim()}
                     />
                     <SummaryRow
-                      icon="/dashboard icons/region .png"
+                      icon="/dashboard-icons/region.png"
                       label="Region"
                       value={maxVisitedStep >= 1 ? (selectedRegionData?.name ?? "—") : "—"}
                       empty={maxVisitedStep < 1}
                     />
                     <SummaryRow
-                      icon="/dashboard icons/Operating System .png"
+                      icon="/dashboard-icons/operating-system.png"
                       label="OS"
                       value={maxVisitedStep >= 2 ? selectedOSName : "—"}
                       empty={maxVisitedStep < 2}
@@ -882,19 +885,19 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                   {/* Resources */}
                   <div className="space-y-0.5">
                     <SummaryRow
-                      icon="/dashboard icons/cpu .png"
+                      icon="/dashboard-icons/cpu.png"
                       label="vCPU"
                       value={maxVisitedStep >= 3 ? `${cpuCores} cores` : "—"}
                       empty={maxVisitedStep < 3}
                     />
                     <SummaryRow
-                      icon="/dashboard icons/ram .png"
+                      icon="/dashboard-icons/ram.png"
                       label="Memory"
                       value={maxVisitedStep >= 3 ? `${memoryGB} GB` : "—"}
                       empty={maxVisitedStep < 3}
                     />
                     <SummaryRow
-                      icon="/dashboard icons/storage .png"
+                      icon="/dashboard-icons/storage.png"
                       label="Storage"
                       value={maxVisitedStep >= 3 ? `${diskGB} GB` : "—"}
                       empty={maxVisitedStep < 3}
@@ -911,13 +914,13 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                   {/* Connectivity */}
                   <div className="space-y-0.5">
                     <SummaryRow
-                      icon="/dashboard icons/Acess.png"
+                      icon="/dashboard-icons/acess.png"
                       label="Access"
                       value={maxVisitedStep >= 2 ? (usesRDP ? "RDP" : "SSH") : "—"}
                       empty={maxVisitedStep < 2}
                     />
                     <SummaryRow
-                      icon="/dashboard icons/network .png"
+                      icon="/dashboard-icons/network.png"
                       label="Network"
                       value="IPv4 included"
                     />

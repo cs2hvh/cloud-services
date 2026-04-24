@@ -70,20 +70,25 @@ export function SignInForm() {
       });
 
       if (res?.data?.twofastatus) {
+        setIsLoading(false);
         setTwofaRequired(true);
         return;
       }
 
       if (res.status === 200) {
-        toast.success(`Welcome back ${res?.data?.name || ""}!`);
+        toast.success(res?.data?.name ? `Welcome back ${res.data.name}!` : "Welcome back!");
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           await supabase.auth.setSession(data.session);
         }
         router.refresh();
         router.push(nextPath);
+        // keep isLoading=true — spinner stays until navigation completes
+        return;
       }
-    } finally {
+
+      setIsLoading(false);
+    } catch {
       setIsLoading(false);
     }
   }
@@ -101,6 +106,7 @@ export function SignInForm() {
 
       if (!endpoint) {
         toast.error("Unsupported sign-in provider");
+        setIsLoading(false);
         return;
       }
 
@@ -112,8 +118,12 @@ export function SignInForm() {
 
       if (response?.data?.url) {
         window.location.href = response?.data?.url;
+        // keep isLoading=true — spinner stays until browser navigates
+        return;
       }
-    } finally {
+
+      setIsLoading(false);
+    } catch {
       setIsLoading(false);
     }
   };
@@ -279,6 +289,7 @@ export function SignInForm() {
 
   return (
     <div className="mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-6 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6">
+      {/* Branding — always visible */}
       <div className="mx-auto mb-1 text-center pt-2 pb-1">
         <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
         <p className="mt-3 text-[14px] leading-[16px] text-white">
@@ -287,108 +298,121 @@ export function SignInForm() {
         </p>
       </div>
 
-      <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
-        <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
-          <Icons.gitHub className="h-8 w-8" />
-        </button>
-        <button type="button" aria-label="Sign in with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
-          <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
-        </button>
-        <button type="button" aria-label="Sign in with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
-          <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
-        </button>
-        <button type="button" aria-label="Sign in with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
-          <Icons.google className="h-8 w-8" />
-        </button>
-      </div>
-
-      <div className="mx-auto mt-4 w-full max-w-[320px]">
-        <div className="flex items-center gap-3 text-white">
-          <div className="h-px flex-1 bg-white/75" />
-          <span className="text-sm">Or</span>
-          <div className="h-px flex-1 bg-white/75" />
-        </div>
-      </div>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-3 w-full max-w-[320px] space-y-2">
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-base font-normal text-white">Email</FormLabel>
-                <FormControl>
-                  <div className={inputShellClass}>
-                    <Input
-                      placeholder=""
-                      {...field}
-                      disabled={isLoading}
-                      type="email"
-                      className={glass.field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-base font-normal text-white">Password</FormLabel>
-                <FormControl>
-                  <PasswordInput
-                    field={field}
-                    placeholder=""
-                    disabled={isLoading}
-                    className={glass.field}
-                    wrapperClassName={inputShellClass}
-                    toggleClassName="h-full pr-3"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="flex items-center justify-between text-[11px] text-white">
-            <label className="inline-flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-[18px] w-[18px] rounded-sm border border-white/80 bg-transparent accent-white"
-              />
-              <span>Remember Me</span>
-            </label>
-
-            <Link href="/reset-password" className="text-[10px] leading-[11px] text-white hover:text-[#2f8af5] cursor-pointer">
-              Forgot Password
-            </Link>
+      {/* Loading overlay — replaces form */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-14 gap-5">
+          <div className="relative h-12 w-12">
+            <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#2f8af5] animate-spin" />
           </div>
-
-          <div className={`mx-auto mt-2 w-full max-w-[200px] ${buttonShellClass}`}>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={glass.button}
-            >
-              {isLoading ? "Logging in..." : "Log In"}
+          <p className="text-sm text-white/50 tracking-wide">Signing in…</p>
+        </div>
+      ) : (
+        <>
+          <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
+            <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
+              <Icons.gitHub className="h-8 w-8" />
+            </button>
+            <button type="button" aria-label="Sign in with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+              <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
+            </button>
+            <button type="button" aria-label="Sign in with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+              <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
+            </button>
+            <button type="button" aria-label="Sign in with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
+              <Icons.google className="h-8 w-8" />
             </button>
           </div>
-        </form>
-      </Form>
 
-      <p className="mt-3 text-center text-sm text-white">
-        New here! Create an account{" "}
-        <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
-          Sign Up
-        </Link>
-      </p>
+          <div className="mx-auto mt-4 w-full max-w-[320px]">
+            <div className="flex items-center gap-3 text-white">
+              <div className="h-px flex-1 bg-white/75" />
+              <span className="text-sm">Or</span>
+              <div className="h-px flex-1 bg-white/75" />
+            </div>
+          </div>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-3 w-full max-w-[320px] space-y-2">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                    <FormControl>
+                      <div className={inputShellClass}>
+                        <Input
+                          placeholder=""
+                          {...field}
+                          disabled={isLoading}
+                          type="email"
+                          className={glass.field}
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base font-normal text-white">Password</FormLabel>
+                    <FormControl>
+                      <PasswordInput
+                        field={field}
+                        placeholder=""
+                        disabled={isLoading}
+                        className={glass.field}
+                        wrapperClassName={inputShellClass}
+                        toggleClassName="h-full pr-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex items-center justify-between text-[11px] text-white">
+                <label className="inline-flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-[18px] w-[18px] rounded-sm border border-white/80 bg-transparent accent-white"
+                  />
+                  <span>Remember Me</span>
+                </label>
+
+                <Link href="/reset-password" className="text-[10px] leading-[11px] text-white hover:text-[#2f8af5] cursor-pointer">
+                  Forgot Password
+                </Link>
+              </div>
+
+              <div className={`mx-auto mt-2 w-full max-w-[200px] ${buttonShellClass}`}>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={glass.button}
+                >
+                  Log In
+                </button>
+              </div>
+            </form>
+          </Form>
+
+          <p className="mt-3 text-center text-sm text-white">
+            New here! Create an account{" "}
+            <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
+              Sign Up
+            </Link>
+          </p>
+        </>
+      )}
     </div>
   );
 }

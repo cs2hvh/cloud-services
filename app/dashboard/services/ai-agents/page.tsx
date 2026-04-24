@@ -190,7 +190,7 @@ export default function AIAgentsPage() {
               <div className="mt-3 text-2xl font-semibold text-white">{agents.length}</div>
               <p className="mt-1 text-sm text-white/45">Provisioned conversational agents</p>
             </div>
-            <Image src="/dashboard icons/agents .png" alt="Agents" width={36} height={36} className="shrink-0 opacity-80" />
+            <Image src="/dashboard-icons/agents.png" alt="Agents" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
           </div>
         </div>
         <div className="glass-panel p-5">
@@ -200,7 +200,7 @@ export default function AIAgentsPage() {
               <div className="mt-3 text-2xl font-semibold text-white">{activeAgents}</div>
               <p className="mt-1 text-sm text-white/45">Agents currently serving traffic</p>
             </div>
-            <Image src="/dashboard icons/active .png" alt="Active" width={36} height={36} className="shrink-0 opacity-80" />
+            <Image src="/dashboard-icons/active-1.png" alt="Active" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
           </div>
         </div>
         <div className="glass-panel p-5">
@@ -210,7 +210,7 @@ export default function AIAgentsPage() {
               <div className="mt-3 text-2xl font-semibold text-white">{totalMessages}</div>
               <p className="mt-1 text-sm text-white/45">Tracked requests across all agents</p>
             </div>
-            <Image src="/dashboard icons/messages .png" alt="Messages" width={36} height={36} className="shrink-0 opacity-80" />
+            <Image src="/dashboard-icons/messages.png" alt="Messages" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
           </div>
         </div>
         <div className="glass-panel p-5">
@@ -220,7 +220,7 @@ export default function AIAgentsPage() {
               <div className="mt-3 text-2xl font-semibold text-white">{linkedKnowledgeBases}</div>
               <p className="mt-1 text-sm text-white/45">Knowledge-base attachments in use</p>
             </div>
-            <Image src="/dashboard icons/knowledge links .png" alt="Knowledge Links" width={36} height={36} className="shrink-0 opacity-80" />
+            <Image src="/dashboard-icons/knowledge-links.png" alt="Knowledge Links" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
           </div>
         </div>
       </div>
@@ -239,7 +239,7 @@ export default function AIAgentsPage() {
                 <div key={agent.id} className="border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]">
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
-                      <Image src="/dashboard icons/agents .png" alt="Agent" width={44} height={44} className="shrink-0 opacity-80" />
+                      <Image src="/dashboard-icons/agents.png" alt="Agent" width={44} height={44} className="shrink-0 opacity-80"  unoptimized />
                       <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
@@ -317,7 +317,7 @@ export default function AIAgentsPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-16 text-center">
-              <Image src="/dashboard icons/agents .png" alt="No agents" width={48} height={48} className="opacity-25" />
+              <Image src="/dashboard-icons/agents.png" alt="No agents" width={48} height={48} className="opacity-25"  unoptimized />
               <h3 className="mt-5 text-lg font-semibold text-white">No agents yet</h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-white/45">Create your first AI agent to launch conversational flows with model selection, knowledge grounding, and endpoint controls.</p>
               <Button asChild className="mt-6 border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">

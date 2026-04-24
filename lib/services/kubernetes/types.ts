@@ -118,6 +118,8 @@ export interface AddKubernetesNodeRequest {
   planId?: string;
   userId: string;
   userEmail?: string | null;
+  /** When true, skip upfront setup charge and activate billing later when cluster is fully ready. */
+  deferBillingUntilReady?: boolean;
   /** Whitelisted fields to forward to DigitalOcean droplet creation API */
   dropletPayload: Record<string, unknown>;
   /** Upfront balance required (caller-supplied, used for pre-flight check) */

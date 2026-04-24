@@ -226,17 +226,18 @@ export class PlatformAppService {
     userId: string
   ): Promise<string | null> {
     if (provider === "github") {
-      const sessionToken = await this.getSessionProviderToken("github");
-      if (sessionToken) return sessionToken;
-
+      // Check DB token first — it is validated against GitHub API on each call.
+      // Session token is only used as a fallback because it is not re-validated
+      // after the initial OAuth login and may be stale.
       try {
         const { GitHubProvider } = await import("@/lib/providers/github");
         const githubProvider = new GitHubProvider();
         const tokenObj = await githubProvider.getToken(userId);
-        return tokenObj?.accessToken ?? null;
-      } catch {
-        return null;
+        if (tokenObj?.accessToken) return tokenObj.accessToken;
+      } catch (err) {
+        console.warn("[PlatformAppService] GitHub DB token lookup failed, falling back to session token:", err);
       }
+      return this.getSessionProviderToken("github");
     }
 
     if (provider === "gitlab") {
@@ -881,6 +882,10 @@ export class PlatformAppService {
     }
 
     // Update billing rate (non-fatal)
+    // NOTE: The resize route does NOT call this method directly.
+    // Billing rate update on confirmed success is owned by AppBuildSideEffectsService
+    // (via BuildPollingService → AppOperationFinalizer). This path only runs if
+    // resizeApp() is called directly (e.g. admin tools or future service consumers).
     try {
       const { hourlyRate } = await getRatesForPlatformApp(newSize);
       await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });

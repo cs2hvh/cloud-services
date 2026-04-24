@@ -71,7 +71,7 @@ function SummaryRow({ label, value, icon, empty }: { label: string; value: React
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="flex items-center gap-2">
         {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
         )}
         <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
       </div>
@@ -137,17 +137,17 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   // Steps array with conditional user selection for admin
   const steps = role === "admin"
     ? [
-        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
-        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard-icons/settings-1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
       ]
     : [
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
-        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard-icons/settings-1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
       ];
 
   const maxStep = role === "admin" ? 4 : 4;
@@ -416,6 +416,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
             height={160}
             className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
             priority
+            unoptimized
           />
         </div>
 
@@ -448,7 +449,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="truncate text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -711,6 +712,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -990,22 +992,22 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
               {role === "admin" && selectedUser && (
                 <SummaryRow label="Assigned To" value={selectedUser.email} />
               )}
-              <SummaryRow icon="/dashboard icons/name.png" label="Name" value={formData.name || "—"} empty={!formData.name} />
+              <SummaryRow icon="/dashboard-icons/name.png" label="Name" value={formData.name || "—"} empty={!formData.name} />
               <SummaryRow
-                icon="/dashboard icons/region .png"
+                icon="/dashboard-icons/region.png"
                 label="Region"
                 value={selectedLocation ? (
                   <span className="flex items-center justify-end gap-2">
-                    <Image src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`} alt={selectedLocation.city} width={16} height={12} className="rounded-sm" />
+                    <Image src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`} alt={selectedLocation.city} width={16} height={12} className="rounded-sm" unoptimized />
                     {selectedLocation.city}
                   </span>
                 ) : "—"}
                 empty={!selectedLocation}
               />
-              <SummaryRow icon="/dashboard icons/Acess.png" label="Access" value={formData.acl === "public-read" ? "Public Read" : "Private"} />
-              <SummaryRow icon="/dashboard icons/versioning .png" label="Versioning" value={formData.versioning_enabled ? "Enabled" : "Off"} />
+              <SummaryRow icon="/dashboard-icons/acess.png" label="Access" value={formData.acl === "public-read" ? "Public Read" : "Private"} />
+              <SummaryRow icon="/dashboard-icons/versioning.png" label="Versioning" value={formData.versioning_enabled ? "Enabled" : "Off"} />
               {selectedProject && (
-                <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={selectedProject.name} />
+                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
               )}
             </div>
             <Separator className="my-4 bg-white/[0.08]" />

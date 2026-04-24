@@ -40,7 +40,7 @@ function MetricCard({
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -145,25 +145,25 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
           label="Total Clusters"
           value={clusters.length}
           meta="Provisioned Kubernetes environments"
-          iconSrc="/dashboard icons/total clusters .png"
+          iconSrc="/dashboard-icons/total-clusters.png"
         />
         <MetricCard
           label="Healthy"
           value={readyClusters}
           meta="Clusters ready to accept workloads"
-          iconSrc="/dashboard icons/healthy .png"
+          iconSrc="/dashboard-icons/healthy.png"
         />
         <MetricCard
           label="Active Nodes"
           value={activeNodes}
           meta="Control plane and worker nodes combined"
-          iconSrc="/dashboard icons/active nodes .png"
+          iconSrc="/dashboard-icons/active-nodes.png"
         />
         <MetricCard
           label="Pending"
           value={pendingClusters}
           meta={`${versions || 0} Kubernetes version${versions === 1 ? "" : "s"} in use`}
-          iconSrc="/dashboard icons/pending .png"
+          iconSrc="/dashboard-icons/pending.png"
         />
       </motion.div>
 
@@ -264,7 +264,7 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] px-6 py-16 text-center">
-              <Image src="/dashboard icons/total clusters .png" alt="No clusters" width={40} height={40} className="mb-4 h-10 w-10 object-contain opacity-20" />
+              <Image src="/dashboard-icons/total-clusters.png" alt="No clusters" width={40} height={40} className="mb-4 h-10 w-10 object-contain opacity-20" unoptimized />
               <h3 className="text-base font-semibold text-white">No Kubernetes clusters found</h3>
               <p className="mt-2 max-w-md text-sm text-white/45">
                 Provision your first cluster to start managing control plane and worker capacity here.
