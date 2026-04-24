@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       planId: json?.plan_id,
       userId: auth.user!.id,
       userEmail: auth.user!.email,
+      deferBillingUntilReady: true,
       dropletPayload: json,
       initialCost: typeof json?.initial_cost === "number" ? json.initial_cost : undefined,
       expectedNodeCount:

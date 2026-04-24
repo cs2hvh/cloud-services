@@ -432,6 +432,7 @@ const NewClusterPage = ({
       }
 
       if (settledResponse.status === 200) {
+        toast.info("Kubernetes Cluster Creation started.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {

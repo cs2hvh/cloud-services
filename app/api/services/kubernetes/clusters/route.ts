@@ -106,9 +106,9 @@ export async function POST(req: NextRequest) {
     totalNodes
   );
 
-  // Billing is handled by addNode (createdroplet) which already deducts cost
-  // and inserts the active_kubernetes row. We only need the user ID for audit/notification.
-  const billingUserId = auth.user!.id;
+  // Billing starts when the cluster transitions to ready.
+  // Here we only need the owner id for audit/notification.
+  const billingUserId = parsed.data.ownerId;
 
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data, decryptedPassword, role: derivedRole });
 
@@ -154,17 +154,20 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Create notification
-  await NotificationService.create({
-    user_id: billingUserId,
-    type: "info",
-    title: "Kubernetes Cluster Created",
-    message: `kubernetes cluster ${parsed.data.cluster.name} created successfully!`,
-    service_type: "kubernetes",
-    service_id: clusterId,
-    action: "created",
-    metadata: { serviceName: parsed.data.cluster.name },
-  });
+  // Notify creation start only when this endpoint is used as the initial create step.
+  // In init -> cluster flow, init already sends the "creation started" notification.
+  if (!parsed.data.clusterId) {
+    await NotificationService.create({
+      user_id: billingUserId,
+      type: "info",
+      title: "Kubernetes Cluster Creation",
+      message: `Kubernetes Cluster Creation started.`,
+      service_type: "kubernetes",
+      service_id: clusterId,
+      action: "created",
+      metadata: { serviceName: parsed.data.cluster.name },
+    });
+  }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

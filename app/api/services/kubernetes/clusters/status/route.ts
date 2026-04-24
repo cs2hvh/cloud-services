@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server"; // your server-side helper
+import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { getRatesForKubernetesExisting } from "@/config/pricing";
+import { postProvisionBilling } from "@/config/billing-flow";
+import { Billing } from "@/lib/supabase/queries/billing";
+import { NotificationService } from "@/lib/notifications";
 // import { Json } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic"; // avoid caching
@@ -19,6 +24,75 @@ type Row = {
   control_plane:{public_ip:string,private_ip:string,droplet_id:string} | null;
   workers: {public_ip:string,private_ip:string,droplet_id:string}[] | null;
 };
+
+async function ensureBillingActivatedForReadyCluster(clusterId: string, cluster: Row) {
+  if (cluster.status !== "ready") return;
+
+  const supabase = await createServiceClient();
+  const { data: activeRow, error: activeRowError } = await supabase
+    .schema("billing")
+    .from("active_kubernetes")
+    .select("service_id")
+    .eq("service_id", clusterId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (activeRowError || activeRow?.service_id) {
+    return;
+  }
+
+  const nodeConfig = (cluster.node_config ?? null) as Record<string, unknown> | null;
+  const provisionConfig = (nodeConfig?.provision_config ?? null) as Record<string, unknown> | null;
+  const planId = typeof provisionConfig?.plan_id === "string" ? provisionConfig.plan_id : null;
+  if (!planId) return;
+
+  const workerCount = Array.isArray(cluster.workers) ? cluster.workers.length : 0;
+  const hasControlPlane = Boolean(cluster.control_plane);
+  const configuredNodeCount =
+    typeof provisionConfig?.node_count === "number" ? Number(provisionConfig.node_count) : null;
+  const totalNodes = Math.max(
+    hasControlPlane ? workerCount + 1 : workerCount,
+    configuredNodeCount !== null ? configuredNodeCount + 1 : 1
+  );
+
+  const { initialCost, hourlyRate } = await getRatesForKubernetesExisting(planId, totalNodes);
+  await postProvisionBilling({
+    userId: cluster.owner_id,
+    initialCost,
+    hourlyRate,
+    serviceId: clusterId,
+    serviceType: "kubernetes",
+    addActive: Billing.add_active_kubernetes,
+  });
+}
+
+async function ensureReadyNotification(clusterId: string, cluster: Row) {
+  if (cluster.status !== "ready") return;
+
+  const supabase = await createServiceClient();
+  const { data: existingNotification, error: notificationCheckError } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("service_id", clusterId)
+    .eq("service_type", "kubernetes")
+    .eq("action", "deployed")
+    .maybeSingle();
+
+  if (notificationCheckError || existingNotification?.id) {
+    return;
+  }
+
+  await NotificationService.create({
+    user_id: cluster.owner_id,
+    type: "success",
+    title: "Kubernetes Cluster Ready",
+    message: `Kubernetes cluster ${cluster.cluster_name} is ready.`,
+    service_type: "kubernetes",
+    service_id: clusterId,
+    action: "deployed",
+    metadata: { serviceName: cluster.cluster_name },
+  });
+}
 
 export async function POST(
   req: Request
@@ -52,6 +126,18 @@ export async function POST(
       { success: false, error: "Cluster not found" },
       { status: 404 }
     );
+  }
+
+  try {
+    await ensureBillingActivatedForReadyCluster(body.clusterId, data);
+  } catch (billingErr) {
+    console.error("[kubernetes/status] Failed to activate ready billing:", billingErr);
+  }
+
+  try {
+    await ensureReadyNotification(body.clusterId, data);
+  } catch (notificationErr) {
+    console.error("[kubernetes/status] Failed to ensure ready notification:", notificationErr);
   }
 
   return NextResponse.json({
