@@ -2,19 +2,15 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Rocket, Server, DollarSign } from "lucide-react";
-import { Admin_PlatformApp } from "@/lib/supabase/types";
+import { Activity, Server, Bell, LayoutGrid, Rocket } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import AppsListTab from "@/components/admin/platform-apps/apps-list-tab";
 import ClusterUsageTab from "@/components/admin/cluster-monitor/cluster-usage-tab";
-import PricingTab from "@/components/admin/platform-apps/pricing-tab";
+import DeploymentHealthTab from "@/components/admin/cluster-monitor/deployment-health-tab";
+import ClusterEventsTab from "@/components/admin/cluster-monitor/cluster-events-tab";
+import PlatformAppsTab from "@/components/admin/cluster-monitor/platform-apps-tab";
 
-interface PageProps {
-  all_apps: Admin_PlatformApp[];
-}
-
-export default function AdminPlatformApps({ all_apps }: PageProps) {
-  const [activeTab, setActiveTab] = useState("deployed-apps");
+export default function AdminClusterMonitor() {
+  const [activeTab, setActiveTab] = useState("cluster-usage");
 
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
@@ -27,14 +23,12 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-neutral-800 rounded-lg">
-              <Rocket className="h-6 w-6 text-neutral-300" />
+              <LayoutGrid className="h-6 w-6 text-neutral-300" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">
-                Platform Apps Management
-              </h1>
+              <h1 className="text-2xl font-semibold text-white">Cluster Monitor</h1>
               <p className="text-sm text-neutral-400 mt-0.5">
-                {all_apps.length} deployed apps
+                Node health, deployment status &amp; warning events
               </p>
             </div>
           </div>
@@ -42,14 +36,7 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
-            <TabsTrigger
-              value="deployed-apps"
-              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
-            >
-              <Rocket className="h-4 w-4 mr-2" />
-              Deployed Apps
-            </TabsTrigger>
+          <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
             <TabsTrigger
               value="cluster-usage"
               className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -58,24 +45,42 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
               Cluster Usage
             </TabsTrigger>
             <TabsTrigger
-              value="pricing"
+              value="deployment-health"
               className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
             >
-              <DollarSign className="h-4 w-4 mr-2" />
-              Pricing
+              <Activity className="h-4 w-4 mr-2" />
+              Deployment Health
+            </TabsTrigger>
+            <TabsTrigger
+              value="cluster-events"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Cluster Events
+            </TabsTrigger>
+            <TabsTrigger
+              value="platform-apps"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Rocket className="h-4 w-4 mr-2" />
+              Platform Apps
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="deployed-apps" className="mt-0">
-            <AppsListTab all_apps={all_apps} />
-          </TabsContent>
 
           <TabsContent value="cluster-usage" className="mt-0">
             <ClusterUsageTab />
           </TabsContent>
 
-          <TabsContent value="pricing" className="mt-0">
-            <PricingTab />
+          <TabsContent value="deployment-health" className="mt-0">
+            <DeploymentHealthTab />
+          </TabsContent>
+
+          <TabsContent value="cluster-events" className="mt-0">
+            <ClusterEventsTab />
+          </TabsContent>
+
+          <TabsContent value="platform-apps" className="mt-0">
+            <PlatformAppsTab />
           </TabsContent>
         </Tabs>
       </motion.div>
