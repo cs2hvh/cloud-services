@@ -61,7 +61,7 @@ export function AppCard({
   build,
   logs,
   logsLoading,
-  logsError,
+  // logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
