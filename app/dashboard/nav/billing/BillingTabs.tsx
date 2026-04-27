@@ -515,6 +515,7 @@ export default function BillingTabs({
 }
 
 function StatCard({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  const formattedValue = Number.isFinite(value) ? value.toFixed(2) : "0.00";
   return (
     <div
       className={`rounded-xl border border-white/10 p-4 backdrop-blur-xl ${
@@ -522,7 +523,7 @@ function StatCard({ label, value, highlight = false }: { label: string; value: n
       }`}
     >
       <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-white">${value}</div>
+      <div className="mt-2 text-xl font-semibold text-white">${formattedValue}</div>
     </div>
   );
 }
