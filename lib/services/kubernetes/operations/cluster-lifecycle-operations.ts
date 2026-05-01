@@ -268,7 +268,12 @@ export const clusterLifecycleOperations = {
         owner_id: request.owner_id,
         ...(request.project_id ? { project_id: request.project_id } : {}),
         k8s_version: request.version,
-        node_config: { cpu: nodes[0].cpu, ram: nodes[0].memory_mb, storage: nodes[0].storage },
+        node_config: {
+          cpu: nodes[0].cpu,
+          ram: nodes[0].memory_mb,
+          storage: nodes[0].storage,
+          ...(request.skipBilling ? { provision_config: { type: "internal" } } : {}),
+        },
         control_plane: cpNode ? { public_ip: cpNode.host, private_ip: cpNode.private_ip, droplet_id: cpNode.droplet_id } : null,
         workers: workerNodes.map(w => ({ public_ip: w.host, private_ip: w.private_ip, droplet_id: w.droplet_id })),
       });

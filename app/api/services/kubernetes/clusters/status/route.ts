@@ -20,7 +20,7 @@ type Row = {
   kubeconfig: string | null;
   owner_id: string;
   project_id: string | null;
-  node_config: {cpu:number,ram:number,storage:number} | null;
+  node_config: { cpu: number; ram: number; storage: number; provision_config?: { type?: string; plan_id?: string; node_count?: number; [key: string]: unknown } } | null;
   control_plane:{public_ip:string,private_ip:string,droplet_id:string} | null;
   workers: {public_ip:string,private_ip:string,droplet_id:string}[] | null;
 };
@@ -143,8 +143,8 @@ export async function POST(
   }
 
   try {
-    // Skip billing and notifications for internal clusters (project_id is null)
-    const isInternalCluster = !data.project_id;
+    // Skip billing and notifications for internal clusters (explicit marker, not project_id nullness)
+    const isInternalCluster = data.node_config?.provision_config?.type === "internal";
     if (!isInternalCluster) {
       await ensureBillingActivatedForReadyCluster(body.clusterId, data);
     }
@@ -153,7 +153,8 @@ export async function POST(
   }
 
   try {
-    if (data.project_id) {
+    const isInternalCluster = data.node_config?.provision_config?.type === "internal";
+    if (!isInternalCluster) {
       await ensureReadyNotification(body.clusterId, data);
     }
   } catch (notificationErr) {

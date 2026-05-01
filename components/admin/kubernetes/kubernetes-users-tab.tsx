@@ -50,8 +50,8 @@ const CLUSTERS_PER_PAGE = 10;
 export default function KubernetesUsersTab({ all_clusters }: KubernetesUsersTabProps) {
   const router = useRouter();
 
-  // Internal clusters have no project_id (null) — exclude them from the user view
-  const userClusters = all_clusters.filter((c) => !!c.project_id);
+  // Exclude internal platform clusters from the user view (check explicit type, not project_id)
+  const userClusters = all_clusters.filter((c) => c.node_config?.provision_config?.type !== "internal");
 
   const [allClustersLocal, setAllClustersLocal] = useState(userClusters);
   const [clusters, setClusters] = useState(userClusters.slice(0, CLUSTERS_PER_PAGE));

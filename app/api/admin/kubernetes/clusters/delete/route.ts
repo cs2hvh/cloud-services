@@ -130,10 +130,13 @@ export async function POST(req: NextRequest) {
             },
           }
         );
-        const clusterPrefix = (cluster.cluster_name as string).toLowerCase();
+        const clusterPrefix = (cluster.cluster_name as string).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match only deterministic node names: {prefix}-{4hex}-(cp|w{n})
+        // Prevents "app" from matching "app-prod-..."
+        const nodeNameRegex = new RegExp(`^${clusterPrefix}-[a-f0-9]{4}-(cp|w\\d+)$`, 'i');
         const matchingDroplets: Array<{ id: number; name: string }> =
           (searchRes.data?.droplets ?? []).filter(
-            (d: { name: string }) => d.name.toLowerCase().startsWith(clusterPrefix)
+            (d: { name: string }) => nodeNameRegex.test(d.name)
           );
         console.log(`[Admin K8s Delete] Name-based fallback found ${matchingDroplets.length} droplet(s) for "${cluster.cluster_name}"`);
         for (const droplet of matchingDroplets) {

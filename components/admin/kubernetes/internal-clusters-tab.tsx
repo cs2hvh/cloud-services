@@ -61,8 +61,8 @@ const getNodeCount = (cluster: Admin_KubernetesCluster) => {
 export default function InternalClustersTab({ all_clusters }: Props) {
   const router = useRouter();
 
-  // Only show internal clusters (identified by null project_id)
-  const internalClusters = all_clusters.filter((c) => !c.project_id);
+  // Only show internal clusters (identified by explicit provision_config.type, not project_id nullness)
+  const internalClusters = all_clusters.filter((c) => c.node_config?.provision_config?.type === "internal");
 
   const [localClusters, setLocalClusters] = useState(internalClusters);
   const [searchQuery, setSearchQuery] = useState("");

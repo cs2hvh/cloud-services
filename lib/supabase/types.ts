@@ -16,6 +16,16 @@ interface NodeConfig {
   ram: number;
   cpu: number;
   storage: number;
+  provision_config?: {
+    type?: "internal" | "customer" | string;
+    location?: string;
+    k8s_minor?: string;
+    pod_cidr?: string;
+    ssh_user?: string;
+    node_count?: number;
+    plan_id?: string;
+    [key: string]: unknown;
+  };
 }
 
 

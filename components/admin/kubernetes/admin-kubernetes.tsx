@@ -17,8 +17,8 @@ interface PageProps {
 export default function AdminKubernetes({ all_clusters, all_products }: PageProps) {
   const [activeTab, setActiveTab] = useState("k8s-users");
 
-  const userClusterCount = all_clusters.filter((c) => !!c.project_id).length;
-  const internalClusterCount = all_clusters.filter((c) => !c.project_id).length;
+  const userClusterCount = all_clusters.filter((c) => c.node_config?.provision_config?.type !== "internal").length;
+  const internalClusterCount = all_clusters.filter((c) => c.node_config?.provision_config?.type === "internal").length;
 
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
