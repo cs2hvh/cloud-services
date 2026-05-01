@@ -16,21 +16,35 @@ export interface ServiceResult<T = unknown> {
 }
 
 // Cluster operations
-export interface CreateKubernetesClusterRequest {
+// Discriminated union prevents accidental undefined plan_id/project_id at runtime.
+// Customer clusters require both; internal clusters must not provide either.
+type CustomerClusterRequest = {
+  skipBilling?: false;
+  project_id: string;
+  plan_id: string;
   name: string;
   region: string;
   version: string;
-  node_pool: {
-    size: string;
-    count: number;
-    name?: string;
-  };
-  project_id: string;
-  plan_id: string;
+  node_pool: { size: string; count: number; name?: string };
   owner_id: string;
   user_email?: string;
   isAdmin?: boolean;
-}
+};
+
+type InternalClusterRequest = {
+  skipBilling: true;
+  project_id?: never;
+  plan_id?: never;
+  name: string;
+  region: string;
+  version: string;
+  node_pool: { size: string; count: number; name?: string };
+  owner_id: string;
+  user_email?: string;
+  isAdmin?: boolean;
+};
+
+export type CreateKubernetesClusterRequest = CustomerClusterRequest | InternalClusterRequest;
 
 export interface CreateKubernetesClusterResult extends ServiceResult {
   clusterId?: string;

@@ -113,47 +113,55 @@ export async function POST(req: NextRequest) {
       }
 
       if (status === "ready" && cluster.status !== "ready") {
-        try {
-          const billingState = await activateKubernetesBillingOnReady({
-            clusterId: cluster_id,
-            ownerId: cluster.owner_id,
-            nodeConfig: cluster.node_config,
-            workers: cluster.workers,
-            controlPlane: cluster.control_plane,
-          });
+        const nodeConfig = cluster.node_config as Record<string, unknown> | null;
+        const provisionConfig = (nodeConfig?.provision_config ?? null) as Record<string, unknown> | null;
+        const isInternalCluster = provisionConfig?.type === "internal";
 
-          if (billingState.alreadyActive) {
-            console.log(`[updateClusterStatus] Active kubernetes billing already exists for ${cluster_id}`);
-          } else {
-            console.log(`[updateClusterStatus] Kubernetes billing activated for ${cluster_id}`);
+        if (!isInternalCluster) {
+          try {
+            const billingState = await activateKubernetesBillingOnReady({
+              clusterId: cluster_id,
+              ownerId: cluster.owner_id,
+              nodeConfig: cluster.node_config,
+              workers: cluster.workers,
+              controlPlane: cluster.control_plane,
+            });
+
+            if (billingState.alreadyActive) {
+              console.log(`[updateClusterStatus] Active kubernetes billing already exists for ${cluster_id}`);
+            } else {
+              console.log(`[updateClusterStatus] Kubernetes billing activated for ${cluster_id}`);
+            }
+          } catch (billingErr) {
+            console.error("[updateClusterStatus] Failed to activate kubernetes billing:", billingErr);
           }
-        } catch (billingErr) {
-          console.error("[updateClusterStatus] Failed to activate kubernetes billing:", billingErr);
-        }
 
-        if (cluster.project_id) {
-          await Projects.add_log({
-            project_id: cluster.project_id,
-            event: "CheckCircle",
-            text: `Kubernetes cluster '${cluster.cluster_name}' is ready`,
-          });
-          console.log("[updateClusterStatus] Activity log added for cluster ready");
-        }
+          if (cluster.project_id) {
+            await Projects.add_log({
+              project_id: cluster.project_id,
+              event: "CheckCircle",
+              text: `Kubernetes cluster '${cluster.cluster_name}' is ready`,
+            });
+            console.log("[updateClusterStatus] Activity log added for cluster ready");
+          }
 
-        try {
-          await NotificationService.create({
-            user_id: cluster.owner_id,
-            type: "success",
-            title: "Kubernetes Cluster Ready",
-            message: `Kubernetes cluster ${cluster.cluster_name} is ready.`,
-            service_type: "kubernetes",
-            service_id: cluster_id,
-            action: "deployed",
-            metadata: { serviceName: cluster.cluster_name },
-          });
-          console.log("[updateClusterStatus] Notification sent for cluster ready");
-        } catch (notifErr) {
-          console.error("[updateClusterStatus] Failed to create notification:", notifErr);
+          try {
+            await NotificationService.create({
+              user_id: cluster.owner_id,
+              type: "success",
+              title: "Kubernetes Cluster Ready",
+              message: `Kubernetes cluster ${cluster.cluster_name} is ready.`,
+              service_type: "kubernetes",
+              service_id: cluster_id,
+              action: "deployed",
+              metadata: { serviceName: cluster.cluster_name },
+            });
+            console.log("[updateClusterStatus] Notification sent for cluster ready");
+          } catch (notifErr) {
+            console.error("[updateClusterStatus] Failed to create notification:", notifErr);
+          }
+        } else {
+          console.log(`[updateClusterStatus] Internal cluster ${cluster_id} ready — skipping billing and notifications`);
         }
       }
     }
