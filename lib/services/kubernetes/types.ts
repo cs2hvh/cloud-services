@@ -25,11 +25,12 @@ export interface CreateKubernetesClusterRequest {
     count: number;
     name?: string;
   };
-  project_id: string;
-  plan_id: string;
+  project_id?: string;  // optional for admin internal clusters (no billing)
+  plan_id?: string;     // optional for admin internal clusters (no billing)
   owner_id: string;
   user_email?: string;
   isAdmin?: boolean;
+  skipBilling?: boolean; // skip billing, project validation, and notifications (admin internal clusters)
 }
 
 export interface CreateKubernetesClusterResult extends ServiceResult {

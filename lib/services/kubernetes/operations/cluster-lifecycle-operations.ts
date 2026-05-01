@@ -49,7 +49,7 @@ function resolveAuditUserRole(isAdmin?: boolean): "user" | "admin" {
 // Format: {name8}-{uuid4}-cp (16 chars) or {name8}-{uuid4}-w{i} (up to 18 chars for i<100)
 function makeNodeKeys(workers: number, clusterName: string): string[] {
   const MAX_PREFIX = 8; // safe prefix length to fit within 20 chars for any reasonable worker count
-  const namePrefix = clusterName.slice(0, MAX_PREFIX).replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const namePrefix = clusterName.slice(0, MAX_PREFIX).replace(/[^a-z0-9]/gi, "-").toLowerCase().replace(/-+$/, "");
   const nodeNames: string[] = [];
   for (let i = 0; i <= workers; i++) {
     const shortId = crypto.randomUUID().replace(/-/g, "").slice(0, 4);
@@ -83,39 +83,44 @@ export const clusterLifecycleOperations = {
     req?: NextRequest
   ): Promise<CreateKubernetesClusterResult> {
     let clusterId: string | null = null;
+    let INITIAL_COST = 0;
+    let HOURLY_RATE = 0;
 
     try {
       const totalNodes = Math.max(request.node_pool.count, 1);
 
-      // Check billing
-      const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
-        await getRatesForKubernetes(request.plan_id, totalNodes);
+      if (!request.skipBilling) {
+        // Check billing
+        const rates = await getRatesForKubernetes(request.plan_id!, totalNodes);
+        INITIAL_COST = rates.initialCost;
+        HOURLY_RATE = rates.hourlyRate;
 
-      const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
-      if (!balCheck.ok) {
-        return {
-          success: false,
-          error: "Insufficient credits",
-          errorCode: "INSUFFICIENT_BALANCE",
-        };
-      }
+        const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
+        if (!balCheck.ok) {
+          return {
+            success: false,
+            error: "Insufficient credits",
+            errorCode: "INSUFFICIENT_BALANCE",
+          };
+        }
 
-      // Verify project ownership
-      const project = await Projects.get_by_id(request.project_id);
-      if (!project) {
-        return {
-          success: false,
-          error: "Project not found",
-          errorCode: "NOT_FOUND",
-        };
-      }
+        // Verify project ownership
+        const project = await Projects.get_by_id(request.project_id!);
+        if (!project) {
+          return {
+            success: false,
+            error: "Project not found",
+            errorCode: "NOT_FOUND",
+          };
+        }
 
-      if (!request.isAdmin && project.owner !== request.owner_id) {
-        return {
-          success: false,
-          error: "You do not have permission to create clusters in this project",
-          errorCode: "FORBIDDEN",
-        };
+        if (!request.isAdmin && project.owner !== request.owner_id) {
+          return {
+            success: false,
+            error: "You do not have permission to create clusters in this project",
+            errorCode: "FORBIDDEN",
+          };
+        }
       }
 
       // Step 1: Generate node names
@@ -128,7 +133,7 @@ export const clusterLifecycleOperations = {
         names: nodeNames,
         region: request.region,
         size: request.node_pool.size,
-        image: "ubuntu-25-04-x64",
+        image: "ubuntu-24-04-x64",
         backups: false,
         ipv6: true,
         monitoring: true,
@@ -251,13 +256,21 @@ export const clusterLifecycleOperations = {
 
       // Persist the cluster row immediately so GET /kubernetes/{id} cannot 404
       // between POST returning and the background worker completing provisioning.
+      // Build control_plane and workers from the nodes array (already populated with droplet_id)
+      // This ensures delete works immediately — no orphaned droplets if admin deletes during provisioning
+      const cpNode = nodes.find(n => n.role === "control-plane");
+      const workerNodes = nodes.filter(n => n.role === "worker");
+
       const dbCreateResult = await Clusters.create({
         cluster_id: clusterId,
         cluster_name: request.name,
         status: "creating",
         owner_id: request.owner_id,
-        project_id: request.project_id,
+        ...(request.project_id ? { project_id: request.project_id } : {}),
         k8s_version: request.version,
+        node_config: { cpu: nodes[0].cpu, ram: nodes[0].memory_mb, storage: nodes[0].storage },
+        control_plane: cpNode ? { public_ip: cpNode.host, private_ip: cpNode.private_ip, droplet_id: cpNode.droplet_id } : null,
+        workers: workerNodes.map(w => ({ public_ip: w.host, private_ip: w.private_ip, droplet_id: w.droplet_id })),
       });
 
       if (!dbCreateResult.success) {
@@ -297,6 +310,7 @@ export const clusterLifecycleOperations = {
         ...clusterPayload,
         decryptedPassword: vmPassword,
         role: "user",
+        ...(request.skipBilling ? { clusterType: "internal" } : {}),
       });
 
       // Add activity log
@@ -311,24 +325,26 @@ export const clusterLifecycleOperations = {
         );
       }
 
-      // Post-provision billing
-      try {
-        await postProvisionBilling({
-          userId: request.owner_id,
-          initialCost: INITIAL_COST,
-          hourlyRate: HOURLY_RATE,
-          serviceId: clusterId,
-          serviceType: "kubernetes",
-          addActive: Billing.add_active_kubernetes,
-        });
-      } catch (billingErr) {
-        const billingMessage =
-          billingErr instanceof Error ? billingErr.message : String(billingErr);
-        return {
-          success: false,
-          error: `Post-provision billing failed: ${billingMessage}`,
-          errorCode: "POST_PROVISION_BILLING_FAILED",
-        };
+      // Post-provision billing (skipped for admin internal clusters)
+      if (!request.skipBilling) {
+        try {
+          await postProvisionBilling({
+            userId: request.owner_id,
+            initialCost: INITIAL_COST,
+            hourlyRate: HOURLY_RATE,
+            serviceId: clusterId,
+            serviceType: "kubernetes",
+            addActive: Billing.add_active_kubernetes,
+          });
+        } catch (billingErr) {
+          const billingMessage =
+            billingErr instanceof Error ? billingErr.message : String(billingErr);
+          return {
+            success: false,
+            error: `Post-provision billing failed: ${billingMessage}`,
+            errorCode: "POST_PROVISION_BILLING_FAILED",
+          };
+        }
       }
 
       // Audit log
@@ -368,17 +384,19 @@ export const clusterLifecycleOperations = {
         });
       }
 
-      // Notification
-      await NotificationService.create({
-        user_id: request.owner_id,
-        type: "info",
-        title: "Kubernetes Cluster Creation",
-        message: "Kubernetes Cluster Creation started.",
-        service_type: "kubernetes",
-        service_id: clusterId,
-        action: "created",
-        metadata: { serviceName: request.name },
-      });
+      // Notification (skipped for admin internal clusters)
+      if (!request.skipBilling) {
+        await NotificationService.create({
+          user_id: request.owner_id,
+          type: "info",
+          title: "Kubernetes Cluster Creation",
+          message: "Kubernetes Cluster Creation started.",
+          service_type: "kubernetes",
+          service_id: clusterId,
+          action: "created",
+          metadata: { serviceName: request.name },
+        });
+      }
 
       // Return the persisted DB record so the response shape is identical to GET /kubernetes/{id}
       const persistedCluster = dbCreateResult.data ?? await Clusters.get_by_id(clusterId);

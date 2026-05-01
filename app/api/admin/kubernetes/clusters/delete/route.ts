@@ -111,7 +111,56 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    
+
+    // Fallback: if no droplet IDs were stored in DB (worker failed or cluster still provisioning),
+    // query DO for droplets whose name starts with the cluster name and delete them.
+    // DO API supports fuzzy name search — "app-ko" matches "app-ko-5ca7-cp", "app-ko-5152-w1", etc.
+    const hadStoredIds =
+      !!cluster.control_plane?.droplet_id ||
+      (Array.isArray(cluster.workers) && cluster.workers.some((w: Record<string, unknown>) => w?.droplet_id));
+
+    if (!hadStoredIds && cluster.cluster_name) {
+      try {
+        const searchRes = await axios.get(
+          `https://api.digitalocean.com/v2/droplets?name=${encodeURIComponent(cluster.cluster_name)}&per_page=200`,
+          {
+            headers: {
+              Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const clusterPrefix = (cluster.cluster_name as string).toLowerCase();
+        const matchingDroplets: Array<{ id: number; name: string }> =
+          (searchRes.data?.droplets ?? []).filter(
+            (d: { name: string }) => d.name.toLowerCase().startsWith(clusterPrefix)
+          );
+        console.log(`[Admin K8s Delete] Name-based fallback found ${matchingDroplets.length} droplet(s) for "${cluster.cluster_name}"`);
+        for (const droplet of matchingDroplets) {
+          try {
+            await axios.delete(
+              `https://api.digitalocean.com/v2/droplets/${droplet.id}`,
+              {
+                headers: {
+                  Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            console.log(`[Admin K8s Delete] ✅ Deleted droplet by name-match: ${droplet.name} (${droplet.id})`);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            console.error(`[Admin K8s Delete] ❌ Failed to delete droplet ${droplet.name}: ${errorMsg}`);
+            dropletDeletionErrors.push(`${droplet.name}: ${errorMsg}`);
+          }
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[Admin K8s Delete] ❌ Name-based DO query failed: ${errorMsg}`);
+        dropletDeletionErrors.push(`Name-based fallback: ${errorMsg}`);
+      }
+    }
+
     // Delete the cluster from database
     const { error: deleteError } = await supabase
       .from("clusters")

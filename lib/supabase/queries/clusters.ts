@@ -314,6 +314,8 @@ export const Clusters = {
     connect_status?: boolean;
     verify_status?: boolean;
     node_config?: Record<string, unknown>;
+    control_plane?: { public_ip: string; private_ip?: string; droplet_id?: number } | null;
+    workers?: Array<{ public_ip: string; private_ip?: string; droplet_id?: number }>;
   }): Promise<{ success: boolean; data?: ClusterRow; error?: string }> => {
     try {
       const supabase = await createServiceClient();
@@ -333,6 +335,8 @@ export const Clusters = {
           connect_status: clusterData.connect_status ?? false,
           verify_status: clusterData.verify_status ?? false,
           node_config: clusterData.node_config || null,
+          control_plane: clusterData.control_plane ?? null,
+          workers: clusterData.workers ?? [],
         })
         .select()
         .single();
