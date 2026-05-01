@@ -279,7 +279,7 @@ export class BuildPollingService {
 
     // Notification fires alongside audit (confirmed outcome, not trigger-time)
     try {
-      const { NotificationService, createServiceNotification } = await import('@/lib/notifications');
+      const { NotificationService, createServiceNotification } = await import('@/lib/notifications/service');
       await NotificationService.create(
         createServiceNotification({
           userId: params.userId,
@@ -314,7 +314,7 @@ export class BuildPollingService {
     failureReason?: string;
   }): Promise<void> {
     try {
-      const { NotificationService, createServiceNotification } = await import('@/lib/notifications');
+      const { NotificationService, createServiceNotification } = await import('@/lib/notifications/service');
       await NotificationService.create(
         createServiceNotification({
           userId: params.userId,
