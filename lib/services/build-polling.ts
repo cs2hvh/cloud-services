@@ -146,7 +146,6 @@ export class BuildPollingService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('not found')) {
         const failureReason = 'Build never started';
-        await AppStatusService.setStatus(appId, 'failed', failureReason);
         await this.finalizeBuildRecord({
           appId,
           appName,
@@ -460,17 +459,10 @@ export class BuildPollingService {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
 
-    // If build failed, mark as failed immediately
+    // If build failed, delegate to finalizer (single status writer)
     if (buildStatus.status === 'failed' || buildStatus.result !== 'SUCCESS') {
       const failureReason = `Build failed: ${buildStatus.result || 'Unknown error'}`;
-      
-      // Use AppStatusService for consistent status management
-      const updateResult = await AppStatusService.setStatus(appId, "failed", failureReason);
 
-      if (!updateResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to update app status to failed: ${updateResult.error}`);
-      }
-      
       await this.finalizeBuildRecord({
         appId,
         appName,
@@ -487,7 +479,7 @@ export class BuildPollingService {
       } else if (trigger !== 'resize' && userId) {
         await this.logDeployNotification({ appId, appName, userId, trigger, status: 'failed', buildNumber, failureReason });
       }
-      console.log(`[BuildPolling] App status set to failed for build #${buildNumber ?? 'unknown'}`);
+      console.log(`[BuildPolling] Build #${buildNumber ?? 'unknown'} failed — status written by finalizer`);
       return;
     }
 
@@ -502,10 +494,6 @@ export class BuildPollingService {
         if (actualRuntimeSize !== resizeContext.targetSize) {
           const failureReason = `Resize verification failed: expected ${resizeContext.targetSize}, got ${actualRuntimeSize ?? 'unknown'}`;
           console.log(`[BuildPolling] ❌ ${failureReason}`);
-          const updateResult = await AppStatusService.setStatus(appId, "failed", failureReason);
-          if (!updateResult.success) {
-            console.error(`[BuildPolling] ❌ Failed to update app status to failed (resize verify): ${updateResult.error}`);
-          }
           await this.finalizeBuildRecord({
             appId,
             appName,
@@ -529,14 +517,6 @@ export class BuildPollingService {
       // No need to handle them inline here.
 
       console.log(`[BuildPolling] ✅ App ${appName} is healthy and running`);
-      // Use AppStatusService for consistent status management
-      const updateResult = await AppStatusService.setStatus(appId, "running");
-
-      if (!updateResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to update app status to running: ${updateResult.error}`);
-      } else {
-        console.log(`[BuildPolling] ✅ App status updated to 'running' in DB`);
-      }
       await this.finalizeBuildRecord({
         appId,
         appName,
@@ -557,15 +537,9 @@ export class BuildPollingService {
       console.log(`[BuildPolling] ✅ Build #${buildNumber} confirmed healthy`);
     } else {
       const failureReason = `Health check failed: ${healthCheck.reason}`;
-      
-      console.log(`[BuildPolling] ❌ App ${appName} failed health check - ${healthCheck.reason}`);
-      // Use AppStatusService for consistent status management
-      const updateResult = await AppStatusService.setStatus(appId, "failed", failureReason);
 
-      if (!updateResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to update app status to failed (health check): ${updateResult.error}`);
-      }
-      
+      console.log(`[BuildPolling] ❌ App ${appName} failed health check - ${healthCheck.reason}`);
+
       await this.finalizeBuildRecord({
         appId,
         appName,
@@ -582,7 +556,7 @@ export class BuildPollingService {
       } else if (trigger !== 'resize' && userId) {
         await this.logDeployNotification({ appId, appName, userId, trigger, status: 'failed', buildNumber, failureReason });
       }
-      
+
       console.log(`[BuildPolling] 📝 Recorded health-check failure for build #${buildNumber ?? 'unknown'}`);
     }
   }
@@ -593,32 +567,45 @@ export class BuildPollingService {
    */
   private static async waitForHealthy(appName: string): Promise<{ healthy: boolean; reason: string }> {
     let lastReason = 'Health verification timed out';
+    let allAttemptsUnreachable = true;
 
     for (let attempt = 1; attempt <= this.HEALTH_CHECK_MAX_ATTEMPTS; attempt++) {
       try {
         const health = await AppStatusService.checkK8sHealth(appName);
-        
+
         lastReason = health.reason;
         console.log(
-          `[BuildPolling] Health check ${attempt}/${this.HEALTH_CHECK_MAX_ATTEMPTS}: ${health.healthy ? 'healthy' : 'unhealthy'} - ${health.reason}`
+          `[BuildPolling] Health check ${attempt}/${this.HEALTH_CHECK_MAX_ATTEMPTS}: ${health.healthy ? 'healthy' : health.unreachable ? 'k8s-unreachable' : 'unhealthy'} - ${health.reason}`
         );
-        
+
         if (health.healthy) {
           return { healthy: true, reason: health.reason };
         }
-        
+
+        // K8s API is unreachable — skip this attempt but don't count it as a
+        // genuine pod failure. If ALL attempts are unreachable we trust Jenkins.
+        if (health.unreachable) {
+          if (attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
+            await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
+          }
+          continue;
+        }
+
+        // At least one attempt reached K8s and observed an actual pod problem.
+        allAttemptsUnreachable = false;
+
         // If pods exist but not ready, keep waiting
         if (health.podsTotal > 0 && attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
           await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
           continue;
         }
-        
+
         // If no pods found after multiple attempts, consider it failed
         if (health.podsTotal === 0 && attempt >= 3) {
           console.log(`[BuildPolling] No pods found after ${attempt} attempts`);
           return { healthy: false, reason: health.reason };
         }
-        
+
         // Wait before next attempt
         if (attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
           await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
@@ -631,6 +618,13 @@ export class BuildPollingService {
           await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
         }
       }
+    }
+
+    // If every attempt failed because K8s was unreachable (not because pods were
+    // actually down), trust Jenkins' SUCCESS result and treat the app as healthy.
+    if (allAttemptsUnreachable) {
+      console.warn(`[BuildPolling] ⚠️ K8s unreachable throughout health check for ${appName} — trusting Jenkins SUCCESS`);
+      return { healthy: true, reason: 'K8s unreachable — health assumed from Jenkins SUCCESS' };
     }
 
     console.log(`[BuildPolling] ⚠️ Health verification failed: ${lastReason}`);
@@ -652,16 +646,9 @@ export class BuildPollingService {
   ): Promise<void> {
     const timeoutMinutes = Math.floor((pollCount * pollInterval) / 60000);
     const failureReason = `Build timeout: No response after ${timeoutMinutes} minutes`;
-    
-    console.log(`[BuildPolling] ⚠️ Timeout for ${appName} after ${timeoutMinutes} minutes`);
-    
-    // Use AppStatusService for consistent status management
-    const updateResult = await AppStatusService.setStatus(appId, "failed", failureReason);
 
-    if (!updateResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to update app status to timeout: ${updateResult.error}`);
-    }
-    
+    console.log(`[BuildPolling] ⚠️ Timeout for ${appName} after ${timeoutMinutes} minutes`);
+
     await this.finalizeBuildRecord({
       appId,
       appName,
@@ -717,8 +704,6 @@ export class BuildPollingService {
       if (!buildFound) {
         const failureReason = "Build never started";
         console.error(`[BuildPolling] ❌ Build never started for ${appName} after ${Math.floor(buildStartTimeout / 1000)}s`);
-        // Use AppStatusService for consistent status management
-        await AppStatusService.setStatus(appId, "failed", failureReason);
         await this.finalizeBuildRecord({
           appId,
           appName,

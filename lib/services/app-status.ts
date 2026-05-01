@@ -33,6 +33,8 @@ export interface K8sHealthCheck {
   podsReady: number;
   podsRunning: number;
   healthy: boolean;
+  /** true when the K8s API itself was unreachable — pods may still be running */
+  unreachable?: boolean;
   reason: string;
 }
 
@@ -93,6 +95,7 @@ export class AppStatusService {
         podsReady: 0,
         podsRunning: 0,
         healthy: false,
+        unreachable: true,
         reason: `K8s check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
@@ -157,6 +160,19 @@ export class AppStatusService {
 
       // Check K8s health (SOURCE OF TRUTH)
       const health = await this.checkK8sHealth(appName);
+
+      // If K8s API is unreachable, preserve current status — don't flip to failed
+      // due to a transient network issue or K8s control-plane hiccup.
+      if (health.unreachable) {
+        console.warn(`[AppStatusService] K8s unreachable for ${appName}, preserving status '${previousStatus}': ${health.reason}`);
+        return {
+          success: true,
+          previousStatus,
+          currentStatus: previousStatus,
+          changed: false,
+          reason: `K8s unreachable — status preserved: ${health.reason}`,
+        };
+      }
 
       // Determine new status based on K8s state
       const newStatus: AppStatus = health.healthy ? "running" : "failed";
@@ -260,6 +276,95 @@ export class AppStatusService {
         error: error instanceof Error ? error.message : "Unknown error" 
       };
     }
+  }
+
+  // ─── Operation outcome helpers ─────────────────────────────────────────────
+  //
+  // These are the ONLY place the "what status should an app be after operation
+  // X?" rule lives. All callers (AppOperationFinalizer, BuildPollingService,
+  // recover-build, etc.) must go through applyOperationStatus instead of
+  // calling setStatus or writing to the DB directly with a status field.
+
+  /**
+   * Pure rule: given an operation outcome, return what app status + failure
+   * reason the app should have.
+   *
+   * Rule:
+   *   success            → running,  clear failure reason
+   *   failed + prior release live → running,  record failure reason (new build failed but old one still serves)
+   *   failed + no prior release  → failed,   record failure reason
+   */
+  static resolveOperationStatus(params: {
+    operationStatus: "success" | "failed";
+    hasActiveDeployment: boolean;
+    failureReason?: string | null;
+  }): { status: AppStatus; lastFailureReason: string | null } {
+    if (params.operationStatus === "success") {
+      return { status: "running", lastFailureReason: null };
+    }
+    if (params.hasActiveDeployment) {
+      // Old release is still live — don't downgrade the whole app to "failed"
+      return { status: "running", lastFailureReason: params.failureReason ?? null };
+    }
+    return { status: "failed", lastFailureReason: params.failureReason ?? null };
+  }
+
+  /**
+   * Apply the canonical post-operation status to the database.
+   * This is the SINGLE place that writes running/failed after any build, resize,
+   * rollback, or runtime operation completes.
+   *
+   * It fetches active_deployment_id from the DB, delegates to
+   * resolveOperationStatus for the decision, then writes atomically.
+   */
+  static async applyOperationStatus(params: {
+    appId: string;
+    operationStatus: "success" | "failed";
+    trigger: string;
+    commitSha?: string | null;
+    failureReason?: string | null;
+  }): Promise<void> {
+    const appRecord = await Platform_Apps.get(params.appId);
+    if (!appRecord.success) {
+      // Non-fatal: on DB failure, assume a prior release IS live (conservative toward
+      // availability — don't downgrade a running app to "failed" just because we
+      // couldn't confirm the active_deployment_id).
+      console.warn(
+        `[AppStatusService] applyOperationStatus: DB lookup failed for ${params.appId}: ${appRecord.error}`
+      );
+    }
+    // If DB lookup failed we assume hasActiveDeployment=true to avoid wrongly
+    // marking a live app as failed. The failure reason is still stored.
+    const hasActiveDeployment =
+      !appRecord.success || appRecord.data?.active_deployment_id != null;
+
+    const { status, lastFailureReason } = this.resolveOperationStatus({
+      operationStatus: params.operationStatus,
+      hasActiveDeployment,
+      failureReason: params.failureReason,
+    });
+
+    const result = await Platform_Apps.update(params.appId, {
+      status,
+      last_deploy_trigger: params.trigger,
+      last_deploy_commit: params.commitSha ?? null,
+      last_failure_reason: lastFailureReason,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || "applyOperationStatus: DB update failed");
+    }
+
+    // Record timestamp so syncStatus() grace period works correctly
+    this.recentStatusSets.set(params.appId, Date.now());
+
+    console.log(
+      `[AppStatusService] applyOperationStatus: ${params.appId} → ${status}` +
+        (lastFailureReason ? ` (${lastFailureReason})` : "") +
+        (hasActiveDeployment && params.operationStatus === "failed"
+          ? " [prior release preserved]"
+          : "")
+    );
   }
 
   /**

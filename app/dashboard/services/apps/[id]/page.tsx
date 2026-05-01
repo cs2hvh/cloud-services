@@ -624,6 +624,9 @@ export default function AppDetailPage() {
 
     if (wasBuilding === true && !isBuilding) {
       refetchDeployments();
+      // Re-fetch full app state: last_failure_reason, can_rollback, rollback_target_build_number
+      // and other server-computed fields are not carried by the Supabase realtime payload.
+      fetchApp();
 
       // Poll details every 5s for up to 60s until the K8s pod image updates
       let attempts = 0;
@@ -637,7 +640,7 @@ export default function AppDetailPage() {
       }, 5000);
       return () => clearInterval(pollId);
     }
-  }, [isBuilding, refetchDetails, refetchDeployments]);
+  }, [isBuilding, refetchDetails, refetchDeployments, fetchApp]);
 
   // Idle poll: when no build is running, check Jenkins every 15 s so webhook-triggered
   // builds (started entirely on the backend) are detected promptly. Once Jenkins
@@ -672,9 +675,8 @@ export default function AppDetailPage() {
     if (latestResize.id !== prevResizeOpIdRef.current && latestResize.status !== 'BUILDING') {
       prevResizeOpIdRef.current = latestResize.id;
       setPendingResizeSize(null);
-      if (latestResize.status === 'SUCCESS') {
-        fetchApp();
-      }
+      // Refresh on both success and failure: failure reason and status are updated server-side
+      fetchApp();
     }
   }, [operationDeployments, fetchApp]);
 
@@ -1266,18 +1268,25 @@ export default function AppDetailPage() {
                 </button>
               </div>
 
-              {app.status === 'failed' && app.last_failure_reason && !isBuilding && (
-                <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {/* Failure reason: shown for failed apps AND running apps with a recent operation failure (e.g. resize, redeploy on first-ever build) that did NOT leave a prior release live */}
+              {app.last_failure_reason && !isBuilding && !isDegraded &&
+                (app.status === 'failed' || app.status === 'running') && (
+                <div className={`mt-3 flex items-center gap-2 border px-3 py-2 text-sm ${
+                  app.status === 'failed'
+                    ? 'border-red-400/20 bg-red-500/10 text-red-300'
+                    : 'border-orange-400/20 bg-orange-500/10 text-orange-300'
+                }`}>
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
                 </div>
               )}
-              {/* Degraded state warning: newer deploy exists but old build is still serving */}
+              {/* Degraded state warning: newer release failed but old pod is still serving */}
               {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over — still serving Build #${servingBuildNumber}.`}
+                    {app.last_failure_reason ? ` Failure: ${app.last_failure_reason}` : ''}
                   </span>
                 </div>
               )}
