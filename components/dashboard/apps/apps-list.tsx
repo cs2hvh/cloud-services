@@ -60,7 +60,9 @@ export function AppsList({
     app.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const runningCount = apps.filter((app) => app.status === "running").length;
+  const runningCount = apps.filter(
+    (app) => app.status === "running" && !buildInfo[app.name]?.building,
+  ).length;
   const buildingCount = apps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,
   ).length;

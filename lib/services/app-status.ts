@@ -113,11 +113,15 @@ export class AppStatusService {
   static async syncStatus(
     appId: string,
     appName: string,
-    currentDbStatus?: AppStatus
+    currentDbStatus?: AppStatus,
+    /** ISO timestamp of the app row's last DB write — used for a durable grace
+     *  period across serverless instances. Pass `app.updated_at` when available. */
+    appUpdatedAt?: string
   ): Promise<StatusSyncResult> {
     try {
-      // Get current DB status if not provided
+      // Get current DB status (and updated_at for durable grace period) if not provided
       let previousStatus = currentDbStatus;
+      let durableUpdatedAt = appUpdatedAt;
       if (!previousStatus) {
         const appResult = await Platform_Apps.get(appId);
         if (!appResult.success || !appResult.data) {
@@ -130,6 +134,7 @@ export class AppStatusService {
           };
         }
         previousStatus = appResult.data.status as AppStatus;
+        durableUpdatedAt = appResult.data.updated_at ?? undefined;
       }
 
       // pending, stopped, and deleting are never K8s-managed — always skip.
@@ -179,15 +184,28 @@ export class AppStatusService {
 
       // Grace period: after a deployment completes, pods may still be stabilising
       // (rolling update). Don't flip running → failed during the grace window.
+      //
+      // Two sources — whichever fires:
+      //   1. In-memory (recentStatusSets): only works in the same process instance
+      //   2. Durable (DB updated_at): works across serverless instances/restarts
+      //      — applyOperationStatus/setStatus both write updated_at via Platform_Apps.update
       if (previousStatus === "running" && newStatus === "failed") {
-        const lastSet = this.recentStatusSets.get(appId);
-        if (lastSet && Date.now() - lastSet < this.STATUS_GRACE_PERIOD_MS) {
+        const inMemoryGrace = (() => {
+          const lastSet = this.recentStatusSets.get(appId);
+          return lastSet != null && Date.now() - lastSet < this.STATUS_GRACE_PERIOD_MS;
+        })();
+        const durableGrace = (() => {
+          if (!durableUpdatedAt) return false;
+          return Date.now() - new Date(durableUpdatedAt).getTime() < this.STATUS_GRACE_PERIOD_MS;
+        })();
+        if (inMemoryGrace || durableGrace) {
+          const source = inMemoryGrace ? "in-memory" : "durable(updated_at)";
           return {
             success: true,
             previousStatus,
             currentStatus: previousStatus,
             changed: false,
-            reason: `Skipping running→failed transition during grace period (${health.reason})`,
+            reason: `Skipping running→failed transition during grace period [${source}] (${health.reason})`,
           };
         }
       }

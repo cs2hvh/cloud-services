@@ -147,10 +147,15 @@ export default function ApplicationDeploymentPage() {
 
   const runningApps = deployedApps.filter(
     (app) =>
-      app.status === "running" ||
-      // An app with an active serving deployment is still live even if the DB
-      // status was transiently flipped to "failed" (e.g., by a K8s sync error).
-      (app.serving_build_number != null && app.status !== "deleting" && app.status !== "building"),
+      // Exclude apps Jenkins has confirmed as building, even if the Supabase realtime
+      // status update hasn't arrived yet — avoids Healthy/ActiveBuilds count mismatch.
+      !buildInfo[app.name]?.building &&
+      (
+        app.status === "running" ||
+        // An app with an active serving deployment is still live even if the DB
+        // status was transiently flipped to "failed" (e.g., by a K8s sync error).
+        (app.serving_build_number != null && app.status !== "deleting" && app.status !== "building")
+      ),
   ).length;
   const buildingApps = deployedApps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,
