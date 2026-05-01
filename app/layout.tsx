@@ -3,6 +3,7 @@ import { Open_Sans, Nunito, Salsa } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
+import { OfflineBanner } from "@/components/offline-banner";
 
 const openSans = Open_Sans({
   variable: "--font-open-sans",
@@ -91,6 +92,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable}`}>
+        <OfflineBanner />
         {children}
         <Toaster
           position="top-right"
