@@ -196,7 +196,7 @@ export function useDomainConnections(
               : '';
           toast.warning(
             `${connectionDomain || 'Domain'} activated. Add ${recordType} ${recordName}${
-              recordValue ? ` -> ${recordValue}` : ''
+              recordValue ? ` with value ${recordValue}` : ''
             } at your DNS provider.`
           );
         } else if (!dnsAutoConfigured) {

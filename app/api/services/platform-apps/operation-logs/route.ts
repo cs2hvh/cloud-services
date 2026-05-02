@@ -27,7 +27,7 @@ function synthesizeOperationLogs(params: {
   }
   if (params.details.source?.size || params.details.target?.size) {
     lines.push(
-      `Size: ${params.details.source?.size ?? "unknown"} -> ${params.details.target?.size ?? "unknown"}`
+      `Size: from ${params.details.source?.size ?? "unknown"} to ${params.details.target?.size ?? "unknown"}`
     );
   }
 

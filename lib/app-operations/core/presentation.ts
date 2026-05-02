@@ -97,7 +97,7 @@ export function getAppOperationLabel(params: {
     const from = params.operationDetails?.source?.size;
     const to = params.operationDetails?.target?.size;
     if (from || to) {
-      return `Resize ${from ?? "?"} -> ${to ?? "?"}`;
+      return `Resize from ${from ?? "?"} to ${to ?? "?"}`;
     }
     return params.buildNumber != null ? `Resize #${params.buildNumber}` : "Resize";
   }
