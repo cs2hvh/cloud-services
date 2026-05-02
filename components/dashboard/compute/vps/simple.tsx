@@ -1,24 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import Image from "next/image";
+import Link from "next/link";
 import {
+  ArrowRight,
   CheckCircle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Cpu,
-  LockKeyhole,
   Loader2,
-  type LucideIcon,
   MapPin,
+  Minus,
   MonitorUp,
-  Server,
+  Plus,
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,54 +68,79 @@ const STEP_META: Array<{
   label: string;
   title: string;
   description: string;
-  icon: LucideIcon;
+  iconSrc: string;
 }> = [
   {
     id: 0,
     label: "Name",
-    title: "Name the machine",
-    description: "Use a short, production-safe hostname that will stay readable in your fleet view.",
-    icon: Server,
+    title: "Hostname",
+    description: "Set server hostname",
+    iconSrc: "/dashboard-icons/name.png",
   },
   {
     id: 1,
     label: "Region",
-    title: "Choose deployment region",
-    description: "Place the VPS close to your workloads, end users, or compliance boundary.",
-    icon: MapPin,
+    title: "Deployment region",
+    description: "Choose deployment location",
+    iconSrc: "/dashboard-icons/region.png",
   },
   {
     id: 2,
     label: "Operating System",
-    title: "Select the base image",
-    description: "Pick the operating system and review its access model before provisioning.",
-    icon: MonitorUp,
+    title: "Image",
+    description: "Image & access type",
+    iconSrc: "/dashboard-icons/operating-system.png",
   },
   {
     id: 3,
     label: "Configuration",
-    title: "Right-size compute and storage",
-    description: "Set CPU, memory, and disk with the current network rate cap shown alongside.",
-    icon: Cpu,
+    title: "Resources",
+    description: "CPU, RAM & storage",
+    iconSrc: "/dashboard-icons/configuration.png",
   },
   {
     id: 4,
     label: "Access",
-    title: "Secure initial access",
-    description: "Define the initial password used for SSH or RDP depending on the selected image.",
-    icon: LockKeyhole,
+    title: "Access",
+    description: "Set root password",
+    iconSrc: "/dashboard-icons/acess.png",
   },
 ];
+
+const REGION_FLAGS: Record<string, string> = {
+  india: "IN",
+  france: "FR",
+  germany: "DE",
+  uk: "GB",
+  "united-kingdom": "GB",
+  us: "US",
+  usa: "US",
+  "united-states": "US",
+  singapore: "SG",
+  australia: "AU",
+  netherlands: "NL",
+  canada: "CA",
+  japan: "JP",
+  brazil: "BR",
+  uae: "AE",
+  poland: "PL",
+  sweden: "SE",
+};
 
 const panelClassName = "glass-panel overflow-hidden";
 const inputClassName =
   "border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -137,7 +161,7 @@ function StepContainer({
       <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">{eyebrow}</p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">{title}</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">{description}</p>
+        {description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">{description}</p> : null}
       </div>
       <div className="px-6 py-6 sm:px-7 sm:py-7">{children}</div>
     </div>
@@ -146,6 +170,7 @@ function StepContainer({
 
 const VPSSelect = ({ computeOptions }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [maxVisitedStep, setMaxVisitedStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   // Form state
@@ -181,6 +206,10 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
   }, [selectedOS, availableOS]);
 
   const usesRDP = isWindows || isDesktop;
+
+  useEffect(() => {
+    setMaxVisitedStep(prev => Math.max(prev, currentStep));
+  }, [currentStep]);
 
   useEffect(() => {
     if (regions.length > 0 && !selectedRegion) {
@@ -334,53 +363,50 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
 
   const selectedRegionData = regions.find((r) => r.id === selectedRegion);
   const selectedOSName = availableOS.find((o) => o.id === selectedOS)?.name || "Select an operating system";
-  const connectionLabel = usesRDP ? "RDP" : "SSH";
-  const bandwidthLabel = cpuCores <= 2 ? "4 MBps" : cpuCores <= 4 ? "8 MBps" : cpuCores <= 6 ? "15 MBps" : "30 MBps";
   const activeStepMeta = STEP_META[currentStep];
   const selectedDefaultUser =
     isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : selectedOS.toLowerCase().includes("centos") ? "centos" : "ubuntu";
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       {!result?.ok ? (
         <>
           {/* ─── Unified top panel: header + stats + progress bar + step grid ─── */}
           <div className={panelClassName}>
-            <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
                   VPS Provisioning
                 </p>
                 <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  Configure and deploy a virtual machine with guided, staged provisioning.
+                  Deploy a virtual machine.
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                  Select region, OS, compute specs, and access credentials. The platform provisions
-                  asynchronously and streams live progress back into the dashboard.
+                  Region, image, resources, and access.
                 </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
-                <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Progress
-                  </div>
-                  <div className="mt-1.5 text-lg font-semibold text-white">
-                    {currentStep + 1} / 5
-                  </div>
-                </div>
-                <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Rate cap
-                  </div>
-                  <div className="mt-1.5 text-lg font-semibold text-white">
-                    {bandwidthLabel}
-                  </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {["KVM hypervisor", "NVMe SSD", "IPv4 included", "Up to 32 vCPUs"].map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/42"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               </div>
+              <Image
+                src="/dashboard-services-icons/da compute.png"
+                alt=""
+                width={160}
+                height={160}
+                className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+                priority
+                unoptimized
+              />
             </div>
 
-            <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+            <div className="border-t border-white/[0.06] px-5 pb-4 pt-3 sm:px-6">
               <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
                 <div
                   className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
@@ -390,7 +416,6 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
 
               <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
                 {STEP_META.map((step) => {
-                  const Icon = step.icon;
                   const isActive = currentStep === step.id;
                   const isCompleted = currentStep > step.id;
                   const accessible = step.id === 0 || stepsValid.slice(0, step.id).every(Boolean);
@@ -399,34 +424,56 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                     <button
                       key={step.id}
                       type="button"
-                      onClick={() => {
-                        if (accessible) setCurrentStep(step.id);
-                      }}
-                      disabled={!accessible}
-                      className={`border px-3 py-3 text-left transition-colors ${
+                      onClick={() => { if (accessible) setCurrentStep(step.id); }}
+                      className={`relative border px-3 py-3 text-left transition-colors ${
                         isActive
                           ? "border-blue-400/30 bg-blue-500/10"
                           : isCompleted
                             ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
                             : "border-white/[0.06] bg-transparent"
-                      } ${accessible ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
+                      } ${accessible ? "cursor-pointer" : "cursor-default"}`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div
-                          className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
-                            isActive ? "border-blue-400/30 text-blue-300" : "border-white/[0.10] text-white/78"
-                          }`}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                          ) : (
-                            <Icon className="h-4 w-4" />
-                          )}
+                      {isActive && (
+                        <span className="absolute left-0 top-0 h-0.5 w-full bg-blue-400/70" />
+                      )}
+                      <div className="flex h-full flex-col">
+                        <span className={`text-xs font-semibold ${
+                          isActive ? "text-blue-200/90" : isCompleted ? "text-emerald-300/80" : "text-white/32"
+                        }`}>
+                          0{step.id + 1}
+                        </span>
+                        <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                          <div className="min-w-0">
+                            <div className={`text-sm font-semibold ${
+                              isActive ? "text-white" : "text-white/88"
+                            }`}>
+                              {step.label}
+                            </div>
+                            <div className={`mt-0.5 text-xs leading-snug ${
+                              isActive ? "text-white/48" : "text-white/28"
+                            }`}>
+                              {step.description}
+                            </div>
+                          </div>
+                          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                            <Image
+                              src={step.iconSrc}
+                              alt={step.label}
+                              width={44}
+                              height={44}
+                              className="h-11 w-11 object-contain"
+                              unoptimized
+                            />
+                            {isCompleted && (
+                              <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                                <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none">
+                                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-xs font-semibold text-white/32">0{step.id + 1}</span>
                       </div>
-                      <div className="mt-3 text-sm font-semibold text-white">{step.label}</div>
-                      <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
                     </button>
                   );
                 })}
@@ -440,71 +487,93 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
             <div className="space-y-6">
               <StepContainer
                 eyebrow={`Step ${String(currentStep + 1).padStart(2, "0")}`}
-                title={activeStepMeta.title}
-                description={activeStepMeta.description}
+                title={currentStep === 4 ? (usesRDP ? "RDP Access" : "SSH Access") : activeStepMeta.title}
+                description={currentStep === 4 ? `Set a strong ${usesRDP ? "RDP" : "SSH"} password for your server.` : activeStepMeta.description}
               >
                 {/* Step 0: Hostname */}
-                {currentStep === 0 && (
-                  <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
-                    <div>
-                      <Label htmlFor="hostname" className="mb-3 block text-sm font-medium text-white/78">
-                        Hostname
-                      </Label>
-                      <Input
-                        id="hostname"
-                        value={hostname}
-                        onChange={(e) => setHostname(e.target.value)}
-                        placeholder="prod-web-01"
-                        className={inputClassName}
-                      />
-                      <p className="mt-3 text-sm leading-6 text-white/42">
-                        Use a stable, lowercase identifier — easy to recognize in tickets, dashboards,
-                        and fleet views.
-                      </p>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                      <h3 className="text-sm font-semibold text-white">Naming rules</h3>
-                      <div className="mt-4 space-y-3 text-sm text-white/50">
-                        <p>2–63 characters</p>
-                        <p>Lowercase letters, numbers, hyphens</p>
-                        <p>No spaces or special characters</p>
-                        <p>Must be unique in your fleet</p>
+                {currentStep === 0 && (() => {
+                  const hn = hostname.trim();
+                  const checks = [
+                    { label: "2–63 characters", ok: hn.length >= 2 && hn.length <= 63 },
+                    { label: "Lowercase letters, numbers, hyphens", ok: /^[a-z0-9-]+$/.test(hn) && hn.length > 0 },
+                    { label: "No spaces or special characters", ok: hn.length > 0 && !/[\s!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(hn) },
+                  ];
+                  return (
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+                      <div>
+                        <Label htmlFor="hostname" className="mb-3 block text-sm font-medium text-white/78">
+                          Hostname
+                        </Label>
+                        <Input
+                          id="hostname"
+                          value={hostname}
+                          onChange={(e) => setHostname(e.target.value)}
+                          placeholder="prod-web-01"
+                          className={inputClassName}
+                        />
+                      </div>
+                      <div className="border border-white/[0.08] bg-white/[0.04] p-5">
+                        <h3 className="text-sm font-semibold text-white">Requirements</h3>
+                        <div className="mt-4 space-y-2.5">
+                          {checks.map((c) => (
+                            <div key={c.label} className="flex items-start gap-2">
+                              <span className={`mt-px text-xs font-bold leading-none ${c.ok ? "text-emerald-400" : "text-white/28"}`}>
+                                {c.ok ? "✓" : "·"}
+                              </span>
+                              <span className={`text-sm leading-snug ${c.ok ? "text-white/70" : "text-white/42"}`}>{c.label}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Step 1: Region */}
                 {currentStep === 1 && (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {regions.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => r.available && setSelectedRegion(r.id)}
-                        disabled={!r.available}
-                        className={`flex items-center gap-4 border p-4 text-left transition-colors ${
-                          r.available
-                            ? selectedRegion === r.id
-                              ? "border-blue-400/30 bg-blue-500/10"
-                              : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                            : "border-white/[0.05] bg-white/[0.02] cursor-not-allowed opacity-55"
-                        }`}
-                      >
-                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]">
-                          <MapPin className="h-4 w-4 text-white/60" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-white">{r.name}</div>
-                          {!r.available && (
-                            <div className="mt-1 text-xs text-red-400/80">Unavailable</div>
+                    {regions.map((r) => {
+                      const flagCode = REGION_FLAGS[r.id.toLowerCase()];
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => r.available && setSelectedRegion(r.id)}
+                          disabled={!r.available}
+                          className={`flex items-center gap-4 border p-4 text-left transition-colors ${
+                            r.available
+                              ? selectedRegion === r.id
+                                ? "border-blue-400/30 bg-blue-500/10"
+                                : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
+                              : "border-white/[0.05] bg-white/[0.02] cursor-not-allowed opacity-55"
+                          }`}
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border border-white/[0.08] bg-white/[0.05]">
+                            {flagCode ? (
+                              <Image
+                                src={`https://flagsapi.com/${flagCode}/flat/64.png`}
+                                alt={r.name}
+                                width={32}
+                                height={32}
+                                className="h-6 w-8 object-cover"
+                                unoptimized
+                              />
+                            ) : (
+                              <MapPin className="h-4 w-4 text-white/60" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-white">{r.name}</div>
+                            {!r.available && (
+                              <div className="mt-1 text-xs text-red-400/80">Unavailable</div>
+                            )}
+                          </div>
+                          {selectedRegion === r.id && (
+                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-blue-300" />
                           )}
-                        </div>
-                        {selectedRegion === r.id && (
-                          <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-blue-300" />
-                        )}
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -536,12 +605,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                           Access mode
                         </div>
                         <p className="mt-3 text-sm font-medium text-white">
-                          {usesRDP ? "RDP-enabled image" : "SSH-first image"}
-                        </p>
-                        <p className="mt-2 text-xs leading-5 text-white/42">
-                          {usesRDP
-                            ? "Connect via Remote Desktop Protocol on port 3389."
-                            : "Connect via SSH on port 22 using password authentication."}
+                          {usesRDP ? "RDP" : "SSH"}
                         </p>
                       </div>
                       <div className="border border-white/[0.08] bg-white/[0.04] p-5">
@@ -550,9 +614,6 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                           Default user
                         </div>
                         <p className="mt-3 text-sm font-medium text-white">{selectedDefaultUser}</p>
-                        <p className="mt-2 text-xs leading-5 text-white/42">
-                          Initial system account created by cloud-init at boot.
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -560,84 +621,117 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
 
                 {/* Step 3: Configuration */}
                 {currentStep === 3 && (
-                  <div className="space-y-6">
+                  <div>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                      {/* vCPU */}
                       <div>
                         <Label htmlFor="cpu-cores" className="mb-3 block text-sm font-medium text-white/78">
                           vCPU Cores
                         </Label>
-                        <Input
-                          id="cpu-cores"
-                          type="number"
-                          min={1}
-                          max={32}
-                          value={cpuCores}
-                          onChange={(e) => setCpuCores(parseInt(e.target.value || "1", 10))}
-                          className={inputClassName}
-                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCpuCores(v => Math.max(1, v - 1))}
+                            disabled={cpuCores <= 1}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <Input
+                            id="cpu-cores"
+                            type="number"
+                            min={1}
+                            max={32}
+                            value={cpuCores}
+                            onChange={(e) => setCpuCores(Math.max(1, Math.min(32, parseInt(e.target.value || "1", 10))))}
+                            className={`${inputClassName} text-center`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCpuCores(v => Math.min(32, v + 1))}
+                            disabled={cpuCores >= 32}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                         <p className="mt-2 text-xs text-white/40">1 – 32 cores</p>
                       </div>
+                      {/* Memory */}
                       <div>
                         <Label htmlFor="memory-gb" className="mb-3 block text-sm font-medium text-white/78">
                           Memory (GB)
                         </Label>
-                        <Input
-                          id="memory-gb"
-                          type="number"
-                          min={isWindows ? 2 : 1}
-                          max={128}
-                          value={memoryGB}
-                          onChange={(e) => setMemoryGB(parseInt(e.target.value || (isWindows ? "2" : "1"), 10))}
-                          className={inputClassName}
-                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setMemoryGB(v => Math.max(isWindows ? 2 : 1, v - 1))}
+                            disabled={memoryGB <= (isWindows ? 2 : 1)}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <Input
+                            id="memory-gb"
+                            type="number"
+                            min={isWindows ? 2 : 1}
+                            max={128}
+                            value={memoryGB}
+                            onChange={(e) => setMemoryGB(Math.max(isWindows ? 2 : 1, Math.min(128, parseInt(e.target.value || (isWindows ? "2" : "1"), 10))))}
+                            className={`${inputClassName} text-center`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setMemoryGB(v => Math.min(128, v + 1))}
+                            disabled={memoryGB >= 128}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                         {isWindows ? (
                           <p className="mt-2 text-xs text-amber-400/80">Min 2 GB for Windows</p>
                         ) : (
                           <p className="mt-2 text-xs text-white/40">1 – 128 GB</p>
                         )}
                       </div>
+                      {/* Storage */}
                       <div>
                         <Label htmlFor="disk-gb" className="mb-3 block text-sm font-medium text-white/78">
                           Storage (GB)
                         </Label>
-                        <Input
-                          id="disk-gb"
-                          type="number"
-                          min={isWindows ? 40 : 10}
-                          max={2000}
-                          value={diskGB}
-                          onChange={(e) => setDiskGB(parseInt(e.target.value || (isWindows ? "40" : "10"), 10))}
-                          className={inputClassName}
-                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDiskGB(v => Math.max(isWindows ? 40 : isDesktop ? 25 : 10, v - 5))}
+                            disabled={diskGB <= (isWindows ? 40 : isDesktop ? 25 : 10)}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <Input
+                            id="disk-gb"
+                            type="number"
+                            min={isWindows ? 40 : 10}
+                            max={2000}
+                            value={diskGB}
+                            onChange={(e) => setDiskGB(Math.max(isWindows ? 40 : 10, Math.min(2000, parseInt(e.target.value || (isWindows ? "40" : "10"), 10))))}
+                            className={`${inputClassName} text-center`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setDiskGB(v => Math.min(2000, v + 5))}
+                            disabled={diskGB >= 2000}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                         {isWindows ? (
                           <p className="mt-2 text-xs text-amber-400/80">Min 40 GB for Windows</p>
                         ) : (
                           <p className="mt-2 text-xs text-white/40">10 – 2000 GB</p>
                         )}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          CPU model
-                        </div>
-                        <p className="mt-2 text-sm font-medium text-white">Host CPU passthrough</p>
-                        <p className="mt-1 text-xs text-white/40">Closer-to-bare-metal performance</p>
-                      </div>
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          Rate limit
-                        </div>
-                        <p className="mt-2 text-sm font-medium text-white">{bandwidthLabel} network cap</p>
-                        <p className="mt-1 text-xs text-white/40">Scales with vCPU count</p>
-                      </div>
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          Network model
-                        </div>
-                        <p className="mt-2 text-sm font-medium text-white">VirtIO on routed IPv4</p>
-                        <p className="mt-1 text-xs text-white/40">Public IP allocated at boot</p>
                       </div>
                     </div>
                   </div>
@@ -679,13 +773,22 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                     </div>
 
                     <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                      <h3 className="text-sm font-semibold text-white">Password requirements</h3>
-                      <div className="mt-4 space-y-3 text-sm text-white/50">
-                        <p>At least 12 characters</p>
-                        <p>Uppercase letter (A–Z)</p>
-                        <p>Lowercase letter (a–z)</p>
-                        <p>Number (0–9)</p>
-                        <p>Special character (!@#$…)</p>
+                      <h3 className="text-sm font-semibold text-white">Requirements</h3>
+                      <div className="mt-4 space-y-2.5">
+                        {[
+                          { label: "12+ characters", ok: sshPassword.length >= 12 },
+                          { label: "Uppercase (A–Z)", ok: PASSWORD_PATTERNS.hasUpperCase.test(sshPassword) },
+                          { label: "Lowercase (a–z)", ok: PASSWORD_PATTERNS.hasLowerCase.test(sshPassword) },
+                          { label: "Number (0–9)", ok: PASSWORD_PATTERNS.hasNumbers.test(sshPassword) },
+                          { label: "Special character", ok: PASSWORD_PATTERNS.hasSpecialChar.test(sshPassword) },
+                        ].map((c) => (
+                          <div key={c.label} className="flex items-center gap-2">
+                            <span className={`text-xs font-bold leading-none ${c.ok ? "text-emerald-400" : "text-white/28"}`}>
+                              {c.ok ? "✓" : "·"}
+                            </span>
+                            <span className={`text-sm ${c.ok ? "text-white/70" : "text-white/42"}`}>{c.label}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -705,7 +808,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                   variant="outline"
                   onClick={handlePrevStep}
                   disabled={currentStep === 0 || isLoading}
-                  className="border-white/[0.12] bg-transparent px-4 text-white hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
+                  className="rounded-none border-white/[0.12] bg-transparent px-4 text-white hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
                 >
                   <ChevronLeft className="mr-2 h-4 w-4" />
                   Back
@@ -716,7 +819,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                     type="button"
                     onClick={handleNextStep}
                     disabled={!stepsValid[currentStep]}
-                    className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
+                    className="rounded-none border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
                   >
                     Continue
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -726,7 +829,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
                     type="button"
                     onClick={onSubmit}
                     disabled={isLoading || !stepsValid.every(Boolean)}
-                    className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
+                    className="rounded-none border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
                   >
                     {isLoading ? (
                       <>
@@ -749,53 +852,79 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
               <div className={`${panelClassName} lg:sticky lg:top-8`}>
                 <div className="border-b border-white/[0.06] px-6 py-5">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                    Deployment Summary
+                    Summary
                   </p>
-                  <h3 className="mt-2 text-lg font-semibold text-white">Machine configuration</h3>
+                  <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
                 </div>
 
-                <div className="px-6 py-5">
-                  <div className="space-y-1">
-                    <SummaryRow label="Hostname" value={hostname || "Pending"} />
-                    <SummaryRow label="Region" value={selectedRegionData?.name || "Pending"} />
-                    <SummaryRow label="OS" value={selectedOSName} />
-                    <SummaryRow label="vCPU" value={`${cpuCores} cores`} />
-                    <SummaryRow label="Memory" value={`${memoryGB} GB`} />
-                    <SummaryRow label="Storage" value={`${diskGB} GB`} />
+                <div className="px-6 py-4">
+                  {/* Identity */}
+                  <div className="space-y-0.5">
+                    <SummaryRow
+                      icon="/dashboard-icons/name.png"
+                      label="Hostname"
+                      value={hostname.trim() || "—"}
+                      empty={!hostname.trim()}
+                    />
+                    <SummaryRow
+                      icon="/dashboard-icons/region.png"
+                      label="Region"
+                      value={maxVisitedStep >= 1 ? (selectedRegionData?.name ?? "—") : "—"}
+                      empty={maxVisitedStep < 1}
+                    />
+                    <SummaryRow
+                      icon="/dashboard-icons/operating-system.png"
+                      label="OS"
+                      value={maxVisitedStep >= 2 ? selectedOSName : "—"}
+                      empty={maxVisitedStep < 2}
+                    />
                   </div>
 
-                  <Separator className="my-4 bg-white/[0.08]" />
+                  <div className="my-3 border-t border-white/[0.05]" />
 
-                  <div className="space-y-3">
-                    <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        CPU model
-                      </div>
-                      <p className="mt-2 text-sm text-white">Host CPU passthrough</p>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Network
-                      </div>
-                      <p className="mt-2 text-sm text-white">Routed public IPv4 · {bandwidthLabel} cap</p>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Initial access
-                      </div>
-                      <p className="mt-2 text-sm text-white">
-                        {connectionLabel} · user {selectedDefaultUser}
-                      </p>
-                    </div>
+                  {/* Resources */}
+                  <div className="space-y-0.5">
+                    <SummaryRow
+                      icon="/dashboard-icons/cpu.png"
+                      label="vCPU"
+                      value={maxVisitedStep >= 3 ? `${cpuCores} cores` : "—"}
+                      empty={maxVisitedStep < 3}
+                    />
+                    <SummaryRow
+                      icon="/dashboard-icons/ram.png"
+                      label="Memory"
+                      value={maxVisitedStep >= 3 ? `${memoryGB} GB` : "—"}
+                      empty={maxVisitedStep < 3}
+                    />
+                    <SummaryRow
+                      icon="/dashboard-icons/storage.png"
+                      label="Storage"
+                      value={maxVisitedStep >= 3 ? `${diskGB} GB` : "—"}
+                      empty={maxVisitedStep < 3}
+                    />
+                    <SummaryRow
+                      label="CPU model"
+                      value={maxVisitedStep >= 3 ? "Host passthrough" : "—"}
+                      empty={maxVisitedStep < 3}
+                    />
                   </div>
 
-                  <Separator className="my-4 bg-white/[0.08]" />
+                  <div className="my-3 border-t border-white/[0.05]" />
 
-                  <p className="text-xs leading-5 text-white/42">
-                    After submission, the platform allocates an IP, clones the image, applies
-                    cloud-init, and boots the VM. Live progress streams back into this page
-                    automatically.
-                  </p>
+                  {/* Connectivity */}
+                  <div className="space-y-0.5">
+                    <SummaryRow
+                      icon="/dashboard-icons/acess.png"
+                      label="Access"
+                      value={maxVisitedStep >= 2 ? (usesRDP ? "RDP" : "SSH") : "—"}
+                      empty={maxVisitedStep < 2}
+                    />
+                    <SummaryRow
+                      icon="/dashboard-icons/network.png"
+                      label="Network"
+                      value="IPv4 included"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -827,29 +956,37 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
           />
         ) : (
           /* Fallback success message */
-          <Card className="bg-black/50 border-white/10">
-            <CardHeader className="text-center">
-              <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-emerald-400" />
+          <div className="glass-panel overflow-hidden">
+            <div className="h-px w-full bg-gradient-to-r from-emerald-400/35 via-emerald-300/10 to-transparent" />
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center border border-emerald-500/30 bg-emerald-500/10">
+                <CheckCircle className="h-7 w-7 text-emerald-400" />
               </div>
-              <CardTitle className="text-white mt-3">VPS Created Successfully</CardTitle>
-              <CardDescription className="text-white/70">
+              <h2 className="mt-5 text-xl font-semibold text-white">VPS Created Successfully</h2>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-white/45">
                 Your VPS is being provisioned. You can manage it from your dashboard.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center justify-center gap-3">
-              <Button
-                onClick={() => {
-                  setResult(null);
-                  setHostname("");
-                  setCurrentStep(0);
-                }}
-                className="bg-white/10 hover:bg-white/20 text-white border border-white/10"
-              >
-                Create Another VPS
-              </Button>
-            </CardContent>
-          </Card>
+              </p>
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Button
+                  onClick={() => {
+                    setResult(null);
+                    setHostname("");
+                    setCurrentStep(0);
+                  }}
+                  className="rounded-none border border-white/[0.12] bg-white/[0.06] px-5 text-sm text-white hover:bg-white/[0.10]"
+                >
+                  Create Another
+                </Button>
+                <Link
+                  href="/dashboard/services/compute/vps"
+                  className="inline-flex items-center gap-2 border border-emerald-500/25 bg-emerald-500/90 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+                >
+                  View Servers
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
         )
       )}
     </div>

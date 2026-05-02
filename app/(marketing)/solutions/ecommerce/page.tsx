@@ -64,7 +64,7 @@ const EcommercePage = () => {
     tags: ["Compute", "Kubernetes", "Object Storage", "Managed Database", "Security"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -86,7 +86,7 @@ const EcommercePage = () => {
         badge={["High Availability", "Secure Checkout", "Big CDN", "PCI Ready"]}
         title="Ecommerce Infrastructure"
         description="Deliver blazing-fast storefronts, resilient checkout flows, and secure payment processing with scalable cloud infrastructure designed for commerce."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-ecom.png", alt: "Ecommerce infrastructure" }}

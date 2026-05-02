@@ -2,7 +2,7 @@
  * API Authentication Helper
  * Supports both JWT (session) and PAT (Personal Access Token) authentication
  */
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { ApiKeys } from "@/lib/supabase/queries/api_keys";
 
 export type ApiAuthResult =
@@ -143,4 +143,26 @@ export function getRateLimitConfig(auth: ApiAuthResult) {
   };
 
   return limits[auth.plan] ?? limits.free;
+}
+
+/**
+ * Resolve the user's email from an authenticated result.
+ * For session auth, uses the email from the JWT.
+ * For PAT auth, fetches from Supabase admin API since PAT tokens carry no email.
+ * Returns undefined silently on any lookup failure.
+ */
+export async function resolveAuthEmail(
+  auth: Extract<ApiAuthResult, { authenticated: true }>,
+): Promise<string | undefined> {
+  if (auth.kind === "session") {
+    return auth.email;
+  }
+
+  try {
+    const supabase = await createWorkerClient();
+    const { data } = await supabase.auth.admin.getUserById(auth.userId);
+    return data.user?.email ?? undefined;
+  } catch {
+    return undefined;
+  }
 }

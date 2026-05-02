@@ -33,13 +33,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Key,
+  // Key,
   Plus,
   Trash2,
   Loader2,
-  CheckCircle,
+  // CheckCircle,
   XCircle,
-  ArrowLeft,
+  // ArrowLeft,
   Eye,
   EyeOff,
   Copy,
@@ -302,33 +302,37 @@ export default function AIAgentsSettingsPage() {
   return (
     <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       <div className="glass-panel overflow-hidden">
+        <div className="h-px bg-gradient-to-r from-cyan-400/40 via-cyan-300/10 to-transparent" />
         <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">AI Services</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">AI Services</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI agent access, provider keys, and API controls.</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">Manage model provider credentials, issue endpoint keys, and share implementation guidance from a more operational settings surface.</p>
           </div>
-          <Button variant="outline" asChild className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
-            <Link href="/dashboard/services/ai-agents">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to agents
-            </Link>
-          </Button>
+          <div className="flex items-center gap-5">
+            <Image src="/dashboard-services-icons/da ai aniamtion.png" alt="" width={72} height={72} className="shrink-0 opacity-80 hidden lg:block"  unoptimized />
+            <Button variant="outline" asChild className="rounded-none border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+              <Link href="/dashboard/services/ai-agents">
+                <Image src="/dashboard-icons/settings-1.png" alt="" width={14} height={14} className="mr-2 opacity-70"  unoptimized />
+                Back to agents
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><Image src="/dashboard icons/model keys .png" alt="Model Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><Image src="/dashboard icons/valid keys .png" alt="Valid Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
-        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><Image src="/dashboard icons/agent api keys .png" alt="Agent API Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><Image src="/dashboard-icons/model-keys.png" alt="Model Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><Image src="/dashboard-icons/valid-keys.png" alt="Valid Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><Image src="/dashboard-icons/agent-api-keys.png" alt="Agent API Keys" width={36} height={36} className="shrink-0 opacity-80"  unoptimized /></div></div>
       </div>
 
       {/* New Key Created Dialog */}
       <Dialog open={showNewKeyDialog} onOpenChange={setShowNewKeyDialog}>
-        <DialogContent className="glass-panel overflow-hidden border border-white/[0.08] bg-[#050816] text-white sm:max-w-md">
+        <DialogContent className="glass-panel overflow-hidden border border-white/[0.08] bg-[#050816] text-white sm:max-w-md [&>button]:rounded-none">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <Image src="/dashboard-icons/valid-keys.png" alt="" width={18} height={18} className="opacity-90"  unoptimized />
               API Key Created
             </DialogTitle>
             <DialogDescription>
@@ -336,9 +340,9 @@ export default function AIAgentsSettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/10">
+            <div className="border border-amber-500/20 bg-amber-500/10 p-3">
               <p className="text-sm text-yellow-400 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
+                <AlertTriangle className="h-4 w-4 shrink-0" />
                 This key will only be shown once. Store it securely.
               </p>
             </div>
@@ -346,18 +350,19 @@ export default function AIAgentsSettingsPage() {
               <Input
                 readOnly
                 value={newlyCreatedKey || ''}
-                className="font-mono text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35"
+                className="rounded-none font-mono text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35"
               />
               <Button
                 variant="outline"
                 size="icon"
+                className="rounded-none shrink-0"
                 onClick={() => newlyCreatedKey && copyToClipboard(newlyCreatedKey)}
               >
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
             <Button
-              className="w-full border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
+              className="w-full rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
               onClick={() => {
                 setShowNewKeyDialog(false);
                 setNewlyCreatedKey(null);
@@ -370,9 +375,15 @@ export default function AIAgentsSettingsPage() {
       </Dialog>
 
       <Tabs defaultValue="model-keys" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
-          <TabsTrigger value="model-keys" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Model API Keys</TabsTrigger>
-          <TabsTrigger value="agent-api-keys" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Agent API Keys</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 rounded-none border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
+          <TabsTrigger value="model-keys" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
+            <Image src="/dashboard-icons/model-keys.png" alt="" width={14} height={14} className="mr-1.5 opacity-70"  unoptimized />
+            Model API Keys
+          </TabsTrigger>
+          <TabsTrigger value="agent-api-keys" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
+            <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={14} height={14} className="mr-1.5 opacity-70"  unoptimized />
+            Agent API Keys
+          </TabsTrigger>
         </TabsList>
 
         {/* Model API Keys Tab */}
@@ -380,13 +391,16 @@ export default function AIAgentsSettingsPage() {
           <div className="glass-panel overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <div>
-                <h3 className="text-base font-semibold text-white">Model API Keys</h3>
+                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Image src="/dashboard-icons/model-keys.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
+                  Model API Keys
+                </h3>
                 <p className="mt-1 text-sm text-white/45">
                   Add API keys for different AI providers (OpenAI, Anthropic, etc.). Keys are encrypted at rest.
                 </p>
               </div>
               {!showAddForm && (
-                <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                <Button onClick={() => setShowAddForm(true)} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Key
                 </Button>
@@ -455,6 +469,7 @@ export default function AIAgentsSettingsPage() {
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
+                        className="rounded-none"
                         onClick={() => {
                           setShowAddForm(false);
                           setNewKeyName('');
@@ -463,7 +478,7 @@ export default function AIAgentsSettingsPage() {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleAddKey} disabled={saving} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                      <Button onClick={handleAddKey} disabled={saving} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                         {saving ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -471,7 +486,7 @@ export default function AIAgentsSettingsPage() {
                           </>
                         ) : (
                           <>
-                            <Key className="h-4 w-4 mr-2" />
+                            <Image src="/dashboard-icons/valid-keys.png" alt="" width={14} height={14} className="mr-2 opacity-80"  unoptimized />
                             Add Key
                           </>
                         )}
@@ -490,16 +505,17 @@ export default function AIAgentsSettingsPage() {
                   {keys.map((key) => (
                     <div
                       key={key.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
+                      className="relative flex items-center justify-between p-4 border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
                     >
+                      <div className={`absolute left-0 top-0 h-full w-0.5 ${key.is_valid ? 'bg-emerald-500/50' : 'bg-red-500/40'}`} />
                       <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-white/[0.06] border border-white/[0.08]">
-                          <Key className="h-4 w-4 text-white/75" />
+                        <div className="p-2 bg-white/[0.06] border border-white/[0.08]">
+                          <Image src="/dashboard-icons/valid-keys.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-white font-medium">{key.name}</p>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="rounded-none text-xs">
                               {getProviderName(key.provider)}
                             </Badge>
                           </div>
@@ -509,12 +525,12 @@ export default function AIAgentsSettingsPage() {
 
                       <div className="flex items-center gap-3">
                         {key.is_valid ? (
-                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                            <CheckCircle className="h-3 w-3 mr-1" />
+                          <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30">
+                            <Image src="/dashboard-icons/healthy.png" alt="" width={10} height={10} className="mr-1 opacity-90"  unoptimized />
                             Valid
                           </Badge>
                         ) : (
-                          <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                          <Badge className="rounded-none bg-red-500/20 text-red-400 border-red-500/30">
                             <XCircle className="h-3 w-3 mr-1" />
                             Invalid
                           </Badge>
@@ -525,13 +541,13 @@ export default function AIAgentsSettingsPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-red-400 hover:text-red-300"
+                              className="rounded-none text-red-400 hover:text-red-300"
                               onClick={() => setDeleteKey(key)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
+                          <AlertDialogContent className="[&>button]:rounded-none">
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete API Key</AlertDialogTitle>
                               <AlertDialogDescription>
@@ -540,11 +556,11 @@ export default function AIAgentsSettingsPage() {
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={handleDeleteKey}
                                 disabled={deleting}
-                                className="bg-red-600 hover:bg-red-700 text-white"
+                                className="rounded-none bg-red-600 hover:bg-red-700 text-white"
                               >
                                 {deleting ? 'Deleting...' : 'Delete'}
                               </AlertDialogAction>
@@ -557,13 +573,13 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Image src="/dashboard icons/model keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
+                  <Image src="/dashboard-icons/model-keys.png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
                   <p className="text-white/55 mb-2">No API keys configured</p>
                   <p className="text-sm text-white/40 mb-4">
                     Add an API key to start using AI models
                   </p>
                   {!showAddForm && (
-                    <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                    <Button onClick={() => setShowAddForm(true)} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Your First Key
                     </Button>
@@ -575,7 +591,10 @@ export default function AIAgentsSettingsPage() {
 
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
-              <h3 className="text-base font-semibold text-white">Supported Providers</h3>
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <Image src="/dashboard-icons/model.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
+                Supported Providers
+              </h3>
               <p className="mt-1 text-sm text-white/45">Get API keys from these providers to use their models</p>
             </div>
             <div className="p-5 sm:p-6">
@@ -596,7 +615,7 @@ export default function AIAgentsSettingsPage() {
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
               <div>
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Image src="/dashboard icons/agent api keys .png" alt="" width={20} height={20} className="opacity-80" />
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={20} height={20} className="opacity-80"  unoptimized />
                   Agent API Keys
                 </h3>
                 <p className="mt-1 text-sm text-white/45">
@@ -605,7 +624,7 @@ export default function AIAgentsSettingsPage() {
                 </p>
               </div>
               {!showAddAgentKeyForm && (
-                <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                <Button onClick={() => setShowAddAgentKeyForm(true)} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Key
                 </Button>
@@ -615,7 +634,7 @@ export default function AIAgentsSettingsPage() {
               {/* Info Box */}
               <div className="border border-blue-500/20 bg-blue-500/10 p-4">
                 <p className="text-sm text-blue-400">
-                  Note: Agent API Keys are used in the <code className="bg-white/[0.08] px-1 rounded">x-api-key</code> header
+                  Note: Agent API Keys are used in the <code className="bg-white/[0.08] px-1">x-api-key</code> header
                   when calling your agent&apos;s public endpoint. Enable &quot;Require API Key&quot; in your agent&apos;s
                   Access Control settings to require authentication.
                 </p>
@@ -641,6 +660,7 @@ export default function AIAgentsSettingsPage() {
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
+                        className="rounded-none"
                         onClick={() => {
                           setShowAddAgentKeyForm(false);
                           setNewAgentKeyName('');
@@ -648,7 +668,7 @@ export default function AIAgentsSettingsPage() {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleAddAgentKey} disabled={savingAgentKey} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                      <Button onClick={handleAddAgentKey} disabled={savingAgentKey} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                         {savingAgentKey ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -656,7 +676,7 @@ export default function AIAgentsSettingsPage() {
                           </>
                         ) : (
                           <>
-                            <Key className="h-4 w-4 mr-2" />
+                            <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={14} height={14} className="mr-2 opacity-80"  unoptimized />
                             Create Key
                           </>
                         )}
@@ -675,21 +695,22 @@ export default function AIAgentsSettingsPage() {
                   {agentApiKeys.map((key) => (
                     <div
                       key={key.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
+                      className="relative flex items-center justify-between p-4 border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
                     >
+                      <div className={`absolute left-0 top-0 h-full w-0.5 ${key.is_active ? 'bg-emerald-500/50' : 'bg-red-500/40'}`} />
                       <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-white/[0.06] border border-white/[0.08]">
-                          <Image src="/dashboard icons/agent api keys .png" alt="" width={16} height={16} className="opacity-75" />
+                        <div className="p-2 bg-white/[0.06] border border-white/[0.08]">
+                          <Image src="/dashboard-icons/agent-api-keys.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-white font-medium">{key.name}</p>
                             {key.is_active ? (
-                              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                              <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
                                 Active
                               </Badge>
                             ) : (
-                              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">
+                              <Badge className="rounded-none bg-red-500/20 text-red-400 border-red-500/30 text-xs">
                                 Inactive
                               </Badge>
                             )}
@@ -713,26 +734,26 @@ export default function AIAgentsSettingsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="text-red-400 hover:text-red-300"
+                            className="rounded-none text-red-400 hover:text-red-300"
                             onClick={() => setDeleteAgentKey(key)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="[&>button]:rounded-none">
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete API Key</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to delete &quot;{key.name}&quot;? 
+                              Are you sure you want to delete &quot;{key.name}&quot;?
                               Any applications using this key will no longer be able to access your agents.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={handleDeleteAgentKey}
                               disabled={deletingAgentKey}
-                              className="bg-red-600 hover:bg-red-700 text-white"
+                              className="rounded-none bg-red-600 hover:bg-red-700 text-white"
                             >
                               {deletingAgentKey ? 'Deleting...' : 'Delete'}
                             </AlertDialogAction>
@@ -744,13 +765,13 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Image src="/dashboard icons/agent api keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
                   <p className="text-white/55 mb-2">No agent API keys</p>
                   <p className="text-sm text-white/40 mb-4">
                     Create an API key to authenticate requests to your agent endpoints
                   </p>
                   {!showAddAgentKeyForm && (
-                    <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                    <Button onClick={() => setShowAddAgentKeyForm(true)} className="rounded-none border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Your First Key
                     </Button>
@@ -763,14 +784,17 @@ export default function AIAgentsSettingsPage() {
           {/* API Documentation */}
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
-              <h3 className="text-base font-semibold text-white">API Documentation</h3>
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <Image src="/dashboard-icons/configure.png" alt="" width={18} height={18} className="opacity-80"  unoptimized />
+                API Documentation
+              </h3>
               <p className="mt-1 text-sm text-white/45">Complete guide to using your agent&apos;s public API endpoint</p>
             </div>
             <div className="space-y-6 p-5 sm:p-6">
               {/* Endpoint URL */}
               <div>
                 <h4 className="text-white font-medium mb-2">Endpoint URL</h4>
-                <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
+                <pre className="p-3 border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                   <code className="text-blue-400">POST /api/v1/agents/&#123;endpoint_id&#125;/chat</code>
                 </pre>
               </div>
@@ -791,12 +815,12 @@ export default function AIAgentsSettingsPage() {
                       <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-green-400">Content-Type</td>
                         <td className="py-2">Yes</td>
-                        <td className="py-2">Must be <code className="bg-white/[0.08] px-1 rounded">application/json</code></td>
+                        <td className="py-2">Must be <code className="bg-white/[0.08] px-1">application/json</code></td>
                       </tr>
                       <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-green-400">x-api-key</td>
                         <td className="py-2">If auth required</td>
-                        <td className="py-2">Your agent API key (starts with <code className="bg-white/[0.08] px-1 rounded">ak_</code>)</td>
+                        <td className="py-2">Your agent API key (starts with <code className="bg-white/[0.08] px-1">ak_</code>)</td>
                       </tr>
                     </tbody>
                   </table>
@@ -843,15 +867,15 @@ export default function AIAgentsSettingsPage() {
               {/* Standard vs Streaming */}
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Standard Response */}
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                    <div className="w-3 h-3 bg-blue-500"></div>
                     <h5 className="text-white font-medium">Standard Response</h5>
                   </div>
                   <p className="text-sm text-white/55 mb-3">
                     Best for: Simple integrations, backend services, or when you need the complete response at once.
                   </p>
-                  <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
+                  <pre className="p-3 border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
                     <code className="text-green-400">
 {`// Request
 {
@@ -878,18 +902,18 @@ export default function AIAgentsSettingsPage() {
                 </div>
 
                 {/* Streaming Response */}
-                <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-4">
+                <div className="border border-purple-500/20 bg-purple-500/10 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-3 h-3 rounded-full bg-purple-500 animate-pulse"></div>
+                    <div className="w-3 h-3 bg-purple-500 animate-pulse"></div>
                     <h5 className="text-white font-medium">Streaming Response</h5>
-                    <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                    <Badge className="rounded-none bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
                       Real-time
                     </Badge>
                   </div>
                   <p className="text-sm text-white/55 mb-3">
                     Best for: Chat UIs, real-time apps. Words appear as they&apos;re generated for better UX.
                   </p>
-                  <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
+                  <pre className="p-3 border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
                     <code className="text-purple-400">
 {`// Request
 {
@@ -916,14 +940,14 @@ data: {"type":"done","usage":{...}}`}
               <div>
                 <h4 className="text-white font-medium mb-3">Code Examples</h4>
                 <Tabs defaultValue="curl" className="w-full">
-                  <TabsList className="border border-white/[0.08] bg-white/[0.04] p-1">
-                    <TabsTrigger value="curl" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">cURL</TabsTrigger>
-                    <TabsTrigger value="javascript" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">JavaScript</TabsTrigger>
-                    <TabsTrigger value="python" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Python</TabsTrigger>
+                  <TabsList className="rounded-none border border-white/[0.08] bg-white/[0.04] p-1">
+                    <TabsTrigger value="curl" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">cURL</TabsTrigger>
+                    <TabsTrigger value="javascript" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">JavaScript</TabsTrigger>
+                    <TabsTrigger value="python" className="rounded-none text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Python</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="curl" className="mt-3">
-                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
+                    <pre className="p-4 border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-green-400">
 {`# Standard request
 curl -X POST \\
@@ -943,7 +967,7 @@ curl -N -X POST \\
                   </TabsContent>
                   
                   <TabsContent value="javascript" className="mt-3">
-                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
+                    <pre className="p-4 border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-yellow-400">
 {`// Standard request
 const response = await fetch(
@@ -1000,7 +1024,7 @@ while (true) {
                   </TabsContent>
                   
                   <TabsContent value="python" className="mt-3">
-                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
+                    <pre className="p-4 border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-blue-400">
 {`import requests
 import json

@@ -181,6 +181,7 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
     providerRequestId?: string | null;
     lastError?: string | null;
     registrantEmail?: string | null;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
     const supabase = await createServiceClient();
     const update: Record<string, unknown> = {
@@ -195,6 +196,15 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
     }
     if (params.registrantEmail !== undefined) {
       update.registrant_email = params.registrantEmail;
+    }
+    if (params.metadata !== undefined) {
+      // Read-modify-write: merge new keys into existing metadata JSONB
+      const { data: existing } = await supabase
+        .from(TABLE)
+        .select("metadata")
+        .eq("id", params.requestId)
+        .maybeSingle();
+      update.metadata = { ...(existing?.metadata ?? {}), ...params.metadata };
     }
     const { error } = await supabase
       .from(TABLE)

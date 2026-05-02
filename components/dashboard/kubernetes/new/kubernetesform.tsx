@@ -432,6 +432,7 @@ const NewClusterPage = ({
       }
 
       if (settledResponse.status === 200) {
+        toast.info("Kubernetes Cluster Creation started.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
@@ -483,34 +484,48 @@ const NewClusterPage = ({
 
   const steps = role === "admin" 
     ? [
-        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
+        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ]
     : [
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ];
 
   const panelClassName = "glass-panel overflow-hidden";
+
+  function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
+    return (
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="flex items-center gap-2">
+          {icon && (
+            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+          )}
+          <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+        </div>
+        <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
+      </div>
+    );
+  }
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
   const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
-  const totalNodes = Math.max(selectedNode + 1, 1);
-  const planMonthlyRate =
-    typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
-  const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
+  // const totalNodes = Math.max(selectedNode + 1, 1);
+  // const planMonthlyRate =
+  //   typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
+  // const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
   const nodePresets = [1, 2, 3, 5];
   const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
 
@@ -518,9 +533,9 @@ const NewClusterPage = ({
   //   const dbTypes = Object.keys(databaseInfo);
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <Link
               href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
@@ -539,25 +554,15 @@ const NewClusterPage = ({
               Move through cluster identity, region, node count, plan sizing, version, project assignment, and final review in a cleaner enterprise flow.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {progressStep} / {steps.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Plan
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedPlan || "-"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da kuubernetes.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -595,7 +600,7 @@ const NewClusterPage = ({
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -779,6 +784,7 @@ const NewClusterPage = ({
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -1439,137 +1445,64 @@ const NewClusterPage = ({
         </div>
 
         <div className="space-y-6">
-          <Card className={panelClassName + " sticky top-8"}>
-            <CardHeader>
-              <CardTitle className="text-white">Deployment Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedName && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Cluster</span>
-                    <span className="font-medium text-white">{selectedName}</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedLocation && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Location</span>
-                    <div className="flex items-center gap-2 font-medium text-white">
-                      <span>{selectedLocationDetails?.city}</span>
-                      {selectedLocationDetails?.country_code && (
-                        <Image
-                          src={"https://flagsapi.com/" + selectedLocationDetails.country_code + "/flat/64.png"}
-                          alt={selectedLocation}
-                          width={20}
-                          height={20}
-                          className="object-contain"
-                        />
+          <div className={`${panelClassName} lg:sticky lg:top-8`}>
+            <div className="border-b border-white/[0.06] px-6 py-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+            </div>
+            <div className="px-6 py-4">
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster" value={selectedName || "—"} empty={!selectedName} />
+                <SummaryRow
+                  icon="/dashboard-icons/region.png"
+                  label="Location"
+                  value={selectedLocationDetails ? (
+                    <span className="flex items-center justify-end gap-2">
+                      {selectedLocationDetails.country_code && (
+                        <Image src={`https://flagsapi.com/${selectedLocationDetails.country_code}/flat/64.png`} alt={selectedLocation} width={16} height={12} className="rounded-sm object-contain" unoptimized />
                       )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedNode && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Workers</span>
-                    <span className="font-medium text-white">{selectedNode}</span>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-white/45">
-                    {selectedNode + 1} total nodes including the control plane.
-                  </p>
-                </div>
-              )}
+                      {selectedLocationDetails.city}
+                    </span>
+                  ) : "—"}
+                  empty={!selectedLocation}
+                />
+                <SummaryRow icon="/dashboard-icons/number.png" label="Workers" value={selectedNode ? `${selectedNode} (${selectedNode + 1} total)` : "—"} empty={!selectedNode} />
+                <SummaryRow icon="/dashboard-icons/versioning.png" label="Version" value={selectedVersion ? `v${selectedVersion}` : "—"} empty={!selectedVersion} />
+                {selectedProject && (
+                  <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || selectedProject} />
+                )}
+              </div>
 
               {selectedPlan && (
-                <div className="border border-blue-400/20 bg-blue-500/8 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/70">
-                        Plan
-                      </div>
-                      <div className="mt-1 text-base font-semibold text-white">
-                        {selectedPlan}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold text-white">
-                        {totalMonthlyRate !== null ? "$" + totalMonthlyRate.toFixed(2) : "-"}
-                      </div>
-                      <div className="text-xs text-white/45">
-                        {planMonthlyRate !== null
-                          ? "$" + planMonthlyRate.toFixed(2) + " x " + totalNodes + " nodes"
-                          : "monthly rate"}
-                      </div>
-                    </div>
+                <>
+                  <div className="my-3 border-t border-white/[0.05]" />
+                  <div className="space-y-0.5">
+                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedPlan} />
+                    {selectedPlanDetails && (
+                      <>
+                        <SummaryRow icon="/dashboard-icons/cpu.png" label="vCPU" value={selectedPlanDetails.resources.cpu} />
+                        <SummaryRow icon="/dashboard-icons/ram.png" label="RAM" value={selectedPlanDetails.resources.ram} />
+                        <SummaryRow icon="/dashboard-icons/storage.png" label="Disk" value={selectedPlanDetails.resources.storage} />
+                      </>
+                    )}
                   </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.cpu || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        vCPU
-                      </div>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.ram || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        RAM
-                      </div>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.storage || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        Disk
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </>
               )}
 
-              {selectedVersion && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Version</span>
-                    <span className="rounded-full border border-white/[0.08] bg-white/[0.06] px-2.5 py-1 text-sm font-medium text-white">
-                      {"v" + selectedVersion}
-                    </span>
+              <Separator className="my-4 bg-white/[0.08]" />
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Monthly rate</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">
+                    {selectedPlanDetails?.price != null ? `$${selectedPlanDetails.price.toFixed(2)}` : "—"}
                   </div>
                 </div>
-              )}
-
-              {selectedProject && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Project</span>
-                    <span className="font-medium text-white">
-                      {projects.find((project) => project.id === selectedProject)?.name || selectedProject}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <Separator className="bg-white/10" />
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-white/60">Monthly rate</span>
-                <span className="text-lg font-semibold text-white">
-                  {totalMonthlyRate !== null
-                    ? "$" + totalMonthlyRate.toFixed(2)
-                    : "Select a plan"}
-                </span>
+                {selectedPlanDetails?.price != null && (
+                  <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">per month</Badge>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

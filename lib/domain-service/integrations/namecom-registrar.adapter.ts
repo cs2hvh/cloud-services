@@ -1,5 +1,5 @@
 import { DOMAIN_ERROR_CODES, DomainServiceError } from "@/lib/domain-service/core/errors";
-import type { DomainRegistrarPort, DomainTransferRegistrarPort } from "@/lib/domain-service/core/ports";
+import type { DomainRegistrarPort, DomainTransferRegistrarPort, RegistrarSettings } from "@/lib/domain-service/core/ports";
 
 export type NameComRecordType = "A" | "AAAA" | "ANAME" | "CNAME" | "MX" | "NS" | "SRV" | "TXT";
 
@@ -18,6 +18,11 @@ export interface NameComDomainResponse {
   privacyEnabled?: boolean;
   autorenewEnabled?: boolean;
   nameservers?: string[];
+  // Returned by GET /domains/{name}, PATCH /domains/{name}, and POST /domains
+  renewalPrice?: number;
+  // Present in live API responses but not consumed by our code
+  locks?: unknown[];
+  contacts?: Record<string, unknown>;
 }
 
 export interface NameComListDomainsResponse {
@@ -181,16 +186,33 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
   async getDomainSummary(domainName: string): Promise<{ domainName: string; expiresAt?: string; createdAt?: string } | null> {
     const encodedDomain = encodeURIComponent(domainName);
     const data = await this.request<NameComDomainResponse>(`/domains/${encodedDomain}`);
+    if (!data?.domainName) return null;
+    return { domainName: data.domainName, createdAt: data.createDate, expiresAt: data.expireDate };
+  }
 
-    if (!data?.domainName) {
-      return null;
+  async resolveZone(fqdn: string): Promise<{ zone: string; host: string } | null> {
+    const parts = fqdn.trim().toLowerCase().replace(/\.$/, "").split(".").filter(Boolean);
+    if (parts.length < 2) return null;
+    for (let i = 0; i <= parts.length - 2; i++) {
+      const zone = parts.slice(i).join(".");
+      try {
+        const s = await this.getDomainSummary(zone);
+        if (s?.domainName.toLowerCase() === zone) {
+          return { zone, host: i === 0 ? "@" : parts.slice(0, i).join(".") };
+        }
+      } catch { /* keep iterating */ }
     }
+    return null;
+  }
 
-    return {
-      domainName: data.domainName,
-      createdAt: data.createDate,
-      expiresAt: data.expireDate,
-    };
+  async getRegistrarSettings(zone: string): Promise<RegistrarSettings> {
+    const d = await this.getDomain(zone);
+    return { autorenewEnabled: d.autorenewEnabled ?? null, locked: d.locked ?? null, privacyEnabled: d.privacyEnabled ?? null, expireDate: d.expireDate ?? null };
+  }
+
+  async updateRegistrarSettings(zone: string, updates: { autorenewEnabled?: boolean; locked?: boolean; privacyEnabled?: boolean }): Promise<RegistrarSettings> {
+    const d = await this.updateDomain(zone, updates);
+    return { autorenewEnabled: d.autorenewEnabled ?? null, locked: d.locked ?? null, privacyEnabled: d.privacyEnabled ?? null, expireDate: d.expireDate ?? null };
   }
 
   async getDomain(domainName: string): Promise<NameComDomainResponse> {
@@ -210,6 +232,16 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
     }
     if (typeof input.privacyEnabled === "boolean") {
       body.privacyEnabled = input.privacyEnabled;
+    }
+
+    // Name.com requires at least one of autorenewEnabled/locked/privacyEnabled.
+    // Sending an empty body returns a 400 error. Guard here so callers with
+    // no-op updates fail fast with a clear message instead of a cryptic 400.
+    if (Object.keys(body).length === 0) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+        message: "updateDomain requires at least one field: autorenewEnabled, locked, or privacyEnabled",
+      });
     }
 
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`, {

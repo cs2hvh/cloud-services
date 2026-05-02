@@ -154,6 +154,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (result.errorCode === 'GIT_TOKEN_MISSING') {
+        return NextResponse.json(
+          {
+            error: result.error,
+            code: 'GIT_TOKEN_MISSING',
+            provider: appData.git_provider,
+          },
+          { status: 403 }
+        );
+      }
+
       if (result.errorCode === 'DEPLOYMENT_FAILED') {
         return NextResponse.json(
           { error: result.error || "Deployment failed" },

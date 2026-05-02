@@ -210,6 +210,34 @@ export async function PATCH(req: NextRequest) {
 
     const updated = await adapter.getDomain(managed.zone);
 
+    // Persist the autorenew preference in domain_purchase_requests.metadata so
+    // the renewal billing cron can skip domains where the user opted out.
+    // Non-blocking — failure here doesn't affect the response.
+    ;(async () => {
+      try {
+        const { data: req } = await supabase
+          .from("domain_purchase_requests")
+          .select("id, metadata")
+          .eq("user_id", auth.user.id)
+          .eq("domain", domain)
+          .eq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (req) {
+          await supabase
+            .from("domain_purchase_requests")
+            .update({
+              metadata: { ...(req.metadata as Record<string, unknown> ?? {}), autorenew_enabled: autorenewEnabled },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", req.id);
+        }
+      } catch (err) {
+        console.warn("[domains/registrar] Failed to persist autorenew_enabled in metadata:", err);
+      }
+    })();
+
     return NextResponse.json({
       success: true,
       data: {

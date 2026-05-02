@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
 import { ReadyToBuild } from "@/components/solutions/sections/ready-to-build";
 import { Container } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 const heroTags = ["Premium GPU Cloud", "Model Training", "Fine-tuning", "Inference APIs"];
 
@@ -216,12 +218,14 @@ export function AiMlLanding() {
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/signup"
+                <AuthAwareServiceCta
+                  service="ai-agents"
+                  intent="main"
                   className="inline-flex h-11 items-center justify-center rounded-none bg-white px-6 text-sm font-medium text-black transition-transform duration-300 hover:-translate-y-0.5 hover:bg-[#efefef]"
                 >
                   Launch AI Infrastructure
-                </Link>
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </AuthAwareServiceCta>
                 <Link
                   href="/services/gpu"
                   className="inline-flex h-11 items-center justify-center rounded-none border border-[#4c9eff]/25 bg-white/[0.05] px-6 text-sm font-medium text-white/82 backdrop-blur-xl transition-colors hover:border-[#4c9eff]/45 hover:bg-white/[0.09] hover:text-white"

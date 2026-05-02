@@ -72,6 +72,8 @@ export default function BillingTabs({
 
   // Show toast on return from Stripe checkout
   useEffect(() => {
+    if (!paymentStatus) return;
+
     if (paymentStatus === "success") {
       pushToast("success", "Payment successful! Your balance will update shortly.");
     } else if (paymentStatus === "cancelled") {
@@ -80,6 +82,15 @@ export default function BillingTabs({
       pushToast("success", "Recurring auto top-up enabled successfully.");
     } else if (paymentStatus === "recurring_cancelled") {
       pushToast("error", "Recurring auto top-up setup was cancelled.");
+    }
+
+    // Remove one-time payment query params so refresh doesn't replay the toast.
+    if (typeof window !== "undefined") {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("status");
+      nextUrl.searchParams.delete("session_id");
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      window.history.replaceState({}, "", nextPath);
     }
   }, [paymentStatus]);
 
@@ -504,6 +515,7 @@ export default function BillingTabs({
 }
 
 function StatCard({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  const formattedValue = Number.isFinite(value) ? value.toFixed(2) : "0.00";
   return (
     <div
       className={`rounded-xl border border-white/10 p-4 backdrop-blur-xl ${
@@ -511,7 +523,7 @@ function StatCard({ label, value, highlight = false }: { label: string; value: n
       }`}
     >
       <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-white">${value}</div>
+      <div className="mt-2 text-xl font-semibold text-white">${formattedValue}</div>
     </div>
   );
 }
@@ -643,9 +655,16 @@ interface Transaction {
   created_at: string;
 }
 
+type UsageBreakdown = {
+  serviceName: string;
+  hourlyRate: number | null;
+  hoursUsed: number | null;
+  cost: number;
+};
+
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
-type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
+type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage" | "purchase";
+type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps" | "domain";
 
 const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
 
@@ -747,6 +766,7 @@ function TransactionsTab() {
       recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
       setup: "bg-rose-500/15 text-rose-300 border-rose-500/20",
       usage: "bg-orange-500/15 text-orange-300 border-orange-500/20",
+      purchase: "bg-violet-500/15 text-violet-300 border-violet-500/20",
     };
     return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
   };
@@ -754,6 +774,119 @@ function TransactionsTab() {
   const formatAmount = (txn: Transaction) => {
     const sign = CREDIT_TRANSACTION_TYPES.has(txn.type) ? "+" : "-";
     return `${sign}$${txn.amount.toFixed(2)}`;
+  };
+
+  const toNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatCurrency = (value: number | null) =>
+    value == null ? "N/A" : `$${value.toFixed(2)}`;
+
+  const formatHours = (value: number | null) =>
+    value == null ? "N/A" : value.toFixed(2);
+
+  const getServiceTypeLabel = (serviceType: string | null) => {
+    const map: Record<string, string> = {
+      kubernetes: "Kubernetes",
+      database: "Database",
+      objectspace: "Object Storage",
+      spectrum: "Spectrum",
+      platform_apps: "Platform App",
+      domain: "Domain",
+    };
+    if (!serviceType) return "Service";
+    return map[serviceType] ?? serviceType.replace("_", " ");
+  };
+
+  const getUsageBreakdown = (txn: Transaction): UsageBreakdown | null => {
+    if (txn.type !== "usage") return null;
+
+    const metadata = txn.metadata ?? {};
+    const metadataServiceName =
+      typeof metadata.service_name === "string"
+        ? metadata.service_name
+        : typeof metadata.serviceName === "string"
+          ? metadata.serviceName
+          : null;
+
+    const serviceTail = txn.service_id ? txn.service_id.slice(0, 8) : null;
+    const serviceName =
+      metadataServiceName ??
+      `${getServiceTypeLabel(txn.service_type)}${serviceTail ? ` (${serviceTail}...)` : ""}`;
+
+    let hoursUsed = toNumber(metadata.hours_used);
+    if (hoursUsed == null && txn.period_start && txn.period_end) {
+      const start = new Date(txn.period_start).getTime();
+      const end = new Date(txn.period_end).getTime();
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        hoursUsed = (end - start) / (1000 * 60 * 60);
+      }
+    }
+
+    let hourlyRate = toNumber(metadata.hourly_rate);
+    if (hourlyRate == null && hoursUsed != null && hoursUsed > 0) {
+      hourlyRate = txn.amount / hoursUsed;
+    }
+
+    return {
+      serviceName,
+      hourlyRate,
+      hoursUsed,
+      cost: txn.amount,
+    };
+  };
+
+  const renderUsageBreakdown = (txn: Transaction) => {
+    const breakdown = getUsageBreakdown(txn);
+    if (!breakdown) return null;
+
+    return (
+      <div className="mt-1.5 rounded-md border border-orange-500/25 bg-orange-500/5 p-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+          <span className="text-neutral-400">Service</span>
+          <span className="text-right text-neutral-200 truncate" title={breakdown.serviceName}>
+            {breakdown.serviceName}
+          </span>
+          <span className="text-neutral-400">Hourly rate</span>
+          <span className="text-right text-neutral-200">{formatCurrency(breakdown.hourlyRate)}</span>
+          <span className="text-neutral-400">Hours</span>
+          <span className="text-right text-neutral-200">{formatHours(breakdown.hoursUsed)}</span>
+          <span className="text-neutral-400">Formula</span>
+          <span className="text-right text-neutral-200">
+            {`${formatCurrency(breakdown.hourlyRate)} × ${formatHours(breakdown.hoursUsed)}`}
+          </span>
+          <span className="text-neutral-400">Cost</span>
+          <span className="text-right text-neutral-100 font-medium">
+            {formatCurrency(breakdown.cost)}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDomainBreakdown = (txn: Transaction) => {
+    if (txn.type !== "purchase" || txn.service_type !== "domain") return null;
+    const metadata = txn.metadata ?? {};
+    const domain = typeof metadata.domain === "string" ? metadata.domain : null;
+    const isRenewal = metadata.renewal === true;
+    const currency = typeof metadata.currency === "string" ? metadata.currency.toUpperCase() : "USD";
+    if (!domain) return null;
+    return (
+      <div className="mt-1.5 rounded-md border border-violet-500/25 bg-violet-500/5 p-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+          <span className="text-neutral-400">Domain</span>
+          <span className="text-right text-neutral-200 font-mono truncate" title={domain}>{domain}</span>
+          <span className="text-neutral-400">Action</span>
+          <span className="text-right text-neutral-200">{isRenewal ? "Renewal" : "Registration"}</span>
+          <span className="text-neutral-400">Currency</span>
+          <span className="text-right text-neutral-200">{currency}</span>
+          <span className="text-neutral-400">Amount</span>
+          <span className="text-right text-neutral-100 font-medium">{formatCurrency(txn.amount)}</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -798,6 +931,7 @@ function TransactionsTab() {
             <option value="recurring">Recurring</option>
             <option value="setup">Setup charge</option>
             <option value="usage">Usage</option>
+            <option value="purchase">Purchase</option>
           </select>
 
           {/* Service Type */}
@@ -812,6 +946,7 @@ function TransactionsTab() {
             <option value="objectspace">Object Storage</option>
             <option value="spectrum">DDoS / Spectrum</option>
             <option value="platform_apps">Platform Apps</option>
+            <option value="domain">Domains</option>
           </select>
 
           {/* Date From */}
@@ -819,7 +954,7 @@ function TransactionsTab() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
             placeholder="From"
           />
 
@@ -828,7 +963,7 @@ function TransactionsTab() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
             placeholder="To"
           />
 
@@ -922,6 +1057,8 @@ function TransactionsTab() {
                         {txn.description && (
                           <p className="text-xs text-neutral-500">{txn.description}</p>
                         )}
+                        {renderUsageBreakdown(txn)}
+                        {renderDomainBreakdown(txn)}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-white">
@@ -999,6 +1136,8 @@ function TransactionsTab() {
                     {txn.description}
                   </div>
                 )}
+                {renderUsageBreakdown(txn)}
+                {renderDomainBreakdown(txn)}
                 {txn.receipt_url && (
                   <a
                     href={txn.receipt_url}

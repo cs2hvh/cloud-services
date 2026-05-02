@@ -13,6 +13,8 @@ import { AppStatusService } from "./app-status";
 import { getRatesForPlatformApp } from "@/config/pricing";
 import { ensureBalance } from "@/config/billing-flow";
 import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
+import { DatabaseIntegrationService } from "@/lib/services/database-integration";
+import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
 
 export interface CreateAppRequest {
   name: string;
@@ -224,17 +226,18 @@ export class PlatformAppService {
     userId: string
   ): Promise<string | null> {
     if (provider === "github") {
-      const sessionToken = await this.getSessionProviderToken("github");
-      if (sessionToken) return sessionToken;
-
+      // Check DB token first — it is validated against GitHub API on each call.
+      // Session token is only used as a fallback because it is not re-validated
+      // after the initial OAuth login and may be stale.
       try {
         const { GitHubProvider } = await import("@/lib/providers/github");
         const githubProvider = new GitHubProvider();
         const tokenObj = await githubProvider.getToken(userId);
-        return tokenObj?.accessToken ?? null;
-      } catch {
-        return null;
+        if (tokenObj?.accessToken) return tokenObj.accessToken;
+      } catch (err) {
+        console.warn("[PlatformAppService] GitHub DB token lookup failed, falling back to session token:", err);
       }
+      return this.getSessionProviderToken("github");
     }
 
     if (provider === "gitlab") {
@@ -383,7 +386,18 @@ export class PlatformAppService {
       }
 
       // 5. Inject repository tokens for private repo access
+      const knownProviders: GitProvider[] = ["github", "gitlab", "bitbucket"];
       const providerToken = await this.resolveProviderToken(request.git_provider, request.userId);
+
+      if (!providerToken && knownProviders.includes(request.git_provider)) {
+        console.warn(`[PlatformAppService] ⚠️ No valid ${request.git_provider} token — blocking deployment.`);
+        return {
+          success: false,
+          error: `Your ${request.git_provider} account is not connected or the access token has expired. Please reconnect it in Account Settings before deploying.`,
+          errorCode: "GIT_TOKEN_MISSING",
+        };
+      }
+
       const authenticatedUrl = this.injectProviderToken(
         request.repository_url,
         request.git_provider,
@@ -599,7 +613,8 @@ export class PlatformAppService {
         const syncResult = await AppStatusService.syncStatus(
           appId,
           app.name,
-          app.status as "running" | "failed" | "pending" | "building" | "stopped"
+          app.status as "running" | "failed" | "pending" | "building" | "stopped",
+          app.updated_at ?? undefined
         );
         syncedStatus = syncResult.currentStatus;
       } catch (syncErr) {
@@ -717,10 +732,19 @@ export class PlatformAppService {
     let billingWarning: string | undefined;
 
     try {
-      // 1. Delete infrastructure using deployment service
-      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
+      // 1. Unlink all database and object-storage integrations before the app record is deleted
+      await Promise.all([
+        DatabaseIntegrationService.unlinkAllFromApp(appId, userId).catch((err) => {
+          console.error(`[PlatformAppService] Failed to unlink database integrations for app ${appId}:`, err);
+        }),
+        ObjectStorageIntegrationService.unlinkAllFromApp(appId, userId).catch((err) => {
+          console.error(`[PlatformAppService] Failed to unlink storage integrations for app ${appId}:`, err);
+        }),
+      ]);
 
-      // 2. Close active billing (prorated final charge)
+      // 2. Delete infrastructure using deployment service
+      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
+      // 3. Close active billing (prorated final charge)
       try {
         const billingResult = await Billing.close_active_service("platform_apps", {
           userId,
@@ -740,7 +764,7 @@ export class PlatformAppService {
             : String(billingError);
       }
 
-      // 3. Add project activity log if project_id exists
+      // 4. Add project activity log if project_id exists
       if (projectId) {
         try {
           await Projects.add_log({
@@ -753,7 +777,7 @@ export class PlatformAppService {
         }
       }
 
-      // 4. Audit log
+      // 5. Audit log
       if (audit_context) {
         try {
           await AuditLogService.create({
@@ -774,7 +798,7 @@ export class PlatformAppService {
         }
       }
 
-      // 5. Create success notification
+      // 6. Create success notification
       try {
         await NotificationService.create(
           createServiceNotification({
@@ -859,6 +883,10 @@ export class PlatformAppService {
     }
 
     // Update billing rate (non-fatal)
+    // NOTE: The resize route does NOT call this method directly.
+    // Billing rate update on confirmed success is owned by AppBuildSideEffectsService
+    // (via BuildPollingService → AppOperationFinalizer). This path only runs if
+    // resizeApp() is called directly (e.g. admin tools or future service consumers).
     try {
       const { hourlyRate } = await getRatesForPlatformApp(newSize);
       await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });

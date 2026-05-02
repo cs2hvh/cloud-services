@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
     // Sync status from K8s to DB (single source of truth)
     // This ensures DB status matches actual K8s state
-    const syncResult = await AppStatusService.syncStatus(appId, app.name, app.status as "running" | "failed" | "pending" | "building" | "stopped");
+    const syncResult = await AppStatusService.syncStatus(appId, app.name, app.status as "running" | "failed" | "pending" | "building" | "stopped", app.updated_at ?? undefined);
     
     return NextResponse.json({
       app_id: appId,

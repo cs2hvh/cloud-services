@@ -1,8 +1,13 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type EnvironmentCard = {
   title: string;
@@ -36,6 +41,42 @@ export function ReferenceDeployment({
   backgroundImage = "/images/main-page/ref-dply-bg.svg",
   className,
 }: ReferenceDeploymentProps) {
+  const [isRouting, setIsRouting] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const getSolutionsDeployTarget = (path: string) => {
+    if (path.includes("/solutions/database")) return "/dashboard/services/database/new";
+    if (path.includes("/solutions/kubernetes")) return "/dashboard/services/kubernetes/new";
+    if (path.includes("/solutions/security")) return "/dashboard/services/network-ddos/new";
+    if (path.includes("/solutions/storage")) return "/dashboard/services/object-storage/new";
+    if (path.includes("/solutions/ecommerce")) return "/dashboard/services/apps/new";
+    if (path.includes("/solutions/web-hosting")) return "/dashboard/services/apps/new";
+    if (path.includes("/solutions/game-dev")) return "/dashboard/services/compute/vps/new";
+    return null;
+  };
+
+  const handlePrimaryActionClick = async (fallbackHref: string) => {
+    if (isRouting) return;
+    setIsRouting(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const target = getSolutionsDeployTarget(pathname);
+      if (user && target) {
+        router.push(target);
+        return;
+      }
+
+      router.push(fallbackHref);
+    } finally {
+      setIsRouting(false);
+    }
+  };
+
   return (
     <section
       className={cn(
@@ -115,13 +156,30 @@ export function ReferenceDeployment({
             <div className="flex flex-wrap items-center gap-4">
               {actions.map((action, index) => (
                 action.variant === "primary" ? (
-                  <Link
+                  <button
                     key={index}
-                    href={action.href}
+                    type="button"
+                    onClick={() => handlePrimaryActionClick(action.href)}
+                    disabled={isRouting}
                     className="inline-flex items-center justify-center px-5 py-2.5 bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
                   >
                     {action.label}
-                  </Link>
+                  </button>
+                ) : action.href.startsWith("#") ? (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      const element = document.getElementById(action.href.slice(1));
+                      if (element) {
+                        element.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 text-white text-sm font-medium hover:text-white/80 transition-colors"
+                  >
+                    {action.label}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 ) : (
                   <Link
                     key={index}

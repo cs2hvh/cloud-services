@@ -38,7 +38,7 @@ function MetricCard({
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -103,25 +103,25 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
             label="Protected Apps"
             value={stats.totalApplications}
             meta="Spectrum configurations under protection"
-            iconSrc="/dashboard icons/protected apps .png"
+            iconSrc="/dashboard-icons/protected-apps.png"
           />
           <MetricCard
             label="Active"
             value={stats.activeApps}
             meta="Configs currently provisioned and serving"
-            iconSrc="/dashboard icons/active _1.png"
+            iconSrc="/dashboard-icons/active-1.png"
           />
           <MetricCard
             label="IP Firewall"
             value={stats.firewallEnabled}
             meta="Apps with IP firewall controls enabled"
-            iconSrc="/dashboard icons/ip firewall .png"
+            iconSrc="/dashboard-icons/ip-firewall.png"
           />
           <MetricCard
             label="Traffic Profiles"
             value={stats.trafficProfiles || 0}
             meta="Distinct traffic modes across protected apps"
-            iconSrc="/dashboard icons/traffic Profiles .png"
+            iconSrc="/dashboard-icons/traffic-profiles.png"
           />
         </motion.div>
 

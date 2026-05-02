@@ -411,7 +411,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{stats.total_messages}</p>
               </div>
-              <Image src="/dashboard icons/messages .png" alt="Messages" width={32} height={32} className="shrink-0 opacity-80" />
+              <Image src="/dashboard-icons/messages.png" alt="Messages" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -420,7 +420,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Conversations</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{stats.total_conversations}</p>
               </div>
-              <Image src="/dashboard icons/agents .png" alt="Conversations" width={32} height={32} className="shrink-0 opacity-80" />
+              <Image src="/dashboard-icons/agents.png" alt="Conversations" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -429,7 +429,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Tokens Used</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}</p>
               </div>
-              <Image src="/dashboard icons/model.png" alt="Tokens" width={32} height={32} className="shrink-0 opacity-80" />
+              <Image src="/dashboard-icons/model.png" alt="Tokens" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -438,7 +438,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total Cost</p>
                 <p className="mt-3 text-2xl font-semibold text-white">${stats.total_cost.toFixed(4)}</p>
               </div>
-              <Image src="/dashboard icons/agent api keys .png" alt="Cost" width={32} height={32} className="shrink-0 opacity-80" />
+              <Image src="/dashboard-icons/agent-api-keys.png" alt="Cost" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
         </div>

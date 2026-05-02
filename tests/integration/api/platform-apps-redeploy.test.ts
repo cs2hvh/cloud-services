@@ -53,6 +53,7 @@ vi.mock('@/lib/services/build-polling');
 vi.mock('@/lib/audit');
 vi.mock('@/lib/audit/context');
 vi.mock('@/lib/services/runtime-env-reconciler');
+vi.mock('@/lib/git/provider-token');
 vi.mock('@/lib/app-operations', () => {
   class MockAppReleaseBuildService {
     startReleaseBuild = appOpsMocks.startReleaseBuildMock;
@@ -161,6 +162,11 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     // Default mock for getAuditContext
     const { getAuditContext } = await import('@/lib/audit/context');
     vi.mocked(getAuditContext).mockReturnValue({} as any);
+
+    // Default mock for git provider token — returns a valid token so builds proceed
+    const { getGitProviderToken, buildAuthenticatedGitUrl } = await import('@/lib/git/provider-token');
+    vi.mocked(getGitProviderToken).mockResolvedValue('mock-github-token');
+    vi.mocked(buildAuthenticatedGitUrl).mockImplementation((url) => url);
 
     const { reconcileRuntimeEnv } = await import('@/lib/services/runtime-env-reconciler');
     vi.mocked(reconcileRuntimeEnv).mockResolvedValue({
@@ -484,9 +490,11 @@ describe('POST /api/services/platform-apps/redeploy', () => {
 
       await POST(request as NextRequest);
 
-      expect(appOpsMocks.jenkinsBuildTriggerMock).toHaveBeenCalledWith({
-        appName: mockPlatformApp.name,
-      });
+      expect(appOpsMocks.jenkinsBuildTriggerMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appName: mockPlatformApp.name,
+        })
+      );
     });
 
     it('TC-PA-I057: should start a release-build operation', async () => {
@@ -684,7 +692,7 @@ describe('POST /api/services/platform-apps/redeploy', () => {
       await expectResponseStatus(response, 200);
     });
 
-    it('should still succeed when token retrieval fails for github provider', async () => {
+    it('should return 403 GIT_TOKEN_MISSING when token retrieval fails for github provider', async () => {
       const { Platform_Apps } = await import('@/lib/supabase/queries');
       vi.mocked(Platform_Apps.get).mockResolvedValue({
         success: true,
@@ -696,23 +704,20 @@ describe('POST /api/services/platform-apps/redeploy', () => {
         },
       } as any);
 
-      // Simulate all token sources failing
-      vi.mock('@/lib/providers/github', () => {
-        return {
-          GitHubProvider: class {
-            getToken = vi.fn().mockRejectedValue(new Error('Token fetch failed'));
-          },
-        };
-      });
+      // Simulate token not available
+      const { getGitProviderToken } = await import('@/lib/git/provider-token');
+      vi.mocked(getGitProviderToken).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/redeploy',
         { app_id: mockPlatformApp.id }
       );
 
-      // Should still trigger redeploy (with unauthenticated URL)
+      // Must now block the redeploy instead of silently using an unauthenticated URL
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response, 200);
+      const data = await expectResponseStatus(response, 403);
+      expect(data.code).toBe('GIT_TOKEN_MISSING');
+      expect(data.provider).toBe('github');
     });
   });
 });

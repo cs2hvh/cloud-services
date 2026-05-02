@@ -97,8 +97,9 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
     case DOMAIN_ERROR_CODES.PROVIDER_RATE_LIMITED:
       return { status: 429, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED:
-    case DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED:
       return { status: 502, code: error.code, message: error.message, details: error.details };
+    case DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED:
+      return { status: 500, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR:
     case DOMAIN_ERROR_CODES.INTERNAL_ERROR:
     default:

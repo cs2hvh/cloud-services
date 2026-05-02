@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -215,6 +215,8 @@ export default function AppDetailPage() {
   const logOffsetRef = useRef(0);
   const prevBuildingRef = useRef<boolean | undefined>(undefined);
   const prevBuildNumberRef = useRef<number | null>(null);
+  // Tracks the last-seen resize operation id so we only call fetchApp() when a NEW resize completes
+  const prevResizeOpIdRef = useRef<string | null>(null);
   // Which build's logs the user is viewing — null means "show the active/latest build".
   // Separate from buildInfo so polling doesn't hijack the user's selection.
   const [viewingBuildNumber, setViewingBuildNumber] = useState<number | null>(null);
@@ -230,6 +232,13 @@ export default function AppDetailPage() {
   const [editedEnvVars, setEditedEnvVars] = useState<EnvVar[]>([]);
   const [envVarsModified, setEnvVarsModified] = useState(false);
   const [savingEnvVars, setSavingEnvVars] = useState(false);
+  const [envVarsLoading, setEnvVarsLoading] = useState(false);
+  const [envVarsLoaded, setEnvVarsLoaded] = useState(false);
+  const [revealingKey, setRevealingKey] = useState<string | null>(null);
+  // Tracks per-key auto-expiry timers so revealed values don't linger indefinitely
+  const revealTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Timer for the token-expired redirect — cleared on unmount to prevent ghost navigation
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [redeploying, setRedeploying] = useState(false);
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
@@ -348,7 +357,7 @@ export default function AppDetailPage() {
     }
 
     return buildInfo;
-  }, [activeBuildNumber, activeBuildTrigger, buildInfo, viewingBuildNumber]);
+  }, [activeBuildNumber, buildInfo, viewingBuildNumber]);
   const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
@@ -458,6 +467,26 @@ export default function AppDetailPage() {
       setOperationLogsLoading(false);
     }
   }, [app]);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
+
+  // When the OAuth callback redirects back here after a successful git provider reconnect,
+  // show a success toast and strip the ?*_connected=true param from the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connectedParam =
+      params.get('github_connected') === 'true' ? 'GitHub' :
+      params.get('gitlab_connected') === 'true' ? 'GitLab' :
+      params.get('bitbucket_connected') === 'true' ? 'Bitbucket' : null;
+    if (connectedParam) {
+      window.history.replaceState({}, '', window.location.pathname);
+      toast.success(`${connectedParam} reconnected successfully. You can now redeploy.`, { duration: 6000 });
+    }
+  }, []);
 
   useEffect(() => {
     fetchApp();
@@ -595,6 +624,9 @@ export default function AppDetailPage() {
 
     if (wasBuilding === true && !isBuilding) {
       refetchDeployments();
+      // Re-fetch full app state: last_failure_reason, can_rollback, rollback_target_build_number
+      // and other server-computed fields are not carried by the Supabase realtime payload.
+      fetchApp();
 
       // Poll details every 5s for up to 60s until the K8s pod image updates
       let attempts = 0;
@@ -608,7 +640,7 @@ export default function AppDetailPage() {
       }, 5000);
       return () => clearInterval(pollId);
     }
-  }, [isBuilding, refetchDetails, refetchDeployments]);
+  }, [isBuilding, refetchDetails, refetchDeployments, fetchApp]);
 
   // Idle poll: when no build is running, check Jenkins every 15 s so webhook-triggered
   // builds (started entirely on the backend) are detected promptly. Once Jenkins
@@ -621,10 +653,32 @@ export default function AppDetailPage() {
 
   useEffect(() => {
     if (!isBuilding) {
-      setPendingResizeSize(null);
       stalePollingCountRef.current = 0;
     }
   }, [isBuilding]);
+
+  // When the latest resize operation transitions to SUCCESS/FAILURE, refresh app data
+  // so the header reflects the updated size. This is needed because resize runs on a
+  // separate Jenkins job (build_number = null) and never sets isBuilding, so the
+  // normal build-completion effect never fires for resize.
+  useEffect(() => {
+    const latestResize = operationDeployments.find((d) => d.trigger === 'resize');
+    if (!latestResize) return;
+
+    // Seed the ref on first render so we don't react to already-completed operations
+    if (prevResizeOpIdRef.current === null) {
+      prevResizeOpIdRef.current = latestResize.id;
+      return;
+    }
+
+    // A new resize operation appeared and it's no longer building
+    if (latestResize.id !== prevResizeOpIdRef.current && latestResize.status !== 'BUILDING') {
+      prevResizeOpIdRef.current = latestResize.id;
+      setPendingResizeSize(null);
+      // Refresh on both success and failure: failure reason and status are updated server-side
+      fetchApp();
+    }
+  }, [operationDeployments, fetchApp]);
 
   useEffect(() => {
     if (operationDeployments.length === 0) {
@@ -657,18 +711,51 @@ export default function AppDetailPage() {
     }
   }, [activeBuildNumber]);
 
-  // Initialize edited env vars when app data loads
+  // Reset env vars state when navigating to a different app
   useEffect(() => {
-    if (app?.env_vars) {
-      setEditedEnvVars(
-        app.env_vars.map((env) => ({
-          key: env?.key ?? '',
-          value: env?.value ?? '',
-          visible: false,
-        }))
-      );
+    setEnvVarsLoaded(false);
+    setEnvVarsLoading(false);
+    setEditedEnvVars([]);
+    setEnvVarsModified(false);
+  }, [app?.id]);
+
+  // Clear decrypted env var values from memory when the user leaves the Settings tab.
+  // Secrets should not persist in React state any longer than necessary.
+  useEffect(() => {
+    if (activeTab !== 'settings') {
+      // Cancel all pending reveal-expiry timers and wipe state when leaving the tab
+      revealTimersRef.current.forEach(t => clearTimeout(t));
+      revealTimersRef.current.clear();
+      setEditedEnvVars([]);
+      setEnvVarsLoaded(false);
+      setEnvVarsModified(false);
     }
-  }, [app?.env_vars]);
+  }, [activeTab]);
+
+  // Lazy-load env var values only when the Settings tab is first opened.
+  // Values are intentionally excluded from the main page-load GET response
+  // to avoid sending decrypted secrets over the wire unnecessarily.
+  useEffect(() => {
+    if (activeTab !== 'settings' || !app?.id || envVarsLoaded || envVarsLoading) return;
+
+    setEnvVarsLoading(true);
+    setEnvVarError(null);
+
+    fetch('/api/services/platform-apps/env-vars/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: app.id }),
+    })
+      .then(res => res.ok ? res.json() : res.json().then(d => Promise.reject(d.error || 'Failed to load')))
+      .then((data: { env_vars: Array<{ key: string; hasValue: boolean }>; truncated?: boolean }) => {
+        setEditedEnvVars(
+          data.env_vars.map(ev => ({ key: ev.key, value: '', hasValue: ev.hasValue, revealed: false, visible: false }))
+        );
+        setEnvVarsLoaded(true);
+      })
+      .catch((msg: string) => setEnvVarError(typeof msg === 'string' ? msg : 'Failed to load environment variables'))
+      .finally(() => setEnvVarsLoading(false));
+  }, [activeTab, app?.id, envVarsLoaded, envVarsLoading]);
 
   // Initialize project assignment when app data loads
   useEffect(() => {
@@ -676,6 +763,47 @@ export default function AppDetailPage() {
       setProjectId(app.project_id || null);
     }
   }, [app?.project_id]);
+
+  // Reveal the value for a single masked env var by fetching it on demand.
+  const handleRevealVar = useCallback(async (key: string) => {
+    if (!app?.id || revealingKey === key) return;
+    setRevealingKey(key);
+    try {
+      const res = await fetch('/api/services/platform-apps/env-vars/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reveal');
+      setEditedEnvVars(prev =>
+        prev.map(ev =>
+          ev.key === key ? { ...ev, value: data.value, revealed: true, visible: true } : ev
+        )
+      );
+
+      // Auto-clear the revealed value after 5 minutes — secrets shouldn't sit in
+      // React state any longer than necessary if the user walks away.
+      const existing = revealTimersRef.current.get(key);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        setEditedEnvVars(prev =>
+          prev.map(ev =>
+            ev.key === key && ev.revealed
+              ? { ...ev, value: '', revealed: false, visible: false }
+              : ev
+          )
+        );
+        revealTimersRef.current.delete(key);
+      }, 5 * 60_000);
+      revealTimersRef.current.set(key, timer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reveal variable';
+      setEnvVarError(msg);
+    } finally {
+      setRevealingKey(null);
+    }
+  }, [app?.id, revealingKey]);
 
   // Handle env var changes - now handled by EnvVarsEditor
   const handleEnvVarsChange = (vars: EnvVar[]) => {
@@ -688,14 +816,24 @@ export default function AppDetailPage() {
   const handleSaveEnvVars = async () => {
     if (!app) return;
     
-    // Filter out empty entries and validate
-    const validEnvVars = editedEnvVars
+    // Separate vars the user actually has values for from vars that were
+    // never revealed (existing server-side vars the user didn't touch).
+    const allValid = editedEnvVars
       .map((env) => ({
-        key: env.key ?? '',
+        key: (env.key ?? '').trim(),
         value: env.value ?? '',
         visible: env.visible ?? false,
+        revealed: env.revealed ?? false,
+        hasValue: env.hasValue ?? false,
       }))
-      .filter((env) => env.key.trim() !== '');
+      .filter((env) => env.key !== '');
+
+    // Vars to upsert: new vars (hasValue=false) + revealed existing vars
+    const validEnvVars = allValid.filter(env => !env.hasValue || env.revealed);
+    // Vars to preserve server-side without overwriting their stored value
+    const keptKeys = allValid
+      .filter(env => env.hasValue && !env.revealed)
+      .map(env => env.key);
     
     // Check for duplicate keys
     const keys = validEnvVars.map(e => e.key.trim());
@@ -722,6 +860,7 @@ export default function AppDetailPage() {
             key: env.key.trim(),
             value: env.value,
           })),
+          kept_keys: keptKeys,
         }),
       });
 
@@ -805,6 +944,15 @@ export default function AppDetailPage() {
 
       if (!res.ok) {
         const data = await res.json();
+        if (data.code === 'GIT_TOKEN_MISSING') {
+          const validProviders = ['github', 'gitlab', 'bitbucket'];
+          const provider: string = validProviders.includes(data.provider) ? (data.provider as string) : 'github';
+          setEnvVarError(`Your ${provider} account is not connected or the token has expired. Redirecting to Account Settings to reconnect…`);
+          redirectTimerRef.current = setTimeout(() => {
+            router.push(`/dashboard/nav/account?reconnect=${provider}&returnTo=/dashboard/services/apps/${app.id}`);
+          }, 1500);
+          return;
+        }
         throw new Error(data.error || 'Failed to trigger redeploy');
       }
 
@@ -1120,18 +1268,25 @@ export default function AppDetailPage() {
                 </button>
               </div>
 
-              {app.status === 'failed' && app.last_failure_reason && !isBuilding && (
-                <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {/* Failure reason: shown for failed apps AND running apps with a recent operation failure (e.g. resize, redeploy on first-ever build) that did NOT leave a prior release live */}
+              {app.last_failure_reason && !isBuilding && !isDegraded &&
+                (app.status === 'failed' || app.status === 'running') && (
+                <div className={`mt-3 flex items-center gap-2 border px-3 py-2 text-sm ${
+                  app.status === 'failed'
+                    ? 'border-red-400/20 bg-red-500/10 text-red-300'
+                    : 'border-orange-400/20 bg-orange-500/10 text-orange-300'
+                }`}>
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
                 </div>
               )}
-              {/* Degraded state warning: newer deploy exists but old build is still serving */}
+              {/* Degraded state warning: newer release failed but old pod is still serving */}
               {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over — still serving Build #${servingBuildNumber}.`}
+                    {app.last_failure_reason ? ` Failure: ${app.last_failure_reason}` : ''}
                   </span>
                 </div>
               )}
@@ -1976,7 +2131,14 @@ export default function AppDetailPage() {
                   )}
 
                   {/* Advanced Environment Variables Editor */}
-                  <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} />
+                  {envVarsLoading ? (
+                    <div className="flex items-center gap-2 py-6 text-white/50 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading environment variables…
+                    </div>
+                  ) : (
+                    <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} appId={app?.id} onReveal={handleRevealVar} revealingKey={revealingKey} />
+                  )}
 
                   {/* Save Button */}
                   {envVarsModified && (

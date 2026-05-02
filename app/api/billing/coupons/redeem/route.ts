@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 import { limitByUser } from "@/lib/cooldown/userbased";
 
 // POST: Redeem a coupon code
@@ -67,6 +68,12 @@ export async function POST(request: Request) {
     } catch (txnErr) {
       console.error("[Coupons] Failed to save coupon transaction:", txnErr);
       // Don't fail the redemption — credits are already added
+    }
+
+    try {
+      await resolveGraceForUserAfterTopup({ userId: user.id });
+    } catch (graceErr) {
+      console.warn("[Coupons] Grace recovery hook failed:", graceErr);
     }
 
     return NextResponse.json({

@@ -93,6 +93,7 @@ export function SupportedFrameworks() {
                   width={48}
                   height={48}
                   className="object-contain"
+                  unoptimized
                 />
               </div>
               <p className="text-sm font-medium text-white">{framework.name}</p>
@@ -113,7 +114,7 @@ export function GitProviders() {
           <Card key={provider.name} className="bg-white/5 border-white/10">
             <CardHeader>
               <CardTitle className="text-white flex items-center">
-                <Image src={provider.icon} alt={provider.name} width={20} height={20} className="mr-2" />
+                <Image src={provider.icon} alt={provider.name} width={20} height={20} className="mr-2" unoptimized />
                 {provider.name}
               </CardTitle>
             </CardHeader>

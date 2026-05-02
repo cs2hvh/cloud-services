@@ -195,6 +195,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (githubIdentity && data.session.provider_token) {
+        let githubTokenStored = false;
         try {
           // Get GitHub user info
           const userResponse = await fetch("https://api.github.com/user", {
@@ -229,11 +230,21 @@ export async function GET(request: NextRequest) {
                 "Stored GitHub token for repository access:",
                 githubUser.login
               );
+              githubTokenStored = true;
             }
           }
         } catch (error) {
           console.error("Failed to store GitHub token:", error);
           // Don't fail the auth flow if token storage fails
+        }
+
+        // Append ?github_connected=true so the accounts page can show a success toast,
+        // mirroring the ?gitlab_connected=true / ?bitbucket_connected=true behaviour.
+        if (githubTokenStored) {
+          // Append ?github_connected=true so the accounts page can show a success toast,
+          // mirroring the ?gitlab_connected=true / ?bitbucket_connected=true behaviour.
+          const separator = next.includes("?") ? "&" : "?";
+          return NextResponse.redirect(`${redirectOrigin}${next}${separator}github_connected=true`);
         }
       }
 

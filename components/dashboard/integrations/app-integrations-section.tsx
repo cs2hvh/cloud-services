@@ -306,7 +306,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       setLinkModalOpen(true);
       toast.info('Failed integration cleared — you can re-link now');
     } catch (error) {
-      toast.error('Network error while retrying');
+      toast.error(error instanceof Error ? 'Network error while retrying' : 'Network error while retrying');
     } finally {
       setUnlinkingId(null);
     }

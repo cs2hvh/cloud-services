@@ -73,8 +73,10 @@ export class DomainService {
 
   constructor(private readonly deps: DomainServiceDeps) {}
 
-  async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecordWithRouting[]> {
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+  async listDomains(input: { actor: ActorContext; appId?: string }): Promise<DomainRecordWithRouting[]> {
+    if (input.appId !== undefined) {
+      await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    }
     const records = await this.deps.domains.listByApp(input.appId, input.actor.userId);
 
     if (!this.deps.dnsRouting) {
@@ -130,88 +132,96 @@ export class DomainService {
       return normalizeAddDomainResult(fromIdempotency);
     }
 
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    // Load app first (authorization + needed for mutation lock)
+    const app = await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
 
-    const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
-    if (existing) {
-      throw new DomainServiceError({
-        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
-        message:
-          existing.app_id === input.appId
-            ? "This domain is already added to this app"
-            : "This domain is already in use by another app",
-      });
-    }
+    return this.appMutationGuard.withAppMutationLock({
+      app,
+      holder: "domain_add",
+      metadata: { domain: cleanDomain, action: "domain.add" },
+      run: async () => {
+        const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
+        if (existing) {
+          throw new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+            message:
+              existing.app_id === input.appId
+                ? "This domain is already added to this app"
+                : "This domain is already in use by another app",
+          });
+        }
 
-    const ownership = await this.resolveOwnershipMode({
-      domain: cleanDomain,
-      userId: input.actor.userId,
-    });
+        const ownership = await this.resolveOwnershipMode({
+          domain: cleanDomain,
+          userId: input.actor.userId,
+        });
 
-    const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
-    const createdDomain = await this.deps.domains.createPending({
-      appId: input.appId,
-      userId: input.actor.userId,
-      domain: cleanDomain,
-      verificationToken,
-    });
+        const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
+        const createdDomain = await this.deps.domains.createPending({
+          appId: input.appId,
+          userId: input.actor.userId,
+          domain: cleanDomain,
+          verificationToken,
+        });
 
-    const domain = ownership.managedByPlatform
-      ? await this.deps.domains.markVerified(createdDomain.id)
-      : createdDomain;
+        const domain = ownership.managedByPlatform
+          ? await this.deps.domains.markVerified(createdDomain.id)
+          : createdDomain;
 
-    const response = {
-      domain,
-      verification_required: !ownership.managedByPlatform,
-      managed_zone_detected: ownership.managedByPlatform,
-      ownership_source: ownership.source,
-      verification_instructions: ownership.managedByPlatform
-        ? null
-        : {
-            record_type: "TXT" as const,
-            record_name: `galaxyhvh-verify.${cleanDomain}`,
-            record_value: verificationToken,
-            ttl: 300,
-          },
-    };
-
-    await this.persistCompletedIdempotentOperation({
-      action: "domain.add",
-      actorUserId: input.actor.userId,
-      idempotencyKey: input.idempotencyKey,
-      domainId: domain.id,
-      requestData: { app_id: input.appId, domain: cleanDomain },
-      responseData: response as unknown as Record<string, unknown>,
-    });
-
-    await this.emitNonBlocking(async () => {
-      await this.emitAudit({
-        actor: input.actor,
-        action: "create",
-        serviceId: domain.id,
-        serviceName: cleanDomain,
-        metadata: {
-          app_id: input.appId,
-          event: "domain_added",
+        const response = {
+          domain,
+          verification_required: !ownership.managedByPlatform,
           managed_zone_detected: ownership.managedByPlatform,
           ownership_source: ownership.source,
-        },
-      });
-      await this.emitNotification({
-        userId: input.actor.userId,
-        action: "created",
-        serviceName: cleanDomain,
-        serviceId: domain.id,
-        type: "success",
-        metadata: {
-          app_id: input.appId,
-          managed_zone_detected: ownership.managedByPlatform,
-          ownership_source: ownership.source,
-        },
-      });
-    });
+          verification_instructions: ownership.managedByPlatform
+            ? null
+            : {
+                record_type: "TXT" as const,
+                record_name: `galaxyhvh-verify.${cleanDomain}`,
+                record_value: verificationToken,
+                ttl: 300,
+              },
+        };
 
-    return response;
+        await this.persistCompletedIdempotentOperation({
+          action: "domain.add",
+          actorUserId: input.actor.userId,
+          idempotencyKey: input.idempotencyKey,
+          domainId: domain.id,
+          requestData: { app_id: input.appId, domain: cleanDomain },
+          responseData: response as unknown as Record<string, unknown>,
+        });
+
+        await this.emitNonBlocking(async () => {
+          await this.emitAudit({
+            actor: input.actor,
+            action: "create",
+            serviceId: domain.id,
+            serviceName: cleanDomain,
+            metadata: {
+              app_id: input.appId,
+              event: "domain_added",
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+          await this.emitNotification({
+            userId: input.actor.userId,
+            action: "created",
+            serviceName: cleanDomain,
+            serviceId: domain.id,
+            type: "success",
+            metadata: {
+              app_id: input.appId,
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+        });
+
+        return response;
+      },
+    });
   }
 
   async verifyDomain(input: {
@@ -551,6 +561,46 @@ export class DomainService {
         return response;
       },
     });
+  }
+
+  async getRegistrarSettings(input: { actor: ActorContext; domainId: string }) {
+    const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+    const managed = await this.deps.registrar.resolveZone(domain.domain);
+    if (!managed) return { managed: false as const, domain: domain.domain };
+    const s = await this.deps.registrar.getRegistrarSettings(managed.zone);
+    return { managed: true as const, domain: domain.domain, zone: managed.zone, autorenew_enabled: s.autorenewEnabled, locked: s.locked, privacy_enabled: s.privacyEnabled, expires_at: s.expireDate };
+  }
+
+  async updateRegistrarSettings(input: {
+    actor: ActorContext;
+    domainId: string;
+    updates: { autorenew_enabled?: boolean; locked?: boolean; privacy_enabled?: boolean };
+  }) {
+    const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+    const managed = await this.deps.registrar.resolveZone(domain.domain);
+    if (!managed) return { managed: false as const, domain: domain.domain };
+
+    // Persist autorenew preference BEFORE calling the registrar so that if the
+    // DB write fails the user gets a 500 with no registrar change (retryable).
+    // If we called Name.com first and the DB write failed, the registrar would be
+    // updated but the cron would still charge the user (stale DB value).
+    if (input.updates.autorenew_enabled !== undefined && this.deps.purchaseRequests) {
+      const req = await this.deps.purchaseRequests!.findLatestByDomain({ userId: input.actor.userId, domain: managed.zone });
+      if (req) await this.deps.purchaseRequests!.updateStatus({ requestId: req.id, status: req.status, metadata: { autorenew_enabled: input.updates.autorenew_enabled } });
+    }
+
+    const s = await this.deps.registrar.updateRegistrarSettings(managed.zone, {
+      autorenewEnabled: input.updates.autorenew_enabled,
+      locked: input.updates.locked,
+      privacyEnabled: input.updates.privacy_enabled,
+    });
+
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({ actor: input.actor, action: "update", serviceId: domain.id, serviceName: domain.domain, metadata: { event: "registrar_settings_updated", ...input.updates } });
+      await this.emitNotification({ userId: input.actor.userId, action: "updated", serviceName: domain.domain, serviceId: domain.id, type: "info", metadata: { event: "registrar_settings_updated", ...input.updates } });
+    });
+
+    return { managed: true as const, domain: domain.domain, zone: managed.zone, autorenew_enabled: s.autorenewEnabled, locked: s.locked, privacy_enabled: s.privacyEnabled, expires_at: s.expireDate };
   }
 
   async checkSslStatus(input: {

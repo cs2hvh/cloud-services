@@ -14,6 +14,7 @@ import {
 
 import api from "@/lib/axios/axios";
 import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
+import { toast } from "sonner";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -191,6 +192,8 @@ const Accounts = () => {
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const autoRepoConnectStartedRef = useRef(false);
   const connectInProgressRef = useRef(false);
+  // Stores the page the user should return to after reconnecting a git provider
+  const returnToRef = useRef<string | null>(null);
 
   const fetchProviders = async () => {
     try {
@@ -200,6 +203,7 @@ const Accounts = () => {
       }
     } catch (error) {
       console.error("Failed to fetch providers:", error);
+      toast.error("Failed to load provider status. Please refresh the page.");
     }
   };
 
@@ -215,7 +219,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings",
       });
     } catch (error) {
       console.error("Connect repo failed:", error);
@@ -247,7 +251,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings",
       });
     } catch (error) {
       console.error("Reconnect repo failed:", error);
@@ -262,6 +266,22 @@ const Accounts = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Redirected here because a git token expired before a redeploy
+    const reconnectProvider = params.get("reconnect");
+    if (reconnectProvider && ["github", "gitlab", "bitbucket"].includes(reconnectProvider)) {
+      const rawReturnTo = params.get("returnTo") ?? "";
+      // Only allow internal dashboard paths to prevent open-redirect abuse
+      if (rawReturnTo.startsWith("/dashboard/")) {
+        returnToRef.current = rawReturnTo;
+      }
+      params.delete("reconnect");
+      params.delete("returnTo");
+      window.history.replaceState({}, "", window.location.pathname);
+      const label = reconnectProvider.charAt(0).toUpperCase() + reconnectProvider.slice(1);
+      toast.warning(`Your ${label} token has expired. Please reconnect your account below, then return to redeploy.`);
+    }
+
     const autoRepoConnect = params.get("auto_repo_connect");
     const shouldAutoConnectRepo =
       !autoRepoConnectStartedRef.current &&
@@ -294,9 +314,17 @@ const Accounts = () => {
 
     if (
       params.get("gitlab_connected") === "true" ||
-      params.get("bitbucket_connected") === "true"
+      params.get("bitbucket_connected") === "true" ||
+      params.get("github_connected") === "true"
     ) {
+      const connectedProvider =
+        params.get("github_connected") === "true"
+          ? "GitHub"
+          : params.get("gitlab_connected") === "true"
+          ? "GitLab"
+          : "Bitbucket";
       window.history.replaceState({}, "", window.location.pathname);
+      toast.success(`${connectedProvider} connected successfully`);
       setTimeout(() => fetchProviders(), 500);
     }
   }, [performIntegrationAction]);

@@ -66,11 +66,16 @@ interface BucketCreateProps {
   }>;
 }
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -107,7 +112,11 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const response = await axios.get("/api/admin/products?type=object-storage");
+        const endpoint =
+          role === "admin"
+            ? "/api/admin/products?type=object-storage"
+            : "/api/products?type=object-storage";
+        const response = await axios.get(endpoint);
         const products = response?.data?.products;
         
         if (products && products.length > 0) {
@@ -123,22 +132,22 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Steps array with conditional user selection for admin
   const steps = role === "admin"
     ? [
-        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
-        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard-icons/settings-1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
       ]
     : [
-        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
-        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
-        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard-icons/settings-1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
       ];
 
   const maxStep = role === "admin" ? 4 : 4;
@@ -380,7 +389,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   return (
     <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <Link
               href="/dashboard/services/object-storage"
@@ -400,25 +409,15 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
               focused review before the bucket is created.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {progressStep} / {steps.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Status
-              </div>
-              <div className="mt-1.5 text-sm font-semibold text-white">
-                {currentStep === maxStep ? "Review" : "In progress"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da object storage.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -450,7 +449,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="truncate text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -713,6 +712,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -985,46 +985,31 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
               Summary
             </p>
-            <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
           </div>
-          <div className="px-6 py-5">
-            {((role === "admin" && selectedUser) || formData.name || selectedLocation || formData.cors_enabled || formData.versioning_enabled || selectedProject) ? (
-              <div className="divide-y divide-white/[0.05]">
-                {role === "admin" && selectedUser && (
-                  <SummaryRow label="Assigned To" value={selectedUser.email} />
-                )}
-                {formData.name && (
-                  <SummaryRow label="Name" value={formData.name} />
-                )}
-                {selectedLocation && (
-                  <SummaryRow
-                    label="Region"
-                    value={
-                      <span className="flex items-center justify-end gap-2">
-                        <Image
-                          src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`}
-                          alt={selectedLocation.city}
-                          width={16}
-                          height={12}
-                          className="rounded-sm"
-                        />
-                        {selectedLocation.city}
-                      </span>
-                    }
-                  />
-                )}
-                <SummaryRow label="Access" value={formData.acl === "public-read" ? "Public Read" : "Private"} />
-                {formData.cors_enabled && (
-                  <SummaryRow label="CORS" value="Enabled" />
-                )}
-                {formData.versioning_enabled && (
-                  <SummaryRow label="Versioning" value="Enabled" />
-                )}
-                {selectedProject && (
-                  <SummaryRow label="Project" value={selectedProject.name} />
-                )}
-              </div>
-            ) : null}
+          <div className="px-6 py-4">
+            <div className="space-y-0.5">
+              {role === "admin" && selectedUser && (
+                <SummaryRow label="Assigned To" value={selectedUser.email} />
+              )}
+              <SummaryRow icon="/dashboard-icons/name.png" label="Name" value={formData.name || "—"} empty={!formData.name} />
+              <SummaryRow
+                icon="/dashboard-icons/region.png"
+                label="Region"
+                value={selectedLocation ? (
+                  <span className="flex items-center justify-end gap-2">
+                    <Image src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`} alt={selectedLocation.city} width={16} height={12} className="rounded-sm" unoptimized />
+                    {selectedLocation.city}
+                  </span>
+                ) : "—"}
+                empty={!selectedLocation}
+              />
+              <SummaryRow icon="/dashboard-icons/acess.png" label="Access" value={formData.acl === "public-read" ? "Public Read" : "Private"} />
+              <SummaryRow icon="/dashboard-icons/versioning.png" label="Versioning" value={formData.versioning_enabled ? "Enabled" : "Off"} />
+              {selectedProject && (
+                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
+              )}
+            </div>
             <Separator className="my-4 bg-white/[0.08]" />
             <div className="flex items-end justify-between gap-4">
               <div>

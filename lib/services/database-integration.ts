@@ -890,6 +890,48 @@ export class DatabaseIntegrationService {
   }
 
   /**
+   * Unlink all database integrations for an app during app deletion.
+   *
+   * Skips env-var removal and K8s reconciliation — those are unnecessary when the
+   * app itself is being destroyed. Only marks each active integration as "unlinked"
+   * so the database cluster is freed for other apps.
+   *
+   * Best-effort: individual failures are collected and returned but never thrown.
+   */
+  static async unlinkAllFromApp(app_id: string, user_id: string): Promise<{
+    unlinked: number;
+    errors: string[];
+  }> {
+    console.log(`[DatabaseIntegrationService] Unlinking all database integrations for app ${app_id}`);
+
+    const result = await Database_Integrations.get_by_app(app_id, false);
+    if (!result.success || !result.data || result.data.length === 0) {
+      return { unlinked: 0, errors: [] };
+    }
+
+    let unlinked = 0;
+    const errors: string[] = [];
+
+    for (const integration of result.data) {
+      try {
+        await Database_Integrations.mark_unlinked(integration.id, user_id);
+        unlinked++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`integration ${integration.id}: ${msg}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      console.warn(`[DatabaseIntegrationService] ⚠️ ${errors.length} integration(s) failed to unlink for app ${app_id}:`, errors);
+    } else {
+      console.log(`[DatabaseIntegrationService] ✅ Unlinked ${unlinked} database integration(s) for app ${app_id}`);
+    }
+
+    return { unlinked, errors };
+  }
+
+  /**
    * Force unlink all apps from a database (for force delete)
    * 
    * WARNING: This is a destructive operation. Use with caution.

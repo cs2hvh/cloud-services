@@ -88,18 +88,18 @@ export default function VPSFormLoader() {
 
   if (error) {
     return (
-      <div className="text-red-400 p-4 rounded border border-red-500">
-        <p className="font-semibold">Unable to load server options</p>
-        <p className="text-sm mt-1">Please refresh the page or try again later. If the problem persists, contact support.</p>
+      <div className="border border-red-500/20 bg-red-500/[0.06] px-5 py-5">
+        <p className="text-sm font-semibold text-red-400">Unable to load server options</p>
+        <p className="mt-1 text-sm text-white/45">Please refresh the page or try again later. If the problem persists, contact support.</p>
       </div>
     );
   }
 
   if (!options?.regions || options.regions.length === 0) {
     return (
-      <div className="text-yellow-400 p-4 rounded border border-yellow-500">
-        <p className="font-semibold">No regions available</p>
-        <p className="text-sm mt-1">No active servers available. Please contact support.</p>
+      <div className="border border-amber-500/20 bg-amber-500/[0.06] px-5 py-5">
+        <p className="text-sm font-semibold text-amber-400">No regions available</p>
+        <p className="mt-1 text-sm text-white/45">No active servers available. Please contact support.</p>
       </div>
     );
   }

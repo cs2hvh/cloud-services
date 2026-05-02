@@ -166,12 +166,19 @@ export class KubernetesCustomDomainService {
       
       // Wait for build to complete (with timeout)
       await this.waitForBuildCompletion(jobName, buildNumber, 120000); // 2 minute timeout
-      
+
       console.log("[K8sCustomDomain] Add domain completed", {
         ...context,
         buildNumber,
       });
-      
+
+      // Self-cleanup: delete the Jenkins job now that it has served its purpose.
+      // Best-effort — never fail the overall operation just because cleanup fails.
+      jenkins.job.destroy(jobName).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[K8sCustomDomain] Could not delete add-domain job after completion: ${msg}`, { jobName });
+      });
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error("[K8sCustomDomain] Add domain failed", {
@@ -210,20 +217,53 @@ export class KubernetesCustomDomainService {
       
       // Wait for build to complete
       await this.waitForBuildCompletion(jobName, buildNumber, 60000); // 1 minute timeout
-      
+
       console.log("[K8sCustomDomain] Remove domain completed", {
         ...context,
         buildNumber,
       });
-      
+
+      // Self-cleanup: delete the Jenkins job now that it has served its purpose.
+      // Best-effort — never fail the overall operation just because cleanup fails.
+      jenkins.job.destroy(jobName).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[K8sCustomDomain] Could not delete remove-domain job after completion: ${msg}`, { jobName });
+      });
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error("[K8sCustomDomain] Remove domain failed", {
         ...context,
         error: errorMessage,
       });
-      
+
       throw new Error(`Domain removal execution failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Delete the Jenkins job associated with a domain operation if it still exists.
+   * Safe to call even when the job never existed (404 is swallowed).
+   * Used during app deletion to clean up any leftover domain jobs.
+   */
+  static async deleteJobForDomain(
+    appName: string,
+    action: "add-domain" | "remove-domain",
+    customDomain: string
+  ): Promise<void> {
+    const jobName = this.buildDomainJobName(appName, action, customDomain);
+    try {
+      await jenkins.job.destroy(jobName);
+      console.log(`[K8sCustomDomain] Deleted leftover domain job: ${jobName}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNotFound =
+        msg.includes("404") ||
+        msg.toLowerCase().includes("not found") ||
+        msg.toLowerCase().includes("does not exist");
+      if (!isNotFound) {
+        console.warn(`[K8sCustomDomain] Could not delete domain job ${jobName}: ${msg}`);
+      }
     }
   }
 

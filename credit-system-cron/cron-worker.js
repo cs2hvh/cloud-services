@@ -54,13 +54,94 @@ const TABLE_TO_SERVICE_TYPE = {
   active_platform_apps: "platform_apps",
 };
 
+const BILLING_SERVICE_TABLES = Object.keys(TABLE_TO_SERVICE_TYPE);
+
+const GRACE_LIFECYCLE_STATES = {
+  GRACE: "grace",
+  DELETION_SCHEDULED: "deletion_scheduled",
+  DELETING: "deleting",
+  DELETED: "deleted",
+  RESTORED: "restored",
+};
+
+function parsePositiveNumberEnv(name, fallback) {
+  const parsed = Number(process.env[name]);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function parseReminderOffsetsEnv() {
+  const raw = process.env.BILLING_REMINDER_OFFSETS_DAYS ?? "3,1";
+  const values = raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .sort((a, b) => b - a);
+
+  if (values.length === 0) return [3, 1];
+  return [...new Set(values)];
+}
+
+const GRACE_CONFIG = {
+  ENABLED: (process.env.BILLING_GRACE_AUTODELETE_ENABLED ?? "true").toLowerCase() !== "false",
+  PERIOD_DAYS: parsePositiveNumberEnv("BILLING_GRACE_PERIOD_DAYS", 0.006944444),
+  FINAL_WARNING_HOURS: parsePositiveNumberEnv("BILLING_FINAL_WARNING_HOURS",0.1),
+  REMINDER_OFFSETS_DAYS: parseReminderOffsetsEnv(),
+  DELETE_MAX_RETRIES: Math.max(1, Math.floor(parsePositiveNumberEnv("BILLING_DELETE_MAX_RETRIES", 5))),
+  DELETE_RETRY_BACKOFF_SECONDS: parsePositiveNumberEnv("BILLING_DELETE_RETRY_BACKOFF_SECONDS", 15),
+  RECOVERY_MIN_HOURS_COVERAGE: parsePositiveNumberEnv("BILLING_RECOVERY_MIN_HOURS_COVERAGE", 1),
+};
+
 let transactionHistoryMode = "unknown";
 let hasWarnedServiceLedgerUnavailable = false;
 let lastServiceLedgerMismatchAt = 0;
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
+let hasWarnedGraceSchemaUnavailable = false;
+let hasWarnedGraceRouteConfiguration = false;
 
 function roundToCurrency(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function parseBillingTimestamp(value) {
+  if (!value) return null;
+
+  const parsed =
+    typeof value === "string"
+      ? new Date(
+          value.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(value)
+            ? value
+            : `${value}Z`
+        )
+      : new Date(value);
+
+  if (isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSupabaseError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    code === "40001" || // serialization_failure
+    code === "40P01" || // deadlock_detected
+    code === "55P03" || // lock_not_available
+    code === "57014" || // statement_timeout
+    code === "08006" || // connection_failure
+    code === "08001" || // sqlclient_unable_to_establish_sqlconnection
+    message.includes("timeout") ||
+    message.includes("temporarily") ||
+    message.includes("connection") ||
+    message.includes("network")
+  );
 }
 
 function isTransactionHistorySchemaMismatch(error) {
@@ -117,29 +198,729 @@ function markServiceLedgerLegacy() {
   lastServiceLedgerMismatchAt = Date.now();
 }
 
-async function getBalanceAfterDeduction(userId) {
-  const { data, error } = await supabase
-    .schema("billing")
-    .from("user_credits")
-    .select("credit_balance")
-    .eq("user_id", userId)
-    .maybeSingle();
+function asObject(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
 
-  if (error) {
-    console.warn(`⚠️ Failed to fetch balance after deduction for ${userId}: ${error.message}`);
+function formatGraceNumber(value, fallback = null) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function isGraceSchemaUnavailable(error) {
+  if (!error || typeof error !== "object") return false;
+
+  const code = String(error.code || "");
+  const message = String(error.message || "").toLowerCase();
+  const mentionsGraceTables =
+    message.includes("service_lifecycle") || message.includes("notification_outbox");
+
+  return (
+    code === "42P01" || // undefined_table
+    code === "42703" || // undefined_column
+    code === "PGRST204" ||
+    code === "PGRST205" ||
+    message.includes("does not exist") ||
+    message.includes("schema cache") ||
+    mentionsGraceTables
+  );
+}
+
+function warnGraceSchemaUnavailable(error) {
+  if (hasWarnedGraceSchemaUnavailable) return;
+  hasWarnedGraceSchemaUnavailable = true;
+  console.warn(
+    "⚠️ Grace lifecycle schema is unavailable. Apply billing grace migrations to enable auto-delete flow.",
+    error?.message || ""
+  );
+}
+
+function getAppDomainBaseUrl() {
+  const raw = String(process.env.DOMAIN || "").trim();
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+async function postInternalCronRoute(path, payload) {
+  const appUrl = getAppDomainBaseUrl();
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    if (!hasWarnedGraceRouteConfiguration) {
+      hasWarnedGraceRouteConfiguration = true;
+      console.warn(
+        "⚠️ Grace internal routes are disabled because DOMAIN or CRON_SECRET is not configured."
+      );
+    }
+    return {
+      ok: false,
+      skipped: true,
+      status: 0,
+      data: null,
+      errorMessage: "Missing DOMAIN or CRON_SECRET",
+    };
+  }
+
+  try {
+    const response = await fetch(`${appUrl}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify(payload ?? {}),
+    });
+
+    let body = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        status: response.status,
+        data: body,
+        errorMessage:
+          (body && typeof body.message === "string" && body.message) ||
+          `HTTP ${response.status}`,
+      };
+    }
+
+    return {
+      ok: true,
+      skipped: false,
+      status: response.status,
+      data: body,
+      errorMessage: null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: false,
+      status: 0,
+      data: null,
+      errorMessage: error?.message || "Unknown request failure",
+    };
+  }
+}
+
+async function enqueueGraceOutboxEvent({
+  eventKey,
+  eventType,
+  userId,
+  serviceTable,
+  serviceId,
+  payload,
+}) {
+  try {
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .schema("billing")
+      .from("notification_outbox")
+      .upsert(
+        {
+          event_key: eventKey,
+          event_type: eventType,
+          user_id: userId,
+          service_table: serviceTable || null,
+          service_id: serviceId || null,
+          payload: payload || {},
+          status: "pending",
+          updated_at: nowIso,
+        },
+        { onConflict: "event_key" }
+      );
+
+    if (error) {
+      if (isGraceSchemaUnavailable(error)) {
+        warnGraceSchemaUnavailable(error);
+        return false;
+      }
+      console.warn(`⚠️ Failed to enqueue grace outbox event ${eventKey}: ${error.message}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    if (isGraceSchemaUnavailable(error)) {
+      warnGraceSchemaUnavailable(error);
+      return false;
+    }
+    console.warn(
+      `⚠️ Failed to enqueue grace outbox event ${eventKey}: ${error?.message || "Unknown error"}`
+    );
+    return false;
+  }
+}
+
+function mapReminderOffsetToEventType(daysOffset) {
+  const rounded = Math.round(daysOffset);
+  if (rounded === 3) return "grace_reminder_day3";
+  if (rounded === 1) return "grace_reminder_day1";
+  return `grace_reminder_day${rounded}`;
+}
+
+async function startGraceLifecycleForInsufficientCredit({
+  tableName,
+  serviceId,
+  userId,
+  hourlyRate,
+  attemptedAmount,
+  availableBalance,
+  occurredAtIso,
+}) {
+  if (!GRACE_CONFIG.ENABLED) return;
+
+  const now = parseBillingTimestamp(occurredAtIso) || new Date();
+  const nowIso = now.toISOString();
+  const graceExpiresAtIso = new Date(
+    now.getTime() + GRACE_CONFIG.PERIOD_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const requiredBalance = roundToCurrency(
+    Math.max(hourlyRate * GRACE_CONFIG.RECOVERY_MIN_HOURS_COVERAGE, 0)
+  );
+
+  let lifecycleRow = null;
+
+  try {
+    const { data: existing, error: readError } = await supabase
+      .schema("billing")
+      .from("service_lifecycle")
+      .select(
+        "id, state, user_id, service_table, service_id, grace_started_at, grace_expires_at, metadata"
+      )
+      .eq("service_table", tableName)
+      .eq("service_id", serviceId)
+      .maybeSingle();
+
+    if (readError) {
+      if (isGraceSchemaUnavailable(readError)) {
+        warnGraceSchemaUnavailable(readError);
+        return;
+      }
+      console.error(
+        `CRITICAL: Failed to read grace lifecycle for ${tableName}:${serviceId}: ${readError.message}`
+      );
+      return;
+    }
+
+    if (existing) {
+      if (
+        existing.state === GRACE_LIFECYCLE_STATES.GRACE ||
+        existing.state === GRACE_LIFECYCLE_STATES.DELETION_SCHEDULED ||
+        existing.state === GRACE_LIFECYCLE_STATES.DELETING ||
+        existing.state === GRACE_LIFECYCLE_STATES.DELETED
+      ) {
+        return;
+      }
+
+      const mergedMetadata = {
+        ...asObject(existing.metadata),
+        reason: "insufficient_credit",
+        required_balance: requiredBalance,
+        recovery_min_hours_coverage: GRACE_CONFIG.RECOVERY_MIN_HOURS_COVERAGE,
+        insufficient_credit_detected_at: nowIso,
+        available_balance:
+          formatGraceNumber(availableBalance) !== null
+            ? formatGraceNumber(availableBalance)
+            : null,
+        billing_attempt_amount: attemptedAmount,
+        hourly_rate: formatGraceNumber(hourlyRate),
+        previous_state: existing.state,
+      };
+
+      const { data: updatedRow, error: updateError } = await supabase
+        .schema("billing")
+        .from("service_lifecycle")
+        .update({
+          user_id: userId,
+          state: GRACE_LIFECYCLE_STATES.GRACE,
+          grace_started_at: nowIso,
+          grace_expires_at: graceExpiresAtIso,
+          deletion_started_at: null,
+          deleted_at: null,
+          deletion_attempts: 0,
+          last_error: null,
+          metadata: mergedMetadata,
+          updated_at: nowIso,
+        })
+        .eq("id", existing.id)
+        .select("id, grace_expires_at")
+        .maybeSingle();
+
+      if (updateError) {
+        if (isGraceSchemaUnavailable(updateError)) {
+          warnGraceSchemaUnavailable(updateError);
+          return;
+        }
+        console.error(
+          `CRITICAL: Failed to update grace lifecycle for ${tableName}:${serviceId}: ${updateError.message}`
+        );
+        return;
+      }
+
+      lifecycleRow = updatedRow;
+    } else {
+      const insertedMetadata = {
+        reason: "insufficient_credit",
+        required_balance: requiredBalance,
+        recovery_min_hours_coverage: GRACE_CONFIG.RECOVERY_MIN_HOURS_COVERAGE,
+        insufficient_credit_detected_at: nowIso,
+        available_balance:
+          formatGraceNumber(availableBalance) !== null
+            ? formatGraceNumber(availableBalance)
+            : null,
+        billing_attempt_amount: attemptedAmount,
+        hourly_rate: formatGraceNumber(hourlyRate),
+      };
+
+      const { data: insertedRow, error: insertError } = await supabase
+        .schema("billing")
+        .from("service_lifecycle")
+        .insert({
+          service_table: tableName,
+          service_id: serviceId,
+          user_id: userId,
+          state: GRACE_LIFECYCLE_STATES.GRACE,
+          grace_started_at: nowIso,
+          grace_expires_at: graceExpiresAtIso,
+          deletion_attempts: 0,
+          metadata: insertedMetadata,
+          updated_at: nowIso,
+        })
+        .select("id, grace_expires_at")
+        .maybeSingle();
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          return;
+        }
+        if (isGraceSchemaUnavailable(insertError)) {
+          warnGraceSchemaUnavailable(insertError);
+          return;
+        }
+        console.error(
+          `CRITICAL: Failed to create grace lifecycle for ${tableName}:${serviceId}: ${insertError.message}`
+        );
+        return;
+      }
+
+      lifecycleRow = insertedRow;
+    }
+  } catch (error) {
+    if (isGraceSchemaUnavailable(error)) {
+      warnGraceSchemaUnavailable(error);
+      return;
+    }
+    console.error(
+      `CRITICAL: Grace lifecycle handling failed for ${tableName}:${serviceId}:`,
+      error?.message || String(error)
+    );
+    return;
+  }
+
+  const lifecycleId = lifecycleRow?.id ?? `${tableName}:${serviceId}`;
+  await enqueueGraceOutboxEvent({
+    eventKey: `grace_started:${lifecycleId}:${graceExpiresAtIso}`,
+    eventType: "grace_started",
+    userId,
+    serviceTable: tableName,
+    serviceId,
+    payload: {
+      grace_started_at: nowIso,
+      grace_expires_at: lifecycleRow?.grace_expires_at || graceExpiresAtIso,
+      required_balance: requiredBalance,
+      available_balance:
+        formatGraceNumber(availableBalance) !== null
+          ? formatGraceNumber(availableBalance)
+          : null,
+      billing_attempt_amount: attemptedAmount,
+      hourly_rate: formatGraceNumber(hourlyRate),
+    },
+  });
+}
+
+async function enqueueGraceReminderEvents() {
+  if (!GRACE_CONFIG.ENABLED) return;
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  let rows = null;
+  try {
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("service_lifecycle")
+      .select(
+        "id, user_id, service_table, service_id, state, grace_started_at, grace_expires_at, metadata"
+      )
+      .eq("state", GRACE_LIFECYCLE_STATES.GRACE)
+      .order("grace_expires_at", { ascending: true })
+      .limit(500);
+
+    if (error) {
+      if (isGraceSchemaUnavailable(error)) {
+        warnGraceSchemaUnavailable(error);
+        return;
+      }
+      console.error(`CRITICAL: Failed to load grace lifecycle reminders: ${error.message}`);
+      return;
+    }
+
+    rows = data || [];
+  } catch (error) {
+    if (isGraceSchemaUnavailable(error)) {
+      warnGraceSchemaUnavailable(error);
+      return;
+    }
+    console.error(
+      "CRITICAL: Grace reminder lifecycle query failed:",
+      error?.message || String(error)
+    );
+    return;
+  }
+
+  for (const row of rows) {
+    const graceExpiresAt = parseBillingTimestamp(row.grace_expires_at);
+    if (!graceExpiresAt) continue;
+
+    const millisecondsRemaining = graceExpiresAt.getTime() - now.getTime();
+    if (millisecondsRemaining <= 0) {
+      continue;
+    }
+
+    const hoursRemaining = millisecondsRemaining / (1000 * 60 * 60);
+    const metadata = asObject(row.metadata);
+    const requiredBalance =
+      formatGraceNumber(metadata.required_balance) !== null
+        ? formatGraceNumber(metadata.required_balance)
+        : null;
+
+    for (const offsetDays of GRACE_CONFIG.REMINDER_OFFSETS_DAYS) {
+      const thresholdHours = offsetDays * 24;
+      if (hoursRemaining > thresholdHours) continue;
+
+      const reminderEventType = mapReminderOffsetToEventType(offsetDays);
+      await enqueueGraceOutboxEvent({
+        eventKey: `${reminderEventType}:${row.id}:${row.grace_expires_at}`,
+        eventType: reminderEventType,
+        userId: row.user_id,
+        serviceTable: row.service_table,
+        serviceId: row.service_id,
+        payload: {
+          grace_expires_at: row.grace_expires_at,
+          reminder_offset_days: offsetDays,
+          required_balance: requiredBalance,
+          hours_remaining: Number(hoursRemaining.toFixed(2)),
+          generated_at: nowIso,
+        },
+      });
+    }
+
+    if (hoursRemaining <= GRACE_CONFIG.FINAL_WARNING_HOURS) {
+      await enqueueGraceOutboxEvent({
+        eventKey: `grace_reminder_6h:${row.id}:${row.grace_expires_at}`,
+        eventType: "grace_reminder_6h",
+        userId: row.user_id,
+        serviceTable: row.service_table,
+        serviceId: row.service_id,
+        payload: {
+          grace_expires_at: row.grace_expires_at,
+          final_warning_hours: GRACE_CONFIG.FINAL_WARNING_HOURS,
+          required_balance: requiredBalance,
+          hours_remaining: Number(hoursRemaining.toFixed(2)),
+          generated_at: nowIso,
+        },
+      });
+    }
+  }
+}
+
+async function executeGraceDeletionForExpiredServices() {
+  if (!GRACE_CONFIG.ENABLED) return;
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const backoffMs = GRACE_CONFIG.DELETE_RETRY_BACKOFF_SECONDS * 1000;
+
+  let rows = null;
+  try {
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("service_lifecycle")
+      .select(
+        "id, user_id, service_table, service_id, state, grace_expires_at, deletion_attempts, deletion_started_at, metadata"
+      )
+      .in("state", [
+        GRACE_LIFECYCLE_STATES.GRACE,
+        GRACE_LIFECYCLE_STATES.DELETION_SCHEDULED,
+      ])
+      .lte("grace_expires_at", nowIso)
+      .order("grace_expires_at", { ascending: true })
+      .limit(200);
+
+    if (error) {
+      if (isGraceSchemaUnavailable(error)) {
+        warnGraceSchemaUnavailable(error);
+        return;
+      }
+      console.error(`CRITICAL: Failed to load expired grace rows: ${error.message}`);
+      return;
+    }
+    rows = data || [];
+  } catch (error) {
+    if (isGraceSchemaUnavailable(error)) {
+      warnGraceSchemaUnavailable(error);
+      return;
+    }
+    console.error(
+      "CRITICAL: Expired grace lifecycle query failed:",
+      error?.message || String(error)
+    );
+    return;
+  }
+
+  for (const row of rows) {
+    const attempts = Number(row.deletion_attempts || 0);
+    if (attempts >= GRACE_CONFIG.DELETE_MAX_RETRIES) {
+      continue;
+    }
+
+    const lastDeletionStart = parseBillingTimestamp(row.deletion_started_at);
+    if (lastDeletionStart && now.getTime() - lastDeletionStart.getTime() < backoffMs) {
+      continue;
+    }
+
+    if (row.state === GRACE_LIFECYCLE_STATES.GRACE) {
+      const { data: scheduledRow, error: scheduleError } = await supabase
+        .schema("billing")
+        .from("service_lifecycle")
+        .update({
+          state: GRACE_LIFECYCLE_STATES.DELETION_SCHEDULED,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .eq("state", GRACE_LIFECYCLE_STATES.GRACE)
+        .select("id")
+        .maybeSingle();
+
+      if (scheduleError) {
+        if (isGraceSchemaUnavailable(scheduleError)) {
+          warnGraceSchemaUnavailable(scheduleError);
+          return;
+        }
+        console.error(
+          `CRITICAL: Failed to schedule grace deletion for ${row.service_table}:${row.service_id}: ${scheduleError.message}`
+        );
+        continue;
+      }
+
+      if (!scheduledRow) {
+        continue;
+      }
+    }
+
+    const attemptNumber = attempts + 1;
+    const deletionStartedAtIso = new Date().toISOString();
+
+    const { data: deletingRow, error: claimError } = await supabase
+      .schema("billing")
+      .from("service_lifecycle")
+      .update({
+        state: GRACE_LIFECYCLE_STATES.DELETING,
+        deletion_started_at: deletionStartedAtIso,
+        deletion_attempts: attemptNumber,
+        last_error: null,
+        updated_at: deletionStartedAtIso,
+      })
+      .eq("id", row.id)
+      .eq("state", GRACE_LIFECYCLE_STATES.DELETION_SCHEDULED)
+      .select("id, metadata")
+      .maybeSingle();
+
+    if (claimError) {
+      if (isGraceSchemaUnavailable(claimError)) {
+        warnGraceSchemaUnavailable(claimError);
+        return;
+      }
+      console.error(
+        `CRITICAL: Failed to claim deletion for ${row.service_table}:${row.service_id}: ${claimError.message}`
+      );
+      continue;
+    }
+
+    if (!deletingRow) {
+      continue;
+    }
+
+    const deletionResponse = await postInternalCronRoute(
+      "/api/internal/billing/grace-delete/execute",
+      {
+        service_table: row.service_table,
+        service_id: row.service_id,
+        user_id: row.user_id,
+      }
+    );
+
+    if (deletionResponse.ok && deletionResponse.data?.success) {
+      const deletedAtIso = new Date().toISOString();
+      const mergedMetadata = {
+        ...asObject(deletingRow.metadata),
+        deleted_by: "billing_grace_auto_delete",
+        deleted_at: deletedAtIso,
+        delete_response: deletionResponse.data?.metadata || null,
+      };
+
+      const { error: markDeletedError } = await supabase
+        .schema("billing")
+        .from("service_lifecycle")
+        .update({
+          state: GRACE_LIFECYCLE_STATES.DELETED,
+          deleted_at: deletedAtIso,
+          last_error: null,
+          metadata: mergedMetadata,
+          updated_at: deletedAtIso,
+        })
+        .eq("id", row.id);
+
+      if (markDeletedError) {
+        if (isGraceSchemaUnavailable(markDeletedError)) {
+          warnGraceSchemaUnavailable(markDeletedError);
+          return;
+        }
+        console.error(
+          `CRITICAL: Failed to mark deleted state for ${row.service_table}:${row.service_id}: ${markDeletedError.message}`
+        );
+        continue;
+      }
+
+      await enqueueGraceOutboxEvent({
+        eventKey: `grace_deleted:${row.id}`,
+        eventType: "grace_deleted",
+        userId: row.user_id,
+        serviceTable: row.service_table,
+        serviceId: row.service_id,
+        payload: {
+          grace_expires_at: row.grace_expires_at,
+          deleted_at: deletedAtIso,
+          attempts: attemptNumber,
+          result: deletionResponse.data?.message || "deleted",
+        },
+      });
+      continue;
+    }
+
+    const errorMessage =
+      deletionResponse.errorMessage ||
+      (deletionResponse.data &&
+        typeof deletionResponse.data.error === "string" &&
+        deletionResponse.data.error) ||
+      "Unknown deletion execution failure";
+    const shouldRetry = attemptNumber < GRACE_CONFIG.DELETE_MAX_RETRIES;
+    const failureIso = new Date().toISOString();
+    const failureMetadata = {
+      ...asObject(deletingRow.metadata),
+      last_delete_failure_at: failureIso,
+      last_delete_failure_status: deletionResponse.status || null,
+      exhausted_retries: !shouldRetry,
+    };
+
+    const { error: retryError } = await supabase
+      .schema("billing")
+      .from("service_lifecycle")
+      .update({
+        state: GRACE_LIFECYCLE_STATES.DELETION_SCHEDULED,
+        last_error: errorMessage,
+        metadata: failureMetadata,
+        updated_at: failureIso,
+      })
+      .eq("id", row.id)
+      .eq("state", GRACE_LIFECYCLE_STATES.DELETING);
+
+    if (retryError) {
+      if (isGraceSchemaUnavailable(retryError)) {
+        warnGraceSchemaUnavailable(retryError);
+        return;
+      }
+      console.error(
+        `CRITICAL: Failed to persist retry state for ${row.service_table}:${row.service_id}: ${retryError.message}`
+      );
+      continue;
+    }
+
+    console.error(
+      `CRITICAL: Grace deletion failed for ${row.service_table}:${row.service_id} (attempt ${attemptNumber}/${GRACE_CONFIG.DELETE_MAX_RETRIES}): ${errorMessage}`
+    );
+  }
+}
+
+async function dispatchPendingGraceOutboxEvents() {
+  if (!GRACE_CONFIG.ENABLED) return;
+
+  const response = await postInternalCronRoute("/api/internal/billing/grace-events/process", {
+    limit: 100,
+  });
+
+  if (response.skipped) {
+    return;
+  }
+
+  if (!response.ok) {
+    console.error(
+      "CRITICAL: Grace outbox dispatch failed:",
+      response.errorMessage || "Unknown processing error"
+    );
+    return;
+  }
+
+  const processed = Number(response.data?.processed || 0);
+  const failed = Number(response.data?.failed || 0);
+  const skipped = Number(response.data?.skipped || 0);
+
+  if (processed > 0 || failed > 0 || skipped > 0) {
+    console.log(
+      `Grace outbox dispatch: processed=${processed}, failed=${failed}, skipped=${skipped}`
+    );
+  }
+}
+
+async function getBalanceAfterDeduction(userId) {
+  try {
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("credit_balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`⚠️ Failed to fetch balance after deduction for ${userId}: ${error.message}`);
+      return null;
+    }
+
+    if (typeof data?.credit_balance === "number") {
+      return data.credit_balance;
+    }
+
+    if (data?.credit_balance != null) {
+      const parsed = Number(data.credit_balance);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(
+      `⚠️ Failed to fetch balance after deduction for ${userId}: ${error?.message || String(error)}`
+    );
     return null;
   }
-
-  if (typeof data?.credit_balance === "number") {
-    return data.credit_balance;
-  }
-
-  if (data?.credit_balance != null) {
-    const parsed = Number(data.credit_balance);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
 }
 
 async function recordUsageTransaction({
@@ -158,29 +939,38 @@ async function recordUsageTransaction({
     return;
   }
 
-  const { error } = await supabase
-    .schema("billing")
-    .from("transactions")
-    .insert({
-      user_id: userId,
-      amount,
-      currency: "usd",
-      status: "completed",
-      type: "usage",
-      balance_after: balanceAfter,
-      description: `${serviceType.replace("_", " ")} usage charge`,
-      service_id: serviceId,
-      service_type: serviceType,
-      period_start: periodStart,
-      period_end: periodEnd,
+  let error = null;
+  try {
+    const result = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        amount,
+        currency: "usd",
+        status: "completed",
+        type: "usage",
+        balance_after: balanceAfter,
+        description: `${serviceType.replace("_", " ")} usage charge`,
+        service_id: serviceId,
+        service_type: serviceType,
+        period_start: periodStart,
+        period_end: periodEnd,
       metadata: {
         source: "credit-system-cron",
         table: tableName,
         hourly_rate: rateToMetadata(hourlyRate),
-        hours_used: Number(hoursUsed.toFixed(6)),
+        hours_used: Number(hoursUsed.toFixed(2)),
       },
       completed_at: periodEnd,
     });
+    error = result?.error || null;
+  } catch (caughtError) {
+    error = {
+      code: "CLIENT_SHAPE_MISMATCH",
+      message: caughtError?.message || String(caughtError),
+    };
+  }
 
   if (!error) {
     markServiceLedgerAvailable();
@@ -202,6 +992,85 @@ function rateToMetadata(value) {
   if (typeof value === "number") return value;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function runAtomicBillingCycle(params) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const { data, error } = await supabase
+      .schema("billing")
+      .rpc("bill_service_cycle_atomic", params);
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    lastError = error;
+    if (!isTransientSupabaseError(error) || attempt === 2) {
+      break;
+    }
+
+    await sleep(200);
+  }
+
+  return { data: null, error: lastError };
+}
+
+async function recordBillingFailure({
+  tableName,
+  serviceId,
+  userId,
+  amount,
+  failureType,
+  errorCode = null,
+  errorMessage = null,
+  occurredAt,
+  lastBilledAt = null,
+}) {
+  try {
+    await supabase
+      .schema("billing")
+      .from("billing_failure_events")
+      .insert({
+        service_table: tableName,
+        service_id: serviceId,
+        user_id: userId,
+        amount,
+        failure_type: failureType,
+        error_code: errorCode,
+        error_message: errorMessage,
+        occurred_at: occurredAt,
+        billing_attempted_at: occurredAt,
+        last_billed_at: lastBilledAt,
+      });
+  } catch (error) {
+    console.error("WARN: Failed to record billing failure event", {
+      tableName,
+      serviceId,
+      userId,
+      failureType,
+      error: error?.message || String(error),
+    });
+  }
+}
+
+async function resolveBillingFailures(tableName, serviceId, userId) {
+  try {
+    await supabase
+      .schema("billing")
+      .from("billing_failure_events")
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("service_table", tableName)
+      .eq("service_id", serviceId)
+      .eq("user_id", userId)
+      .eq("resolved", false);
+  } catch {
+    // Best effort only. Failure tracking should never break billing flow.
+  }
 }
 
 export async function billSingleService(tableName, svc) {
@@ -358,32 +1227,16 @@ export async function billSingleService(tableName, svc) {
 
   console.log(
     `BILLING ${tableName} -> service_id=${service_id}, user_id=${user_id}, hours=${hoursUsed.toFixed(
-      4
+      2
     )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 
   const periodStart = last
     ? last.toISOString()
-    : created_at
-      ? new Date(created_at).toISOString()
-      : null;
+    : parseBillingTimestamp(created_at)?.toISOString() || null;
   const periodEnd = now.toISOString();
   const billedAtIso = periodEnd;
-  const expectedLastBilledAtIso = periodStart;
-
-  // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
-  // If credit deduction fails, timestamp is updated but no charge occurs (safer than opposite)
-  const { error: updateError } = await supabase
-    .schema("billing")
-    .from(tableName)
-    .update({ last_billed_at: now.toISOString() })
-    .eq("service_id", service_id);
-
-  if (updateError) {
-    console.error(
-      `BILLING: Pre-atomic timestamp update failed for ${tableName} service_id=${service_id}: ${updateError.message}`
-    );
-  }
+  const expectedLastBilledAtIso = last ? last.toISOString() : null;
 
   const { data: cycleResult, error: cycleError } = await runAtomicBillingCycle({
     p_table_name: tableName,
@@ -450,8 +1303,23 @@ export async function billSingleService(tableName, svc) {
       timestamp: billedAtIso,
       note: "Timestamp may be advanced without deduction for this period",
     });
+
+    if (status === "insufficient_credit") {
+      await startGraceLifecycleForInsufficientCredit({
+        tableName,
+        serviceId: service_id,
+        userId: user_id,
+        hourlyRate: rate,
+        attemptedAmount: finalCost,
+        availableBalance: cycleResult?.new_balance ?? null,
+        occurredAtIso: billedAtIso,
+      });
+    }
+
     return;
   }
+
+  await resolveBillingFailures(tableName, service_id, user_id);
 
   const balanceAfter =
     transactionHistoryMode === "legacy"
@@ -533,30 +1401,25 @@ cron.schedule("*/5 * * * *", async () => {
   try {
     console.log("Billing cycle started:", new Date().toISOString());
 
-    const results = await Promise.allSettled([
-      processServiceTable("active_kubernetes"),
-      processServiceTable("active_database"),
-      processServiceTable("active_objectspace"),
-      processServiceTable("active_spectrum"),
-      processServiceTable("active_platform_apps"),
-    ]);
+    const results = await Promise.allSettled(
+      BILLING_SERVICE_TABLES.map((tableName) => processServiceTable(tableName))
+    );
 
     // Log any table processing failures
     results.forEach((result, index) => {
-      const tables = [
-        "active_kubernetes",
-        "active_database",
-        "active_objectspace",
-        "active_spectrum",
-        "active_platform_apps",
-      ];
       if (result.status === "rejected") {
         console.error(
-          `CRITICAL: Failed to process table ${tables[index]}:`,
+          `CRITICAL: Failed to process table ${BILLING_SERVICE_TABLES[index]}:`,
           result.reason
         );
       }
     });
+
+    if (GRACE_CONFIG.ENABLED) {
+      await enqueueGraceReminderEvents();
+      await executeGraceDeletionForExpiredServices();
+      await dispatchPendingGraceOutboxEvents();
+    }
 
     console.log("Billing cycle completed:", new Date().toISOString());
   } catch (error) {
@@ -608,6 +1471,43 @@ cron.schedule("0 * * * *", async () => {
     console.error("[domain-contact-sync] Reconciliation error:", error.message);
   }
 });
+
+// -----------------------------
+// DOMAIN RENEWAL BILLING
+// Runs daily at 09:00 UTC — charges users' credit balances for domains
+// expiring within the next 30 days. Name.com handles the actual renewal
+// from the platform account. No extra cron needed for the renewal itself.
+// -----------------------------
+cron.schedule("0 9 * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[domain-renewal] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[domain-renewal] Running renewal billing:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/domains/renewal/poll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 50, days_ahead: 30 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[domain-renewal] Renewal billing failed:", data);
+    } else {
+      console.log("[domain-renewal] Renewal billing completed:", data.message);
+    }
+  } catch (error) {
+    console.error("[domain-renewal] Renewal billing error:", error.message);
+  }
+});
+
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +
@@ -618,4 +1518,13 @@ console.log(
     ", Min billable=$" +
     SECURITY_LIMITS.MIN_BILLABLE_COST
 );
-console.log("⏰ Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());
+console.log(
+  "Grace auto-delete:",
+  GRACE_CONFIG.ENABLED
+    ? `enabled (${GRACE_CONFIG.PERIOD_DAYS}d grace, reminders=${GRACE_CONFIG.REMINDER_OFFSETS_DAYS.join(
+        ","
+      )}d, final=${GRACE_CONFIG.FINAL_WARNING_HOURS}h, retries=${GRACE_CONFIG.DELETE_MAX_RETRIES})`
+    : "disabled"
+);
+console.log("Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());
+

@@ -21,7 +21,7 @@ export function createResizePipeline(
   name: string,
   size: string = 'small',
   appId: string = '',
-  appDomain: string = 'galaxyhvh.com',
+  // appDomain: string = 'galaxyhvh.com',
   webhookBaseUrl: string = '',
   deploymentRecordSecret: string = '',
   envVars: EnvVar[] = [],
@@ -29,10 +29,10 @@ export function createResizePipeline(
   framework?: string | null,
   operationId: string = '',
 ): string {
-  const domain = `${name}.${appDomain}`;
+  // const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
-  const ingressName = `${name}-ingress`;
+  // const ingressName = `${name}-ingress`;
 
   const sizeKey = (size || 'small').toLowerCase();
   let cpuRequest = '250m';
@@ -90,8 +90,6 @@ pipeline {
   environment {
     APP_NAME = '${appName}'
     SERVICE_NAME = '${serviceName}'
-    INGRESS_NAME = '${ingressName}'
-    DOMAIN = '${domain}'
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     PLATFORM_OPERATION_ID = '${operationId}'
@@ -189,9 +187,6 @@ DEPLOY_EOF
 
               echo 'Applying deployment manifest'
               kubectl apply -f deployment.yaml
-
-              echo "Restarting deployment to apply new resource limits"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
             ''',
             returnStatus: false
             )
@@ -208,6 +203,11 @@ DEPLOY_EOF
           script {
             echo 'STAGE: Verify Deployment'
             echo "Checking deployment status for \${env.APP_NAME}"
+
+            sh(
+              script: 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }',
+              returnStatus: false
+            )
 
             echo 'Fetching deployment, service, and ingress status'
             sh(

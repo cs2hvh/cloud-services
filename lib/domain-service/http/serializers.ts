@@ -67,11 +67,23 @@ export function serializeDomainOperation(op: DomainOperation) {
   };
 }
 
+// Internal-only metadata keys managed by the renewal cron and billing system.
+// Never expose these to API consumers — they are implementation details.
+const INTERNAL_METADATA_KEYS = new Set([
+  "renewal_charged",
+  "last_renewal_charged_at",
+]);
+
 /**
  * Serialize a DomainPurchaseRequest for public API responses.
  * Strips: user_id, idempotency_key, provider_request_id.
+ * Strips internal billing-cron metadata keys from metadata object.
  */
 export function serializeDomainPurchaseRequest(request: DomainPurchaseRequest) {
+  const publicMetadata = Object.fromEntries(
+    Object.entries(request.metadata ?? {}).filter(([k]) => !INTERNAL_METADATA_KEYS.has(k))
+  );
+
   return {
     id: request.id,
     app_id: request.app_id,
@@ -82,7 +94,7 @@ export function serializeDomainPurchaseRequest(request: DomainPurchaseRequest) {
     currency: request.currency,
     provider: request.provider,
     last_error: request.last_error,
-    metadata: request.metadata,
+    metadata: publicMetadata,
     created_at: request.created_at,
     updated_at: request.updated_at,
   };

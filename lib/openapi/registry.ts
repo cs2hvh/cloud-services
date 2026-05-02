@@ -5,6 +5,7 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
+import { registerBillingPaths } from '@/lib/openapi/paths/billing';
 import { registerDatabasePaths } from '@/lib/openapi/paths/databases';
 import { registerDomainPaths } from '@/lib/openapi/paths/domains';
 import { registerKubernetesPaths } from '@/lib/openapi/paths/kubernetes';
@@ -23,6 +24,7 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 });
 
 registerAppPaths(registry);
+registerBillingPaths(registry);
 registerProjectPaths(registry);
 registerResourcePaths(registry);
 registerStoragePaths(registry);

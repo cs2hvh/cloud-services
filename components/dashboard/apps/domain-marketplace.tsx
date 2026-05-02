@@ -16,6 +16,7 @@ export interface DomainMarketplaceTabProps {
   appOptions?: unknown[];
   defaultAttachAppId?: string;
   onDomainAttached?: (appId: string) => void;
+  onPurchaseRequested?: () => void;
   showAttachActions?: boolean;
   modeLabel?: string;
   purchaseRequestAppIdFilter?: string;
@@ -52,6 +53,7 @@ function buildQuerySuggestions(value: string) {
 export function DomainMarketplaceTab({
   sourceAppId,
   initialQuery,
+  onPurchaseRequested,
 }: DomainMarketplaceTabProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -183,6 +185,7 @@ export function DomainMarketplaceTab({
           : 'Check your email for an ICANN verification link and click it before activating the domain.',
         duration: 8000,
       });
+      onPurchaseRequested?.();
     } catch {
       toast.error('Failed to submit purchase request');
     } finally {
@@ -222,7 +225,7 @@ export function DomainMarketplaceTab({
               <Button
                 onClick={() => void handleSearch({ syncUrl: true })}
                 disabled={isSearchDisabled}
-                className="h-12 shrink-0 border border-cyan-400/25 bg-cyan-500/90 px-7 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/25"
+                className="h-12 shrink-0 rounded-none border border-cyan-400/25 bg-cyan-500/90 px-7 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/25"
               >
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
               </Button>

@@ -176,7 +176,7 @@ function ResultRow({
             size="sm"
             onClick={() => onRequestPurchase(item.domainName)}
             disabled={requesting}
-            className="h-9 min-w-[124px] border border-cyan-400/20 bg-cyan-500/90 px-3 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:border-white/[0.08] disabled:bg-white/[0.06] disabled:text-white/30"
+            className="h-9 min-w-[124px] rounded-none border border-cyan-400/20 bg-cyan-500/90 px-3 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:border-white/[0.08] disabled:bg-white/[0.06] disabled:text-white/30"
           >
             {requesting ? (
               <Loader2 className="h-3 w-3 animate-spin" />

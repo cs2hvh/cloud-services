@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import type { Plan } from "@/types/pricing";
 
 type Cycle = "monthly" | "yearly";
@@ -245,13 +246,14 @@ export default function DatabasePricingSection({
                     <p className="text-[13px] leading-6 text-white/54">{engine.note}</p>
                   </div>
 
-                  <a
-                    href="/signup"
+                  <AuthAwareServiceCta
+                    service="database"
+                    intent="new"
                     className="relative mt-auto inline-flex h-11 w-full items-center justify-center gap-2 border border-white/[0.08] bg-white text-[13px] font-medium text-black transition-colors duration-200 hover:bg-white/90"
                   >
                     Deploy {engine.name}
                     <ArrowRight className="h-4 w-4" />
-                  </a>
+                  </AuthAwareServiceCta>
                 </article>
               );
             })}

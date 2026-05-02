@@ -4,6 +4,7 @@ import { Billing } from "@/lib/supabase/queries/billing";
 import { createServiceClient } from "@/lib/supabase/server";
 import { NotificationService } from "@/lib/notifications";
 import { emailService } from "@/lib/email";
+import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 import Stripe from "stripe";
 
 // Disable Next.js body parsing - we need the raw body for signature verification
@@ -464,6 +465,11 @@ export async function POST(request: Request) {
           kind: "topup",
           receiptUrl,
         });
+        try {
+          await resolveGraceForUserAfterTopup({ userId });
+        } catch (graceErr) {
+          console.warn("[Stripe Webhook] Grace recovery hook failed:", graceErr);
+        }
 
         console.log(`[Stripe Webhook] Credited $${amount} to user ${userId} (session: ${session.id})`);
       } catch (err: unknown) {
@@ -593,6 +599,11 @@ export async function POST(request: Request) {
           kind: "recurring",
           receiptUrl: invoice.hosted_invoice_url ?? undefined,
         });
+        try {
+          await resolveGraceForUserAfterTopup({ userId: recurring.user_id });
+        } catch (graceErr) {
+          console.warn("[Stripe Webhook] Recurring grace recovery hook failed:", graceErr);
+        }
 
         console.log(
           `[Stripe Webhook] Credited recurring $${amount} to user ${recurring.user_id} (invoice: ${stripeInvoiceId})`

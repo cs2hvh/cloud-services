@@ -36,11 +36,16 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import axios from "axios";
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -118,7 +123,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Filter users based on search query
   const filteredUsers = allUsers.filter(
@@ -297,35 +302,35 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const steps = role === "admin"
     ? (isSSHorRDP
         ? [
-            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard icons/users & DBs .png" },
-            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard icons/project _1.png" }
+            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 0, name: "User",      iconSrc: "/dashboard icons/users & DBs .png" },
-            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
+            { id: 0, name: "User",      iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ])
     : (isSSHorRDP
         ? [
-            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard icons/project _1.png" }
+            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ]);
 
   // Filter projects based on selected user (admin mode) or current user
@@ -346,9 +351,9 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const progressPercentage = (progressStep / steps.length) * 100;
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-5 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <Link
               href={role === "admin" ? "/dashboard/admin/network-ddos" : "/dashboard/services/network-ddos"}
@@ -367,25 +372,15 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
               Move through app type, domain, routing, origin, and project assignment in a more compact enterprise flow.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {progressStep} / {steps.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Monthly rate
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {loadingPrice ? "-" : "$" + spectrumPrice.toFixed(2)}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da ddos preotection.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -428,7 +423,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                     <div className="mt-2 flex items-center justify-between gap-2 pt-3">
                       <div className="text-sm font-semibold text-white">{step.name}</div>
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
                         {isCompleted && (
                           <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
                             <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -669,34 +664,25 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
               Summary
             </p>
-            <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
           </div>
-          <div className="px-6 py-5">
-            {(formData.appType || formData.domain || formData.edgePort > 0 || formData.originIP || formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off') || selectedProject) ? (
-              <div className="divide-y divide-white/[0.05]">
-                {formData.appType && (
-                  <SummaryRow label="Application" value={<span className="uppercase">{formData.appType}</span>} />
-                )}
-                {formData.domain && (
-                  <SummaryRow label="Domain" value={formData.domain} />
-                )}
-                {formData.edgePort > 0 && (
-                  <SummaryRow label="Edge Port" value={formData.edgePort} />
-                )}
-                {formData.originIP && (
-                  <SummaryRow label="Origin" value={`${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}`} />
-                )}
-                {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
-                  <SummaryRow
-                    label="Protection"
-                    value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
-                  />
-                )}
-                {selectedProject && (
-                  <SummaryRow label="Project" value={selectedProject.name} />
-                )}
-              </div>
-            ) : null}
+          <div className="px-6 py-4">
+            <div className="space-y-0.5">
+              <SummaryRow icon="/dashboard-icons/apptype.png" label="Application" value={formData.appType ? <span className="uppercase">{formData.appType}</span> : "—"} empty={!formData.appType} />
+              <SummaryRow icon="/dashboard-icons/domain.png" label="Domain" value={formData.domain || "—"} empty={!formData.domain} />
+              <SummaryRow icon="/dashboard-icons/edge-port.png" label="Edge Port" value={formData.edgePort > 0 ? formData.edgePort : "—"} empty={!(formData.edgePort > 0)} />
+              <SummaryRow icon="/dashboard-icons/origin.png" label="Origin" value={formData.originIP ? `${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}` : "—"} empty={!formData.originIP} />
+              {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
+                <SummaryRow
+                  icon="/dashboard-icons/ip-firewall.png"
+                  label="Protection"
+                  value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
+                />
+              )}
+              {selectedProject && (
+                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
+              )}
+            </div>
             <Separator className="my-4 bg-white/[0.08]" />
             <div className="flex items-end justify-between gap-4">
               <div>

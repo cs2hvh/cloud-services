@@ -145,7 +145,18 @@ export default function ApplicationDeploymentPage() {
   const { buildInfo, buildLogs, logsLoading, logsError, fetchBuildLogs } =
     useAppBuildState(deployedApps);
 
-  const runningApps = deployedApps.filter((app) => app.status === "running").length;
+  const runningApps = deployedApps.filter(
+    (app) =>
+      // Exclude apps Jenkins has confirmed as building, even if the Supabase realtime
+      // status update hasn't arrived yet — avoids Healthy/ActiveBuilds count mismatch.
+      !buildInfo[app.name]?.building &&
+      (
+        app.status === "running" ||
+        // An app with an active serving deployment is still live even if the DB
+        // status was transiently flipped to "failed" (e.g., by a K8s sync error).
+        (app.serving_build_number != null && app.status !== "deleting" && app.status !== "building")
+      ),
+  ).length;
   const buildingApps = deployedApps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,
   ).length;
@@ -237,25 +248,25 @@ export default function ApplicationDeploymentPage() {
           label="Total Apps"
           value={deployedApps.length}
           meta="Managed deployment targets"
-          iconSrc="/dashboard icons/total apps.png"
+          iconSrc="/dashboard-icons/total-apps.png"
         />
         <MetricCard
           label="Healthy"
           value={runningApps}
           meta="Applications serving live traffic"
-          iconSrc="/dashboard icons/healthy.png"
+          iconSrc="/dashboard-icons/healthy.png"
         />
         <MetricCard
           label="Active Builds"
           value={buildingApps}
           meta="Builds or rollouts currently in progress"
-          iconSrc="/dashboard icons/active builds.png"
+          iconSrc="/dashboard-icons/active-builds.png"
         />
         <MetricCard
           label="Success Rate"
           value={successRate}
           meta="Running apps relative to total inventory"
-          iconSrc="/dashboard icons/sucess rate .png"
+          iconSrc="/dashboard-icons/sucess-rate.png"
         />
       </motion.div>
 

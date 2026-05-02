@@ -50,13 +50,16 @@ const CLUSTERS_PER_PAGE = 10;
 export default function KubernetesUsersTab({ all_clusters }: KubernetesUsersTabProps) {
   const router = useRouter();
 
-  const [allClustersLocal, setAllClustersLocal] = useState(all_clusters);
-  const [clusters, setClusters] = useState(all_clusters.slice(0, CLUSTERS_PER_PAGE));
+  // Exclude internal platform clusters from the user view (check explicit type, not project_id)
+  const userClusters = all_clusters.filter((c) => c.node_config?.provision_config?.type !== "internal");
+
+  const [allClustersLocal, setAllClustersLocal] = useState(userClusters);
+  const [clusters, setClusters] = useState(userClusters.slice(0, CLUSTERS_PER_PAGE));
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"email" | "cluster_name" | "created">("email");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
-    Math.ceil(all_clusters.length / CLUSTERS_PER_PAGE)
+    Math.ceil(userClusters.length / CLUSTERS_PER_PAGE)
   );
 
   // Delete dialog state

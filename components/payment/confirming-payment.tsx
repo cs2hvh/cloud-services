@@ -10,6 +10,7 @@ import { FaqSheet } from "./faq-sheet";
 import { Spinner } from "../ui/spinner";
 import Link from "next/link";
 import { PublicPaymentData } from "@/types/database/payment";
+import Image from "next/image";
 
 interface ConfirmingPaymentProps {
   payment: PublicPaymentData;
@@ -38,7 +39,7 @@ export function ConfirmingPayment({ payment }: ConfirmingPaymentProps) {
           <div className="flex items-start justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <img
+                <Image
                   src={`/currencies/${payment.currency.toLowerCase()}.svg`}
                   alt={payment.currency}
                   className="w-9 h-9"

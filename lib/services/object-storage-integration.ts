@@ -622,6 +622,48 @@ export class ObjectStorageIntegrationService {
   }
 
   /**
+   * Unlink all object storage integrations for an app during app deletion.
+   *
+   * Skips env-var removal and K8s reconciliation — those are unnecessary when the
+   * app itself is being destroyed. Only marks each active integration as "unlinked"
+   * so the bucket is freed for other apps.
+   *
+   * Best-effort: individual failures are collected and returned but never thrown.
+   */
+  static async unlinkAllFromApp(app_id: string, user_id: string): Promise<{
+    unlinked: number;
+    errors: string[];
+  }> {
+    console.log(`[ObjectStorageIntegrationService] Unlinking all storage integrations for app ${app_id}`);
+
+    const result = await ObjectStorage_Integrations.get_by_app(app_id, false);
+    if (!result.success || !result.data || result.data.length === 0) {
+      return { unlinked: 0, errors: [] };
+    }
+
+    let unlinked = 0;
+    const errors: string[] = [];
+
+    for (const integration of result.data) {
+      try {
+        await ObjectStorage_Integrations.mark_unlinked(integration.id, user_id);
+        unlinked++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`integration ${integration.id}: ${msg}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      console.warn(`[ObjectStorageIntegrationService] ⚠️ ${errors.length} integration(s) failed to unlink for app ${app_id}:`, errors);
+    } else {
+      console.log(`[ObjectStorageIntegrationService] ✅ Unlinked ${unlinked} storage integration(s) for app ${app_id}`);
+    }
+
+    return { unlinked, errors };
+  }
+
+  /**
    * Update an existing storage integration's env var key names
    *
    * Renames injected env vars in-place without requiring unlink + re-link.

@@ -85,6 +85,7 @@ spec:
       steps {
         container('kubectl') {
           script {
+            echo 'STAGE: Delete Kubernetes Resources'
             echo 'Deleting application resources...'
             
             sh """
@@ -111,6 +112,7 @@ spec:
       steps {
         container('kubectl') {
           script {
+            echo 'STAGE: Verify Deletion'
             echo 'Verifying resources are deleted...'
             
             sh """
@@ -131,11 +133,18 @@ spec:
   
   post {
     success {
+      echo "PIPELINE: Success"
       echo "[PASS] Successfully deleted Kubernetes resources for ${name}"
     }
     
     failure {
+      echo "PIPELINE: Failure"
       echo "[FAIL] Failed to delete Kubernetes resources for ${name}"
+    }
+    always {
+      script {
+        echo 'PIPELINE: Cleanup'
+      }
     }
   }
 }

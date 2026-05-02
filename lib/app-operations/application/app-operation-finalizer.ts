@@ -1,4 +1,5 @@
 import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
+import { AppStatusService } from "@/lib/services/app-status";
 import { AppOperationLogger } from "@/lib/app-operations/application/app-operation-logger";
 import { ResourceMutationLockService } from "@/lib/app-operations/application/resource-mutation-lock.service";
 import {
@@ -57,7 +58,6 @@ export class AppOperationFinalizer {
       throw new Error(result.error || "Failed to update app state");
     }
   }
-
   async finalizeRuntimeOperation(params: {
     operationId: string;
     appId: string;
@@ -113,30 +113,23 @@ export class AppOperationFinalizer {
         operationDetails: details,
       });
 
-      if (params.status === "success") {
-        if (params.activeDeploymentId) {
-          const activeResult = await Platform_App_Deployments.set_active_for_app(
-            params.appId,
-            params.activeDeploymentId
-          );
-          if (!activeResult.success) {
-            throw new Error(activeResult.error || "Failed to update active deployment");
-          }
+      if (params.status === "success" && params.activeDeploymentId) {
+        const activeResult = await Platform_App_Deployments.set_active_for_app(
+          params.appId,
+          params.activeDeploymentId
+        );
+        if (!activeResult.success) {
+          throw new Error(activeResult.error || "Failed to update active deployment");
         }
-        await this.updateAppState(params.appId, {
-          status: "running",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: null,
-        });
-      } else {
-        await this.updateAppState(params.appId, {
-          status: "failed",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: params.failureReason ?? "Operation failed",
-        });
       }
+
+      await AppStatusService.applyOperationStatus({
+        appId: params.appId,
+        operationStatus: params.status,
+        trigger: params.trigger,
+        commitSha: params.commitSha,
+        failureReason: params.failureReason,
+      });
 
       this.logger.child({
         app_id: params.appId,
@@ -301,30 +294,23 @@ export class AppOperationFinalizer {
         });
       }
 
-      if (params.status === "success") {
-        if (params.trigger !== "resize" && params.trigger !== "rollback") {
-          const activeResult = await Platform_App_Deployments.set_active_for_app(
-            params.appId,
-            operationId
-          );
-          if (!activeResult.success) {
-            throw new Error(activeResult.error || "Failed to update active deployment");
-          }
+      if (params.status === "success" && params.trigger !== "resize" && params.trigger !== "rollback") {
+        const activeResult = await Platform_App_Deployments.set_active_for_app(
+          params.appId,
+          operationId
+        );
+        if (!activeResult.success) {
+          throw new Error(activeResult.error || "Failed to update active deployment");
         }
-        await this.updateAppState(params.appId, {
-          status: "running",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: null,
-        });
-      } else {
-        await this.updateAppState(params.appId, {
-          status: "failed",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: params.failureReason ?? null,
-        });
       }
+
+      await AppStatusService.applyOperationStatus({
+        appId: params.appId,
+        operationStatus: params.status,
+        trigger: params.trigger,
+        commitSha: params.commitSha,
+        failureReason: params.failureReason,
+      });
 
       this.logger.child({
         app_id: params.appId,
@@ -440,21 +426,13 @@ export class AppOperationFinalizer {
         });
       }
 
-      if (params.status === "success") {
-        await this.updateAppState(params.appId, {
-          status: "running",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: null,
-        });
-      } else {
-        await this.updateAppState(params.appId, {
-          status: "failed",
-          last_deploy_trigger: params.trigger,
-          last_deploy_commit: params.commitSha ?? null,
-          last_failure_reason: params.failureReason ?? null,
-        });
-      }
+      await AppStatusService.applyOperationStatus({
+        appId: params.appId,
+        operationStatus: params.status,
+        trigger: params.trigger,
+        commitSha: params.commitSha,
+        failureReason: params.failureReason,
+      });
 
       this.logger.child({
         app_id: params.appId,

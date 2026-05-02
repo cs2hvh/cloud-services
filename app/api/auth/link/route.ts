@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
 import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
+import { githubTokenManager } from "@/lib/providers/github/token-manager";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -53,6 +54,31 @@ export async function POST(request: Request) {
       (i) => i.provider === provider,
     );
     if (alreadyLinked) {
+      if (provider === "github") {
+        // GitHub identity already linked. Re-trigger OAuth so /api/auth/callback
+        // receives a fresh provider_token and stores it in github_tokens.
+        // This handles the case where the token was deleted or never stored.
+        const origin = request.headers.get("origin") || "http://localhost:3000";
+        const callbackUrl = returnTo
+          ? `${origin}/api/auth/callback?next=${encodeURIComponent(returnTo)}`
+          : `${origin}/api/auth/callback`;
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "github",
+          options: {
+            redirectTo: callbackUrl,
+            scopes: "repo user:email",
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error || !data?.url) {
+          logError("POST /api/auth/link github re-auth", error);
+          return NextResponse.json(
+            { error: "Failed to initiate GitHub re-authentication" },
+            { status: 400 }
+          );
+        }
+        return NextResponse.json({ url: data.url }, { status: 200 });
+      }
       return NextResponse.json(
         { message: `Already connected with ${provider}.` },
         { status: 409 },
@@ -148,7 +174,7 @@ export async function POST(request: Request) {
     // Only delete github_tokens when we actually unlinked a GitHub identity.
     if (provider === 'github') {
       if (identity) {
-        await supabase.from('github_tokens').delete().eq('user_id', user.id);
+        await githubTokenManager.deleteToken(user.id);
       } else {
         // Disconnect was requested but no GitHub identity was found on this user —
         // this can happen if the user manually removed the identity elsewhere.

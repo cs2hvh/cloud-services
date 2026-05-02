@@ -64,3 +64,40 @@ export const AppDeleteResponseSchema = z.object({
     deleted: z.boolean().openapi({ example: true }),
   }),
 }).openapi('AppDeleteResponse');
+
+export const DeploymentSchema = z.object({
+  build_number: z.number().nullable().openapi({ example: 5 }),
+  status: z.enum(['BUILDING', 'SUCCESS', 'FAILURE', 'UNKNOWN']).openapi({ example: 'SUCCESS' }),
+  started_at: z.string().openapi({ example: '2026-04-21T10:00:00Z' }),
+  duration: z.number().nullable().optional().openapi({ example: 120000, description: 'Build duration in milliseconds' }),
+  commit_sha: z.string().nullable().optional().openapi({ example: 'abc1234' }),
+  commit_message: z.string().nullable().optional().openapi({ example: 'Fix login redirect bug' }),
+  trigger: z.enum(['manual', 'webhook', 'rollback', 'resize']).nullable().optional().openapi({ example: 'manual' }),
+  failure_reason: z.string().nullable().optional().openapi({ example: 'Build script exited with code 1' }),
+  rollback_target_build_number: z.number().nullable().optional().openapi({ example: null }),
+  operation_type: z.string().openapi({ example: 'deploy' }),
+  history_type: z.enum(['release', 'operation', 'rollback']).openapi({ example: 'release' }),
+  is_release_build: z.boolean().openapi({ example: true }),
+}).openapi('Deployment');
+
+export const DeploymentListResponseSchema = z.object({
+  data: z.object({
+    app_id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
+    app_name: z.string().openapi({ example: 'my-awesome-app' }),
+    deployments: z.array(DeploymentSchema),
+    total: z.number().openapi({ example: 10 }),
+    pending: z.boolean().optional().openapi({ example: false, description: 'True when app is still pending with no deployments' }),
+  }),
+}).openapi('DeploymentListResponse');
+
+export const RedeployResponseSchema = z.object({
+  data: z.object({
+    app_id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
+    app_name: z.string().openapi({ example: 'my-awesome-app' }),
+    status: z.enum(['triggered', 'pending']).openapi({ example: 'triggered' }),
+    build_number: z.number().nullable().optional().openapi({ example: 5 }),
+    operation_id: z.string().uuid().openapi({ example: 'a1cd4c8d-e891-48ba-8655-5c3d04a59501' }),
+    reused: z.boolean().openapi({ example: false, description: 'True if an existing in-progress operation was reused' }),
+    message: z.string().optional().openapi({ example: 'Redeployment started' }),
+  }),
+}).openapi('RedeployResponse');

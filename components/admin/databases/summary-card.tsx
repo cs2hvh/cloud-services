@@ -103,6 +103,7 @@ export const SummaryCard = ({
                 width={16}
                 height={12}
                 className="rounded-sm"
+                unoptimized
               />
               <span className="font-medium text-white">
                 {selectedLocationData.city}

@@ -3,7 +3,9 @@ export type AppOperationType =
   | "redeploy"
   | "rollback"
   | "resize"
-  | "env_update";
+  | "env_update"
+  | "domain_add"
+  | "domain_remove";
 
 export type AppTriggerOrigin = "manual" | "webhook" | "system";
 

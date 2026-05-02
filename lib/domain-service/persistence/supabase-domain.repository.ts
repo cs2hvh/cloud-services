@@ -4,15 +4,18 @@ import type { DomainRecord } from "@/lib/domain-service/core/types";
 import type { DomainRepositoryPort } from "@/lib/domain-service/core/ports";
 
 export class SupabaseDomainRepository implements DomainRepositoryPort {
-  async listByApp(appId: string, userId: string): Promise<DomainRecord[]> {
+  async listByApp(appId: string | undefined, userId: string): Promise<DomainRecord[]> {
     const supabase = await createServiceClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("platform_app_domains")
       .select("*")
-      .eq("app_id", appId)
       .eq("user_id", userId)
       .neq("status", "removed")
       .order("created_at", { ascending: false });
+    if (appId !== undefined) {
+      query = query.eq("app_id", appId);
+    }
+    const { data, error } = await query;
 
     if (error) {
       throw new DomainServiceError({
