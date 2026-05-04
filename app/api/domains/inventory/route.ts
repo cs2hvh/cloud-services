@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false }),
       supabase
         .from('domain_purchase_requests')
-        .select('id, app_id, domain, status, created_at, last_error, registrant_email')
+        .select('id, app_id, domain, status, created_at, last_error, registrant_email, metadata')
         .eq('user_id', auth.user.id)
         .order('created_at', { ascending: false })
         .limit(1000),
@@ -209,6 +209,9 @@ export async function GET(req: NextRequest) {
     }
 
     const purchaseByDomain = new Map<string, DomainPurchase>();
+    // DB-stored expiry/auto_renew written by the marketplace service at purchase time.
+    // Used as fallback when the Name.com live API call times out.
+    const dbMetaByDomain = new Map<string, { expires_at: string | null; auto_renew: boolean | null }>();
 
     (purchaseRows || []).forEach((row) => {
       const domain = normalizeDomain(row.domain || '');
@@ -222,19 +225,25 @@ export async function GET(req: NextRequest) {
         last_error: row.last_error || null,
         registrant_email: row.registrant_email || null,
       });
+
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const storedExpiresAt = typeof meta.expires_at === 'string' ? meta.expires_at : null;
+      const storedAutoRenew = typeof meta.autorenew_enabled === 'boolean' ? meta.autorenew_enabled : null;
+      dbMetaByDomain.set(domain, { expires_at: storedExpiresAt, auto_renew: storedAutoRenew });
     });
 
     const inventoryByDomain = new Map<string, DomainInventoryItem>();
 
     for (const [domain, purchase] of purchaseByDomain.entries()) {
       const providerMeta = resolveProviderMeta(domain, nameComMeta);
+      const dbMeta = dbMetaByDomain.get(domain);
       inventoryByDomain.set(domain, {
         domain,
         purchase,
         connections: [],
         source: 'purchased',
-        expires_at: providerMeta?.expires_at || null,
-        auto_renew: providerMeta?.auto_renew ?? null,
+        expires_at: providerMeta?.expires_at || dbMeta?.expires_at || null,
+        auto_renew: providerMeta?.auto_renew ?? dbMeta?.auto_renew ?? null,
       });
     }
 
