@@ -71,7 +71,7 @@ describe("app operation presentation helpers", () => {
           target: { size: "medium" },
         },
       })
-    ).toBe("Resize small -> medium");
+    ).toBe("Resize from small to medium");
 
     expect(
       getAppOperationLabel({

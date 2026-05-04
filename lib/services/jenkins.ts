@@ -21,6 +21,9 @@ import {
 } from "@/lib/jenkins/pipelines";
 
 export class JenkinsService {
+  private static readonly QUEUE_BUILD_NUMBER_POLL_TIMEOUT_MS = 120_000; // 2 minutes
+  private static readonly QUEUE_BUILD_NUMBER_POLL_INTERVAL_MS = 1_500; // 1.5 seconds
+
   /**
    * Get Jenkins URL without credentials for safe logging
    */
@@ -91,6 +94,102 @@ export class JenkinsService {
     return xml;
   }
 
+  private static async getLatestBuildNumberForJob(jobName: string): Promise<number | null> {
+    try {
+      const jobInfo = await jenkins.job.get(jobName);
+      return jobInfo?.lastBuild?.number ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static async resolveBuildNumberFromQueue(params: {
+    jobName: string;
+    queueItemNumber: number | null | undefined;
+    fallbackBuildNumber: number;
+  }): Promise<number> {
+    const { jobName, queueItemNumber, fallbackBuildNumber } = params;
+
+    if (
+      typeof queueItemNumber !== "number" ||
+      !Number.isFinite(queueItemNumber) ||
+      queueItemNumber <= 0
+    ) {
+      console.warn(
+        `[JenkinsService] Queue item id missing for ${jobName}; falling back to expected build #${fallbackBuildNumber}`
+      );
+      return fallbackBuildNumber;
+    }
+
+    const startedAt = Date.now();
+    let attempts = 0;
+
+    while (Date.now() - startedAt < this.QUEUE_BUILD_NUMBER_POLL_TIMEOUT_MS) {
+      attempts++;
+
+      try {
+        const queueItem = (await jenkins.queue.item(queueItemNumber)) as
+          | {
+              cancelled?: boolean;
+              why?: string;
+              executable?: { number?: number };
+            }
+          | undefined;
+
+        const executableBuildNumber = queueItem?.executable?.number;
+        if (
+          typeof executableBuildNumber === "number" &&
+          Number.isFinite(executableBuildNumber) &&
+          executableBuildNumber > 0
+        ) {
+          return executableBuildNumber;
+        }
+
+        if (queueItem?.cancelled) {
+          throw new Error(
+            `Queue item #${queueItemNumber} for ${jobName} was cancelled` +
+              (queueItem.why ? `: ${queueItem.why}` : "")
+          );
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const lower = message.toLowerCase();
+        const isNotFound = lower.includes("404") || lower.includes("not found");
+        const isCancelled = lower.includes("was cancelled");
+
+        if (isCancelled) {
+          throw error instanceof Error ? error : new Error(message);
+        }
+
+        if (isNotFound) {
+          const latestBuildNumber = await this.getLatestBuildNumberForJob(jobName);
+          if (
+            typeof latestBuildNumber === "number" &&
+            latestBuildNumber >= fallbackBuildNumber
+          ) {
+            console.log(
+              `[JenkinsService] Queue item #${queueItemNumber} for ${jobName} is no longer available; using latest build #${latestBuildNumber}`
+            );
+            return latestBuildNumber;
+          }
+        } else if (attempts % 10 === 0) {
+          console.warn(
+            `[JenkinsService] Still resolving queue item #${queueItemNumber} for ${jobName}: ${message}`
+          );
+        }
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.QUEUE_BUILD_NUMBER_POLL_INTERVAL_MS)
+      );
+    }
+
+    console.warn(
+      `[JenkinsService] Timed out resolving queue item #${queueItemNumber} for ${jobName}; falling back to expected build #${fallbackBuildNumber}`
+    );
+    return fallbackBuildNumber;
+  }
+
   /**
    * Trigger a build for an existing Jenkins job
    * Used by webhooks for auto-deploy
@@ -135,15 +234,23 @@ export class JenkinsService {
         buildParams.GIT_AUTH_URL = gitAuthUrl;
       }
 
-      await jenkins.job.build({
+      const queueItemNumber = await jenkins.job.build({
         name: jobName,
         parameters: buildParams,
       });
-      
-      console.log(`[JenkinsService] Build #${expectedBuildNumber} triggered for: ${jobName}`);
-      console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${expectedBuildNumber}/`);
-      
-      return expectedBuildNumber;
+
+      const actualBuildNumber = await this.resolveBuildNumberFromQueue({
+        jobName,
+        queueItemNumber,
+        fallbackBuildNumber: expectedBuildNumber,
+      });
+
+      console.log(`[JenkinsService] Build #${actualBuildNumber} triggered for: ${jobName}`);
+      console.log(
+        `[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${actualBuildNumber}/`
+      );
+
+      return actualBuildNumber;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Error triggering build for ${jobName}:`, errorMessage);
@@ -1095,12 +1202,19 @@ export class JenkinsService {
     const currentBuildNumber = await this.getResizeLatestBuildNumber(appName) || 0;
     const expectedBuildNumber = currentBuildNumber + 1;
 
-    await jenkins.job.build(jobName);
+    const queueItemNumber = await jenkins.job.build(jobName);
+    const actualBuildNumber = await this.resolveBuildNumberFromQueue({
+      jobName,
+      queueItemNumber,
+      fallbackBuildNumber: expectedBuildNumber,
+    });
 
-    console.log(`[JenkinsService] Resize build #${expectedBuildNumber} triggered for: ${jobName}`);
-    console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${expectedBuildNumber}/`);
+    console.log(`[JenkinsService] Resize build #${actualBuildNumber} triggered for: ${jobName}`);
+    console.log(
+      `[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${actualBuildNumber}/`
+    );
 
-    return expectedBuildNumber;
+    return actualBuildNumber;
   }
 
   /**

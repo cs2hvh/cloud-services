@@ -282,6 +282,11 @@ export interface NameComCreateTransferResponse {
   totalPaid?: number;
 }
 
+export interface DomainTransferDomainResponse {
+  nameservers?: string[];
+  renewalPrice?: number | null;
+}
+
 export interface DomainTransferRegistrarPort {
   checkAvailability(domainNames: string[]): Promise<{
     results: DomainMarketplaceResultRecord[];
@@ -295,6 +300,8 @@ export interface DomainTransferRegistrarPort {
   }): Promise<NameComCreateTransferResponse>;
 
   getTransfer(domainName: string): Promise<NameComTransferResponse>;
+
+  getDomain(domainName: string): Promise<DomainTransferDomainResponse>;
 
   cancelTransfer(domainName: string): Promise<NameComTransferResponse>;
 
@@ -345,6 +352,9 @@ export interface DomainTransferRequestRepositoryPort {
     providerEmail?: string | null;
     lastError?: string | null;
     failureReason?: string | null;
+    renewalPrice?: number | null;
+    /** Shallow-merged into the existing metadata JSONB column. */
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   updatePolled(requestId: string): Promise<void>;

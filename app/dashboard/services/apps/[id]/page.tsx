@@ -64,6 +64,7 @@ import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
 import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
+import { applyLiveBuildStatus } from '@/lib/app-operations/core/live-build-status';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
 import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-editor';
@@ -304,6 +305,10 @@ export default function AppDetailPage() {
   const releaseDeployments = useMemo(
     () => buildDeployments.filter((deployment) => deployment.history_type === 'release'),
     [buildDeployments]
+  );
+  const deploymentsForHistory = useMemo(
+    () => deployments.map((deployment) => applyLiveBuildStatus(deployment, buildInfo)),
+    [deployments, buildInfo]
   );
   const latestReleaseDeployment = releaseDeployments[0] ?? null;
   const activeBuildTrigger = latestBuildDeployment?.status === 'BUILDING'
@@ -1843,7 +1848,7 @@ export default function AppDetailPage() {
           {/* Deployments Tab */}
           <TabsContent value="deployments">
             <DeploymentHistory
-              deployments={deployments}
+              deployments={deploymentsForHistory}
               deploymentsLoading={deploymentsLoading}
               connectionStatus={connectionStatus}
               servingBuildNumber={servingBuildNumber}

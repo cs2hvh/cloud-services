@@ -99,7 +99,6 @@ export async function POST(req: Request) {
       }),
       domain: parsed.data.domain,
       authCode: parsed.data.auth_code,
-      purchasePrice: parsed.data.purchase_price,
       privacyEnabled: parsed.data.privacy_enabled,
       idempotencyKey,
       metadata: { source: "dashboard" },

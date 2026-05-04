@@ -94,7 +94,7 @@ function StatusLabel({ status, label }: { status: DomainStatus; label: string })
 
 function needsAttention(item: DomainInventoryItem): boolean {
   if (item.purchase?.status === 'failed') return true;
-  return item.connections.some((c) => c.status === 'failed' || c.status === 'pending');
+  return item.connections.some((c) => c.status === 'failed');
 }
 
 function isExpiringSoon(expiresAt: string | null, days: number): boolean {
