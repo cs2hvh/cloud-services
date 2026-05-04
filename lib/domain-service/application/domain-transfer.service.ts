@@ -14,6 +14,8 @@ import type { ActorContext, DomainTransferRequest, DomainTransferRequestStatus }
 const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
   "retrieving email": "pending",
   "pending approval": "pending",
+  "pending_transfer": "pending",
+  "pending": "pending",
   "approved": "approved",
   "completed": "completed",
   "cancelled": "cancelled",
@@ -48,6 +50,7 @@ export interface DomainTransferEligibility {
   eligible: boolean;
   reason: string | null;
   transferPrice: number | null;
+  renewalPrice: number | null;
   currency: string;
 }
 
@@ -94,6 +97,7 @@ export class DomainTransferService {
           ? "You already have a transfer in progress for this domain"
           : "A transfer is already in progress for this domain",
         transferPrice: null,
+        renewalPrice: null,
         currency: "USD",
       };
     }
@@ -110,6 +114,7 @@ export class DomainTransferService {
           eligible: false,
           reason: "Domain is not registered or is not available for transfer. Please verify the domain name.",
           transferPrice: null,
+          renewalPrice: null,
           currency: "USD",
         };
       }
@@ -119,6 +124,7 @@ export class DomainTransferService {
         eligible: true,
         reason: null,
         transferPrice: result.purchasePrice ?? null,
+        renewalPrice: result.renewalPrice ?? result.purchasePrice ?? null,
         currency: "USD",
       };
     } catch (error: unknown) {
@@ -131,6 +137,7 @@ export class DomainTransferService {
         eligible: false,
         reason: "Could not verify transfer eligibility. Please try again later.",
         transferPrice: null,
+        renewalPrice: null,
         currency: "USD",
       };
     }
@@ -144,7 +151,6 @@ export class DomainTransferService {
     actor: ActorContext;
     domain: string;
     authCode: string;
-    purchasePrice?: number;
     privacyEnabled?: boolean;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
@@ -177,18 +183,22 @@ export class DomainTransferService {
       });
     }
 
+    const pricing = await this.resolveTransferPricing(domain);
+
     // Create the DB record first (status: initiated)
     const authCodeHashed = hashAuthCode(input.authCode);
     const request = await this.transfers.create({
       userId: actor.userId,
       domain,
       authCodeHash: authCodeHashed,
-      purchasePrice: input.purchasePrice ?? null,
+      purchasePrice: pricing.purchasePrice,
+      renewalPrice: pricing.renewalPrice,
       currency: "USD",
       provider: "namecom",
       idempotencyKey: input.idempotencyKey || null,
       metadata: {
         privacy_enabled: input.privacyEnabled || false,
+        pricing_source: "namecom_check_availability",
         ...(input.metadata || {}),
       },
       status: "initiated",
@@ -196,16 +206,16 @@ export class DomainTransferService {
 
     // Charge billing credits if applicable
     let chargedAmount = 0;
-    if (input.purchasePrice && input.purchasePrice > 0 && this.deps.billing) {
+    if (pricing.purchasePrice && pricing.purchasePrice > 0 && this.deps.billing) {
       try {
         await this.deps.billing.chargeDomainPurchase({
           userId: actor.userId,
           purchaseRequestId: request.id,
           domain,
-          amount: input.purchasePrice,
+          amount: pricing.purchasePrice,
           currency: "USD",
         });
-        chargedAmount = input.purchasePrice;
+        chargedAmount = pricing.purchasePrice;
       } catch (error: unknown) {
         const serviceError = error instanceof DomainServiceError
           ? error
@@ -239,7 +249,7 @@ export class DomainTransferService {
       transferResponse = await this.registrar.createTransfer({
         domainName: domain,
         authCode: input.authCode,
-        purchasePrice: input.purchasePrice,
+        purchasePrice: pricing.purchasePrice ?? undefined,
         privacyEnabled: input.privacyEnabled,
       });
     } catch (error: unknown) {
@@ -537,6 +547,22 @@ export class DomainTransferService {
     const newMappedStatus = mapProviderStatus(newProviderStatus);
     const oldStatus = transfer.status;
 
+    let completionMetadata: Record<string, unknown> | undefined;
+    let completionRenewalPrice: number | null | undefined;
+
+    if (newMappedStatus === "completed") {
+      try {
+        const domainInfo = await this.registrar.getDomain(transfer.domain);
+        completionMetadata = { nameservers: domainInfo.nameservers ?? [] };
+        completionRenewalPrice = domainInfo.renewalPrice ?? transfer.renewal_price ?? null;
+      } catch (error: unknown) {
+        console.warn(
+          `[DomainTransferService] Could not load completed domain info for ${transfer.domain}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
     // Only update if status actually changed
     if (newMappedStatus !== oldStatus || newProviderStatus !== transfer.provider_status) {
       await this.transfers.updateStatus({
@@ -546,6 +572,8 @@ export class DomainTransferService {
         providerEmail: providerData.email || transfer.provider_email,
         lastError: null,
         failureReason: newMappedStatus === "failed" ? "provider_rejected" : null,
+        renewalPrice: completionRenewalPrice,
+        metadata: completionMetadata,
       });
 
       // Clear auth code when transfer reaches a terminal state
@@ -557,6 +585,38 @@ export class DomainTransferService {
       if (newMappedStatus !== oldStatus) {
         await this.emitStatusChangeEvents(transfer, oldStatus as DomainTransferRequestStatus, newMappedStatus);
       }
+    }
+  }
+
+  private async resolveTransferPricing(domain: string): Promise<{
+    purchasePrice: number | null;
+    renewalPrice: number | null;
+  }> {
+    try {
+      const availability = await this.registrar.checkAvailability([domain]);
+      const result = availability.results[0];
+
+      if (!result || result.purchasable) {
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+          message: "Domain is not registered or is not available for transfer.",
+          details: { domain },
+        });
+      }
+
+      return {
+        purchasePrice: result.purchasePrice ?? null,
+        renewalPrice: result.renewalPrice ?? result.purchasePrice ?? null,
+      };
+    } catch (error: unknown) {
+      if (error instanceof DomainServiceError) {
+        throw error;
+      }
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: "Could not resolve transfer pricing from registrar.",
+        details: { domain },
+      });
     }
   }
 
