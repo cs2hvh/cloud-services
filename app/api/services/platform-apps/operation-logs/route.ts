@@ -127,9 +127,20 @@ export async function GET(req: NextRequest) {
       trigger: operation.trigger,
     });
 
+    const resizeRunNumber =
+      operation.trigger === "resize"
+        ? (operation.build_number ??
+          (typeof details.executor?.run_number === "number"
+            ? details.executor.run_number
+            : null))
+        : null;
+
     let logs: string;
-    if (operation.trigger === "resize" && operation.build_number) {
-      logs = await JenkinsService.getResizeDeploymentLog(appResult.data.name, operation.build_number);
+    if (operation.trigger === "resize" && resizeRunNumber) {
+      logs = await JenkinsService.getResizeDeploymentLog(
+        appResult.data.name,
+        resizeRunNumber
+      );
     } else {
       logs = synthesizeOperationLogs({
         appName: appResult.data.name,
@@ -147,6 +158,10 @@ export async function GET(req: NextRequest) {
       trigger: operation.trigger,
       status: operation.status,
       build_number: operation.build_number,
+      executor_run_number:
+        typeof details.executor?.run_number === "number"
+          ? details.executor.run_number
+          : null,
       rollback_target_build_number: operation.rollback_target_build_number,
       verification: details.verification ?? null,
       logs,

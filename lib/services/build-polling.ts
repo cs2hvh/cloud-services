@@ -45,7 +45,7 @@ export class BuildPollingService {
   private static readonly DEFAULT_MAX_POLLS = 180; // 30 minutes
   private static readonly DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
   private static readonly DEFAULT_STARTUP_WAIT = 5000; // 5 seconds
-  private static readonly DEFAULT_BUILD_START_TIMEOUT = 60000; // 1 minute
+  private static readonly DEFAULT_BUILD_START_TIMEOUT = 180000; // 3 minutes (queue-safe)
   private static readonly HEALTH_CHECK_MAX_ATTEMPTS = BUILD_POLLING_HEALTH_CHECK_MAX_ATTEMPTS; // 60 seconds total
   private static readonly HEALTH_CHECK_INTERVAL = BUILD_POLLING_HEALTH_CHECK_INTERVAL_MS; // 10 seconds
   static readonly STALE_BUILD_AGE_MS = BUILD_POLLING_STALE_BUILD_AGE_MS;
