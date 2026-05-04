@@ -42,11 +42,13 @@ interface TransferRequest {
   domain: string;
   status: "initiated" | "pending" | "approved" | "completed" | "failed" | "cancelled";
   purchase_price: number | null;
+  renewal_price: number | null;
   currency: string;
   provider_status: string | null;
   provider_email: string | null;
   last_error: string | null;
   failure_reason: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +58,7 @@ interface EligibilityResult {
   eligible: boolean;
   reason: string | null;
   transferPrice: number | null;
+  renewalPrice: number | null;
   currency: string;
 }
 
@@ -178,6 +181,9 @@ function TransferActivityCard({
   onCancel: (transferId: string) => void;
 }) {
   const isActive = ["initiated", "pending", "approved"].includes(transfer.status);
+  const nameservers = Array.isArray(transfer.metadata?.nameservers)
+    ? transfer.metadata.nameservers.filter((value): value is string => typeof value === "string")
+    : [];
 
   return (
     <div className="border border-white/[0.07] bg-white/[0.02]">
@@ -217,9 +223,17 @@ function TransferActivityCard({
                   <p className="mt-1 break-all text-sm text-white/75">{value}</p>
                 </div>
               ))}
+              {transfer.renewal_price !== null && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Renewal price</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {formatCurrency(transfer.renewal_price, transfer.currency)}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {(transfer.provider_status || transfer.last_error) && (
+            {(transfer.provider_status || transfer.last_error || nameservers.length > 0) && (
               <div className="mt-3 grid gap-2 lg:grid-cols-2">
                 {transfer.provider_status && (
                   <div className="border border-white/[0.07] bg-white/[0.03] p-3">
@@ -231,6 +245,16 @@ function TransferActivityCard({
                   <div className="border border-red-500/20 bg-red-500/10 p-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/60">Last error</p>
                     <p className="mt-1 text-sm text-red-200/80">{transfer.last_error}</p>
+                  </div>
+                )}
+                {nameservers.length > 0 && (
+                  <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Nameservers</p>
+                    <div className="mt-1 text-sm text-white/75 space-y-1">
+                      {nameservers.map((nameserver) => (
+                        <p key={nameserver}>{nameserver}</p>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -375,14 +399,17 @@ export default function DomainTransferPage() {
 
   const handleStartTransfer = useCallback(async () => {
     if (!eligibility?.eligible || !authCode.trim()) { setEligibilityFeedback("Enter the authorization code from your current registrar."); return; }
-    if (authCode.trim().length < 4) { setEligibilityFeedback("Authorization code must be at least 4 characters."); return; }
+    if (authCode.trim().length < 6) { setEligibilityFeedback("Authorization code must be at least 6 characters."); return; }
 
     setSubmitting(true);
     try {
       const response = await fetch("/api/domains/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: eligibility.domain, auth_code: authCode.trim(), purchase_price: eligibility.transferPrice ?? undefined }),
+        body: JSON.stringify({
+          domain: eligibility.domain,
+          auth_code: authCode.trim(),
+        }),
       });
       const json = await response.json();
       if (!response.ok) {
@@ -592,6 +619,9 @@ export default function DomainTransferPage() {
                       </p>
                       <p className="mt-2 text-xs text-white/45">
                         Transfer fee: {formatCurrency(eligibility.transferPrice, eligibility.currency)}
+                      </p>
+                      <p className="text-xs text-white/45">
+                        Renewal price: {formatCurrency(eligibility.renewalPrice, eligibility.currency)}
                       </p>
                     </div>
                     <Button

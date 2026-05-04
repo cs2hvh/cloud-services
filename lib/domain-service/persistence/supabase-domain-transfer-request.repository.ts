@@ -186,6 +186,8 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
     providerEmail?: string | null;
     lastError?: string | null;
     failureReason?: string | null;
+    renewalPrice?: number | null;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
     const supabase = await createServiceClient();
     const update: Record<string, unknown> = {
@@ -197,6 +199,15 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
     if (params.providerEmail !== undefined) update.provider_email = params.providerEmail;
     if (params.lastError !== undefined) update.last_error = params.lastError;
     if (params.failureReason !== undefined) update.failure_reason = params.failureReason;
+    if (params.renewalPrice !== undefined) update.renewal_price = params.renewalPrice;
+    if (params.metadata !== undefined) {
+      const { data: existing } = await supabase
+        .from(TABLE)
+        .select("metadata")
+        .eq("id", params.requestId)
+        .maybeSingle();
+      update.metadata = { ...(existing?.metadata ?? {}), ...params.metadata };
+    }
 
     const { error } = await supabase
       .from(TABLE)
