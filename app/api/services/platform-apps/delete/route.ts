@@ -62,7 +62,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "App not found", message: "App not found" }, { status: 404 });
       }
       if (!isAdminUser && existing.data.user_id !== auth.user!.id) {
-        return NextResponse.json({ error: "Unauthorized", message: "Unauthorized" }, { status: 403 });
+        // Backstop for admin surfaces that don't send is_admin yet:
+        // if ownership doesn't match, perform a real admin check before rejecting.
+        const adminCheck = await requireAdmin();
+        if (!adminCheck.ok) {
+          return NextResponse.json({ error: "Unauthorized", message: "Unauthorized" }, { status: 403 });
+        }
+        isAdminUser = true;
       }
       previousStatus = existing.data.status ?? null;
       previousFailureReason = existing.data.last_failure_reason ?? null;
