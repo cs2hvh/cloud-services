@@ -337,6 +337,7 @@ export interface DomainTransferRequestRepositoryPort {
   listByUser(params: {
     userId: string;
     limit?: number;
+    includeArchived?: boolean;
   }): Promise<DomainTransferRequest[]>;
 
   listPendingForPolling(params: {
@@ -360,4 +361,6 @@ export interface DomainTransferRequestRepositoryPort {
   updatePolled(requestId: string): Promise<void>;
 
   clearAuthCode(requestId: string): Promise<void>;
+
+  archive(requestId: string, archivedBy: string): Promise<void>;
 }
