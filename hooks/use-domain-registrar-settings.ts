@@ -10,11 +10,14 @@ interface DomainSettingsState {
   registrarError: string | null;
   registrarSettings: RegistrarSettings | null;
   savingAutorenew: boolean;
+  savingNameservers: boolean;
 }
 
 interface SettingsHandlers {
   loadRegistrarSettings: () => Promise<void>;
   onToggleAutorenew: () => Promise<void>;
+  onSetNameservers: (nameservers: string[]) => Promise<boolean>;
+  onUseManagedNameservers: () => Promise<boolean>;
 }
 
 export function useDomainRegistrarSettings(
@@ -26,6 +29,7 @@ export function useDomainRegistrarSettings(
   const [registrarError, setRegistrarError] = useState<string | null>(null);
   const [registrarSettings, setRegistrarSettings] = useState<RegistrarSettings | null>(null);
   const [savingAutorenew, setSavingAutorenew] = useState(false);
+  const [savingNameservers, setSavingNameservers] = useState(false);
   const requestIdRef = useRef(0);
 
   const loadRegistrarSettings = useCallback(async () => {
@@ -124,14 +128,105 @@ export function useDomainRegistrarSettings(
     } finally {
       setSavingAutorenew(false);
     }
-  }, [domainName, registrarSettings, onRefresh]);
+  }, [domainName, registrarSettings, onRefresh, onSyncDomainMeta]);
+
+  const onSetNameservers = useCallback(async (nameservers: string[]) => {
+    if (!registrarSettings?.managed) {
+      toast.error('Nameservers can only be changed for domains managed through your account.');
+      return false;
+    }
+
+    setSavingNameservers(true);
+    try {
+      const res = await fetch('/api/domains/registrar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: domainName,
+          nameservers,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
+        return false;
+      }
+
+      const updated = data?.data as RegistrarSettings | null;
+      if (updated) {
+        setRegistrarSettings(updated);
+        onSyncDomainMeta?.(
+          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
+          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
+        );
+      } else {
+        await onRefresh();
+      }
+
+      toast.success('Nameservers updated.');
+      return true;
+    } catch (err) {
+      console.error('Failed to update nameservers:', err);
+      toast.error('Failed to update nameservers. Please try again.');
+      return false;
+    } finally {
+      setSavingNameservers(false);
+    }
+  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta]);
+
+  const onUseManagedNameservers = useCallback(async () => {
+    if (!registrarSettings?.managed) {
+      toast.error('Nameservers can only be changed for domains managed through your account.');
+      return false;
+    }
+
+    setSavingNameservers(true);
+    try {
+      const res = await fetch('/api/domains/registrar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: domainName,
+          nameserver_mode: 'managed',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
+        return false;
+      }
+
+      const updated = data?.data as RegistrarSettings | null;
+      if (updated) {
+        setRegistrarSettings(updated);
+        onSyncDomainMeta?.(
+          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
+          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
+        );
+      } else {
+        await onRefresh();
+      }
+
+      toast.success('Nameservers updated.');
+      return true;
+    } catch (err) {
+      console.error('Failed to update nameservers:', err);
+      toast.error('Failed to update nameservers. Please try again.');
+      return false;
+    } finally {
+      setSavingNameservers(false);
+    }
+  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta]);
 
   return {
     registrarLoading,
     registrarError,
     registrarSettings,
     savingAutorenew,
+    savingNameservers,
     loadRegistrarSettings,
     onToggleAutorenew,
+    onSetNameservers,
+    onUseManagedNameservers,
   };
 }

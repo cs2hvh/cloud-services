@@ -12,6 +12,69 @@ import {
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
 
+const MIN_NAMESERVERS = 2;
+const MAX_NAMESERVERS = 13;
+const NAMESERVER_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.?$/i;
+const NAMECOM_MANAGED_NAMESERVER_RE = /^ns[a-z0-9-]*\.name\.com$/i;
+const CONFIGURED_MANAGED_NAMESERVERS = (process.env.AHURASENSE_MANAGED_NAMESERVERS || "")
+  .split(",")
+  .map((value) => value.trim().toLowerCase().replace(/\.$/, ""))
+  .filter(Boolean);
+const DEFAULT_MANAGED_NAMESERVERS = CONFIGURED_MANAGED_NAMESERVERS.length >= MIN_NAMESERVERS
+  ? CONFIGURED_MANAGED_NAMESERVERS
+  : ["ns1.name.com", "ns2.name.com", "ns3.name.com", "ns4.name.com"];
+
+function normalizeNameserver(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase().replace(/\.$/, "");
+  if (!normalized || !NAMESERVER_RE.test(normalized)) return null;
+  return normalized;
+}
+
+function parseNameservers(value: unknown): { ok: true; nameservers: string[] } | { ok: false; message: string } {
+  if (!Array.isArray(value)) {
+    return { ok: false, message: "Provide nameservers as an array." };
+  }
+
+  const invalidInput = value.some((item) => {
+    if (typeof item !== "string") return true;
+    if (!item.trim()) return false;
+    return normalizeNameserver(item) === null;
+  });
+
+  if (invalidInput) {
+    return { ok: false, message: "Use valid nameserver hostnames, for example ns1.example.com." };
+  }
+
+  const nameservers = Array.from(new Set(value.map(normalizeNameserver).filter(Boolean) as string[]));
+
+  if (nameservers.length < MIN_NAMESERVERS) {
+    return { ok: false, message: "Add at least two valid nameservers." };
+  }
+
+  if (nameservers.length > MAX_NAMESERVERS) {
+    return { ok: false, message: `Use ${MAX_NAMESERVERS} or fewer nameservers.` };
+  }
+
+  return { ok: true, nameservers };
+}
+
+function sameNameservers(a: string[], b: string[]): boolean {
+  const left = a.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  const right = b.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function nameserverMode(nameservers: string[]): "managed" | "custom" {
+  const normalized = nameservers.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean);
+  if (sameNameservers(normalized, DEFAULT_MANAGED_NAMESERVERS)) return "managed";
+  if (normalized.length >= MIN_NAMESERVERS && normalized.every((value) => NAMECOM_MANAGED_NAMESERVER_RE.test(value))) {
+    return "managed";
+  }
+  return "custom";
+}
+
 export async function GET(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
@@ -88,11 +151,14 @@ export async function GET(req: NextRequest) {
           locked: null,
           privacy_enabled: null,
           expires_at: null,
+          nameservers: [],
+          nameserver_mode: "custom",
         },
       });
     }
 
     const domainInfo = await adapter.getDomain(managed.zone);
+    const nameservers = Array.isArray(domainInfo.nameservers) ? domainInfo.nameservers : [];
 
     return NextResponse.json({
       data: {
@@ -105,6 +171,8 @@ export async function GET(req: NextRequest) {
         locked: typeof domainInfo.locked === "boolean" ? domainInfo.locked : null,
         privacy_enabled: typeof domainInfo.privacyEnabled === "boolean" ? domainInfo.privacyEnabled : null,
         expires_at: domainInfo.expireDate || null,
+        nameservers,
+        nameserver_mode: nameserverMode(nameservers),
       },
     });
   } catch (error: unknown) {
@@ -143,6 +211,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const domain = normalizeDomain(typeof body?.domain === "string" ? body.domain : "");
     const autorenewEnabled = body?.autorenew_enabled;
+    const wantsNameserverUpdate = Array.isArray(body?.nameservers);
+    const requestedNameserverMode = body?.nameserver_mode === "managed" ? "managed" : null;
 
     if (!domain || !isValidDomain(domain)) {
       return NextResponse.json(
@@ -154,11 +224,22 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (typeof autorenewEnabled !== "boolean") {
+    if (typeof autorenewEnabled !== "boolean" && !wantsNameserverUpdate && requestedNameserverMode !== "managed") {
       return NextResponse.json(
         {
           error: "VALIDATION_ERROR",
-          message: "Provide autorenew_enabled (boolean) to update.",
+          message: "Provide autorenew_enabled (boolean), nameservers (array), or nameserver_mode.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const parsedNameservers = wantsNameserverUpdate ? parseNameservers(body.nameservers) : null;
+    if (parsedNameservers && !parsedNameservers.ok) {
+      return NextResponse.json(
+        {
+          error: "VALIDATION_ERROR",
+          message: parsedNameservers.message,
         },
         { status: 400 }
       );
@@ -206,6 +287,34 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    const nextNameservers = requestedNameserverMode === "managed"
+      ? DEFAULT_MANAGED_NAMESERVERS
+      : parsedNameservers?.ok
+        ? parsedNameservers.nameservers
+        : null;
+
+    if (nextNameservers) {
+      const updated = await adapter.setNameservers(managed.zone, nextNameservers);
+      const updatedNameservers = Array.isArray(updated.nameservers) ? updated.nameservers : nextNameservers;
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          domain,
+          managed: true,
+          zone: managed.zone,
+          host: managed.host,
+          autorenew_enabled:
+            typeof updated.autorenewEnabled === "boolean" ? updated.autorenewEnabled : null,
+          locked: typeof updated.locked === "boolean" ? updated.locked : null,
+          privacy_enabled: typeof updated.privacyEnabled === "boolean" ? updated.privacyEnabled : null,
+          expires_at: updated.expireDate || null,
+          nameservers: updatedNameservers,
+          nameserver_mode: nameserverMode(updatedNameservers),
+        },
+      });
+    }
+
     // Persist autorenew preference to DB BEFORE calling Name.com.
     // If the DB write fails we return 500 and the registrar is never touched —
     // the user can retry. If we called Name.com first and the DB write failed
@@ -247,11 +356,14 @@ export async function PATCH(req: NextRequest) {
         domain,
         managed: true,
         zone: managed.zone,
+        host: managed.host,
         autorenew_enabled:
           typeof updated.autorenewEnabled === "boolean" ? updated.autorenewEnabled : null,
         locked: typeof updated.locked === "boolean" ? updated.locked : null,
         privacy_enabled: typeof updated.privacyEnabled === "boolean" ? updated.privacyEnabled : null,
         expires_at: updated.expireDate || null,
+        nameservers: Array.isArray(updated.nameservers) ? updated.nameservers : [],
+        nameserver_mode: nameserverMode(Array.isArray(updated.nameservers) ? updated.nameservers : []),
       },
     });
   } catch (error: unknown) {
