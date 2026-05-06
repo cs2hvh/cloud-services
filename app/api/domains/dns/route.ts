@@ -14,6 +14,7 @@ import {
   userOwnsDomain,
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
+import { DEFAULT_MANAGED_NAMESERVERS, NAMECOM_MANAGED_NAMESERVER_RE } from "@/lib/domain-service/managed-nameservers";
 
 type NameComDnsRecordView = {
   id: number | null;
@@ -37,14 +38,6 @@ const SUPPORTED_DNS_TYPES: NameComRecordType[] = [
 ];
 
 const MIN_NAMESERVERS = 2;
-const NAMECOM_MANAGED_NAMESERVER_RE = /^ns[a-z0-9-]*\.name\.com$/i;
-const CONFIGURED_MANAGED_NAMESERVERS = (process.env.AHURASENSE_MANAGED_NAMESERVERS || "")
-  .split(",")
-  .map((value) => value.trim().toLowerCase().replace(/\.$/, ""))
-  .filter(Boolean);
-const MANAGED_NAMESERVERS = CONFIGURED_MANAGED_NAMESERVERS.length >= MIN_NAMESERVERS
-  ? CONFIGURED_MANAGED_NAMESERVERS
-  : ["ns1.name.com", "ns2.name.com", "ns3.name.com", "ns4.name.com"];
 
 function normalizeHost(host: string | null | undefined): string {
   if (!host || host === "") return "@";
@@ -104,7 +97,7 @@ async function hasManagedNameservers(adapter: NameComRegistrarAdapter, zone: str
   const nameservers = Array.isArray(domain.nameservers) ? domain.nameservers : [];
   const normalized = nameservers.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean);
   return (
-    sameNameservers(normalized, MANAGED_NAMESERVERS) ||
+    sameNameservers(normalized, DEFAULT_MANAGED_NAMESERVERS) ||
     (normalized.length >= MIN_NAMESERVERS && normalized.every((value) => NAMECOM_MANAGED_NAMESERVER_RE.test(value)))
   );
 }

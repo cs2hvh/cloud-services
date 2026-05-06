@@ -82,6 +82,8 @@ function NameserverSettings({
 
   useEffect(() => {
     setNameserverMode(isCustomSelected ? 'custom' : 'managed');
+    // Reset custom nameserver inputs when settings prop changes (e.g. after a successful save).
+    setCustomNameservers(['', '']);
   }, [isCustomSelected]);
 
   const normalizedCustomNameservers = useMemo(

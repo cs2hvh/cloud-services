@@ -12,17 +12,11 @@ import {
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
 
+import { DEFAULT_MANAGED_NAMESERVERS, NAMECOM_MANAGED_NAMESERVER_RE } from "@/lib/domain-service/managed-nameservers";
+
 const MIN_NAMESERVERS = 2;
 const MAX_NAMESERVERS = 13;
 const NAMESERVER_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.?$/i;
-const NAMECOM_MANAGED_NAMESERVER_RE = /^ns[a-z0-9-]*\.name\.com$/i;
-const CONFIGURED_MANAGED_NAMESERVERS = (process.env.AHURASENSE_MANAGED_NAMESERVERS || "")
-  .split(",")
-  .map((value) => value.trim().toLowerCase().replace(/\.$/, ""))
-  .filter(Boolean);
-const DEFAULT_MANAGED_NAMESERVERS = CONFIGURED_MANAGED_NAMESERVERS.length >= MIN_NAMESERVERS
-  ? CONFIGURED_MANAGED_NAMESERVERS
-  : ["ns1.name.com", "ns2.name.com", "ns3.name.com", "ns4.name.com"];
 
 function normalizeNameserver(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -346,6 +340,13 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // For autorenew-only updates, fetch domain info first to preserve nameserver_mode.
+    // If the registrar returns empty nameservers, we fall back to the original mode
+    // instead of incorrectly returning "custom".
+    const originalInfo = await adapter.getDomain(managed.zone);
+    const originalNameservers = Array.isArray(originalInfo.nameservers) ? originalInfo.nameservers : [];
+    const originalNameserverMode = nameserverMode(originalNameservers);
+
     await adapter.updateDomain(managed.zone, { autorenewEnabled });
 
     const updated = await adapter.getDomain(managed.zone);
@@ -363,7 +364,11 @@ export async function PATCH(req: NextRequest) {
         privacy_enabled: typeof updated.privacyEnabled === "boolean" ? updated.privacyEnabled : null,
         expires_at: updated.expireDate || null,
         nameservers: Array.isArray(updated.nameservers) ? updated.nameservers : [],
-        nameserver_mode: nameserverMode(Array.isArray(updated.nameservers) ? updated.nameservers : []),
+        // Preserve the original nameserver mode if the registrar returns empty nameservers.
+        // This ensures we don't incorrectly show "custom" for a managed domain.
+        nameserver_mode: Array.isArray(updated.nameservers) && updated.nameservers.length > 0
+          ? nameserverMode(updated.nameservers)
+          : originalNameserverMode,
       },
     });
   } catch (error: unknown) {
