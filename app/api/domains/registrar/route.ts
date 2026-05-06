@@ -347,9 +347,9 @@ export async function PATCH(req: NextRequest) {
     const originalNameservers = Array.isArray(originalInfo.nameservers) ? originalInfo.nameservers : [];
     const originalNameserverMode = nameserverMode(originalNameservers);
 
-    await adapter.updateDomain(managed.zone, { autorenewEnabled });
-
-    const updated = await adapter.getDomain(managed.zone);
+    // Use updateDomain response directly to avoid an extra API call.
+    // updateDomain returns the updated domain info including nameservers.
+    const updated = await adapter.updateDomain(managed.zone, { autorenewEnabled });
 
     return NextResponse.json({
       success: true,

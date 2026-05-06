@@ -168,11 +168,13 @@ export function useDomainRegistrarSettings(
     } catch (err) {
       console.error('Failed to update nameservers:', err);
       toast.error('Failed to update nameservers. Please try again.');
+      // Refresh settings in case the server partially applied the change.
+      await loadRegistrarSettings();
       return false;
     } finally {
       setSavingNameservers(false);
     }
-  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta]);
+  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta, loadRegistrarSettings]);
 
   const onUseManagedNameservers = useCallback(async () => {
     if (!registrarSettings?.managed) {
@@ -212,11 +214,13 @@ export function useDomainRegistrarSettings(
     } catch (err) {
       console.error('Failed to update nameservers:', err);
       toast.error('Failed to update nameservers. Please try again.');
+      // Refresh settings in case the server partially applied the change.
+      await loadRegistrarSettings();
       return false;
     } finally {
       setSavingNameservers(false);
     }
-  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta]);
+  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta, loadRegistrarSettings]);
 
   return {
     registrarLoading,

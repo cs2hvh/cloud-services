@@ -94,8 +94,9 @@ function NameserverSettings({
     () => Array.from(new Set(normalizedCustomNameservers)),
     [normalizedCustomNameservers]
   );
+  const hasDuplicates = uniqueCustomNameservers.length < normalizedCustomNameservers.length;
   const hasInvalidCustomNameservers = normalizedCustomNameservers.some((value) => !NAMESERVER_RE.test(value));
-  const canSaveCustom = uniqueCustomNameservers.length >= MIN_NAMESERVERS && !hasInvalidCustomNameservers;
+  const canSaveCustom = uniqueCustomNameservers.length >= MIN_NAMESERVERS && !hasInvalidCustomNameservers && !hasDuplicates;
 
   const updateCustomNameserver = (index: number, value: string) => {
     setCustomNameservers((prev) => prev.map((item, itemIndex) => (itemIndex === index ? value : item)));
@@ -134,7 +135,9 @@ function NameserverSettings({
     }
     const updated = await onUseManagedNameservers();
     if (!updated) {
-      setNameserverMode(isCustomSelected ? 'custom' : 'managed');
+      // Rollback to server state to avoid divergence.
+      // Since isManagedSelected was false, server state is 'custom'.
+      setNameserverMode('custom');
     }
   };
 
@@ -308,10 +311,14 @@ function NameserverSettings({
               <div className="flex items-center gap-1.5 text-xs">
                 <Info className="h-3.5 w-3.5 text-white/30" />
                 <span className={canSaveCustom ? 'text-white/35' : 'text-amber-300/80'}>
-                  {canSaveCustom ? `${uniqueCustomNameservers.length} nameservers ready` : 'Enter at least two valid nameservers.'}
-                </span>
-              </div>
-              <Button
+                  {hasDuplicates
+                    ? 'Remove duplicate nameservers.'
+                    : canSaveCustom
+                      ? `${uniqueCustomNameservers.length} nameservers ready`
+                      : 'Enter at least two valid nameservers.'}
+                  </span>
+                </div>
+                <Button
                 size="sm"
                 className="bg-white text-black hover:bg-white/90 font-medium"
                 disabled={saving}
