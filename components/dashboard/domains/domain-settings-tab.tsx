@@ -321,7 +321,7 @@ function NameserverSettings({
                 <Button
                 size="sm"
                 className="bg-white text-black hover:bg-white/90 font-medium"
-                disabled={saving}
+                disabled={saving || !canSaveCustom}
                 onClick={saveCustomNameservers}
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
