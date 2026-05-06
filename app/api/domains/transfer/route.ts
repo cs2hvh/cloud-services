@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const parsed = DomainTransferListQuerySchema.safeParse({
       limit: url.searchParams.get("limit") || undefined,
+      include_archived: url.searchParams.get("include_archived") || undefined,
     });
 
     if (!parsed.success) {
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
         userEmail: auth.user.email || undefined,
       }),
       limit: parsed.data.limit,
+      includeArchived: parsed.data.include_archived,
     });
 
     return NextResponse.json({

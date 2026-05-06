@@ -12,10 +12,11 @@ function isValidUUID(value: string): boolean {
 }
 
 /**
- * GET /api/domains/transfer/[requestId]
- * Get details for a single transfer request.
+ * POST /api/domains/transfer/[requestId]/archive
+ * Hide a terminal transfer from the default activity list without deleting
+ * billing, provider, or audit history.
  */
-export async function GET(
+export async function POST(
   req: Request,
   { params }: { params: Promise<{ requestId: string }> }
 ) {
@@ -32,57 +33,7 @@ export async function GET(
     }
 
     const rl = await limitByUser(auth.user.id, {
-      prefix: "rl:domain-transfer:get",
-      limit: 60,
-      windowMs: 60_000,
-    });
-
-    if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "TOO_MANY_REQUESTS", message: `Retry after ${rl.retryAfterSec}s` },
-        { status: 429 }
-      );
-    }
-
-    const service = getDomainTransferService();
-    const request = await service.getTransferRequest({
-      actor: createDomainActor({
-        req,
-        userId: auth.user.id,
-        userEmail: auth.user.email || undefined,
-      }),
-      requestId,
-    });
-
-    return NextResponse.json({ data: request });
-  } catch (error: unknown) {
-    return toDashboardDomainErrorResponse(error);
-  }
-}
-
-/**
- * DELETE /api/domains/transfer/[requestId]
- * User-facing delete: hides a terminal transfer from the default activity list
- * while preserving billing, provider, and audit history.
- */
-export async function DELETE(
-  req: Request,
-  { params }: { params: Promise<{ requestId: string }> }
-) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
-
-  try {
-    const { requestId } = await params;
-    if (!isValidUUID(requestId)) {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "Invalid transfer request ID" },
-        { status: 400 }
-      );
-    }
-
-    const rl = await limitByUser(auth.user.id, {
-      prefix: "rl:domain-transfer:delete",
+      prefix: "rl:domain-transfer:archive",
       limit: 20,
       windowMs: 60_000,
     });

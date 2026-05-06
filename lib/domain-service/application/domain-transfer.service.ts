@@ -392,12 +392,60 @@ export class DomainTransferService {
   async listTransferRequests(input: {
     actor: ActorContext;
     limit?: number;
+    includeArchived?: boolean;
   }): Promise<DomainTransferRequest[]> {
     const requests = await this.transfers.listByUser({
       userId: input.actor.userId,
       limit: input.limit || 20,
+      includeArchived: input.includeArchived,
     });
     return requests.map(toPublicTransferRequest);
+  }
+
+  /**
+   * Hide a terminal transfer from the default activity list without deleting
+   * billing/audit history.
+   */
+  async archiveTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    if (isActiveTransferStatus(request.status)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+        message: "Active transfers cannot be archived. Cancel the transfer first if it should not continue.",
+        details: { currentStatus: request.status },
+      });
+    }
+
+    await this.transfers.archive(request.id, input.actor.userId);
+
+    await this.safeAsync(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "update",
+        serviceId: request.id,
+        serviceName: request.domain,
+        metadata: { event: "domain_transfer_archived" },
+      });
+    });
+
+    return toPublicTransferRequest({
+      ...request,
+      metadata: {
+        ...(request.metadata || {}),
+        archived_at: new Date().toISOString(),
+        archived_by: input.actor.userId,
+      },
+    });
   }
 
   /**
@@ -929,6 +977,27 @@ function ensureDomainFormat(domain: string): void {
       details: { domain },
     });
   }
+
+  if (!looksLikeRegistrableRoot(labels)) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Transfers must use a root-level domain, such as example.com. Subdomains like app.example.com cannot be transferred.",
+      details: { domain },
+    });
+  }
+}
+
+function looksLikeRegistrableRoot(labels: string[]): boolean {
+  if (labels.length === 2) return true;
+  if (labels.length !== 3) return false;
+
+  const secondLevel = labels[1];
+  const countryCodeTld = labels[2];
+  const commonSecondLevelTlds = new Set([
+    "ac", "co", "com", "edu", "gov", "net", "org",
+  ]);
+
+  return countryCodeTld.length === 2 && commonSecondLevelTlds.has(secondLevel);
 }
 
 function mapTransferProviderError(error: DomainServiceError, domain: string): DomainServiceError {

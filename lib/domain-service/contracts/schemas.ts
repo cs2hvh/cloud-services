@@ -372,6 +372,10 @@ export const DomainTransferListQuerySchema = z
         .max(100, "limit must be between 1 and 100")
         .optional()
     ),
+    include_archived: z.preprocess(
+      (value) => value === "true" || value === true,
+      z.boolean().optional()
+    ),
   })
   .openapi("DomainTransferListQuery");
 

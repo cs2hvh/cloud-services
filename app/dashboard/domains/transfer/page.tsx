@@ -13,6 +13,8 @@ import {
   EyeOff,
   Loader2,
   RefreshCw,
+  RotateCcw,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
@@ -171,16 +173,29 @@ function formatDateTime(value: string) {
   });
 }
 
+function looksLikeRegistrableRoot(parts: string[]) {
+  if (parts.length === 2) return true;
+  if (parts.length !== 3) return false;
+  return parts[2].length === 2 && ["ac", "co", "com", "edu", "gov", "net", "org"].includes(parts[1]);
+}
+
 function TransferActivityCard({
   transfer,
   cancellingId,
+  deletingId,
   onCancel,
+  onDelete,
+  onRetry,
 }: {
   transfer: TransferRequest;
   cancellingId: string | null;
+  deletingId: string | null;
   onCancel: (transferId: string) => void;
+  onDelete: (transferId: string) => void;
+  onRetry: (transfer: TransferRequest) => void;
 }) {
   const isActive = ["initiated", "pending", "approved"].includes(transfer.status);
+  const isTerminal = ["completed", "failed", "cancelled"].includes(transfer.status);
   const nameservers = Array.isArray(transfer.metadata?.nameservers)
     ? transfer.metadata.nameservers.filter((value): value is string => typeof value === "string")
     : [];
@@ -270,6 +285,16 @@ function TransferActivityCard({
                 </Button>
               </Link>
             )}
+            {transfer.status === "failed" && (
+              <Button
+                variant="outline"
+                className="rounded-none border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/10"
+                onClick={() => onRetry(transfer)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            )}
             {isActive && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -298,6 +323,34 @@ function TransferActivityCard({
                 </AlertDialogContent>
               </AlertDialog>
             )}
+            {isTerminal && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-none border-white/15 text-white/60 hover:bg-white/[0.08] hover:text-white"
+                    disabled={deletingId === transfer.id}
+                  >
+                    {deletingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-white/10 bg-zinc-900">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-white">Delete transfer from history?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/60">
+                      Remove <span className="font-medium text-white/80">{transfer.domain}</span> from your transfer activity list. Billing and audit records are retained for account security.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogAction className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => onDelete(transfer.id)}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
       </div>
@@ -318,6 +371,7 @@ export default function DomainTransferPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [eligibilityFeedback, setEligibilityFeedback] = useState<string | null>(null);
@@ -373,7 +427,7 @@ export default function DomainTransferPage() {
       setEligibilityFeedback("Domain contains invalid characters. Each label must start and end with a letter or number."); return;
     }
     if (parts[parts.length - 1].length < 2) { setEligibilityFeedback("Domain extension must be at least 2 characters."); return; }
-    if (parts.length > 3) { setEligibilityFeedback("This looks like a subdomain. Transfers only work on root-level domains."); return; }
+    if (!looksLikeRegistrableRoot(parts)) { setEligibilityFeedback("This looks like a subdomain. Transfers only work on root-level domains, such as yourbrand.com."); return; }
 
     setChecking(true);
     setEligibilityFeedback(null);
@@ -449,6 +503,30 @@ export default function DomainTransferPage() {
       setCancellingId(null);
     }
   }, [fetchTransfers]);
+
+  const handleDeleteTransfer = useCallback(async (transferId: string) => {
+    setDeletingId(transferId);
+    try {
+      const response = await fetch(`/api/domains/transfer/${transferId}`, { method: "DELETE" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) { toast.error(json.message || "Failed to delete transfer from history."); return; }
+      toast.success("Transfer deleted from history.");
+      void fetchTransfers();
+    } catch {
+      toast.error("Failed to delete transfer from history.");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [fetchTransfers]);
+
+  const handleRetryTransfer = useCallback((transfer: TransferRequest) => {
+    setDomain(transfer.domain);
+    setAuthCode("");
+    setEligibility(null);
+    setEligibilityFeedback("Fix the registrar-side issue, then re-check eligibility and submit a fresh authorization code.");
+    setStage("lookup");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const stageIndex = stage === "lookup" ? 1 : 2;
   const inputCls = "rounded-none border-white/[0.18] bg-black/35 text-white placeholder:text-white/45 focus:border-white/30 transition-colors";
@@ -817,7 +895,10 @@ export default function DomainTransferPage() {
                         key={transfer.id}
                         transfer={transfer}
                         cancellingId={cancellingId}
+                        deletingId={deletingId}
                         onCancel={(id) => void handleCancelTransfer(id)}
+                        onDelete={(id) => void handleDeleteTransfer(id)}
+                        onRetry={handleRetryTransfer}
                       />
                     ))
                   ) : (
