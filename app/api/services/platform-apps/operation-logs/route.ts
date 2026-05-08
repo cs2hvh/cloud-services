@@ -137,10 +137,20 @@ export async function GET(req: NextRequest) {
 
     let logs: string;
     if (operation.trigger === "resize" && resizeRunNumber) {
-      logs = await JenkinsService.getResizeDeploymentLog(
-        appResult.data.name,
-        resizeRunNumber
-      );
+      try {
+        logs = await JenkinsService.getResizeDeploymentLog(
+          appResult.data.name,
+          resizeRunNumber
+        );
+      } catch (jenkinsErr) {
+        logError("services/platform-apps/operation-logs:resize-log", jenkinsErr);
+        logs = synthesizeOperationLogs({
+          appName: appResult.data.name,
+          operationId: operation.id,
+          trigger: operation.trigger,
+          details,
+        });
+      }
     } else {
       logs = synthesizeOperationLogs({
         appName: appResult.data.name,

@@ -126,11 +126,7 @@ export default function DomainDetailPage() {
     [setAutoRenew, setExpiresAt]
   );
 
-  const registrarData = useDomainRegistrarSettings(
-    domainName,
-    useCallback(() => refreshAllRef.current(), []),
-    syncDomainMeta
-  );
+  const registrarData = useDomainRegistrarSettings(domainName, syncDomainMeta);
   const { loadRegistrarSettings } = registrarData;
 
   const loadRelated = useCallback(async () => {
@@ -375,6 +371,7 @@ export default function DomainDetailPage() {
                   registrarSettings={registrarData.registrarSettings}
                   savingAutorenew={registrarData.savingAutorenew}
                   savingNameservers={registrarData.savingNameservers}
+                  connections={domainData.connections}
                   onToggleAutorenew={registrarData.onToggleAutorenew}
                   onSetNameservers={registrarData.onSetNameservers}
                   onUseManagedNameservers={registrarData.onUseManagedNameservers}
