@@ -1625,30 +1625,64 @@ export default function AppDetailPage() {
                         </div>
                       )}
 
+
+
                       {/* Resource Usage */}
-                      {metrics && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <Cpu className="w-3.5 h-3.5" /> CPU Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.cpu_usage ?? 0).toFixed(2)}%
-                              </span>
+                      {metrics && details?.container?.resources && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <Cpu className="w-3.5 h-3.5" /> CPU Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.cpu_usage ?? 0).toFixed(2)}%
+                                </span>
+                              </div>
+                              <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Request: {details.container.resources.requests?.cpu || '-'}</p>
+                                <p>Limit: {details.container.resources.limits?.cpu || '-'}</p>
+                              </div>
                             </div>
-                            <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <HardDrive className="w-3.5 h-3.5" /> Memory Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.memory_mb ?? 0).toFixed(1)} Mi
+                                </span>
+                              </div>
+                              <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Request: {details.container.resources.requests?.memory || '-'}</p>
+                                <p>Limit: {details.container.resources.limits?.memory || '-'}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <HardDrive className="w-3.5 h-3.5" /> Memory Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.memory_mb ?? 0).toFixed(1)} Mi
-                              </span>
+                        </div>
+                      )}
+
+                      {/* Capacity */}
+                      {details?.deployment && (
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                              <p className="text-2xl font-bold text-white">{details.deployment.readyReplicas}/{details.deployment.replicas}</p>
                             </div>
-                            <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                            <div className="text-right">
+                              <p className="text-xs text-white/40 mb-1">Status</p>
+                              <Badge className={`rounded-none ${
+                                details.deployment.readyReplicas >= details.deployment.replicas
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       )}

@@ -534,83 +534,7 @@ export function AppCard({
                       </div>
                     )}
 
-                    {/* Pod & Container Info */}
-                    {details?.pod && (
-                      <div className="bg-black/30 rounded-lg p-4">
-                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                          <Container className="w-3.5 h-3.5" />
-                          Pod Information
-                        </h5>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Pod Name</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white truncate flex-1">
-                                {details.pod.name}
-                              </p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.name, 'pod')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'pod' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node
-                            </p>
-                            <p className="text-xs text-white truncate" title={details.pod.nodeName}>
-                              {details.pod.nodeName.split('-').slice(0, 2).join('-')}...
-                            </p>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Network className="w-3 h-3" /> Pod IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.podIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.podIP, 'podip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'podip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.nodeIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.nodeIP, 'nodeip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'nodeip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Phase</p>
-                            <Badge className={`text-[10px] ${
-                              details.pod.phase === 'Running' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                              details.pod.phase === 'Pending' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
-                              'bg-red-500/20 text-red-400 border-red-500/30'
-                            }`}>
-                              {details.pod.phase}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Started</p>
-                            <p className="text-xs text-white">
-                              {details.pod.startTime ? new Date(details.pod.startTime).toLocaleString() : '-'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Container Info */}
                     {details?.container && (
@@ -693,35 +617,24 @@ export function AppCard({
                       <div className="bg-black/30 rounded-lg p-4">
                         <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
-                          Deployment
+                          Capacity
                         </h5>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Replicas</p>
-                            <p className="text-lg font-bold text-white">
+                            <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                            <p className="text-2xl font-bold text-white">
                               {details.deployment.readyReplicas}/{details.deployment.replicas}
                             </p>
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Strategy</p>
-                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
-                              {details.deployment.strategy}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Available</p>
-                            <span className={`text-sm font-medium ${
-                              details.deployment.availableReplicas >= details.deployment.replicas 
-                                ? 'text-green-400' : 'text-yellow-400'
+                            <p className="text-xs text-white/40 mb-1">Status</p>
+                            <Badge className={`text-[10px] ${
+                              details.deployment.readyReplicas >= details.deployment.replicas
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                             }`}>
-                              {details.deployment.availableReplicas}
-                            </span>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Created</p>
-                            <p className="text-xs text-white">
-                              {details.deployment.createdAt ? new Date(details.deployment.createdAt).toLocaleDateString() : '-'}
-                            </p>
+                              {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                            </Badge>
                           </div>
                         </div>
                       </div>
