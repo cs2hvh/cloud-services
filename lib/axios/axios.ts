@@ -13,36 +13,33 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-   // debugger
-   
     const status = error.response?.status;
+    const url = error.config?.url || 'unknown';
     const serverPayload = error.response?.data as { message?: string; error?: string } | undefined;
     const serverMessage = serverPayload?.message || serverPayload?.error;
-      // console.log(error.response?.data,".............axios error interceptors...........");
-      // console.log(error.response,".............axios error interceptors...........");
-      //  console.log(error,".............axios error interceptors...........");
+
+    // Log 4xx as warnings (client errors), 5xx as errors (server faults)
+    if (status && status >= 500) {
+      console.error(`[API ${status}] ${url}`, serverMessage || error.message);
+    } else {
+      console.warn(`[API ${status}] ${url}`, serverMessage || error.message);
+    }
 
     if (status === 400) {
-      //console.log(serverMessage,".............axios 400 error...........");
-      toast.error(serverMessage||"Bad Request - invalid data provided.");
+      toast.error(serverMessage || "Bad Request - invalid data provided.");
     } else if (status === 401) {
       toast.error(serverMessage || "Unauthorized - please login.");
     } else if (status === 403) {
       toast.error(serverMessage || "Forbidden - access denied.");
-    }
-    else if (status === 402) {
-     // console.log(serverMessage,".............axios 402 error...........");
-      toast.error(serverMessage || "Insufficient credits.please add credits to proceed.");
-     // router.push('dashboard/nav/billing');
-    }
-     else if (status === 404) {
+    } else if (status === 402) {
+      toast.error(serverMessage || "Insufficient credits. Please add credits to proceed.");
+    } else if (status === 404) {
       toast.error(serverMessage || "Not found.");
     } else if (status === 500) {
       toast.error(serverMessage || "Server error, please try again later.");
-    }else if(status===503){
-      toast.error("our server is busy. please try after sometimes.");
-    }
-     else {
+    } else if (status === 503) {
+      toast.error("Our server is busy. Please try again later.");
+    } else {
       toast.error(serverMessage || "Something went wrong.");
     }
 

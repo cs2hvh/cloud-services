@@ -100,6 +100,25 @@ export async function GET(req: NextRequest) {
     }
 
     logError("[API] Error getting build logs", error);
+
+    // Jenkins connection/timeout errors are transient — return an empty pending
+    // response so the client retries silently instead of showing an error toast.
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isTransient = /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|timeout|socket hang up/i.test(errorMsg);
+    if (isTransient) {
+      const buildNum = parseInt(buildNumber || '0', 10);
+      const startOffset = parseInt(start, 10);
+      return NextResponse.json({
+        app_name: appName,
+        build_number: buildNum,
+        start: startOffset,
+        logs: '',
+        next_start: startOffset,
+        more: true,
+        pending: true,
+      });
+    }
+
     return NextResponse.json(
       { error: sanitizeError(error) },
       { status: 500 }

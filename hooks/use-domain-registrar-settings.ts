@@ -22,7 +22,6 @@ interface SettingsHandlers {
 
 export function useDomainRegistrarSettings(
   domainName: string,
-  onRefresh: () => Promise<void>,
   onSyncDomainMeta?: (expiresAt: string | null, autoRenew: boolean | null) => void
 ): DomainSettingsState & SettingsHandlers {
   const [registrarLoading, setRegistrarLoading] = useState(false);
@@ -69,7 +68,6 @@ export function useDomainRegistrarSettings(
           ? settings.expires_at
           : null;
 
-      // Sync expiry and auto-renew back to the domain header state.
       onSyncDomainMeta?.(
         normalizedExpiresAt,
         typeof settings?.autorenew_enabled === 'boolean' ? settings.autorenew_enabled : null
@@ -77,7 +75,9 @@ export function useDomainRegistrarSettings(
     } catch (err) {
       if (isStale()) return;
       console.error('Failed to load registrar settings:', err);
-      setRegistrarError(err instanceof Error ? err.message : 'Unable to load domain settings. Refresh to try again.');
+      setRegistrarError(
+        err instanceof Error ? err.message : 'Unable to load domain settings. Refresh to try again.'
+      );
       setRegistrarSettings(null);
     } finally {
       if (!isStale()) {
@@ -85,6 +85,19 @@ export function useDomainRegistrarSettings(
       }
     }
   }, [domainName, onSyncDomainMeta]);
+
+  const syncSettings = useCallback(
+    (updated: RegistrarSettings) => {
+      setRegistrarSettings(updated);
+      onSyncDomainMeta?.(
+        typeof updated.expires_at === 'string' && updated.expires_at.trim()
+          ? updated.expires_at
+          : null,
+        typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
+      );
+    },
+    [onSyncDomainMeta]
+  );
 
   const onToggleAutorenew = useCallback(async () => {
     if (!registrarSettings?.managed || typeof registrarSettings.autorenew_enabled !== 'boolean') {
@@ -109,18 +122,11 @@ export function useDomainRegistrarSettings(
 
       toast.success(`Auto-renew ${data?.data?.autorenew_enabled ? 'enabled' : 'turned off'}.`);
 
-      // Update local state directly from the API response — avoids triggering registrarLoading
-      // (which blanks the entire settings panel) just to flip one field.
       const updated = data?.data as RegistrarSettings | null;
       if (updated) {
-        setRegistrarSettings(updated);
-        onSyncDomainMeta?.(
-          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
-          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
-        );
+        syncSettings(updated);
       } else {
-        // Fallback: do a silent background refresh without resetting registrarLoading
-        await onRefresh();
+        await loadRegistrarSettings();
       }
     } catch (err) {
       console.error('Failed to update auto-renew:', err);
@@ -128,53 +134,49 @@ export function useDomainRegistrarSettings(
     } finally {
       setSavingAutorenew(false);
     }
-  }, [domainName, registrarSettings, onRefresh, onSyncDomainMeta]);
+  }, [domainName, registrarSettings, syncSettings, loadRegistrarSettings]);
 
-  const onSetNameservers = useCallback(async (nameservers: string[]) => {
-    if (!registrarSettings?.managed) {
-      toast.error('Nameservers can only be changed for domains managed through your account.');
-      return false;
-    }
-
-    setSavingNameservers(true);
-    try {
-      const res = await fetch('/api/domains/registrar', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          nameservers,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
+  const onSetNameservers = useCallback(
+    async (nameservers: string[]) => {
+      if (!registrarSettings?.managed) {
+        toast.error('Nameservers can only be changed for domains managed through your account.');
         return false;
       }
 
-      const updated = data?.data as RegistrarSettings | null;
-      if (updated) {
-        setRegistrarSettings(updated);
-        onSyncDomainMeta?.(
-          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
-          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
-        );
-      } else {
-        await onRefresh();
-      }
+      setSavingNameservers(true);
+      try {
+        const res = await fetch('/api/domains/registrar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain: domainName, nameservers }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
+          return false;
+        }
 
-      toast.success('Nameservers updated.');
-      return true;
-    } catch (err) {
-      console.error('Failed to update nameservers:', err);
-      toast.error('Failed to update nameservers. Please try again.');
-      // Refresh settings in case the server partially applied the change.
-      await loadRegistrarSettings();
-      return false;
-    } finally {
-      setSavingNameservers(false);
-    }
-  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta, loadRegistrarSettings]);
+        const updated = data?.data as RegistrarSettings | null;
+        if (updated) {
+          syncSettings(updated);
+        } else {
+          await loadRegistrarSettings();
+        }
+
+        toast.success('Custom nameservers saved. Changes may take up to 48 hours to propagate.');
+        return true;
+      } catch (err) {
+        console.error('Failed to update nameservers:', err);
+        toast.error('Failed to update nameservers. Please try again.');
+        // Re-fetch in case the registrar partially applied the change.
+        await loadRegistrarSettings();
+        return false;
+      } finally {
+        setSavingNameservers(false);
+      }
+    },
+    [domainName, registrarSettings?.managed, syncSettings, loadRegistrarSettings]
+  );
 
   const onUseManagedNameservers = useCallback(async () => {
     if (!registrarSettings?.managed) {
@@ -187,10 +189,7 @@ export function useDomainRegistrarSettings(
       const res = await fetch('/api/domains/registrar', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          nameserver_mode: 'managed',
-        }),
+        body: JSON.stringify({ domain: domainName, nameserver_mode: 'managed' }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -200,27 +199,25 @@ export function useDomainRegistrarSettings(
 
       const updated = data?.data as RegistrarSettings | null;
       if (updated) {
-        setRegistrarSettings(updated);
-        onSyncDomainMeta?.(
-          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
-          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
-        );
+        syncSettings(updated);
       } else {
-        await onRefresh();
+        await loadRegistrarSettings();
       }
 
-      toast.success('Nameservers updated.');
+      toast.success(
+        'Switched to Ahura managed nameservers. Changes may take up to 48 hours to propagate.'
+      );
       return true;
     } catch (err) {
       console.error('Failed to update nameservers:', err);
       toast.error('Failed to update nameservers. Please try again.');
-      // Refresh settings in case the server partially applied the change.
+      // Re-fetch in case the registrar partially applied the change.
       await loadRegistrarSettings();
       return false;
     } finally {
       setSavingNameservers(false);
     }
-  }, [domainName, registrarSettings?.managed, onRefresh, onSyncDomainMeta, loadRegistrarSettings]);
+  }, [domainName, registrarSettings?.managed, syncSettings, loadRegistrarSettings]);
 
   return {
     registrarLoading,
