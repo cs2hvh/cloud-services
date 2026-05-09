@@ -60,7 +60,7 @@ const JENKINS_CONTAINERS = {
     image: 'aquasec/trivy:0.48.0',
     inJenkins: true,
     resources: {
-      requests: { memory: '512Mi', cpu: '250m' },
+      requests: { memory: '256Mi', cpu: '100m' },
       limits: { memory: '1Gi', cpu: '500m' },
     },
     purpose: 'Container image vulnerability scanning',
@@ -1451,4 +1451,5 @@ export function getContainerUsageReport() {
     recommendations,
   };
 }
+
 
