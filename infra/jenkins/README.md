@@ -95,7 +95,7 @@ After completing setup, go to **Manage Jenkins → Clouds**:
 | Container | Image | Memory request/limit | CPU request/limit |
 |---|---|---|---|
 | `git` | `alpine/git:latest` | 256Mi / 1Gi | 100m / 500m |
-| `kaniko` | `gcr.io/kaniko-project/executor:v1.24.0-debug` | 4Gi / 6Gi | 500m / 1 |
+| `buildkit` | `moby/buildkit:latest` | 2Gi / 4Gi | 1 / 2 |
 | `kubectl` | `alpine/k8s:1.28.0` | 128Mi / 256Mi | 100m / 500m |
 | `trivy` | `aquasec/trivy:0.48.0` | 256Mi / 1Gi | 100m / 500m |
 

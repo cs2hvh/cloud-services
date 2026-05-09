@@ -1,6 +1,6 @@
 # Jenkins Cloud Settings (linode-kube)
 
-Source: production Jenkins config snapshot on 2026-03-23.
+Source: production Jenkins config snapshot (updated 2026-05-09 — Kaniko → BuildKit migration).
 
 ## Cloud
 - Name: `linode-kube`
@@ -11,7 +11,7 @@ Source: production Jenkins config snapshot on 2026-03-23.
 - Skip TLS Verify: `true`
 - WebSocket: `true`
 - Jenkins URL: `http://170.187.238.34:8080`
-- Container Cap: `10`
+- Container Cap: `20`
 - Retention Timeout (min): `5`
 - Connect Timeout (sec): `5`
 - Read Timeout (sec): `15`

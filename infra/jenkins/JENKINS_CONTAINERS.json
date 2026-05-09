@@ -23,21 +23,21 @@
         "K8S-VALIDATION"
       ]
     },
-    "kaniko": {
-      "name": "kaniko",
-      "image": "gcr.io/kaniko-project/executor:v1.24.0-debug",
+    "buildkit": {
+      "name": "buildkit",
+      "image": "moby/buildkit:latest",
       "inJenkins": true,
       "resources": {
         "requests": {
-          "memory": "4Gi",
-          "cpu": "500m"
+          "memory": "2Gi",
+          "cpu": "1"
         },
         "limits": {
-          "memory": "6Gi",
-          "cpu": "1"
+          "memory": "4Gi",
+          "cpu": "2"
         }
       },
-      "purpose": "Docker image building (rootless)",
+      "purpose": "Docker image building with layer caching (BuildKit, privileged)",
       "usedBySecurityStages": []
     },
     "kubectl": {

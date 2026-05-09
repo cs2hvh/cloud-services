@@ -4,7 +4,7 @@ These IDs are hard-coded in pipeline generators and must exist in Jenkins.
 
 ## 1) `dockerhublogin`
 - Kind: Username with password
-- Purpose: Push container images to Docker Hub from Kaniko stage
+- Purpose: Push container images to Docker Hub from BuildKit stage
 
 ## 2) `kubeconfig_file`
 - Kind: Secret file

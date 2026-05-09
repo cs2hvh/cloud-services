@@ -9,12 +9,12 @@ This directory contains configuration and tooling for managing Jenkins pod templ
 | Container | Image | Memory | CPU | Used By Security |
 |-----------|-------|--------|-----|------------------|
 | **git** | alpine/git:latest | 1Gi | 500m | ✅ 5 stages |
-| **kaniko** | gcr.io/kaniko-project/executor:v1.24.0-debug | 6Gi | 1 core | ❌ Build only |
-| **kubectl** | alpine/k8s:1.28.0 | 256Mi | 500m | ❌ Deploy only |
+| **buildkit** | moby/buildkit:latest | 4Gi | 2 cores | ❌ Build only |
+| **kubectl** | alpine/k8s:1.28.0| 256Mi | 500m | ❌ Deploy only |
 | **trivy** | aquasec/trivy:0.48.0 | 1Gi | 500m | ✅ IMAGE-SCAN |
 | **jnlp** | jenkins/inbound-agent | 512Mi | 500m | ❌ Jenkins agent |
 
-**Total Resources:** 8.75 Gi memory, 3.0 CPU cores
+**Total Resources:** 6.75 Gi memory, 4.0 CPU cores
 
 ### Recommended to Add
 
