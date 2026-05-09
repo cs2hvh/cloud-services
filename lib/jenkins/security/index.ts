@@ -18,7 +18,7 @@ const SECURITY_TOOL_VERSIONS = {
  * 
  * CURRENT JENKINS POD TEMPLATE "common-agent":
  * - Defined at: Jenkins → Manage Jenkins → Clouds → linode-kube → common-agent
- * - Pod spec includes: git, kaniko, kubectl, trivy, jnlp (auto-added)
+ * - Pod spec includes: git, buildkit, kubectl, trivy, jnlp (auto-added)
  */
 
 const JENKINS_CONTAINERS = {
@@ -33,15 +33,15 @@ const JENKINS_CONTAINERS = {
     purpose: 'Git operations, shell scripting',
     usedBySecurityStages: ['SECRET-SCAN', 'DEPENDENCY-SCAN', 'DOCKERFILE-LINT', 'STATIC-ANALYSIS', 'K8S-VALIDATION'],
   },
-  kaniko: {
-    name: 'kaniko',
-    image: 'gcr.io/kaniko-project/executor:v1.24.0-debug',
+  buildkit: {
+    name: 'buildkit',
+    image: 'moby/buildkit:latest',
     inJenkins: true,
     resources: {
-      requests: { memory: '3Gi', cpu: '500m' },
-      limits: { memory: '5Gi', cpu: '1' },
+      requests: { memory: '1.5Gi', cpu: '500m' },
+      limits: { memory: '2Gi', cpu: '1' },
     },
-    purpose: 'Docker image building (rootless)',
+    purpose: 'Docker image building with layer caching (BuildKit)',
     usedBySecurityStages: [],
   },
   kubectl: {

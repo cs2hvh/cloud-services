@@ -6,7 +6,7 @@
  * 2. Project has a valid pom.xml file
  * 3. Auto-creates Dockerfile if missing, builds with Kaniko, deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript } from './utils';
+import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -215,53 +215,7 @@ ${generateJavaDockerfileStage()}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          script {
-            echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
-            withCredentials([usernamePassword(
-              credentialsId: 'dockerhublogin',
-              usernameVariable: 'DOCKER_USER',
-              passwordVariable: 'DOCKER_PASS'
-            )]) {
-              sh(
-                script: '''
-                  mkdir -p /kaniko/.docker
-                AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
-
-                cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "\$AUTH"
-    }
-  }
-}
-EOF
-
-                echo 'Executing Kaniko build'
-                /kaniko/executor \\
-                  --context=\${WORKSPACE} \\
-                  --dockerfile=Dockerfile \\
-                  --destination=\${DOCKER_IMAGE_VERSION} \\
-                  --destination=\${DOCKER_IMAGE_LATEST} \\
-                  --cache=true \\
-                  --cache-repo=hav0ky/${appName}-cache \\
-                  --use-new-run \\
-                  --digest-file=image-digest.txt
-                
-                echo 'Image build completed successfully'
-                ''',
-                returnStatus: false,
-                returnStdout: false
-              )
-            }
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName)}
 
 ${generateImageScanStage({ language: 'docker' })}
 
