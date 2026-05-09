@@ -13,7 +13,7 @@ Dockerfile
  ├─ plugins.txt  (99 plugins, pinned versions)  ← pre-installed at build time
  └─ init.d/01-configure-kube-cloud.groovy       ← runs on first boot, creates:
        • linode-kube  Kubernetes cloud
-       • common-agent pod template (git, kaniko, kubectl, trivy)
+       • common-agent pod template (git, buildkit, kubectl, trivy)
        • all resource limits, DNS config, timeouts matching production
 
 docker-compose.yml
