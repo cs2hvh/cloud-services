@@ -185,13 +185,13 @@ Then update the stage generators to use the dedicated containers instead of down
 
 ### Current Pod Resource Usage
 ```
-git:     1Gi    / 500m CPU  (multi-purpose)
-kaniko:  6Gi    / 1 CPU     (image builds)
-kubectl: 256Mi  / 500m CPU  (K8s deploys)
-trivy:   1Gi    / 500m CPU  (image scanning)
-jnlp:    512Mi  / 500m CPU  (Jenkins agent)
+git:      1Gi    / 500m CPU  (multi-purpose)
+buildkit: 4Gi    / 2 CPU     (image builds, privileged)
+kubectl:  256Mi  / 500m CPU  (K8s deploys)
+trivy:    1Gi    / 500m CPU  (image scanning)
+jnlp:     512Mi  / 500m CPU  (Jenkins agent)
 -------------------------------------------
-TOTAL:   8.75Gi / 3.0 CPU
+TOTAL:    6.75Gi / 4.0 CPU
 ```
 
 ### If Hadolint + Gitleaks Added
@@ -199,7 +199,7 @@ TOTAL:   8.75Gi / 3.0 CPU
 + hadolint: 128Mi / 200m CPU
 + gitleaks: 256Mi / 300m CPU
 -------------------------------------------
-NEW TOTAL:  9.12Gi / 3.5 CPU (+4.3% memory, +16.7% CPU)
+NEW TOTAL:  7.13Gi / 4.5 CPU (+5.7% memory, +12.5% CPU)
 ```
 
 **Verdict:** Minimal resource impact for significant build time improvement.
