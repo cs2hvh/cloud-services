@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -33,12 +34,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const result = await DatabaseService.readMaintenanceWindow(database_id);
+    const result = await DatabaseService.readMaintenanceWindow(database_id, auth.user.id);
 
     if (!result.success) {
-      const message = result.error || "Failed to fetch maintenance window";
-      const status = message.toLowerCase().includes("not found") ? 404 : 400;
-      return NextResponse.json({ error: message }, { status });
+      return NextResponse.json(
+        { error: result.error || "Failed to fetch maintenance window" },
+        { status: result.statusCode || 400 }
+      );
     }
 
     return NextResponse.json(
@@ -48,16 +50,7 @@ export async function GET(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Unknown error occurred" },
-      { status: 500 }
-    );
+    logError("services/database/maintenance/read", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

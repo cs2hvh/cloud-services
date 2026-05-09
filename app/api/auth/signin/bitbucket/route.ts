@@ -1,25 +1,26 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const origin = request.headers.get("origin") || "http://localhost:3000";
 
+    const body = await request.json().catch(() => ({})) as { next?: string };
+    const safeNext = typeof body.next === "string" && body.next.startsWith("/") && !body.next.startsWith("//") ? body.next : "/dashboard";
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "bitbucket",
       options: {
-        redirectTo: `${origin}/api/auth/callback`,
-        scopes: 'repositories account',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent'
-        }
+        redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(safeNext)}`,
+        scopes: "repository account",
       },
     });
 
     if (error) {
-      return Response.json({ message: error.message }, { status: 400 });
+      logError("auth/signin/bitbucket", error);
+      return Response.json({ message: sanitizeAuthError(error) }, { status: 400 });
     }
 
     if (!data.url) {

@@ -5,10 +5,13 @@
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
+import { registerBillingPaths } from '@/lib/openapi/paths/billing';
 import { registerDatabasePaths } from '@/lib/openapi/paths/databases';
 import { registerDomainPaths } from '@/lib/openapi/paths/domains';
+import { registerKubernetesPaths } from '@/lib/openapi/paths/kubernetes';
 import { registerNetworkPaths } from '@/lib/openapi/paths/network';
 import { registerProjectPaths } from '@/lib/openapi/paths/projects';
+import { registerResourcePaths } from '@/lib/openapi/paths/resources';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
 
 export const registry = new OpenAPIRegistry();
@@ -21,10 +24,13 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 });
 
 registerAppPaths(registry);
+registerBillingPaths(registry);
 registerProjectPaths(registry);
+registerResourcePaths(registry);
 registerStoragePaths(registry);
 registerNetworkPaths(registry);
 registerDatabasePaths(registry);
+registerKubernetesPaths(registry);
 registerDomainPaths(registry);
 
 /**
@@ -58,7 +64,8 @@ You can generate API keys from your [dashboard settings](https://galaxyhvh.com/d
 - **Free Plan:** 30 requests per minute per operation
 - **Paid Plans:** Higher limits available
 
-Rate limit headers are included in all responses:
+Rate limiting is enforced by v1 middleware on all authenticated endpoints.
+Runtime responses include rate-limit headers:
 - \`X-RateLimit-Limit\`: Maximum requests per window
 - \`X-RateLimit-Remaining\`: Remaining requests in current window
 - \`Retry-After\`: Seconds until rate limit resets (on 429 responses)
@@ -130,8 +137,16 @@ For more examples, see the API reference below.
         description: 'Manage projects used to organize cloud services and ownership.',
       },
       {
+        name: 'Resources',
+        description: 'List available product plans/resources and filter by type.',
+      },
+      {
         name: 'Databases',
         description: 'Manage database clusters, databases, and users.',
+      },
+      {
+        name: 'Kubernetes',
+        description: 'Manage Kubernetes clusters and their lifecycle.',
       },
       {
         name: 'Object Storage',

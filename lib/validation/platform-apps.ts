@@ -144,18 +144,18 @@ export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;
 export const updatePlatformAppSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
   
-  // Only safe metadata fields that don't require redeployment
+  // Only safe metadata fields that don't require redeployment.
   name: z.string().min(NAMING_RULES.MIN_CLUSTER_NAME_LENGTH).max(NAMING_RULES.MAX_CLUSTER_NAME_LENGTH).optional(),
   auto_deploy: z.boolean().optional(),
   
-  // NOTE: Build config fields (branch, framework, build_command, output_directory) are NOT allowed
-  // These require redeployment - use the redeploy endpoint instead
+  // NOTE: Build config fields (branch, framework, build_command, output_directory) are NOT allowed.
+  // These require redeployment - use the redeploy endpoint instead.
   
   // Internal-only fields (not exposed via API v1)
   status: z.enum(["pending", "building", "running", "failed", "stopped"]).optional(),
   deployment_url: z.string().url().optional(),
   container_port: z.number().int().min(1).max(65535).optional(),
-});
+}).strict();
 
 export type UpdatePlatformAppPayload = z.infer<typeof updatePlatformAppSchema>;
 
@@ -175,9 +175,29 @@ export type GetPlatformAppPayload = z.infer<typeof getPlatformAppSchema>;
 export const updateEnvVarsSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
   env_vars: envVarListSchema,
+  // Keys of existing vars that the user did not reveal or modify.
+  // The backend will preserve them without overwriting their stored values.
+  kept_keys: z
+    .array(z.string().regex(ENV_KEY_REGEX, "Invalid env key"))
+    .max(MAX_ENV_VARS)
+    .optional()
+    .default([]),
 });
 
 export type UpdateEnvVarsPayload = z.infer<typeof updateEnvVarsSchema>;
+
+/** Used by POST /api/services/platform-apps/env-vars/reveal */
+export const revealEnvVarSchema = z.object({
+  app_id: z.string().uuid("App ID must be a valid UUID"),
+  key: z
+    .string()
+    .trim()
+    .min(1, "Key is required")
+    .max(MAX_ENV_KEY_LENGTH, `Key must be <= ${MAX_ENV_KEY_LENGTH} characters`)
+    .regex(ENV_KEY_REGEX, "Invalid env key format"),
+});
+
+export type RevealEnvVarPayload = z.infer<typeof revealEnvVarSchema>;
 
 export const rollbackPlatformAppSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),

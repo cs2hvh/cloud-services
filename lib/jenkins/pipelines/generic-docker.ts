@@ -9,7 +9,7 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with Kaniko and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -20,6 +20,7 @@ export function createDockerfilePipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
+  deploymentRecordSecret: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
@@ -56,17 +57,22 @@ export function createDockerfilePipeline(
     replicas = 3;
   }
 
+  // Normalize port — handles null/undefined passed from callers even though signature has = 3000
+  const port = containerPort ?? 3000;
+
   // Generate Kubernetes Secret for environment variables
   const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
+  <actions/>
   <description>
     Generic Dockerfile Pipeline for ${name}
     Uses existing Dockerfile from repository
     Accessible at https://${domain} via NGINX Ingress
   </description>
+  <keepDependencies>false</keepDependencies>
 
   <properties>
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
@@ -80,14 +86,18 @@ export function createDockerfilePipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>RESIZE_ONLY</name>
-          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
-          <defaultValue>false</defaultValue>
-        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
+
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/1 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+
+  <disabled>false</disabled>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
     <script><![CDATA[
@@ -105,9 +115,10 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -118,20 +129,36 @@ pipeline {
 
   stages {
 
-    stage('Checkout Repo') {
-      when {
-        expression { return !params.RESIZE_ONLY }
+    stage('Initialize') {
+      steps {
+        script {
+          echo 'STAGE: Initialize'
+          echo 'PIPELINE: Generic Dockerfile Deployment Pipeline'
+          echo "Application Name: \${env.APP_NAME}"
+          echo "Git Repository: ${cleanUrl}"
+          echo "Branch: ${branch}"
+          echo "Container Port: \${env.CONTAINER_PORT}"
+          echo "Domain: \${env.DOMAIN}"
+          echo "Build Number: \${env.BUILD_NUMBER}"
+          echo 'Initialization completed'
+        }
       }
+    }
+
+    stage('Checkout Repository') {
       steps {
         container('git') {
           sh '''
+            echo "STAGE: Checkout Repository"
+            echo "Fetching source code from repository"
             echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
+            git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
             
             # If COMMIT_SHA parameter is provided, checkout that specific commit
             if [ -n "\${COMMIT_SHA}" ]; then
               echo "Checking out specific commit: \${COMMIT_SHA}"
+              git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
               git checkout \${COMMIT_SHA}
             else
               echo "Using branch HEAD"
@@ -139,6 +166,7 @@ pipeline {
             
             echo "Current commit:"
             git log -1 --oneline
+            echo "Source code checkout completed"
           '''
         }
       }
@@ -147,9 +175,6 @@ pipeline {
 ${generateSecurityStages({ language: 'docker' })}
 
     stage('Validate Dockerfile') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
@@ -166,52 +191,103 @@ ${generateSecurityStages({ language: 'docker' })}
               echo ""
               exit 1
             fi
-            echo "✓ Dockerfile found"
+            echo "[OK] Dockerfile found"
             echo ""
             echo "Dockerfile contents:"
             cat Dockerfile
             echo ""
+
+            # ── ARG Detection ──────────────────────────────────────────
+            # Detect ARG instructions that expect build-time values.
+            # Platform does NOT pass --build-arg to Kaniko, so any ARG
+            # without a default value will silently resolve to empty.
+            echo "Checking for build-time ARG instructions..."
+            ARG_LINES=$(grep -n "^ARG " Dockerfile 2>/dev/null || true)
+            if [ -n "$ARG_LINES" ]; then
+              echo ""
+              echo "========================================="
+              echo "[WARNING] Dockerfile uses ARG instructions"
+              echo "========================================="
+              echo ""
+              echo "  The following ARG instructions were found:"
+              echo "$ARG_LINES" | while IFS= read -r line; do
+                echo "    $line"
+              done
+              echo ""
+              # Check specifically for ARGs without defaults (e.g. "ARG MY_VAR")
+              ARGS_NO_DEFAULT=$(grep -E "^ARG [A-Za-z_][A-Za-z0-9_]*\\s*$" Dockerfile 2>/dev/null || true)
+              if [ -n "$ARGS_NO_DEFAULT" ]; then
+                echo "  [FAILED] These ARGs have NO default value and WILL be empty:"
+                echo "$ARGS_NO_DEFAULT" | while IFS= read -r line; do
+                  echo "    $line"
+                done
+                echo ""
+              fi
+              echo "  This platform injects environment variables at RUNTIME"
+              echo "  via Kubernetes secrets, NOT at build time."
+              echo ""
+              echo "  If your build depends on ARG values, consider:"
+              echo "    1. Set a default: ARG MY_VAR=default_value"
+              echo "    2. Move the logic to runtime (use ENV instead)"
+              echo "    3. Use a multi-stage build where ARGs have defaults"
+              echo ""
+              echo "  Platform-provided env vars will be available at RUNTIME"
+              echo "  via process.env / os.environ / System.getenv, not during build."
+              echo "========================================="
+              echo ""
+            else
+              echo "[OK] No build-time ARG instructions found"
+            fi
+
+            # ── Secret Exposure Detection ──────────────────────────────
+            # Scan for patterns that could leak runtime env vars in build logs
+            echo "Checking for potential secret exposure patterns..."
+            EXPOSURE_FOUND=0
+
+            # Check for printenv / env dump commands
+            if grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile 2>/dev/null | grep -i "^[0-9]*:RUN" > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile contains env dump commands (printenv/env/set)"
+              grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile | grep -i "RUN" | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            # Check for echo $VAR patterns that could leak secrets
+            if grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile echoes environment variables"
+              grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            # Check for writing env vars to files
+            if grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile may write env vars to files"
+              grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            if [ "$EXPOSURE_FOUND" = "1" ]; then
+              echo ""
+              echo "  These patterns could expose secrets in build logs."
+              echo "  Consider removing debug commands before deploying."
+              echo ""
+            else
+              echo "[OK] No secret exposure patterns detected"
+            fi
           '''
         }
       }
     }
 
-    stage('Build Image with Kaniko') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-
-              echo "Building Docker image with existing Dockerfile"
-              /kaniko/executor \\
-                --context=$WORKSPACE \\
-                --dockerfile=Dockerfile \\
-                --destination=$DOCKER_IMAGE_VERSION \\
-                --destination=$DOCKER_IMAGE_LATEST \\
-                --digest-file=image-digest.txt
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName)}
 
 ${generateImageScanStage({ language: 'docker' })}
 
@@ -234,20 +310,55 @@ SECRET_EOF
       }
     }
 
+    stage('Verify Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          sh '''
+            echo "STAGE: Verify Environment Secret"
+            echo "Checking that secret \${ENV_SECRET_NAME} exists before deployment..."
+            
+            MAX_RETRIES=5
+            RETRY_DELAY=3
+            ATTEMPT=0
+            
+            while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+              ATTEMPT=$((ATTEMPT + 1))
+              if kubectl get secret "\${ENV_SECRET_NAME}" -n default > /dev/null 2>&1; then
+                KEY_COUNT=$(kubectl get secret "\${ENV_SECRET_NAME}" -n default -o json | grep -c '"' | head -1 || echo "unknown")
+                echo "[SUCCESS] Secret \${ENV_SECRET_NAME} verified (attempt $ATTEMPT)"
+                break
+              fi
+              
+              if [ $ATTEMPT -eq $MAX_RETRIES ]; then
+                echo "========================================="
+                echo "ERROR: Environment secret not found!"
+                echo "========================================="
+                echo ""
+                echo "Secret \${ENV_SECRET_NAME} was not found after $MAX_RETRIES attempts."
+                echo "The backend should have created this secret before the build started."
+                echo "This may indicate a backend synchronization issue."
+                echo ""
+                exit 1
+              fi
+              
+              echo "Secret not found yet, retrying in $RETRY_DELAY seconds... (attempt $ATTEMPT/$MAX_RETRIES)"
+              sleep $RETRY_DELAY
+            done
+          '''
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
           sh '''
             echo "STAGE: Deploy to Kubernetes"
             
-            # Use latest image for resize operations, new build image otherwise
-            if [ "\${RESIZE_ONLY}" = "true" ]; then
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
-              echo "Resize mode: Using existing latest image"
-            else
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
-              echo "Full deploy: Using newly built image"
-            fi
+            DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
             
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
@@ -260,6 +371,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -273,11 +385,11 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
         env:
         - name: PORT
-          value: "${containerPort}"
+          value: "${port}"
         resources:
           requests:
             cpu: ${cpuRequest}
@@ -287,14 +399,14 @@ ${envFromSection}
             memory: ${memoryLimit}
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 6
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -314,7 +426,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 
@@ -364,17 +476,11 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh '''
-            if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
-              echo "Restarting deployment to pull new image"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
-            else
-              echo "First deployment - skipping rollout restart"
-            fi
-          '''
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
-          sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
+          sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
+          '''
         }
       }
     }
@@ -387,6 +493,9 @@ INGRESS_EOF
             echo "Checking deployment status for $APP_NAME"
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
+            echo "Checking SSL certificate status"
+            kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"
+            kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"
             echo "Deployment verification completed successfully"
           '''
         }
@@ -404,8 +513,8 @@ INGRESS_EOF
             echo "Deployment completed successfully for $APP_NAME"
             echo "Service URL: https://$DOMAIN"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -435,6 +544,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
                 -H "content-type: application/json" \\
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -442,6 +552,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \\
                 --header="content-type: application/json" \\
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \\
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -459,8 +570,8 @@ JSON
             echo "PIPELINE: Failure"
             echo "Deployment failed for $APP_NAME"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -490,6 +601,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
                 -H "content-type: application/json" \\
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -497,6 +609,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \\
                 --header="content-type: application/json" \\
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \\
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -504,6 +617,11 @@ JSON
             fi
           '''
         }
+      }
+    }
+    always {
+      script {
+        echo 'PIPELINE: Cleanup'
       }
     }
   }

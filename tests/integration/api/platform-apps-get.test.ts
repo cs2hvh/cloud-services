@@ -35,7 +35,7 @@ describe('POST /api/services/platform-apps/get', () => {
     } as any);
 
     // Default mock for Platform_Apps.get
-    const { Platform_Apps } = await import('@/lib/supabase/queries');
+    const { Platform_Apps, Platform_App_Deployments } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
       success: true,
       data: {
@@ -46,6 +46,17 @@ describe('POST /api/services/platform-apps/get', () => {
 
     // Default mock for Platform_Apps.get_env_vars
     vi.mocked(Platform_Apps.get_env_vars).mockResolvedValue(mockEnvVars);
+
+    // Default deployment metadata lookups
+    vi.mocked(Platform_App_Deployments.get_rollback_context).mockResolvedValue({
+      success: true,
+      data: {
+        serving_release: { id: 'deploy-serving', build_number: 5 },
+        rollback_target: null,
+        latest_operation: { id: 'deploy-latest', build_number: 6, trigger: 'manual' },
+        can_rollback: false,
+      },
+    } as any);
 
     // Default mock for AppStatusService.syncStatus
     const { AppStatusService } = await import('@/lib/services/app-status');
@@ -309,6 +320,38 @@ describe('POST /api/services/platform-apps/get', () => {
       expect(data.port).toBeDefined();
       expect(data.deployment_url).toBeDefined();
       expect(data.created_at).toBeDefined();
+    });
+
+    it('should clear rollback target when it matches the current serving release', async () => {
+      const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
+      // get_rollback_context is the single source of truth — when target matches
+      // serving, it returns can_rollback: false with no rollback_target.
+      vi.mocked(Platform_App_Deployments.get_rollback_context).mockResolvedValue({
+        success: true,
+        data: {
+          serving_release: {
+            id: 'deploy-serving',
+            build_number: 5,
+            image_tag: 'example/app:5',
+            image_digest: 'sha256:same',
+          },
+          rollback_target: null,
+          latest_operation: { id: 'deploy-latest', build_number: 6, trigger: 'manual' },
+          can_rollback: false,
+        },
+      } as any);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/get',
+        { app_id: mockPlatformApp.id }
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 200);
+
+      expect(data.can_rollback).toBe(false);
+      expect(data.rollback_target_build_number).toBeNull();
+      expect(data.rollback_target_commit_sha).toBeNull();
     });
   });
 

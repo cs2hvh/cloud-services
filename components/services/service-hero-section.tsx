@@ -1,9 +1,14 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
+import { createClient } from "@/lib/supabase/client";
 
 type HeroAction = {
   label: string;
@@ -28,6 +33,11 @@ type ServiceHeroSectionProps = {
   className?: string;
 };
 
+type ServiceDashboardTargets = {
+  main: string;
+  deploy: string;
+};
+
 export function ServiceHeroSection({
   badge,
   title,
@@ -41,11 +51,90 @@ export function ServiceHeroSection({
 }: ServiceHeroSectionProps) {
   const imageLeft = align === "left";
   const isIllustrationSvg = illustration.src.endsWith(".svg");
+  const [isRouting, setIsRouting] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const getServiceDashboardTargets = (path: string): ServiceDashboardTargets | null => {
+    if (path.includes("/services/compute") || path.includes("/services/gpu")) {
+      return {
+        main: "/dashboard/services/compute",
+        deploy: "/dashboard/services/compute/vps/new",
+      };
+    }
+    if (path.includes("/services/kubernetes")) {
+      return {
+        main: "/dashboard/services/kubernetes",
+        deploy: "/dashboard/services/kubernetes/new",
+      };
+    }
+    if (path.includes("/services/database")) {
+      return {
+        main: "/dashboard/services/database",
+        deploy: "/dashboard/services/database/new",
+      };
+    }
+    if (path.includes("/services/security")) {
+      return {
+        main: "/dashboard/services/network-ddos",
+        deploy: "/dashboard/services/network-ddos/new",
+      };
+    }
+    if (path.includes("/services/object-storage")) {
+      return {
+        main: "/dashboard/services/object-storage",
+        deploy: "/dashboard/services/object-storage/new",
+      };
+    }
+    if (path.includes("/services/app-deployment") || path.includes("/services/application-deployment")) {
+      return {
+        main: "/dashboard/services/apps",
+        deploy: "/dashboard/services/apps/new",
+      };
+    }
+    return null;
+  };
+
+  const getPrimaryActionTarget = (path: string, label: string) => {
+    const targets = getServiceDashboardTargets(path);
+    if (!targets) return primaryAction?.href ?? "/signin";
+
+    const normalizedLabel = label.toLowerCase();
+    const shouldGoToMain =
+      normalizedLabel.includes("get started") ||
+      normalizedLabel.includes("start");
+
+    return shouldGoToMain ? targets.main : targets.deploy;
+  };
+
+  const getSecondaryActionTarget = (label: string, fallbackHref: string) => {
+    if (label.toLowerCase().includes("documentation")) {
+      return "/api-doc";
+    }
+    return fallbackHref;
+  };
+
+  const handlePrimaryActionClick = async () => {
+    if (!primaryAction || isRouting) return;
+    setIsRouting(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const target = user
+        ? getPrimaryActionTarget(pathname, primaryAction.label)
+        : "/signin";
+      router.push(target);
+    } finally {
+      setIsRouting(false);
+    }
+  };
 
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden bg-[#0E0F0F] ",
+        "relative w-full overflow-x-hidden ",
         "min-h-screen flex flex-col",
         className,
       )}
@@ -97,19 +186,24 @@ export function ServiceHeroSection({
                 {(primaryAction || secondaryAction) && (
                   <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                     {primaryAction && (
-                      <Link
-                        href={primaryAction.href}
-                        className="inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
+                      <button
+                        type="button"
+                        onClick={handlePrimaryActionClick}
+                        disabled={isRouting}
+                        className="cursor-pointer inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
                       >
                         {primaryAction.label}
                         <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </Link>
+                      </button>
                     )}
 
                     {secondaryAction && (
                       <Link
-                        href={secondaryAction.href}
-                        className="inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
+                        href={getSecondaryActionTarget(
+                          secondaryAction.label,
+                          secondaryAction.href
+                        )}
+                        className="cursor-pointer inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
                       >
                         {secondaryAction.label}
                       </Link>

@@ -302,20 +302,21 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create VPS');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Something went wrong while creating your server.');
       }
 
       const result = await response.json();
       toast.success('VPS deployment initiated successfully!');
       
       // Optionally redirect or show VM details
-      console.log('VM created:', result.data);
+      console.log('VM created:', result?.data);
       // You could redirect to the new VPS details page here
-      // router.push(`/dashboard/compute/vms/${result.data.id}`);
+      // router.push(`/dashboard/compute/vms/${result?.data?.id}`);
     } catch (error) {
-      console.error('VPS creation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to deploy VPS. Please try again.');
+      console.error('[VPS Create]', error);
+      const msg = error instanceof Error ? error.message : '';
+      toast.error(msg || 'Something went wrong while deploying your server. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -422,7 +423,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                         htmlFor={region.city}
                         className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
                       >
-                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" />
+                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" unoptimized />
                         <div>
                           <div className="font-medium text-white">{region.city}</div>
                           <div className="text-xs text-white/60">{region.country}</div>
@@ -552,6 +553,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                             width={40}
                             height={40}
                             className="object-contain"
+                            unoptimized
                           />
                         </div>
                         <div className="flex-1">
@@ -704,6 +706,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                       width={16} 
                       height={12} 
                       className="rounded-sm" 
+                      unoptimized
                     />
                     <span className="text-white">{selectedLocationData.city}</span>
                   </div>

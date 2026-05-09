@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
-import { Shield, Lock, FileCheck } from "lucide-react";
 
 const FOOTER_LINKS = [
   {
     heading: "Company",
     links: [
-      { label: "Blog", href: "#" },
+      { label: "Blog", href: "/blog" },
       { label: "Careers", href: "#" },
       { label: "Pricing", href: "/pricing" },
       { label: "Customers", href: "#" },
@@ -15,9 +14,9 @@ const FOOTER_LINKS = [
   {
     heading: "Resources",
     links: [
-      { label: "Documentation", href: "/docs" },
-      { label: "Papers", href: "#" },
-      { label: "Press", href: "#" },
+      { label: "Resources Hub", href: "/resources" },
+      { label: "API Reference", href: "/api-docs" },
+      { label: "Pricing", href: "/pricing" },
       { label: "Changelog", href: "#" },
     ],
   },
@@ -35,19 +34,19 @@ const FOOTER_LINKS = [
   {
     heading: "Legal",
     links: [
-      { label: "Terms of Service", href: "#" },
-      { label: "Privacy Policy", href: "#" },
-      { label: "Cookies Policy", href: "#" },
-      { label: "Data Processing", href: "#" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Cookies Policy", href: "/cookies" },
+      { label: "Data Processing", href: "/dpa" },
     ],
   },
 ];
 
-const COMPLIANCE_BADGES = [
-  { icon: Shield, abbr: "PCI", label: "PCI Level 1" },
-  { icon: Lock, abbr: "SOC", label: "SOC 2 Type II" },
-  { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
-];
+// const COMPLIANCE_BADGES = [
+//   { icon: Shield, abbr: "PCI", label: "PCI Level 1" },
+//   { icon: Lock, abbr: "SOC", label: "SOC 2 Type II" },
+//   { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
+// ];
 
 
 export function Footer() {
@@ -71,7 +70,7 @@ export function Footer() {
             </p>
 
             {/* Compliance badges */}
-            <div className="mt-6 flex flex-col gap-3">
+            {/* <div className="mt-6 flex flex-col gap-3">
               {COMPLIANCE_BADGES.map((badge) => (
                 <div
                   key={badge.abbr}
@@ -85,7 +84,7 @@ export function Footer() {
                   </span>
                 </div>
               ))}
-            </div>
+            </div> */}
           </div>
 
           {/* Right: link columns */}

@@ -17,9 +17,13 @@ import {
   createSvelteKitPipeline,
   createDockerfilePipeline,
   createJavaPipeline,
+  createResizePipeline,
 } from "@/lib/jenkins/pipelines";
 
 export class JenkinsService {
+  private static readonly QUEUE_BUILD_NUMBER_POLL_TIMEOUT_MS = 120_000; // 2 minutes
+  private static readonly QUEUE_BUILD_NUMBER_POLL_INTERVAL_MS = 1_500; // 1.5 seconds
+
   /**
    * Get Jenkins URL without credentials for safe logging
    */
@@ -36,13 +40,167 @@ export class JenkinsService {
   }
 
   /**
+   * Public accessor for safe Jenkins URL in logs from other services.
+   */
+  static getSafeBaseUrlForLogs(): string {
+    return this.getSafeJenkinsUrl();
+  }
+
+  /**
+   * Remove embedded credentials from repository URL.
+   */
+  private static sanitizeGitUrl(gitUrl: string): string {
+    return gitUrl
+      .replace(/https:\/\/[^@]+@github\.com\//, "https://github.com/")
+      .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, "https://gitlab.com/")
+      .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, "https://bitbucket.org/")
+      .replace(/https:\/\/[^@]+@/g, "https://");
+  }
+
+  /**
+   * Ensure every generated pipeline supports ephemeral auth URL injection
+   * and does not print tokenized clone commands.
+   */
+  private static hardenPipelineXml(pipelineXml: string): string {
+    let xml = pipelineXml;
+
+    if (!xml.includes("<name>GIT_AUTH_URL</name>") && xml.includes("</parameterDefinitions>")) {
+      const gitAuthParam = `        <hudson.model.PasswordParameterDefinition>
+          <name>GIT_AUTH_URL</name>
+          <description>Ephemeral authenticated repository URL for private repo checkout (optional)</description>
+          <defaultValue></defaultValue>
+        </hudson.model.PasswordParameterDefinition>
+`;
+      xml = xml.replace("</parameterDefinitions>", `${gitAuthParam}      </parameterDefinitions>`);
+    }
+
+    // Match the full "git clone --depth=1 ... . || git clone --branch ... ." pattern atomically
+    // and replace with a single GIT_AUTH_URL-aware command that suppresses TTY prompts.
+    // This handles the pattern used by every pipeline template:
+    //   git clone --depth=1 --branch <branch> <url> . || git clone --branch <branch> <url> .
+    xml = xml.replace(
+      /git clone --depth=\d+ --branch ([^\s]+) ([^\s]+) \. \|\| git clone --branch [^\s]+ [^\s]+ \./g,
+      (_match, branchArg: string, repoUrl: string) => {
+        const safeRepoUrl = repoUrl.replace(/"/g, '\\"');
+        return [
+          `REPO_URL="${'$'}{GIT_AUTH_URL:-${safeRepoUrl}}"`,
+          "set +x",
+          `GIT_TERMINAL_PROMPT=0 git clone --depth=1 --branch ${branchArg} "$REPO_URL" .`,
+          "set -x",
+        ].join("\n              ");
+      }
+    );
+
+    return xml;
+  }
+
+  private static async getLatestBuildNumberForJob(jobName: string): Promise<number | null> {
+    try {
+      const jobInfo = await jenkins.job.get(jobName);
+      return jobInfo?.lastBuild?.number ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static async resolveBuildNumberFromQueue(params: {
+    jobName: string;
+    queueItemNumber: number | null | undefined;
+    fallbackBuildNumber: number;
+  }): Promise<number> {
+    const { jobName, queueItemNumber, fallbackBuildNumber } = params;
+
+    if (
+      typeof queueItemNumber !== "number" ||
+      !Number.isFinite(queueItemNumber) ||
+      queueItemNumber <= 0
+    ) {
+      console.warn(
+        `[JenkinsService] Queue item id missing for ${jobName}; falling back to expected build #${fallbackBuildNumber}`
+      );
+      return fallbackBuildNumber;
+    }
+
+    const startedAt = Date.now();
+    let attempts = 0;
+
+    while (Date.now() - startedAt < this.QUEUE_BUILD_NUMBER_POLL_TIMEOUT_MS) {
+      attempts++;
+
+      try {
+        const queueItem = (await jenkins.queue.item(queueItemNumber)) as
+          | {
+              cancelled?: boolean;
+              why?: string;
+              executable?: { number?: number };
+            }
+          | undefined;
+
+        const executableBuildNumber = queueItem?.executable?.number;
+        if (
+          typeof executableBuildNumber === "number" &&
+          Number.isFinite(executableBuildNumber) &&
+          executableBuildNumber > 0
+        ) {
+          return executableBuildNumber;
+        }
+
+        if (queueItem?.cancelled) {
+          throw new Error(
+            `Queue item #${queueItemNumber} for ${jobName} was cancelled` +
+              (queueItem.why ? `: ${queueItem.why}` : "")
+          );
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const lower = message.toLowerCase();
+        const isNotFound = lower.includes("404") || lower.includes("not found");
+        const isCancelled = lower.includes("was cancelled");
+
+        if (isCancelled) {
+          throw error instanceof Error ? error : new Error(message);
+        }
+
+        if (isNotFound) {
+          const latestBuildNumber = await this.getLatestBuildNumberForJob(jobName);
+          if (
+            typeof latestBuildNumber === "number" &&
+            latestBuildNumber >= fallbackBuildNumber
+          ) {
+            console.log(
+              `[JenkinsService] Queue item #${queueItemNumber} for ${jobName} is no longer available; using latest build #${latestBuildNumber}`
+            );
+            return latestBuildNumber;
+          }
+        } else if (attempts % 10 === 0) {
+          console.warn(
+            `[JenkinsService] Still resolving queue item #${queueItemNumber} for ${jobName}: ${message}`
+          );
+        }
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.QUEUE_BUILD_NUMBER_POLL_INTERVAL_MS)
+      );
+    }
+
+    console.warn(
+      `[JenkinsService] Timed out resolving queue item #${queueItemNumber} for ${jobName}; falling back to expected build #${fallbackBuildNumber}`
+    );
+    return fallbackBuildNumber;
+  }
+
+  /**
    * Trigger a build for an existing Jenkins job
    * Used by webhooks for auto-deploy
    * @param appName - The application name
    * @param commitSha - Optional specific commit SHA to checkout
-   * @param resizeOnly - If true, skips build stages and only updates K8s deployment
    */
-  static async triggerBuild(appName: string, commitSha?: string, resizeOnly: boolean = false): Promise<number> {
+  static async triggerBuild(
+    appName: string,
+    commitSha?: string,
+    gitAuthUrl?: string
+  ): Promise<number> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
     }
@@ -52,9 +210,6 @@ export class JenkinsService {
     console.log(`[JenkinsService] Triggering build for: ${jobName}`);
     if (commitSha) {
       console.log(`[JenkinsService] Target commit: ${commitSha}`);
-    }
-    if (resizeOnly) {
-      console.log(`[JenkinsService] Resize mode: Skipping build stages`);
     }
 
     try {
@@ -72,19 +227,30 @@ export class JenkinsService {
       // Trigger the build with parameters
       // IMPORTANT: Jobs with parameter definitions MUST use buildWithParameters
       // Passing empty COMMIT_SHA uses branch HEAD (default behavior)
-      // RESIZE_ONLY=true skips checkout, dockerfile prep, and build stages
-      await jenkins.job.build({
+      const buildParams: Record<string, string | boolean> = {
+        COMMIT_SHA: commitSha || "",
+      };
+      if (gitAuthUrl) {
+        buildParams.GIT_AUTH_URL = gitAuthUrl;
+      }
+
+      const queueItemNumber = await jenkins.job.build({
         name: jobName,
-        parameters: { 
-          COMMIT_SHA: commitSha || '',
-          RESIZE_ONLY: resizeOnly,
-        },
+        parameters: buildParams,
       });
-      
-      console.log(`[JenkinsService] Build #${expectedBuildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
-      console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${expectedBuildNumber}/`);
-      
-      return expectedBuildNumber;
+
+      const actualBuildNumber = await this.resolveBuildNumberFromQueue({
+        jobName,
+        queueItemNumber,
+        fallbackBuildNumber: expectedBuildNumber,
+      });
+
+      console.log(`[JenkinsService] Build #${actualBuildNumber} triggered for: ${jobName}`);
+      console.log(
+        `[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${actualBuildNumber}/`
+      );
+
+      return actualBuildNumber;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Error triggering build for ${jobName}:`, errorMessage);
@@ -104,7 +270,8 @@ export class JenkinsService {
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
     envVars: Array<{ key: string; value: string }> = [],
-    containerPort?: number
+    containerPort?: number,
+    gitAuthUrl?: string
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -119,17 +286,53 @@ export class JenkinsService {
       console.log(`[JenkinsService] Container port: ${containerPort}`);
     }
 
-    // Select pipeline based on framework
-    const pipeline = JenkinsService.selectPipeline(appName, appId, githubUrl, branch, framework, size, deployTrigger, envVars, containerPort);
+    const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
 
-    // Create the job
+    // Select pipeline based on framework
+    const pipelineRaw = JenkinsService.selectPipeline(
+      appName,
+      appId,
+      cleanGitUrl,
+      branch,
+      framework,
+      size,
+      deployTrigger,
+      envVars,
+      containerPort
+    );
+    const pipeline = this.hardenPipelineXml(pipelineRaw);
+
+    // Upsert: update existing job config first, create only if it doesn't exist yet.
+    // This ensures every redeploy picks up the latest pipeline template.
     try {
-      await jenkins.job.create(jobName, pipeline);
-      console.log(`[JenkinsService] Created Jenkins job: ${jobName}`);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JenkinsService] Failed to create job:`, errorMessage);
-      throw new Error(`Jenkins job creation failed: ${errorMessage}`);
+      await jenkins.job.config(jobName, pipeline);
+      console.log(`[JenkinsService] Updated existing Jenkins job config: ${jobName}`);
+    } catch (updateError: unknown) {
+      const updateMessage = updateError instanceof Error ? updateError.message : String(updateError);
+      const is404 =
+        updateMessage.includes('404') ||
+        updateMessage.toLowerCase().includes('not found') ||
+        updateMessage.toLowerCase().includes('does not exist');
+
+      if (!is404) {
+        console.error(`[JenkinsService] Failed to update job:`, updateMessage);
+        throw new Error(`Jenkins job update failed: ${updateMessage}`);
+      }
+
+      // Job doesn't exist yet — create it
+      try {
+        await jenkins.job.create(jobName, pipeline);
+        console.log(`[JenkinsService] Created Jenkins job: ${jobName}`);
+      } catch (createError: unknown) {
+        const createMessage = createError instanceof Error ? createError.message : String(createError);
+        // Race-safe: if job was created between our check and create, update config
+        try {
+          await jenkins.job.config(jobName, pipeline);
+          console.log(`[JenkinsService] Job config set after create race: ${jobName}`);
+        } catch {
+          throw new Error(`Jenkins job creation failed: ${createMessage}`);
+        }
+      }
     }
 
     // Trigger build immediately (job creation might need a moment, hence the small delay)
@@ -141,17 +344,16 @@ export class JenkinsService {
       // Pass empty COMMIT_SHA to use branch HEAD (default behavior)
       await jenkins.job.build({
         name: jobName,
-        parameters: { COMMIT_SHA: '' }
+        parameters: {
+          COMMIT_SHA: '',
+          ...(gitAuthUrl ? { GIT_AUTH_URL: gitAuthUrl } : {}),
+        }
       });
       console.log(`[JenkinsService] Build #1 triggered for: ${jobName}`);
       console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Error triggering build:`, errorMessage);
-      // Try to delete the created job since build failed
-      await jenkins.job.destroy(jobName).catch((err: unknown) => 
-        console.error(`[JenkinsService] Failed to cleanup job after build failure:`, err)
-      );
       throw new Error(`Jenkins build trigger failed: ${errorMessage}`);
     }
   }
@@ -239,6 +441,19 @@ export class JenkinsService {
     await jenkins.job.destroy(jobName);
     
     console.log(`[JenkinsService] Deleted Jenkins deletion job: ${jobName}`);
+  }
+
+  /**
+   * Delete a Jenkins resize job
+   */
+  static async deleteResizeJob(appName: string): Promise<void> {
+    const jobName = this.getResizeJobName(appName);
+
+    console.log(`[JenkinsService] Deleting resize job: ${jobName}`);
+
+    await jenkins.job.destroy(jobName);
+
+    console.log(`[JenkinsService] Deleted Jenkins resize job: ${jobName}`);
   }
 
   /**
@@ -344,11 +559,15 @@ export class JenkinsService {
         meta: true,
       }) as { text: string; more: boolean; size?: string };
 
-      const text = data.text ?? '';
+      const rawText = data.text ?? '';
       const more = data.more === true;
       // X-Text-Size is the byte offset Jenkins expects on the next request.
       // Prefer it over character count so multi-byte characters don't drift.
-      const nextStart = data.size != null ? parseInt(data.size, 10) : start + text.length;
+      const nextStart = data.size != null ? parseInt(data.size, 10) : start + rawText.length;
+
+      // Sanitise before sending to the browser — strips internal infra details
+      // and security-sensitive stack information.
+      const text = this.sanitizeRawBuildLogs(rawText);
 
       return { text, more, nextStart };
     } catch (error: unknown) {
@@ -499,12 +718,264 @@ export class JenkinsService {
    * Pipeline authors control what users see via echo statements.
    * No need to update when adding new frameworks/pipelines.
    */
+  /**
+   * Shared block-list used by both sanitizeRawBuildLogs (during-build) and
+   * filterDeploymentLogs (after-build) so the two views are always consistent.
+   *
+   * All patterns are matched against the trimmed line AFTER the Kaniko INFO[XXXX]
+   * prefix has been stripped.  Add patterns here once; both callers pick them up.
+   */
+  private static readonly LOG_BLOCK_PATTERNS: RegExp[] = [
+    // ── Jenkins pipeline engine ─────────────────────────────────────────────
+    /^\[Pipeline\]/,
+    /^\[PodInfo\]/,
+    /^Started by user/,
+    /^Created Pod:/,
+    /^Agent .* is provisioned/,
+    /^Running on .* in \/home\/jenkins/,
+    /^\*{8,}/,                        // masked credentials ********
+    /^Masking supported pattern/,
+
+    // ── Kubernetes pod template YAML ────────────────────────────────────────
+    /^(apiVersion|kind|metadata|spec|containers|volumes|initContainers|nodeSelector):/,
+    /^(dnsConfig|dnsPolicy|hostNetwork|restartPolicy|activeDeadlineSeconds):/,
+    /^(labels|annotations|namespace|nameservers|buildUrl|runUrl|label):/,
+    /^(imagePullPolicy|resources|limits|requests|volumeMounts|mountPath):/,
+    /^(workingDir|tty|env|readOnly|medium|memory|cpu|value):/,
+    /^- (name|command|mountPath|emptyDir)/i,
+    /^- ".*"$/,
+    /^---$/,
+    /^kubernetes\.io\//,
+    /^name:.*(-job-|workspace|jenkins)/i,
+
+    // ── Jenkins agent environment variables ─────────────────────────────────
+    /JENKINS_(SECRET|AGENT|URL|NAME|WEB_SOCKET)/,
+    /REMOTING_OPTS/,
+    /withCredentials/,
+    /kubernetes\.jenkins\.io/,
+
+    // ── Infrastructure container images ────────────────────────────────────
+    /gcr\.io\/kaniko-project/,
+    /jenkins\/inbound-agent/,
+    /alpine\/(git|k8s)/,
+    /\/jenkins-agent/,
+    /agent\.jar/,
+    /^image: "/,
+    /^index\.docker\.io/,
+    /^jenkins(\/|:)/,
+    /^name: "(git|kaniko|kubectl|trivy|jnlp)"$/,
+
+    // ── Pod lifecycle ───────────────────────────────────────────────────────
+    /Container \[.*\] .* waiting/,
+    /Pod \[Pending\]/,
+    /\[Containers(NotReady|NotInitialized)\]/,
+    /\[PodInitializing\]/,
+
+    // ── Credentials / tokens ────────────────────────────────────────────────
+    /AUTH=/,
+    /\$DOCKER_PASS/,
+    /\$KUBECONFIG/,
+    /gh[op]_[a-zA-Z0-9]{20,}/,
+
+    // ── Shell set -x echo prefix ────────────────────────────────────────────
+    /^\+ /,
+
+    // ── HTML error pages ────────────────────────────────────────────────────
+    /^<[!a-zA-Z\/]/,
+
+    // ── Webhook / deployment record noise ───────────────────────────────────
+    /^Sending deployment record/,
+    /^Payload:/,
+    /^Response \(HTTP/,
+    /%\{http_code\}/,
+    /-X POST.*webhook/,
+    /^'\d{3}'$/,
+    /^\d{3}'$/,
+    /^'$/,
+    /^Finished: (SUCCESS|FAILURE|ABORTED)$/,
+
+    // ── MiB / KiB progress bars ─────────────────────────────────────────────
+    /^\d+\.\d+ (MiB|KiB) \/ \d+\.\d+ (MiB|KiB)/,
+
+    // ── Trivy ISO timestamp INFO/WARN lines ─────────────────────────────────
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+(INFO|WARN)\b/,
+
+    // ── Gitleaks ────────────────────────────────────────────────────────────
+    /^\d{1,2}:\d{2}(AM|PM) INF /,
+    /^[○│╲░ ]*gitleaks\s*$/,
+    /^[○│╲░ ]+$/,
+    /^Generated CI gitleaks config/,
+
+    // ── npm noise ───────────────────────────────────────────────────────────
+    /^npm notice/,
+    /^npm warn config only/,
+    /^\d+ packages are looking for funding/,
+    /^run `npm fund` for details/,
+
+    // ── Tool binary download lines ──────────────────────────────────────────
+    /^Downloading (gitleaks|hadolint|trivy|kubectl) v/,
+
+    // ── Checksum verification ───────────────────────────────────────────────
+    /^\/tmp\/.*:\s*(OK|FAILED)$/,
+
+    // ── Security section banners & headers ──────────────────────────────────
+    /^={10,}$/,
+    /^SECRET DETECTION SCAN/,
+    /^STATIC CODE ANALYSIS /,
+    /^NPM DEPENDENCY AUDIT$/,
+    /^DOCKERFILE SECURITY LINT$/,
+    /^KUBERNETES MANIFEST SECURITY CHECK/,
+    /^TRIVY VULNERABILITY SCAN$/,
+
+    // ── Security instructional / descriptive text ────────────────────────────
+    /^This scan reports potential secrets but does NOT block/,
+    /^Review findings and add \.gitleaks\.toml/,
+    /^Consider adding ESLint for code quality/,
+
+    // ── Security stage progress markers ─────────────────────────────────────
+    /^Running gitleaks scan\.\.\./,
+    /^Running basic security pattern check\.\.\./,
+    /^Linting Dockerfile\.\.\./,
+    /^Checking for (security anti-patterns|secret exposure patterns)/,
+    /^Validating deployment template security\.\.\./,
+
+    // ── Kaniko internal build ops (INFO[XXXX] prefix already stripped) ───────
+    /^Retrieving image /,
+    /^Returning cached image manifest/,
+    /^Built cross stage deps:/,
+    /^Executing \d+ build triggers/,
+    /^Checking for cached layer /,
+    /^No cached layer found for cmd /,
+    /^Unpacking rootfs/,
+    /^Taking snapshot of files/,
+    /^Resolving srcs \[/,
+    /^Cmd: (workdir|\/bin\/sh|EXPOSE)$/,
+    /^Args: \[/,
+    /^Running: \[/,
+    /^Changed working directory to /,
+    /^Creating directory .* with uid /,
+    /^No files changed in this command/,
+    /^Adding exposed port:/,
+    /^Pushing layer /,
+    /^Pushing image to .*-cache[:/]/,
+    /^Pushed .*@sha256:/,
+    // Newer Kaniko versions omit INFO[XXXX] prefix entirely
+    /^Resolved base name .* to /,
+    /^Building stage '.*' \[idx:/,
+    /^Using caching version of cmd:/,
+    /^Found cached layer/,
+
+    // ── Dockerfile directive lines ───────────────────────────────────────────
+    // These appear in both pipeline Dockerfile dumps and Kaniko execution echoes.
+    // The actual *output* of running RUN commands (npm, build tools) still passes through.
+    /^FROM /,
+    /^WORKDIR /,
+    /^ARG /,
+    /^ENV /,
+    /^USER /,
+    /^HEALTHCHECK/,
+    /^ENTRYPOINT/,
+    /^COPY --from=/,             // multi-stage copy instructions
+    /^RUN (if \[|corepack|addgroup|adduser|mkdir -p )/,  // infra-only shell blocks
+    /^# ---/,                    // Dockerfile section header comments
+
+    // ── Git clone progress ──────────────────────────────────────────────────
+    /^Updating files:\s+\d+%/,
+    /^remote: (Counting|Compressing|Enumerating) objects:/,
+    /^Receiving objects:\s+\d+%/,
+    /^Resolving deltas:\s+\d+%/,
+  ];
+
+  /**
+   * Shared helper: trim the line and strip the Kaniko INFO[XXXX] timestamp prefix.
+   * Called by both filter functions so they operate on identical normalised input.
+   */
+  private static normalizeLine(raw: string): string {
+    return raw.trim().replace(/^INFO\[\d+\]\s*/, '');
+  }
+
+  /**
+   * Shared helper: apply k8s / Docker username transforms to a display line.
+   */
+  private static transformLine(line: string): string {
+    return line
+      .replace('STAGE: ', '[STAGE] ')
+      .replace(/hav0ky\//g, '')
+      .replace(/deployment\.apps\//g, '')
+      .replace(/service\//g, '')
+      .replace(/ingress\.networking\.k8s\.io\//g, '')
+      .replace(/certificate\.cert-manager\.io\//g, '');
+  }
+
+  /**
+   * Shared stateful check: are we inside a Dockerfile dump that should be hidden?
+   *
+   * Returns the UPDATED flag value.  Call this BEFORE the block-list check.
+   * If the returned value is true the caller should `continue` (skip the line).
+   * If the line is an end-marker the flag is reset to false and the line is shown.
+   */
+  private static updateDockerfileSkip(trimmed: string, skip: boolean): { skip: boolean; hide: boolean } {
+    if (skip) {
+      // End markers: resume showing output
+      if (
+        /^Detected /.test(trimmed) ||
+        trimmed === 'Dockerfile preparation completed' ||
+        trimmed === 'Checking for build-time ARG instructions...'  // generic-docker: ARG analysis follows dump
+      ) {
+        return { skip: false, hide: false }; // show this line, stop skipping
+      }
+      return { skip: true, hide: true };
+    }
+    // Start markers for existing Dockerfile dump
+    if (trimmed === 'Dockerfile contents:') return { skip: true, hide: true };
+    // Start marker for generated Dockerfile dump (followed immediately by Dockerfile text)
+    if (/^Package manager: .+ \(will be passed as build arg\)/.test(trimmed)) return { skip: true, hide: true };
+    return { skip: false, hide: false };
+  }
+
+  /**
+   * Strip Jenkins-injected infrastructure noise from raw build logs (during-build view).
+   */
+  private static sanitizeRawBuildLogs(raw: string): string {
+    const log = raw
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')
+      .replace(/\r/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+
+    const lines = log.split('\n');
+    const out: string[] = [];
+    let skipDockerfile = false;
+
+    for (const line of lines) {
+      const trimmed = JenkinsService.normalizeLine(line);
+
+      const df = JenkinsService.updateDockerfileSkip(trimmed, skipDockerfile);
+      skipDockerfile = df.skip;
+      if (df.hide) continue;
+
+      if (!trimmed) {
+        if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+
+      if (JenkinsService.LOG_BLOCK_PATTERNS.some((p) => p.test(trimmed))) continue;
+
+      out.push(JenkinsService.transformLine(trimmed));
+    }
+
+    return out.filter((l, i, arr) => !(l === '' && i > 0 && arr[i - 1] === '')).join('\n');
+  }
+
+
   private static filterDeploymentLogs(fullLog: string): string {
     // Step 1: Clean Jenkins encoding artifacts (universal across all pipelines)
     const cleanLog = fullLog
       .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')           // Jenkins hash markers
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')                // ANSI escape
       .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')              // Unicode ANSI
+      .replace(/\r/g, '')                                    // carriage returns (npm/Gradle progress)
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');        // Control chars
 
     const lines = cleanLog.split('\n');
@@ -515,88 +986,18 @@ export class JenkinsService {
     let isFinalSuccess = false;
     let isFinalFailure = false;
 
-    // Universal blocklist - ONLY Jenkins internal noise (not framework specific)
-    // These patterns are generated by Jenkins itself, not pipeline scripts
-    const blockPatterns = [
-      // Jenkins pipeline engine markers
-      /^\[Pipeline\]/,
-      /^\[PodInfo\]/,
-      /^Started by user/,
-      /^Created Pod:/,
-      /^Agent .* is provisioned/,
-      /^Running on .* in \/home\/jenkins/,
-      /^\*{8,}/,                          // Masked credentials ********
-      /^Masking supported pattern/,
-      
-      // Kubernetes pod template YAML (always generated by k8s plugin)
-      /^(apiVersion|kind|metadata|spec|containers|volumes|initContainers|nodeSelector):/,
-      /^(dnsConfig|dnsPolicy|hostNetwork|restartPolicy|activeDeadlineSeconds):/,
-      /^(labels|annotations|namespace|nameservers|buildUrl|runUrl|label):/,
-      /^(imagePullPolicy|resources|limits|requests|volumeMounts|mountPath):/,
-      /^(workingDir|tty|env|readOnly|medium|memory|cpu|value):/,
-      /^- (name|command|mountPath|emptyDir)/i,  // YAML array items
-      /^- ".*"$/,                          // YAML array strings
-      /^---$/,
-      /^kubernetes\.io\//,
-      
-      // Pod template name/label lines (jenkins job names, workspace volumes)
-      /^jenkins(\/|:)/,                    // jenkins: "slave", jenkins/label:, jenkins/label-digest:
-      /^name:.*(-job-|workspace|jenkins)/i,
-      /^name: "(git|kaniko|kubectl|trivy|jnlp)"$/,  // Container names
-      
-      // Jenkins agent environment variables
-      /JENKINS_(SECRET|AGENT|URL|NAME|WEB_SOCKET)/,
-      /REMOTING_OPTS/,
-      /withCredentials/,
-      /kubernetes\.jenkins\.io/,
-      
-      // Container images (internal)
-      /gcr\.io\/kaniko-project/,
-      /jenkins\/inbound-agent/,
-      /alpine\/(git|k8s)/,
-      /\/jenkins-agent/,
-      /agent\.jar/,
-      
-      // Pod status messages
-      /Container \[.*\] .* waiting/,
-      /Pod \[Pending\]/,
-      /\[Containers(NotReady|NotInitialized)\]/,
-      /\[PodInitializing\]/,
-      
-      // Shell echo commands (we show the output, not the command)
-      /^\+ echo /,
-      // Other shell prefixes
-      /^\+ (?!.*STAGE:)/,
-      
-      // Credentials
-      /AUTH=/,
-      /\$DOCKER_PASS/,
-      /\$KUBECONFIG/,
-      /gh[op]_[a-zA-Z0-9]+/,              // GitHub tokens
-      
-      // HTML error pages
-      /^<[!a-zA-Z\/]/,
-      
-      // Response codes from webhooks
-      /^'\d{3}'$/,
-      /^\d{3}'$/,                          // 404' without leading quote
-      /^'$/,                               // Stray single quote
-      
-      // Progress bars
-      /^\d+\.\d+ MiB \/ \d+\.\d+ MiB/,
-      
-      // Webhook/deployment record noise
-      /^Sending deployment record/,
-      /^Payload:/,
-      /^Response \(HTTP/,
-      /%\{http_code\}/,
-      /-X POST.*webhook/,
-      /^Finished: (SUCCESS|FAILURE)$/,    // We show our own banner instead
-    ];
+    // Shared block-list (see LOG_BLOCK_PATTERNS) plus any filterDeploymentLogs-specific patterns
+    const blockPatterns = JenkinsService.LOG_BLOCK_PATTERNS;
+
+    let skipDockerfile = false;
 
     for (const line of lines) {
-      const trimmed = line.trim();
-      
+      const trimmed = JenkinsService.normalizeLine(line);
+
+      const df = JenkinsService.updateDockerfileSkip(trimmed, skipDockerfile);
+      skipDockerfile = df.skip;
+      if (df.hide) continue;
+
       // Skip empty, preserve one blank line for spacing
       if (!trimmed) {
         if (outputLines.length > 0 && outputLines[outputLines.length - 1] !== '') {
@@ -615,22 +1016,8 @@ export class JenkinsService {
 
       // Check blocklist
       if (blockPatterns.some(p => p.test(trimmed))) continue;
-      
-      // Skip YAML-like lines from pod templates (key: "value" or key: value with internal refs)
-      if (/^(name|image):.*(?:jenkins|docker\.io|gcr\.io|aquasec)/i.test(trimmed)) continue;
-      if (/^index\.docker\.io/.test(trimmed)) continue;
 
-      // Transform and add
-      const outputLine = trimmed
-        .replace('STAGE: ', '[STAGE] ')                      // Stage markers
-        .replace(/INFO\[\d+\]\s*/, '')                      // Kaniko INFO prefix
-        .replace(/hav0ky\//g, '')                           // Docker username
-        .replace(/deployment\.apps\//g, '')                 // k8s prefixes
-        .replace(/service\//g, '')
-        .replace(/ingress\.networking\.k8s\.io\//g, '')
-        .replace(/certificate\.cert-manager\.io\//g, '');
-
-      outputLines.push(outputLine);
+      outputLines.push(JenkinsService.transformLine(trimmed));
     }
 
     // Add final status banner
@@ -724,6 +1111,178 @@ export class JenkinsService {
     }
   }
 
+  // ─── Resize Job (separate from main app job) ───────────────────────────
+
+  /**
+   * Get the resize job name for an app.
+   */
+  static getResizeJobName(appName: string): string {
+    return `${appName}-resize-job`;
+  }
+
+  /**
+   * Ensure the resize Jenkins job exists with the correct pipeline config.
+   * Uses upsert pattern: update first, create if 404.
+   */
+  static async ensureResizeJob(
+    appName: string,
+    appId: string,
+    size: string,
+    envVars: Array<{ key: string; value: string }> = [],
+    containerPort?: number,
+    framework?: string | null,
+    operationId?: string,
+  ): Promise<void> {
+    if (!process.env.JENKINS_URL) {
+      throw new Error("JENKINS_URL not configured");
+    }
+
+    const jobName = this.getResizeJobName(appName);
+    const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
+    const deploymentRecordSecret = process.env.JENKINS_DEPLOYMENT_RECORD_SECRET || '';
+
+    const pipeline = createResizePipeline(
+      appName,
+      size,
+      appId,
+      webhookBaseUrl,
+      deploymentRecordSecret,
+      envVars,
+      containerPort,
+      framework,
+      operationId ?? '',
+    );
+
+    console.log(`[JenkinsService] Ensuring resize job: ${jobName} (size: ${size})`);
+
+    // 1) Try updating existing job config
+    try {
+      await jenkins.job.config(jobName, pipeline);
+      console.log(`[JenkinsService] Resize job config updated: ${jobName}`);
+      return;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const is404 =
+        message.includes('404') ||
+        message.toLowerCase().includes('not found') ||
+        message.toLowerCase().includes('does not exist');
+      if (!is404) {
+        throw new Error(`Failed to update resize job ${jobName}: ${message}`);
+      }
+    }
+
+    // 2) Create if missing
+    try {
+      await jenkins.job.create(jobName, pipeline);
+      console.log(`[JenkinsService] Resize job created: ${jobName}`);
+    } catch (createError: unknown) {
+      const createMessage = createError instanceof Error ? createError.message : String(createError);
+
+      // Race-safe: if job was created between our check and create, update config
+      try {
+        await jenkins.job.config(jobName, pipeline);
+        console.log(`[JenkinsService] Resize job config set after create race: ${jobName}`);
+        return;
+      } catch {
+        // ignore – throw original create error below
+      }
+
+      throw new Error(`Failed to create resize job ${jobName}: ${createMessage}`);
+    }
+  }
+
+  /**
+   * Trigger a resize job build and return the build number.
+   */
+  static async triggerResizeBuild(appName: string): Promise<number> {
+    const jobName = this.getResizeJobName(appName);
+
+    console.log(`[JenkinsService] Triggering resize build for: ${jobName}`);
+
+    const currentBuildNumber = await this.getResizeLatestBuildNumber(appName) || 0;
+    const expectedBuildNumber = currentBuildNumber + 1;
+
+    const queueItemNumber = await jenkins.job.build(jobName);
+    const actualBuildNumber = await this.resolveBuildNumberFromQueue({
+      jobName,
+      queueItemNumber,
+      fallbackBuildNumber: expectedBuildNumber,
+    });
+
+    console.log(`[JenkinsService] Resize build #${actualBuildNumber} triggered for: ${jobName}`);
+    console.log(
+      `[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${actualBuildNumber}/`
+    );
+
+    return actualBuildNumber;
+  }
+
+  /**
+   * Get the latest build number for a resize job.
+   */
+  static async getResizeLatestBuildNumber(appName: string): Promise<number | null> {
+    const jobName = this.getResizeJobName(appName);
+    try {
+      const info = await jenkins.job.get(jobName);
+      return info.lastBuild?.number ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Check build status for a resize job.
+   */
+  static async checkResizeBuildStatus(appName: string, buildNumber: number): Promise<{
+    building: boolean;
+    result: 'SUCCESS' | 'FAILURE' | 'ABORTED' | 'UNSTABLE' | null;
+    status: 'running' | 'failed' | 'building';
+  }> {
+    const jobName = this.getResizeJobName(appName);
+
+    try {
+      const buildInfo = await jenkins.build.get(jobName, buildNumber);
+
+      let status: 'running' | 'failed' | 'building' = 'building';
+      if (!buildInfo.building) {
+        status = buildInfo.result === 'SUCCESS' ? 'running' : 'failed';
+      }
+
+      return {
+        building: buildInfo.building,
+        result: buildInfo.result,
+        status,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorObj = error as { statusCode?: number };
+      console.error(`[JenkinsService] Error checking resize build status:`, errorMessage);
+      if (errorMessage.includes('404') || errorMessage.includes('not found') || errorObj.statusCode === 404) {
+        const notFoundError = new Error(`Build #${buildNumber} not found for ${jobName}`) as Error & { notFound: boolean };
+        notFoundError.notFound = true;
+        throw notFoundError;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get deployment log for a resize job.
+   */
+  static async getResizeDeploymentLog(appName: string, buildNumber: number): Promise<string> {
+    const jobName = this.getResizeJobName(appName);
+
+    try {
+      const fullLog = await jenkins.build.log(jobName, buildNumber, { type: 'text' });
+      console.log(`[JenkinsService] Resize log length: ${fullLog.length}`);
+      return this.filterDeploymentLogs(fullLog);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error getting resize deployment log:`, errorMessage);
+      throw error;
+    }
+  }
+
   /**
    * Select appropriate pipeline based on framework
    */
@@ -742,6 +1301,7 @@ export class JenkinsService {
     
     // WEBHOOK_BASE_URL (ngrok / tunnel) takes priority in dev; DOMAIN is the production fallback
     const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
+    const deploymentRecordSecret = process.env.JENKINS_DEPLOYMENT_RECORD_SECRET || '';
 
     switch (fw) {
       case 'simple-test':
@@ -752,7 +1312,7 @@ export class JenkinsService {
       case 'dockerfile':
       case 'custom':
         console.log(`[JenkinsService] Using GENERIC DOCKERFILE pipeline (existing Dockerfile)`);
-        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'java':
       case 'maven':
@@ -760,50 +1320,50 @@ export class JenkinsService {
       case 'spring-boot':
       case 'springboot':
         console.log(`[JenkinsService] Using JAVA/MAVEN pipeline (auto-Dockerfile with Maven build)`);
-        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'nextjs':
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
-        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'nuxtjs':
       case 'nuxt.js':
       case 'nuxt':
         console.log(`[JenkinsService] Using NUXT.JS pipeline (auto-Dockerfile with Nitro server)`);
-        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'vite-react':
       case 'vitereact':
       case 'react-vite':
         console.log(`[JenkinsService] Using VITE-REACT pipeline (auto-Dockerfile with Vite build)`);
-        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'vue':
       case 'vue.js':
       case 'vuejs':
         console.log(`[JenkinsService] Using VUE pipeline (auto-Dockerfile with Vite build)`);
-        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'angular':
         console.log(`[JenkinsService] Using ANGULAR pipeline (auto-Dockerfile with Angular CLI)`);
-        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'sveltekit':
         console.log(`[JenkinsService] Using SVELTEKIT pipeline (auto-Dockerfile with Node adapter)`);
-        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'nodejs':
       case 'node.js':
@@ -811,7 +1371,7 @@ export class JenkinsService {
       case 'react': // Standard React (CRA) - requires Dockerfile
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
     }
   }
 
@@ -835,19 +1395,20 @@ export class JenkinsService {
     }
 
     const jobName = `${appName}-job`;
+    const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
     
     console.log(`[JenkinsService] Updating job config: ${jobName}`);
-    console.log(`[JenkinsService] New Git URL: ${githubUrl.replace(/https:\/\/[^@]+@/, 'https://***@')}`);
+    console.log(`[JenkinsService] New Git URL: ${cleanGitUrl}`);
     console.log(`[JenkinsService] Size: ${size}, EnvVars: ${envVars.length}`);
     if (containerPort) {
       console.log(`[JenkinsService] Container port: ${containerPort}`);
     }
 
     // Generate new pipeline with updated config
-    const pipeline = JenkinsService.selectPipeline(
+    const pipelineRaw = JenkinsService.selectPipeline(
       appName,
       appId,
-      githubUrl, 
+      cleanGitUrl,
       branch, 
       framework, 
       size,
@@ -855,6 +1416,7 @@ export class JenkinsService {
       envVars,
       containerPort
     );
+    const pipeline = this.hardenPipelineXml(pipelineRaw);
 
     try {
       // Update the job configuration using Jenkins API

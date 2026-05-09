@@ -63,7 +63,7 @@ const SolutionsKubernetesPage = () => {
     tags: ["Kubernetes", "App Deploy", "Database", "Security", "Storage"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -77,6 +77,7 @@ const SolutionsKubernetesPage = () => {
       { name: "workload", placeholder: "Tell us about your K8s workload...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Cloud-Native Kubernetes",
   };
 
   return (
@@ -85,7 +86,7 @@ const SolutionsKubernetesPage = () => {
         badge={["Managed K8s", "Auto Scaling", "Service Mesh", "GitOps"]}
         title="Cloud-Native Kubernetes Platforms Infrastructure"
         description="Run microservices at scale with managed Kubernetes, automated deployments, service mesh, observability, and modern delivery practices."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-kubernetes.png", alt: "Kubernetes infrastructure" }}

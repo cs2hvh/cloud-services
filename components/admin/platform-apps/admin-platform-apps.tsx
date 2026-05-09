@@ -6,7 +6,7 @@ import { Rocket, Server, DollarSign } from "lucide-react";
 import { Admin_PlatformApp } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AppsListTab from "@/components/admin/platform-apps/apps-list-tab";
-import ClusterUsageTab from "@/components/admin/platform-apps/cluster-usage-tab";
+import ClusterUsageTab from "@/components/admin/cluster-monitor/cluster-usage-tab";
 import PricingTab from "@/components/admin/platform-apps/pricing-tab";
 
 interface PageProps {

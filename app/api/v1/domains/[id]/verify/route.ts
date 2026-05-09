@@ -1,9 +1,11 @@
 import { withV1Auth, v1Ok, v1ValidationError } from "@/lib/api/v1-middleware";
+import { resolveAuthEmail } from "@/lib/api-auth";
 import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { getDomainService } from "@/lib/domain-service";
 import { VerifyDomainRequestSchema } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { serializeDomain } from "@/lib/domain-service/http/serializers";
 
 export const POST = withV1Auth("domains:verify", async (req, auth, context) => {
   const idResult = await v1ExtractId(context);
@@ -25,7 +27,7 @@ export const POST = withV1Auth("domains:verify", async (req, auth, context) => {
     const actor = createDomainActor({
       req,
       userId: auth.userId,
-      userEmail: auth.kind === "session" ? auth.email : undefined,
+      userEmail: await resolveAuthEmail(auth),
     });
 
     const domain = await service.verifyDomain({
@@ -35,7 +37,7 @@ export const POST = withV1Auth("domains:verify", async (req, auth, context) => {
       idempotencyKey,
     });
 
-    return v1Ok({ data: domain });
+    return v1Ok({ data: serializeDomain(domain) });
   } catch (error) {
     return toV1DomainErrorResponse(error);
   }

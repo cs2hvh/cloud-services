@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { getOAuthStateSecret, createSignedOAuthState, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket App OAuth flow for repository access
@@ -10,6 +11,15 @@ import { AuditLogService, createAuditContext } from "@/lib/audit";
  * - Refresh tokens must be stored and used to get new access tokens
  * - Required scopes: repository, account
  */
+
+function getStateSecret(): string {
+  return getOAuthStateSecret(process.env.BITBUCKET_STATE_SECRET, "Bitbucket", "BITBUCKET_STATE_SECRET");
+}
+
+function createSignedState(userId: string, returnTo: string): string {
+  return createSignedOAuthState(getStateSecret(), userId, returnTo);
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -64,8 +74,7 @@ export async function POST(request: Request) {
 
     // Bitbucket App OAuth flow for repository access
     const clientId = process.env.BITBUCKET_CLIENT_ID;
-    const domain = process.env.DOMAIN;
-    const redirectUri = `${domain}/api/bitbucket/callback`;
+    const explicitRedirectUri = process.env.BITBUCKET_REDIRECT_URI?.trim();
     
     if (!clientId) {
       return Response.json(
@@ -80,17 +89,24 @@ export async function POST(request: Request) {
     const scopes = 'repository account';
     
     // Generate state parameter for CSRF protection + returnTo path
-    const returnPath = returnTo || '/dashboard/settings';
-    const stateData = `${user.id}|${Date.now()}|${returnPath}`;
-    const state = Buffer.from(stateData).toString('base64');
+    const returnPath = sanitizeReturnTo(returnTo);
+    const state = createSignedState(user.id, returnPath);
     
     // Build Bitbucket authorization URL
-    const bitbucketAuthUrl = `https://bitbucket.org/site/oauth2/authorize?` +
-      `client_id=${clientId}&` +
-      `response_type=code&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `scope=${encodeURIComponent(scopes)}&` +
-      `state=${state}`;
+    // Bitbucket supports omitting redirect_uri to use the consumer callback URL.
+    // This avoids strict mismatch issues caused by callback URL formatting differences.
+    const authorizeParams = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      scope: scopes,
+      state,
+    });
+
+    if (explicitRedirectUri) {
+      authorizeParams.set("redirect_uri", explicitRedirectUri);
+    }
+
+    const bitbucketAuthUrl = `https://bitbucket.org/site/oauth2/authorize?${authorizeParams.toString()}`;
 
     // Audit log: Bitbucket connect initiated
     const auditContext = createAuditContext(

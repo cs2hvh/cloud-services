@@ -46,6 +46,7 @@ interface AddDomainDialogProps {
   onCopy: (text: string, field: string) => void;
   onSubmit: () => void;
   onClose: () => void;
+  disabled?: boolean;
 }
 
 export function AddDomainDialog({
@@ -68,6 +69,7 @@ export function AddDomainDialog({
   onCopy,
   onSubmit,
   onClose,
+  disabled = false,
 }: AddDomainDialogProps) {
   return (
     <Dialog
@@ -81,7 +83,7 @@ export function AddDomainDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-white text-black hover:bg-white/95 rounded-md px-3 py-1.5">
+        <Button size="sm" className="bg-white text-black hover:bg-white/95 rounded-md px-3 py-1.5" disabled={disabled}>
           <Plus className="mr-1 h-4 w-4" />
           Add Domain
         </Button>

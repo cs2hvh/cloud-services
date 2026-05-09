@@ -98,7 +98,7 @@ export default function PlansTab({ products: initialProducts }: PlansTabProps) {
       if (response.status === 200) {
         // Filter for pricing-related products
         const pricingTypes = PRODUCT_TYPES.map(t => t.value);
-        const pricingProducts = response.data.products.filter(
+        const pricingProducts = (response?.data?.products ?? []).filter(
           (p: Tables<"products">) => pricingTypes.includes(p.type)
         );
         setProductsList(pricingProducts);

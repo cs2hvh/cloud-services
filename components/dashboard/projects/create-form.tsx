@@ -40,7 +40,7 @@ const ProjectCreateForm = () => {
 
       if (response.status === 201) {
         toast.success(`Project "${data.name}" was successfully created.`);
-        router.push(`/dashboard/projects/${response.data.id}`);
+        router.push(`/dashboard/projects/${response?.data?.id}`);
       }
     } catch (error) {
       console.error("Error creating project:", error);

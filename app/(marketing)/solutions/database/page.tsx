@@ -64,7 +64,7 @@ const SolutionsDatabasePage = () => {
     tags: ["Database", "Compute", "Object Storage", "Security", "Monitoring"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -78,6 +78,7 @@ const SolutionsDatabasePage = () => {
       { name: "workload", placeholder: "Tell us about your database needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Managed Databases",
   };
 
   return (
@@ -86,7 +87,7 @@ const SolutionsDatabasePage = () => {
         badge={["Managed DB", "Auto Backup", "Read Replicas", "High Availability"]}
         title="Database-Driven Applications Infrastructure"
         description="Build data-intensive applications with managed databases, automated backups, read replicas, and secure networking for maximum reliability."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/service-home-db-section-1.png", alt: "Database infrastructure" }}

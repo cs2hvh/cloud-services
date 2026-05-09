@@ -11,7 +11,9 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
-import { AuditLogService, createAuditContext } from '@/lib/audit';
+// import { AuditLogService, createAuditContext } from '@/lib/audit';
+import { encryptOAuthToken } from '@/lib/security/token-crypto';
+import { getValidBitbucketToken } from '@/lib/bitbucket/token-refresh';
 
 interface BitbucketTokenResponse {
   access_token: string;
@@ -82,164 +84,12 @@ export class BitbucketTokenManager {
   }
 
   /**
-   * Get a valid Bitbucket access token for a user
-   * Automatically refreshes if token is expired or expiring soon
-   * Uses service client so it works without request context
+   * Get a valid Bitbucket access token for a user.
+   * Delegates to the canonical getValidBitbucketToken function which is the
+   * single source of truth for token refresh logic.
    */
   async getToken(userId: string): Promise<string | null> {
-    try {
-      const supabase = await createServiceClient();
-
-      // Get stored token from database
-      const { data: tokenData, error } = await supabase
-        .from('bitbucket_tokens')
-        .select('access_token, refresh_token, expires_at, auth_source')
-        .eq('user_id', userId)
-        .single();
-
-      if (error || !tokenData?.access_token) {
-        console.log('[Bitbucket Token Manager] No stored token found for user:', userId);
-        return null;
-      }
-
-      // Check if token has expired or will expire soon (within 5 minutes)
-      const now = new Date();
-      const expiresAt = tokenData.expires_at ? new Date(tokenData.expires_at) : null;
-      const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
-
-      // If no expiration set or token hasn't expired (with 5 min buffer), validate and return
-      if (!expiresAt || expiresAt > fiveMinutesFromNow) {
-        // Validate the token is still working
-        const isValid = await this.validateToken(tokenData.access_token);
-        if (isValid) {
-          console.log('[Bitbucket Token Manager] Found valid stored token for user:', userId);
-          return tokenData.access_token;
-        }
-        console.log('[Bitbucket Token Manager] Stored token failed validation, will try refresh');
-      }
-
-      // Token has expired or will expire soon or failed validation - try to refresh
-      console.log('[Bitbucket Token Manager] Token expired/expiring, attempting refresh for user:', userId);
-      console.log('[Bitbucket Token Manager] Token auth_source:', tokenData.auth_source || 'unknown (legacy)');
-
-      // Check if this token came from Supabase Auth - we cannot refresh it with our credentials
-      if (tokenData.auth_source === 'supabase') {
-        console.log('[Bitbucket Token Manager] Token from Supabase Auth - cannot refresh with app credentials');
-        console.log('[Bitbucket Token Manager] User should refresh their Supabase session or re-connect Bitbucket');
-        // Delete the expired token - user needs to re-authenticate
-        await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
-        
-        // Audit log: token expired
-        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
-        await AuditLogService.create({
-          user_id: userId,
-          user_role: 'system',
-          action: 'token_expired',
-          service_type: 'auth',
-          service_id: `bitbucket_token_${userId}`,
-          service_name: 'Bitbucket OAuth Token',
-          metadata: { reason: 'supabase_token_cannot_refresh', provider: 'bitbucket' },
-          ip_address: auditContext.ipAddress,
-          user_agent: auditContext.userAgent,
-          request_id: auditContext.requestId,
-        });
-        
-        return null;
-      }
-
-      if (!tokenData.refresh_token) {
-        console.log('[Bitbucket Token Manager] No refresh token available, user needs to re-authenticate');
-        // Delete the expired token
-        await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
-        
-        // Audit log: token expired
-        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
-        await AuditLogService.create({
-          user_id: userId,
-          user_role: 'system',
-          action: 'token_expired',
-          service_type: 'auth',
-          service_id: `bitbucket_token_${userId}`,
-          service_name: 'Bitbucket OAuth Token',
-          metadata: { reason: 'no_refresh_token', provider: 'bitbucket' },
-          ip_address: auditContext.ipAddress,
-          user_agent: auditContext.userAgent,
-          request_id: auditContext.requestId,
-        });
-        
-        return null;
-      }
-
-      const refreshResult = await this.refreshToken(tokenData.refresh_token);
-
-      if (!refreshResult.accessToken) {
-        console.log('[Bitbucket Token Manager] Failed to refresh token, user needs to re-authenticate');
-        // Delete the expired/invalid token
-        await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
-        
-        // Audit log: token expired (refresh failed)
-        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
-        await AuditLogService.create({
-          user_id: userId,
-          user_role: 'system',
-          action: 'token_expired',
-          service_type: 'auth',
-          service_id: `bitbucket_token_${userId}`,
-          service_name: 'Bitbucket OAuth Token',
-          metadata: { reason: 'refresh_failed', provider: 'bitbucket' },
-          ip_address: auditContext.ipAddress,
-          user_agent: auditContext.userAgent,
-          request_id: auditContext.requestId,
-        });
-        
-        return null;
-      }
-
-      // Update the stored token with new values
-      const newExpiresAt = refreshResult.expiresIn
-        ? new Date(Date.now() + refreshResult.expiresIn * 1000).toISOString()
-        : null;
-
-      const { error: updateError } = await supabase
-        .from('bitbucket_tokens')
-        .update({
-          access_token: refreshResult.accessToken,
-          refresh_token: refreshResult.refreshToken || tokenData.refresh_token,
-          expires_at: newExpiresAt,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
-
-      if (updateError) {
-        console.error('[Bitbucket Token Manager] Failed to update refreshed token:', updateError);
-        // Still return the new token even if we couldn't save it
-      } else {
-        console.log('[Bitbucket Token Manager] Successfully refreshed and stored new token for user:', userId);
-        
-        // Audit log: token refreshed
-        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
-        await AuditLogService.create({
-          user_id: userId,
-          user_role: 'system',
-          action: 'token_refreshed',
-          service_type: 'auth',
-          service_id: `bitbucket_token_${userId}`,
-          service_name: 'Bitbucket OAuth Token',
-          metadata: { 
-            provider: 'bitbucket',
-            expires_at: newExpiresAt,
-          },
-          ip_address: auditContext.ipAddress,
-          user_agent: auditContext.userAgent,
-          request_id: auditContext.requestId,
-        });
-      }
-
-      return refreshResult.accessToken;
-    } catch (error) {
-      console.error('[Bitbucket Token Manager] Error getting token:', error);
-      return null;
-    }
+    return getValidBitbucketToken(userId);
   }
 
   /**
@@ -284,8 +134,8 @@ export class BitbucketTokenManager {
         .upsert(
           {
             user_id: userId,
-            access_token: accessToken,
-            refresh_token: refreshToken,
+            access_token: encryptOAuthToken(accessToken),
+            refresh_token: encryptOAuthToken(refreshToken),
             expires_at: expiresAt,
             bitbucket_username: bitbucketUsername,
             bitbucket_user_id: bitbucketUserId,

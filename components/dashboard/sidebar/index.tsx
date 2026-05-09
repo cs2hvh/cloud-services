@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Archive,
+  ArrowRightLeft,
+  BadgeDollarSign,
   BookOpen,
   Bot,
   Box,
@@ -15,7 +17,6 @@ import {
   Cpu,
   Database,
   FileText,
-  Gamepad2,
   Globe,
   HardDrive,
   HelpCircle,
@@ -31,6 +32,7 @@ import {
   Settings,
   Shield,
   ShieldCheck,
+  ShoppingCart,
   Ticket,
   Users,
   X,
@@ -138,6 +140,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
   const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.includes("/services/ai-agents"));
+  const [domainsExpanded, setDomainsExpanded] = useState(pathname.includes("/dashboard/domains"));
   const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -153,6 +156,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     }
     if (pathname.includes("/services/ai-agents")) {
       setAiAgentsExpanded(true);
+    }
+    if (pathname.includes("/dashboard/domains")) {
+      setDomainsExpanded(true);
     }
     if (pathname.includes("/admin")) {
       setAdminExpanded(true);
@@ -230,22 +236,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       icon: Rocket,
     },
     {
-      name: "Domains",
-      href: "/dashboard/domains",
-      current: pathname.includes("/dashboard/domains"),
-      icon: Globe,
-    },
-    {
       name: "Kubernetes",
       href: "/dashboard/services/kubernetes",
       current: pathname.includes("/services/kubernetes"),
       icon: Box,
-    },
-    {
-      name: "Game Servers",
-      href: "/dashboard/services/game",
-      current: pathname.includes("/services/game"),
-      icon: Gamepad2,
     },
     {
       name: "Network DDoS Protection",
@@ -264,6 +258,27 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/object-storage",
       current: pathname.includes("/services/object-storage"),
       icon: Archive,
+    },
+  ];
+
+  const domainsSubItems: NavLinkItem[] = [
+    {
+      name: "Buy Domains",
+      href: "/dashboard/domains/marketplace",
+      current: pathname.includes("/dashboard/domains/marketplace"),
+      icon: ShoppingCart,
+    },
+    {
+      name: "Transfer Domain",
+      href: "/dashboard/domains/transfer",
+      current: pathname.includes("/dashboard/domains/transfer"),
+      icon: ArrowRightLeft,
+    },
+    {
+      name: "My Domains",
+      href: "/dashboard/domains",
+      current: pathname === "/dashboard/domains" || (pathname.includes("/dashboard/domains") && !pathname.includes("/marketplace") && !pathname.includes("/transfer")),
+      icon: Globe,
     },
   ];
 
@@ -313,10 +328,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     { name: "Proxmox Hosts", href: "/dashboard/admin/hosts", current: pathname === "/dashboard/admin/hosts" || pathname.startsWith("/dashboard/admin/hosts/"), icon: Network },
     { name: "All Servers", href: "/dashboard/admin/servers", current: pathname === "/dashboard/admin/servers" || pathname.startsWith("/dashboard/admin/servers/"), icon: Server },
     { name: "Users", href: "/dashboard/admin/users", current: pathname === "/dashboard/admin/users" || pathname.startsWith("/dashboard/admin/users/"), icon: Users },
+    { name: "Support Tickets", href: "/dashboard/admin/support", current: pathname === "/dashboard/admin/support" || pathname.startsWith("/dashboard/admin/support/"), icon: HelpCircle },
     { name: "Databases", href: "/dashboard/admin/databases", current: pathname === "/dashboard/admin/databases" || pathname.startsWith("/dashboard/admin/databases/"), icon: Database },
     { name: "Object Storage", href: "/dashboard/admin/object-storage", current: pathname === "/dashboard/admin/object-storage" || pathname.startsWith("/dashboard/admin/object-storage/"), icon: Archive },
     { name: "Network DDoS", href: "/dashboard/admin/network-ddos", current: pathname === "/dashboard/admin/network-ddos" || pathname.startsWith("/dashboard/admin/network-ddos/"), icon: Shield },
     { name: "Kubernetes", href: "/dashboard/admin/kubernetes", current: pathname === "/dashboard/admin/kubernetes" || pathname.startsWith("/dashboard/admin/kubernetes/"), icon: Box },
+    { name: "Cluster Monitor", href: "/dashboard/admin/cluster-monitor", current: pathname === "/dashboard/admin/cluster-monitor" || pathname.startsWith("/dashboard/admin/cluster-monitor/"), icon: Activity },
     { name: "Platform Apps", href: "/dashboard/admin/platform-apps", current: pathname === "/dashboard/admin/platform-apps" || pathname.startsWith("/dashboard/admin/platform-apps/"), icon: Rocket },
     { name: "Coupons", href: "/dashboard/admin/coupons", current: pathname === "/dashboard/admin/coupons" || pathname.startsWith("/dashboard/admin/coupons/"), icon: Ticket },
     { name: "Audit Logs", href: "/dashboard/admin/audit-logs", current: pathname === "/dashboard/admin/audit-logs" || pathname.startsWith("/dashboard/admin/audit-logs/"), icon: ShieldCheck },
@@ -336,10 +353,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       current: false,
       icon: FileText,
     },
+     {
+      name: "Billing & Transaction",
+      href: "/dashboard/nav/billing",
+      current: false,
+      icon: BadgeDollarSign,
+    },
     {
       name: "Help Center",
-      href: "/support",
-      current: false,
+      href: "/dashboard/support",
+      current: pathname.includes("/dashboard/support"),
       icon: HelpCircle,
     },
   ];
@@ -445,6 +468,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               onToggle={() => setComputeExpanded((prev) => !prev)}
             >
               {computeServices.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
+
+            <ExpandableGroup
+              label="Domains"
+              icon={Globe}
+              expanded={domainsExpanded}
+              active={pathname.includes("/dashboard/domains")}
+              onToggle={() => setDomainsExpanded((prev) => !prev)}
+            >
+              {domainsSubItems.map((item) => (
                 <SidebarLink key={item.name} item={item} compact />
               ))}
             </ExpandableGroup>

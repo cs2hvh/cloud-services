@@ -179,6 +179,7 @@ export function createServiceNotification(params: {
     ai_agent: 'AI Agent',
     knowledge_base: 'Knowledge Base',
     domain: 'Domain',
+    billing: 'Billing',
   };
 
   const { type: defaultType, verb } = actionMessages[action];
@@ -215,6 +216,9 @@ export function createServiceNotification(params: {
         break;
       case 'user_deleted':
         message = `Database user "${metadata.userName}" has been deleted from ${serviceName}.`;
+        break;
+      case 'user_password_reset':
+        message = `Password reset completed for database user "${metadata.userName}" on ${serviceName}.`;
         break;
       case 'database_created':
         message = `Database "${metadata.dbName}" has been created in cluster ${serviceName}.`;

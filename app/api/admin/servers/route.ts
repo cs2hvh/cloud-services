@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { Agent as UndiciAgent } from "undici";
+import { removeHostRoute, type ProxmoxHost } from "@/lib/proxmox-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -40,30 +41,13 @@ function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
 async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig): Promise<ProxmoxAuthHeaders> {
   const tokenId = host.token_id || undefined;
   const tokenSecret = host.token_secret || undefined;
-  const username = host.username || undefined;
+  const rawUsername = host.username || undefined;
   const password = host.password || undefined;
 
-  if (tokenId && tokenSecret) {
-    const tokenAuth: ProxmoxAuthHeaders = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } };
-    try {
-      
-      const verify = await withTimeout(
-        fetch(`${apiBase}/api2/json/nodes`, {
-          cache: "no-store",
-          redirect: "follow",
-          headers: tokenAuth.headers,
-         
-          // @ts-expect-error undici dispatcher
-          dispatcher,
-        })
-      );
-      if (verify.ok) return tokenAuth;
-    } catch {}
-  }
-
-  if (!username || !password) throw new Error("Missing Proxmox credentials in DB");
-
-  const body = new URLSearchParams({ username, password });
+  // Prefer password/ticket auth — API tokens often lack VM.Clone and other mutating permissions
+  if (rawUsername && password) {
+    const username = rawUsername.includes("@") ? rawUsername : `${rawUsername}@pam`;
+    const body = new URLSearchParams({ username, password });
   const ticketRes = await withTimeout(
     fetch(`${apiBase}/api2/json/access/ticket`, {
       method: "POST",
@@ -84,6 +68,26 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
   if (!ticket) throw new Error("Missing PVE ticket in response");
   if (!csrf) throw new Error("Missing CSRFPreventionToken in response");
   return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } };
+  }
+
+  // Fallback to API token if no password credentials
+  if (tokenId && tokenSecret) {
+    const tokenAuth: ProxmoxAuthHeaders = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } };
+    try {
+      const verify = await withTimeout(
+        fetch(`${apiBase}/api2/json/nodes`, {
+          cache: "no-store",
+          redirect: "follow",
+          headers: tokenAuth.headers,
+          // @ts-expect-error undici dispatcher
+          dispatcher,
+        })
+      );
+      if (verify.ok) return tokenAuth;
+    } catch {}
+  }
+
+  throw new Error("Missing Proxmox credentials in DB");
 }
 
 async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
@@ -174,7 +178,7 @@ export async function GET() {
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: "Failed to fetch servers" },
         { status: 500 }
       );
     }
@@ -184,9 +188,9 @@ export async function GET() {
       servers: servers || [],
     });
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[Admin Servers] Error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Failed to fetch servers" },
       { status: 500 }
     );
   }
@@ -217,7 +221,7 @@ export async function DELETE(req: NextRequest) {
     // Get server details
     const { data: server, error: serverErr } = await supabase
       .from("servers")
-      .select("id, name, vmid, node, location")
+      .select("id, name, vmid, node, location, ip")
       .eq("id", serverId)
       .maybeSingle();
 
@@ -244,7 +248,7 @@ export async function DELETE(req: NextRequest) {
       try {
         const { data: host } = await supabase
           .from("proxmox_hosts")
-          .select("*")
+          .select("id, host_url, allow_insecure_tls, token_id, token_secret, username, password")
           .eq("id", location)
           .maybeSingle();
 
@@ -252,7 +256,7 @@ export async function DELETE(req: NextRequest) {
           const cfg = host as HostConfig;
           const allowInsecure = !!cfg.allow_insecure_tls;
           const dispatcher = allowInsecure ? new UndiciAgent({ connect: { rejectUnauthorized: false } }) : undefined;
-          const apiBase = cfg.host_url.startsWith('http:') ? cfg.host_url.replace(/^http:/, 'https:') : cfg.host_url;
+          const apiBase = (cfg.host_url.startsWith('http:') ? cfg.host_url.replace(/^http:/, 'https:') : cfg.host_url).replace(/\/+$/, '');
 
           // Try to delete from Proxmox
           try {
@@ -322,6 +326,17 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
+    // Remove host route for the VM's IP
+    const serverIp = (server as Record<string, unknown>).ip as string | undefined;
+    if (serverIp && location) {
+      try {
+        const { data: hostForRoute } = await supabase.from("proxmox_hosts").select("id, name, host_url, allow_insecure_tls, node, storage, bridge, gateway_ip, dns_primary, dns_secondary, template_vmid, is_active, token_id, token_secret, username, password").eq("id", location).maybeSingle();
+        if (hostForRoute) await removeHostRoute(hostForRoute as ProxmoxHost, serverIp);
+      } catch (e) {
+        console.warn(`[Admin Delete] Failed to remove host route:`, e);
+      }
+    }
+
     // Delete from database
     const { error: deleteErr } = await supabase
       .from("servers")
@@ -330,19 +345,19 @@ export async function DELETE(req: NextRequest) {
 
     if (deleteErr) {
       return NextResponse.json(
-        { ok: false, error: deleteErr.message },
+        { ok: false, error: "Failed to delete server record" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
-      message: `Server "${server.name}" deleted successfully`,
+      message: "Server deleted successfully",
     });
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[Admin Delete] Error:", error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Server deletion failed" },
       { status: 500 }
     );
   }

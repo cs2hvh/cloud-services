@@ -68,8 +68,8 @@ export default function CategoriesTab({ categories: initialCategories }: Categor
     try {
       const response = await api.get("/admin/pricing/categories");
       if (response.status === 200) {
-        setCategoriesList(response.data.categories);
-        return response.data.categories;
+        setCategoriesList(response?.data?.categories ?? []);
+        return response?.data?.categories ?? [];
       }
     } catch (error) {
       console.error("Error fetching categories:", error);

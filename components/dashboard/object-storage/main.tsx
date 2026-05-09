@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, type ElementType } from "react";
+import { useMemo } from "react";
 import { motion } from "motion/react";
-import {
-  Archive,
-  CheckCircle2,
-  Globe2,
-  Plus,
-  Waypoints,
-} from "lucide-react";
+import { Plus } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
@@ -24,14 +19,12 @@ function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: ElementType;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
@@ -43,8 +36,8 @@ function MetricCard({
           <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div className={"flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] " + accentClassName}>
-          <Icon className="h-4 w-4" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -105,29 +98,25 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           label="Buckets"
           value={stats.totalBuckets}
           meta="Provisioned object storage buckets"
-          icon={Archive}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard-icons/buckets.png"
         />
         <MetricCard
           label="Active"
           value={stats.activeBuckets}
           meta="Buckets currently available for traffic"
-          icon={CheckCircle2}
-          accentClassName="text-emerald-300"
+          iconSrc="/dashboard-icons/active-1.png"
         />
         <MetricCard
           label="Public Access"
           value={stats.publicBuckets}
           meta="Buckets with public read access"
-          icon={Globe2}
-          accentClassName="text-white/75"
+          iconSrc="/dashboard-icons/public-acess.png"
         />
         <MetricCard
           label="Versioning"
           value={stats.versionedBuckets}
           meta="Buckets with object versioning enabled"
-          icon={Waypoints}
-          accentClassName="text-amber-300"
+          iconSrc="/dashboard-icons/versioning.png"
         />
       </motion.div>
 

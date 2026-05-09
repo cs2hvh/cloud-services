@@ -63,7 +63,7 @@ const SolutionsStoragePage = () => {
     tags: ["Object Storage", "Database", "Security", "Compute", "CDN"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -77,6 +77,7 @@ const SolutionsStoragePage = () => {
       { name: "workload", placeholder: "Tell us about your storage needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Storage & Backup",
   };
 
   return (
@@ -85,7 +86,7 @@ const SolutionsStoragePage = () => {
         badge={["S3 Compatible", "Auto Backup", "CDN Delivery", "Lifecycle Rules"]}
         title="Storage & Backup Solutions Infrastructure"
         description="Store and protect critical data with S3-compatible object storage, automated backups, lifecycle policies, and cross-region replication."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-storage.png", alt: "Storage infrastructure" }}

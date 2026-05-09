@@ -40,7 +40,16 @@ export interface DomainSearchResponse {
   results: DomainMarketplaceResult[];
 }
 
-const DEFAULT_TLDS = ["com", "net", "io", "app", "dev", "org"];
+const DEFAULT_TLDS = [
+  // Classic
+  "com", "net", "org",
+  // Tech / Startup
+  "io", "app", "dev", "ai", "tech", "cloud",
+  // Business / Brand
+  "co", "me", "pro",
+  // New popular
+  "xyz", "site", "online",
+];
 
 export class DomainMarketplaceService {
   private readonly deps: {
@@ -102,8 +111,28 @@ export class DomainMarketplaceService {
 
     if (hasDot) {
       const normalized = normalizeDomainCandidate(query);
-      const data = await this.registrar.checkAvailability([normalized]);
-      results = (data.results || []).map((item) => toMarketplaceResult(item));
+      // Extract keyword (before first dot) to also find alternatives across other TLDs
+      const keyword = normalized.split(".")[0];
+      const altTlds = keyword
+        ? tlds.filter((t) => !normalized.endsWith(`.${t}`)).slice(0, 9)
+        : [];
+
+      // Run exact availability check + alternative TLD checks in parallel
+      const [primaryData, altData] = await Promise.all([
+        this.registrar.checkAvailability([normalized]),
+        altTlds.length > 0
+          ? this.registrar.checkAvailability(buildCandidateDomains(keyword, altTlds))
+          : Promise.resolve({ results: [] }),
+      ]);
+
+      const primaryResults = (primaryData.results || []).map((item) => toMarketplaceResult(item));
+      const altResults = (altData.results || [])
+        .map((item) => toMarketplaceResult(item))
+        // Sort alternatives: available first, then taken
+        .sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
+
+      // Primary result always first so users immediately see their domain's status
+      results = [...primaryResults, ...altResults];
     } else {
       const data = await this.registrar.searchDomains({
         keyword: query,
@@ -114,9 +143,23 @@ export class DomainMarketplaceService {
       results = (data.results || []).slice(0, 20).map((item) => toMarketplaceResult(item));
 
       if (results.length === 0) {
+        // No suggestions at all — fall back to exact availability checks
         const generated = buildCandidateDomains(query, tlds);
         const fallback = await this.registrar.checkAvailability(generated);
         results = (fallback.results || []).map((item) => toMarketplaceResult(item));
+      } else {
+        // name.com search may not return results for every selected TLD.
+        // Fill gaps so the user sees at least `keyword.tld` for each selected TLD.
+        const coveredTlds = new Set(
+          results.map((r) => r.domainName.split(".").slice(1).join("."))
+        );
+        const missingTlds = tlds.filter((t) => !coveredTlds.has(t));
+        if (missingTlds.length > 0) {
+          const gapDomains = buildCandidateDomains(query, missingTlds);
+          const gapData = await this.registrar.checkAvailability(gapDomains);
+          const gapResults = (gapData.results || []).map((item) => toMarketplaceResult(item));
+          results = [...results, ...gapResults];
+        }
       }
     }
 
@@ -142,14 +185,10 @@ export class DomainMarketplaceService {
       await this.appRead.getOwnedApp(input.appId, input.actor.userId);
     }
 
-    const existingByDomain = await this.purchaseRequests.findLatestByDomain({
-      userId: input.actor.userId,
-      domain: cleanDomain,
-    });
-    if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
-      return toPublicPurchaseRequest(existingByDomain);
-    }
-
+    // Check idempotency key FIRST — if the same key was already used for this
+    // exact payload, return the existing request immediately without checking
+    // domain availability or ownership again. This ensures clients get a stable
+    // response on retry even after the first request completed.
     if (input.idempotencyKey) {
       const existing = await this.purchaseRequests.findByIdempotencyKey(
         input.actor.userId,
@@ -168,6 +207,18 @@ export class DomainMarketplaceService {
         }
         return toPublicPurchaseRequest(existing);
       }
+    }
+
+    const existingByDomain = await this.purchaseRequests.findLatestByDomain({
+      userId: input.actor.userId,
+      domain: cleanDomain,
+    });
+    if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+        message: `A purchase request for "${cleanDomain}" already exists with status: ${existingByDomain.status}`,
+        details: { request_id: existingByDomain.id, status: existingByDomain.status, domain: cleanDomain },
+      });
     }
 
     const check = await this.registrar.checkAvailability([cleanDomain]);
@@ -314,6 +365,92 @@ export class DomainMarketplaceService {
       lastError: null,
     });
 
+    // Store expiry date from Name.com in metadata so the renewal cron can find
+    // domains approaching expiry without making live API calls per domain.
+    // Also flag renewal_charged: false so the cron knows it hasn't billed yet.
+    // Fire-and-forget — failure here does not affect the purchase result.
+    const purchaseDomain = (purchase as { domain?: { expireDate?: string; renewalPrice?: number } }).domain;
+    const expiresAt = purchaseDomain?.expireDate ?? null;
+    // Name.com confirms the authoritative renewal price in the purchase response.
+    // Prefer this over the availability-check estimate (they can differ for premium domains).
+    const purchaseRenewalPrice = purchaseDomain?.renewalPrice ?? null;
+    this.emitNonBlocking(async () => {
+      try {
+        // If the purchase response didn't include expireDate, fetch it via getDomain.
+        // NameComApiService exposes getDomain() but not getDomainSummary(), so we
+        // duck-type against the method that is actually present on the service.
+        type WithGetDomain = { getDomain?: (d: string) => Promise<{ expireDate?: string; renewalPrice?: number } | null> };
+        const fetchedDomain = expiresAt == null
+          ? await (this.registrar as unknown as WithGetDomain).getDomain?.(cleanDomain)
+          : null;
+        const resolvedExpiresAt = expiresAt ?? fetchedDomain?.expireDate ?? null;
+        // Use the authoritative renewal price from purchase → fallback to getDomain → fallback to availability check
+        const resolvedRenewalPrice = purchaseRenewalPrice ?? fetchedDomain?.renewalPrice ?? first.renewalPrice ?? null;
+        await this.purchaseRequests.updateStatus({
+          requestId: request.id,
+          status: "completed",
+          metadata: {
+            expires_at: resolvedExpiresAt,
+            renewal_charged: false,
+            renewal_price: resolvedRenewalPrice,
+            // Store the initial auto-renew state explicitly so the cron and PATCH
+            // registrar routes always have a concrete value to read and merge.
+            autorenew_enabled: true,
+          },
+        });
+      } catch (err) {
+        console.warn("[DomainMarketplace] Failed to store expires_at in metadata (non-fatal)", {
+          domain: cleanDomain,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    // After a successful purchase the name.com account-level contacts are used as
+    // the default registrant. For white-label: update the registrant email to the
+    // purchasing user so ICANN contact-verification emails are routed to them, not
+    // to the platform admin inbox. This is non-blocking — a failure here does NOT
+    // roll back the purchase.
+    if (actor.userEmail && this.registrar.setRegistrantContact) {
+      const [rawFirst, ...rest] = (actor.userName || "").trim().split(" ");
+      const firstName = rawFirst || undefined;
+      const lastName = rest.join(" ") || undefined;
+      this.emitNonBlocking(async () => {
+        let contactSynced = false;
+        try {
+          await this.registrar.setRegistrantContact!(cleanDomain, {
+            email: actor.userEmail!,
+            ...(firstName ? { firstName } : {}),
+            ...(lastName ? { lastName } : {}),
+          });
+          contactSynced = true;
+          // Persist the email so operators can trace ICANN verification issues.
+          await this.purchaseRequests.updateStatus({
+            requestId: request.id,
+            status: "completed",
+            registrantEmail: actor.userEmail,
+          });
+        } catch (err) {
+          console.warn("[DomainMarketplace] setRegistrantContact failed (non-fatal)", {
+            domain: cleanDomain,
+            email: actor.userEmail,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        await this.emitAudit({
+          actor,
+          action: "update",
+          serviceId: request.id,
+          serviceName: cleanDomain,
+          metadata: {
+            event: "domain_registrant_contact_sync",
+            registrant_email: actor.userEmail,
+            contact_synced: contactSynced,
+          },
+        });
+      });
+    }
+
     await this.emitNonBlocking(async () => {
       await this.emitAudit({
         actor,
@@ -348,7 +485,7 @@ export class DomainMarketplaceService {
         severity: "info",
         alertTitle: "Domain purchase completed",
         serviceName: cleanDomain,
-        summary: `Your domain purchase for ${cleanDomain} has completed successfully.`,
+        summary: `Your domain purchase for ${cleanDomain} has completed successfully. Check your inbox for an ICANN contact verification email and click the link to unlock DNS activation.`,
         metadata: {
           source_app_id: input.appId || "none",
           amount: first.purchasePrice ?? 0,
@@ -396,6 +533,74 @@ export class DomainMarketplaceService {
     }
 
     return toPublicPurchaseRequest(request);
+  }
+
+  /**
+   * Reconciliation job — called by the hourly cron to retry setRegistrantContact
+   * for any completed purchases where the initial async call failed or was skipped.
+   * Up to `limit` records are processed per run (oldest first).
+   *
+   * @param lookupEmail  Caller-provided function to resolve a user ID → email.
+   *                     Kept as a callback so the service stays decoupled from auth infra.
+   */
+  async reconcileRegistrantContacts(params: {
+    limit?: number;
+    lookupUser: (userId: string) => Promise<{ email: string | null; firstName?: string; lastName?: string } | null>;
+  }): Promise<{ processed: number; failed: number; skipped: number; failures: Array<{ domain: string; error: string }> }> {
+    if (!this.registrar.setRegistrantContact) {
+      return { processed: 0, failed: 0, skipped: 0, failures: [] };
+    }
+
+    const unsynced = await this.purchaseRequests.findUnsyncedCompleted(params.limit ?? 20);
+    let processed = 0;
+    let failed = 0;
+    let skipped = 0;
+    const failures: Array<{ domain: string; error: string }> = [];
+
+    for (const record of unsynced) {
+      try {
+        const user = await params.lookupUser(record.user_id);
+        if (!user?.email) {
+          skipped++;
+          continue;
+        }
+
+        await this.registrar.setRegistrantContact(record.domain, {
+          email: user.email,
+          ...(user.firstName ? { firstName: user.firstName } : {}),
+          ...(user.lastName ? { lastName: user.lastName } : {}),
+        });
+        await this.purchaseRequests.updateStatus({
+          requestId: record.id,
+          status: "completed",
+          registrantEmail: user.email,
+        });
+        processed++;
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn("[DomainMarketplace] reconcileRegistrantContacts: failed for domain", {
+          domain: record.domain,
+          error: errMsg,
+        });
+        // If the domain doesn't exist at the registrar (e.g. sandbox purchase), permanently
+        // skip it so it never shows up in reconcile again.
+        const isNotFound = err instanceof DomainServiceError
+          && err.code === DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND;
+        if (isNotFound) {
+          await this.purchaseRequests.updateStatus({
+            requestId: record.id,
+            status: "completed",
+            registrantEmail: "sandbox@not-found.invalid",
+          }).catch(() => {});
+          skipped++;
+        } else {
+          failures.push({ domain: record.domain, error: errMsg });
+          failed++;
+        }
+      }
+    }
+
+    return { processed, failed, skipped, failures };
   }
 
   private async emitFailureEvents(params: {

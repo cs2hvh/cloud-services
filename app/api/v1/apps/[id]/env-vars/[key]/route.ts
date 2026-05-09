@@ -1,21 +1,23 @@
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
-import { v1ExtractId, v1VerifyOwnership } from "@/lib/api/v1-helpers";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { ENV_KEY_REGEX, MAX_ENV_KEY_LENGTH, analyzeEnvLifecycle, type EnvVar } from "@/lib/env/lifecycle";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
+import { PlatformAppEnvService } from "@/lib/services/platform-app-env-service";
+import { AuditLogService } from "@/lib/audit";
 
 async function getOwnedApp(appId: string, userId: string) {
-  const existing = await Platform_Apps.get(appId);
-  if (!existing.success || !existing.data) {
-    return { app: null, error: v1Error("NOT_FOUND", 404, "App not found") };
+  const result = await PlatformAppEnvService.getOwnedApp(appId, userId);
+  if (!result.success) {
+    if (result.errorCode === "NOT_FOUND") {
+      return { app: null, error: v1Error("NOT_FOUND", 404, "App not found") };
+    }
+    if (result.errorCode === "FORBIDDEN") {
+      return { app: null, error: v1Error("FORBIDDEN", 403, "Access denied") };
+    }
+    return { app: null, error: v1Error("INTERNAL_ERROR", 500, result.error || "Failed to fetch app") };
   }
 
-  const ownershipError = v1VerifyOwnership(existing.data.user_id, userId, "app", "modify");
-  if (ownershipError) {
-    return { app: null, error: ownershipError };
-  }
-
-  return { app: existing.data, error: null };
+  return { app: result.data, error: null };
 }
 
 async function extractKey(
@@ -44,6 +46,51 @@ async function extractKey(
   return { key, error: null };
 }
 
+export const GET = withV1Auth("apps:env:get", async (req, auth, context) => {
+  const idResult = await v1ExtractId(context);
+  if (idResult.error) return idResult.error;
+
+  const keyResult = await extractKey(context);
+  if (keyResult.error) return keyResult.error;
+
+  const appId = idResult.id;
+  const key = keyResult.key!;
+
+  const ownership = await getOwnedApp(appId, auth.userId);
+  if (ownership.error) return ownership.error;
+
+  const envVars = await PlatformAppEnvService.getEnvVars(appId);
+  const found = envVars.find((env: { key: string }) => env.key === key);
+  if (!found) {
+    return v1Error("NOT_FOUND", 404, "Environment variable key not found", { field: "key" });
+  }
+
+  // Audit every plaintext secret read — secret reads are a threat model event.
+  void AuditLogService.create({
+    user_id: auth.userId,
+    user_role: "user",
+    action: "access",
+    service_type: "platform_apps",
+    service_id: appId,
+    service_name: ownership.app?.name ?? appId,
+    ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+    user_agent: req.headers.get("user-agent") || "unknown",
+    request_id: crypto.randomUUID(),
+    metadata: {
+      operation: "env_var_read",
+      key,
+    },
+  }).catch((err) => console.warn("[v1/env-vars/key] Audit log failed:", err));
+
+  return v1Ok({
+    data: {
+      app_id: appId,
+      key: found.key,
+      value: found.value,
+    },
+  });
+});
+
 export const DELETE = withV1Auth("apps:env:delete", async (_req, auth, context) => {
   const idResult = await v1ExtractId(context);
   if (idResult.error) {
@@ -64,7 +111,7 @@ export const DELETE = withV1Auth("apps:env:delete", async (_req, auth, context) 
   }
 
   const app = ownership.app!;
-  const envVars = await Platform_Apps.get_env_vars(appId);
+  const envVars = await PlatformAppEnvService.getEnvVars(appId);
   const found = envVars.some((env: { key: string }) => env.key === key);
   if (!found) {
     return v1Error("NOT_FOUND", 404, "Environment variable key not found", {
@@ -79,9 +126,9 @@ export const DELETE = withV1Auth("apps:env:delete", async (_req, auth, context) 
       value: env.value,
     })) as EnvVar[];
 
-  const setResult = await Platform_Apps.set_env_vars(appId, filteredVars);
+  const setResult = await PlatformAppEnvService.setEnvVars(appId, filteredVars);
   if (!setResult.success) {
-    return v1Error("DELETE_FAILED", 500, "Failed to delete environment variable");
+    return v1Error("DELETE_FAILED", 500, setResult.error || "Failed to delete environment variable");
   }
 
   const lifecycle = analyzeEnvLifecycle(app.framework ?? null, filteredVars);

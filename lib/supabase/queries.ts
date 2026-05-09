@@ -1,4 +1,9 @@
 import { Encryption } from "@/config/functions";
+import {
+  findRollbackTarget,
+  findServingRelease,
+} from "@/lib/app-operations/core/release-history";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/security/token-crypto";
 // import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
@@ -65,6 +70,37 @@ const decryptEnvValue = (encryptedValue: string): string => {
     return encryptedValue;
   }
 };
+
+const DEFAULT_PROJECT_NAME = "My First Project";
+const DEFAULT_PROJECT_DESCRIPTION = "Default project created automatically.";
+
+async function ensureDefaultProjectForUser(userId: string): Promise<void> {
+  try {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", userId);
+
+    if (error || (count ?? 0) > 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("projects").insert({
+      name: DEFAULT_PROJECT_NAME,
+      description: DEFAULT_PROJECT_DESCRIPTION,
+      default_project: true,
+      owner: userId,
+      users: [userId],
+    });
+
+    if (insertError) {
+      console.log(`[Supabase] Error while creating default project: ${insertError.message}`);
+    }
+  } catch (err) {
+    console.log(`[Supabase] Error while ensuring default project: ${err}`);
+  }
+}
 
 
 export const Users = {
@@ -401,7 +437,26 @@ export const Projects = {
         );
         return [];
       }
-      return data || [];
+
+      if (data && data.length > 0) {
+        return data;
+      }
+
+      await ensureDefaultProjectForUser(userId);
+
+      const { data: refreshedData, error: refreshError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("owner", userId);
+
+      if (refreshError) {
+        console.log(
+          `[Supabase] Error............. while refreshing projects by userId: ${refreshError.message}`,
+        );
+        return [];
+      }
+
+      return refreshedData || [];
     } catch (err) {
       console.log(`[Supabase] Error while getting projects by userId: ${err}`);
       return [];
@@ -2833,7 +2888,10 @@ export const Platform_Apps = {
           auto_deploy,
           user_id,
           created_at,
-          project_id
+          project_id,
+          size,
+          deployment_url,
+          ip
         `)
         .order("created_at", { ascending: false });
 
@@ -2893,6 +2951,9 @@ export const Platform_Apps = {
             owner_username: usernameMap.get(app.user_id ?? "") ?? null,
             created_at: app.created_at ?? null,
             project_id: app.project_id ?? null,
+            size: (app as Record<string, unknown>).size as string | null ?? null,
+            deployment_url: (app as Record<string, unknown>).deployment_url as string | null ?? null,
+            ip: (app as Record<string, unknown>).ip as string | null ?? null,
           } as Admin_PlatformApp;
         })
         .filter((item): item is Admin_PlatformApp => Boolean(item));
@@ -2920,7 +2981,11 @@ export const Platform_Apps = {
   },
 
   // Environment variables
-  set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
+  set_env_vars: async (
+    app_id: string,
+    env_vars: { key: string; value: string }[],
+    kept_keys: string[] = [],
+  ) => {
     try {
       // Validate: Check for duplicate keys in the input array
       const keys = env_vars.map(ev => ev.key);
@@ -2933,21 +2998,27 @@ export const Platform_Apps = {
         };
       }
 
+      // Keys that should survive the stale-prune step even though they're not
+      // being upserted (user didn't reveal them — their existing value stays).
+      const preservedKeys = new Set(kept_keys);
+
       const supabase = await createServiceClient();
 
       // Upsert first, then delete stale keys. This avoids full data loss on partial failures.
-      if (env_vars.length > 0) {
-        const encryptedEnvVars = env_vars.map(ev => ({
-          app_id,
-          key: ev.key,
-          value: encryptEnvValue(ev.value), // Encrypt the value before storing
-        }));
+      if (env_vars.length > 0 || preservedKeys.size > 0) {
+        if (env_vars.length > 0) {
+          const encryptedEnvVars = env_vars.map(ev => ({
+            app_id,
+            key: ev.key,
+            value: encryptEnvValue(ev.value),
+          }));
 
-        const { error: upsertError } = await supabase
-          .from("platform_app_env_vars")
-          .upsert(encryptedEnvVars, { onConflict: "app_id,key" });
+          const { error: upsertError } = await supabase
+            .from("platform_app_env_vars")
+            .upsert(encryptedEnvVars, { onConflict: "app_id,key" });
 
-        if (upsertError) return { success: false, error: upsertError.message };
+          if (upsertError) return { success: false, error: upsertError.message };
+        }
 
         const { data: existingRows, error: existingRowsError } = await supabase
           .from("platform_app_env_vars")
@@ -2956,9 +3027,10 @@ export const Platform_Apps = {
 
         if (existingRowsError) return { success: false, error: existingRowsError.message };
 
+        // A key is stale only when it's not being upserted AND not kept.
         const staleKeys = (existingRows || [])
           .map((row: { key: string }) => row.key)
-          .filter((key) => !uniqueKeys.has(key));
+          .filter((key) => !uniqueKeys.has(key) && !preservedKeys.has(key));
 
         if (staleKeys.length > 0) {
           const { error: pruneError } = await supabase
@@ -2984,13 +3056,19 @@ export const Platform_Apps = {
     }
   },
 
-  get_env_vars: async (app_id: string) => {
+  get_env_vars: async (app_id: string, key?: string) => {
     try {
       const supabase = await createServiceClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from("platform_app_env_vars")
         .select("*")
         .eq("app_id", app_id);
+      // When a specific key is requested, filter at the DB level to avoid
+      // decrypting every row just to return one value.
+      if (key !== undefined) {
+        query = query.eq("key", key);
+      }
+      const { data, error } = await query;
       if (error) {
         console.error(`[Platform_Apps] Error getting env vars: ${error.message}`);
         return [];
@@ -2999,7 +3077,7 @@ export const Platform_Apps = {
       // Decrypt values before returning
       const decryptedData = (data || []).map(ev => ({
         ...ev,
-        value: decryptEnvValue(ev.value), // Decrypt the value
+        value: decryptEnvValue(ev.value),
       }));
       
       return decryptedData;
@@ -3086,6 +3164,94 @@ export const Platform_App_Deployments = {
     }
   },
 
+  get_latest_by_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || null };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_in_progress_by_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'building')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || null };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_operation_lock: async (app_id: string, appStatus?: string | null) => {
+    if (appStatus === 'deleting') {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'deleting' as const,
+        message: 'App is being deleted and cannot accept changes right now.',
+        deployment: null,
+      };
+    }
+
+    if (appStatus === 'building' || appStatus === 'pending') {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'building' as const,
+        message: 'A deployment is already in progress. Please wait for it to complete.',
+        deployment: null,
+      };
+    }
+
+    const inProgress = await Platform_App_Deployments.get_in_progress_by_app(app_id);
+    if (!inProgress.success) {
+      return {
+        success: false,
+        blocked: false,
+        blocker: null,
+        message: inProgress.error || 'Failed to check deployment state',
+        deployment: null,
+      };
+    }
+
+    if (inProgress.data) {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'building' as const,
+        message: `Build #${inProgress.data.build_number ?? 'unknown'} is still in progress.`,
+        deployment: inProgress.data,
+      };
+    }
+
+    return {
+      success: true,
+      blocked: false,
+      blocker: null,
+      message: null,
+      deployment: null,
+    };
+  },
+
   get_latest_successful: async (app_id: string) => {
     try {
       const supabase = await createServiceClient();
@@ -3094,6 +3260,8 @@ export const Platform_App_Deployments = {
         .select('*')
         .eq('app_id', app_id)
         .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -3113,6 +3281,8 @@ export const Platform_App_Deployments = {
         .select('*')
         .eq('app_id', app_id)
         .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -3130,6 +3300,255 @@ export const Platform_App_Deployments = {
     }
   },
 
+  get_previous_rollback_target: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      const servingRelease = await Platform_App_Deployments.get_serving_release(
+        app_id,
+        reference_deployment_id
+      );
+      if (!servingRelease.success) {
+        return { success: false, error: servingRelease.error };
+      }
+      if (servingRelease.data) {
+        currentDeployment = servingRelease.data;
+      }
+
+      if (!currentDeployment && reference_deployment_id) {
+        const { data, error } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('id', reference_deployment_id)
+          .maybeSingle();
+
+        if (error) return { success: false, error: error.message };
+        currentDeployment = data ?? null;
+      }
+
+      if (!currentDeployment) {
+        const latestSuccessful = await Platform_App_Deployments.get_latest_successful(app_id);
+        if (!latestSuccessful.success) {
+          return { success: false, error: latestSuccessful.error };
+        }
+        currentDeployment = latestSuccessful.data ?? null;
+      }
+
+      const currentBuildNumber =
+        typeof currentDeployment?.build_number === 'number' ? currentDeployment.build_number : null;
+
+      if (currentBuildNumber === null) {
+        return { success: true, data: null };
+      }
+
+      const { data: rollbackTarget, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
+        .lt('build_number', currentBuildNumber)
+        .order('build_number', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+
+      return { success: true, data: rollbackTarget };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_serving_release: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      if (reference_deployment_id) {
+        const { data, error } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('id', reference_deployment_id)
+          .maybeSingle();
+
+        if (error) return { success: false, error: error.message };
+        currentDeployment = data ?? null;
+      }
+
+      if (!currentDeployment) {
+        const latestSuccessful = await Platform_App_Deployments.get_latest_successful(app_id);
+        if (!latestSuccessful.success) {
+          return { success: false, error: latestSuccessful.error };
+        }
+        currentDeployment = latestSuccessful.data ?? null;
+      }
+
+      if (!currentDeployment) {
+        return { success: true, data: null };
+      }
+
+      const { data: successfulDeployments, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) return { success: false, error: error.message };
+      const servingRelease = findServingRelease({
+        currentDeployment,
+        successfulReleases: successfulDeployments || [],
+      });
+
+      return { success: true, data: servingRelease };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  /**
+   * Single source of truth for rollback eligibility and deployment presentation.
+   * Fetches data in ONE pass (2 DB queries total) and returns everything needed
+   * by the API, the rollback route, and the UI.
+   *
+   * Replaces the need to call get_serving_release, get_previous_rollback_target,
+   * and get_latest_by_app separately.
+   */
+  get_rollback_context: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      // ── 1. Two parallel queries ──
+      // q1: any-status recent 5 — for latest_operation + quick reference lookup
+      // q2: successful only 20 — for serving release + rollback target (reliable window)
+      const [{ data: recentAll, error: err1 }, { data: successData, error: err2 }] =
+        await Promise.all([
+          supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .eq('status', 'success')
+            .in('trigger', ['manual', 'webhook'])
+            .not('build_number', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
+
+      if (err1) return { success: false as const, error: err1.message };
+      if (err2) return { success: false as const, error: err2.message };
+
+      const recentDeployments = recentAll || [];
+      const successfulDeployments = successData || [];
+
+      // Latest operation from any-status window
+      const latestOperation = recentDeployments[0] ?? null;
+
+      // ── 2. Resolve current deployment ──
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      if (reference_deployment_id) {
+        // Check recent any-status first (rollback/resize records land here)
+        currentDeployment = recentDeployments.find((d) => d.id === reference_deployment_id) ?? null;
+
+        // Check successful history (old but successful deployment)
+        if (!currentDeployment) {
+          currentDeployment = successfulDeployments.find((d) => d.id === reference_deployment_id) ?? null;
+        }
+
+        // Not in either window — targeted fetch
+        if (!currentDeployment) {
+          const { data, error: refErr } = await supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .eq('id', reference_deployment_id)
+            .maybeSingle();
+          if (refErr) return { success: false as const, error: refErr.message };
+          currentDeployment = data ?? null;
+        }
+      }
+
+      if (!currentDeployment) {
+        currentDeployment = successfulDeployments[0] ?? null;
+      }
+
+      // ── 3. Derive serving release ──
+      // Serving release is the most recent REAL BUILD deployment (trigger='webhook'|'manual')
+      // that matches the active image. Rollback and resize records are excluded —
+      // rollbacks copy an image but don't represent a new build, and resize records
+      // only change runtime size without changing the serving image.
+      const servingRelease = findServingRelease({
+        currentDeployment,
+        successfulReleases: successfulDeployments,
+      });
+
+      // ── 4. Derive rollback target ──
+      let rollbackTarget = findRollbackTarget({
+        currentDeployment,
+        servingRelease,
+        successfulReleases: successfulDeployments,
+      });
+
+      const servingBuildNumber =
+        typeof servingRelease?.build_number === 'number' ? servingRelease.build_number : null;
+
+      if (!rollbackTarget && servingBuildNumber !== null) {
+        const { data: olderSuccessfulReleases, error: rollbackErr } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('status', 'success')
+          .in('trigger', ['manual', 'webhook'])
+          .not('build_number', 'is', null)
+          .lt('build_number', servingBuildNumber)
+          .order('build_number', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (rollbackErr) {
+          return { success: false as const, error: rollbackErr.message };
+        }
+
+        rollbackTarget = findRollbackTarget({
+          currentDeployment,
+          servingRelease,
+          successfulReleases: olderSuccessfulReleases ?? [],
+        });
+      }
+
+      // ── 5. Latest operation already resolved above ──
+
+      return {
+        success: true as const,
+        data: {
+          serving_release: servingRelease,
+          rollback_target: rollbackTarget,
+          latest_operation: latestOperation,
+          can_rollback: rollbackTarget !== null,
+        },
+      };
+    } catch (err) {
+      return { success: false as const, error: String(err) };
+    }
+  },
+
   update_status: async (
     appId: string,
     buildNumber: number,
@@ -3140,30 +3559,172 @@ export const Platform_App_Deployments = {
       failure_reason?: string | null;
     }
   ) => {
-    try {
-      const supabase = await createServiceClient();
-      const { data, error } = await supabase
-        .from('platform_app_deployments')
-        .update({
-          status: updates.status,
-          ...(updates.image_tag !== undefined && { image_tag: updates.image_tag }),
-          ...(updates.image_digest !== undefined && { image_digest: updates.image_digest }),
-          ...(updates.failure_reason !== undefined && { failure_reason: updates.failure_reason }),
-        })
-        .eq('app_id', appId)
-        .eq('build_number', buildNumber)
-        .select('*')
-        .single();
-
-      if (error) return { success: false, error: error.message };
-      return { success: true, data };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
+    return Platform_App_Deployments.complete_build({
+      app_id: appId,
+      build_number: buildNumber,
+      status: updates.status,
+      image_tag: updates.image_tag,
+      image_digest: updates.image_digest,
+      failure_reason: updates.failure_reason,
+    });
   },
 
   set_active_for_app: async (app_id: string, deployment_id: string | null) => {
     return Platform_Apps.update(app_id, { active_deployment_id: deployment_id });
+  },
+
+  /**
+   * Create a 'building' record at the start of every build trigger.
+   * This is the only way to create an initial deployment record — use this
+   * instead of calling create() directly with status: 'building'.
+   * The Jenkins webhook (deployment-record) will UPDATE this to success/failed.
+   */
+  start_build: async (payload: {
+    app_id: string;
+    build_number: number;
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
+    commit_sha?: string | null;
+  }) => {
+    return Platform_App_Deployments.create({
+      app_id: payload.app_id,
+      build_number: payload.build_number,
+      status: 'building',
+      trigger: payload.trigger,
+      commit_sha: payload.commit_sha ?? null,
+    });
+  },
+
+  complete_build: async (payload: {
+    app_id: string;
+    build_number: number;
+    status: 'success' | 'failed';
+    image_tag?: string | null;
+    image_digest?: string | null;
+    failure_reason?: string | null;
+    allowed_current_statuses?: Array<'building' | 'success' | 'failed'>;
+    create_if_missing?: boolean;
+    trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
+    commit_sha?: string | null;
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      const canRecoverFailedRecord = (failureReason: string | null | undefined) => {
+        if (!failureReason) return true;
+        return (
+          failureReason === 'Build never started' ||
+          failureReason.startsWith('Build timeout:') ||
+          failureReason.startsWith('Build failed:')
+        );
+      };
+      const updatePayload = {
+        status: payload.status,
+        ...(payload.image_tag !== undefined && { image_tag: payload.image_tag }),
+        ...(payload.image_digest !== undefined && { image_digest: payload.image_digest }),
+        failure_reason: payload.status === 'success' ? null : (payload.failure_reason ?? null),
+      };
+
+      let updateQuery = supabase
+        .from('platform_app_deployments')
+        .update(updatePayload)
+        .eq('app_id', payload.app_id)
+        .eq('build_number', payload.build_number);
+
+      if (payload.allowed_current_statuses && payload.allowed_current_statuses.length > 0) {
+        updateQuery = updateQuery.in('status', payload.allowed_current_statuses);
+      }
+
+      const { data: updatedRows, error: updateError } = await updateQuery.select('*');
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+
+      const updated = updatedRows?.[0] || null;
+      if (updated) {
+        return { success: true, data: updated, updated: true, created: false };
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', payload.app_id)
+        .eq('build_number', payload.build_number)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        return { success: false, error: existingError.message };
+      }
+
+      if (existing) {
+        const shouldRecoverFailedToSuccess =
+          payload.status === 'success' &&
+          existing.status === 'failed' &&
+          canRecoverFailedRecord(existing.failure_reason);
+        const shouldClearFailureReason =
+          payload.status === 'success' &&
+          existing.status === 'success' &&
+          existing.failure_reason !== null;
+        const shouldBackfillFailureReason =
+          payload.status === 'failed' &&
+          !!payload.failure_reason &&
+          !existing.failure_reason &&
+          existing.status === 'failed';
+
+        if (shouldRecoverFailedToSuccess || shouldClearFailureReason || shouldBackfillFailureReason) {
+          const { data: repaired, error: repairError } = await supabase
+            .from('platform_app_deployments')
+            .update({
+              ...(shouldRecoverFailedToSuccess && { status: 'success' }),
+              ...(shouldClearFailureReason && { failure_reason: null }),
+              ...(shouldRecoverFailedToSuccess && { failure_reason: null }),
+              ...(shouldBackfillFailureReason && { failure_reason: payload.failure_reason ?? null }),
+              ...(payload.image_tag !== undefined && { image_tag: payload.image_tag }),
+              ...(payload.image_digest !== undefined && { image_digest: payload.image_digest }),
+            })
+            .eq('id', existing.id)
+            .select('*')
+            .maybeSingle();
+
+          if (repairError) {
+            return { success: false, error: repairError.message };
+          }
+
+          if (repaired) {
+            return { success: true, data: repaired, updated: true, created: false };
+          }
+        }
+
+        return { success: true, data: existing, updated: false, created: false };
+      }
+
+      if (!payload.create_if_missing) {
+        return { success: false, error: 'Deployment record not found' };
+      }
+
+      if (!payload.trigger) {
+        return { success: false, error: 'Missing trigger for create_if_missing fallback' };
+      }
+
+      const created = await Platform_App_Deployments.create({
+        app_id: payload.app_id,
+        build_number: payload.build_number,
+        commit_sha: payload.commit_sha ?? null,
+        image_tag: payload.image_tag,
+        image_digest: payload.image_digest,
+        status: payload.status,
+        trigger: payload.trigger,
+        failure_reason: payload.status === 'success' ? null : (payload.failure_reason ?? null),
+      });
+
+      if (!created.success) {
+        return { success: false, error: created.error };
+      }
+
+      return { success: true, data: created.data, updated: true, created: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   },
 };
 
@@ -3486,7 +4047,11 @@ export const GitLab_Tokens = {
         return null;
       }
 
-      return data;
+      return {
+        ...data,
+        access_token: decryptOAuthToken(data?.access_token ?? null),
+        refresh_token: decryptOAuthToken(data?.refresh_token ?? null),
+      };
     } catch (err) {
       console.error(`[GitLab_Tokens] Error getting token for user ${user_id}: ${err}`);
       return null;
@@ -3505,10 +4070,15 @@ export const GitLab_Tokens = {
   }) => {
     try {
       const supabase = await createServiceClient();
+      const encryptedAccessToken = encryptOAuthToken(payload.access_token);
+      const encryptedRefreshToken = encryptOAuthToken(payload.refresh_token);
+
       const { data, error } = await supabase
         .from("gitlab_tokens")
         .upsert({
           ...payload,
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           updated_at: new Date().toISOString(),
         })
         .select()

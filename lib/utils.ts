@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
+import { toast } from "sonner";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -75,3 +76,31 @@ export function getRandomPort(existingPorts: number[]): number {
 export const generateRandomUuid = (): string => {
   return uuidv4();
 };
+
+export function formatAmount(amount: number, decimals: number): string {
+  return amount.toFixed(decimals);
+}
+
+export async function copyToClipboard(text: string, successMessage?: string, errorMessage?: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    if (successMessage) {
+      toast.success(successMessage)
+    }
+    return true
+  } catch {
+    if (errorMessage) {
+      toast.error(errorMessage)
+    }
+    return false
+  }
+}
+
+export function formatUSD(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { resolveOwnedCluster } from "@/lib/services/database/operations/cluster-access";
 import { v1ExtractId, type RouteContext } from "@/lib/api/v1-helpers";
 import { v1Error } from "@/lib/api/v1-middleware";
 
@@ -49,31 +49,16 @@ export async function v1EnsureOwnedDatabaseCluster(
   userId: string,
   action: "access" | "modify" | "delete" = "access"
 ): Promise<{ cluster: Record<string, unknown>; error: null } | { cluster: null; error: NextResponse }> {
-  const clusterResult = await Database_Clusters.read(clusterId);
-
-  if (!clusterResult.success || !clusterResult.data) {
+  const clusterResult = await resolveOwnedCluster(clusterId, userId, action);
+  if (!clusterResult.success) {
     return {
       cluster: null,
-      error: v1Error("NOT_FOUND", 404, "Database cluster not found"),
-    };
-  }
-
-  if (clusterResult.data.status === "deleted") {
-    return {
-      cluster: null,
-      error: v1Error("NOT_FOUND", 404, "Database cluster not found"),
-    };
-  }
-
-  if (clusterResult.data.owner_id !== userId) {
-    return {
-      cluster: null,
-      error: v1Error("FORBIDDEN", 403, `You do not have permission to ${action} this database cluster`),
+      error: v1Error(clusterResult.errorCode, clusterResult.statusCode, clusterResult.error),
     };
   }
 
   return {
-    cluster: clusterResult.data as unknown as Record<string, unknown>,
+    cluster: clusterResult.cluster,
     error: null,
   };
 }
@@ -103,6 +88,8 @@ export function v1DatabaseServiceError(
       });
     case "DIGITALOCEAN_API_ERROR":
       return v1Error("INVALID_PARAMETER", 400, message);
+    case "UNSUPPORTED_OPERATION":
+      return v1Error("UNSUPPORTED_OPERATION", 422, message);
     case "POST_PROVISION_BILLING_FAILED":
     case "SUPABASE_INSERT_FAILED":
     case "SUPABASE_DELETE_FAILED":

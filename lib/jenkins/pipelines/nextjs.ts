@@ -1,4 +1,4 @@
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateNextjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -10,6 +10,7 @@ export function createNextJsPipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
+  deploymentRecordSecret: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
@@ -59,30 +60,24 @@ export function createNextJsPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
-  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
-  // This prevents secrets from being baked into Docker images
-  // Why: Next.js only needs public vars during build for static generation
-  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars
-        .map(e => {
-          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-          return `--build-arg ${e.key}="${escapedValue}"`;
-        }).join(' \\\\\n                    ')
-    : '';
-  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
-  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
-  const buildArgsLine = buildArgs
-    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
-    : ` \\\\\n                    ${pmBuildArg}`;
+  // Only NEXT_PUBLIC_* vars are baked into the image at build time.
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
+  const buildOpts: string[] = [
+    ...clientEnvVars.map(e => {
+      const escapedValue = e.value.replace(/\$/g, '\\$');
+      return `--opt build-arg:${e.key}=${escapedValue}`;
+    }),
+    '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
+  ];
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
+  <actions/>
   <description>
     Next.js Deployment Pipeline for ${name}
     Accessible at https://${domain} via NGINX Ingress
   </description>
+  <keepDependencies>false</keepDependencies>
 
   <properties>
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
@@ -96,14 +91,18 @@ export function createNextJsPipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>RESIZE_ONLY</name>
-          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
-          <defaultValue>false</defaultValue>
-        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
+
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/1 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+
+  <disabled>false</disabled>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
     <script><![CDATA[
@@ -124,6 +123,7 @@ pipeline {
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -134,20 +134,36 @@ pipeline {
 
   stages {
 
-    stage('Checkout Repo') {
-      when {
-        expression { return !params.RESIZE_ONLY }
+    stage('Initialize') {
+      steps {
+        script {
+          echo 'STAGE: Initialize'
+          echo 'PIPELINE: Next.js Deployment Pipeline'
+          echo "Application Name: \${env.APP_NAME}"
+          echo "Git Repository: ${cleanUrl}"
+          echo "Branch: ${branch}"
+          echo "Container Port: \${env.CONTAINER_PORT}"
+          echo "Domain: \${env.DOMAIN}"
+          echo "Build Number: \${env.BUILD_NUMBER}"
+          echo 'Initialization completed'
+        }
       }
+    }
+
+    stage('Checkout Repository') {
       steps {
         container('git') {
           sh '''
+            echo "STAGE: Checkout Repository"
+            echo "Fetching source code from repository"
             echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
+            git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
             
             # If COMMIT_SHA parameter is provided, checkout that specific commit
             if [ -n "\${COMMIT_SHA}" ]; then
               echo "Checking out specific commit: \${COMMIT_SHA}"
+              git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
               git checkout \${COMMIT_SHA}
             else
               echo "Using branch HEAD"
@@ -155,7 +171,33 @@ pipeline {
             
             echo "Current commit:"
             git log -1 --oneline
+            echo "Source code checkout completed"
           '''
+        }
+      }
+    }
+
+    stage('Validate Prerequisites') {
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Validate Prerequisites'
+            echo 'Checking required files and project structure'
+            sh(
+              script: '''
+                if [ ! -f package.json ]; then
+                  echo 'WARNING: package.json not found'
+                  echo 'Next.js projects typically require a package.json file'
+                else
+                  echo 'package.json found'
+                fi
+
+                echo 'Prerequisites check completed'
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
+          }
         }
       }
     }
@@ -163,55 +205,18 @@ pipeline {
 ${generateSecurityStages({ language: 'node' })}
 
     stage('Prepare Dockerfile') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
+            echo "STAGE: Prepare Dockerfile"
 ${generateNextjsDockerfileStage(envVars)}
+            echo 'Dockerfile preparation completed'
           '''
         }
       }
     }
 
-    stage('Build Image with Kaniko') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-                # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-              /kaniko/executor \
-                --context=$WORKSPACE \
-                --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE_VERSION \
-                --destination=\$DOCKER_IMAGE_LATEST${buildArgsLine} \\
-                --digest-file=image-digest.txt
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, buildOpts, getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 
@@ -240,14 +245,7 @@ SECRET_EOF
           sh '''
             echo "STAGE: Deploy to Kubernetes"
             
-            # Use latest image for resize operations, new build image otherwise
-            if [ "\${RESIZE_ONLY}" = "true" ]; then
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
-              echo "Resize mode: Using existing latest image"
-            else
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
-              echo "Full deploy: Using newly built image"
-            fi
+            DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
             
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
@@ -260,6 +258,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -362,17 +361,11 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh '''
-            if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
-              echo "Restarting deployment to pull new image"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
-            else
-              echo "First deployment - skipping rollout restart"
-            fi
-          '''
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
-          sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
+          sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
+          '''
         }
       }
     }
@@ -385,6 +378,9 @@ INGRESS_EOF
             echo "Checking deployment status for $APP_NAME"
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
+            echo "Checking SSL certificate status"
+            kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"
+            kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"
             echo "Deployment verification completed successfully"
           '''
         }
@@ -402,8 +398,8 @@ INGRESS_EOF
             echo "Deployment completed successfully for $APP_NAME"
             echo "Service URL: https://$DOMAIN"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -433,6 +429,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
                 -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -440,6 +437,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \
                 --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -457,8 +455,8 @@ JSON
             echo "PIPELINE: Failure"
             echo "Deployment failed for $APP_NAME"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -488,6 +486,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
                 -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -495,6 +494,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \
                 --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -502,6 +502,11 @@ JSON
             fi
           '''
         }
+      }
+    }
+    always {
+      script {
+        echo 'PIPELINE: Cleanup'
       }
     }
   }

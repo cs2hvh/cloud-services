@@ -1,13 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, Fragment } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Loader2, Search, ShoppingCart } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Clock,
+  Copy,
+  Globe,
+  Loader2,
+  Mail,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 
 interface DomainPurchase {
   id: string;
@@ -15,6 +24,7 @@ interface DomainPurchase {
   status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
   last_error: string | null;
+  registrant_email: string | null;
 }
 
 interface DomainConnection {
@@ -39,44 +49,289 @@ interface DomainInventoryItem {
   auto_renew: boolean | null;
 }
 
-function getDomainBadge(item: DomainInventoryItem) {
+type DomainStatus = 'active' | 'pending' | 'attention' | 'purchased' | 'unknown';
+
+function getDomainStatus(item: DomainInventoryItem): { status: DomainStatus; label: string } {
   const purchaseStatus = item.purchase?.status;
   const hasActive = item.connections.some((c) => c.status === 'active');
   const hasFailed = purchaseStatus === 'failed' || item.connections.some((c) => c.status === 'failed');
   const hasPendingPurchase = purchaseStatus === 'requested' || purchaseStatus === 'processing';
   const hasPendingSetup = item.connections.some((c) => c.status === 'pending' || c.status === 'verified');
 
-  if (hasFailed) return <Badge className="border-red-500/30 bg-red-500/20 text-red-200">Needs Attention</Badge>;
-  if (hasPendingPurchase || hasPendingSetup) return <Badge className="border-yellow-500/30 bg-yellow-500/20 text-yellow-100">Pending</Badge>;
-  if (hasActive) return <Badge className="border-green-500/30 bg-green-500/20 text-green-200">Active</Badge>;
-  if (purchaseStatus === 'completed') return <Badge className="border-cyan-500/30 bg-cyan-500/20 text-cyan-200">Purchased</Badge>;
-  return <Badge className="border-white/20 bg-white/10 text-white/80">Unknown</Badge>;
+  if (hasFailed) return { status: 'attention', label: 'Needs Attention' };
+  if (hasPendingPurchase || hasPendingSetup) return { status: 'pending', label: 'Pending' };
+  if (hasActive) return { status: 'active', label: 'Active' };
+  if (purchaseStatus === 'completed') return { status: 'purchased', label: 'Purchased' };
+  return { status: 'unknown', label: 'Unknown' };
+}
+
+function StatusDot({ status }: { status: DomainStatus }) {
+  const colors: Record<DomainStatus, string> = {
+    active: 'bg-emerald-400',
+    pending: 'bg-amber-400',
+    attention: 'bg-red-400',
+    purchased: 'bg-cyan-400',
+    unknown: 'bg-white/40',
+  };
+  return <span className={`inline-block h-2 w-2 rounded-full ${colors[status]}`} />;
+}
+
+function StatusLabel({ status, label }: { status: DomainStatus; label: string }) {
+  const colors: Record<DomainStatus, string> = {
+    active: 'text-emerald-300',
+    pending: 'text-amber-300',
+    attention: 'text-red-300',
+    purchased: 'text-cyan-300',
+    unknown: 'text-white/50',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${colors[status]}`}>
+      <StatusDot status={status} />
+      {label}
+    </span>
+  );
 }
 
 function needsAttention(item: DomainInventoryItem): boolean {
-  const purchaseStatus = item.purchase?.status;
-  if (purchaseStatus === 'failed' || purchaseStatus === 'requested' || purchaseStatus === 'processing') {
-    return true;
-  }
-
-  return item.connections.some((c) => c.status === 'failed' || c.status === 'pending' || c.status === 'verified');
+  if (item.purchase?.status === 'failed') return true;
+  return item.connections.some((c) => c.status === 'failed');
 }
 
 function isExpiringSoon(expiresAt: string | null, days: number): boolean {
   if (!expiresAt) return false;
   const expiry = new Date(expiresAt);
   if (Number.isNaN(expiry.getTime())) return false;
-
   const now = new Date();
   const horizon = new Date();
   horizon.setDate(now.getDate() + days);
   return expiry >= now && expiry <= horizon;
 }
 
+function copyDomain(domain: string) {
+  navigator.clipboard.writeText(domain);
+  toast.success('Domain copied');
+}
+
+/* ── Domain grouping ── */
+type DomainGroup = {
+  rootDomain: string;
+  root: DomainInventoryItem | null;
+  children: DomainInventoryItem[];
+};
+
+function groupDomains(items: DomainInventoryItem[]): DomainGroup[] {
+  const domainSet = new Set(items.map((i) => i.domain));
+
+  function findParent(domain: string): string | null {
+    const parts = domain.split('.');
+    for (let i = 1; i < parts.length - 1; i++) {
+      const candidate = parts.slice(i).join('.');
+      if (domainSet.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  const groupMap = new Map<string, DomainGroup>();
+
+  // First pass: establish parent relationships
+  const parentOf = new Map<string, string>();
+  for (const item of items) {
+    const parent = findParent(item.domain);
+    if (parent) parentOf.set(item.domain, parent);
+  }
+
+  for (const item of items) {
+    const parent = parentOf.get(item.domain);
+    if (!parent) {
+      const existing = groupMap.get(item.domain);
+      if (existing) {
+        existing.root = item;
+      } else {
+        groupMap.set(item.domain, { rootDomain: item.domain, root: item, children: [] });
+      }
+    } else {
+      // Walk up to the true root (top-most ancestor that has no parent)
+      let rootKey = parent;
+      while (parentOf.has(rootKey)) rootKey = parentOf.get(rootKey)!;
+      if (!groupMap.has(rootKey)) {
+        groupMap.set(rootKey, { rootDomain: rootKey, root: null, children: [] });
+      }
+      groupMap.get(rootKey)!.children.push(item);
+    }
+  }
+
+  return Array.from(groupMap.values())
+    .sort((a, b) => a.rootDomain.localeCompare(b.rootDomain))
+    .map((g) => ({ ...g, children: [...g.children].sort((a, b) => a.domain.localeCompare(b.domain)) }));
+}
+
+/* ── Skeleton rows for loading state ── */
+function TableSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <tr key={i} className="border-t border-white/[0.04]">
+          <td className="px-4 py-3"><div className="h-4 w-40 animate-pulse rounded bg-white/[0.06]" /></td>
+          <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-white/[0.06]" /></td>
+          <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-8 animate-pulse rounded bg-white/[0.06]" /></td>
+          <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" /></td>
+          <td className="px-4 py-3 hidden xl:table-cell"><div className="h-4 w-12 animate-pulse rounded bg-white/[0.06]" /></td>
+          <td className="px-4 py-3"><div className="h-4 w-6 animate-pulse rounded bg-white/[0.06]" /></td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+/* ── Domain table row ── */
+function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDomain?: string }) {
+  const { status, label } = getDomainStatus(item);
+  const activeConns = item.connections.filter((c) => c.status === 'active').length;
+  const isChild = !!parentDomain;
+  const subPrefix =
+    isChild && item.domain.endsWith('.' + parentDomain)
+      ? item.domain.slice(0, item.domain.length - parentDomain.length - 1)
+      : null;
+
+  return (
+    <tr className={`group border-t border-white/[0.04] transition-colors hover:bg-white/[0.02]${isChild ? ' bg-white/[0.005]' : ''}`}>
+      {/* Domain */}
+      <td className="px-4 py-3">
+        <div className={`flex items-center gap-2 min-w-0${isChild ? ' pl-5' : ''}`}>
+          {isChild && (
+            <span className="shrink-0 text-white/20 text-xs select-none leading-none">└</span>
+          )}
+          <Link
+            href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}
+            className="text-sm font-medium font-mono text-white hover:text-cyan-300 transition-colors truncate"
+          >
+            {subPrefix ? (
+              <>
+                <span>{subPrefix}</span>
+                <span className="text-white/35">.{parentDomain}</span>
+              </>
+            ) : (
+              item.domain
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); copyDomain(item.domain); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-white/30 hover:text-white/60"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
+        </div>
+        {item.purchase?.status === 'completed' && (() => {
+          const withinIcannWindow = item.purchase.created_at
+            ? Date.now() - new Date(item.purchase.created_at).getTime() < 15 * 24 * 60 * 60 * 1000
+            : false;
+          const isSandboxSentinel = item.purchase.registrant_email?.endsWith('@not-found.invalid');
+          const displayEmail = isSandboxSentinel ? null : item.purchase.registrant_email;
+          if (!displayEmail && !withinIcannWindow) return null;
+          return (
+            <div className="mt-1 flex items-center gap-1.5 pl-0">
+              <Mail className="h-2.5 w-2.5 shrink-0 text-white/25" />
+              {displayEmail ? (
+                <span className="text-[10px] text-white/35" title="ICANN verification email sent to this address">
+                  ICANN email → <span className="font-mono text-white/50">{displayEmail}</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-400/70" title="Verification email routing pending — retries automatically">
+                  ICANN email routing pending…
+                </span>
+              )}
+            </div>
+          );
+        })()}
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-3">
+        <StatusLabel status={status} label={label} />
+      </td>
+
+      {/* Connections */}
+      <td className="px-4 py-3 hidden lg:table-cell">
+        <span className="text-xs tabular-nums text-white/60">
+          {item.connections.length > 0 ? (
+            <>
+              {activeConns}/{item.connections.length}
+            </>
+          ) : (
+            <span className="text-white/30">—</span>
+          )}
+        </span>
+      </td>
+
+      {/* Expires */}
+      <td className="px-4 py-3 hidden lg:table-cell">
+        {item.expires_at ? (
+          <span className={`text-xs tabular-nums ${isExpiringSoon(item.expires_at, 30) ? 'text-amber-300' : 'text-white/50'}`}>
+            {new Date(item.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        ) : (
+          <span className="text-xs text-white/25">—</span>
+        )}
+      </td>
+
+      {/* Auto-renew */}
+      <td className="px-4 py-3 hidden xl:table-cell">
+        {item.auto_renew !== null ? (
+          <span className={`text-xs ${item.auto_renew ? 'text-emerald-400' : 'text-white/35'}`}>
+            {item.auto_renew ? 'On' : 'Off'}
+          </span>
+        ) : (
+          <span className="text-xs text-white/25">—</span>
+        )}
+      </td>
+
+      {/* Actions */}
+      <td className="px-4 py-3">
+        <Link href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-white/40 hover:text-white hover:bg-white/[0.06]"
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
+      </td>
+    </tr>
+  );
+}
+
+/* ── Empty state ── */
+function EmptyState({ message, isFiltered }: { message: string; isFiltered?: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] mb-4">
+        <Globe className="h-5 w-5 text-white/30" />
+      </div>
+      <p className="text-sm font-medium text-white/60 mb-1">{message}</p>
+      {!isFiltered && (
+        <p className="text-xs text-white/35 max-w-sm">
+          Register a new domain or connect one you already own.
+        </p>
+      )}
+      {!isFiltered && (
+        <Link href="/dashboard/domains/marketplace" className="mt-4">
+          <Button size="sm" className="bg-white/[0.08] text-white/80 hover:bg-white/[0.12] border border-white/[0.08]">
+            Search Domains
+          </Button>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/* ── Main page ── */
 export default function DomainsDashboardPage() {
   const [items, setItems] = useState<DomainInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadDomains = useCallback(async () => {
     setLoading(true);
@@ -86,9 +341,9 @@ export default function DomainsDashboardPage() {
       const res = await fetch('/api/domains/inventory');
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to load domains inventory');
-      }
+        if (!res.ok) {
+          throw new Error(data?.message || data?.error || 'Failed to load domains');
+        }
 
       const domains = (data?.data?.domains || []) as DomainInventoryItem[];
       setItems(domains);
@@ -107,145 +362,198 @@ export default function DomainsDashboardPage() {
 
   const attentionItems = useMemo(() => items.filter(needsAttention), [items]);
   const expiringSoonItems = useMemo(() => items.filter((item) => isExpiringSoon(item.expires_at, 30)), [items]);
+  const activeCount = useMemo(() => items.filter((item) => item.connections.some((c) => c.status === 'active')).length, [items]);
 
-  const renderDomainTable = (rows: DomainInventoryItem[], emptyMessage: string) => {
-    if (rows.length === 0) {
-      return (
-        <div className="rounded-lg border border-dashed border-white/15 p-5 text-sm text-white/55">
-          {emptyMessage}
-        </div>
-      );
-    }
+  // Filter items by search
+  const filterBySearch = useCallback((list: DomainInventoryItem[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter((item) => item.domain.toLowerCase().includes(q));
+  }, [searchQuery]);
+
+  const renderTable = (rows: DomainInventoryItem[], emptyMessage: string) => {
+    const filtered = filterBySearch(rows);
 
     return (
-      <div className="space-y-2">
-        {rows.map((item) => (
-          <div key={item.domain} className="rounded-lg border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white">{item.domain}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/60">
-                  <span>Connected apps: {item.connections.length}</span>
-                  <span>Source: {item.source}</span>
-                  {item.purchase?.status && <span>Purchase: {item.purchase.status}</span>}
-                  {item.expires_at && <span>Expires: {new Date(item.expires_at).toLocaleDateString()}</span>}
-                  {item.auto_renew !== null && <span>Auto-renew: {item.auto_renew ? 'On' : 'Off'}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {getDomainBadge(item)}
-                <Link href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}>
-                  <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                    View Details
-                    <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-white/35">
+              <th className="px-4 py-3">Domain</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 hidden lg:table-cell">Connections</th>
+              <th className="px-4 py-3 hidden lg:table-cell">Expires</th>
+              <th className="px-4 py-3 hidden xl:table-cell">Auto-renew</th>
+              <th className="px-4 py-3 w-12" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableSkeleton />
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6}>
+                  <EmptyState
+                    message={searchQuery ? 'No domains match your search' : emptyMessage}
+                    isFiltered={!!searchQuery}
+                  />
+                </td>
+              </tr>
+            ) : (
+              groupDomains(filtered).map((group) => (
+                <Fragment key={group.rootDomain}>
+                  {group.root ? (
+                    <DomainRow item={group.root} />
+                  ) : (
+                    <tr className="border-t border-white/[0.04]">
+                      <td className="px-4 py-2.5">
+                        <span className="text-[11px] font-mono text-white/30 uppercase tracking-wider">{group.rootDomain}</span>
+                      </td>
+                      <td colSpan={5} />
+                    </tr>
+                  )}
+                  {group.children.map((child) => (
+                    <DomainRow key={child.domain} item={child} parentDomain={group.rootDomain} />
+                  ))}
+                </Fragment>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     );
   };
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">Domains Dashboard</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Manage your domains</h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/65">
-            Global control center for purchased and external domains, connection status, and routing actions.
+          <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Domains</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Manage purchased and connected domains across your account.
           </p>
         </div>
-
-        <Link href="/dashboard/domains/marketplace">
-          <Button className="bg-blue-500 hover:bg-blue-400 text-white">
-            <Search className="h-4 w-4 mr-2" />
-            Open Marketplace
-          </Button>
-        </Link>
-      </div>
-
-      {error && (
-        <Card className="mb-4 border-red-500/30 bg-red-500/10">
-          <CardContent className="py-4 text-sm text-red-100 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            {error}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="glass-panel border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">Domain Control Center</CardTitle>
-            <CardDescription className="text-white/55">
-              Separate management from buying. Purchase happens in Marketplace; control happens here.
-            </CardDescription>
-          </div>
+        <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="border-white/20 text-white hover:bg-white/10"
+            className="text-white/50 hover:text-white hover:bg-white/[0.06]"
             onClick={() => void loadDomains()}
             disabled={loading}
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-white/60">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading domains...
-            </div>
-          ) : (
-            <Tabs defaultValue="all" className="space-y-4">
-              <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-                <TabsTrigger value="all" className="data-[state=active]:bg-white/10">All Domains ({items.length})</TabsTrigger>
-                <TabsTrigger value="attention" className="data-[state=active]:bg-white/10">Needs Attention ({attentionItems.length})</TabsTrigger>
-                <TabsTrigger value="expiring" className="data-[state=active]:bg-white/10">Expiring Soon ({expiringSoonItems.length})</TabsTrigger>
-              </TabsList>
+          <Link href="/dashboard/domains/marketplace">
+            <Button size="sm" className="bg-white text-black hover:bg-white/90 font-medium">
+              Register Domain
+            </Button>
+          </Link>
+        </div>
+      </div>
 
-              <TabsContent value="all">
-                {renderDomainTable(items, 'No domains yet. Buy one from Marketplace or connect an external domain.')}
-              </TabsContent>
-
-              <TabsContent value="attention">
-                {renderDomainTable(attentionItems, 'No domains need attention right now.')}
-              </TabsContent>
-
-              <TabsContent value="expiring">
-                {renderDomainTable(expiringSoonItems, 'No domains expiring in the next 30 days.')}
-              </TabsContent>
-            </Tabs>
+      {/* Stats bar */}
+      {!loading && items.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-white/40">Total</span>
+            <span className="font-semibold tabular-nums text-white">{items.length}</span>
+          </div>
+          <div className="h-4 w-px bg-white/[0.08]" />
+          <div className="flex items-center gap-2">
+            <StatusDot status="active" />
+            <span className="text-white/40">Active</span>
+            <span className="font-semibold tabular-nums text-white">{activeCount}</span>
+          </div>
+          {attentionItems.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-white/[0.08]" />
+              <div className="flex items-center gap-2">
+                <StatusDot status="attention" />
+                <span className="text-white/40">Needs Attention</span>
+                <span className="font-semibold tabular-nums text-red-300">{attentionItems.length}</span>
+              </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+          {expiringSoonItems.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-white/[0.08]" />
+              <div className="flex items-center gap-2">
+                <Clock className="h-3 w-3 text-amber-400" />
+                <span className="text-white/40">Expiring</span>
+                <span className="font-semibold tabular-nums text-amber-300">{expiringSoonItems.length}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardContent className="p-5">
-            <p className="text-sm font-semibold text-white flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" /> Marketplace (Buying)
-            </p>
-            <p className="mt-2 text-xs text-white/60">
-              Search, purchase, and track purchase requests only.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Error */}
+      {error && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
 
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardContent className="p-5">
-            <p className="text-sm font-semibold text-white flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Domains (Management)
-            </p>
-            <p className="mt-2 text-xs text-white/60">
-              Manage status, connections, and domain lifecycle after purchase.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Search + Table */}
+      <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
+        {/* Toolbar: search + tabs */}
+        <div className="border-b border-white/[0.06] px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Search */}
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter domains..."
+              className="h-8 w-full rounded-md border border-white/[0.08] bg-white/[0.03] pl-8 pr-3 text-sm text-white placeholder:text-white/30 focus:border-white/[0.15] focus:outline-none focus:ring-0"
+            />
+          </div>
+
+          {/* Tab counts */}
+          <div className="text-xs text-white/35">
+            {items.length} domain{items.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        <Tabs defaultValue="all">
+          <div className="border-b border-white/[0.06]">
+            <TabsList className="bg-transparent border-0 h-auto p-0 px-4 gap-0 rounded-none">
+              <TabsTrigger
+                value="all"
+                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-white data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
+              >
+                All{!loading && ` (${items.length})`}
+              </TabsTrigger>
+              <TabsTrigger
+                value="attention"
+                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-red-400 data-[state=active]:text-red-300 data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
+              >
+                Needs Attention{!loading && attentionItems.length > 0 && ` (${attentionItems.length})`}
+              </TabsTrigger>
+              <TabsTrigger
+                value="expiring"
+                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-amber-400 data-[state=active]:text-amber-300 data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
+              >
+                Expiring{!loading && expiringSoonItems.length > 0 && ` (${expiringSoonItems.length})`}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="all" className="mt-0">
+            {renderTable(items, 'No domains yet')}
+          </TabsContent>
+
+          <TabsContent value="attention" className="mt-0">
+            {renderTable(attentionItems, 'No domains need attention')}
+          </TabsContent>
+
+          <TabsContent value="expiring" className="mt-0">
+            {renderTable(expiringSoonItems, 'No domains expiring in the next 30 days')}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

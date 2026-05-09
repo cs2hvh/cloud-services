@@ -42,8 +42,8 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
         owner_id: spectrumApp.owner_id,
       });
 
-      if (response.data.local) {
-        setSpectrumApp(response.data.local);
+      if (response?.data?.local) {
+        setSpectrumApp(response?.data?.local ?? null);
       }
     } catch (error: unknown) {
       console.error("Failed to refresh app data:", error);

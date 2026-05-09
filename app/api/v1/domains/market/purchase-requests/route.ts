@@ -1,4 +1,5 @@
 import { withV1Auth, v1Error, v1Ok, v1ValidationError } from "@/lib/api/v1-middleware";
+import { resolveAuthEmail } from "@/lib/api-auth";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { serializeDomainPurchaseRequest } from "@/lib/domain-service/http/serializers";
 
 export const GET = withV1Auth("domains:market:purchase-requests:list", async (req, auth) => {
   try {
@@ -30,14 +32,14 @@ export const GET = withV1Auth("domains:market:purchase-requests:list", async (re
       actor: createDomainActor({
         req,
         userId: auth.userId,
-        userEmail: auth.kind === "session" ? auth.email : undefined,
+        userEmail: await resolveAuthEmail(auth),
       }),
       appId: validation.data.app_id,
       limit: validation.data.limit,
     });
 
     return v1Ok({
-      data: requests,
+      data: requests.map(serializeDomainPurchaseRequest),
       meta: { total: requests.length },
     });
   } catch (error) {
@@ -62,7 +64,7 @@ export const POST = withV1Auth("domains:market:purchase-requests:create", async 
       actor: createDomainActor({
         req,
         userId: auth.userId,
-        userEmail: auth.kind === "session" ? auth.email : undefined,
+        userEmail: await resolveAuthEmail(auth),
       }),
       appId: validation.data.app_id,
       domain: validation.data.domain,
@@ -72,7 +74,7 @@ export const POST = withV1Auth("domains:market:purchase-requests:create", async 
       },
     });
 
-    return v1Ok({ data: request }, 201);
+    return v1Ok({ data: serializeDomainPurchaseRequest(request) }, 201);
   } catch (error) {
     return toV1DomainErrorResponse(error);
   }

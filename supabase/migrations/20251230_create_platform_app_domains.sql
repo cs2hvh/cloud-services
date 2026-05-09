@@ -7,13 +7,11 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
-
 DO $$ BEGIN
     CREATE TYPE ssl_status AS ENUM ('pending', 'issuing', 'active', 'failed');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
-
 -- Create platform_app_domains table
 CREATE TABLE IF NOT EXISTS platform_app_domains (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -50,29 +48,21 @@ CREATE TABLE IF NOT EXISTS platform_app_domains (
     -- Constraints
     UNIQUE(domain) -- Only one record per domain (excluding removed)
 );
-
 -- Add has_custom_domains flag to platform_apps
 ALTER TABLE platform_apps ADD COLUMN IF NOT EXISTS has_custom_domains BOOLEAN DEFAULT FALSE;
-
 -- Add custom_domain column for primary custom domain reference
 ALTER TABLE platform_apps ADD COLUMN IF NOT EXISTS custom_domain TEXT;
-
 -- Enable RLS
 ALTER TABLE platform_app_domains ENABLE ROW LEVEL SECURITY;
-
 -- RLS Policies for platform_app_domains
 CREATE POLICY "Users can view their own domains" ON platform_app_domains
     FOR SELECT USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create domains" ON platform_app_domains
     FOR INSERT WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update their own domains" ON platform_app_domains
     FOR UPDATE USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete their own domains" ON platform_app_domains
     FOR DELETE USING (auth.uid() = user_id);
-
 -- Admin policies (assuming admins can see all)
 CREATE POLICY "Admins can view all domains" ON platform_app_domains
     FOR SELECT USING (
@@ -82,13 +72,11 @@ CREATE POLICY "Admins can view all domains" ON platform_app_domains
             AND 'admin' = ANY(roles)
         )
     );
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_platform_app_domains_app ON platform_app_domains(app_id);
 CREATE INDEX IF NOT EXISTS idx_platform_app_domains_user ON platform_app_domains(user_id);
 CREATE INDEX IF NOT EXISTS idx_platform_app_domains_domain ON platform_app_domains(domain);
 CREATE INDEX IF NOT EXISTS idx_platform_app_domains_status ON platform_app_domains(status);
-
 -- Trigger for updated_at
 CREATE OR REPLACE FUNCTION update_platform_app_domains_updated_at()
 RETURNS TRIGGER AS $$
@@ -97,13 +85,11 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
-
 DROP TRIGGER IF EXISTS update_platform_app_domains_updated_at ON platform_app_domains;
 CREATE TRIGGER update_platform_app_domains_updated_at
     BEFORE UPDATE ON platform_app_domains
     FOR EACH ROW
     EXECUTE FUNCTION update_platform_app_domains_updated_at();
-
 -- Function to ensure only one primary domain per app
 CREATE OR REPLACE FUNCTION ensure_single_primary_domain()
 RETURNS TRIGGER AS $$
@@ -116,7 +102,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS ensure_single_primary_domain_trigger ON platform_app_domains;
 CREATE TRIGGER ensure_single_primary_domain_trigger
     BEFORE INSERT OR UPDATE OF is_primary ON platform_app_domains

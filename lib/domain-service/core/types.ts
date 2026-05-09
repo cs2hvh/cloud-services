@@ -8,6 +8,14 @@ export type DomainPurchaseRequestStatus =
   | "failed"
   | "cancelled";
 
+export type DomainTransferRequestStatus =
+  | "initiated"
+  | "pending"
+  | "approved"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
 export interface DomainRecord {
   id: string;
   app_id: string;
@@ -59,6 +67,30 @@ export interface DomainPurchaseRequest {
   idempotency_key: string | null;
   provider_request_id: string | null;
   last_error: string | null;
+  registrant_email: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DomainTransferRequest {
+  id: string;
+  user_id: string;
+  domain: string;
+  status: DomainTransferRequestStatus;
+  auth_code_hash: string | null;
+  purchase_price: number | null;
+  renewal_price: number | null;
+  currency: string;
+  provider: string;
+  provider_order_id: string | null;
+  provider_status: string | null;
+  provider_email: string | null;
+  idempotency_key: string | null;
+  last_error: string | null;
+  failure_reason: string | null;
+  last_polled_at: string | null;
+  poll_count: number;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;

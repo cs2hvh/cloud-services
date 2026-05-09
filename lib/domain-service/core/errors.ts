@@ -6,6 +6,7 @@ export const DOMAIN_ERROR_CODES = {
   DOMAIN_NOT_AVAILABLE: "DOMAIN_NOT_AVAILABLE",
   DOMAIN_INVALID: "DOMAIN_INVALID",
   APP_NOT_FOUND: "APP_NOT_FOUND",
+  APP_NOT_RUNNING: "APP_NOT_RUNNING",
   FORBIDDEN: "FORBIDDEN",
   OPERATION_NOT_FOUND: "OPERATION_NOT_FOUND",
   PURCHASE_REQUEST_NOT_FOUND: "PURCHASE_REQUEST_NOT_FOUND",
@@ -19,6 +20,11 @@ export const DOMAIN_ERROR_CODES = {
   INGRESS_APPLY_FAILED: "INGRESS_APPLY_FAILED",
   INTEGRATION_CONFIG_ERROR: "INTEGRATION_CONFIG_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  TRANSFER_NOT_FOUND: "TRANSFER_NOT_FOUND",
+  TRANSFER_NOT_ELIGIBLE: "TRANSFER_NOT_ELIGIBLE",
+  TRANSFER_ALREADY_IN_PROGRESS: "TRANSFER_ALREADY_IN_PROGRESS",
+  TRANSFER_AUTH_CODE_INVALID: "TRANSFER_AUTH_CODE_INVALID",
+  TRANSFER_DOMAIN_LOCKED: "TRANSFER_DOMAIN_LOCKED",
 } as const;
 
 export type DomainErrorCode = typeof DOMAIN_ERROR_CODES[keyof typeof DOMAIN_ERROR_CODES];
@@ -65,6 +71,7 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
     case DOMAIN_ERROR_CODES.OPERATION_NOT_FOUND:
     case DOMAIN_ERROR_CODES.PURCHASE_REQUEST_NOT_FOUND:
     case DOMAIN_ERROR_CODES.APP_NOT_FOUND:
+    case DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND:
       return { status: 404, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.FORBIDDEN:
       return { status: 403, code: error.code, message: error.message, details: error.details };
@@ -72,10 +79,15 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
     case DOMAIN_ERROR_CODES.DOMAIN_NOT_VERIFIED:
     case DOMAIN_ERROR_CODES.DOMAIN_NOT_ACTIVE:
     case DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED:
+    case DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE:
+    case DOMAIN_ERROR_CODES.TRANSFER_AUTH_CODE_INVALID:
+    case DOMAIN_ERROR_CODES.TRANSFER_DOMAIN_LOCKED:
       return { status: 400, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE:
     case DOMAIN_ERROR_CODES.DOMAIN_NOT_AVAILABLE:
+    case DOMAIN_ERROR_CODES.APP_NOT_RUNNING:
     case DOMAIN_ERROR_CODES.OPERATION_IN_PROGRESS:
+    case DOMAIN_ERROR_CODES.TRANSFER_ALREADY_IN_PROGRESS:
       return { status: 409, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.PROVIDER_UNAUTHORIZED:
       return { status: 502, code: error.code, message: error.message, details: error.details };
@@ -85,8 +97,9 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
     case DOMAIN_ERROR_CODES.PROVIDER_RATE_LIMITED:
       return { status: 429, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED:
-    case DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED:
       return { status: 502, code: error.code, message: error.message, details: error.details };
+    case DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED:
+      return { status: 500, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR:
     case DOMAIN_ERROR_CODES.INTERNAL_ERROR:
     default:

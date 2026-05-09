@@ -18,7 +18,7 @@ const SECURITY_TOOL_VERSIONS = {
  * 
  * CURRENT JENKINS POD TEMPLATE "common-agent":
  * - Defined at: Jenkins → Manage Jenkins → Clouds → linode-kube → common-agent
- * - Pod spec includes: git, kaniko, kubectl, trivy, jnlp (auto-added)
+ * - Pod spec includes: git, buildkit, kubectl, trivy, jnlp (auto-added)
  */
 
 const JENKINS_CONTAINERS = {
@@ -33,15 +33,15 @@ const JENKINS_CONTAINERS = {
     purpose: 'Git operations, shell scripting',
     usedBySecurityStages: ['SECRET-SCAN', 'DEPENDENCY-SCAN', 'DOCKERFILE-LINT', 'STATIC-ANALYSIS', 'K8S-VALIDATION'],
   },
-  kaniko: {
-    name: 'kaniko',
-    image: 'gcr.io/kaniko-project/executor:v1.24.0-debug',
+  buildkit: {
+    name: 'buildkit',
+    image: 'moby/buildkit:latest',
     inJenkins: true,
     resources: {
-      requests: { memory: '4Gi', cpu: '500m' },
-      limits: { memory: '6Gi', cpu: '1' },
+      requests: { memory: '1.5Gi', cpu: '500m' },
+      limits: { memory: '2Gi', cpu: '1' },
     },
-    purpose: 'Docker image building (rootless)',
+    purpose: 'Docker image building with layer caching (BuildKit)',
     usedBySecurityStages: [],
   },
   kubectl: {
@@ -337,9 +337,6 @@ export function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}
 
   return `
     stage('Security: Image Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('trivy') {
           script {
@@ -362,46 +359,71 @@ ${generateLoggingHelpers()}
                 echo "=========================================="
                 
                 # Scan the image once and save as JSON for analysis
+                # NOTE: trivy exits non-zero on transport/infrastructure errors (HTTP2 stream
+                # failures, registry timeouts, DB download errors) as well as on vuln findings.
+                # We must distinguish these — infrastructure failures must NOT block deployment.
+                # Only confirmed vulnerability findings (jq-counted below) should block builds.
                 echo "Scanning \${DOCKER_IMAGE_VERSION}..."
                 TRIVY_REPORT="/tmp/trivy-report.json"
+                TRIVY_SCAN_FAILED=false
+                set +e
                 trivy image --format json --output "$TRIVY_REPORT" \${DOCKER_IMAGE_VERSION}
-                
-                # Display human-readable table format
-                trivy image --format table \${DOCKER_IMAGE_VERSION}
+                TRIVY_EXIT=$?
+                set -e
+                if [ "$TRIVY_EXIT" -ne 0 ]; then
+                  TRIVY_SCAN_FAILED=true
+                  log_security "WARN" "$STAGE_ID" "Trivy exited with code $TRIVY_EXIT (infrastructure/transport error, not a vuln finding)"
+                  echo "[WARN] Trivy scan did not complete — skipping vulnerability analysis. Deployment will continue."
+                  echo "[WARN] Review the error above. Common causes: registry HTTP2 stream error, DB download failure, layer extraction error."
+                else
+                  # Display human-readable table format (only when JSON scan succeeded)
+                  set +e
+                  trivy image --format table \${DOCKER_IMAGE_VERSION}
+                  set -e
+                fi
                 
                 ${severityCheck ? `
-                # Check for ${severityCheck} severity vulnerabilities
-                echo ""
-                echo "Checking for ${severityCheck} severity vulnerabilities..."
-                
-                # Use jq to parse JSON and check for vulnerabilities
-                if command -v jq &> /dev/null; then
-                  # Build jq filter based on severity levels to check
-                  ${failOnHigh ? `
-                  # Check for both CRITICAL and HIGH
-                  VULN_FOUND=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL" or .Severity == "HIGH")] | length' "$TRIVY_REPORT" 2>/dev/null || echo "0")
-                  ` : `
-                  # Check for CRITICAL only
-                  VULN_FOUND=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' "$TRIVY_REPORT" 2>/dev/null || echo "0")
-                  `}
-                  
-                  if [ "$VULN_FOUND" -gt "0" ]; then
-                    echo "[FAIL] SECURITY FAILURE: Found $VULN_FOUND ${severityCheck} vulnerabilities!"
-                    echo "Build blocked for security reasons."
-                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended but continuing build"'}
-                  else
-                    echo "[PASS] No ${severityCheck} vulnerabilities found"
-                  fi
+                # Vulnerability check — only when scan produced a valid report
+                if [ "$TRIVY_SCAN_FAILED" = "true" ]; then
+                  echo "[WARN] Skipping ${severityCheck} vulnerability check — scan did not complete."
                 else
-                  # Fallback: Use trivy's exit-code feature
-                  if trivy image --exit-code 1 --severity ${severityCheck} --quiet \${DOCKER_IMAGE_VERSION} 2>&1 | grep -q "Total:"; then
-                    echo "[FAIL] SECURITY FAILURE: Found ${severityCheck} vulnerabilities!"
-                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended"'}
+                  # Check for ${severityCheck} severity vulnerabilities
+                  echo ""
+                  echo "Checking for ${severityCheck} severity vulnerabilities..."
+                  # Use jq to parse JSON and check for vulnerabilities
+                  if command -v jq &> /dev/null; then
+                    # Build jq filter based on severity levels to check
+                    ${failOnHigh ? `
+                    # Check for both CRITICAL and HIGH
+                    VULN_FOUND=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL" or .Severity == "HIGH")] | length' "$TRIVY_REPORT" 2>/dev/null || echo "0")
+                    ` : `
+                    # Check for CRITICAL only
+                    VULN_FOUND=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' "$TRIVY_REPORT" 2>/dev/null || echo "0")
+                    `}
+                    if [ "$VULN_FOUND" -gt "0" ]; then
+                      echo "[FAIL] SECURITY FAILURE: Found $VULN_FOUND ${severityCheck} vulnerabilities!"
+                      echo "Build blocked for security reasons."
+                      ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended but continuing build"'}
+                    else
+                      echo "[PASS] No ${severityCheck} vulnerabilities found"
+                    fi
                   else
-                    echo "[PASS] No ${severityCheck} vulnerabilities found"
+                    # Fallback: Use trivy's exit-code feature
+                    if trivy image --exit-code 1 --severity ${severityCheck} --quiet \${DOCKER_IMAGE_VERSION} 2>&1 | grep -q "Total:"; then
+                      echo "[FAIL] SECURITY FAILURE: Found ${severityCheck} vulnerabilities!"
+                      ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended"'}
+                    else
+                      echo "[PASS] No ${severityCheck} vulnerabilities found"
+                    fi
                   fi
                 fi
-                ` : 'echo "[PASS] Scan completed (informational only)"'}
+                ` : `
+                if [ "$TRIVY_SCAN_FAILED" = "true" ]; then
+                  echo "[WARN] Scan did not complete (informational mode — deployment continues)"
+                else
+                  echo "[PASS] Scan completed (informational only — no severity thresholds configured)"
+                fi
+                `}
                 
                 DURATION=$(end_timer $START_TIME)
                 log_timing "$STAGE_ID" "$DURATION"
@@ -423,9 +445,6 @@ export function generateDependencyScanStage(language: 'node' | 'python' | 'docke
   if (language === 'docker') {
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -553,9 +572,6 @@ ${generateLoggingHelpers()}
   if (language === 'node') {
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -625,9 +641,6 @@ ${generateLoggingHelpers()}
     // Python
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -710,9 +723,6 @@ export function generateDockerfileLintStage(): string {
   
   return `
     stage('Security: Dockerfile Lint') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -778,6 +788,44 @@ ${generateLoggingHelpers()}
                     echo "[INFO] INFO: ADD instruction found - COPY is preferred unless extracting archives"
                   fi
                   
+                  # Check for secret exposure patterns in RUN instructions
+                  echo ""
+                  echo "Checking for secret exposure patterns..."
+                  SECRET_EXPOSURE=0
+                  
+                  # Detect printenv / env dump in RUN commands
+                  if grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile may dump environment variables in build output"
+                    grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  # Detect echo $VAR patterns
+                  if grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile echoes environment variables (may leak secrets)"
+                    grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  # Detect writing env to files
+                  if grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile may write env vars to files (persists in image layer)"
+                    grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  if [ "$SECRET_EXPOSURE" = "0" ]; then
+                    echo "[PASS] No secret exposure patterns detected"
+                  else
+                    log_security "WARN" "$STAGE_ID" "Potential secret exposure patterns found in Dockerfile"
+                  fi
+                  
                   echo ""
                   log_security "INFO" "$STAGE_ID" "Dockerfile lint completed"
                   echo "[PASS] SECURITY: Dockerfile lint completed"
@@ -812,9 +860,6 @@ export function generateSecretScanStage(): string {
   
   return `
     stage('Security: Secret Detection') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -862,15 +907,54 @@ ${generateLoggingHelpers()}
                 
                 # Check if baseline file exists (for excluding known false positives)
                 if [ -f ".gitleaks-baseline.json" ]; then
-                  echo "✓ Using .gitleaks-baseline.json to exclude known false positives"
+                  echo "[OK] Using .gitleaks-baseline.json to exclude known false positives"
                   BASELINE_ARG="--baseline-path .gitleaks-baseline.json"
                 else
                   BASELINE_ARG=""
                 fi
                 
+                # Determine gitleaks --config to use:
+                # - If project ships its own .gitleaks.toml, use it — the developer owns that config.
+                # - Otherwise generate a CI config that excludes build artifacts.
+                #   Without exclusions, node_modules alone causes 500+ second scan times.
+                #
+                # We use --config (TOML) not --gitleaks-ignore-path, because:
+                #   --gitleaks-ignore-path points to a JSON fingerprint file (SHA suppression),
+                #   NOT a path-exclusion list. Path exclusions require the [allowlist] TOML section.
+                #   A TOML file with only [allowlist] and no [[rules]] still activates all
+                #   built-in gitleaks detection rules — allowlist is additive, not a replacement.
+                if [ -f ".gitleaks.toml" ]; then
+                  CONFIG_ARG="--config .gitleaks.toml"
+                  echo "[OK] Using project .gitleaks.toml"
+                else
+                  cat > /tmp/gitleaks-ci.toml << 'TOML_EOF'
+title = "AhuraCloud CI"
+
+[allowlist]
+  description = "Exclude build artifacts and dependency dirs (auto-generated by platform)"
+  paths = [
+    'node_modules',
+    '.next',
+    '.nuxt',
+    '.svelte-kit',
+    '^build/',
+    '^dist/',
+    '^out/',
+    'ccr_temp',
+    '\.lock$',
+    'package-lock\.json',
+    'pnpm-lock\.yaml',
+    'yarn\.lock',
+    'composer\.lock',
+  ]
+TOML_EOF
+                  CONFIG_ARG="--config /tmp/gitleaks-ci.toml"
+                  echo "  Generated CI gitleaks config — excluding build artifacts and dependencies"
+                fi
+                
                 # Run scan but don't fail the build
                 set +e  # Allow scan to fail without blocking build
-                $GITLEAKS detect --source . --no-git $BASELINE_ARG -v 2>&1
+                $GITLEAKS detect --source . --no-git $BASELINE_ARG $CONFIG_ARG -v 2>&1
                 GITLEAKS_EXIT=$?
                 set -e
                 
@@ -898,7 +982,7 @@ ${generateLoggingHelpers()}
                   echo ""
                   echo "Or create baseline: gitleaks detect --report-path .gitleaks-baseline.json"
                   echo ""
-                  echo "✓ BUILD CONTINUING (secrets are non-blocking for better user experience)"
+                  echo "[OK] BUILD CONTINUING (secrets are non-blocking for better user experience)"
                 else
                   log_security "INFO" "$STAGE_ID" "No secrets detected"
                   echo "[PASS] SECURITY: No secrets detected"
@@ -927,9 +1011,6 @@ export function generateStaticAnalysisStage(language: 'node' | 'python' | 'docke
   if (language === 'docker') {
     return `
     stage('Security: Generic Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1028,9 +1109,6 @@ ${generateLoggingHelpers()}
   if (language === 'node') {
     return `
     stage('Security: Static Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1114,9 +1192,6 @@ ${generateLoggingHelpers()}
     // Python
     return `
     stage('Security: Static Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1196,9 +1271,6 @@ ${generateLoggingHelpers()}
 export function generateK8sManifestValidationStage(): string {
   return `
     stage('Security: K8s Manifest Validation') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {

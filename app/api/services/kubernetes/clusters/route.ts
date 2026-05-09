@@ -3,13 +3,11 @@ import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Billing } from "@/lib/supabase/queries/billing";
 import { Projects } from "@/lib/supabase/queries/projects";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { NotificationService } from "@/lib/notifications";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 
@@ -53,7 +51,8 @@ const Payload = z.object({
   ips: z.array(z.string().regex(ipRegex, "Invalid IPv4 address")),
   ownerId: z.string(),
   projectId: z.string(),
-  planId:z.string().uuid()
+  planId:z.string().uuid(),
+  clusterId: z.string().uuid().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -94,19 +93,22 @@ export async function POST(req: NextRequest) {
       //console.log(decryptedPassword,".........................60");
   }
 
-  const clusterId = crypto.randomUUID();
+  const clusterId = parsed.data.clusterId ?? crypto.randomUUID();
   // Derive role server-side to avoid trusting client-provided role
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
-  // Billing: dynamic from admin pricing (existing cluster import uses default plan)
-  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(parsed.data.planId);
+  const totalNodes = Math.max(parsed.data.nodes.length, 1);
 
-  // Check balance BEFORE provisioning
-  const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);
-  if (!balCheck.ok) {
-    return NextResponse.json({ error: "Insufficient credits", balance: balCheck.balance, required: INITIAL_COST }, { status: 402 });
-  }
+  // Billing: dynamic from admin pricing and scaled by total nodes (workers + control plane)
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(
+    parsed.data.planId,
+    totalNodes
+  );
+
+  // Billing starts when the cluster transitions to ready.
+  // Here we only need the owner id for audit/notification.
+  const billingUserId = parsed.data.ownerId;
 
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data, decryptedPassword, role: derivedRole });
 
@@ -120,23 +122,10 @@ export async function POST(req: NextRequest) {
     console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
   }
 
-  // Deduct upfront and register active_kubernetes after provisioning
-  try {
-    await postProvisionBilling({
-      userId: parsed.data.ownerId,
-      initialCost: INITIAL_COST,
-      hourlyRate: HOURLY_RATE,
-      serviceId: clusterId,
-      addActive: Billing.add_active_kubernetes,
-    });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: "Post-provision billing failed", details: e instanceof Error ? e.message : String(e) }, { status: 500 });
-  }
-
   // Create audit log
   const auditContext = getAuditContext(req);
   await AuditLogService.create({
-    user_id: parsed.data.ownerId,
+    user_id: billingUserId,
     user_role: derivedRole,
     user_email: auth.user?.email,
     action: 'create',
@@ -161,20 +150,24 @@ export async function POST(req: NextRequest) {
       job_id: job.id,
       initial_cost: INITIAL_COST,
       hourly_rate: HOURLY_RATE,
+      node_count: totalNodes,
     },
   });
 
-  // Create notification
-  await NotificationService.create(
-    createServiceNotification({
-      userId: parsed.data.ownerId,
-      type: 'success',
-      action: 'created',
-      serviceType: 'kubernetes',
-      serviceName: parsed.data.cluster.name,
-      serviceId: clusterId,
-    })
-  );
+  // Notify creation start only when this endpoint is used as the initial create step.
+  // In init -> cluster flow, init already sends the "creation started" notification.
+  if (!parsed.data.clusterId) {
+    await NotificationService.create({
+      user_id: billingUserId,
+      type: "info",
+      title: "Kubernetes Cluster Creation",
+      message: `Kubernetes Cluster Creation started.`,
+      service_type: "kubernetes",
+      service_id: clusterId,
+      action: "created",
+      metadata: { serviceName: parsed.data.cluster.name },
+    });
+  }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

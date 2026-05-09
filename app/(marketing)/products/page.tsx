@@ -73,7 +73,7 @@ export default function ProductsPage() {
               <Link
                 key={product.href}
                 href={product.href}
-                className="group block border border-[#737373] bg-white/[0.02] p-6 hover:bg-white/[0.04] hover:border-white/20 transition-all duration-200"
+                className="group block border border-[#737373] bg-white/[0.02] p-6 hover:bg-white/[0.04] hover:border-white/20 transition-all duration-200 cursor-pointer"
               >
                 <h3 className="text-xl font-semibold text-white mb-3 group-hover:text-[#0095FF] transition-colors duration-200">
                   {product.title}

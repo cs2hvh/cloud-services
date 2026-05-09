@@ -6,7 +6,6 @@ import {
   AddDomainRequestSchema,
   AddDomainResponseSchema,
   DomainListQuerySchema,
-  DomainMarketplaceProvidersResponseSchema,
   DomainMarketplacePurchaseRequestListResponseSchema,
   DomainMarketplacePurchaseRequestResponseSchema,
   DomainMarketplacePurchaseRequestSchema,
@@ -55,7 +54,8 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
     method: "get",
     path: "/api/v1/domains",
     tags: ["Domains"],
-    summary: "List domains by app",
+    summary: "List domains",
+    description: "List all domains owned by the authenticated user. Optionally filter by app using the `app_id` query parameter.",
     security: [{ bearerAuth: [] }],
     request: {
       query: DomainListQuerySchema,
@@ -304,39 +304,6 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       502: {
         description: "Registrar upstream error",
-        content: { "application/json": { schema: ErrorResponseSchema } },
-      },
-    },
-  });
-
-  registry.registerPath({
-    method: "get",
-    path: "/api/v1/domains/market/providers",
-    tags: ["Domain Marketplace"],
-    summary: "Get domain marketplace provider metadata",
-    description: "Legacy compatibility endpoint that mirrors marketplace summary data.",
-    deprecated: true,
-    security: [{ bearerAuth: [] }],
-    responses: {
-      200: {
-        description: "Provider metadata",
-        content: { "application/json": { schema: DomainMarketplaceProvidersResponseSchema } },
-      },
-      401: {
-        description: "Unauthorized",
-        content: { "application/json": { schema: ErrorResponseSchema } },
-      },
-      429: {
-        description: "Too many requests",
-        content: {
-          "application/json": {
-            schema: ErrorResponseSchema,
-            example: V1RateLimitErrorExample,
-          },
-        },
-      },
-      500: {
-        description: "Internal error",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
     },
@@ -620,6 +587,114 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       502: {
         description: "Registrar or billing upstream error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  // Registrar settings schema (shared between GET and PATCH responses)
+  const DomainRegistrarSettingsSchema = z
+    .object({
+      domain: z.string().openapi({ example: "example.com" }),
+      managed: z.boolean().openapi({ description: "True if this domain is registered on the platform Name.com account." }),
+      zone: z.string().optional().openapi({ example: "example.com" }),
+      autorenew_enabled: z.boolean().nullable().openapi({ description: "Whether Name.com will auto-renew the domain before expiry. null if not a managed domain." }),
+      locked: z.boolean().nullable().openapi({ description: "Whether the domain is transfer-locked at the registrar." }),
+      privacy_enabled: z.boolean().nullable().openapi({ description: "Whether WHOIS privacy protection is active." }),
+      expires_at: z.string().nullable().openapi({ example: "2027-04-21T00:00:00Z" }),
+    })
+    .openapi("DomainRegistrarSettings");
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/domains/{id}/registrar",
+    tags: ["Domains"],
+    summary: "Get registrar settings",
+    description:
+      "Returns live registrar settings for a domain including auto-renew status and expiry date. " +
+      "Only applicable to domains purchased through the platform (Name.com-managed). " +
+      "Returns `managed: false` for externally connected domains.",
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+    },
+    responses: {
+      200: {
+        description: "Registrar settings",
+        content: {
+          "application/json": {
+            schema: z.object({ data: DomainRegistrarSettingsSchema }),
+          },
+        },
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "Domain not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/domains/{id}/registrar",
+    tags: ["Domains"],
+    summary: "Update registrar settings",
+    description:
+      "Toggle auto-renew, transfer lock, or WHOIS privacy for a platform-managed domain. " +
+      "Name.com handles the actual renewal — no cron job is required. " +
+      "At least one field must be provided.",
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z
+              .object({
+                autorenew_enabled: z.boolean().optional().openapi({ description: "Enable or disable auto-renew at the registrar." }),
+                locked: z.boolean().optional().openapi({ description: "Enable or disable transfer lock." }),
+                privacy_enabled: z.boolean().optional().openapi({ description: "Enable or disable WHOIS privacy." }),
+              })
+              .openapi("UpdateRegistrarSettingsRequest"),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Updated registrar settings",
+        content: {
+          "application/json": {
+            schema: z.object({ data: DomainRegistrarSettingsSchema }),
+          },
+        },
+      },
+      400: {
+        description: "Validation error or domain not managed by platform registrar",
+        content: {
+          "application/json": {
+            schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          },
+        },
+      },
+      401: {
+        description: "Unauthorized",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "Domain not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      500: {
+        description: "Internal error",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
     },

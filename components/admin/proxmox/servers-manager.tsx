@@ -125,6 +125,7 @@ export function ServersManager() {
                   <th className="py-3 pr-4">Node</th>
                   <th className="py-3 pr-4">Specs</th>
                   <th className="py-3 pr-4">OS</th>
+                  <th className="py-3 pr-4">Access</th>
                   <th className="py-3 pr-4">Owner</th>
                   <th className="py-3 pr-4">Status</th>
                   <th className="py-3 pr-4">Actions</th>
@@ -141,6 +142,12 @@ export function ServersManager() {
                       {server.cpu_cores}c • {Math.round(server.memory_mb / 1024)}GB • {server.disk_gb}GB
                     </td>
                     <td className="py-3 pr-4 text-white/80">{server.os}</td>
+                    <td className="py-3 pr-4 text-white/80 text-xs">
+                      {(server.os || '').toLowerCase().includes('windows')
+                        ? <span className="text-blue-400">RDP :3389</span>
+                        : <span className="text-green-400">SSH :22</span>
+                      }
+                    </td>
                     <td className="py-3 pr-4 text-white/80 text-xs">{server.owner_email || 'N/A'}</td>
                     <td className="py-3 pr-4">
                       <span className={`text-xs px-2 py-1 rounded ${

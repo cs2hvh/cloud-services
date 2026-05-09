@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { authenticateUser } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
+import { APP_DOMAIN } from '@/config/domain';
 import { NameComRegistrarAdapter } from '@/lib/domain-service/integrations/namecom-registrar.adapter';
 import { PlatformAppService } from '@/lib/services/platform-app-service';
 import { createServiceClient } from '@/lib/supabase/server';
@@ -10,17 +11,22 @@ type AppListItem = {
   id: string;
   name: string;
   status: string;
+  slug: string;
 };
 
 type DomainConnection = {
   id: string;
   app_id: string;
   app_name: string;
+  app_slug: string;
   app_status: string;
   domain: string;
   status: 'pending' | 'verified' | 'active' | 'failed' | 'removed';
   ssl_status: 'pending' | 'issuing' | 'active' | 'failed';
   is_primary: boolean;
+  verification_token: string;
+  routing_target: string;
+  routing_ips: string[];
   last_error: string | null;
   created_at: string;
 };
@@ -31,6 +37,7 @@ type DomainPurchase = {
   status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
   last_error: string | null;
+  registrant_email: string | null;
 };
 
 type DomainInventoryItem = {
@@ -44,6 +51,13 @@ type DomainInventoryItem = {
 
 function normalizeDomain(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
+}
+
+function parseRoutingIps(): string[] {
+  return (process.env.KUBE_IP || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 async function loadNameComDomainMeta(): Promise<Map<string, { expires_at: string | null; auto_renew: boolean | null }>> {
@@ -86,6 +100,24 @@ async function loadNameComDomainMeta(): Promise<Map<string, { expires_at: string
   return meta;
 }
 
+/**
+ * For a given FQDN, return the registrar metadata from nameComMeta.
+ * Checks the domain itself first, then walks up parent zones.
+ * This means blog.sabpatahai.guru inherits sabpatahai.guru's expiry/auto_renew.
+ */
+function resolveProviderMeta(
+  domain: string,
+  nameComMeta: Map<string, { expires_at: string | null; auto_renew: boolean | null }>
+): { expires_at: string | null; auto_renew: boolean | null } {
+  const parts = domain.split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const candidate = parts.slice(i).join('.');
+    const meta = nameComMeta.get(candidate);
+    if (meta) return meta;
+  }
+  return { expires_at: null, auto_renew: null };
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -124,6 +156,7 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const domainFilter = url.searchParams.get('domain')?.trim().toLowerCase() || null;
+    const routingIps = parseRoutingIps();
 
     const [appsRaw, nameComMeta, supabase] = await Promise.all([
       PlatformAppService.listApps({ userId: auth.user.id, includeRollbackInfo: false }),
@@ -134,11 +167,13 @@ export async function GET(req: NextRequest) {
     const apps = (appsRaw || []).map((app) => {
       const name = "name" in app && typeof app.name === "string" ? app.name : app.id;
       const status = "status" in app && typeof app.status === "string" ? app.status : "unknown";
+      const slug = "slug" in app && typeof app.slug === "string" ? app.slug : "";
 
       return {
         id: app.id,
         name,
         status,
+        slug,
       };
     }) as AppListItem[];
 
@@ -147,13 +182,13 @@ export async function GET(req: NextRequest) {
     const [{ data: domainRows, error: domainError }, { data: purchaseRows, error: purchaseError }] = await Promise.all([
       supabase
         .from('platform_app_domains')
-        .select('id, app_id, domain, status, ssl_status, is_primary, last_error, created_at')
+        .select('id, app_id, domain, status, ssl_status, is_primary, verification_token, last_error, created_at')
         .eq('user_id', auth.user.id)
         .neq('status', 'removed')
         .order('created_at', { ascending: false }),
       supabase
         .from('domain_purchase_requests')
-        .select('id, app_id, domain, status, created_at, last_error')
+        .select('id, app_id, domain, status, created_at, last_error, registrant_email, metadata')
         .eq('user_id', auth.user.id)
         .order('created_at', { ascending: false })
         .limit(1000),
@@ -161,25 +196,22 @@ export async function GET(req: NextRequest) {
 
     if (domainError) {
       return NextResponse.json(
-        {
-          error: 'INTERNAL_ERROR',
-          message: `Failed to load domain connections: ${domainError.message}`,
-        },
+        { error: 'INTERNAL_ERROR', message: 'Failed to load domain data. Please try again.' },
         { status: 500 }
       );
     }
 
     if (purchaseError) {
       return NextResponse.json(
-        {
-          error: 'INTERNAL_ERROR',
-          message: `Failed to load domain purchases: ${purchaseError.message}`,
-        },
+        { error: 'INTERNAL_ERROR', message: 'Failed to load domain data. Please try again.' },
         { status: 500 }
       );
     }
 
     const purchaseByDomain = new Map<string, DomainPurchase>();
+    // DB-stored expiry/auto_renew written by the marketplace service at purchase time.
+    // Used as fallback when the Name.com live API call times out.
+    const dbMetaByDomain = new Map<string, { expires_at: string | null; auto_renew: boolean | null }>();
 
     (purchaseRows || []).forEach((row) => {
       const domain = normalizeDomain(row.domain || '');
@@ -191,20 +223,27 @@ export async function GET(req: NextRequest) {
         status: row.status,
         created_at: row.created_at,
         last_error: row.last_error || null,
+        registrant_email: row.registrant_email || null,
       });
+
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const storedExpiresAt = typeof meta.expires_at === 'string' ? meta.expires_at : null;
+      const storedAutoRenew = typeof meta.autorenew_enabled === 'boolean' ? meta.autorenew_enabled : null;
+      dbMetaByDomain.set(domain, { expires_at: storedExpiresAt, auto_renew: storedAutoRenew });
     });
 
     const inventoryByDomain = new Map<string, DomainInventoryItem>();
 
     for (const [domain, purchase] of purchaseByDomain.entries()) {
-      const providerMeta = nameComMeta.get(domain);
+      const providerMeta = resolveProviderMeta(domain, nameComMeta);
+      const dbMeta = dbMetaByDomain.get(domain);
       inventoryByDomain.set(domain, {
         domain,
         purchase,
         connections: [],
         source: 'purchased',
-        expires_at: providerMeta?.expires_at || null,
-        auto_renew: providerMeta?.auto_renew ?? null,
+        expires_at: providerMeta?.expires_at || dbMeta?.expires_at || null,
+        auto_renew: providerMeta?.auto_renew ?? dbMeta?.auto_renew ?? null,
       });
     }
 
@@ -219,18 +258,24 @@ export async function GET(req: NextRequest) {
         id: row.id,
         app_id: row.app_id,
         app_name: app.name,
+        app_slug: app.slug,
         app_status: app.status,
         domain,
         status: row.status,
         ssl_status: row.ssl_status,
         is_primary: Boolean(row.is_primary),
+        verification_token: row.verification_token || '',
+        // Use app.name (not app.slug): the CNAME target DNS record is <name>.APP_DOMAIN.
+        // app.slug includes a hash suffix that has no direct A record.
+        routing_target: app.name ? `${app.name}.${APP_DOMAIN}` : '',
+        routing_ips: routingIps,
         last_error: row.last_error || null,
         created_at: row.created_at,
       };
 
       const existing = inventoryByDomain.get(domain);
       if (!existing) {
-        const providerMeta = nameComMeta.get(domain);
+        const providerMeta = resolveProviderMeta(domain, nameComMeta);
         inventoryByDomain.set(domain, {
           domain,
           purchase: null,
@@ -262,11 +307,11 @@ export async function GET(req: NextRequest) {
         total_apps: apps.length,
       },
     });
-  } catch (error: unknown) {
+  } catch {
     return NextResponse.json(
       {
         error: 'INTERNAL_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to load domains inventory',
+        message: 'Failed to load domains inventory. Please try again.',
       },
       { status: 500 }
     );

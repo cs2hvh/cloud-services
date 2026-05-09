@@ -12,8 +12,25 @@ import {
 } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
 import type { DomainMarketplaceRegistrarPort } from "@/lib/domain-service/core/ports";
 
+const REQUIRED_CONTACT_ENVS = [
+  "PLATFORM_CONTACT_PHONE",
+  "PLATFORM_CONTACT_ADDRESS",
+  "PLATFORM_CONTACT_CITY",
+  "PLATFORM_CONTACT_STATE",
+  "PLATFORM_CONTACT_ZIP",
+  "PLATFORM_CONTACT_COUNTRY",
+] as const;
+
 export class NameComApiService implements DomainMarketplaceRegistrarPort {
-  constructor(private readonly client: NameComRegistrarAdapter) {}
+  constructor(private readonly client: NameComRegistrarAdapter) {
+    const missing = REQUIRED_CONTACT_ENVS.filter((k) => !process.env[k]);
+    if (missing.length > 0) {
+      console.warn(
+        `[NameComApiService] Missing required env vars: ${missing.join(", ")}. ` +
+        "setRegistrantContact will throw at runtime — ICANN verification emails will not be routed to users."
+      );
+    }
+  }
 
   async hello() {
     return this.client.hello();
@@ -47,7 +64,56 @@ export class NameComApiService implements DomainMarketplaceRegistrarPort {
     input: NameComCreateDomainInput,
     options?: { idempotencyKey?: string }
   ): Promise<NameComCreateDomainResponse> {
-    return this.client.createDomain(input, options);
+    const result = await this.client.createDomain(input, options);
+    // Enable auto-renew immediately after purchase so the domain never silently
+    // expires. Name.com handles the actual renewal — no cron job needed for this.
+    // Fire-and-forget: a failure here is non-fatal (domain is already purchased).
+    this.client.updateDomain(input.domainName, { autorenewEnabled: true }).catch((err: unknown) => {
+      console.warn("[NameComApiService] Failed to enable auto-renew after purchase:", {
+        domain: input.domainName,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    return result;
+  }
+
+  async setRegistrantContact(
+    domainName: string,
+    contact: { email: string; firstName?: string; lastName?: string }
+  ): Promise<void> {
+    // name.com requires a complete contact object — partial objects fail with a
+    // validation error. Use platform-registered address as the defaults so the
+    // address sub-fields always satisfy the API, while only the email is
+    // overridden to route ICANN verification to the correct user inbox.
+    const phone = process.env.PLATFORM_CONTACT_PHONE;
+    const address1 = process.env.PLATFORM_CONTACT_ADDRESS;
+    const city = process.env.PLATFORM_CONTACT_CITY;
+    const state = process.env.PLATFORM_CONTACT_STATE;
+    const zip = process.env.PLATFORM_CONTACT_ZIP;
+    const country = process.env.PLATFORM_CONTACT_COUNTRY;
+
+    if (!phone || !address1 || !city || !state || !zip || !country) {
+      throw new Error(
+        "setRegistrantContact: one or more PLATFORM_CONTACT_* environment variables are not set. " +
+        "Required: PLATFORM_CONTACT_PHONE, PLATFORM_CONTACT_ADDRESS, PLATFORM_CONTACT_CITY, " +
+        "PLATFORM_CONTACT_STATE, PLATFORM_CONTACT_ZIP, PLATFORM_CONTACT_COUNTRY. " +
+        "Set these to the platform's registered name.com contact address."
+      );
+    }
+
+    await this.client.setContacts(domainName, {
+      registrant: {
+        email: contact.email,
+        ...(contact.firstName ? { firstName: contact.firstName } : {}),
+        ...(contact.lastName ? { lastName: contact.lastName } : {}),
+        phone,
+        address1,
+        city,
+        state,
+        zip,
+        country,
+      },
+    });
   }
 
   async listDnsRecords(domainName: string, params?: { page?: number; perPage?: number }): Promise<NameComListRecordsResponse> {

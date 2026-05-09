@@ -13,27 +13,22 @@ CREATE TABLE IF NOT EXISTS bitbucket_tokens (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id)
 );
-
 -- Enable RLS
 ALTER TABLE bitbucket_tokens ENABLE ROW LEVEL SECURITY;
-
 -- Create policy so users can only access their own tokens
 CREATE POLICY "Users can only access their own Bitbucket tokens" ON bitbucket_tokens
     FOR ALL USING (auth.uid() = user_id);
-
 -- Create indexes for faster lookups
 CREATE INDEX idx_bitbucket_tokens_user_id ON bitbucket_tokens(user_id);
 CREATE INDEX idx_bitbucket_tokens_bitbucket_user_id ON bitbucket_tokens(bitbucket_user_id);
-
 -- Add comment explaining the table
 COMMENT ON TABLE bitbucket_tokens IS 'Stores Bitbucket OAuth tokens for repository access. Tokens expire in ~1 hour and require refresh using the refresh_token.';
 COMMENT ON COLUMN bitbucket_tokens.refresh_token IS 'Used to refresh expired access tokens. Critical for maintaining long-term access.';
 COMMENT ON COLUMN bitbucket_tokens.expires_at IS 'When the access_token expires. Bitbucket tokens typically expire in 1 hour (3600 seconds).';
-
 -- ============================================
 -- ROLLBACK COMMANDS (Run to remove this table)
 -- ============================================
 -- DROP INDEX IF EXISTS idx_bitbucket_tokens_user_id;
 -- DROP INDEX IF EXISTS idx_bitbucket_tokens_bitbucket_user_id;
 -- DROP POLICY IF EXISTS "Users can only access their own Bitbucket tokens" ON bitbucket_tokens;
--- DROP TABLE IF EXISTS bitbucket_tokens;
+-- DROP TABLE IF EXISTS bitbucket_tokens;;

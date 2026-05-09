@@ -31,6 +31,16 @@ describe('POST /api/services/database/network/delete', () => {
 
     const axios = (await import('axios')).default;
     vi.mocked(axios.isAxiosError).mockReturnValue(false);
+
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read).mockResolvedValue({
+      success: true,
+      data: {
+        name: 'my-cluster',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        project_id: 'project-1',
+      },
+    } as any);
   });
 
   function setupSuccessfulDOFlow() {
@@ -55,7 +65,11 @@ describe('POST /api/services/database/network/delete', () => {
       } as any);
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', owner_id: 'user-1', project_id: 'project-1' },
+        data: {
+          name: 'my-cluster',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+          project_id: 'project-1',
+        },
       } as any);
 
       const { Projects } = await import('@/lib/supabase/queries/projects');
@@ -76,6 +90,29 @@ describe('POST /api/services/database/network/delete', () => {
       });
       const response = await POST(request as any);
       await expectResponseStatus(response, 401);
+    });
+
+    it('should return 403 for a cluster owned by another user', async () => {
+      await mockAuthenticatedUser();
+
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          name: 'my-cluster',
+          owner_id: '00000000-0000-0000-0000-000000000999',
+          project_id: 'project-1',
+        },
+      } as any);
+
+      const request = createMockPostRequest(testUrl, {
+        id: validClusterId,
+        rule_uuid: validRuleUuid,
+      });
+      const response = await POST(request as any);
+      const data = await expectResponseStatus(response, 403);
+
+      expect(data.error).toContain('not authorized');
     });
   });
 

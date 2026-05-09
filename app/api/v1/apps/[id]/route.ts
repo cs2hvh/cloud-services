@@ -1,10 +1,10 @@
 // GET /api/v1/apps/[id] — get a single app by ID
 // PATCH /api/v1/apps/[id] — update app metadata (does NOT redeploy)
 // DELETE /api/v1/apps/[id] — delete app and all infrastructure
-import { Platform_Apps } from "@/lib/supabase/queries";
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { z } from "zod";
+import { logError } from "@/lib/api/error-sanitizer";
 
 // Helper to extract and validate app ID
 async function getValidatedAppId(context: { params: Promise<{ [key: string]: string | string[] }> } | undefined) {
@@ -118,7 +118,8 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
     if (error.code === "FORBIDDEN") {
       return v1Error("FORBIDDEN", 403, "Access denied");
     }
-    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: error.details || error.message });
+    logError("v1/apps/[id] update", updateError);
+    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: error.details });
   }
 
   return v1Ok({
@@ -136,21 +137,27 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
   });
 });
 
-export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
+export const DELETE = withV1Auth("apps:delete", async (req, auth, context) => {
   const { error, id } = await getValidatedAppId(context);
   if (error) return error;
 
-  // Get app details before deletion
-  const appResult = await Platform_Apps.get(id!);
-  if (!appResult.success) {
-    return v1Error("NOT_FOUND", 404, "App not found");
-  }
-
-  const app = appResult.data;
-
-  // Verify ownership
-  if (app.user_id !== auth.userId) {
-    return v1Error("FORBIDDEN", 403, "Access denied");
+  let app: Awaited<ReturnType<typeof PlatformAppService.getApp>>;
+  try {
+    app = await PlatformAppService.getApp({
+      appId: id!,
+      userId: auth.userId,
+      syncStatus: false,
+      includeEnvVars: false,
+    });
+  } catch (getError: unknown) {
+    const getAppError = getError as Error & { code?: string };
+    if (getAppError.code === "NOT_FOUND") {
+      return v1Error("NOT_FOUND", 404, "App not found");
+    }
+    if (getAppError.code === "FORBIDDEN") {
+      return v1Error("FORBIDDEN", 403, "Access denied");
+    }
+    return v1Error("INTERNAL_ERROR", 500, "Failed to fetch app");
   }
 
   try {
@@ -159,6 +166,13 @@ export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
       appId: id!,
       userId: auth.userId,
       isAdmin: false,
+      audit_context: {
+        ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+        user_agent: req.headers.get("user-agent") || "unknown",
+        request_id: crypto.randomUUID(),
+        user_email: auth.kind === 'session' ? auth.email : undefined,
+        user_role: "user",
+      },
     });
 
     return v1Ok({

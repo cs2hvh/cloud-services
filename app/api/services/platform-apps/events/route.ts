@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { RuntimeLogsService } from "@/lib/services/runtime-logs";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { 
   translateToIssues, 
   calculateSummary, 
@@ -87,19 +88,20 @@ export async function GET(req: NextRequest) {
     const summary = calculateSummary(issues);
     const actionableIssues = getActionableIssues(issues);
 
-    // LAZY STATE UPDATE: If critical issues detected and app is marked as 'running',
-    // update the status to reflect the actual state (degraded/failed)
-    // This is the "lazy evaluation" pattern - we detect issues when user views them
+    // LAZY STATE UPDATE: Fire-and-forget status sync when critical issues are detected.
+    // Using void + non-blocking update avoids concurrent request races and prevents
+    // the GET response from being held up by a write.
     if (summary.hasCriticalIssues && app.status === 'running') {
-      // Check if the critical issues are ongoing (not resolved)
       const criticalIssue = issues.find(i => i.severity === 'critical');
       if (criticalIssue) {
-        // Update app status to 'failed' since critical issues indicate the app is not healthy
-        await Platform_Apps.update(appId, {
+        void Platform_Apps.update(appId, {
           status: 'failed',
           last_failure_reason: criticalIssue.title,
+        }).then(() => {
+          console.log(`[Events API] 🔄 Lazy state update: ${app.name} marked as failed due to ${criticalIssue.title}`);
+        }).catch((err: unknown) => {
+          console.error(`[Events API] Failed lazy status update for ${app.name}:`, err);
         });
-        console.log(`[Events API] 🔄 Lazy state update: ${app.name} marked as failed due to ${criticalIssue.title}`);
       }
     }
 
@@ -114,11 +116,7 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting issues:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get issues";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/events", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

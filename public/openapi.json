@@ -3,7 +3,7 @@
   "info": {
     "title": "Cloud Services - API v1",
     "version": "1.0.0",
-    "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limit headers are included in all responses:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
+    "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
     "contact": {
       "name": "Cloud Services Support",
       "email": "support@galaxyhvh.com",
@@ -34,8 +34,16 @@
       "description": "Manage projects used to organize cloud services and ownership."
     },
     {
+      "name": "Resources",
+      "description": "List available product plans/resources and filter by type."
+    },
+    {
       "name": "Databases",
       "description": "Manage database clusters, databases, and users."
+    },
+    {
+      "name": "Kubernetes",
+      "description": "Manage Kubernetes clusters and their lifecycle."
     },
     {
       "name": "Object Storage",
@@ -416,6 +424,577 @@
           "data"
         ]
       },
+      "EnvVar": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Environment variable key",
+            "example": "DATABASE_URL"
+          },
+          "value": {
+            "type": "string",
+            "description": "Environment variable value",
+            "example": "postgres://user:pass@host:5432/db"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "EnvVarsListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "framework": {
+                "type": "string",
+                "nullable": true,
+                "example": "Next.js"
+              },
+              "env_vars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EnvVar"
+                }
+              }
+            },
+            "required": [
+              "app_id",
+              "framework",
+              "env_vars"
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ApplyStatus": {
+        "type": "object",
+        "properties": {
+          "applied_live": {
+            "type": "boolean",
+            "description": "Whether changes were applied to the running app",
+            "example": true
+          },
+          "requires_redeploy": {
+            "type": "boolean",
+            "description": "Whether a redeploy is needed",
+            "example": false
+          },
+          "mode": {
+            "type": "string",
+            "description": "Apply mode (live, persisted_only)",
+            "example": "live"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for the apply result"
+          },
+          "hint": {
+            "type": "string",
+            "description": "Suggested next step"
+          },
+          "ignored_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys ignored by the framework",
+            "example": []
+          }
+        },
+        "required": [
+          "applied_live",
+          "requires_redeploy",
+          "mode"
+        ]
+      },
+      "EnvVarsReplaceResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "framework": {
+                "type": "string",
+                "nullable": true,
+                "example": "Next.js"
+              },
+              "env_vars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EnvVar"
+                }
+              },
+              "apply": {
+                "$ref": "#/components/schemas/ApplyStatus"
+              }
+            },
+            "required": [
+              "app_id",
+              "framework",
+              "env_vars",
+              "apply"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "EnvVarsReplaceRequest": {
+        "type": "object",
+        "properties": {
+          "env_vars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvVar"
+            },
+            "description": "Full list of environment variables to set (replaces all existing)"
+          }
+        },
+        "required": [
+          "env_vars"
+        ]
+      },
+      "EnvVarDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "deleted_key": {
+                "type": "string",
+                "description": "The key that was deleted",
+                "example": "OLD_SECRET"
+              },
+              "env_vars": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EnvVar"
+                },
+                "description": "Remaining environment variables"
+              },
+              "apply": {
+                "$ref": "#/components/schemas/ApplyStatus"
+              }
+            },
+            "required": [
+              "app_id",
+              "deleted_key",
+              "env_vars",
+              "apply"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "EnvVarGetResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "key": {
+                "type": "string",
+                "description": "Environment variable key",
+                "example": "DATABASE_URL"
+              },
+              "value": {
+                "type": "string",
+                "description": "Environment variable value",
+                "example": "postgres://user:pass@host:5432/db"
+              }
+            },
+            "required": [
+              "app_id",
+              "key",
+              "value"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "Deployment": {
+        "type": "object",
+        "properties": {
+          "build_number": {
+            "type": "number",
+            "nullable": true,
+            "example": 5
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "BUILDING",
+              "SUCCESS",
+              "FAILURE",
+              "UNKNOWN"
+            ],
+            "example": "SUCCESS"
+          },
+          "started_at": {
+            "type": "string",
+            "example": "2026-04-21T10:00:00Z"
+          },
+          "duration": {
+            "type": "number",
+            "nullable": true,
+            "description": "Build duration in milliseconds",
+            "example": 120000
+          },
+          "commit_sha": {
+            "type": "string",
+            "nullable": true,
+            "example": "abc1234"
+          },
+          "commit_message": {
+            "type": "string",
+            "nullable": true,
+            "example": "Fix login redirect bug"
+          },
+          "trigger": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "manual",
+              "webhook",
+              "rollback",
+              "resize"
+            ],
+            "example": "manual"
+          },
+          "failure_reason": {
+            "type": "string",
+            "nullable": true,
+            "example": "Build script exited with code 1"
+          },
+          "rollback_target_build_number": {
+            "type": "number",
+            "nullable": true,
+            "example": null
+          },
+          "operation_type": {
+            "type": "string",
+            "example": "deploy"
+          },
+          "history_type": {
+            "type": "string",
+            "enum": [
+              "release",
+              "operation",
+              "rollback"
+            ],
+            "example": "release"
+          },
+          "is_release_build": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "build_number",
+          "status",
+          "started_at",
+          "operation_type",
+          "history_type",
+          "is_release_build"
+        ]
+      },
+      "DeploymentListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "app_name": {
+                "type": "string",
+                "example": "my-awesome-app"
+              },
+              "deployments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              },
+              "total": {
+                "type": "number",
+                "example": 10
+              },
+              "pending": {
+                "type": "boolean",
+                "description": "True when app is still pending with no deployments",
+                "example": false
+              }
+            },
+            "required": [
+              "app_id",
+              "app_name",
+              "deployments",
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "RedeployResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+              },
+              "app_name": {
+                "type": "string",
+                "example": "my-awesome-app"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "triggered",
+                  "pending"
+                ],
+                "example": "triggered"
+              },
+              "build_number": {
+                "type": "number",
+                "nullable": true,
+                "example": 5
+              },
+              "operation_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "a1cd4c8d-e891-48ba-8655-5c3d04a59501"
+              },
+              "reused": {
+                "type": "boolean",
+                "description": "True if an existing in-progress operation was reused",
+                "example": false
+              },
+              "message": {
+                "type": "string",
+                "example": "Redeployment started"
+              }
+            },
+            "required": [
+              "app_id",
+              "app_name",
+              "status",
+              "operation_id",
+              "reused"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "BillingBalanceResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "credit_balance": {
+                "type": "number",
+                "description": "Total credit balance in USD cents",
+                "example": 5000
+              },
+              "promo_credits": {
+                "type": "number",
+                "description": "Promotional credits portion (USD cents)",
+                "example": 1000
+              },
+              "topup_credits": {
+                "type": "number",
+                "description": "Paid top-up credits portion (USD cents)",
+                "example": 4000
+              }
+            },
+            "required": [
+              "credit_balance",
+              "promo_credits",
+              "topup_credits"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "BillingTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Transaction amount in USD cents",
+            "example": 1500
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed"
+            ],
+            "example": "completed"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "topup",
+              "refund",
+              "coupon",
+              "recurring",
+              "setup",
+              "usage",
+              "purchase"
+            ],
+            "example": "purchase"
+          },
+          "service_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "database",
+              "kubernetes",
+              "objectspace",
+              "spectrum",
+              "platform_apps",
+              "domain"
+            ],
+            "example": "domain"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Domain renewal: example.com"
+          },
+          "balance_after": {
+            "type": "number",
+            "nullable": true,
+            "example": 3500
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-11-15T08:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "amount",
+          "status",
+          "type",
+          "service_type",
+          "description",
+          "balance_after",
+          "metadata",
+          "created_at"
+        ]
+      },
+      "BillingTransactionListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingTransaction"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer",
+                "example": 1
+              },
+              "limit": {
+                "type": "integer",
+                "example": 20
+              },
+              "total": {
+                "type": "integer",
+                "example": 42
+              },
+              "total_pages": {
+                "type": "integer",
+                "example": 3
+              }
+            },
+            "required": [
+              "page",
+              "limit",
+              "total",
+              "total_pages"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -432,12 +1011,6 @@
             "type": "string",
             "nullable": true,
             "example": "Core production workloads"
-          },
-          "owner_id": {
-            "type": "string",
-            "nullable": true,
-            "format": "uuid",
-            "example": "ccf391ef-271b-45e7-9799-3b1be3422363"
           },
           "users": {
             "type": "array",
@@ -465,7 +1038,6 @@
           "id",
           "name",
           "description",
-          "owner_id",
           "users",
           "created_at",
           "default_project"
@@ -562,6 +1134,90 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "ResourceType": {
+        "type": "string",
+        "enum": [
+          "vps",
+          "vds",
+          "game",
+          "database",
+          "object-storage",
+          "kubernetes",
+          "network-ddos",
+          "platform-apps",
+          "compute",
+          "gpu",
+          "security",
+          "ai-deployment",
+          "app-deployment"
+        ],
+        "example": "database"
+      },
+      "ResourcePlan": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f15eca8f-032e-4c35-99ee-b5a15f1ec18a"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Starter DB Plan"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "General-purpose managed database plan."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "sub_type": {
+            "type": "string",
+            "nullable": true,
+            "example": "postgresql"
+          }
+        },
+        "required": [
+          "plan_id",
+          "name",
+          "description",
+          "type",
+          "sub_type"
+        ]
+      },
+      "ResourcePlanListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourcePlan"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "example": 12
+              },
+              "type": {
+                "$ref": "#/components/schemas/ResourceType"
+              }
+            },
+            "required": [
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
         ]
       },
       "Bucket": {
@@ -1531,6 +2187,267 @@
           "storage_size_mib"
         ]
       },
+      "DatabaseFirewallRule": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid",
+            "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+          },
+          "type": {
+            "type": "string",
+            "example": "ip_addr"
+          },
+          "value": {
+            "type": "string",
+            "example": "203.0.113.42"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-20T10:00:00Z"
+          }
+        },
+        "required": [
+          "uuid",
+          "cluster_uuid",
+          "type",
+          "value",
+          "created_at"
+        ]
+      },
+      "DatabaseFirewallRuleListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatabaseFirewallRule"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseFirewallRuleUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRule"
+                }
+              },
+              "updated": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "rules",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AddDatabaseFirewallRuleRequest": {
+        "type": "object",
+        "properties": {
+          "ip_address": {
+            "type": "string",
+            "example": "203.0.113.42/32"
+          }
+        },
+        "required": [
+          "ip_address"
+        ]
+      },
+      "DatabaseFirewallRuleDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "rule_uuid": {
+                "type": "string",
+                "format": "uuid",
+                "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              },
+              "warning": {
+                "type": "string",
+                "example": "IP address deleted from firewall, but failed to update database"
+              }
+            },
+            "required": [
+              "cluster_id",
+              "rule_uuid",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseMaintenanceWindow": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "day": {
+            "type": "string",
+            "example": "monday"
+          },
+          "hour": {
+            "type": "string",
+            "example": "13:00"
+          }
+        },
+        "required": [
+          "day",
+          "hour"
+        ],
+        "example": {
+          "day": "monday",
+          "hour": "13:00"
+        }
+      },
+      "DatabaseMaintenanceWindowResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DatabaseMaintenanceWindow"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DatabaseMaintenanceWindowUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "window": {
+                "$ref": "#/components/schemas/DatabaseMaintenanceWindow"
+              },
+              "updated": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "window",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "UpdateDatabaseMaintenanceWindowRequest": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "example": "monday"
+          },
+          "hour": {
+            "type": "string",
+            "example": "13:00"
+          }
+        },
+        "required": [
+          "day",
+          "hour"
+        ]
+      },
+      "DatabaseRegionMigrationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+              },
+              "region": {
+                "type": "string",
+                "example": "nyc1"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "migrating"
+                ],
+                "example": "migrating"
+              },
+              "migration_started": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "cluster_id",
+              "region",
+              "status",
+              "migration_started"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "MigrateDatabaseRegionRequest": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "string",
+            "example": "nyc1"
+          }
+        },
+        "required": [
+          "region"
+        ]
+      },
       "DatabaseUserListResponse": {
         "type": "object",
         "properties": {
@@ -1585,6 +2502,336 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "ControlPlane": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "public_ip": {
+            "type": "string",
+            "nullable": true,
+            "description": "Public IP of the control plane",
+            "example": "139.59.1.6"
+          },
+          "droplet_id": {
+            "type": "number",
+            "nullable": true,
+            "description": "DigitalOcean droplet ID",
+            "example": 539342401
+          },
+          "private_ip": {
+            "type": "string",
+            "nullable": true,
+            "description": "Private IP of the control plane",
+            "example": "10.122.0.14"
+          }
+        },
+        "required": [
+          "public_ip",
+          "droplet_id",
+          "private_ip"
+        ],
+        "description": "Control plane node info"
+      },
+      "WorkerNode": {
+        "type": "object",
+        "properties": {
+          "public_ip": {
+            "type": "string",
+            "nullable": true,
+            "example": "157.245.111.205"
+          },
+          "droplet_id": {
+            "type": "number",
+            "nullable": true,
+            "example": 539342404
+          },
+          "private_ip": {
+            "type": "string",
+            "nullable": true,
+            "example": "10.122.0.18"
+          }
+        },
+        "required": [
+          "public_ip",
+          "droplet_id",
+          "private_ip"
+        ]
+      },
+      "NodeConfig": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "cpu": {
+            "type": "number",
+            "description": "CPU cores per node",
+            "example": 2
+          },
+          "ram": {
+            "type": "number",
+            "description": "RAM in MB per node",
+            "example": 4096
+          },
+          "storage": {
+            "type": "number",
+            "description": "Storage in GB per node",
+            "example": 80
+          }
+        },
+        "required": [
+          "cpu",
+          "ram",
+          "storage"
+        ],
+        "description": "Node hardware configuration"
+      },
+      "KubernetesCluster": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Cluster ID (use this for /kubernetes/{id} routes)",
+            "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+          },
+          "cluster_name": {
+            "type": "string",
+            "description": "Cluster display name",
+            "example": "cluster-for-app-d"
+          },
+          "control_plane": {
+            "$ref": "#/components/schemas/ControlPlane"
+          },
+          "workers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/WorkerNode"
+            },
+            "description": "Worker nodes (null while cluster is being created)"
+          },
+          "create_status": {
+            "type": "boolean",
+            "description": "Whether cluster creation is complete",
+            "example": true
+          },
+          "connect_status": {
+            "type": "boolean",
+            "description": "Whether cluster is connected",
+            "example": true
+          },
+          "verify_status": {
+            "type": "boolean",
+            "description": "Whether cluster is verified",
+            "example": true
+          },
+          "node_config": {
+            "$ref": "#/components/schemas/NodeConfig"
+          },
+          "cni_plugin": {
+            "type": "string",
+            "nullable": true,
+            "description": "CNI plugin (e.g., calico, flannel)",
+            "example": "calico"
+          },
+          "k8s_version": {
+            "type": "string",
+            "nullable": true,
+            "description": "Kubernetes version",
+            "example": "v1.31"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "creating",
+              "ready",
+              "failed",
+              "deleted"
+            ],
+            "description": "Cluster status",
+            "example": "ready"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T12:00:00Z"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project this cluster belongs to",
+            "example": "25bb74a1-d21e-4282-a3f9-8cc18a298e7e"
+          }
+        },
+        "required": [
+          "id",
+          "cluster_name",
+          "control_plane",
+          "workers",
+          "create_status",
+          "connect_status",
+          "verify_status",
+          "node_config",
+          "cni_plugin",
+          "k8s_version",
+          "status",
+          "created_at",
+          "project_id"
+        ]
+      },
+      "KubernetesClusterListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KubernetesCluster"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "KubernetesClusterResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/KubernetesCluster"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "CreateKubernetesClusterRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 63,
+            "description": "Cluster name (DNS-1123 subdomain: lowercase alphanumeric and hyphens)",
+            "example": "my-k8s-cluster"
+          },
+          "region": {
+            "type": "string",
+            "description": "DigitalOcean region slug",
+            "example": "sgp1"
+          },
+          "version": {
+            "type": "string",
+            "description": "Kubernetes version",
+            "example": "1.29.1-do.0"
+          },
+          "node_pool": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "string",
+                "description": "DigitalOcean droplet size slug",
+                "example": "s-2vcpu-4gb"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20,
+                "description": "Number of worker nodes (1-20)",
+                "example": 3
+              },
+              "name": {
+                "type": "string",
+                "description": "Node pool name",
+                "example": "worker-pool"
+              }
+            },
+            "required": [
+              "size",
+              "count"
+            ],
+            "description": "Worker node pool configuration"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "25bb74a1-d21e-4282-a3f9-8cc18a298e7e"
+          },
+          "plan_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Billing plan UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        },
+        "required": [
+          "name",
+          "region",
+          "version",
+          "node_pool",
+          "project_id",
+          "plan_id"
+        ]
+      },
+      "UpdateKubernetesClusterRequest": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "25bb74a1-d21e-4282-a3f9-8cc18a298e7e"
+          },
+          "node_pool": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "string",
+                "example": "s-4vcpu-8gb"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20,
+                "example": 5
+              }
+            },
+            "description": "Updated node pool configuration"
+          }
+        }
+      },
+      "KubernetesClusterDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "id",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
         ]
       },
       "DomainStatus": {
@@ -1679,6 +2926,36 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-03-16T09:00:00Z"
+          },
+          "dns_ready": {
+            "type": "boolean",
+            "description": "Whether DNS has propagated to the platform load-balancer IPs.",
+            "example": true
+          },
+          "dns_message": {
+            "type": "string",
+            "description": "Human-readable DNS routing status message.",
+            "example": "DNS is routing correctly."
+          },
+          "dns_resolved_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IPs the domain currently resolves to.",
+            "example": [
+              "1.2.3.4"
+            ]
+          },
+          "dns_expected_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IPs the domain should resolve to for routing to work.",
+            "example": [
+              "1.2.3.4"
+            ]
           }
         },
         "required": [
@@ -2048,30 +3325,6 @@
           "data"
         ]
       },
-      "DomainMarketplaceProvidersResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/DomainMarketplaceSummary"
-          },
-          "deprecated": {
-            "type": "boolean",
-            "enum": [
-              true
-            ],
-            "example": true
-          },
-          "message": {
-            "type": "string",
-            "example": "Use /api/v1/domains/market/summary for reseller metadata."
-          }
-        },
-        "required": [
-          "data",
-          "deprecated",
-          "message"
-        ]
-      },
       "DomainMarketplaceResult": {
         "type": "object",
         "properties": {
@@ -2185,11 +3438,20 @@
               "minLength": 2,
               "maxLength": 20
             },
-            "maxItems": 15,
+            "maxItems": 20,
             "example": [
               "com",
+              "ai",
               "io",
-              "app"
+              "app",
+              "dev",
+              "net",
+              "co",
+              "shop",
+              "store",
+              "tech",
+              "cloud",
+              "me"
             ]
           }
         },
@@ -2207,18 +3469,13 @@
           "cancelled"
         ]
       },
-      "DomainMarketplacePurchaseRequestRecord": {
+      "DomainMarketplacePurchaseRequestPublic": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid",
             "example": "656bb6a3-9905-46d0-9704-b127cc296957"
-          },
-          "user_id": {
-            "type": "string",
-            "format": "uuid",
-            "example": "ccf391ef-271b-45e7-9799-3b1be3422363"
           },
           "app_id": {
             "type": "string",
@@ -2251,16 +3508,6 @@
             "type": "string",
             "example": "ahuracloud"
           },
-          "idempotency_key": {
-            "type": "string",
-            "nullable": true,
-            "example": "idem-domain-001"
-          },
-          "provider_request_id": {
-            "type": "string",
-            "nullable": true,
-            "example": "123456"
-          },
           "last_error": {
             "type": "string",
             "nullable": true,
@@ -2290,7 +3537,6 @@
         },
         "required": [
           "id",
-          "user_id",
           "app_id",
           "domain",
           "status",
@@ -2298,8 +3544,6 @@
           "renewal_price",
           "currency",
           "provider",
-          "idempotency_key",
-          "provider_request_id",
           "last_error",
           "metadata",
           "created_at",
@@ -2312,7 +3556,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestRecord"
+              "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestPublic"
             }
           },
           "meta": {
@@ -2337,7 +3581,7 @@
         "type": "object",
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestRecord"
+            "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestPublic"
           }
         },
         "required": [
@@ -2368,6 +3612,68 @@
         "required": [
           "domain"
         ]
+      },
+      "DomainRegistrarSettings": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "example": "example.com"
+          },
+          "managed": {
+            "type": "boolean",
+            "description": "True if this domain is registered on the platform Name.com account."
+          },
+          "zone": {
+            "type": "string",
+            "example": "example.com"
+          },
+          "autorenew_enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether Name.com will auto-renew the domain before expiry. null if not a managed domain."
+          },
+          "locked": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the domain is transfer-locked at the registrar."
+          },
+          "privacy_enabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether WHOIS privacy protection is active."
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "example": "2027-04-21T00:00:00Z"
+          }
+        },
+        "required": [
+          "domain",
+          "managed",
+          "autorenew_enabled",
+          "locked",
+          "privacy_enabled",
+          "expires_at"
+        ]
+      },
+      "UpdateRegistrarSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "autorenew_enabled": {
+            "type": "boolean",
+            "description": "Enable or disable auto-renew at the registrar."
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "Enable or disable transfer lock."
+          },
+          "privacy_enabled": {
+            "type": "boolean",
+            "description": "Enable or disable WHOIS privacy."
+          }
+        }
       }
     },
     "parameters": {}
@@ -2855,6 +4161,980 @@
                   "details": {
                     "details": "Kubernetes deletion timeout"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/env-vars": {
+      "get": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "List environment variables",
+        "description": "Returns all environment variables for the specified app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment variables list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this app"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Replace environment variables",
+        "description": "Replaces all environment variables for the app. If the app is running, changes are applied live via Kubernetes secret update and optional pod restart.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Full set of environment variables",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvVarsReplaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Environment variables replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarsReplaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this app"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to update environment variables",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to update environment variables"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/env-vars/{key}": {
+      "delete": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Delete environment variable",
+        "description": "Deletes a single environment variable by key. If the app is running, changes are applied live.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Environment variable key to delete",
+              "example": "OLD_SECRET"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment variable deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid key format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_KEY",
+                  "message": "Invalid environment variable key format",
+                  "details": {
+                    "field": "key"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this app"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App or env var key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Environment variable key not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to delete environment variable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete environment variable"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Get environment variable by key",
+        "description": "Returns the value of a single environment variable. The full plaintext value is returned — use with care.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Environment variable key",
+              "example": "DATABASE_URL"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment variable value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarGetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid key format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_KEY",
+                  "message": "Invalid environment variable key format",
+                  "details": {
+                    "field": "key"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this app"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App or key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Environment variable key not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/deployments": {
+      "get": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "List deployment history",
+        "description": "Returns up to 10 recent deployments for an app, merging Jenkins build data with DB records. Includes releases, operations (resize), and rollbacks.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "Access denied"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch deployments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}/redeploy": {
+      "post": {
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Trigger redeploy",
+        "description": "Triggers a new deployment for the app using the current git branch and configuration. Rebuilds the container and rolls out via Kubernetes. Returns 202 if a build is already in progress.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Redeploy triggered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeployResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted — a build is already in progress; the existing operation was reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeployResponse"
+                },
+                "example": {
+                  "data": {
+                    "app_id": "8bdf284c-d3df-40f0-9565-b6e26f588c83",
+                    "app_name": "my-awesome-app",
+                    "status": "pending",
+                    "operation_id": "a1cd4c8d-e891-48ba-8655-5c3d04a59501",
+                    "reused": true,
+                    "message": "Redeploy already running"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — not the app owner, or git provider token missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "GIT_TOKEN_MISSING",
+                  "message": "Your github account is not connected or the access token has expired."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict — operation lock held or terminal build state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFLICT",
+                  "message": "Another operation is already in progress for this app"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable — repository URL not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFIGURATION_ERROR",
+                  "message": "Repository URL not configured for this app"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to trigger redeploy"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/balance": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Get credit balance",
+        "description": "Returns the current credit balance for the authenticated user, split into top-up and promotional credit components.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingBalanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/transactions": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "List billing transactions",
+        "description": "Returns paginated billing transaction history for the authenticated user. Supports filtering by type, service, status, and date range.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Max records per page. Default 20, max 100.",
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based page number. Default 1.",
+              "example": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "topup",
+                "refund",
+                "coupon",
+                "recurring",
+                "setup",
+                "usage",
+                "purchase"
+              ],
+              "description": "Filter by transaction type."
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "database",
+                "kubernetes",
+                "objectspace",
+                "spectrum",
+                "platform_apps",
+                "domain"
+              ],
+              "description": "Filter by service type."
+            },
+            "required": false,
+            "name": "service_type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "failed"
+              ],
+              "description": "Filter by transaction status."
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 8601 — return transactions created after this time.",
+              "example": "2024-01-01T00:00:00Z"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 8601 — return transactions created before this time.",
+              "example": "2024-12-31T23:59:59Z"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingTransactionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3452,6 +5732,111 @@
                 "example": {
                   "error": "DELETE_FAILED",
                   "message": "Failed to delete project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "summary": "List resource plans",
+        "description": "Returns available resource plans with minimal fields only: plan_id, name, description, type, and sub_type.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceType"
+                },
+                {
+                  "description": "Optional resource type filter."
+                }
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of resource plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePlanListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_PARAMETER",
+                  "message": "Invalid resource type",
+                  "details": {
+                    "field": "type"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch resources"
                 }
               }
             }
@@ -5809,6 +8194,1053 @@
         }
       }
     },
+    "/api/v1/databases/{id}/network/firewall": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "List database firewall rules",
+        "description": "Returns all network firewall rules configured for a database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Firewall rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch firewall rules"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Add database firewall rule",
+        "description": "Adds a new IP/CIDR firewall rule to the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDatabaseFirewallRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Firewall rule added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "ip_address",
+                      "message": "Must be a valid IPv4, IPv6, or CIDR notation"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "ALREADY_EXISTS",
+                  "message": "This IP address already exists in the firewall rules"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to add firewall rule"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/network/firewall/{ruleUuid}": {
+      "delete": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Delete database firewall rule",
+        "description": "Deletes a firewall rule from the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "90f543fc-cf87-4f77-ab47-acddf8ebde7f"
+            },
+            "required": true,
+            "name": "ruleUuid",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Firewall rule deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseFirewallRuleDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request",
+                  "validation_errors": [
+                    {
+                      "path": "rule_uuid",
+                      "message": "Rule UUID must be a valid UUID"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Delete failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete firewall rule"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/maintenance": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Get database maintenance window",
+        "description": "Returns the configured maintenance window for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Maintenance window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseMaintenanceWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch maintenance window"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Update database maintenance window",
+        "description": "Updates the maintenance window for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabaseMaintenanceWindowRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Maintenance window updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseMaintenanceWindowUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "hour",
+                      "message": "Hour must be in HH:MM format (24-hour)"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to update maintenance window"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/region": {
+      "get": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "List available migration regions",
+        "description": "Returns all allowed destination regions for database migration.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available migration regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "cluster_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+                        },
+                        "available_regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "nyc1",
+                            "nyc3",
+                            "sfo1",
+                            "sfo2",
+                            "sfo3",
+                            "ams2",
+                            "ams3",
+                            "sgp1",
+                            "lon1",
+                            "fra1",
+                            "tor1",
+                            "blr1",
+                            "syd1"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "cluster_id",
+                        "available_regions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fetch failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch migration regions"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Databases"
+        ],
+        "summary": "Migrate database cluster region",
+        "description": "Starts an asynchronous region migration for the database cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateDatabaseRegionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Migration started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseRegionMigrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid region. Use one of the available regions.",
+                  "details": {
+                    "field": "region",
+                    "available_regions": [
+                      "nyc1",
+                      "nyc3",
+                      "sfo1",
+                      "sfo2",
+                      "sfo3",
+                      "ams2",
+                      "ams3",
+                      "sgp1",
+                      "lon1",
+                      "fra1",
+                      "tor1",
+                      "blr1",
+                      "syd1"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this database cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Database cluster not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unsupported operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNSUPPORTED_OPERATION",
+                  "message": "Region migration is not supported for MongoDB clusters"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Migration failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to start region migration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/databases/{id}/users": {
       "get": {
         "tags": [
@@ -6370,12 +9802,643 @@
         }
       }
     },
+    "/api/v1/kubernetes": {
+      "get": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "List Kubernetes clusters",
+        "description": "Returns all Kubernetes clusters owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of Kubernetes clusters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesClusterListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch Kubernetes clusters"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Create Kubernetes cluster",
+        "description": "Creates a new Kubernetes cluster. Requires sufficient credits in account.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Kubernetes cluster configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKubernetesClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kubernetes cluster created with status `creating`. Poll GET /api/v1/kubernetes/{id} to track provisioning progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesClusterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "name",
+                      "message": "Cluster name must be at least 3 characters"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INSUFFICIENT_BALANCE",
+                  "message": "Insufficient credits"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no permission on the target project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Project not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CREATE_FAILED",
+                  "message": "Failed to create Kubernetes cluster"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/kubernetes/{id}": {
+      "get": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Get Kubernetes cluster by ID",
+        "description": "Returns detailed information about a specific Kubernetes cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Kubernetes cluster ID",
+              "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kubernetes cluster details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesClusterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid cluster ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch Kubernetes cluster"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Update Kubernetes cluster",
+        "description": "Updates an existing Kubernetes cluster configuration.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Kubernetes cluster ID",
+              "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Cluster update payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKubernetesClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kubernetes cluster updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesClusterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or invalid cluster ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Body validation error",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "node_pool.count",
+                          "message": "Number must be greater than or equal to 1"
+                        }
+                      ]
+                    }
+                  },
+                  "invalid_id": {
+                    "summary": "Invalid cluster ID format",
+                    "value": {
+                      "error": "INVALID_ID",
+                      "message": "Invalid id format",
+                      "details": {
+                        "field": "id"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to update Kubernetes cluster"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Delete Kubernetes cluster",
+        "description": "Deletes a Kubernetes cluster and all associated resources.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Kubernetes cluster ID",
+              "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kubernetes cluster deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesClusterDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid cluster ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Cluster not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete Kubernetes cluster"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/domains": {
       "get": {
         "tags": [
           "Domains"
         ],
-        "summary": "List domains by app",
+        "summary": "List domains",
+        "description": "List all domains owned by the authenticated user. Optionally filter by app using the `app_id` query parameter.",
         "security": [
           {
             "bearerAuth": []
@@ -6388,7 +10451,7 @@
               "format": "uuid",
               "example": "550e8400-e29b-41d4-a716-446655440000"
             },
-            "required": true,
+            "required": false,
             "name": "app_id",
             "in": "query"
           }
@@ -7154,70 +11217,6 @@
         }
       }
     },
-    "/api/v1/domains/market/providers": {
-      "get": {
-        "tags": [
-          "Domain Marketplace"
-        ],
-        "summary": "Get domain marketplace provider metadata",
-        "description": "Legacy compatibility endpoint that mirrors marketplace summary data.",
-        "deprecated": true,
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Provider metadata",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DomainMarketplaceProvidersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too many requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": "RATE_LIMIT_EXCEEDED",
-                  "message": "Too many requests. Please try again later.",
-                  "details": {
-                    "retry_after": 58
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/domains/market/search": {
       "post": {
         "tags": [
@@ -7816,6 +11815,180 @@
           },
           "502": {
             "description": "Registrar or billing upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/registrar": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Get registrar settings",
+        "description": "Returns live registrar settings for a domain including auto-renew status and expiry date. Only applicable to domains purchased through the platform (Name.com-managed). Returns `managed: false` for externally connected domains.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registrar settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DomainRegistrarSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Update registrar settings",
+        "description": "Toggle auto-renew, transfer lock, or WHOIS privacy for a platform-managed domain. Name.com handles the actual renewal — no cron job is required. At least one field must be provided.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistrarSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated registrar settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DomainRegistrarSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or domain not managed by platform registrar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
             "content": {
               "application/json": {
                 "schema": {

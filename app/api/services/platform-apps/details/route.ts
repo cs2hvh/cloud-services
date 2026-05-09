@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { KubernetesInfoService } from "@/lib/services/kubernetes-info";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/services/platform-apps/details?app_id=xxx
@@ -56,11 +57,7 @@ export async function GET(req: NextRequest) {
       ...details,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting app details:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get app details";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/details", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

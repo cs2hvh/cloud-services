@@ -38,10 +38,10 @@ const SECTION_META: Record<
     eyebrow: "Identity",
   },
   account: {
-    title: "Connected Accounts",
-    description: "Manage linked providers and account access relationships.",
+    title: "Connections",
+    description: "Manage login methods and repository connections separately.",
     icon: Shield,
-    helper: "Review connected accounts regularly and remove providers you no longer use.",
+    helper: "Login methods are for authentication. Repository connections grant repo access for deployments.",
     eyebrow: "Access",
   },
   security: {
@@ -77,7 +77,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4 [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

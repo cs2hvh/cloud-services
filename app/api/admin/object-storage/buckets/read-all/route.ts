@@ -1,6 +1,8 @@
 import {NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 export async function GET() {
   // Check authentication
@@ -9,8 +11,9 @@ export async function GET() {
     return auth.response;
   }
 
-  // Check if user is admin
-  if (auth.user?.role !== 'admin') {
+  // Re-validate admin status on every request (fresh profile check)
+  const adminCheck = await requireAdmin();
+  if (!adminCheck.ok) {
     return NextResponse.json(
       { error: "Unauthorized", message: "Admin access required" },
       { status: 403 }
@@ -34,13 +37,11 @@ export async function GET() {
       { status: 200 }
     );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin bucket delete error:", errorMessage);
-    
+    logError("GET /api/admin/object-storage/buckets/read-all", error);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -3,6 +3,7 @@ import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { getDomainService } from "@/lib/domain-service";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor } from "@/lib/domain-service/http/request-context";
+import { serializeDomainOperation } from "@/lib/domain-service/http/serializers";
 
 export const GET = withV1Auth("domains:operation:get", async (_req, auth, context) => {
   const idResult = await v1ExtractId(context, "operationId");
@@ -20,7 +21,7 @@ export const GET = withV1Auth("domains:operation:get", async (_req, auth, contex
       operationId: idResult.id,
     });
 
-    return v1Ok({ data: operation });
+    return v1Ok({ data: serializeDomainOperation(operation) });
   } catch (error) {
     return toV1DomainErrorResponse(error);
   }

@@ -136,8 +136,8 @@ fi
  * Shell function to detect package manager from lockfile
  * Returns: PACKAGE_MANAGER variable (npm, pnpm, or yarn)
  * 
- * ⚠️ CRITICAL: This variable MUST be passed to docker build/kaniko via:
- *    --build-arg PACKAGE_MANAGER="$PACKAGE_MANAGER"
+ * WARNING: CRITICAL: This variable MUST be passed to BuildKit via:
+ *    --opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER
  * 
  * Without the build arg, ARG PACKAGE_MANAGER in Dockerfiles will be empty,
  * causing setupPm logic to silently fail and breaking pnpm/yarn builds.
@@ -451,6 +451,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# CUSTOM_SERVER_COPY_PLACEHOLDER
 
 USER nextjs
 
@@ -469,7 +470,7 @@ CMD ${pm.start}
  * Supports build-time env vars for NEXT_PUBLIC_* variables ONLY
  * Server-side vars come from K8s secrets at runtime (never baked into image)
  * 
- * ⚠️ RUNTIME: Package manager is ONLY used during build.
+ * WARNING: RUNTIME: Package manager is ONLY used during build.
  * Standalone mode runs "node server.js" directly (Next.js generates optimized server).
  * This is different from standard mode which uses package manager at runtime.
  */
@@ -537,9 +538,9 @@ CMD ["node", "server.js"]
  * Supports optional build-time environment variable injection
  * Now supports pnpm/yarn/npm auto-detection
  * 
- * ⚠️ Only for static SPA builds. Vite requires VITE_ prefix for public env vars.
- * ⚠️ Build args are visible in Docker logs - DO NOT use for secrets!
- * ⚠️ RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
+ * WARNING: Only for static SPA builds. Vite requires VITE_ prefix for public env vars.
+ * WARNING: Build args are visible in Docker logs - DO NOT use for secrets!
+ * WARNING: RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
  * 
  * Users can access env vars via import.meta.env.VITE_API_URL in their code
  * If no env vars provided, generates a standard static site Dockerfile
@@ -582,7 +583,7 @@ ${envDirectives}${pm.build}
 FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
-# ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
+# WARNING: RUNTIME STRATEGY: Always use npm for serve installation
 # Package manager detection is BUILD-ONLY. Runtime uses npm because:
 # 1. serve is a runtime tool, not a project dependency
 # 2. Avoids Corepack conflicts and Alpine image issues
@@ -608,9 +609,9 @@ CMD ["sh", "-c", "serve -s dist -l $PORT"]
 /**
  * Generate Dockerfile for Angular (handles browser subfolder)
  * Supports build-time environment variable injection via sed replacement
- * ⚠️ Build args are NOT secrets - use Kubernetes Secrets for sensitive data
- * ⚠️ Only for static SPA builds (environment.prod.ts placeholders). Not for SSR/Nx/runtime config.
- * ⚠️ RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
+ * WARNING: Build args are NOT secrets - use Kubernetes Secrets for sensitive data
+ * WARNING: Only for static SPA builds (environment.prod.ts placeholders). Not for SSR/Nx/runtime config.
+ * WARNING: RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
  * Users can use __VAR_NAME__ placeholders in environment.prod.ts
  */
 export function getAngularDockerfile(envVars: Array<{key: string, value: string}> = []): string {
@@ -626,7 +627,7 @@ export function getAngularDockerfile(envVars: Array<{key: string, value: string}
 
   const envInjection = envVars.length > 0
     ? `# Inject env vars into Angular environment files (replace __VAR__ placeholders)
-# ⚠️ Only works for static builds with environment.prod.ts - NOT for SSR/Universal
+# WARNING: Only works for static builds with environment.prod.ts - NOT for SSR/Universal
 RUN ${sedCommands}
 
 `
@@ -652,7 +653,7 @@ ${envInjection}${pm.build}
 FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
-# ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
+# WARNING: RUNTIME STRATEGY: Always use npm for serve installation
 # Package manager detection is BUILD-ONLY. Runtime uses npm because:
 # 1. serve is a runtime tool, not a project dependency
 # 2. Avoids Corepack conflicts and Alpine image issues
@@ -881,7 +882,7 @@ export function generateNodejsDockerfileStage(): string {
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -928,7 +929,7 @@ export function generateNextjsDockerfileStage(envVars: Array<{key: string, value
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -962,6 +963,36 @@ DOCKERFILE_EOF
   # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
+  # Detect custom server (server.ts / server.js / server.mjs) and inject extra COPY lines
+  # This supports Next.js apps with custom servers (e.g. WebSocket proxies, custom routing)
+  # without breaking standard Next.js apps that use the default server
+  CUSTOM_SERVER_FILE=""
+  if [ -f server.ts ] || [ -f server.js ] || [ -f server.mjs ]; then
+    CUSTOM_SERVER_FILE=$(ls server.ts server.js server.mjs 2>/dev/null | head -1)
+    echo "Detected custom server: $CUSTOM_SERVER_FILE — adding to Dockerfile"
+  fi
+
+  if [ -n "$CUSTOM_SERVER_FILE" ]; then
+    # Write each COPY line to a temp file to avoid multi-line shell variables in sed
+    # (sed cannot handle newlines embedded in replacement strings)
+    echo "COPY --from=builder --chown=nextjs:nodejs /app/$CUSTOM_SERVER_FILE ./$CUSTOM_SERVER_FILE" > /tmp/custom_copies.txt
+    # If custom server imports from lib/, copy that too
+    if [ -d lib ] && (grep -rFq "./lib" "$CUSTOM_SERVER_FILE" || grep -rFq "@/lib" "$CUSTOM_SERVER_FILE") 2>/dev/null; then
+      echo "Custom server imports from lib/ — including lib directory"
+      echo "COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib" >> /tmp/custom_copies.txt
+    fi
+    # If using tsx/ts-node, we need tsconfig.json for TypeScript resolution
+    if [ -f tsconfig.json ] && (echo "$CUSTOM_SERVER_FILE" | grep -Fq ".ts"); then
+      echo "TypeScript custom server detected — including tsconfig.json"
+      echo "COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json" >> /tmp/custom_copies.txt
+    fi
+    # Use awk for multi-line placeholder replacement — reads lines from temp file
+    awk 'FNR==NR{lines[NR]=$0;count=NR;next} /^# CUSTOM_SERVER_COPY_PLACEHOLDER$/{for(i=1;i<=count;i++) print lines[i];next}1' /tmp/custom_copies.txt Dockerfile > /tmp/Dockerfile.new && mv /tmp/Dockerfile.new Dockerfile
+  else
+    # No custom server — remove the placeholder line entirely
+    sed -i "/# CUSTOM_SERVER_COPY_PLACEHOLDER/d" Dockerfile 2>/dev/null || sed -i "" "/# CUSTOM_SERVER_COPY_PLACEHOLDER/d" Dockerfile
+  fi
+  
   echo "Dockerfile generated successfully"
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
@@ -983,7 +1014,7 @@ export function generatePythonDockerfileStage(): string {
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -1133,7 +1164,7 @@ export function generateStaticSiteDockerfileStage(outputDir: string = 'dist', en
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -1180,7 +1211,7 @@ export function generateAngularDockerfileStage(envVars: Array<{key: string, valu
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -1224,7 +1255,7 @@ export function generateNuxtjsDockerfileStage(envVars: Array<{key: string, value
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -1269,7 +1300,7 @@ export function generateSveltekitDockerfileStage(envVars: Array<{key: string, va
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."
@@ -1380,7 +1411,7 @@ export function generateJavaDockerfileStage(): string {
   return `
 if [ -f Dockerfile ]; then
   echo "========================================="
-  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "[OK] FOUND EXISTING DOCKERFILE"
   echo "========================================="
   echo "Using project's existing Dockerfile instead of generating one."
   echo "This Dockerfile will be built as-is with no modifications."

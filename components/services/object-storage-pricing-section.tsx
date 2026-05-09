@@ -15,6 +15,7 @@ import {
 import { Container } from "@/components/ui/container";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Spotlight } from "@/components/ui/spotlight";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 interface Plan {
   storage: string;
@@ -51,63 +52,51 @@ const FALLBACK_CATEGORIES: StorageCategory[] = [
     key: "standard",
     label: "Standard",
     icon: Database,
-    tagline: "From $0.02/GB",
+    tagline: "$0.025/GB",
     description:
-      "High-performance object storage for frequently accessed data. Perfect for active applications, content delivery, and backups.",
+      "High-performance storage for frequently accessed data. Perfect for applications, media delivery, and active backups. Flat pricing — no volume tiers. CDN cache egress is free; origin traffic billed at $0.03/GB.",
     features: [
-      "Instant data retrieval",
+      "Instant access",
       "99.999% durability",
-      "S3-compatible API",
-      "Free egress to CDN",
+      "Free API requests",
+      "Free CDN cache egress",
     ],
     plans: [
-      { storage: "0 - 50 GB", priceStorage: 0.025, priceTransfer: 0.09, free: true },
-      { storage: "50 - 500 GB", priceStorage: 0.023, priceTransfer: 0.08 },
-      { storage: "500 GB - 5 TB", priceStorage: 0.021, priceTransfer: 0.07 },
-      { storage: "5 - 50 TB", priceStorage: 0.019, priceTransfer: 0.06 },
-      { storage: "50 TB+", priceStorage: 0.017, priceTransfer: 0.05 },
+      { storage: "All volumes", priceStorage: 0.025, priceTransfer: 0.03 },
     ],
   },
   {
     key: "infrequent",
     label: "Infrequent Access",
     icon: Archive,
-    tagline: "From $0.01/GB",
+    tagline: "$0.01/GB",
     description:
-      "Cost-effective storage for data accessed less frequently. Automatic retrieval with slightly higher access costs.",
+      "Cost-effective storage for infrequently accessed data. Lower cost with occasional retrieval. Same durability, no volume tiers. Retrieval fee of $0.005/GB applies when accessing data.",
     features: [
-      "Lower storage costs",
+      "Low storage cost",
       "Lifecycle automation",
-      "Retrieval fee applies",
-      "Same durability SLA",
+      "$0.005/GB retrieval",
+      "99.999% durability",
     ],
     plans: [
-      { storage: "0 - 100 GB", priceStorage: 0.015, priceTransfer: 0.09, retrievalFee: 0.01 },
-      { storage: "100 GB - 1 TB", priceStorage: 0.013, priceTransfer: 0.08, retrievalFee: 0.01 },
-      { storage: "1 - 10 TB", priceStorage: 0.011, priceTransfer: 0.07, retrievalFee: 0.01 },
-      { storage: "10 - 100 TB", priceStorage: 0.009, priceTransfer: 0.06, retrievalFee: 0.01 },
-      { storage: "100 TB+", priceStorage: 0.007, priceTransfer: 0.05, retrievalFee: 0.01 },
+      { storage: "All volumes", priceStorage: 0.01, priceTransfer: 0.03, retrievalFee: 0.005 },
     ],
   },
   {
     key: "glacier",
     label: "Archive",
     icon: Box,
-    tagline: "From $0.004/GB",
+    tagline: "$0.004/GB",
     description:
-      "Long-term archival storage for compliance and cold data. Minutes to hours retrieval time with lowest per-GB pricing.",
+      "Ultra-low cost archival storage for long-term compliance and cold data. Infrequent retrieval with simple, flat per-GB pricing. Retrieval time 5–12 hours; retrieval fees apply.",
     features: [
-      "Ultra-low storage cost",
-      "Compliance features",
-      "Flexible retrieval options",
+      "Ultra-low cost",
+      "Compliance-ready",
+      "5–12 hour retrieval",
       "Object lock support",
     ],
     plans: [
-      { storage: "0 - 1 TB", priceStorage: 0.005, priceTransfer: 0.09, retrievalTime: "5-12 hours" },
-      { storage: "1 - 10 TB", priceStorage: 0.0045, priceTransfer: 0.08, retrievalTime: "5-12 hours" },
-      { storage: "10 - 100 TB", priceStorage: 0.004, priceTransfer: 0.07, retrievalTime: "5-12 hours" },
-      { storage: "100 TB - 1 PB", priceStorage: 0.0035, priceTransfer: 0.06, retrievalTime: "5-12 hours" },
-      { storage: "1 PB+", priceStorage: 0.003, priceTransfer: 0.05, retrievalTime: "5-12 hours" },
+      { storage: "All volumes", priceStorage: 0.004, priceTransfer: 0.03, retrievalTime: "5–12 hours" },
     ],
   },
   {
@@ -116,19 +105,15 @@ const FALLBACK_CATEGORIES: StorageCategory[] = [
     icon: Building2,
     tagline: "Custom Pricing",
     description:
-      "Dedicated infrastructure with SLA, priority support, and volume discounts. Tailored for large-scale deployments.",
+      "Dedicated infrastructure with guaranteed SLA, priority support, and custom terms. Tailored for large-scale deployments and mission-critical workloads.",
     features: [
-      "Dedicated tenancy",
-      "99.99% uptime SLA",
+      "Custom SLA",
+      "99.99%+ uptime",
       "24/7 priority support",
-      "Custom integrations",
+      "Dedicated account manager",
     ],
     plans: [
-      { storage: "10 - 100 TB", priceStorage: "Custom", priceTransfer: "Custom", sla: "99.99%" },
-      { storage: "100 TB - 1 PB", priceStorage: "Custom", priceTransfer: "Custom", sla: "99.99%" },
-      { storage: "1 - 10 PB", priceStorage: "Custom", priceTransfer: "Custom", sla: "99.995%" },
-      { storage: "10 PB+", priceStorage: "Custom", priceTransfer: "Custom", sla: "99.995%" },
-      { storage: "Contact Sales", priceStorage: "Volume", priceTransfer: "Discounts", sla: "Custom" },
+      { storage: "Contact Sales", priceStorage: "Custom", priceTransfer: "Custom", sla: "99.99%+" },
     ],
   },
 ];
@@ -170,11 +155,10 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
         {/* ═══════════ SECTION 1: STORAGE HIGHLIGHTS ═══════════ */}
         <div className="text-center mb-12 lg:mb-16">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-[400] tracking-tight leading-[1.1] text-white">
-            Enterprise Object Storage,{" "}
-            <span className="text-[#0095FF]">Simple Pricing</span>
+            Simple, Predictable Pricing
           </h2>
           <p className="mt-4 mx-auto max-w-2xl text-sm lg:text-base leading-relaxed text-white/40">
-            S3-compatible object storage with 99.999% durability, lifecycle automation, and built-in CDN — pay only for what you use.
+            No request fees. No hidden charges. Just flat per-GB pricing for storage and transfer. Unlike Amazon S3 — simple enough for startups, powerful enough for enterprise.
           </p>
         </div>
 
@@ -198,11 +182,11 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
         {/* ═══════════ SECTION 2: STORAGE TIER PICKER ═══════════ */}
         <div className="mb-8 lg:mb-10">
           <h3 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight text-white">
-            Choose Your{" "}
-            <span className="text-[#0095FF]">Storage Tier</span>
+            Pick Your{" "}
+            <span className="text-[#0095FF]">Tier</span>
           </h3>
           <p className="mt-2 text-sm text-white/40 max-w-lg">
-            4 storage tiers optimized for different access patterns — from hot data to cold archival storage.
+            Flat pricing within each tier — no volume discounts, no surprises. All prices include 100GB free transfer and free API requests.
           </p>
         </div>
 
@@ -331,13 +315,24 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
                     <td className="px-6 py-5 text-[13px] text-white/55">{plan.sla}</td>
                   )}
                   <td className="px-6 py-5 text-right">
-                    <a
-                      href={isEnterprise && plan.storage === "Contact Sales" ? "/contact" : "/signup"}
-                      className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
-                    >
-                      {isEnterprise && plan.storage === "Contact Sales" ? "Contact Sales" : "Get Started"}
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </a>
+                    {isEnterprise && plan.storage === "Contact Sales" ? (
+                      <a
+                        href="/contact"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
+                      >
+                        Contact Sales
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <AuthAwareServiceCta
+                        service="object-storage"
+                        intent="main"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
+                      >
+                        Get Started
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </AuthAwareServiceCta>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -368,13 +363,14 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
 
         {/* ── CTA ── */}
         <div className="mt-12 flex flex-col items-center">
-          <a
-            href="/signup"
+          <AuthAwareServiceCta
+            service="object-storage"
+            intent="main"
             className="cursor-pointer inline-flex items-center justify-center gap-2.5 bg-white text-black px-10 h-12 text-[15px] font-[500] hover:bg-white/90 transition-colors"
           >
             Start Storing Objects Today
             <ArrowRight className="w-4.5 h-4.5" />
-          </a>
+          </AuthAwareServiceCta>
           <p className="mt-4 text-[13px] text-white/30">
             No credit card required &middot; 50 GB free tier included
           </p>

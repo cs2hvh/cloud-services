@@ -1,90 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Encryption, generateStrongPassword } from "@/config/functions";
-import { Billing } from "@/lib/supabase/queries/billing";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { getAuditContext } from "@/lib/audit/context";
+import { clusterOperations } from "@/lib/services/kubernetes/cluster-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
-    //debugger
     const json = await req.json();
-    //console.log(json,"...............................25")
-    // Expect ownerId in payload to check credits
-    const ownerId: string | undefined = json?.ownerId;
-    const upfront: number =
-      typeof json?.initial_cost === "number" ? json.initial_cost : 5.0; // default dummy upfront
+    const context = getAuditContext(req);
 
-    if (!ownerId) {
-      return NextResponse.json(
-        { error: "ownerId is required to validate credits" },
-        { status: 400 }
-      );
-    }
-
-    // Check balance before hitting DO API
-    const hasBalance = await Billing.has_balance(ownerId, upfront);
-    if (!hasBalance) {
-      const bal = await Billing.get_balance(ownerId);
-      return NextResponse.json(
-        { error: "Insufficient credits", balance: bal, required: upfront },
-        { status: 402 }
-      );
-    }
-
-
-
-    const vmPassword = generateStrongPassword();
-    //console.log(vmPassword,".................generateStrongPassword..............28")
-    const payload = {
-      ...json,
-      user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
-    };
-    //console.log(payload,"...............................28")
-    const droplets = await axios.post(
-      "https://api.digitalocean.com/v2/droplets",
-      payload,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
+    // Validate node names: each must not exceed 20 characters
+    const names: unknown = json?.names;
+    if (Array.isArray(names)) {
+      const invalid = names.filter((n) => typeof n === "string" && n.length > 20);
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { message: `Node name(s) exceed 20 characters: ${invalid.join(", ")}` },
+          { status: 400 }
+        );
       }
-    );
-    const hashedPassword = Encryption.encrypt(
-      vmPassword,
-      process.env.ENCRYPTION_KEY!
-    );
-
-    
-    if (droplets.status === 202) {
+    } else if (typeof names === "string" && names.length > 20) {
       return NextResponse.json(
-        {
-          data: droplets.data,
-          vmPassword: hashedPassword,
-          message: "droplet created success",
-        },
-        { status: 202 }
-      );
-    }
-
-    if (droplets.status != 202) {
-      return NextResponse.json(
-        { message: "there is some internal error. please try later" },
-        { status: 503 }
-      );
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      //  console.log(err.cause,"...............error in creating droplet................")
-      return NextResponse.json(
-        { message: "our server is not responding. please try later" },
+        { message: `Node name "${names}" exceeds 20 characters` },
         { status: 400 }
       );
-    } else {
-      console.log("Unknown error occurred");
-      return NextResponse.json(
-        { message: "Unknown error occurred" },
-        { status: 503 }
-      );
     }
+
+    const result = await clusterOperations.addNode({
+      clusterId: json?.cluster_id,
+      planId: json?.plan_id,
+      userId: auth.user!.id,
+      userEmail: auth.user!.email,
+      deferBillingUntilReady: true,
+      dropletPayload: json,
+      initialCost: typeof json?.initial_cost === "number" ? json.initial_cost : undefined,
+      expectedNodeCount:
+        typeof json?.expected_node_count === "number" ? json.expected_node_count : undefined,
+      auditContext: context,
+    });
+
+    if (!result.success) {
+      if (result.errorCode === "INSUFFICIENT_BALANCE") {
+        return NextResponse.json(
+          {
+            error: result.error || "Insufficient credits to start this cluster.",
+            message: result.error || "Insufficient credits to start this cluster.",
+            ...(result.data as object),
+          },
+          { status: 402 }
+        );
+      }
+      return NextResponse.json({ message: result.error }, { status: 503 });
+    }
+
+    return NextResponse.json(
+      {
+        data: result.dropletData,
+        vmPassword: result.vmPassword,
+        message: "Droplet created successfully",
+      },
+      { status: 202 }
+    );
+  } catch (err: unknown) {
+    logError("services/kubernetes/manageip/createdroplet", err);
+    return NextResponse.json({ message: sanitizeError(err) }, { status: 500 });
   }
 }

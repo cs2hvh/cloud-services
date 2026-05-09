@@ -21,11 +21,21 @@ import type {
   GetDatabaseClusterResult,
   UpdateDatabaseStatusRequest,
 } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 async function getClusterInternalImpl(
   request: GetDatabaseClusterRequest
 ): Promise<GetDatabaseClusterResult> {
   try {
+    const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+    if (!access.success) {
+      return {
+        success: false,
+        error: access.error,
+        errorCode: access.errorCode,
+      };
+    }
+
     let status = false;
     let doStatus: string | null = null;
 

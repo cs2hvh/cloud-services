@@ -196,8 +196,27 @@ export const Platform_Apps = {
     }
   },
 
+  delete_admin: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { error, count } = await supabase
+        .from("platform_apps")
+        .delete({ count: "exact" })
+        .eq("id", app_id);
+      if (error) return { success: false, error: error.message };
+      if (count === 0) return { success: false, error: "App not found" };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
   // Environment variables
-  set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
+  set_env_vars: async (
+    app_id: string,
+    env_vars: { key: string; value: string }[],
+    kept_keys: string[] = [],
+  ) => {
     try {
       // ✅ Validate: Check for duplicate keys in the input array
       const keys = env_vars.map(ev => ev.key);
@@ -210,21 +229,26 @@ export const Platform_Apps = {
         };
       }
 
+      // Keys that must be preserved as-is (caller does not have their decrypted values)
+      const protectedKeys = new Set(kept_keys);
+
       const supabase = await createServiceClient();
 
       // Upsert first, then delete stale keys. This avoids full data loss on partial failures.
-      if (env_vars.length > 0) {
+      if (env_vars.length > 0 || protectedKeys.size > 0) {
         const encryptedEnvVars = env_vars.map(ev => ({
           app_id,
           key: ev.key,
           value: encryptEnvValue(ev.value), // Encrypt the value before storing
         }));
 
-        const { error: upsertError } = await supabase
-          .from("platform_app_env_vars")
-          .upsert(encryptedEnvVars, { onConflict: "app_id,key" });
+        if (encryptedEnvVars.length > 0) {
+          const { error: upsertError } = await supabase
+            .from("platform_app_env_vars")
+            .upsert(encryptedEnvVars, { onConflict: "app_id,key" });
 
-        if (upsertError) return { success: false, error: upsertError.message };
+          if (upsertError) return { success: false, error: upsertError.message };
+        }
 
         const { data: existingRows, error: existingRowsError } = await supabase
           .from("platform_app_env_vars")
@@ -233,9 +257,10 @@ export const Platform_Apps = {
 
         if (existingRowsError) return { success: false, error: existingRowsError.message };
 
+        // A key is stale when it is neither in env_vars nor in kept_keys
         const staleKeys = (existingRows || [])
           .map((row: { key: string }) => row.key)
-          .filter((key) => !uniqueKeys.has(key));
+          .filter((key) => !uniqueKeys.has(key) && !protectedKeys.has(key));
 
         if (staleKeys.length > 0) {
           const { error: pruneError } = await supabase

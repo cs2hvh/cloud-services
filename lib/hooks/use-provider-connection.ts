@@ -5,6 +5,12 @@ import { toast } from 'sonner';
 
 interface UseProviderConnectionOptions {
   returnTo?: string;
+  mode?: 'identity' | 'integration';
+}
+
+interface ConnectProviderOverrides {
+  returnTo?: string;
+  mode?: 'identity' | 'integration';
 }
 
 interface ProviderConnectionResponse {
@@ -28,18 +34,34 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
   const [error, setError] = useState<string | null>(null);
 
   const connectProvider = useCallback(
-    async (provider: string, method: 'connect' | 'disconnect' = 'connect') => {
+    async (
+      provider: string,
+      method: 'connect' | 'disconnect' = 'connect',
+      overrides?: ConnectProviderOverrides
+    ) => {
       setIsLoading(true);
       setError(null);
 
       try {
         // Use provided returnTo or default to current page
-        const returnPath = options?.returnTo || (typeof window !== 'undefined' ? window.location.pathname : '/dashboard');
+        const returnPath =
+          overrides?.returnTo ||
+          options?.returnTo ||
+          (typeof window !== 'undefined' ? window.location.pathname : '/dashboard');
 
-        // Use direct OAuth for GitLab and Bitbucket to enable infinite token refresh
-        // GitHub uses Supabase Auth since those tokens don't expire anyway
-        const useDirectOAuth = provider === 'gitlab' || provider === 'bitbucket';
-        const endpoint = useDirectOAuth ? `/api/${provider}/app-auth` : '/api/auth/link';
+        const mode = overrides?.mode || options?.mode || 'integration';
+        const isGitIntegrationProvider = provider === 'gitlab' || provider === 'bitbucket';
+        // In integration mode: GitLab/Bitbucket connect AND disconnect go to their own
+        // /api/{provider}/app-auth endpoint (which handles both connect + delete).
+        // GitHub always goes to /api/auth/link regardless of mode; the link route has
+        // an `&& identity` guard that prevents deleting github_tokens unless a GitHub
+        // identity was actually unlinked.
+        const endpoint =
+          mode === 'identity'
+            ? '/api/auth/link'
+            : isGitIntegrationProvider
+              ? `/api/${provider}/app-auth`
+              : '/api/auth/link';
 
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -69,7 +91,8 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
 
         // Handle disconnect success
         if (method === 'disconnect') {
-          toast.success('Provider disconnected successfully');
+          const label = provider.charAt(0).toUpperCase() + provider.slice(1);
+          toast.success(`${label} disconnected successfully`);
           return { success: true };
         }
 
@@ -84,7 +107,7 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
         setIsLoading(false);
       }
     },
-    [options?.returnTo]
+    [options?.mode, options?.returnTo]
   );
 
   return { connectProvider, isLoading, error };

@@ -38,6 +38,7 @@ export async function PUT(req: NextRequest) {
       {
         clusterId: validatedData.database_id,
         storageSizeMib: validatedData.storage_size_mib,
+        userId: auth.user.id,
       },
       req
     );
@@ -50,10 +51,24 @@ export async function PUT(req: NextRequest) {
         );
       }
 
+      if (result.errorCode === "FORBIDDEN") {
+        return NextResponse.json(
+          { error: result.error || "You are not authorized to modify this database cluster" },
+          { status: 403 }
+        );
+      }
+
       if (result.errorCode === "INVALID_PARAMETER") {
         return NextResponse.json(
-          { error: result.error || "Failed to upsize database storage" },
+          { error: result.error || "Invalid storage size selected." },
           { status: 400 }
+        );
+      }
+
+      if (result.errorCode === "UNSUPPORTED_OPERATION") {
+        return NextResponse.json(
+          { error: "Storage upsize is not available for this database engine." },
+          { status: 422 }
         );
       }
 
@@ -65,7 +80,7 @@ export async function PUT(req: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: result.error || "Failed to upsize database storage" },
+        { error: result.error || "Unable to upsize storage right now. Please try again." },
         { status: result.statusCode || 500 }
       );
     }
@@ -77,15 +92,16 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
+    console.error("[api/services/database/upsize-storage] Unexpected error:", err);
     if (err instanceof Error) {
       return NextResponse.json(
-        { error: err.message || "Failed to upsize database storage" },
+        { error: "Unable to process storage upsize request." },
         { status: 500 }
       );
     }
 
     return NextResponse.json(
-      { error: "An unexpected error occurred" },
+      { error: "Unable to process storage upsize request." },
       { status: 500 }
     );
   }

@@ -294,6 +294,7 @@ export function EverythingSection() {
                         sizes="(min-width: 1280px) 600px, (min-width: 1024px) 420px, (min-width: 640px) 70vw, 90vw"
                         className="object-contain"
                         priority={activeTab.id === "gpu"}
+                        unoptimized
                       />
                     </div>
                   </motion.div>

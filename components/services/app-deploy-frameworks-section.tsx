@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
 import { ArrowRight, GitBranch, Terminal, Layers } from "lucide-react";
+import Image from "next/image";
 
 /* ─── Real SVG icons (Simple Icons, viewBox 0 0 24 24) ───----------- */
 
@@ -74,22 +75,6 @@ const icons = {
   ),
 };
 
-/* ─── Framework list ─── */
-const FRAMEWORKS = [
-  { name: "Node.js", icon: icons.nodejs, color: "#539E43", tag: "Runtime" },
-  { name: "Python", icon: icons.python, color: "#3776AB", tag: "Language" },
-  { name: "Go", icon: icons.go, color: "#00ADD8", tag: "Language" },
-  { name: "Ruby", icon: icons.ruby, color: "#CC342D", tag: "Language" },
-  { name: "React", icon: icons.react, color: "#61DAFB", tag: "Frontend" },
-  { name: "Next.js", icon: icons.nextjs, color: "#ffffff", tag: "Fullstack" },
-  { name: "Django", icon: icons.django, color: "#092E20", displayColor: "#44B78B", tag: "Backend" },
-  { name: "Flask", icon: icons.flask, color: "#ffffff", tag: "Backend" },
-  { name: "FastAPI", icon: icons.fastapi, color: "#009688", tag: "API" },
-  { name: "Spring Boot", icon: icons.springboot, color: "#6DB33F", tag: "Enterprise" },
-  { name: "Laravel", icon: icons.laravel, color: "#FF2D20", tag: "Backend" },
-  { name: "Express", icon: icons.express, color: "#ffffff", tag: "API" },
-];
-
 /* ─── Workflow steps ─── */
 const STEPS = [
   {
@@ -114,15 +99,6 @@ const container = {
   hidden: {},
   visible: {
     transition: { staggerChildren: 0.06 },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 24 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] as const },
   },
 };
 
@@ -177,50 +153,25 @@ export default function AppDeployFrameworksSection() {
           </p>
         </motion.div>
 
-        {/* Framework grid — 2 rows of 6 */}
+        {/* Framework visual */}
         <motion.div
-          className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-px bg-white/[0.06] border border-white/[0.06]"
+          className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-white/[0.03] to-white/[0.01] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8"
           variants={container}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
         >
-          {FRAMEWORKS.map((fw) => {
-            const c = fw.displayColor || fw.color;
-            return (
-              <motion.div
-                key={fw.name}
-                variants={item}
-                className="group relative bg-[#0a0a0a] flex flex-col items-center justify-center gap-2.5 py-7 px-4 lg:py-9 hover:bg-white/[0.04] transition-all duration-300 cursor-default"
-              >
-                {/* Hover glow — color tinted */}
-                <div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                  style={{
-                    background: `radial-gradient(circle at 50% 35%, ${c}15 0%, transparent 70%)`,
-                  }}
-                />
-
-                {/* Icon */}
-                <div
-                  className="relative w-9 h-9 lg:w-11 lg:h-11 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5"
-                  style={{ color: c }}
-                >
-                  {fw.icon}
-                </div>
-
-                {/* Name */}
-                <span className="relative text-[13px] lg:text-[14px] font-[500] text-white/60 group-hover:text-white transition-colors duration-300">
-                  {fw.name}
-                </span>
-
-                {/* Tag */}
-                <span className="relative text-[10px] text-white/20 uppercase tracking-wider group-hover:text-white/35 transition-colors duration-300">
-                  {fw.tag}
-                </span>
-              </motion.div>
-            );
-          })}
+          <div className="mx-auto w-full max-w-5xl">
+            <Image
+              src="/images/main-page/tornado.png"
+              alt="Cloud infrastructure visualization"
+              width={1600}
+              height={900}
+              sizes="(max-width: 640px) 92vw, (max-width: 1024px) 88vw, 1200px"
+              className="mx-auto h-auto w-full max-h-[240px] sm:max-h-[320px] lg:max-h-[420px] object-contain"
+              priority
+            />
+          </div>
         </motion.div>
 
         {/* Docker + extras row */}

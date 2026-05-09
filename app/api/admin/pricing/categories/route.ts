@@ -7,16 +7,7 @@ import {
   deleteCategorySchema,
 } from "@/lib/validation/pricing";
 import { validateRequest } from "@/lib/middleware/validate-request";
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  return "An unexpected error occurred";
-}
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // GET - Fetch all pricing categories
 export async function GET() {
@@ -44,9 +35,9 @@ export async function GET() {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Categories API] GET error:", error);
+    logError("GET /api/admin/pricing/categories", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to fetch categories" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -102,9 +93,9 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("[Pricing Categories API] POST error:", error);
+    logError("POST /api/admin/pricing/categories", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to create category" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -154,9 +145,9 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Categories API] PUT error:", error);
+    logError("PUT /api/admin/pricing/categories", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to update category" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -197,9 +188,9 @@ export async function DELETE(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Categories API] DELETE error:", error);
+    logError("DELETE /api/admin/pricing/categories", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to delete category" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

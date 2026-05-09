@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainService } from "@/lib/domain-service";
 import {
   createDomainActor,
@@ -23,6 +24,18 @@ export async function DELETE(
   if (!auth.authenticated) return auth.response;
 
   try {
+    const rl = await limitByUser(auth.user.id, {
+      prefix: "rl:remove-domain",
+      limit: 10,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
+    }
+
     const rawParams = await context.params;
     const params = ParamsSchema.safeParse(rawParams);
     if (!params.success) {

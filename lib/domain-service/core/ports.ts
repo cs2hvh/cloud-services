@@ -5,6 +5,8 @@ import type {
   DomainPurchaseRequest,
   DomainPurchaseRequestStatus,
   DomainRecord,
+  DomainTransferRequest,
+  DomainTransferRequestStatus,
 } from "@/lib/domain-service/core/types";
 
 export interface DomainMarketplaceResultRecord {
@@ -39,18 +41,55 @@ export interface DomainMarketplaceRegistrarPort {
     order?: number;
     totalPaid?: number;
   }>;
+  /**
+   * Optional: Update the registrant contact on a domain after purchase.
+   * Used for white-label flows so ICANN contact verification emails are
+   * routed to the purchasing user rather than the platform admin account.
+   * Implementations may be no-ops if the provider does not support it.
+   */
+  setRegistrantContact?(
+    domainName: string,
+    contact: { email: string; firstName?: string; lastName?: string }
+  ): Promise<void>;
+}
+
+export interface RegistrarSettings {
+  autorenewEnabled: boolean | null;
+  locked: boolean | null;
+  privacyEnabled: boolean | null;
+  expireDate: string | null;
 }
 
 export interface DomainRegistrarPort {
   getDomainSummary(domainName: string): Promise<{ domainName: string; expiresAt?: string; createdAt?: string } | null>;
+  resolveZone(fqdn: string): Promise<{ zone: string; host: string } | null>;
+  getRegistrarSettings(zone: string): Promise<RegistrarSettings>;
+  updateRegistrarSettings(zone: string, updates: { autorenewEnabled?: boolean; locked?: boolean; privacyEnabled?: boolean }): Promise<RegistrarSettings>;
 }
 
 export interface DnsProviderPort {
   listTxtRecords(recordName: string): Promise<string[]>;
   ensureRoutingRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
   removeRoutingRecord(params: { fqdn: string; target?: string }): Promise<void>;
-  ensureCnameRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
-  removeCnameRecord(params: { fqdn: string; target?: string }): Promise<void>;
+}
+
+/**
+ * Probes the live TLS certificate of a publicly reachable hostname.
+ * Decoupled from ingress management — can be backed by a Node.js TLS socket,
+ * an HTTP-based checker, or any other implementation.
+ */
+export interface TlsCertInfo {
+  /** Lowercased JSON of the certificate issuer object. */
+  issuer: string;
+  /** Lowercased certificate CN when present. */
+  common_name?: string;
+  /** Lowercased DNS SAN entries (without the `DNS:` prefix). */
+  sans?: string[];
+}
+
+export interface SslProbePort {
+  /** Returns null if the host is unreachable or presents no certificate. */
+  probe(hostname: string): Promise<TlsCertInfo | null>;
 }
 
 export interface IngressPort {
@@ -65,6 +104,7 @@ export interface AppReadPort {
 export interface AppWritePort {
   setHasCustomDomains(appId: string, hasCustomDomains: boolean): Promise<void>;
   clearCustomDomain(appId: string, clearedDomain: string): Promise<void>;
+  setPrimaryCustomDomain(appId: string, domain: string): Promise<void>;
 }
 
 export interface DnsRoutingPort {
@@ -72,7 +112,7 @@ export interface DnsRoutingPort {
 }
 
 export interface DomainRepositoryPort {
-  listByApp(appId: string, userId: string): Promise<DomainRecord[]>;
+  listByApp(appId: string | undefined, userId: string): Promise<DomainRecord[]>;
   findByIdForUser(domainId: string, userId: string): Promise<DomainRecord | null>;
   findActiveByDomain(domain: string): Promise<DomainRecord | null>;
   createPending(params: {
@@ -144,11 +184,20 @@ export interface DomainPurchaseRequestRepositoryPort {
     appId?: string;
     limit?: number;
   }): Promise<DomainPurchaseRequest[]>;
+  /**
+   * Returns completed purchase requests where registrant_email is NULL.
+   * Used by the reconciliation cron to retry failed setRegistrantContact calls.
+   * Only looks at records created within the last 20 days (ICANN window is 15 days).
+   */
+  findUnsyncedCompleted(limit: number): Promise<DomainPurchaseRequest[]>;
   updateStatus(params: {
     requestId: string;
     status: DomainPurchaseRequestStatus;
     providerRequestId?: string | null;
     lastError?: string | null;
+    registrantEmail?: string | null;
+    /** Shallow-merged into the existing metadata JSONB column. */
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 }
 
@@ -167,6 +216,13 @@ export interface DomainBillingPort {
     amount: number;
     currency: string;
     reason: string;
+  }): Promise<void>;
+  chargeRenewal(params: {
+    userId: string;
+    purchaseRequestId: string;
+    domain: string;
+    amount: number;
+    currency: string;
   }): Promise<void>;
 }
 
@@ -208,4 +264,103 @@ export interface DomainEmailPort {
     actionUrl?: string;
     actionLabel?: string;
   }): Promise<void>;
+}
+
+/* ──────────────────────────────────────────────────────────
+ * Domain Transfer Ports
+ * ──────────────────────────────────────────────────────────*/
+
+export interface NameComTransferResponse {
+  domainName: string;
+  email?: string;
+  status: string;
+}
+
+export interface NameComCreateTransferResponse {
+  transfer: NameComTransferResponse;
+  order?: number;
+  totalPaid?: number;
+}
+
+export interface DomainTransferDomainResponse {
+  nameservers?: string[];
+  renewalPrice?: number | null;
+}
+
+export interface DomainTransferRegistrarPort {
+  checkAvailability(domainNames: string[]): Promise<{
+    results: DomainMarketplaceResultRecord[];
+  }>;
+
+  createTransfer(input: {
+    domainName: string;
+    authCode: string;
+    purchasePrice?: number;
+    privacyEnabled?: boolean;
+  }): Promise<NameComCreateTransferResponse>;
+
+  getTransfer(domainName: string): Promise<NameComTransferResponse>;
+
+  getDomain(domainName: string): Promise<DomainTransferDomainResponse>;
+
+  cancelTransfer(domainName: string): Promise<NameComTransferResponse>;
+
+  listTransfers(params?: {
+    page?: number;
+    perPage?: number;
+  }): Promise<{ transfers: NameComTransferResponse[] }>;
+}
+
+export interface DomainTransferRequestRepositoryPort {
+  create(params: {
+    userId: string;
+    domain: string;
+    authCodeHash?: string | null;
+    purchasePrice?: number | null;
+    renewalPrice?: number | null;
+    currency?: string;
+    provider?: string;
+    providerOrderId?: string | null;
+    providerStatus?: string | null;
+    providerEmail?: string | null;
+    idempotencyKey?: string | null;
+    metadata?: Record<string, unknown>;
+    status?: DomainTransferRequestStatus;
+  }): Promise<DomainTransferRequest>;
+
+  findByIdForUser(requestId: string, userId: string): Promise<DomainTransferRequest | null>;
+
+  findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<DomainTransferRequest | null>;
+
+  findActiveByDomain(domain: string): Promise<DomainTransferRequest | null>;
+
+  listByUser(params: {
+    userId: string;
+    limit?: number;
+    includeArchived?: boolean;
+  }): Promise<DomainTransferRequest[]>;
+
+  listPendingForPolling(params: {
+    limit?: number;
+    staleBefore?: string;
+  }): Promise<DomainTransferRequest[]>;
+
+  updateStatus(params: {
+    requestId: string;
+    status: DomainTransferRequestStatus;
+    providerOrderId?: string | null;
+    providerStatus?: string | null;
+    providerEmail?: string | null;
+    lastError?: string | null;
+    failureReason?: string | null;
+    renewalPrice?: number | null;
+    /** Shallow-merged into the existing metadata JSONB column. */
+    metadata?: Record<string, unknown>;
+  }): Promise<void>;
+
+  updatePolled(requestId: string): Promise<void>;
+
+  clearAuthCode(requestId: string): Promise<void>;
+
+  archive(requestId: string, archivedBy: string): Promise<void>;
 }

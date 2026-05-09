@@ -5,10 +5,31 @@ import { emailTemplates } from "@/lib/email/templates";
 import type {
   EmailSendOptions,
   EmailTemplateId,
+  EmailTemplateTag,
   SendEmailResult,
 } from "@/lib/email/types";
 
 export class EmailService {
+  private sanitizeTagValue(value: string) {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  private sanitizeTags(tags: EmailTemplateTag[] = []) {
+    return tags
+      .map((tag) => {
+        const name = this.sanitizeTagValue(tag.name);
+        const value = this.sanitizeTagValue(tag.value);
+        if (!name || !value) return null;
+        return { name, value };
+      })
+      .filter((tag): tag is EmailTemplateTag => Boolean(tag));
+  }
+
   buildMessage<K extends EmailTemplateId>(options: EmailSendOptions<K>) {
     const template = emailTemplates[options.template];
 
@@ -18,6 +39,8 @@ export class EmailService {
 
     const config = getEmailConfig();
     const subject = template.subject(options.data);
+    const templateTags = template.tags?.(options.data) || [];
+    const requestTags = options.tags || [];
 
     return {
       from: config.from,
@@ -29,7 +52,7 @@ export class EmailService {
       react: template.render(options.data),
       text: template.text?.(options.data),
       headers: options.headers,
-      tags: [...(template.tags?.(options.data) || []), ...(options.tags || [])],
+      tags: this.sanitizeTags([...templateTags, ...requestTags]),
     };
   }
 

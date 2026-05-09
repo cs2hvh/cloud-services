@@ -95,11 +95,16 @@ export async function POST(req: Request) {
 
     const service = getDomainMarketplaceService();
     const idempotencyKey = resolveIdempotencyKey(req, parsed.data.idempotency_key);
+    const meta = (auth.user.user_metadata ?? {}) as Record<string, string>;
+    const userName = (
+      meta.full_name || meta.name || meta.display_name || meta.username || ""
+    ).trim() || auth.user.email?.split("@")[0].replace(/[._-]+/g, " ") || undefined;
     const request = await service.createPurchaseRequest({
       actor: createDomainActor({
         req,
         userId: auth.user.id,
         userEmail: auth.user.email || undefined,
+        userName,
       }),
       appId: parsed.data.app_id,
       domain: parsed.data.domain,

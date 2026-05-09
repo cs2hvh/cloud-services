@@ -1,5 +1,6 @@
 import { createServiceClient } from "../server";
 import { Promocode } from "../types";
+import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 
 interface PromocodeRedemptionEntry {
   userId?: string;
@@ -29,6 +30,179 @@ const getPromocodeRedemptions = (
   }
   return value.filter(isPromocodeRedemptionEntry);
 };
+
+const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction") => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`${operation} amount must be a positive number`);
+  }
+};
+
+const isUniqueViolation = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === "23505" ||
+    (typeof maybeError.message === "string" &&
+      maybeError.message.toLowerCase().includes("duplicate key"))
+  );
+};
+
+const isTransactionHistorySchemaMismatch = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  const message = maybeError.message?.toLowerCase() ?? "";
+  const mentionsNewColumn =
+    message.includes("service_id") ||
+    message.includes("service_type") ||
+    message.includes("period_start") ||
+    message.includes("period_end") ||
+    message.includes("metadata");
+
+  return Boolean(
+    mentionsNewColumn &&
+      (maybeError.code === "PGRST204" ||
+        maybeError.code === "42703" ||
+        message.includes("could not find the") ||
+        message.includes("column"))
+  );
+};
+
+const isTransactionTypeConstraintMismatch = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  const message = maybeError.message?.toLowerCase() ?? "";
+  return (
+    maybeError.code === "23514" ||
+    message.includes("transactions_type_check") ||
+    (message.includes("check constraint") && message.includes("type"))
+  );
+};
+
+type RecurringInterval = "week" | "month" | "year";
+type RecurringStatus =
+  | "pending"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "trialing"
+  | "paused";
+
+interface RecurringTopupRecord {
+  id: string;
+  user_id: string;
+  stripe_subscription_id: string | null;
+  amount: number;
+  currency: string;
+  interval: RecurringInterval;
+  status: RecurringStatus;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+type BillingTransactionStatus = "pending" | "completed" | "failed";
+type BillingTransactionType =
+  | "topup"
+  | "refund"
+  | "coupon"
+  | "recurring"
+  | "setup"
+  | "usage"
+  | "purchase";
+type BillableServiceType =
+  | "database"
+  | "kubernetes"
+  | "objectspace"
+  | "spectrum"
+  | "platform_apps"
+  | "domain";
+
+type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
+const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
+
+const LEGACY_TRANSACTION_TYPES = new Set<BillingTransactionType>([
+  "topup",
+  "refund",
+  "coupon",
+  "recurring",
+]);
+const SERVICE_LEDGER_TRANSACTION_TYPES = new Set<BillingTransactionType>([
+  "setup",
+  "usage",
+  "purchase",
+]);
+
+let transactionHistoryMode: TransactionHistoryMode = "unknown";
+let hasWarnedServiceLedgerUnavailable = false;
+let lastServiceLedgerMismatchAt = 0;
+
+function transactionNeedsServiceLedger(params: {
+  type?: BillingTransactionType;
+  serviceId?: string;
+  serviceType?: BillableServiceType;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  metadata?: Record<string, unknown>;
+}): boolean {
+  if (params.type && SERVICE_LEDGER_TRANSACTION_TYPES.has(params.type)) {
+    return true;
+  }
+
+  return Boolean(
+    params.serviceId ||
+      params.serviceType ||
+      params.periodStart ||
+      params.periodEnd ||
+      (params.metadata && Object.keys(params.metadata).length > 0)
+  );
+}
+
+function warnServiceLedgerUnavailable(context: string, error?: unknown) {
+  if (hasWarnedServiceLedgerUnavailable) return;
+  hasWarnedServiceLedgerUnavailable = true;
+  console.warn(
+    `[Billing] Service transaction history is unavailable until the billing.transactions ledger migration is applied. Skipping ${context}.`,
+    error instanceof Error ? error.message : error
+  );
+}
+
+function shouldAttemptServiceLedger(): boolean {
+  if (transactionHistoryMode !== "legacy") return true;
+  return Date.now() - lastServiceLedgerMismatchAt >= SERVICE_LEDGER_REPROBE_INTERVAL_MS;
+}
+
+function markServiceLedgerAvailable() {
+  transactionHistoryMode = "service_ledger";
+  hasWarnedServiceLedgerUnavailable = false;
+  lastServiceLedgerMismatchAt = 0;
+}
+
+function markServiceLedgerLegacy() {
+  transactionHistoryMode = "legacy";
+  lastServiceLedgerMismatchAt = Date.now();
+}
+
+async function triggerGraceRecoveryAfterCreditIncrease(userId: string) {
+  try {
+    const result = await resolveGraceForUserAfterTopup({ userId });
+    if (result.restoredCount > 0) {
+      console.log(
+        `[Billing.topup] Restored ${result.restoredCount} grace lifecycle entr${
+          result.restoredCount === 1 ? "y" : "ies"
+        } for user ${userId}`
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "[Billing.topup] Grace recovery hook failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
 
 export const Billing = {
   get_balance: async (userId: string): Promise<number> => {
@@ -101,7 +275,14 @@ export const Billing = {
     promo_credits?: number;
     topup_credits?: number;
   }> => {
+    ensurePositiveAmount(amount, "Top-up");
     const supabase = await createServiceClient();
+    let topupResult: {
+      credit_balance: number;
+      promo_credits?: number;
+      topup_credits?: number;
+    };
+
     const { data: existing } = await supabase
       .schema("billing")
       .from("user_credits")
@@ -118,46 +299,48 @@ export const Billing = {
         .select("credit_balance")
         .single();
       if (error) throw new Error(`Top-up failed: ${error.message}`);
-      return {
+      topupResult = {
         credit_balance: data?.credit_balance ?? amount,
         promo_credits: 0,
         topup_credits: 0,
       };
+    } else {
+      // Atomic increment - prevents race conditions with concurrent webhooks
+      const { data, error } = await supabase.rpc("billing_topup", {
+        p_user_id: userId,
+        p_amount: amount,
+      });
+
+      if (error) {
+        // Fallback to non-atomic update if RPC not available yet
+        console.warn("[Billing] RPC billing_topup not available, using fallback:", error.message);
+        const prevBal = existing.credit_balance ?? 0;
+        const next = { credit_balance: prevBal + amount };
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .schema("billing")
+          .from("user_credits")
+          .update(next)
+          .eq("user_id", userId)
+          .select("credit_balance")
+          .single();
+        if (fallbackErr) throw new Error(`Top-up failed: ${fallbackErr.message}`);
+        topupResult = {
+          credit_balance: fallbackData?.credit_balance ?? next.credit_balance,
+          promo_credits: 0,
+          topup_credits: 0,
+        };
+      } else {
+        topupResult = {
+          credit_balance: data as number,
+          promo_credits: 0,
+          topup_credits: 0,
+        };
+      }
     }
 
-    // Atomic increment — prevents race conditions with concurrent webhooks
-    const { data, error } = await supabase.rpc("billing_topup", {
-      p_user_id: userId,
-      p_amount: amount,
-    });
-
-    if (error) {
-      // Fallback to non-atomic update if RPC not available yet
-      console.warn("[Billing] RPC billing_topup not available, using fallback:", error.message);
-      const prevBal = existing.credit_balance ?? 0;
-      const next = { credit_balance: prevBal + amount };
-      const { data: fallbackData, error: fallbackErr } = await supabase
-        .schema("billing")
-        .from("user_credits")
-        .update(next)
-        .eq("user_id", userId)
-        .select("credit_balance")
-        .single();
-      if (fallbackErr) throw new Error(`Top-up failed: ${fallbackErr.message}`);
-      return {
-        credit_balance: fallbackData?.credit_balance ?? next.credit_balance,
-        promo_credits: 0,
-        topup_credits: 0,
-      };
-    }
-
-    return {
-      credit_balance: data as number,
-      promo_credits: 0,
-      topup_credits: 0,
-    };
+    await triggerGraceRecoveryAfterCreditIncrease(userId);
+    return topupResult;
   },
-
   has_balance: async (
     userId: string,
     requiredAmount: number
@@ -167,6 +350,7 @@ export const Billing = {
   },
 
   deduct: async (userId: string, amount: number): Promise<number> => {
+    ensurePositiveAmount(amount, "Deduction");
     const supabase = await createServiceClient();
 
     // Atomic deduction — prevents race conditions and overdraft
@@ -174,7 +358,8 @@ export const Billing = {
       p_user_id: userId,
       p_amount: amount,
     });
-    console.log(data, "deduct result", error?.message, "deduct error")
+    if (error) console.warn("[Billing] deduct RPC error:", error.message);
+    else console.log("[Billing] deduct result:", data);
 
     if (error) {
       // Fallback to non-atomic if RPC not available yet
@@ -204,6 +389,28 @@ export const Billing = {
     hourlyRate: number;
   }) => {
     const supabase = await createServiceClient();
+
+    // Check if an active row already exists for this service
+    const { data: existing } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .select("service_id")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+
+    if (existing) {
+      // Row already exists — update rate instead of inserting a duplicate
+      const { error: updErr } = await supabase
+        .schema("billing")
+        .from("active_kubernetes")
+        .update({ hourly_rate: params.hourlyRate })
+        .eq("service_id", params.serviceId);
+      if (updErr)
+        throw new Error(`Failed to update active_kubernetes: ${updErr.message}`);
+      console.log(`[Billing.add_active_kubernetes] Row already exists for ${params.serviceId}, updated rate to ${params.hourlyRate}`);
+      return;
+    }
+
     const { error } = await supabase
       .schema("billing")
       .from("active_kubernetes")
@@ -295,16 +502,214 @@ export const Billing = {
       throw new Error(`Failed to insert active_platform_apps: ${error.message}`);
   },
 
+  get_active_platform_app: async (params: {
+    serviceId: string;
+    userId?: string;
+  }): Promise<{
+    success: boolean;
+    data?: {
+      id: string;
+      service_id: string;
+      user_id: string;
+      hourly_rate: number;
+      status: string;
+      created_at: string | null;
+      updated_at: string | null;
+      last_billed_at: string | null;
+    } | null;
+    error?: string;
+  }> => {
+    try {
+      const supabase = await createServiceClient();
+      let query = supabase
+        .schema("billing")
+        .from("active_platform_apps")
+        .select("*")
+        .eq("service_id", params.serviceId)
+        .eq("status", "active");
+
+      if (params.userId) {
+        query = query.eq("user_id", params.userId);
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data ?? null };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
+
+  activate_platform_app: async (params: {
+    userId: string;
+    serviceId: string;
+    initialCost: number;
+    hourlyRate: number;
+  }): Promise<{
+    activated: boolean;
+    alreadyActive: boolean;
+    newBalance: number | null;
+  }> => {
+    const existing = await Billing.get_active_platform_app({
+      serviceId: params.serviceId,
+      userId: params.userId,
+    });
+
+    if (!existing.success) {
+      throw new Error(existing.error || "Failed to check active platform app billing");
+    }
+
+    if (existing.data) {
+      return {
+        activated: false,
+        alreadyActive: true,
+        newBalance: null,
+      };
+    }
+
+    let newBalance: number | null = null;
+    if (params.initialCost > 0) {
+      try {
+        newBalance = await Billing.deduct(params.userId, params.initialCost);
+      } catch (error) {
+        throw new Error(
+          `Failed to deduct initial platform app charge: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    if (params.initialCost > 0) {
+      try {
+        await Billing.save_transaction({
+          userId: params.userId,
+          amount: params.initialCost,
+          status: "completed",
+          type: "setup",
+          balanceAfter: newBalance,
+          serviceId: params.serviceId,
+          serviceType: "platform_apps",
+          description: "Initial platform app setup charge",
+        });
+      } catch (error) {
+        console.warn(
+          "[Billing.activate_platform_app] Failed to record setup transaction:",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+
+    try {
+      await Billing.add_active_platform_app({
+        userId: params.userId,
+        serviceId: params.serviceId,
+        hourlyRate: params.hourlyRate,
+      });
+      return {
+        activated: true,
+        alreadyActive: false,
+        newBalance,
+      };
+    } catch (error) {
+      const raceLostToExistingActiveRow = isUniqueViolation(error);
+      try {
+        if (params.initialCost > 0) {
+          const refundResult = await Billing.topup(params.userId, params.initialCost);
+          try {
+            await Billing.save_transaction({
+              userId: params.userId,
+              amount: params.initialCost,
+              status: "completed",
+              type: "refund",
+              balanceAfter: refundResult.credit_balance,
+              serviceId: params.serviceId,
+              serviceType: "platform_apps",
+              description: raceLostToExistingActiveRow
+                ? "Platform app setup charge refunded after duplicate activation race"
+                : "Platform app setup charge refunded after billing registration failed",
+            });
+          } catch (txnError) {
+            console.warn(
+              "[Billing.activate_platform_app] Failed to record refund transaction:",
+              txnError instanceof Error ? txnError.message : String(txnError)
+            );
+          }
+        }
+      } catch (refundError) {
+        throw new Error(
+          `Failed to create active platform app billing row after deducting credits${
+            raceLostToExistingActiveRow ? " because another activation won the race" : ""
+          }, and refund also failed: ${
+            refundError instanceof Error ? refundError.message : String(refundError)
+          }`
+        );
+      }
+
+      if (raceLostToExistingActiveRow) {
+        return {
+          activated: false,
+          alreadyActive: true,
+          newBalance: null,
+        };
+      }
+
+      throw new Error(
+        `Failed to create active platform app billing row after deducting credits; initial charge was refunded: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  },
+
   /**
    * Update the hourly rate for an active platform app (used during resize)
    * This ensures the user is charged the correct rate after resizing
    */
+  update_active_database_rate: async (params: {
+    serviceId: string;
+    newHourlyRate: number;
+  }): Promise<{ updated: boolean }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("active_database")
+      .update({
+        hourly_rate: params.newHourlyRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active")
+      .select("service_id");
+
+    if (error) {
+      console.error(`[Billing] Failed to update database rate:`, error.message);
+      throw new Error(`Failed to update hourly rate: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active database billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
+    console.log(`[Billing] Updated database ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
+  },
+
   update_active_platform_app_rate: async (params: {
     serviceId: string;
     newHourlyRate: number;
-  }): Promise<void> => {
+  }): Promise<{ updated: boolean }> => {
     const supabase = await createServiceClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .schema("billing")
       .from("active_platform_apps")
       .update({
@@ -312,14 +717,55 @@ export const Billing = {
         updated_at: new Date().toISOString(),
       })
       .eq("service_id", params.serviceId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .select("service_id");
 
     if (error) {
       console.error(`[Billing] Failed to update platform app rate:`, error.message);
       throw new Error(`Failed to update hourly rate: ${error.message}`);
     }
 
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active platform app billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
     console.log(`[Billing] Updated platform app ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
+  },
+
+  update_active_kubernetes_rate: async (params: {
+    serviceId: string;
+    newHourlyRate: number;
+  }): Promise<{ updated: boolean }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .update({
+        hourly_rate: params.newHourlyRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active")
+      .select("service_id");
+
+    if (error) {
+      console.error(`[Billing] Failed to update kubernetes rate:`, error.message);
+      throw new Error(`Failed to update hourly rate: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active kubernetes billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
+    console.log(`[Billing] Updated kubernetes ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
   },
 
   // Internal helper: compute prorated charge for remaining fraction of hour
@@ -387,7 +833,7 @@ export const Billing = {
       .from(table)
       .select("user_id, service_id, hourly_rate, last_billed_at")
       .eq("service_id", params.serviceId)
-      //.eq("user_id", params.userId)
+      .eq("user_id", params.userId)
       .maybeSingle();
 
     if (getErr) {
@@ -409,8 +855,8 @@ export const Billing = {
         .schema("billing")
         .from(table)
         .delete()
-        .eq("service_id", params.serviceId);
-      //.eq("user_id", row?.user_id);
+        .eq("service_id", params.serviceId)
+        .eq("user_id", params.userId);
       return { charged: 0, newBalance: null };
     }
 
@@ -426,14 +872,35 @@ export const Billing = {
 
     // Deduct credits
     let newBalance: number | null = null;
+    let deductionApplied = false;
     if (charge > 0) {
       try {
         newBalance = await Billing.deduct(row.user_id, charge);
+        deductionApplied = true;
         console.log(`[Billing.close_active_service] Deduction successful`, {
           userId: params.userId,
           charge,
           newBalance,
         });
+        try {
+          await Billing.save_transaction({
+            userId: row.user_id,
+            amount: charge,
+            status: "completed",
+            type: "usage",
+            balanceAfter: newBalance,
+            serviceId: params.serviceId,
+            serviceType: type,
+            periodStart: lastBilledAt,
+            periodEnd: new Date().toISOString(),
+            description: `Final prorated ${type.replace("_", " ")} usage charge`,
+          });
+        } catch (txnError) {
+          console.warn(
+            "[Billing.close_active_service] Failed to record usage transaction:",
+            txnError instanceof Error ? txnError.message : String(txnError)
+          );
+        }
       } catch (error) {
         if (params.failOnInsufficient) {
           throw new Error("Insufficient balance");
@@ -452,14 +919,46 @@ export const Billing = {
       .schema("billing")
       .from(table)
       .delete()
-      .eq("service_id", params.serviceId);
-    //.eq("user_id", params.userId);
+      .eq("service_id", params.serviceId)
+      .eq("user_id", params.userId);
     if (delErr) {
+      if (deductionApplied && charge > 0) {
+        try {
+          const refundResult = await Billing.topup(row.user_id, charge);
+          try {
+            await Billing.save_transaction({
+              userId: row.user_id,
+              amount: charge,
+              status: "completed",
+              type: "refund",
+              balanceAfter: refundResult.credit_balance,
+              serviceId: params.serviceId,
+              serviceType: type,
+              description: `Refund for ${type.replace("_", " ")} final charge after cleanup failure`,
+            });
+          } catch (txnError) {
+            console.warn(
+              "[Billing.close_active_service] Failed to record refund transaction:",
+              txnError instanceof Error ? txnError.message : String(txnError)
+            );
+          }
+        } catch (refundError) {
+          console.error(
+            `[Billing.close_active_service] Failed to refund charge after delete error for ${type}:`,
+            refundError instanceof Error ? refundError.message : String(refundError)
+          );
+          throw new Error(
+            `Failed to delete active ${type}: ${delErr.message}. Charge refund also failed.`
+          );
+        }
+      }
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,
         delErr.message
       );
-      throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
+      throw new Error(
+        `Failed to delete active ${type}: ${delErr.message}. Charge of ${charge} was refunded.`
+      );
     }
 
     console.log(`[Billing.close_active_service] Closed service successfully`, {
@@ -513,32 +1012,110 @@ export const Billing = {
     userId: string;
     stripeSessionId?: string;
     stripePaymentIntent?: string;
+    stripeInvoiceId?: string;
     amount: number;
     currency?: string;
-    status: "pending" | "completed" | "failed";
-    type?: "topup" | "refund" | "coupon";
-    balanceAfter?: number;
+    status: BillingTransactionStatus;
+    type?: BillingTransactionType;
+    balanceAfter?: number | null;
     description?: string;
     receiptUrl?: string;
+    serviceId?: string;
+    serviceType?: BillableServiceType;
+    periodStart?: string | null;
+    periodEnd?: string | null;
+    metadata?: Record<string, unknown>;
   }): Promise<void> => {
     const supabase = await createServiceClient();
-    const { error } = await supabase
-      .schema("billing")
-      .from("transactions")
-      .insert({
+    const completedAt = params.status === "completed" ? new Date().toISOString() : null;
+    const requestedType = params.type ?? "topup";
+    const needsServiceLedger = transactionNeedsServiceLedger({
+      type: requestedType,
+      serviceId: params.serviceId,
+      serviceType: params.serviceType,
+      periodStart: params.periodStart,
+      periodEnd: params.periodEnd,
+      metadata: params.metadata,
+    });
+
+    const payload = {
+      user_id: params.userId,
+      stripe_session_id: params.stripeSessionId ?? null,
+      stripe_payment_intent: params.stripePaymentIntent ?? null,
+      stripe_invoice_id: params.stripeInvoiceId ?? null,
+      amount: params.amount,
+      currency: params.currency ?? "usd",
+      status: params.status,
+      type: requestedType,
+      balance_after: params.balanceAfter ?? null,
+      description: params.description ?? null,
+      receipt_url: params.receiptUrl ?? null,
+      service_id: params.serviceId ?? null,
+      service_type: params.serviceType ?? null,
+      period_start: params.periodStart ?? null,
+      period_end: params.periodEnd ?? null,
+      metadata: params.metadata ?? {},
+      completed_at: completedAt,
+    };
+
+    const legacyPayload = {
         user_id: params.userId,
         stripe_session_id: params.stripeSessionId ?? null,
         stripe_payment_intent: params.stripePaymentIntent ?? null,
+        stripe_invoice_id: params.stripeInvoiceId ?? null,
         amount: params.amount,
         currency: params.currency ?? "usd",
         status: params.status,
-        type: params.type ?? "topup",
+        type: requestedType,
         balance_after: params.balanceAfter ?? null,
         description: params.description ?? null,
         receipt_url: params.receiptUrl ?? null,
-        completed_at: params.status === "completed" ? new Date().toISOString() : null,
-      });
-    if (error) throw new Error(`Failed to save transaction: ${error.message}`);
+        completed_at: completedAt,
+      };
+
+    if (shouldAttemptServiceLedger()) {
+      const { error } = await supabase
+        .schema("billing")
+        .from("transactions")
+        .insert(payload);
+
+      if (!error) {
+        markServiceLedgerAvailable();
+        return;
+      }
+
+      if (
+        isTransactionHistorySchemaMismatch(error) ||
+        isTransactionTypeConstraintMismatch(error)
+      ) {
+        markServiceLedgerLegacy();
+      } else {
+        throw new Error(`Failed to save transaction: ${error.message}`);
+      }
+    }
+
+    if (needsServiceLedger && !LEGACY_TRANSACTION_TYPES.has(requestedType)) {
+      warnServiceLedgerUnavailable(`transaction type "${requestedType}"`);
+      return;
+    }
+
+    if (!LEGACY_TRANSACTION_TYPES.has(requestedType)) {
+      throw new Error(`Unsupported transaction type: ${requestedType}`);
+    }
+
+    const { error: legacyError } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert(legacyPayload);
+
+    if (!legacyError) return;
+
+    if (isTransactionTypeConstraintMismatch(legacyError) && needsServiceLedger) {
+      warnServiceLedgerUnavailable(`transaction type "${requestedType}"`, legacyError);
+      return;
+    }
+
+    throw new Error(`Failed to save transaction: ${legacyError.message}`);
   },
 
   get_transaction_by_session: async (stripeSessionId: string): Promise<{ id: string; status: string } | null> => {
@@ -552,6 +1129,166 @@ export const Billing = {
     return data ?? null;
   },
 
+  get_transaction_by_invoice: async (stripeInvoiceId: string): Promise<{ id: string; status: string } | null> => {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .select("id, status")
+      .eq("stripe_invoice_id", stripeInvoiceId)
+      .maybeSingle();
+    return data ?? null;
+  },
+
+  get_recurring_topup: async (userId: string): Promise<RecurringTopupRecord | null> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .select("id, user_id, stripe_subscription_id, amount, currency, interval, status, cancel_at_period_end, canceled_at, created_at, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Billing] Failed to fetch recurring topup:", error.message);
+      return null;
+    }
+
+    return data as RecurringTopupRecord | null;
+  },
+
+  get_recurring_topup_by_subscription: async (
+    stripeSubscriptionId: string
+  ): Promise<RecurringTopupRecord | null> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .select("id, user_id, stripe_subscription_id, amount, currency, interval, status, cancel_at_period_end, canceled_at, created_at, updated_at")
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Billing] Failed to fetch recurring topup by subscription:", error.message);
+      return null;
+    }
+
+    return data as RecurringTopupRecord | null;
+  },
+
+  upsert_recurring_topup: async (params: {
+    userId: string;
+    amount: number;
+    interval: RecurringInterval;
+    currency?: string;
+    status?: RecurringStatus;
+    stripeSubscriptionId?: string | null;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const now = new Date().toISOString();
+    const payload = {
+      user_id: params.userId,
+      stripe_subscription_id: params.stripeSubscriptionId ?? null,
+      amount: params.amount,
+      currency: params.currency ?? "usd",
+      interval: params.interval,
+      status: params.status ?? "pending",
+      cancel_at_period_end: params.cancelAtPeriodEnd ?? false,
+      canceled_at: params.canceledAt ?? null,
+      updated_at: now,
+    };
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .upsert(payload, { onConflict: "user_id" });
+
+    if (error) {
+      throw new Error(`Failed to upsert recurring topup: ${error.message}`);
+    }
+  },
+
+  update_recurring_topup_by_user: async (params: {
+    userId: string;
+    status?: RecurringStatus;
+    stripeSubscriptionId?: string | null;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const updatePayload: {
+      status?: RecurringStatus;
+      stripe_subscription_id?: string | null;
+      cancel_at_period_end?: boolean;
+      canceled_at?: string | null;
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (params.status !== undefined) {
+      updatePayload.status = params.status;
+    }
+    if (params.stripeSubscriptionId !== undefined) {
+      updatePayload.stripe_subscription_id = params.stripeSubscriptionId;
+    }
+    if (params.cancelAtPeriodEnd !== undefined) {
+      updatePayload.cancel_at_period_end = params.cancelAtPeriodEnd;
+    }
+    if (params.canceledAt !== undefined) {
+      updatePayload.canceled_at = params.canceledAt;
+    }
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .update(updatePayload)
+      .eq("user_id", params.userId);
+
+    if (error) {
+      throw new Error(`Failed to update recurring topup: ${error.message}`);
+    }
+  },
+
+  update_recurring_topup_status_by_subscription: async (params: {
+    stripeSubscriptionId: string;
+    status?: RecurringStatus;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const updatePayload: {
+      status?: RecurringStatus;
+      cancel_at_period_end?: boolean;
+      canceled_at?: string | null;
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (params.status !== undefined) {
+      updatePayload.status = params.status;
+    }
+    if (params.cancelAtPeriodEnd !== undefined) {
+      updatePayload.cancel_at_period_end = params.cancelAtPeriodEnd;
+    }
+    if (params.canceledAt !== undefined) {
+      updatePayload.canceled_at = params.canceledAt;
+    }
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .update(updatePayload)
+      .eq("stripe_subscription_id", params.stripeSubscriptionId);
+
+    if (error) {
+      throw new Error(`Failed to update recurring topup by subscription: ${error.message}`);
+    }
+  },
+
   get_transactions: async (
     userId: string,
     opts?: {
@@ -559,6 +1296,7 @@ export const Billing = {
       offset?: number;
       status?: string;
       type?: string;
+      serviceType?: string;
       from?: string;
       to?: string;
     }
@@ -566,6 +1304,7 @@ export const Billing = {
     transactions: Array<{
       id: string;
       stripe_session_id: string | null;
+      stripe_invoice_id: string | null;
       amount: number;
       currency: string;
       status: string;
@@ -573,6 +1312,11 @@ export const Billing = {
       balance_after: number | null;
       description: string | null;
       receipt_url: string | null;
+      service_id: string | null;
+      service_type: string | null;
+      period_start: string | null;
+      period_end: string | null;
+      metadata: Record<string, unknown> | null;
       created_at: string;
     }>;
     total: number;
@@ -581,29 +1325,123 @@ export const Billing = {
     const limit = opts?.limit ?? 20;
     const offset = opts?.offset ?? 0;
 
-    let query = supabase
+    const applyFilters = <
+      T extends {
+        eq: (column: string, value: unknown) => T;
+        gte: (column: string, value: unknown) => T;
+        lte: (column: string, value: unknown) => T;
+      }
+    >(
+      query: T
+    ): T => {
+      let nextQuery = query.eq("user_id", userId);
+
+      if (opts?.status && ["pending", "completed", "failed"].includes(opts.status)) {
+        nextQuery = nextQuery.eq("status", opts.status);
+      }
+      if (
+        opts?.type &&
+        ["topup", "refund", "coupon", "recurring", "setup", "usage", "purchase"].includes(opts.type)
+      ) {
+        nextQuery = nextQuery.eq("type", opts.type);
+      }
+      if (
+        opts?.serviceType &&
+        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain"].includes(opts.serviceType)
+      ) {
+        nextQuery = nextQuery.eq("service_type", opts.serviceType);
+      }
+      if (opts?.from) {
+        nextQuery = nextQuery.gte("created_at", opts.from);
+      }
+      if (opts?.to) {
+        nextQuery = nextQuery.lte("created_at", opts.to);
+      }
+
+      return nextQuery;
+    };
+
+    if (shouldAttemptServiceLedger()) {
+      let ledgerQuery = supabase
+        .schema("billing")
+        .from("transactions")
+        .select(
+          "id, stripe_session_id, stripe_invoice_id, amount, currency, status, type, balance_after, description, receipt_url, service_id, service_type, period_start, period_end, metadata, created_at",
+          { count: "exact" }
+        );
+
+      ledgerQuery = applyFilters(ledgerQuery);
+
+      const { data, count, error } = await ledgerQuery
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (!error) {
+        markServiceLedgerAvailable();
+        return { transactions: data ?? [], total: count ?? 0 };
+      }
+
+      if (isTransactionHistorySchemaMismatch(error)) {
+        markServiceLedgerLegacy();
+      } else {
+        throw new Error(`Failed to fetch transactions: ${error.message}`);
+      }
+    }
+
+    let legacyQuery = supabase
       .schema("billing")
       .from("transactions")
-      .select("id, stripe_session_id, amount, currency, status, type, balance_after, description, receipt_url, created_at", { count: "exact" })
-      .eq("user_id", userId);
+      .select(
+        "id, stripe_session_id, stripe_invoice_id, amount, currency, status, type, balance_after, description, receipt_url, created_at",
+        { count: "exact" }
+      );
 
-    if (opts?.status && ["pending", "completed", "failed"].includes(opts.status)) {
-      query = query.eq("status", opts.status);
-    }
-    if (opts?.type && ["topup", "refund", "coupon"].includes(opts.type)) {
-      query = query.eq("type", opts.type);
-    }
-    if (opts?.from) {
-      query = query.gte("created_at", opts.from);
-    }
-    if (opts?.to) {
-      query = query.lte("created_at", opts.to);
-    }
+    legacyQuery = applyFilters(legacyQuery);
 
-    const { data, count } = await query
+    const { data, count, error } = await legacyQuery
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    return { transactions: data ?? [], total: count ?? 0 };
+    if (error) {
+      throw new Error(`Failed to fetch transactions: ${error.message}`);
+    }
+
+    const transactions = (data ?? []).map((row) => ({
+      ...row,
+      service_id: null,
+      service_type: null,
+      period_start: null,
+      period_end: null,
+      metadata: null,
+      created_at: row.created_at ?? new Date(0).toISOString(),
+    }));
+
+    return { transactions, total: count ?? 0 };
+  },
+
+  /**
+   * Stop billing for a Kubernetes cluster and charge for remaining time
+   */
+  remove_active_kubernetes: async (serviceId: string): Promise<void> => {
+    // We need userId to properly close the service, but we can look it up from the active record
+    const supabase = await createServiceClient();
+    const { data: active } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .select("user_id")
+      .eq("service_id", serviceId)
+      .maybeSingle();
+
+    if (!active) {
+      console.warn(`[Billing.remove_active_kubernetes] No active record found for ${serviceId}`);
+      return;
+    }
+
+    await Billing.close_active_service("kubernetes", {
+      userId: active.user_id,
+      serviceId,
+      failOnInsufficient: false,
+    });
   },
 };
+

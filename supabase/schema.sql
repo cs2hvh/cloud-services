@@ -137,6 +137,7 @@ create table clusters (
 
   control_plane text,
   workers jsonb default '[]'::jsonb,
+  create_droplet boolean default false,
 
   create_status boolean default false,
   connect_status boolean default false,
@@ -314,7 +315,33 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
     INSERT INTO public.user_profiles (id, username, display_name)
-    VALUES (new.id, new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'display_name');
+    VALUES (
+        new.id,
+        COALESCE(
+            NULLIF(new.raw_user_meta_data->>'username', ''),
+            split_part(COALESCE(new.email, ''), '@', 1)
+        ),
+        COALESCE(
+            NULLIF(new.raw_user_meta_data->>'display_name', ''),
+            NULLIF(new.raw_user_meta_data->>'username', ''),
+            split_part(COALESCE(new.email, ''), '@', 1)
+        )
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.projects (name, description, default_project, owner, users)
+    SELECT
+        'My First Project',
+        'Default project created automatically.',
+        TRUE,
+        new.id,
+        jsonb_build_array(new.id::text)
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.projects p
+        WHERE p.owner = new.id
+    );
+
     RETURN new;
 END;
 $$ language plpgsql security definer;

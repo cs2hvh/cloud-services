@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, type ElementType } from "react";
+import { useMemo } from "react";
 import { motion } from "motion/react";
-import {
-  CheckCircle2,
-  Globe,
-  Plus,
-  Shield,
-  Waypoints,
-} from "lucide-react";
+import { Plus } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Tables } from "@/lib/supabase/types";
@@ -25,18 +20,16 @@ function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: ElementType;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
             {label}
@@ -44,8 +37,8 @@ function MetricCard({
           <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div className={"flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] " + accentClassName}>
-          <Icon className="h-4 w-4" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
         </div>
       </div>
     </div>
@@ -110,29 +103,25 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
             label="Protected Apps"
             value={stats.totalApplications}
             meta="Spectrum configurations under protection"
-            icon={Shield}
-            accentClassName="text-blue-300"
+            iconSrc="/dashboard-icons/protected-apps.png"
           />
           <MetricCard
             label="Active"
             value={stats.activeApps}
             meta="Configs currently provisioned and serving"
-            icon={CheckCircle2}
-            accentClassName="text-emerald-300"
+            iconSrc="/dashboard-icons/active-1.png"
           />
           <MetricCard
             label="IP Firewall"
             value={stats.firewallEnabled}
             meta="Apps with IP firewall controls enabled"
-            icon={Globe}
-            accentClassName="text-white/75"
+            iconSrc="/dashboard-icons/ip-firewall.png"
           />
           <MetricCard
             label="Traffic Profiles"
             value={stats.trafficProfiles || 0}
             meta="Distinct traffic modes across protected apps"
-            icon={Waypoints}
-            accentClassName="text-amber-300"
+            iconSrc="/dashboard-icons/traffic-profiles.png"
           />
         </motion.div>
 

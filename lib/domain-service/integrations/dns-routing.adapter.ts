@@ -15,7 +15,10 @@ export class DnsRoutingAdapter implements DnsRoutingPort {
 
   constructor() {
     this.resolver = new Resolver();
-    this.resolver.setServers(["8.8.8.8", "1.1.1.1"]);
+    // Use the same configurable resolver list as the DNS provider adapter so
+    // both checks see a consistent view of DNS. Defaults to Cloudflare first
+    // to avoid Google DNS negative-cache issues on freshly-created records.
+    this.resolver.setServers(parseRoutingDnsServers(process.env.DOMAINS_PUBLIC_DNS));
     this.expectedIps = DnsRoutingAdapter.parseExpectedIps();
   }
 
@@ -102,4 +105,13 @@ export class DnsRoutingAdapter implements DnsRoutingPort {
     if (!raw) return [];
     return raw.split(",").map((ip) => ip.trim()).filter(Boolean);
   }
+}
+
+function parseRoutingDnsServers(raw?: string): string[] {
+  const configured = raw
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (configured && configured.length > 0) return configured;
+  return ["1.1.1.1", "8.8.8.8"];
 }

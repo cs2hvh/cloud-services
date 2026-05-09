@@ -16,6 +16,16 @@ interface NodeConfig {
   ram: number;
   cpu: number;
   storage: number;
+  provision_config?: {
+    type?: "internal" | "customer" | string;
+    location?: string;
+    k8s_minor?: string;
+    pod_cidr?: string;
+    ssh_user?: string;
+    node_count?: number;
+    plan_id?: string;
+    [key: string]: unknown;
+  };
 }
 
 
@@ -124,6 +134,9 @@ export type Admin_PlatformApp = {
   owner_username: string | null;
   created_at: string | null;
   project_id: string | null;
+  size: string | null;
+  deployment_url: string | null;
+  ip: string | null;
 }
 
 // User-facing platform app type (without admin fields)
@@ -131,6 +144,7 @@ export type PlatformApp = {
   id: string;
   name: string;
   slug: string;
+  deployment_url?: string | null;
   repository_url: string;
   repository_name: string;
   repository_id: string;
@@ -174,7 +188,7 @@ export interface DatabaseUser {
 export interface DatabaseInstance {
   id: string;           // Database name (unique identifier)
   name: string;         // Database name
-  created_at: string;   // ISO timestamp
+  created_at?: string;  // ISO timestamp when known
 }
 
 export interface Database_Connection{
@@ -814,6 +828,7 @@ export type Database = {
           owner_id:string;
           controlPlane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          createDroplet?: boolean;
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -830,6 +845,7 @@ export type Database = {
 
           controlPlane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          createDroplet?: boolean;
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -853,6 +869,7 @@ export type Database = {
           owner_id:string;
           control_plane?: { public_ip: string; private_ip: string; droplet_id: string } | null; // e.g., API VIP or CP-1 IP
           workers?: { public_ip: string; private_ip: string; droplet_id: string }[] | null; // list of worker IPs/hosts
+          create_droplet?: boolean;
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;
@@ -869,6 +886,7 @@ export type Database = {
           owner_id:string;
           control_plane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          create_droplet?: boolean;
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;
@@ -1412,6 +1430,120 @@ export type Database = {
         Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
         Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
         Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      active_platform_apps: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_session_id: string | null;
+          stripe_payment_intent: string | null;
+          stripe_invoice_id: string | null;
+          amount: number;
+          currency: string;
+          status: string;
+          type: string;
+          balance_after: number | null;
+          description: string | null;
+          receipt_url: string | null;
+          service_id: string | null;
+          service_type: string | null;
+          period_start: string | null;
+          period_end: string | null;
+          metadata: Record<string, unknown> | null;
+          created_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_invoice_id?: string | null;
+          amount: number;
+          currency?: string;
+          status?: string;
+          type?: string;
+          balance_after?: number | null;
+          description?: string | null;
+          receipt_url?: string | null;
+          service_id?: string | null;
+          service_type?: string | null;
+          period_start?: string | null;
+          period_end?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_invoice_id?: string | null;
+          amount?: number;
+          currency?: string;
+          status?: string;
+          type?: string;
+          balance_after?: number | null;
+          description?: string | null;
+          receipt_url?: string | null;
+          service_id?: string | null;
+          service_type?: string | null;
+          period_start?: string | null;
+          period_end?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      recurring_topups: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_subscription_id: string | null;
+          amount: number;
+          currency: string;
+          interval: string;
+          status: string;
+          cancel_at_period_end: boolean;
+          canceled_at: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_subscription_id?: string | null;
+          amount: number;
+          currency?: string;
+          interval: string;
+          status?: string;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_subscription_id?: string | null;
+          amount?: number;
+          currency?: string;
+          interval?: string;
+          status?: string;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
         Relationships: [];
       };
     };

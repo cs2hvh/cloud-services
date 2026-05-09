@@ -8,19 +8,13 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowUpRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Cpu,
-  Database,
-  FolderKanban,
   HardDrive,
-  Layers3,
   Loader2,
-  MapPin,
   Server,
-  ShieldCheck,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -86,42 +80,42 @@ const STEP_META = [
     name: "Name",
     title: "Name the cluster",
     description: "Choose a clear production-safe name for this managed database cluster.",
-    icon: Database,
+    iconSrc: "/dashboard-icons/name.png",
   },
   {
     id: 2,
     name: "Location",
     title: "Select deployment region",
     description: "Place the cluster near your applications, users, or compliance boundary.",
-    icon: MapPin,
+    iconSrc: "/dashboard-icons/location.png",
   },
   {
     id: 3,
     name: "Type",
     title: "Choose database engine",
     description: "Select the engine that best matches workload requirements and tooling.",
-    icon: Layers3,
+    iconSrc: "/dashboard-icons/type.png",
   },
   {
     id: 4,
     name: "Plan",
     title: "Right-size compute and storage",
     description: "Pick the performance tier, plan size, and engine version for deployment.",
-    icon: Server,
+    iconSrc: "/dashboard-icons/plan-1.png",
   },
   {
     id: 5,
     name: "Project",
     title: "Attach to a project",
     description: "Associate the cluster with an existing project for organization and access.",
-    icon: FolderKanban,
+    iconSrc: "/dashboard-icons/project-1.png",
   },
   {
     id: 6,
     name: "Review",
     title: "Review and confirm",
     description: "Verify configuration, monthly pricing, and policy acceptance before launch.",
-    icon: ShieldCheck,
+    iconSrc: "/dashboard-icons/review-1.png",
   },
 ] as const;
 
@@ -195,11 +189,16 @@ function FieldError({ message }: { message: string }) {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -307,8 +306,8 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
       try {
         setLoadingTypes(true);
         const response = await api.get("/database-types");
-        if (response.data.success) {
-          setDatabaseTypes(response.data.data);
+        if (response?.data?.success) {
+          setDatabaseTypes(response?.data?.data ?? []);
         }
       } catch (error) {
         console.error("Error fetching database types:", error);
@@ -444,6 +443,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
     }
 
     try {
+      //debugger
       setIsLoading(true);
 
       if (
@@ -498,8 +498,11 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
 
       const response = await api.post("/services/database/create", payload);
       if (response.status === 200) {
-        toast.success(response.data.message || "Database creation started!");
-        router.push(`/dashboard/services/database/clusters/${response.data.data.cluster_id}`);
+        toast.success(response?.data?.message || "Database creation started!");
+        const clusterId = response?.data?.data?.cluster_id;
+        if (clusterId) {
+          router.push(`/dashboard/services/database/clusters/${clusterId}`);
+        }
       }
     } catch (error) {
       console.error(error);
@@ -513,9 +516,9 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
   const selectedMonthlyPrice = getEffectivePrice(selectedDatabase);
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
               Database Provisioning
@@ -528,25 +531,15 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               focused review before provisioning begins.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {currentStep} / {STEP_META.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Monthly
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedDatabase ? getPriceLabel(selectedDatabase) : "-"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da database.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -559,7 +552,6 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
 
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-6">
             {STEP_META.map((step) => {
-              const Icon = step.icon;
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
 
@@ -580,14 +572,23 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${isActive ? "border-blue-400/30 text-blue-300" : "border-white/[0.10] text-white/78"}`}>
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">{step.name}</div>
+                        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
+                      </div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
-                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
                 </button>
               );
             })}
@@ -679,6 +680,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-white">{region.city}</div>
@@ -1042,7 +1044,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
+                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
               >
                 Continue
                 <ChevronRight className="ml-2 h-4 w-4" />
@@ -1074,53 +1076,52 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
           <div className={`${panelClassName} lg:sticky lg:top-8`}>
             <div className="border-b border-white/[0.06] px-6 py-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                Order Summary
+                Summary
               </p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Configuration snapshot</h3>
+              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
             </div>
 
-            <div className="px-6 py-5">
-              {selectedDbTypeInfo ? (
-                <div className="mb-5 flex items-center gap-4 border border-white/[0.08] bg-white/[0.04] p-4">
-                  <div className="flex h-12 w-12 items-center justify-center border border-blue-400/20 bg-blue-500/10">
+            <div className="px-6 py-4">
+              {selectedDbTypeInfo && (
+                <div className="mb-4 flex items-center gap-3 border border-white/[0.08] bg-white/[0.04] p-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10">
                     <Image
                       src={selectedDbTypeInfo.icon_url}
                       alt={selectedDbTypeInfo.name}
-                      width={28}
-                      height={28}
+                      width={26}
+                      height={26}
                       className="object-contain"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-sm font-semibold text-white">{selectedDbTypeInfo.name}</div>
-                    <div className="mt-1 text-xs uppercase tracking-wide text-white/35">
-                      {state.selectedVersion ? `Version ${state.selectedVersion}` : "Version pending"}
-                    </div>
+                    {state.selectedVersion && (
+                      <div className="mt-0.5 text-xs uppercase tracking-wide text-white/35">
+                        Version {state.selectedVersion}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div className="mb-5 border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-white/45">
-                  No engine selected yet.
                 </div>
               )}
 
-              <div className="space-y-1">
-                <SummaryRow label="Cluster name" value={state.selectedName || "Pending"} />
-                <SummaryRow
-                  label="Region"
-                  value={selectedLocationData ? selectedLocationData.city : "Pending"}
-                />
-                <SummaryRow
-                  label="Engine"
-                  value={selectedDbTypeInfo ? selectedDbTypeInfo.name : "Pending"}
-                />
-                <SummaryRow label="CPU profile" value={CPU_META[selectedCpuType].label} />
-                <SummaryRow label="Plan" value={selectedDatabase?.name || "Pending"} />
-                <SummaryRow
-                  label="Project"
-                  value={selectedProjectData?.name || "Pending"}
-                />
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster name" value={state.selectedName || "—"} empty={!state.selectedName} />
+                <SummaryRow icon="/dashboard-icons/region.png" label="Region" value={selectedLocationData?.city ?? "—"} empty={!selectedLocationData} />
+                <SummaryRow icon="/dashboard-icons/engine.png" label="Engine" value={selectedDbTypeInfo?.name ?? "—"} empty={!selectedDbTypeInfo} />
               </div>
+
+              {(selectedDatabase) && (
+                <>
+                  <div className="my-3 border-t border-white/[0.05]" />
+                  <div className="space-y-0.5">
+                    <SummaryRow icon="/dashboard-icons/cpu.png" label="CPU profile" value={CPU_META[selectedCpuType].label} />
+                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedDatabase.name} />
+                    {selectedProjectData && (
+                      <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProjectData.name} />
+                    )}
+                  </div>
+                </>
+              )}
 
               <Separator className="my-4 bg-white/[0.08]" />
 
@@ -1130,7 +1131,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                     Estimated monthly cost
                   </div>
                   <div className="mt-2 text-2xl font-semibold text-white">
-                    {selectedDatabase ? getPriceLabel(selectedDatabase) : "-"}
+                    {selectedDatabase ? getPriceLabel(selectedDatabase) : "—"}
                   </div>
                 </div>
                 {selectedMonthlyPrice !== null && selectedMonthlyPrice !== 0 && (

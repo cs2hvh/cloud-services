@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from "react";
-import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 import {
   Card,
@@ -31,7 +32,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {  Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import axios from "axios";
+
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
+    </div>
+  );
+}
 
 interface SpectrumAppCreateProps {
   projects: Tables<"projects">[];
@@ -83,11 +100,19 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const response = await axios.get("/api/admin/products?type=network-ddos");
-        const products = response.data.products;
-        
-        if (products && products.length > 0) {
-          setSpectrumPrice(parseFloat(products[0].price) || 0);
+        if (role === "admin") {
+          const response = await axios.get("/api/admin/products?type=network-ddos");
+          const products = response?.data?.products;
+          if (products && products.length > 0) {
+            setSpectrumPrice(parseFloat(products[0].price) || 0);
+          }
+        } else {
+          const response = await axios.get("/api/pricing?category=network-ddos");
+          const monthly =
+            response?.data?.category?.tiers?.[0]?.price?.monthly;
+          if (typeof monthly === "number" && Number.isFinite(monthly)) {
+            setSpectrumPrice(monthly);
+          }
         }
       } catch (error) {
         console.error("Error fetching spectrum price:", error);
@@ -98,7 +123,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Filter users based on search query
   const filteredUsers = allUsers.filter(
@@ -277,35 +302,35 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const steps = role === "admin"
     ? (isSSHorRDP
         ? [
-            { id: 0, name: "User", displayId: 1 },
-            { id: 1, name: "App Type", displayId: 2 },
-            { id: 2, name: "Domain", displayId: 3 },
-            { id: 4, name: "Origin", displayId: 4 },
-            { id: 6, name: "Project", displayId: 5 }
+            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 0, name: "User" },
-            { id: 1, name: "App Type" },
-            { id: 2, name: "Domain" },
-            { id: 3, name: "Edge Port" },
-            { id: 4, name: "Origin" },
-            { id: 5, name: "Settings" },
-            { id: 6, name: "Project" }
+            { id: 0, name: "User",      iconSrc: "/dashboard-icons/users-and-dbs.png" },
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ])
     : (isSSHorRDP
         ? [
-            { id: 1, name: "App Type", displayId: 1 },
-            { id: 2, name: "Domain", displayId: 2 },
-            { id: 4, name: "Origin", displayId: 3 },
-            { id: 6, name: "Project", displayId: 4 }
+            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard-icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard-icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard-icons/project-1.png" }
           ]
         : [
-            { id: 1, name: "App Type" },
-            { id: 2, name: "Domain" },
-            { id: 3, name: "Edge Port" },
-            { id: 4, name: "Origin" },
-            { id: 5, name: "Settings" },
-            { id: 6, name: "Project" }
+            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
           ]);
 
   // Filter projects based on selected user (admin mode) or current user
@@ -321,16 +346,14 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 
   const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
   const panelClassName = "glass-panel overflow-hidden";
-  const summaryPanelClassName =
-    "overflow-hidden rounded-none border border-white/[0.1] bg-[linear-gradient(180deg,rgba(18,24,37,0.98),rgba(10,14,22,0.96))] shadow-[0_24px_56px_rgba(2,6,20,0.38)] backdrop-blur-2xl";
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-5 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <Link
               href={role === "admin" ? "/dashboard/admin/network-ddos" : "/dashboard/services/network-ddos"}
@@ -349,25 +372,15 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
               Move through app type, domain, routing, origin, and project assignment in a more compact enterprise flow.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {progressStep} / {steps.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Monthly rate
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {loadingPrice ? "-" : "$" + spectrumPrice.toFixed(2)}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da ddos preotection.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -378,7 +391,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
             />
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
+          <div className="grid gap-2.5 sm:grid-cols-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
             {steps.map((step) => {
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
@@ -403,22 +416,22 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                     "px-3 py-3 text-left transition-colors"
                   }
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={
-                        "flex h-8 w-8 items-center justify-center border bg-white/[0.05] " +
-                        (isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78")
-                      }
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">
                       {String(stepNumber).padStart(2, "0")}
                     </span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
                 </button>
               );
             })}
@@ -646,94 +659,47 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
         </div>
 
         {/* Summary Sidebar */}
-        <div className="xl:min-w-0">
-          <Card className={`${summaryPanelClassName} rounded-none xl:sticky xl:top-8 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col`}>
-            <CardHeader className="rounded-none border-b border-white/[0.08] bg-white/[0.02] px-4 py-3.5">
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                  Deployment Summary
-                </div>
-                {!loadingPrice && spectrumPrice > 0 && (
-                  <div className="text-2xl font-semibold tracking-tight text-white">
-                    ${spectrumPrice.toFixed(2)}
-                    <span className="ml-1 text-sm font-medium text-white/45">/mo</span>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 overflow-y-auto px-4 py-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0))]">
-              {formData.appType && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Application</div>
-                  <div className="max-w-[62%] text-right text-sm font-semibold uppercase tracking-[0.12em] text-white">
-                    {formData.appType}
-                  </div>
-                </div>
-              )}
-
-              {formData.domain && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Domain</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {formData.domain}
-                  </div>
-                </div>
-              )}
-
-              {formData.edgePort > 0 && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Edge Port</div>
-                  <div className="text-right text-sm font-semibold text-white">{formData.edgePort}</div>
-                </div>
-              )}
-
-              {formData.originIP && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Origin</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {formData.originIP}{formData.originPort > 0 ? `:${formData.originPort}` : ""}
-                  </div>
-                </div>
-              )}
-
+        <div className={`${panelClassName} xl:sticky xl:top-8`}>
+          <div className="border-b border-white/[0.06] px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
+              Summary
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+          </div>
+          <div className="px-6 py-4">
+            <div className="space-y-0.5">
+              <SummaryRow icon="/dashboard-icons/apptype.png" label="Application" value={formData.appType ? <span className="uppercase">{formData.appType}</span> : "—"} empty={!formData.appType} />
+              <SummaryRow icon="/dashboard-icons/domain.png" label="Domain" value={formData.domain || "—"} empty={!formData.domain} />
+              <SummaryRow icon="/dashboard-icons/edge-port.png" label="Edge Port" value={formData.edgePort > 0 ? formData.edgePort : "—"} empty={!(formData.edgePort > 0)} />
+              <SummaryRow icon="/dashboard-icons/origin.png" label="Origin" value={formData.originIP ? `${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}` : "—"} empty={!formData.originIP} />
               {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Protection</div>
-                  <div className="max-w-[62%] text-right text-sm font-semibold text-white">
-                    {[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null]
-                      .filter(Boolean)
-                      .join(' / ')}
-                  </div>
-                </div>
+                <SummaryRow
+                  icon="/dashboard-icons/ip-firewall.png"
+                  label="Protection"
+                  value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
+                />
               )}
-
-              {currentStep === 6 && selectedProject && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Project</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {selectedProject.name}
-                  </div>
-                </div>
+              {selectedProject && (
+                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
               )}
-
+            </div>
+            <Separator className="my-4 bg-white/[0.08]" />
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Estimated monthly cost
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "—"}
+                </div>
+              </div>
               {!loadingPrice && spectrumPrice > 0 && (
-                <div className="flex items-end justify-between gap-4 pt-1">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium text-white/50">
-                      <DollarSign className="h-4 w-4" />
-                      Monthly Price
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold tracking-tight text-white">
-                      ${spectrumPrice.toFixed(2)}
-                    </div>
-                    <div className="text-xs font-medium text-white/45">per month</div>
-                  </div>
-                </div>
+                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">
+                  per month
+                </Badge>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,67 +1,103 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Search, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Globe, ShieldCheck, Zap } from 'lucide-react';
 
 import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-
-const steps = [
-  {
-    title: 'Search',
-    description: 'Check availability and pricing instantly.',
-    icon: Search,
-  },
-  {
-    title: 'Purchase',
-    description: 'Submit managed domain purchase requests.',
-    icon: ShoppingCart,
-  },
-  {
-    title: 'Track Requests',
-    description: 'Monitor request status: pending, completed, or failed.',
-    icon: CheckCircle2,
-  },
-] as const;
+import { PurchaseRequests } from '@/components/dashboard/apps/domain-marketplace/purchase-requests';
+import type { PurchaseRequest } from '@/components/dashboard/apps/domain-marketplace/types';
+import { consumePendingDomain } from '@/lib/domain-intent';
 
 export default function DomainMarketplacePage() {
+  const searchParams = useSearchParams();
+  const [initialQuery, setInitialQuery] = useState('');
+  const [requests, setRequests] = useState<PurchaseRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+
+  useEffect(() => {
+    const pending = consumePendingDomain();
+    const domainParam = searchParams.get('domain');
+    setInitialQuery(domainParam || pending?.domain || '');
+  }, [searchParams]);
+
+  const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setRequestsLoading(true);
+    try {
+      const res = await fetch('/api/domains/market/purchase-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setRequests(data?.data ?? []);
+      }
+    } finally {
+      if (!silent) setRequestsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchRequests(); }, [fetchRequests]);
+
+  // Poll every 5s while any request is still in-progress
+  useEffect(() => {
+    const hasActive = requests.some((r) => !TERMINAL_STATUSES.has(r.status));
+    if (!hasActive) return;
+    const id = setInterval(() => { void fetchRequests(true); }, 5_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requests]);
+
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
+    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+
+      {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28 }}
-        className="mb-6"
+        className="mb-6 glass-panel overflow-hidden"
       >
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-sky-600/20 via-cyan-500/10 to-emerald-500/10 p-5 sm:p-7">
-          <div className="absolute right-0 top-0 h-40 w-40 translate-x-1/4 -translate-y-1/4 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-32 w-32 -translate-x-1/3 translate-y-1/3 rounded-full bg-emerald-400/20 blur-3xl" />
+        <div className="px-6 py-5">
+          <nav className="mb-4 flex items-center gap-1.5 text-sm text-white/38">
+            <Link href="/dashboard/domains" className="flex items-center gap-1.5 transition-colors hover:text-white/70">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Domains
+            </Link>
+          </nav>
 
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">
                 Domain Marketplace
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                Buy domains globally for your account.
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Search domain names and request registration.
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 sm:text-[15px]">
-                This page is only for domain buying and request tracking. Domain management and app connections are in Domains Dashboard.
+              <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
+                Use this page for search and registration. DNS, renewals, and routing stay on the Domains page.
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge className="border-cyan-500/20 bg-cyan-500/15 text-cyan-100">Buy only flow</Badge>
-                <Badge className="border-white/20 bg-white/10 text-white/90">Account-level domains</Badge>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  { icon: Globe, text: '500+ extensions' },
+                  { icon: ShieldCheck, text: 'Managed registrar' },
+                  { icon: Zap, text: 'Instant availability' },
+                ].map(({ icon: Icon, text }) => (
+                  <span key={text} className="inline-flex items-center gap-1.5 border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/42">
+                    <Icon className="h-3 w-3 text-cyan-300/70" />
+                    {text}
+                  </span>
+                ))}
               </div>
             </div>
 
-            <Link href="/dashboard/domains">
-              <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                Open Domains Dashboard
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
+            <Link
+              href="/dashboard/domains"
+              className="inline-flex shrink-0 self-start items-center justify-center gap-2 border border-cyan-400/25 bg-cyan-500/90 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-400 lg:mt-1"
+            >
+              Go to Domains
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -70,35 +106,27 @@ export default function DomainMarketplacePage() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.04, duration: 0.28 }}
-        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3"
+        transition={{ delay: 0.06, duration: 0.28 }}
       >
-        {steps.map((step, index) => (
-          <Card key={step.title} className="glass-panel border-white/10 bg-white/[0.03]">
-            <CardContent className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xs font-semibold text-white/80">
-                  {index + 1}
-                </div>
-                <step.icon className="h-4 w-4 text-white/65" />
-              </div>
-              <p className="text-sm font-semibold text-white">{step.title}</p>
-              <p className="mt-1 text-xs text-white/50">{step.description}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <DomainMarketplaceTab initialQuery={initialQuery} onPurchaseRequested={fetchRequests} />
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.28 }}
-      >
-        <DomainMarketplaceTab
-          modeLabel="Search, purchase, and track domain requests across your account."
-          showAttachActions={false}
-        />
-      </motion.div>
+      {(requestsLoading || requests.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.28 }}
+          className="mt-8"
+        >
+          <PurchaseRequests
+            requests={requests}
+            loading={requestsLoading}
+            showAttachActions={false}
+            attachOptions={[]}
+            onRefresh={fetchRequests}
+          />
+        </motion.div>
+      )}
     </div>
   );
 }

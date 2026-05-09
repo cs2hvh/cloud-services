@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppCard } from "./app-card";
 import { DeleteAppModal } from "./delete-app-modal";
-import { App, BuildInfo } from "./types";
+import { RollbackAppModal } from "./rollback-app-modal";
+import { App, BuildInfo, mergeDeploymentPresentation } from "./types";
 import { useMultipleAppMetrics } from "@/hooks/use-app-metrics";
+import api from "@/lib/axios/axios";
 
 interface AppsListProps {
   apps: App[];
@@ -35,11 +37,13 @@ export function AppsList({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [appToDelete, setAppToDelete] = useState<{
     id: string;
     name: string;
     originalStatus: string;
   } | null>(null);
+  const [appToRollback, setAppToRollback] = useState<App | null>(null);
 
   const runningAppIds = useMemo(
     () => apps.filter((app) => app.status === "running").map((app) => app.id),
@@ -56,7 +60,9 @@ export function AppsList({
     app.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const runningCount = apps.filter((app) => app.status === "running").length;
+  const runningCount = apps.filter(
+    (app) => app.status === "running" && !buildInfo[app.name]?.building,
+  ).length;
   const buildingCount = apps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,
   ).length;
@@ -69,6 +75,19 @@ export function AppsList({
       originalStatus: app?.status || "running",
     });
     setDeleteModalOpen(true);
+  };
+
+  const refreshAppMetadata = async () => {
+    try {
+      const res = await api.get("/services/platform-apps/list");
+      const enrichedApps = Array.isArray(res?.data?.apps) ? res?.data?.apps as App[] : [];
+      const enrichedMap = new Map(enrichedApps.map((app) => [app.id, app]));
+      onUpdateApps((prev) =>
+        prev.map((app) => mergeDeploymentPresentation(app, enrichedMap.get(app.id)))
+      );
+    } catch {
+      // Non-critical. Realtime still updates status; this only refreshes enriched metadata.
+    }
   };
 
   const handleDeleteStart = (appId: string) => {
@@ -95,6 +114,11 @@ export function AppsList({
     if (!open) {
       setTimeout(() => setAppToDelete(null), 150);
     }
+  };
+
+  const handleRollback = (app: App) => {
+    setAppToRollback(app);
+    setRollbackModalOpen(true);
   };
 
   return (
@@ -181,6 +205,7 @@ export function AppsList({
                         setSelectedApp(selectedApp === app.name ? null : app.name)
                       }
                       onDelete={() => handleDelete(app.id, app.name)}
+                      onRollback={() => handleRollback(app)}
                       onFetchLogs={(buildNumber) => onFetchLogs(app.name, buildNumber)}
                       metrics={appMetrics?.metrics}
                       health={appMetrics?.health}
@@ -237,6 +262,23 @@ export function AppsList({
         onDeleteStart={handleDeleteStart}
         onDeleteSuccess={handleDeleteSuccess}
         onDeleteError={handleDeleteError}
+      />
+
+      <RollbackAppModal
+        open={rollbackModalOpen}
+        onOpenChange={(open) => {
+          setRollbackModalOpen(open);
+          if (!open) {
+            setTimeout(() => setAppToRollback(null), 150);
+          }
+        }}
+        appId={appToRollback?.id || null}
+        appName={appToRollback?.name || null}
+        currentBuildNumber={appToRollback?.serving_build_number ?? null}
+        targetBuildNumber={appToRollback?.rollback_target_build_number ?? null}
+        targetCommitSha={appToRollback?.rollback_target_commit_sha ?? null}
+        currentSizeLabel={appToRollback?.size ?? null}
+        onRollbackSuccess={refreshAppMetadata}
       />
     </>
   );

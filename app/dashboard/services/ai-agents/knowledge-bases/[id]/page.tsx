@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +23,6 @@ import {
   ArrowLeft,
   Loader2,
   Upload,
-  FileText,
   Trash2,
   Save,
   File,
@@ -32,6 +30,7 @@ import {
   XCircle,
   Download,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
@@ -260,59 +259,58 @@ export default function KnowledgeBaseDetailsPage({
       case 'processing':
         return <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />;
       default:
-        return <File className="h-4 w-4 text-slate-400" />;
+        return <File className="h-4 w-4 text-white/45" />;
     }
   };
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className="flex items-center justify-center min-h-[400px] text-white">
+        <Loader2 className="h-8 w-8 animate-spin text-white/45" />
       </div>
     );
   }
 
   if (!knowledgeBase) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-slate-400">Knowledge base not found</p>
+      <div className="flex items-center justify-center min-h-[400px] text-white">
+        <p className="text-white/45">Knowledge base not found</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard/services/ai-agents/knowledge-bases">
-              <ArrowLeft className="h-5 w-5" />
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard/services/ai-agents/knowledge-bases" className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
             </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">{knowledgeBase.name}</h1>
-            <p className="text-slate-400 text-sm">
-              {knowledgeBase.document_count} documents • {knowledgeBase.chunk_count} chunks
-            </p>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-white">{knowledgeBase.name}</h1>
+              <p className="text-sm text-white/45">{knowledgeBase.document_count} documents &bull; {knowledgeBase.chunk_count} chunks</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Settings */}
-      <Card className="bg-slate-900/30 border-slate-800">
-        <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>Update knowledge base details</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+          <h3 className="text-base font-semibold text-white">Settings</h3>
+          <p className="mt-1 text-sm text-white/45">Update knowledge base details</p>
+        </div>
+        <div className="p-5 sm:p-6 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="bg-slate-800 border-slate-700"
+              className="h-11 border-white/[0.1] bg-white/[0.04] text-white placeholder:text-white/34 focus:border-blue-400/40 focus:ring-0"
             />
           </div>
 
@@ -322,7 +320,7 @@ export default function KnowledgeBaseDetailsPage({
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="bg-slate-800 border-slate-700 min-h-[80px]"
+              className="min-h-[80px] border-white/[0.1] bg-white/[0.04] text-white placeholder:text-white/34 focus:border-blue-400/40 focus:ring-0"
             />
           </div>
 
@@ -368,18 +366,18 @@ export default function KnowledgeBaseDetailsPage({
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Upload Documents */}
-      <Card className="bg-slate-900/30 border-slate-800">
-        <CardHeader>
-          <CardTitle>Upload Documents</CardTitle>
-          <CardDescription>
+      <div className="glass-panel overflow-hidden">
+        <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+          <h3 className="text-base font-semibold text-white">Upload Documents</h3>
+          <p className="mt-1 text-sm text-white/45">
             Upload documents to add to the knowledge base. Supports PDF, Word, code files, and more.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div className="p-5 sm:p-6">
           <input
             ref={fileInputRef}
             type="file"
@@ -390,49 +388,47 @@ export default function KnowledgeBaseDetailsPage({
           />
 
           <div
-            className="border-2 border-dashed border-slate-700 rounded-lg p-8 text-center cursor-pointer hover:border-slate-600 transition-colors"
+            className="border-2 border-dashed border-white/[0.12] p-8 text-center cursor-pointer hover:border-white/[0.2] transition-colors"
             onClick={() => fileInputRef.current?.click()}
           >
             {uploading ? (
               <div className="space-y-4">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-400 mx-auto" />
-                <p className="text-slate-400">Uploading and processing...</p>
+                <p className="text-white/55">Uploading and processing...</p>
                 <Progress value={uploadProgress} className="max-w-xs mx-auto" />
               </div>
             ) : (
               <>
-                <Upload className="h-8 w-8 text-slate-500 mx-auto mb-4" />
-                <p className="text-slate-300 mb-2">Click to upload files</p>
-                <p className="text-sm text-slate-500">
+                <Upload className="h-8 w-8 text-white/32 mx-auto mb-4" />
+                <p className="text-white/80 mb-2">Click to upload files</p>
+                <p className="text-sm text-white/40">
                   PDF, Word, Markdown, Code, JSON, CSV, HTML, and more (max 20MB for PDF, 5MB for others)
                 </p>
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Documents List */}
-      <Card className="bg-slate-900/30 border-slate-800">
-        <CardHeader>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>
-            {documents.length} document{documents.length !== 1 ? 's' : ''} in this knowledge base
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="glass-panel overflow-hidden">
+        <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+          <h3 className="text-base font-semibold text-white">Documents</h3>
+          <p className="mt-1 text-sm text-white/45">{documents.length} document{documents.length !== 1 ? 's' : ''} in this knowledge base</p>
+        </div>
+        <div className="p-5 sm:p-6">
           {documents.length > 0 ? (
             <div className="space-y-2">
               {documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                  className="flex items-center justify-between border border-white/[0.08] bg-white/[0.03] p-3 hover:bg-white/[0.05] transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {getStatusIcon(doc.status)}
                     <div>
                       <p className="text-white font-medium">{doc.name}</p>
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-white/40">
                         {doc.file_size ? formatFileSize(doc.file_size) : 'Unknown size'} • {doc.chunk_count} chunks
                       </p>
                     </div>
@@ -442,7 +438,7 @@ export default function KnowledgeBaseDetailsPage({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-blue-400"
+                        className="h-8 w-8 text-white/45 hover:text-blue-400"
                         onClick={() => {
                           window.open(`/api/knowledge-bases/${id}/documents/${doc.id}/download`, '_blank');
                         }}
@@ -468,14 +464,14 @@ export default function KnowledgeBaseDetailsPage({
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">No documents yet</p>
-              <p className="text-sm text-slate-500">Upload documents to get started</p>
+            <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-12 text-center">
+              <Image src="/dashboard-icons/documents.png" alt="" width={48} height={48} className="opacity-25"  unoptimized />
+              <p className="mt-4 text-white/55">No documents yet</p>
+              <p className="mt-1 text-sm text-white/40">Upload documents to get started</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 export type EmailRecipient = string | string[];
+export type EmailTemplateTag = { name: string; value: string };
 
 export interface SendEmailResult {
   success: boolean;
@@ -17,7 +18,7 @@ export interface EmailSendOptions<K extends EmailTemplateId = EmailTemplateId> {
   bcc?: EmailRecipient;
   replyTo?: string;
   headers?: Record<string, string>;
-  tags?: Array<{ name: string; value: string }>;
+  tags?: EmailTemplateTag[];
 }
 
 export interface EmailTemplateDefinition<TData> {
@@ -25,7 +26,7 @@ export interface EmailTemplateDefinition<TData> {
   previewText: (data: TData) => string;
   render: (data: TData) => ReactElement;
   text?: (data: TData) => string;
-  tags?: (data: TData) => Array<{ name: string; value: string }>;
+  tags?: (data: TData) => EmailTemplateTag[];
 }
 
 export interface OtpEmailData {
@@ -116,6 +117,44 @@ export interface SystemAlertEmailData {
   metadata?: Record<string, string | number | boolean>;
 }
 
+export interface ConsultationRequestEmailData {
+  requesterName: string;
+  requesterEmail: string;
+  serviceName: string;
+  messageBody: string;
+  submittedAt: string;
+}
+
+export interface SupportConversationEmailMessageData {
+  actorType: "user" | "admin" | "system";
+  actorLabel: string;
+  authorName: string;
+  authorEmail: string;
+  createdAt: string;
+  body: string;
+}
+
+export interface SupportTicketCreatedEmailData {
+  customerName: string;
+  ticketNumber: string;
+  ticketSubject: string;
+  ticketBody: string;
+  createdAt: string;
+  ticketUrl?: string;
+  conversation: SupportConversationEmailMessageData[];
+}
+
+export interface SupportTicketReplyEmailData {
+  customerName: string;
+  ticketNumber: string;
+  ticketSubject: string;
+  latestReply: string;
+  repliedAt: string;
+  ticketStatus: string;
+  ticketUrl?: string;
+  conversation: SupportConversationEmailMessageData[];
+}
+
 export interface EmailTemplateDataMap {
   otp: OtpEmailData;
   forgotPassword: ForgotPasswordEmailData;
@@ -127,6 +166,9 @@ export interface EmailTemplateDataMap {
   billingNotification: BillingNotificationEmailData;
   deploymentStatus: DeploymentStatusEmailData;
   systemAlert: SystemAlertEmailData;
+  consultationRequest: ConsultationRequestEmailData;
+  supportTicketCreated: SupportTicketCreatedEmailData;
+  supportTicketReply: SupportTicketReplyEmailData;
 }
 
 export type EmailTemplateId = keyof EmailTemplateDataMap;

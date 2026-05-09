@@ -4,38 +4,35 @@ import { motion } from "motion/react";
 import {
   Activity,
   Clock3,
-  GitBranch,
-  Globe2,
   Loader2,
   Plus,
-  Rocket,
-  type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { AppsList } from "@/components/dashboard/apps";
+import { mergeDeploymentPresentation } from "@/components/dashboard/apps/types";
 import { useRealtimeApps } from "@/hooks/use-realtime-apps";
 import { useAppBuildState } from "@/hooks/use-app-build-state";
 import { createClient } from "@/lib/supabase/client";
+import api from "@/lib/axios/axios";
 
 function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: LucideIcon;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
             {label}
@@ -43,10 +40,8 @@ function MetricCard({
           <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div
-          className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${accentClassName}`}
-        >
-          <Icon className="h-4 w-4" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
         </div>
       </div>
     </div>
@@ -100,9 +95,46 @@ export default function ApplicationDeploymentPage() {
     limit: 100,
   });
 
+  // Sync realtime updates while preserving deployment metadata already fetched from the API.
   useEffect(() => {
-    setLocalApps(realtimeApps);
+    setLocalApps(prev => {
+      if (prev.length === 0) return realtimeApps;
+      const prevMap = new Map(prev.map(a => [a.id, a]));
+      return realtimeApps.map(app => mergeDeploymentPresentation(app, prevMap.get(app.id)));
+    });
   }, [realtimeApps]);
+
+  const rollbackRefreshKey = useMemo(
+    () => realtimeApps.map((app) => `${app.id}:${app.status}:${app.updated_at ?? ""}`).join("|"),
+    [realtimeApps]
+  );
+
+  // Re-enrich deployment metadata whenever the live app inventory changes.
+  // Supabase realtime cannot compute rollback targets or serving release info because
+  // they depend on deployment history, so refresh them from the list API whenever
+  // statuses move.
+  useEffect(() => {
+    if (realtimeApps.length === 0) return;
+    api
+      .get("/services/platform-apps/list")
+      .then(res => {
+        if (res?.data?.apps) {
+          const map = new Map(
+            (res?.data?.apps as Array<{
+              id: string;
+              can_rollback?: boolean;
+              serving_build_number?: number | null;
+              last_operation_build_number?: number | null;
+              last_operation_trigger?: string | null;
+              rollback_target_build_number?: number | null;
+              rollback_target_commit_sha?: string | null;
+            }>).map((app) => [app.id, app])
+          );
+          setLocalApps(prev => prev.map(app => mergeDeploymentPresentation(app, map.get(app.id))));
+        }
+      })
+      .catch(() => {}); // non-critical — rollback buttons just stay disabled
+  }, [rollbackRefreshKey, realtimeApps]);
 
   const deployedApps = localApps;
 
@@ -113,7 +145,18 @@ export default function ApplicationDeploymentPage() {
   const { buildInfo, buildLogs, logsLoading, logsError, fetchBuildLogs } =
     useAppBuildState(deployedApps);
 
-  const runningApps = deployedApps.filter((app) => app.status === "running").length;
+  const runningApps = deployedApps.filter(
+    (app) =>
+      // Exclude apps Jenkins has confirmed as building, even if the Supabase realtime
+      // status update hasn't arrived yet — avoids Healthy/ActiveBuilds count mismatch.
+      !buildInfo[app.name]?.building &&
+      (
+        app.status === "running" ||
+        // An app with an active serving deployment is still live even if the DB
+        // status was transiently flipped to "failed" (e.g., by a K8s sync error).
+        (app.serving_build_number != null && app.status !== "deleting" && app.status !== "building")
+      ),
+  ).length;
   const buildingApps = deployedApps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,
   ).length;
@@ -205,29 +248,25 @@ export default function ApplicationDeploymentPage() {
           label="Total Apps"
           value={deployedApps.length}
           meta="Managed deployment targets"
-          icon={Rocket}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard-icons/total-apps.png"
         />
         <MetricCard
           label="Healthy"
           value={runningApps}
           meta="Applications serving live traffic"
-          icon={Globe2}
-          accentClassName="text-emerald-300"
+          iconSrc="/dashboard-icons/healthy.png"
         />
         <MetricCard
           label="Active Builds"
           value={buildingApps}
           meta="Builds or rollouts currently in progress"
-          icon={GitBranch}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard-icons/active-builds.png"
         />
         <MetricCard
           label="Success Rate"
           value={successRate}
           meta="Running apps relative to total inventory"
-          icon={Activity}
-          accentClassName="text-white/75"
+          iconSrc="/dashboard-icons/sucess-rate.png"
         />
       </motion.div>
 

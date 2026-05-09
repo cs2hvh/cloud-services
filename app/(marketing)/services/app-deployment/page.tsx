@@ -1,37 +1,39 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
+import AppDeployHowSection from "@/components/services/app-deploy-how-section";
+import AppDeployWorkloadsSection from "@/components/services/app-deploy-workloads-section";
 import AppDeployFrameworksSection from "@/components/services/app-deploy-frameworks-section";
 import AppDeployShowcaseSection from "@/components/services/app-deploy-showcase-section";
 import AppDeployPricingSection from "@/components/services/app-deploy-pricing-section";
+import AppDeployFinalCtaSection from "@/components/services/app-deploy-final-cta-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
-import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 import { getAppDeployPlans } from "@/lib/helpers/app-deploy-plans";
 
 const AppDeploymentHome = async () => {
   // Fetch dynamic app deployment plans from database
   const plans = await getAppDeployPlans();
   console.log("Fetched app deployment plans:", plans);
-  const cases = [
-    {
-      title: "SaaS & Web Applications",
-      description:
-        "Ship production-ready web apps with zero-downtime deployments, automatic SSL, and global CDN — from monoliths to microservices.",
-    },
-    {
-      title: "APIs & Backend Services",
-      description:
-        "Deploy REST and GraphQL APIs with auto-scaling, health checks, and built-in rate limiting. Connect to managed databases in one click.",
-    },
-    {
-      title: "Static Sites & Jamstack",
-      description:
-        "Instant builds for Next.js, Nuxt, Astro, and other SSG frameworks. Edge-cached globally with automatic cache invalidation.",
-    },
-    {
-      title: "Internal Tools & Dashboards",
-      description:
-        "Deploy admin panels, monitoring dashboards, and internal tools with environment isolation and team-based access controls.",
-    },
-  ];
+  // const cases = [
+  //   {
+  //     title: "SaaS & Web Applications",
+  //     description:
+  //       "Ship production-ready web apps with zero-downtime deployments, automatic SSL, and global CDN — from monoliths to microservices.",
+  //   },
+  //   {
+  //     title: "APIs & Backend Services",
+  //     description:
+  //       "Deploy REST and GraphQL APIs with auto-scaling, health checks, and built-in rate limiting. Connect to managed databases in one click.",
+  //   },
+  //   {
+  //     title: "Static Sites & Jamstack",
+  //     description:
+  //       "Instant builds for Next.js, Nuxt, Astro, and other SSG frameworks. Edge-cached globally with automatic cache invalidation.",
+  //   },
+  //   {
+  //     title: "Internal Tools & Dashboards",
+  //     description:
+  //       "Deploy admin panels, monitoring dashboards, and internal tools with environment isolation and team-based access controls.",
+  //   },
+  // ];
 
   return (
     <main className="bg-black">
@@ -44,9 +46,14 @@ const AppDeploymentHome = async () => {
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/app-deploy.png", alt: "App Deployment infrastructure" }}
       />
+       <AppDeployShowcaseSection />
+      <AppDeployHowSection />
       <AppDeployFrameworksSection />
-      <AppDeployShowcaseSection />
+      <AppDeployWorkloadsSection />
+      
+     
       <AppDeployPricingSection plans={plans} />
+      
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
         faqs={[
@@ -87,7 +94,8 @@ const AppDeploymentHome = async () => {
           },
         ]}
       />
-      <ServicesHomeSectionSix cases={cases} />
+      {/* <ServicesHomeSectionSix cases={cases} /> */}
+      <AppDeployFinalCtaSection />
     </main>
   );
 };

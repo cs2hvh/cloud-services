@@ -4,31 +4,29 @@ import { rollbackPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { KubernetesInfoService } from "@/lib/services/kubernetes-info";
-
-function buildImageRef(imageTag?: string | null, imageDigest?: string | null): string | null {
-  const tag = imageTag?.trim();
-  const digest = imageDigest?.trim();
-
-  if (tag && digest && !tag.includes("@")) {
-    return `${tag}@${digest}`;
-  }
-
-  if (tag) return tag;
-
-  return null;
-}
+import { getIdempotencyKey } from "@/lib/idempotency";
+import {
+  AppOperationError,
+  AppRuntimeMutationService,
+  parseOperationDetails,
+} from "@/lib/app-operations";
+import { buildImageRef } from "@/lib/container-image/image-ref";
 
 /**
  * POST /api/services/platform-apps/rollback
  * Rolls back an app to the previous successful deployment (no new build).
+ * Uses get_rollback_context as the single source of truth for eligibility.
  */
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
+  const userId = auth.user.id;
+
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(userId, {
       prefix: "rl:platform-app-rollback",
       limit: 5,
       windowMs: 60_000,
@@ -52,25 +50,31 @@ export async function POST(req: NextRequest) {
     }
 
     const app = appResult.data as { user_id: string; active_deployment_id?: string | null; name: string };
-    if (app.user_id !== auth.user!.id) {
+    if (app.user_id !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const activeDeploymentId: string | null = app.active_deployment_id ?? null;
 
-    const previous = await Platform_App_Deployments.get_previous_successful(app_id, activeDeploymentId);
-    if (!previous.success) {
-      return NextResponse.json({ error: previous.error || "Failed to query deployment history" }, { status: 500 });
+    // Single source of truth: get_rollback_context determines eligibility
+    const ctx = await Platform_App_Deployments.get_rollback_context(app_id, activeDeploymentId);
+    if (!ctx.success) {
+      return NextResponse.json({ error: ctx.error || "Failed to query deployment history" }, { status: 500 });
     }
 
-    if (!previous.data) {
+    if (!ctx.data.can_rollback || !ctx.data.rollback_target) {
       return NextResponse.json(
-        { error: "No previous successful deployment to roll back to" },
+        { error: "No previous release different from the current serving release is available" },
         { status: 409 }
       );
     }
 
-    const imageRef = buildImageRef(previous.data.image_tag, previous.data.image_digest);
+    const target = ctx.data.rollback_target;
+
+    const imageRef = buildImageRef(
+      typeof target.image_tag === "string" ? target.image_tag : null,
+      typeof target.image_digest === "string" ? target.image_digest : null,
+    );
     if (!imageRef) {
       return NextResponse.json(
         { error: "Previous deployment is missing an image reference" },
@@ -78,49 +82,85 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Patch Kubernetes deployment image (no build)
-    const patch = await KubernetesInfoService.patchAppDeploymentImage(app.name, imageRef, "default");
-    if (!patch.success) {
-      return NextResponse.json({ error: patch.error || "Failed to roll back deployment" }, { status: 500 });
+    const targetId = typeof target.id === "string" ? target.id : null;
+    if (!targetId) {
+      return NextResponse.json({ error: "Rollback target is missing a deployment id" }, { status: 500 });
     }
 
-    // Record rollback as a deployment event (build_number is null)
-    const record = await Platform_App_Deployments.create({
-      app_id,
-      build_number: null,
-      commit_sha: previous.data.commit_sha ?? null,
-      image_tag: previous.data.image_tag ?? null,
-      image_digest: previous.data.image_digest ?? null,
-      status: "success",
-      trigger: "rollback",
+    const targetBuildNumber =
+      typeof target.build_number === "number" && target.build_number > 0
+        ? target.build_number
+        : null;
+    if (targetBuildNumber === null) {
+      return NextResponse.json(
+        { error: "Rollback target is missing a valid build number" },
+        { status: 500 }
+      );
+    }
+
+    const mutationService = new AppRuntimeMutationService();
+    const result = await mutationService.rollback({
+      auditContext: {
+        userId,
+        userEmail: auth.user.email,
+        ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+        userAgent: req.headers.get("user-agent") || "unknown",
+        requestId: crypto.randomUUID(),
+      },
+      appId: app_id,
+      appName: app.name,
+      appStatus: appResult.data.status,
+      appFailureReason:
+        typeof appResult.data.last_failure_reason === "string"
+          ? appResult.data.last_failure_reason
+          : null,
+      activeDeploymentId,
+      commitSha: typeof target.commit_sha === "string" ? target.commit_sha : null,
+      rollbackTargetBuildNumber: targetBuildNumber,
+      targetDeploymentId: targetId,
+      imageRef,
+      imageTag: typeof target.image_tag === "string" ? target.image_tag : null,
+      imageDigest: typeof target.image_digest === "string" ? target.image_digest : null,
+      idempotencyKey: getIdempotencyKey(req.headers),
+      executor: async () => {
+        const patch = await KubernetesInfoService.patchAppDeploymentImage(app.name, imageRef, "default");
+        if (!patch.success) {
+          throw new Error(patch.error || "Failed to roll back deployment");
+        }
+      },
     });
-
-    if (record.success) {
-      await Promise.all([
-        Platform_App_Deployments.set_active_for_app(app_id, record.data.id),
-        Platform_Apps.update(app_id, {
-          status: "running",
-          last_deploy_trigger: "rollback",
-          last_deploy_commit: previous.data.commit_sha ?? null,
-        }),
-      ]);
-    }
 
     // Best-effort: log images after rollback
     KubernetesInfoService.logAppImages(app.name, `rollback app_id=${app_id}`).catch(() => undefined);
 
+    const operationDetails = parseOperationDetails(result.operation.operation_details, {
+      trigger: result.operation.trigger,
+    });
+
     return NextResponse.json({
       ok: true,
       app_id,
+      operation_id: result.operation.id,
+      reused: result.reused,
+      status: result.operation.status,
       rolled_back_to: {
-        deployment_id: previous.data.id,
+        deployment_id: targetId,
+        build_number: targetBuildNumber,
         image: imageRef,
-        commit_sha: previous.data.commit_sha ?? null,
+        commit_sha: typeof target.commit_sha === "string" ? target.commit_sha : null,
       },
-      rollback_record_id: record.success ? record.data.id : null,
+      rollback_record_id: result.operation.id,
+      verification: operationDetails.verification ?? null,
+      warning:
+        operationDetails.verification?.status === "degraded"
+          ? operationDetails.verification?.message ?? null
+          : null,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    if (err instanceof AppOperationError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: err.statusCode });
+    }
+    logError("services/platform-apps/rollback", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

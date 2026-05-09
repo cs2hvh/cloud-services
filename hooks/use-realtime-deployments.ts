@@ -28,6 +28,8 @@
  */
 
 import { useRealtimeTable } from './use-realtime-table';
+import { parseOperationDetails } from '@/lib/app-operations/core/operation-details';
+import { getAppHistoryType } from '@/lib/app-operations/core/presentation';
 
 // Database schema (what Supabase returns)
 interface DeploymentRecord extends Record<string, unknown> {
@@ -40,20 +42,28 @@ interface DeploymentRecord extends Record<string, unknown> {
   status: 'success' | 'failed' | 'building'; // Database values
   trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
   failure_reason: string | null;
+  rollback_target_build_number: number | null;
+  operation_details: Record<string, unknown> | null;
+  idempotency_key?: string | null;
   created_at: string;
 }
 
 // UI-friendly format (what we expose to components)
-interface Deployment {
+export interface Deployment {
   id: string;
   app_id: string;
-  build_number: number;
+  build_number: number | null;
   commit_sha: string | null;
   image_tag: string | null;
   image_digest: string | null;
   status: 'SUCCESS' | 'FAILURE' | 'BUILDING'; // UI values
   trigger: string;
   failure_reason: string | null;
+  rollback_target_build_number: number | null;
+  operation_details: ReturnType<typeof parseOperationDetails>;
+  operation_type: string;
+  history_type: 'release' | 'operation';
+  is_release_build: boolean;
   created_at: string;
   // Convenience aliases
   started_at: string;
@@ -69,16 +79,31 @@ interface UseRealtimeDeploymentsOptions {
  * Transform database status to UI format
  */
 function transformDeployment(record: DeploymentRecord): Deployment {
+  const operationDetails = parseOperationDetails(record.operation_details, {
+    trigger: record.trigger,
+  });
+  const historyType = getAppHistoryType({
+    trigger: record.trigger,
+    buildNumber: record.build_number,
+    operationDetails,
+  });
+  const isReleaseBuild = historyType === 'release';
+
   return {
     id: record.id,
     app_id: record.app_id,
-    build_number: record.build_number ?? 0,
+    build_number: record.build_number,
     commit_sha: record.commit_sha,
     image_tag: record.image_tag,
     image_digest: record.image_digest,
     status: record.status === 'success' ? 'SUCCESS' : record.status === 'building' ? 'BUILDING' : 'FAILURE',
     trigger: record.trigger,
     failure_reason: record.failure_reason,
+    rollback_target_build_number: record.rollback_target_build_number,
+    operation_details: operationDetails,
+    operation_type: operationDetails.type,
+    history_type: historyType,
+    is_release_build: isReleaseBuild,
     created_at: record.created_at,
     started_at: record.created_at, // Alias for convenience
   };
@@ -112,9 +137,7 @@ export function useRealtimeDeployments({
   });
 
   return {
-    // Filter out records where build_number was null in the DB;
-    // they coalesce to 0 in transformDeployment and are not useful in the UI.
-    deployments: deployments.filter((d) => d.build_number > 0),
+    deployments,
     loading,
     error,
     connectionStatus,

@@ -1,6 +1,6 @@
 "use client";
 import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -67,42 +67,6 @@ interface PageProps {
   }>;
 }
 
-interface EncryptedData {
-  encrypted: string;
-  iv: string;
-  tag: string;
-  salt: string;
-}
-
-type NodeInfo = {
-  host: string;
-  role: "control-plane" | "worker"; // Add more roles if needed
-  hostname: string;
-  cpu: number;
-  memory_mb: number;
-  storage: number;
-  private_ip?: string;
-  droplet_id?: number;
-};
-
-type SendPayload = {
-  provider: string;
-  cluster: {
-    name: string;
-    location: string;
-    pod_cidr: string;
-    k8s_minor: string;
-  };
-  auth: {
-    method: string;
-    user: string;
-    password: EncryptedData;
-  };
-  nodes: NodeInfo[];
-  ips: string[];
-  planId?: string;
-};
-
 type K8sCpuType = "shared" | "dedicated" | "gpu";
 
 const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
@@ -167,10 +131,16 @@ const NewClusterPage = ({
     name?: string;
     nodes?: string;
     user?: string;
+    plan?: string;
+    version?: string;
+    project?: string;
   }>({
     name: undefined,
     nodes: undefined,
     user: undefined,
+    plan: undefined,
+    version: undefined,
+    project: undefined,
   });
   //we need to make plan dynamic
   // const [availablePlans] = useState([
@@ -233,14 +203,46 @@ const NewClusterPage = ({
       user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
   );
 
+  // Filter projects based on selected user in admin mode
+  const filteredProjects = useMemo(() => {
+    if (role === "admin") {
+      if (!state.selectedUser) {
+        return [];
+      }
+      return projects.filter((project) => project.owner === state.selectedUser);
+    }
+    return projects;
+  }, [projects, role, state.selectedUser]);
+
+  // Keep selected project valid when user selection changes
+  useEffect(() => {
+    if (!state.selectedProject) {
+      return;
+    }
+
+    const isProjectAvailable = filteredProjects.some(
+      (project) => project.id === state.selectedProject
+    );
+
+    if (!isProjectAvailable) {
+      setState((prev) => ({ ...prev, selectedProject: "" }));
+    }
+  }, [filteredProjects, state.selectedProject]);
+
   // Handle user selection
   const handleUserSelect = (selectedUserId: string) => {
     setState((prev) => ({
       ...prev,
       selectedUser: selectedUserId,
+      selectedProject: projects.some(
+        (project) =>
+          project.id === prev.selectedProject && project.owner === selectedUserId
+      )
+        ? prev.selectedProject
+        : "",
     }));
-    if (validationErrors.user) {
-      setValidationErrors({ ...validationErrors, user: "" });
+    if (validationErrors.user || validationErrors.project) {
+      setValidationErrors({ ...validationErrors, user: "", project: undefined });
     }
   };
 
@@ -269,6 +271,13 @@ const NewClusterPage = ({
         // debugger
         //check if cluster name already exists
         //const clusters = await Clusters.get_by_owner(userId);
+        if (state.selectedName.length > 20) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            name: "Cluster name must not exceed 20 characters",
+          }));
+          return;
+        }
         const clusterExists = clusters?.some(
           (cluster) => cluster.cluster_name === state.selectedName
         );
@@ -315,6 +324,42 @@ const NewClusterPage = ({
       }
     }
 
+    if (currentStep === 4) {
+      if (!state.selectedPlan) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          plan: "Please select a plan",
+        }));
+        toast.error("Please select a plan");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+    }
+
+    if (currentStep === 5) {
+      if (!state.selectedVersion) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          version: "Please select a version",
+        }));
+        toast.error("Please select a version");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, version: undefined }));
+    }
+
+    if (currentStep === 6) {
+      if (!state.selectedProject) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          project: "Please select a project",
+        }));
+        toast.error("Please select a project");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, project: undefined }));
+    }
+
     // Continue with existing step logic
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
@@ -354,160 +399,65 @@ const NewClusterPage = ({
         return;
       }
 
-      const nodeNames = makeNodeKeys(state.selectedNode, state.selectedName);
-      console.log(nodeNames, ".....nodeNames.....262");
-
       const selectedProduct = products.find(
         (product) => product.name === state.selectedPlan
       );
-
-      //generate vms from digitalOcean apis
-      const payload = {
-        names: nodeNames,
-        region: state.selectedLocation, //form-dependent
-        size: selectedProduct?.slug, //form-dependent
-        image: "ubuntu-25-04-x64",
-        backups: false,
-        ipv6: true,
-        monitoring: true,
-        tags: ["env:prod", "web", "ssh-allowed"],
-        // Pass ownerId to allow server-side credit checks
-        ownerId: targetUserId,
-        // Optional: allow overriding initial upfront cost; default handled server-side
-        initial_cost: 5.0,
-      };
-
-      console.log(payload, "...............298");
-
-      const createDroplet = await api.post(
-        "/services/kubernetes/manageip/createdroplet",
-        payload
-      );
-      //console.log(createDroplet.data, "...........createDroplet.............");
-
-      const sendPayload: SendPayload = {
-        provider: "existing",
-        cluster: {
-          name: state.selectedName,
-          location: state.selectedLocation,
-          pod_cidr: "10.244.0.0/16",
-          k8s_minor: "1.31.1",
-        },
-        auth: {
-          method: "password",
-          user: "root",
-          password: createDroplet.data.vmPassword,
-        },
-        planId:selectedProduct?.id,
-        nodes: [],
-        // "cp-1": { "host": "172.104.206.68", "role": "control-plane", "hostname": "cp-1", "cpu": 2, "memory_mb": 512 }
-
-        ips: [],
-      };
-
-      //one more idea clicked my mind , instead check status , call get droplet and see status =active or not.
-
-      if (createDroplet.status === 202) {
-        let counter = 0;
-        while (counter != state.selectedNode + 1) {
-          const checkStatus = await api.post(
-            "/services/kubernetes/manageip/dropletstatus",
-            {
-              id: createDroplet.data.data.links.actions[counter].id,
-            }
-          );
-          if (checkStatus.status === 200) {
-            if (checkStatus.data.data.action.status === "completed") {
-              // https://api.digitalocean.com/v2/actions/2831633833
-              const vmData = await api.post(
-                `/services/kubernetes/manageip/readdroplet`,
-                { id: checkStatus.data.data.action.resource_id }
-              );
-              if (vmData.status === 200) {
-                const vmDetails: {
-                  public_ip: string;
-                  memory_mb: number;
-                  name: string;
-                  cpu: number;
-                  storage: number;
-                  private_ip?: string;
-                  droplet_id?: number;
-                } = {
-                  public_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "public"
-                  ).ip_address,
-                  private_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "private"
-                  ).ip_address,
-                  memory_mb: vmData.data.data.droplet.memory,
-                  name: vmData.data.data.droplet.name,
-                  cpu: vmData.data.data.droplet.vcpus,
-                  storage: vmData.data.data.droplet.disk,
-                  droplet_id: vmData.data.data.droplet.id,
-                };
-                sendPayload.ips.push(vmDetails.public_ip);
-                sendPayload.nodes.push({
-                  host: vmDetails.public_ip,
-                  role: counter === 0 ? "control-plane" : "worker",
-                  hostname: vmDetails.name,
-                  cpu: vmDetails.cpu,
-                  memory_mb: vmDetails.memory_mb,
-                  storage: vmDetails.storage,
-                  private_ip: vmDetails.private_ip,
-                  droplet_id: vmDetails.droplet_id,
-                });
-                counter++;
-              }
-            }
-          } else {
-            continue;
-          }
-        }
-      }
-      else if(createDroplet.status===402){
-        toast.error('Insufficient balance. Please top up your account to create a Kubernetes cluster.');
-        router.push('dashboard/nav/billing');
+      if (!selectedProduct || !selectedProduct.slug) {
+        toast.error("Please select a valid plan");
         return;
       }
 
-      console.log(sendPayload, "...........sendPayload.............");
-
-      await sleep(120000);
-
-      //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
-      const response4 = await api.post("/services/kubernetes/clusters", {
-        ...sendPayload,
+      const response = await api.post("/services/kubernetes/clusters/init", {
+        name: state.selectedName,
+        region: state.selectedLocation,
+        version: state.selectedVersion,
+        nodeCount: state.selectedNode,
+        size: selectedProduct.slug,
         ownerId: targetUserId,
         projectId: state.selectedProject,
-         role:role
+        planId: selectedProduct.id,
+        resources: {
+          cpu: selectedProduct.resources.cpu,
+          ram: selectedProduct.resources.ram,
+          storage: selectedProduct.resources.storage,
+        },
       });
-      if (response4.status == 200) {
-        // alert(
-        //   "your cluster is being created. please wait for some time......."
-        // );
-        //debugger
-        toast.success("Cluster request captured");
-        //navigate to status page.
-        // window.location.href=`/dashboard/${response.data.clusterId}/status`;
+      const settledResponse = response as typeof response & {
+        error?: unknown;
+        data?: { message?: string; clusterId?: string; balance?: number; required?: number };
+      };
+
+      if (settledResponse.error) {
+        return;
+      }
+
+      if (settledResponse.status === 200) {
+        toast.info("Kubernetes Cluster Creation started.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
-          router.push(
-            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
-          );
+          const newClusterId = settledResponse.data?.clusterId;
+          if (!newClusterId) {
+            toast.error("Cluster created but ID missing — check dashboard.");
+            router.push('/dashboard/services/kubernetes');
+          } else {
+            router.push(
+              `/dashboard/services/kubernetes/clusters/${encodeURIComponent(newClusterId)}`
+            );
+          }
         }
+        return;
       }
 
-      // toast.success(response.data);
-      // Redirect to success page or dashboard
+      toast.error(
+        settledResponse.data?.message || "Failed to initialize cluster.",
+      );
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
-       // toast.error(err.message)
+        toast.error(err.message || "Failed to initialize cluster.");
       } else {
-       // toast.error("Unknown error occurred");
+        toast.error("Failed to initialize cluster.");
       }
     } finally {
       setIsLoading(false);
@@ -534,47 +484,48 @@ const NewClusterPage = ({
 
   const steps = role === "admin" 
     ? [
-        { id: 0, name: "User" },
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ]
     : [
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
       ];
 
-  function makeNodeKeys(workers: number, clusterName: string) {
-    const nodeNames = [];
-    for (let i = 0; i <= workers; i++) {
-      const uuid = crypto.randomUUID();
-      if (i === 0) {
-        nodeNames.push(`${clusterName}-${uuid}-cp-1`);
-      } else {
-        nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
-      }
-    }
-    return nodeNames;
-  }
-
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-
   const panelClassName = "glass-panel overflow-hidden";
+
+  function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
+    return (
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="flex items-center gap-2">
+          {icon && (
+            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
+          )}
+          <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+        </div>
+        <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
+      </div>
+    );
+  }
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
   const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
+  // const totalNodes = Math.max(selectedNode + 1, 1);
+  // const planMonthlyRate =
+  //   typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
+  // const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
   const nodePresets = [1, 2, 3, 5];
   const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
 
@@ -582,9 +533,9 @@ const NewClusterPage = ({
   //   const dbTypes = Object.keys(databaseInfo);
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <Link
               href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
@@ -603,25 +554,15 @@ const NewClusterPage = ({
               Move through cluster identity, region, node count, plan sizing, version, project assignment, and final review in a cleaner enterprise flow.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {progressStep} / {steps.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Plan
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedPlan || "-"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da kuubernetes.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+            unoptimized
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -654,19 +595,20 @@ const NewClusterPage = ({
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
-                        isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78"
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : step.id}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
                 </button>
               );
             })}
@@ -676,7 +618,7 @@ const NewClusterPage = ({
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           {currentStep === 0 && (
             <Card className={panelClassName}>
               <CardHeader>
@@ -775,11 +717,13 @@ const NewClusterPage = ({
                       setState({ ...state, selectedName: e.target.value })
                     }
                     type="text"
-                    placeholder="my-production-cluster"
+                    maxLength={20}
+                    placeholder="my-cluster"
                     className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
                       validationErrors.name ? "border-red-500" : ""
                     }`}
                   />
+                  <p className="text-xs text-white/40">{selectedName.length}/20 characters</p>
                   {validationErrors.name && (
                     <p className="text-sm text-red-500">
                       {validationErrors.name}
@@ -840,6 +784,7 @@ const NewClusterPage = ({
                           width={32}
                           height={24}
                           className="rounded-sm"
+                          unoptimized
                         />
                         <div>
                           <div className="font-medium text-white">
@@ -1122,9 +1067,12 @@ const NewClusterPage = ({
                   <div className="max-h-[360px] overflow-y-auto pr-1">
                     <RadioGroup
                       value={state.selectedPlan}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedPlan: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedPlan: value });
+                        if (validationErrors.plan) {
+                          setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+                        }
+                      }}
                       className="space-y-3"
                     >
                       {filteredProducts.map((plan) => (
@@ -1198,6 +1146,9 @@ const NewClusterPage = ({
                   </RadioGroup>
                 </div>
                 )}
+                {validationErrors.plan && (
+                  <p className="text-sm text-red-500">{validationErrors.plan}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1235,7 +1186,12 @@ const NewClusterPage = ({
                       <button
                         key={version}
                         type="button"
-                        onClick={() => setState({ ...state, selectedVersion: version })}
+                        onClick={() => {
+                          setState({ ...state, selectedVersion: version });
+                          if (validationErrors.version) {
+                            setValidationErrors((prev) => ({ ...prev, version: undefined }));
+                          }
+                        }}
                         className={
                           isSelected
                             ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
@@ -1289,6 +1245,9 @@ const NewClusterPage = ({
                     </div>
                   </div>
                 </div>
+                {validationErrors.version && (
+                  <p className="text-sm text-red-500">{validationErrors.version}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1324,24 +1283,40 @@ const NewClusterPage = ({
                     </Label>
                     <Select
                       value={selectedProject}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedProject: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedProject: value });
+                        if (validationErrors.project) {
+                          setValidationErrors((prev) => ({ ...prev, project: undefined }));
+                        }
+                      }}
                     >
                       <SelectTrigger
                         id="project"
-                        className="h-11 w-full border-white/[0.12] bg-white/[0.04] text-white"
+                        className={
+                          "h-11 w-full border-white/[0.12] bg-white/[0.04] text-white " +
+                          (validationErrors.project ? "border-red-500" : "")
+                        }
                       >
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent className="border-white/20 bg-black text-white">
-                        {projects.map((project) => (
+                        {filteredProjects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {filteredProjects.length === 0 && (
+                      <p className="mt-2 text-sm text-white/60">
+                        {role === "admin"
+                          ? "No projects found for selected user."
+                          : "No projects available."}
+                      </p>
+                    )}
+                    {validationErrors.project && (
+                      <p className="mt-2 text-sm text-red-500">{validationErrors.project}</p>
+                    )}
                   </div>
 
                   <div className="border border-white/[0.08] bg-white/[0.03] p-4">
@@ -1350,7 +1325,7 @@ const NewClusterPage = ({
                     </div>
                     <div className="mt-2 text-base font-semibold text-white">
                       {selectedProject
-                        ? projects.find((project) => project.id === selectedProject)?.name || "Unknown project"
+                        ? filteredProjects.find((project) => project.id === selectedProject)?.name || "Unknown project"
                         : "No project selected"}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-white/45">
@@ -1470,135 +1445,64 @@ const NewClusterPage = ({
         </div>
 
         <div className="space-y-6">
-          <Card className={panelClassName + " sticky top-8"}>
-            <CardHeader>
-              <CardTitle className="text-white">Deployment Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedName && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Cluster</span>
-                    <span className="font-medium text-white">{selectedName}</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedLocation && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Location</span>
-                    <div className="flex items-center gap-2 font-medium text-white">
-                      <span>{selectedLocationDetails?.city}</span>
-                      {selectedLocationDetails?.country_code && (
-                        <Image
-                          src={"https://flagsapi.com/" + selectedLocationDetails.country_code + "/flat/64.png"}
-                          alt={selectedLocation}
-                          width={20}
-                          height={20}
-                          className="object-contain"
-                        />
+          <div className={`${panelClassName} lg:sticky lg:top-8`}>
+            <div className="border-b border-white/[0.06] px-6 py-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+            </div>
+            <div className="px-6 py-4">
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster" value={selectedName || "—"} empty={!selectedName} />
+                <SummaryRow
+                  icon="/dashboard-icons/region.png"
+                  label="Location"
+                  value={selectedLocationDetails ? (
+                    <span className="flex items-center justify-end gap-2">
+                      {selectedLocationDetails.country_code && (
+                        <Image src={`https://flagsapi.com/${selectedLocationDetails.country_code}/flat/64.png`} alt={selectedLocation} width={16} height={12} className="rounded-sm object-contain" unoptimized />
                       )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedNode && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Workers</span>
-                    <span className="font-medium text-white">{selectedNode}</span>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-white/45">
-                    {selectedNode + 1} total nodes including the control plane.
-                  </p>
-                </div>
-              )}
+                      {selectedLocationDetails.city}
+                    </span>
+                  ) : "—"}
+                  empty={!selectedLocation}
+                />
+                <SummaryRow icon="/dashboard-icons/number.png" label="Workers" value={selectedNode ? `${selectedNode} (${selectedNode + 1} total)` : "—"} empty={!selectedNode} />
+                <SummaryRow icon="/dashboard-icons/versioning.png" label="Version" value={selectedVersion ? `v${selectedVersion}` : "—"} empty={!selectedVersion} />
+                {selectedProject && (
+                  <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || selectedProject} />
+                )}
+              </div>
 
               {selectedPlan && (
-                <div className="border border-blue-400/20 bg-blue-500/8 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/70">
-                        Plan
-                      </div>
-                      <div className="mt-1 text-base font-semibold text-white">
-                        {selectedPlan}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold text-white">
-                       {selectedPlanDetails?.price !== null
-  ? "$" + selectedPlanDetails?.price.toFixed(2)
-  : "-"}
-                      </div>
-                      <div className="text-xs text-white/45">monthly rate</div>
-                    </div>
+                <>
+                  <div className="my-3 border-t border-white/[0.05]" />
+                  <div className="space-y-0.5">
+                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedPlan} />
+                    {selectedPlanDetails && (
+                      <>
+                        <SummaryRow icon="/dashboard-icons/cpu.png" label="vCPU" value={selectedPlanDetails.resources.cpu} />
+                        <SummaryRow icon="/dashboard-icons/ram.png" label="RAM" value={selectedPlanDetails.resources.ram} />
+                        <SummaryRow icon="/dashboard-icons/storage.png" label="Disk" value={selectedPlanDetails.resources.storage} />
+                      </>
+                    )}
                   </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.cpu || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        vCPU
-                      </div>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.ram || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        RAM
-                      </div>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {selectedPlanDetails?.resources.storage || 0}
-                      </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
-                        Disk
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </>
               )}
 
-              {selectedVersion && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Version</span>
-                    <span className="rounded-full border border-white/[0.08] bg-white/[0.06] px-2.5 py-1 text-sm font-medium text-white">
-                      {"v" + selectedVersion}
-                    </span>
+              <Separator className="my-4 bg-white/[0.08]" />
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Monthly rate</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">
+                    {selectedPlanDetails?.price != null ? `$${selectedPlanDetails.price.toFixed(2)}` : "—"}
                   </div>
                 </div>
-              )}
-
-              {selectedProject && (
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-white/60">Project</span>
-                    <span className="font-medium text-white">
-                      {projects.find((project) => project.id === selectedProject)?.name || selectedProject}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <Separator className="bg-white/10" />
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-white/60">Monthly rate</span>
-                <span className="text-lg font-semibold text-white">
-                  {selectedPlanDetails?.price !== null
-                    ? "$" + selectedPlanDetails?.price.toFixed(2)
-                    : "Select a plan"}
-                </span>
+                {selectedPlanDetails?.price != null && (
+                  <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">per month</Badge>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

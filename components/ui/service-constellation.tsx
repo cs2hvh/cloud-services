@@ -2,36 +2,28 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import {
-  Cpu,
-  Brain,
-  Database,
-  Cloud,
-  Rocket,
-  Shield,
-  Box,
-  Layers,
-} from "lucide-react";
+import Image from "next/image";
+import { Layers } from "lucide-react";
 
 /* ── Node & connection definitions ── */
 
 interface NodeDef {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  imageSrc?: string;
   x: number; // % of container width
   y: number; // % of container height
 }
 
 const NODES: NodeDef[] = [
-  { id: "hub", label: "Platform", icon: Layers, x: 50, y: 48 },
-  { id: "security", label: "Security", icon: Shield, x: 50, y: 8 },
-  { id: "gpu", label: "GPU Compute", icon: Cpu, x: 12, y: 28 },
-  { id: "ai", label: "AI / ML", icon: Brain, x: 88, y: 24 },
-  { id: "k8s", label: "Kubernetes", icon: Box, x: 8, y: 70 },
-  { id: "deploy", label: "App Deploy", icon: Rocket, x: 92, y: 66 },
-  { id: "db", label: "Database", icon: Database, x: 28, y: 92 },
-  { id: "storage", label: "Storage", icon: Cloud, x: 72, y: 90 },
+  { id: "hub",      label: "Platform",    x: 50, y: 46 },
+  { id: "security", label: "Security",    imageSrc: "/images/Features/protection.png",             x: 50, y: 10 },
+  { id: "gpu",      label: "GPU Compute", imageSrc: "/images/main-page/gpu aniamtion resized.png", x: 18, y: 28 },
+  { id: "ai",       label: "AI / ML",     imageSrc: "/images/Features/ai-agent.png",               x: 82, y: 28 },
+  { id: "k8s",      label: "Kubernetes",  imageSrc: "/images/main-page/kubernetes.png",            x: 18, y: 66 },
+  { id: "deploy",   label: "App Deploy",  imageSrc: "/images/main-page/app-deploy.png",            x: 82, y: 66 },
+  { id: "db",       label: "Database",    imageSrc: "/images/Features/database.png",               x: 35, y: 84 },
+  { id: "storage",  label: "Storage",     imageSrc: "/images/main-page/object-space.png",          x: 65, y: 84 },
 ];
 
 const CONNECTIONS = [
@@ -85,10 +77,10 @@ export function ServiceConstellation({
 
     /* pulse state per connection */
     const pulses = CONNECTIONS.map(() => ({
-      progress: Math.random(), // stagger initial positions
-      speed: 0.002 + Math.random() * 0.003,
+      progress: Math.random(),
+      speed: 0.0007 + Math.random() * 0.0008,
       forward: Math.random() > 0.5,
-      rest: 0, // seconds to rest at destination
+      rest: 0,
     }));
 
     function resize() {
@@ -134,9 +126,9 @@ export function ServiceConstellation({
 
         if (p.progress >= 1) {
           p.progress = 0;
-          p.forward = !p.forward; // reverse
-          p.rest = 0.6 + Math.random() * 1.5;
-          p.speed = 0.002 + Math.random() * 0.003;
+          p.forward = !p.forward;
+          p.rest = 1.2 + Math.random() * 2.0;
+          p.speed = 0.0007 + Math.random() * 0.0008;
           continue;
         }
 
@@ -229,7 +221,6 @@ export function ServiceConstellation({
       {/* Service nodes */}
       {NODES.map((node, i) => {
         const isHub = node.id === "hub";
-        const Icon = node.icon;
 
         return (
           <motion.div
@@ -240,30 +231,28 @@ export function ServiceConstellation({
               top: `${node.y}%`,
               transform: "translate(-50%, -50%)",
             }}
-            animate={{
-              y: isHub ? [0, -4, 0] : [0, i % 2 === 0 ? -7 : 7, 0],
-            }}
+            animate={{ scale: [1, isHub ? 1.06 : 1.08, 1] }}
             transition={{
-              duration: isHub ? 4 : 3 + i * 0.4,
+              duration: isHub ? 3.5 : 2.8 + i * 0.35,
               repeat: Infinity,
               ease: "easeInOut" as const,
             }}
           >
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className={`flex items-center justify-center rounded-lg border backdrop-blur-sm ${
-                  isHub
-                    ? "w-12 h-12 bg-[#0095FF]/15 border-[#0095FF]/25 shadow-[0_0_24px_rgba(0,149,255,0.15)]"
-                    : "w-10 h-10 bg-white/[0.04] border-white/[0.08] shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
-                }`}
-              >
-                <Icon
-                  size={isHub ? 22 : 18}
-                  className={
-                    isHub ? "text-[#0095FF]" : "text-white/60"
-                  }
+            <div className="flex flex-col items-center gap-2">
+              {isHub ? (
+                <div className="relative flex items-center justify-center w-14 h-14">
+                  <div className="absolute inset-0 rounded-full bg-[#0095FF]/15 blur-[18px]" />
+                  <Layers size={30} className="text-[#0095FF] relative z-10" />
+                </div>
+              ) : node.imageSrc ? (
+                <Image
+                  src={node.imageSrc}
+                  alt={node.label}
+                  width={56}
+                  height={56}
+                  className="object-contain drop-shadow-[0_0_8px_rgba(0,149,255,0.15)]"
                 />
-              </div>
+              ) : null}
               <span
                 className={`text-[10px] font-medium whitespace-nowrap tracking-wide ${
                   isHub ? "text-[#0095FF]/70" : "text-white/35"

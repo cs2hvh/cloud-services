@@ -99,18 +99,9 @@ const PROFILE: Record<string, FrameworkProfile> = {
     buildTimePrefixes: [],
     allVarsAreBuildTime: true,
   },
-  react: {
-    pipeline: "react",
-    supportsRuntimeInjection: false,
-    buildTimePrefixes: ["REACT_APP_", "VITE_"],
-    allVarsAreBuildTime: false,
-  },
-  static: {
-    pipeline: "static",
-    supportsRuntimeInjection: false,
-    buildTimePrefixes: [],
-    allVarsAreBuildTime: true,
-  },
+  // NOTE: "react" and "static" are intentionally absent here.
+  // Jenkins routes both through the Node.js/runtime pipeline, so they
+  // map to "runtime" in FRAMEWORK_TO_PROFILE below (all vars are runtime).
 };
 
 // Keep this aligned with JenkinsService.selectPipeline framework switch.

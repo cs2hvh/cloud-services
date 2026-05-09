@@ -4,7 +4,7 @@ import { getPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -35,15 +35,20 @@ export async function POST(req: NextRequest) {
       appId: validation.data.app_id,
       userId: auth.user!.id,
       syncStatus: true,      // Internal API syncs K8s status
-      includeEnvVars: false, // Get env vars separately (below)
+      includeEnvVars: false,
     });
 
-    // Get environment variables (internal API feature)
-    const env_vars = await Platform_Apps.get_env_vars(validation.data.app_id);
+    // Env var values are NOT included here — they are fetched on demand via
+    // POST /api/services/platform-apps/env-vars/list to avoid sending
+    // decrypted secrets on every page load.
+    const deploymentPresentation = await PlatformAppService.getDeploymentPresentation({
+      appId: validation.data.app_id,
+      activeDeploymentId: typeof app.active_deployment_id === "string" ? app.active_deployment_id : null,
+    });
 
     return NextResponse.json({ 
       ...app,
-      env_vars 
+      ...deploymentPresentation,
     });
   } catch (err: unknown) {
     if (err instanceof Error && 'code' in err) {
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
+    logError("services/platform-apps/get", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

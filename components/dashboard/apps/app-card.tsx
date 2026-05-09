@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import {
@@ -36,7 +36,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
-import { toast } from 'sonner';
+import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
+import { AppStatusBadge } from './app-status-badge';
+import { BuildLogsPanel } from './build-logs';
 
 interface AppCardProps {
   app: App;
@@ -51,54 +53,7 @@ interface AppCardProps {
   metrics?: AppMetrics | null;
   health?: AppHealth | null;
   metricsLoading?: boolean;
-}
-
-function getStatusBadge(status: string, build?: BuildInfo) {
-  if (build?.building) {
-    return (
-      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-        <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-        Building
-      </Badge>
-    );
-  }
-
-  switch (status) {
-    case 'running':
-      return (
-        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
-          <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-          Running
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
-          <XCircle className="w-2.5 h-2.5 mr-1" />
-          Failed
-        </Badge>
-      );
-    case 'building':
-      return (
-        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Building
-        </Badge>
-      );
-    case 'deleting':
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Deleting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          Pending
-        </Badge>
-      );
-  }
+  onRollback: () => void;
 }
 
 export function AppCard({
@@ -106,7 +61,7 @@ export function AppCard({
   build,
   logs,
   logsLoading,
-  logsError,
+  // logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
@@ -114,14 +69,25 @@ export function AppCard({
   metrics,
   health,
   metricsLoading,
+  onRollback,
 }: AppCardProps) {
   const domain = app.deployment_url
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
-  const [rollingBack, setRollingBack] = useState(false);
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
+
+  // When the card is expanded and the active build number changes (new build started),
+  // fetch a fresh set of logs so the panel doesn't show stale output.
+  useEffect(() => {
+    const prev = prevBuildNumberRef.current;
+    prevBuildNumberRef.current = build?.number;
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+      onFetchLogs(build.number);
+    }
+  }, [build?.number, isExpanded, activeTab, onFetchLogs]);
   
   // Fetch detailed info when metrics tab is active and expanded
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -157,35 +123,10 @@ export function AppCard({
   };
 
   const canRollback = !!app.can_rollback;
-  const rollbackDisabled = isAppDeleting || rollingBack || !canRollback;
-
-  const handleRollback = async () => {
-    if (rollbackDisabled) return;
-
-    setRollingBack(true);
-    try {
-      const res = await fetch('/api/services/platform-apps/rollback', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ app_id: app.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.error || 'Rollback failed');
-      }
-
-      toast.success('Rollback started');
-      if (isExpanded && activeTab === 'metrics') {
-        refetchDetails();
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Rollback failed';
-      toast.error(msg);
-    } finally {
-      setRollingBack(false);
-    }
-  };
+  const isAppBuilding = app.status === 'building';
+  const hasActiveBuild = isAppBuilding || !!build?.building;
+  const rollbackDisabled = isAppDeleting || hasActiveBuild || !canRollback;
+  const deleteDisabled = isAppDeleting || hasActiveBuild;
 
   return (
     <div
@@ -226,7 +167,7 @@ export function AppCard({
                 >
                   {app.name}
                 </Link>
-                {getStatusBadge(app.status, build)}
+                <AppStatusBadge status={app.status} building={build?.building} size="sm" />
               </div>
               <a
                 href={`https://${domain}`}
@@ -251,21 +192,36 @@ export function AppCard({
               <p className="text-xs text-white/40 mb-0.5">Port</p>
               <p className="text-sm text-white font-mono">{app.port}</p>
             </div>
-            {build && (
+            {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
               <div className="text-center">
-                <p className="text-xs text-white/40 mb-0.5">Build</p>
+                <p className="text-xs text-white/40 mb-0.5">Serving</p>
                 <p className="text-sm text-white font-mono flex items-center gap-1">
-                  #{build.number}
-                  {build.building ? (
+                  #{app.serving_build_number ?? build?.number}
+                  {app.serving_build_number == null && build?.building ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                  ) : build.result === 'SUCCESS' ? (
+                  ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                     <CheckCircle2 className="w-3 h-3 text-green-400" />
-                  ) : build.result === 'FAILURE' ? (
+                  ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                     <XCircle className="w-3 h-3 text-red-400" />
                   ) : null}
                 </p>
               </div>
-            )}
+            ) : null}
+            {(app.last_operation_build_number !== null && app.last_operation_build_number !== undefined) || app.last_operation_trigger ? (
+              <div className="text-center">
+                <p className="text-xs text-white/40 mb-0.5">Last Op</p>
+                <p className="text-xs text-white/70">
+                  {getAppOperationLabel({
+                    buildNumber: app.last_operation_build_number ?? null,
+                    trigger: app.last_operation_trigger,
+                    rollbackTargetBuildNumber:
+                      app.last_operation_trigger === 'rollback'
+                        ? app.last_operation_build_number ?? null
+                        : null,
+                  })}
+                </p>
+              </div>
+            ) : null}
             {/* Quick Metrics Summary */}
             {app.status === 'running' && (
               <div 
@@ -325,21 +281,23 @@ export function AppCard({
               size="sm"
               variant="ghost"
               disabled={rollbackDisabled}
-              onClick={handleRollback}
+              onClick={onRollback}
               className="cursor-pointer h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
-              title={canRollback ? 'Rollback to previous successful deployment' : 'No previous successful deployment available'}
+              title={
+                canRollback
+                  ? app.rollback_target_build_number
+                    ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                    : 'Rollback to the previous successful release'
+                  : 'No previous release available. Resize-only operations do not create rollback targets.'
+              }
             >
-              {rollingBack ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RotateCcw className="w-4 h-4" />
-              )}
+              <RotateCcw className="w-4 h-4" />
             </Button>
 
             <Button
               size="sm"
               variant="ghost"
-              disabled={isAppDeleting}
+              disabled={deleteDisabled}
               onClick={onDelete}
               className="cursor-pointer h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
               title="Delete App"
@@ -359,18 +317,18 @@ export function AppCard({
             <GitBranch className="w-3 h-3" />
             Port {app.port}
           </span>
-          {build && (
+          {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
             <span className="flex items-center gap-1">
-              Build #{build.number}
-              {build.building ? (
+              Serving #{app.serving_build_number ?? build?.number}
+              {app.serving_build_number == null && build?.building ? (
                 <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-              ) : build.result === 'SUCCESS' ? (
+              ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                 <CheckCircle2 className="w-3 h-3 text-green-400" />
-              ) : build.result === 'FAILURE' ? (
+              ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                 <XCircle className="w-3 h-3 text-red-400" />
               ) : null}
             </span>
-          )}
+          ) : null}
           {app.status === 'running' && (
             <button
               onClick={handleToggleMetrics}
@@ -431,59 +389,16 @@ export function AppCard({
           <div className="p-4 bg-black/50">
             {activeTab === 'logs' ? (
               /* Build Logs Tab */
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold text-white/70 flex items-center">
-                    <Terminal className="w-3 h-3 mr-1.5" />
-                    Build Logs {build && `#${build.number}`}
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => copyToClipboard(logs || '', 'logs')}
-                      className="h-6 px-2 text-white/50 hover:text-white hover:bg-white/10"
-                      title="Copy logs"
-                    >
-                      {copiedField === 'logs' ? (
-                        <Check className="w-3 h-3 text-green-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </Button>
-                    {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-                  </div>
-                </div>
-                  <div className="bg-[#0c0c0c] rounded border border-white/5 font-mono text-xs">
-                    <pre className="p-3 text-white/70 overflow-auto max-h-96 whitespace-pre w-full [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
-                      {logsLoading ? (
-                        <div className="flex items-center gap-2 text-white/50 italic">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Loading build logs...
-                        </div>
-                      ) : logsError ? (
-                        <div className="text-red-400">
-                          <div className="flex items-center gap-2 mb-2">
-                            <AlertTriangle className="w-4 h-4" />
-                            {logsError}
-                          </div>
-                          {build && (
-                            <button
-                              onClick={() => onFetchLogs(build.number)}
-                              className="text-xs text-blue-400 hover:text-blue-300 underline"
-                            >
-                              Click to retry
-                            </button>
-                          )}
-                        </div>
-                      ) : logs ? (
-                        logs
-                      ) : (
-                        <span className="text-white/30 italic">No logs available</span>
-                      )}
-                    </pre>
-                  </div>
-              </div>
+              <BuildLogsPanel
+                buildInfo={build ?? null}
+                buildLogs={logs ?? ''}
+                initialLoading={!!logsLoading}
+                appName={app.name}
+                fetchBuildLogs={(_, buildNumber) => {
+                  onFetchLogs(buildNumber);
+                  return Promise.resolve();
+                }}
+              />
             ) : (
               /* Metrics Tab */
               <div>
@@ -619,83 +534,7 @@ export function AppCard({
                       </div>
                     )}
 
-                    {/* Pod & Container Info */}
-                    {details?.pod && (
-                      <div className="bg-black/30 rounded-lg p-4">
-                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                          <Container className="w-3.5 h-3.5" />
-                          Pod Information
-                        </h5>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Pod Name</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white truncate flex-1">
-                                {details.pod.name}
-                              </p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.name, 'pod')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'pod' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node
-                            </p>
-                            <p className="text-xs text-white truncate" title={details.pod.nodeName}>
-                              {details.pod.nodeName.split('-').slice(0, 2).join('-')}...
-                            </p>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Network className="w-3 h-3" /> Pod IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.podIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.podIP, 'podip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'podip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.nodeIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.nodeIP, 'nodeip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'nodeip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Phase</p>
-                            <Badge className={`text-[10px] ${
-                              details.pod.phase === 'Running' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                              details.pod.phase === 'Pending' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
-                              'bg-red-500/20 text-red-400 border-red-500/30'
-                            }`}>
-                              {details.pod.phase}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Started</p>
-                            <p className="text-xs text-white">
-                              {details.pod.startTime ? new Date(details.pod.startTime).toLocaleString() : '-'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Container Info */}
                     {details?.container && (
@@ -778,35 +617,24 @@ export function AppCard({
                       <div className="bg-black/30 rounded-lg p-4">
                         <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
-                          Deployment
+                          Capacity
                         </h5>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Replicas</p>
-                            <p className="text-lg font-bold text-white">
+                            <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                            <p className="text-2xl font-bold text-white">
                               {details.deployment.readyReplicas}/{details.deployment.replicas}
                             </p>
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Strategy</p>
-                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
-                              {details.deployment.strategy}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Available</p>
-                            <span className={`text-sm font-medium ${
-                              details.deployment.availableReplicas >= details.deployment.replicas 
-                                ? 'text-green-400' : 'text-yellow-400'
+                            <p className="text-xs text-white/40 mb-1">Status</p>
+                            <Badge className={`text-[10px] ${
+                              details.deployment.readyReplicas >= details.deployment.replicas
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                             }`}>
-                              {details.deployment.availableReplicas}
-                            </span>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Created</p>
-                            <p className="text-xs text-white">
-                              {details.deployment.createdAt ? new Date(details.deployment.createdAt).toLocaleDateString() : '-'}
-                            </p>
+                              {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                            </Badge>
                           </div>
                         </div>
                       </div>

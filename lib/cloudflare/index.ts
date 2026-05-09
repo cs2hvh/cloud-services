@@ -13,7 +13,6 @@ function getCloudflare(): Cloudflare {
     }
     cloudflareInstance = new Cloudflare({
       // apiEmail: "omkarjoshi9918@gmail.com", // This is the default and can be omitted
-      // apiKey: "ghHbAiBgvA14ArB_bi19C_RvAZkLy80BKNJGIOsf", // This is the default and can be omitted
       apiToken: process.env.CLOUDFLARE_API_TOKEN,
     });
   }

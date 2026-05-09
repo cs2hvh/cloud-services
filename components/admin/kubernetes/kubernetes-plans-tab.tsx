@@ -72,8 +72,8 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     try {
       const response = await api.get("/admin/products?type=kubernetes");
       if (response.status === 200) {
-        setProductsList(response.data.products);
-        return response.data.products;
+        setProductsList(response?.data?.products ?? []);
+        return response?.data?.products;
       }
     } catch (error) {
       console.error("Error fetching products:", error);

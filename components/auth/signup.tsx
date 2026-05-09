@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { otp_schema, signup_schema } from "@/types/zod/auth";
 import {
@@ -48,7 +48,15 @@ export default function SignUpMultiStep({
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
   const [isLoading, setIsLoading] = React.useState(false);
   const [pendingEmail, setPendingEmail] = React.useState<string>("");
+  const submitLockRef = React.useRef(false);
   const router = useRouter();
+  const search = useSearchParams();
+
+  const nextPath = React.useMemo(() => {
+    const raw = search.get("next") || "";
+    // Reject protocol-relative URLs (//evil.com) to prevent open redirect
+    return raw.startsWith("/") && !raw.startsWith("//") ? raw : "";
+  }, [search]);
 
   const entryForm = useForm<EntryFormData>({
     resolver: zodResolver(entry_schema),
@@ -73,17 +81,31 @@ export default function SignUpMultiStep({
   });
 
   async function onSubmitSignup(data: SignupFormData) {
-    const response = await api.post("/auth/onboarding", data);
-    if (response.status === 200) {
-      toast.success(response.data.message);
-      setPendingEmail(data.email);
-      setStep(2);
-    } else {
-      toast.error(response.data.message);
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
+    setIsLoading(true);
+    try {
+      const response = await api.post("/auth/onboarding", data);
+      if (response.status === 200) {
+        toast.success(response?.data?.message);
+        setPendingEmail(data.email);
+        setStep(2);
+      } else {
+        toast.error(response?.data?.message);
+      }
+    } finally {
+      setIsLoading(false);
+      submitLockRef.current = false;
     }
   }
 
   async function onSubmitOtp(data: OtpFormData) {
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
     setIsLoading(true);
     try {
       const response = await api.post("/auth/onboarding/verify-otp", {
@@ -92,11 +114,16 @@ export default function SignUpMultiStep({
       });
 
       if (response.status === 200) {
-        toast.success(response.data.message);
-        router.push("/signin");
+        toast.success(response?.data?.message || "Email verified! You can now sign in.");
+        router.push(nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin");
+        // keep isLoading=true — spinner stays until navigation completes
+        return;
       }
-    } finally {
+
       setIsLoading(false);
+    } catch {
+      setIsLoading(false);
+      submitLockRef.current = false;
     }
   }
 
@@ -107,14 +134,41 @@ export default function SignUpMultiStep({
   }
 
   const handleSignIn = async (type: string) => {
+    if (submitLockRef.current) {
+      return;
+    }
+    submitLockRef.current = true;
     setIsLoading(true);
     try {
-      const response = await api.post("/auth/signin/github", { type });
-      if (response.data?.url) {
-        window.location.href = response.data.url;
+      const endpointByProvider: Record<string, string> = {
+        github: "/auth/signin/github",
+        google: "/auth/signin/github",
+        gitlab: "/auth/signin/gitlab",
+        bitbucket: "/auth/signin/bitbucket",
+      };
+      const endpoint = endpointByProvider[type];
+
+      if (!endpoint) {
+        toast.error("Unsupported sign-up provider");
+        setIsLoading(false);
+        return;
       }
-    } finally {
+
+      const payload =
+        endpoint === "/auth/signin/github"
+          ? { type, next: nextPath || undefined }
+          : { next: nextPath || undefined };
+      const response = await api.post(endpoint, payload);
+      if (response?.data?.url) {
+        window.location.href = response?.data?.url;
+        // keep isLoading=true — spinner stays until browser navigates
+        return;
+      }
+
       setIsLoading(false);
+    } catch {
+      setIsLoading(false);
+      submitLockRef.current = false;
     }
   };
 
@@ -126,6 +180,7 @@ export default function SignUpMultiStep({
       )}
       {...props}
     >
+      {/* Branding — always visible */}
       <div className="mx-auto mb-1 text-center pt-2 pb-1">
         <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
         <p className="mt-3 text-[14px] leading-[16px] text-white">
@@ -139,241 +194,256 @@ export default function SignUpMultiStep({
         </p>
       </div>
 
-      {step !== 2 && (
+      {/* Loading overlay — replaces form */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-14 gap-5">
+          <div className="relative h-12 w-12">
+            <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#2f8af5] animate-spin" />
+          </div>
+          <p className="text-sm text-white/50 tracking-wide">
+            {step === 2 ? "Verifying…" : "Creating account…"}
+          </p>
+        </div>
+      ) : (
         <>
-          <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
-            <button type="button" aria-label="Sign up with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
-              <Icons.gitHub className="h-8 w-8" />
-            </button>
-            <button type="button" aria-label="Sign up with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
-              <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
-            </button>
-            <button type="button" aria-label="Sign up with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
-              <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
-            </button>
-            <button type="button" aria-label="Sign up with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
-              <Icons.google className="h-8 w-8" />
-            </button>
-          </div>
-
-          <div className="mx-auto mt-4 w-full max-w-[320px]">
-            <div className="flex items-center gap-3 text-white">
-              <div className="h-px flex-1 bg-white/75" />
-              <span className="text-sm">Or</span>
-              <div className="h-px flex-1 bg-white/75" />
-            </div>
-          </div>
-        </>
-      )}
-
-      {step === 0 && (
-        <Form {...entryForm}>
-          <form
-              onSubmit={entryForm.handleSubmit(handleEntryContinue)}
-              className="mx-auto mt-4 w-full max-w-[320px] space-y-4"
-            >
-            <FormField
-              control={entryForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-normal text-white">Email</FormLabel>
-                  <FormControl>
-                    <div className={inputShellClass}>
-                      <Input
-                        placeholder=""
-                        {...field}
-                        type="email"
-                        disabled={isLoading}
-                        className={glass.field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className={`mx-auto mt-1 w-full max-w-[200px] ${buttonShellClass}`}>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={glass.button}
-              >
-                Continue
-              </button>
-            </div>
-          </form>
-        </Form>
-      )}
-
-      {step === 1 && (
-        <Form {...signupForm}>
-          <form
-            onSubmit={signupForm.handleSubmit(onSubmitSignup)}
-            className="mx-auto mt-4 w-full max-w-[320px] space-y-3"
-          >
-            <FormField
-              control={signupForm.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-normal text-white">Username</FormLabel>
-                  <FormControl>
-                    <div className={inputShellClass}>
-                      <Input
-                        placeholder=""
-                        {...field}
-                        type="text"
-                        disabled={isLoading}
-                        className={glass.field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={signupForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-normal text-white">Email</FormLabel>
-                  <FormControl>
-                    <div className={inputShellClass}>
-                      <Input
-                        placeholder=""
-                        {...field}
-                        type="email"
-                        disabled
-                        className={glass.field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={signupForm.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-normal text-white">Password</FormLabel>
-                  <FormControl>
-                  <PasswordInput
-                    field={field}
-                    placeholder=""
-                    disabled={isLoading}
-                    className={glass.field}
-                    wrapperClassName={inputShellClass}
-                    toggleClassName="h-full pr-3"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-              )}
-            />
-
-            <FormField
-              control={signupForm.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-normal text-white">Confirm Password</FormLabel>
-                  <FormControl>
-                  <PasswordInput
-                    field={field}
-                    placeholder=""
-                    disabled={isLoading}
-                    className={glass.field}
-                    wrapperClassName={inputShellClass}
-                    toggleClassName="h-full pr-3"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-              )}
-            />
-
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <Button
-                type="button"
-                onClick={() => setStep(0)}
-                className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10"
-              >
-                Back
-              </Button>
-              <div className={`w-auto min-w-[180px] ${buttonShellClass}`}>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className={`${glass.button} px-6`}
-                >
-                  {isLoading ? "Creating..." : "Create Account"}
+          {step !== 2 && (
+            <>
+              <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
+                <button type="button" aria-label="Sign up with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
+                  <Icons.gitHub className="h-8 w-8" />
+                </button>
+                <button type="button" aria-label="Sign up with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+                  <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
+                </button>
+                <button type="button" aria-label="Sign up with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+                  <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
+                </button>
+                <button type="button" aria-label="Sign up with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
+                  <Icons.google className="h-8 w-8" />
                 </button>
               </div>
-            </div>
-          </form>
-        </Form>
-      )}
 
-      {step === 2 && (
-        <Form {...otpForm}>
-          <form
-            onSubmit={otpForm.handleSubmit(onSubmitOtp)}
-            className="mx-auto mt-5 max-w-sm space-y-4 text-center"
-          >
-            <p className="text-sm text-white/85">
-              Verification code sent to {pendingEmail}
-            </p>
-            <FormField
-              control={otpForm.control}
-              name="pin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <InputOTP maxLength={6} {...field}>
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} />
-                        <InputOTPSlot index={1} />
-                        <InputOTPSlot index={2} />
-                      </InputOTPGroup>
-                      <InputOTPSeparator />
-                      <InputOTPGroup>
-                        <InputOTPSlot index={3} />
-                        <InputOTPSlot index={4} />
-                        <InputOTPSlot index={5} />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <div className="mx-auto mt-4 w-full max-w-[320px]">
+                <div className="flex items-center gap-3 text-white">
+                  <div className="h-px flex-1 bg-white/75" />
+                  <span className="text-sm">Or</span>
+                  <div className="h-px flex-1 bg-white/75" />
+                </div>
+              </div>
+            </>
+          )}
 
-            <div className={`w-full ${buttonShellClass}`}>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={glass.button}
+          {step === 0 && (
+            <Form {...entryForm}>
+              <form
+                  onSubmit={entryForm.handleSubmit(handleEntryContinue)}
+                  className="mx-auto mt-4 w-full max-w-[320px] space-y-4"
+                >
+                <FormField
+                  control={entryForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                      <FormControl>
+                        <div className={inputShellClass}>
+                          <Input
+                            placeholder=""
+                            {...field}
+                            type="email"
+                            disabled={isLoading}
+                            className={glass.field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className={`mx-auto mt-1 w-full max-w-[200px] ${buttonShellClass}`}>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className={glass.button}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </form>
+            </Form>
+          )}
+
+          {step === 1 && (
+            <Form {...signupForm}>
+              <form
+                onSubmit={signupForm.handleSubmit(onSubmitSignup)}
+                className="mx-auto mt-4 w-full max-w-[320px] space-y-3"
               >
-                {isLoading ? "Verifying..." : "Verify OTP"}
-              </button>
-            </div>
-          </form>
-        </Form>
-      )}
+                <FormField
+                  control={signupForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-normal text-white">Username</FormLabel>
+                      <FormControl>
+                        <div className={inputShellClass}>
+                          <Input
+                            placeholder=""
+                            {...field}
+                            type="text"
+                            disabled={isLoading}
+                            className={glass.field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-      <p className="mt-4 text-center text-sm text-white">
-        {step === 0 ? "Do you already have an account?" : "Already have an account?"}{" "}
-        <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff]">
-          Log In
-        </Link>
-      </p>
+                <FormField
+                  control={signupForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                      <FormControl>
+                        <div className={inputShellClass}>
+                          <Input
+                            placeholder=""
+                            {...field}
+                            type="email"
+                            disabled
+                            className={glass.field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={signupForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-normal text-white">Password</FormLabel>
+                      <FormControl>
+                      <PasswordInput
+                        field={field}
+                        placeholder=""
+                        disabled={isLoading}
+                        className={glass.field}
+                        wrapperClassName={inputShellClass}
+                        toggleClassName="h-full pr-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={signupForm.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-normal text-white">Confirm Password</FormLabel>
+                      <FormControl>
+                      <PasswordInput
+                        field={field}
+                        placeholder=""
+                        disabled={isLoading}
+                        className={glass.field}
+                        wrapperClassName={inputShellClass}
+                        toggleClassName="h-full pr-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                  )}
+                />
+
+                <div className="flex items-center justify-center gap-3 pt-1">
+                  <Button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10 cursor-pointer"
+                  >
+                    Back
+                  </Button>
+                  <div className={`w-auto min-w-[180px] ${buttonShellClass}`}>
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className={`${glass.button} px-6`}
+                    >
+                      Create Account
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </Form>
+          )}
+
+          {step === 2 && (
+            <Form {...otpForm}>
+              <form
+                onSubmit={otpForm.handleSubmit(onSubmitOtp)}
+                className="mx-auto mt-5 max-w-sm space-y-4 text-center"
+              >
+                <p className="text-sm text-white/85">
+                  Verification code sent to {pendingEmail}
+                </p>
+                <FormField
+                  control={otpForm.control}
+                  name="pin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <InputOTP maxLength={6} {...field}>
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                          </InputOTPGroup>
+                          <InputOTPSeparator />
+                          <InputOTPGroup>
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className={`w-full ${buttonShellClass}`}>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className={glass.button}
+                  >
+                    Verify OTP
+                  </button>
+                </div>
+              </form>
+            </Form>
+          )}
+
+          <p className="mt-4 text-center text-sm text-white">
+            {step === 0 ? "Do you already have an account?" : "Already have an account?"}{" "}
+            <Link href={nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
+              Log In
+            </Link>
+          </p>
+        </>
+      )}
     </div>
   );
 }

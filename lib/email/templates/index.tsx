@@ -7,7 +7,10 @@ import { ForgotPasswordEmailTemplate } from "@/lib/email/templates/auth/forgot-p
 import { NewLoginAlertEmailTemplate } from "@/lib/email/templates/auth/new-login-alert";
 import { OtpEmailTemplate } from "@/lib/email/templates/auth/otp";
 import { SuspiciousActivityEmailTemplate } from "@/lib/email/templates/auth/suspicious-activity";
+import { ConsultationRequestEmailTemplate } from "@/lib/email/templates/alerts/consultation-request";
 import { SystemAlertEmailTemplate } from "@/lib/email/templates/alerts/system-alert";
+import { SupportTicketCreatedEmailTemplate } from "@/lib/email/templates/support/support-ticket-created";
+import { SupportTicketReplyEmailTemplate } from "@/lib/email/templates/support/support-ticket-reply";
 import type { EmailTemplateRegistry } from "@/lib/email/types";
 
 export const emailTemplates: EmailTemplateRegistry = {
@@ -108,6 +111,63 @@ export const emailTemplates: EmailTemplateRegistry = {
     tags: ({ severity }) => [
       { name: "category", value: "alerts" },
       { name: "severity", value: severity },
+    ],
+  },
+  consultationRequest: {
+    subject: ({ serviceName }) =>
+      `AhuraSense | New consultation request for ${serviceName}`,
+    previewText: ({ requesterName, serviceName }) =>
+      `${requesterName} requested consultation for ${serviceName}.`,
+    render: (data) => <ConsultationRequestEmailTemplate {...data} />,
+    text: ({ requesterName, requesterEmail, serviceName, messageBody, submittedAt }) =>
+      [
+        "New consultation request",
+        `Service: ${serviceName}`,
+        `Name: ${requesterName}`,
+        `Email: ${requesterEmail}`,
+        `Submitted At: ${submittedAt}`,
+        `Message: ${messageBody}`,
+      ].join("\n"),
+    tags: ({ serviceName }) => [
+      { name: "category", value: "consultation" },
+      { name: "service", value: serviceName.toLowerCase().replace(/\s+/g, "-") },
+    ],
+  },
+  supportTicketCreated: {
+    subject: ({ ticketNumber }) => `AhuraSense | Support ticket created: ${ticketNumber}`,
+    previewText: ({ ticketSubject }) => `We've received your ticket: ${ticketSubject}`,
+    render: (data) => <SupportTicketCreatedEmailTemplate {...data} />,
+    text: ({ customerName, ticketNumber, ticketSubject, ticketBody, createdAt }) =>
+      [
+        `Hi ${customerName},`,
+        "Your support request has been received.",
+        `Ticket Number: ${ticketNumber}`,
+        `Subject: ${ticketSubject}`,
+        `Created At: ${createdAt}`,
+        `Issue Body: ${ticketBody}`,
+      ].join("\n"),
+    tags: () => [
+      { name: "category", value: "support" },
+      { name: "event", value: "ticket-created" },
+    ],
+  },
+  supportTicketReply: {
+    subject: ({ ticketNumber }) => `AhuraSense | New reply on ticket ${ticketNumber}`,
+    previewText: ({ ticketSubject }) => `Support replied to: ${ticketSubject}`,
+    render: (data) => <SupportTicketReplyEmailTemplate {...data} />,
+    text: ({ customerName, ticketNumber, ticketSubject, latestReply, repliedAt, ticketStatus }) =>
+      [
+        `Hi ${customerName},`,
+        "A support team member replied to your ticket.",
+        `Ticket Number: ${ticketNumber}`,
+        `Subject: ${ticketSubject}`,
+        `Status: ${ticketStatus}`,
+        `Replied At: ${repliedAt}`,
+        `Latest Reply: ${latestReply}`,
+      ].join("\n"),
+    tags: () => [
+      { name: "category", value: "support" },
+      { name: "event", value: "ticket-reply" },
     ],
   },
 };

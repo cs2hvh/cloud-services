@@ -12,6 +12,7 @@ import {
   Search,
   X,
   ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ interface DeploymentSummary {
   build_number: number;
   status: string;
   started_at: string;
+  trigger?: string | null;
 }
 
 interface BuildLogsPanelProps {
@@ -60,6 +62,14 @@ export function BuildLogsPanel({
   const [showFilters, setShowFilters] = useState(false);
   const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
   const [showJumpButton, setShowJumpButton] = useState(false);
+  const [showJumpTopButton, setShowJumpTopButton] = useState(false);
+
+  const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
+    if (deployment.trigger === 'resize') {
+      return `Resize #${deployment.build_number}`;
+    }
+    return `Build #${deployment.build_number}`;
+  }, []);
 
   // Ref on the <pre> element for imperative scroll control
   const preRef = useRef<HTMLPreElement>(null);
@@ -71,7 +81,38 @@ export function BuildLogsPanel({
   // needed is when buildInfo is set but Supabase hasn't delivered the row yet
   // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
-    const opts = [...deployments];
+    // Jenkins is the authoritative source for build state. Two race windows exist:
+    //
+    // A) Jenkins says done  → Supabase still shows BUILDING (normal completion lag).
+    //    Override to the terminal status Jenkins reported.
+    //    Exception: result=null during the post-build health-check phase — keep BUILDING
+    //    to avoid a false FAILURE flash before Supabase finalizes.
+    //
+    // B) Jenkins says active → Supabase shows a stale terminal status (e.g. FAILURE
+    //    from the previous run, or a webhook that fired before the new build row was
+    //    written). Override to BUILDING so the dropdown reflects reality.
+    const opts = deployments.map((d) => {
+      if (d.build_number !== buildInfo?.number) return d;
+
+      // Case A: Jenkins done, Supabase still BUILDING
+      if (buildInfo.building === false && d.status === 'BUILDING') {
+        if (buildInfo.result === null) return d; // health-check window — keep BUILDING
+        const RESULT_TO_STATUS: Record<string, DeploymentSummary['status']> = {
+          SUCCESS: 'SUCCESS',
+          ABORTED: 'ABORTED',
+          UNSTABLE: 'UNSTABLE',
+        };
+        const terminalStatus = RESULT_TO_STATUS[buildInfo.result] ?? 'FAILURE';
+        return { ...d, status: terminalStatus };
+      }
+
+      // Case B: Jenkins active, Supabase shows stale terminal status
+      if (buildInfo.building === true && d.status !== 'BUILDING') {
+        return { ...d, status: 'BUILDING' as DeploymentSummary['status'] };
+      }
+
+      return d;
+    });
 
     // Ensure the currently-loaded build is always visible in the dropdown
     if (buildInfo?.number != null && !opts.some((d) => d.build_number === buildInfo.number)) {
@@ -85,6 +126,16 @@ export function BuildLogsPanel({
     return opts;
   }, [deployments, buildInfo]);
 
+  const selectedDeployment = useMemo(
+    () =>
+      buildInfo?.number != null
+        ? buildOptions.find((deployment) => deployment.build_number === buildInfo.number) ?? null
+        : null,
+    [buildInfo?.number, buildOptions]
+  );
+  const selectedRunLabel = selectedDeployment ? getRunLabel(selectedDeployment) : null;
+  const isResizeRun = selectedDeployment?.trigger === 'resize';
+
   // Track whether user is near the bottom
   const handleScroll = useCallback(() => {
     const el = preRef.current;
@@ -92,6 +143,7 @@ export function BuildLogsPanel({
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     wasAtBottomRef.current = atBottom;
     setShowJumpButton(!atBottom && buildLogs.length > 0);
+    setShowJumpTopButton(el.scrollTop > 80 && buildLogs.length > 0);
   }, [buildLogs.length]);
 
   // After every log update: scroll to bottom only if the user was already there
@@ -109,9 +161,17 @@ export function BuildLogsPanel({
     }
   };
 
+  const jumpToTop = () => {
+    if (preRef.current) {
+      preRef.current.scrollTop = 0;
+      wasAtBottomRef.current = false;
+      setShowJumpTopButton(false);
+    }
+  };
+
   // Filter and search logs
   const filteredLogs = useMemo(() => {
-    if (!buildLogs) return '';
+    if (!buildLogs || buildLogs === 'No logs available') return '';
     
     let lines = buildLogs.split('\n');
     
@@ -225,15 +285,15 @@ export function BuildLogsPanel({
           <div className="flex items-center gap-2 mr-1">
             <Terminal className="w-4 h-4 text-white/60" />
             <span className="text-sm font-semibold text-white">
-              Build Logs
+              {isResizeRun ? 'Operation Logs' : 'Build Logs'}
             </span>
-            {buildInfo?.number != null && (
-              <span className="font-mono text-xs text-white/40">#{buildInfo.number}</span>
+            {selectedRunLabel && (
+              <span className="font-mono text-xs text-white/40">{selectedRunLabel}</span>
             )}
             {buildInfo?.building && (
               <Badge className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] px-1.5 py-0">
                 <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-                Building
+                {isResizeRun ? 'Running' : 'Building'}
               </Badge>
             )}
           </div>
@@ -245,7 +305,7 @@ export function BuildLogsPanel({
               onValueChange={(val) => onSelectBuild(Number(val))}
             >
               <SelectTrigger className="h-7 w-auto min-w-[200px] max-w-[280px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Select build…" />
+                <SelectValue placeholder="Select run…" />
               </SelectTrigger>
               <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
                 {buildOptions.map((d) => (
@@ -255,13 +315,17 @@ export function BuildLogsPanel({
                     className="text-xs font-mono cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <span className="text-white/80">#{d.build_number}</span>
+                      <span className="text-white/80">{getRunLabel(d)}</span>
                       <span
                         className={`text-[10px] font-sans ${
                           d.status === 'SUCCESS'
                             ? 'text-green-400'
                             : d.status === 'BUILDING'
                             ? 'text-blue-400'
+                            : d.status === 'ABORTED'
+                            ? 'text-orange-400'
+                            : d.status === 'UNSTABLE'
+                            ? 'text-yellow-400'
                             : 'text-red-400'
                         }`}
                       >
@@ -334,6 +398,12 @@ export function BuildLogsPanel({
             </Button>
           </div>
         </div>
+
+        {isResizeRun && (
+          <div className="mt-3 border-t border-white/[0.06] pt-3 text-xs text-blue-200/80">
+            Resize runs reuse the currently serving release image. These logs show the resize operation, not a new application build.
+          </div>
+        )}
 
         {/* Expandable Filter Bar */}
         {showFilters && (
@@ -432,17 +502,32 @@ export function BuildLogsPanel({
             </pre>
           )}
 
-          {/* Jump-to-bottom pill — appears when user scrolled up during live streaming */}
-          {showJumpButton && (
-            <button
-              onClick={jumpToBottom}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5
-                bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
-                text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
-            >
-              <ArrowDown className="w-3 h-3" />
-              Jump to latest
-            </button>
+          {/* Jump pills — top and bottom */}
+          {(showJumpTopButton || showJumpButton) && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              {showJumpTopButton && (
+                <button
+                  onClick={jumpToTop}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                  Jump to top
+                </button>
+              )}
+              {showJumpButton && (
+                <button
+                  onClick={jumpToBottom}
+                  className="flex items-center gap-1.5
+                    bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                    text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                  Jump to latest
+                </button>
+              )}
+            </div>
           )}
         </div>
       </CardContent>

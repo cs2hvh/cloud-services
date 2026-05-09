@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { 
-  Database, 
+  // Database, 
   Link2Off, 
   Loader2,
   Key,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  RotateCw,
 } from 'lucide-react';
 import { IntegrationBadge } from './integration-badge';
 import type { LinkedDatabase } from './types';
@@ -17,6 +19,8 @@ import type { LinkedDatabase } from './types';
 interface LinkedDatabaseCardProps {
   database: LinkedDatabase;
   onUnlink: (databaseId: string) => Promise<void>;
+  onEdit?: (databaseId: string) => void;
+  onRetry?: (databaseId: string) => void;
   unlinking?: boolean;
 }
 
@@ -26,13 +30,32 @@ interface LinkedDatabaseCardProps {
 export function LinkedDatabaseCard({ 
   database, 
   onUnlink,
+  onEdit,
+  onRetry,
   unlinking = false 
 }: LinkedDatabaseCardProps) {
   const [showEnvVars, setShowEnvVars] = useState(false);
 
-  const getEngineIcon = () => {
-    // Could add specific icons per engine type
-    return <Database className="w-5 h-5 text-blue-400" />;
+  const getEngineLogoPath = () => {
+    switch (database.engine) {
+      case 'pg':
+        return '/images/database-logos/postgresql.png';
+      case 'mysql':
+        return '/images/database-logos/mysql.svg';
+      case 'mongodb':
+        return '/images/database-logos/mongodb.png';
+      default:
+        return '/images/database-logos/postgresql.png';
+    }
+  };
+
+  const getEngineColor = () => {
+    switch (database.engine) {
+      case 'pg': return 'text-blue-400 bg-blue-500/10';
+      case 'mysql': return 'text-orange-400 bg-orange-500/10';
+      case 'mongodb': return 'text-green-400 bg-green-500/10';
+      default: return 'text-blue-400 bg-blue-500/10';
+    }
   };
 
   const getEngineLabel = (engine?: string) => {
@@ -43,23 +66,25 @@ export function LinkedDatabaseCard({
         return 'MySQL';
       case 'mongodb':
         return 'MongoDB';
-      case 'redis':
-        return 'Redis';
-      case 'kafka':
-        return 'Kafka';
       default:
         return engine || 'Database';
     }
   };
 
   return (
-    <Card className="bg-white/5 border-white/10 hover:bg-white/[0.07] transition-colors">
-      <CardContent className="p-4">
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors">      
+      <div className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Database Info */}
           <div className="flex items-start gap-3 flex-1">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              {getEngineIcon()}
+            <div className={`p-2 rounded-lg flex items-center justify-center h-10 w-10 ${getEngineColor()}`}>
+              <Image
+                src={getEngineLogoPath()}
+                alt={getEngineLabel(database.engine)}
+                width={24}
+                height={24}
+                className="object-contain h-full w-full max-h-6 max-w-6"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
@@ -93,11 +118,35 @@ export function LinkedDatabaseCard({
                 <ChevronDown className="w-4 h-4 ml-1" />
               )}
             </Button>
+            {/* Edit button — rename env var keys */}
+            {onEdit && database.status === 'linked' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(database.database_cluster_id)}
+                className="text-white/60 hover:text-white hover:bg-white/10"
+                title="Edit env var names"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+            {/* Retry button — for failed integrations */}
+            {onRetry && database.status === 'failed' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRetry(database.database_cluster_id)}
+                className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
+                title="Retry linking"
+              >
+                <RotateCw className="w-4 h-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onUnlink(database.database_cluster_id)}
-              disabled={unlinking || database.status !== 'linked'}
+              disabled={unlinking || database.status === 'pending'}
               className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             >
               {unlinking ? (
@@ -111,21 +160,18 @@ export function LinkedDatabaseCard({
 
         {/* Injected Environment Variables */}
         {showEnvVars && database.injected_env_keys && database.injected_env_keys.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <p className="text-xs text-white/50 mb-2">Injected Environment Variables:</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="mt-3 pt-3 border-t border-white/[0.06]">
+            <p className="text-[11px] text-white/40 mb-2 uppercase tracking-wide">Injected variables</p>
+            <div className="rounded border border-white/[0.06] bg-black/20 divide-y divide-white/[0.05] overflow-hidden">
               {database.injected_env_keys.map((key) => (
-                <code 
-                  key={key} 
-                  className="text-xs bg-black/30 text-green-400 px-2 py-1 rounded"
-                >
+                <div key={key} className="px-2.5 py-1.5 font-mono text-[11px] text-white/55">
                   {key}
-                </code>
+                </div>
               ))}
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

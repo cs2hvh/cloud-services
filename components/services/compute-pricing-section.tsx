@@ -4,22 +4,22 @@ import { useState } from "react";
 import Image from "next/image";
 import {
   ArrowRight,
-  Cpu,
-  Server,
-  Zap,
-  MemoryStick,
-  HardDrive,
-  Shield,
-  Globe,
-  Gauge,
-  Clock,
-  Network,
-  Check,
   CircuitBoard,
+  Clock,
+  Cpu,
+  Gauge,
+  Globe,
+  HardDrive,
+  MemoryStick,
+  Network,
+  Server,
+  Shield,
+  Zap,
 } from "lucide-react";
 import { Container } from "@/components/ui/container";
+import WorldMap from "@/components/ui/worldmap";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
-/* ─── Type Definitions ─── */
 interface VirtualPlan {
   vcpu: number;
   ram: string;
@@ -49,48 +49,156 @@ interface ComputeCategory {
   plans: (VirtualPlan | BareMetalPlan)[];
 }
 
-
-/* ─── Hardware Highlights ─── */
 const HIGHLIGHTS = [
   {
     icon: Cpu,
     stat: "5.7 GHz",
-    title: "AMD EPYC & Ryzen 9",
-    desc: "Latest-gen processors with industry-leading single & multi-thread performance",
+    title: "AMD EPYC and Ryzen 9",
+    desc: "Modern processors tuned for both single-thread and sustained multi-core performance.",
   },
   {
     icon: Gauge,
     stat: "7 GB/s",
-    title: "NVMe SSD Only",
-    desc: "Enterprise-grade Gen4 NVMe with up to 1M IOPS random read",
+    title: "Enterprise NVMe",
+    desc: "Gen4 NVMe storage with fast boot, low queue latency, and high random IOPS.",
   },
   {
     icon: Network,
     stat: "25 Gbit/s",
-    title: "Premium Network",
-    desc: "Redundant uplinks, low jitter, and free inbound traffic on every plan",
+    title: "Premium network",
+    desc: "Low-jitter networking with redundant uplinks and free inbound traffic on every plan.",
   },
   {
     icon: Globe,
-    stat: "12",
-    title: "Global Regions",
-    desc: "Deploy closest to your users across NA, EU, and APAC with sub-20ms latency",
+    stat: "15 locations",
+    title: "Global footprint",
+    desc: "Launch closer to users across the Americas, Europe, Asia, and Oceania.",
   },
   {
     icon: Shield,
     stat: "L3-L7",
-    title: "DDoS Protection",
-    desc: "Always-on mitigation absorbs volumetric and application-layer attacks",
+    title: "DDoS protection",
+    desc: "Always-on mitigation protects workloads from volumetric and application-layer attacks.",
   },
   {
     icon: Clock,
-    stat: "< 30s",
-    title: "Instant Deploy",
-    desc: "Full root access with your SSH key, public IP, and firewall ready instantly",
+    stat: "< 30 sec",
+    title: "Fast provisioning",
+    desc: "Public IPs, SSH access, and firewall controls are ready as soon as the instance boots.",
   },
 ];
 
-/* ─── Instance Categories ─── */
+const CATEGORY_META: Record<
+  string,
+  {
+    audience: string;
+    cpuProfile: string;
+    summary: string;
+  }
+> = {
+  shared: {
+    audience: "Dev environments, prototypes, low-traffic workloads",
+    cpuProfile: "Burstable shared AMD vCPU",
+    summary: "Low-cost entry instances with flexible burst capacity.",
+  },
+  dedicated: {
+    audience: "Production apps, APIs, and business-critical services",
+    cpuProfile: "Guaranteed dedicated AMD threads",
+    summary: "Consistent compute for steady traffic and predictable performance.",
+  },
+  compute: {
+    audience: "CI/CD runners, game servers, and latency-sensitive jobs",
+    cpuProfile: "High clock-speed Ryzen cores",
+    summary: "CPU-heavy instances optimized for high single-thread performance.",
+  },
+  memory: {
+    audience: "Redis, Postgres, Elasticsearch, analytics",
+    cpuProfile: "High RAM-to-vCPU ratio",
+    summary: "Memory-dense profiles for caches, databases, and in-memory systems.",
+  },
+  storage: {
+    audience: "Backups, media processing, data-heavy pipelines",
+    cpuProfile: "NVMe-heavy storage nodes",
+    summary: "Higher local NVMe capacity for data-intensive services.",
+  },
+  baremetal: {
+    audience: "High-density workloads, virtualization, custom stacks",
+    cpuProfile: "Dedicated physical hardware",
+    summary: "Full hardware access with no hypervisor layer in the way.",
+  },
+};
+
+const AVAILABLE_REGIONS = [
+  {
+    continent: "Americas",
+    locations: [
+      { city: "San Francisco", flag: "us" },
+      { city: "Los Angeles", flag: "us" },
+      { city: "New York", flag: "us" },
+      { city: "Sao Paulo", flag: "br" },
+    ],
+  },
+  {
+    continent: "Europe",
+    locations: [
+      { city: "London", flag: "gb" },
+      { city: "Paris", flag: "fr" },
+      { city: "Frankfurt", flag: "de" },
+      { city: "Amsterdam", flag: "nl" },
+      { city: "Stockholm", flag: "se" },
+      { city: "Madrid", flag: "es" },
+    ],
+  },
+  {
+    continent: "Asia",
+    locations: [
+      { city: "Mumbai", flag: "in" },
+      { city: "Dubai", flag: "ae" },
+      { city: "Singapore", flag: "sg" },
+      { city: "Tokyo", flag: "jp" },
+    ],
+  },
+  {
+    continent: "Oceania",
+    locations: [{ city: "Sydney", flag: "au" }],
+  },
+];
+
+const POP_LOCATIONS = [
+  { lat: 37.7749, lng: -122.4194, label: "San Francisco" },
+  { lat: 40.7128, lng: -74.006, label: "New York" },
+  { lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
+  { lat: -23.5505, lng: -46.6333, label: "Sao Paulo" },
+  { lat: 51.5074, lng: -0.1278, label: "London" },
+  { lat: 48.8566, lng: 2.3522, label: "Paris" },
+  { lat: 50.1109, lng: 8.6821, label: "Frankfurt" },
+  { lat: 52.3676, lng: 4.9041, label: "Amsterdam" },
+  { lat: 59.3293, lng: 18.0686, label: "Stockholm" },
+  { lat: 40.4168, lng: -3.7038, label: "Madrid" },
+  { lat: 19.076, lng: 72.8777, label: "Mumbai" },
+  { lat: 25.2048, lng: 55.2708, label: "Dubai" },
+  { lat: 1.3521, lng: 103.8198, label: "Singapore" },
+  { lat: 35.6762, lng: 139.6503, label: "Tokyo" },
+  { lat: -33.8688, lng: 151.2093, label: "Sydney" },
+];
+
+const REGION_ACCENTS: Record<string, string> = {
+  Americas: "bg-white",
+  Europe: "bg-white/72",
+  Asia: "bg-white/60",
+  Oceania: "bg-white/50",
+};
+
+const VIRTUAL_PLAN_NAMES = ["Starter", "Basic", "Growth", "Scale", "Power", "Max"];
+const BARE_METAL_PLAN_NAMES = [
+  "Launch",
+  "Builder",
+  "Production",
+  "High Core",
+  "Enterprise",
+  "Max Density",
+];
+
 const FALLBACK_CATEGORIES: ComputeCategory[] = [
   {
     key: "shared",
@@ -101,9 +209,9 @@ const FALLBACK_CATEGORIES: ComputeCategory[] = [
       "Burstable performance for development, staging, and low-traffic workloads. Ideal when you need a server fast without breaking the bank.",
     features: [
       "Burstable AMD vCPU cores",
-      "Best $/performance for dev & test",
-      "Full root access & SSH",
-      "Free snapshots & backups",
+      "Best price/performance for dev and test",
+      "Full root access and SSH",
+      "Free snapshots and backups",
     ],
     plans: [
       { vcpu: 1, ram: "1 GB", storage: "25 GB", bandwidth: "1 TB", price: 6 },
@@ -142,10 +250,10 @@ const FALLBACK_CATEGORIES: ComputeCategory[] = [
     description:
       "High clock-speed AMD Ryzen 9 processors tuned for single-thread performance. Perfect for CI/CD runners, game servers, and batch jobs.",
     features: [
-      "Ryzen 9 — up to 5.7 GHz boost",
-      "Optimized for single-thread perf",
+      "Ryzen 9 up to 5.7 GHz boost",
+      "Optimized for single-thread performance",
       "Low-latency NVMe I/O path",
-      "Ideal for CI/CD & game servers",
+      "Ideal for CI/CD and game servers",
     ],
     plans: [
       { vcpu: 2, ram: "4 GB", storage: "50 GB", bandwidth: "4 TB", price: 42 },
@@ -165,7 +273,7 @@ const FALLBACK_CATEGORIES: ComputeCategory[] = [
     features: [
       "Up to 256 GB DDR5 ECC RAM",
       "8:1 RAM-to-vCPU ratio",
-      "Tuned for Redis, Postgres, Elastic",
+      "Tuned for Redis, Postgres, and Elastic",
       "Low-latency memory bus",
     ],
     plans: [
@@ -205,19 +313,67 @@ const FALLBACK_CATEGORIES: ComputeCategory[] = [
     description:
       "Dedicated physical servers with no virtualization layer. Full hardware access for maximum performance, custom OS installations, and raw compute power.",
     features: [
-      "No hypervisor — 100% hardware",
-      "IPMI / KVM remote management",
+      "No hypervisor and 100% hardware access",
+      "IPMI and KVM remote management",
       "Hardware RAID options",
-      "Custom OS & ISO support",
+      "Custom OS and ISO support",
     ],
     isBareMetalCategory: true,
     plans: [
-      { processor: "Intel Xeon E-2388G", cores: "8c / 16t", ram: "32 GB DDR4 ECC", storage: "2× 512 GB NVMe", bandwidth: "10 TB", network: "1 Gbit/s", price: 99 },
-      { processor: "AMD Ryzen 9 7950X", cores: "16c / 32t", ram: "64 GB DDR5", storage: "2× 1 TB NVMe", bandwidth: "20 TB", network: "1 Gbit/s", price: 179 },
-      { processor: "AMD EPYC 7443P", cores: "24c / 48t", ram: "128 GB DDR4 ECC", storage: "2× 1.92 TB NVMe", bandwidth: "30 TB", network: "10 Gbit/s", price: 329 },
-      { processor: "AMD EPYC 9354P", cores: "32c / 64t", ram: "256 GB DDR5 ECC", storage: "2× 3.84 TB NVMe", bandwidth: "50 TB", network: "10 Gbit/s", price: 549 },
-      { processor: "2× AMD EPYC 9654", cores: "2×96c / 384t", ram: "512 GB DDR5 ECC", storage: "4× 3.84 TB NVMe", bandwidth: "100 TB", network: "25 Gbit/s", price: 1299 },
-      { processor: "2× AMD EPYC 9754", cores: "2×128c / 512t", ram: "1 TB DDR5 ECC", storage: "8× 3.84 TB NVMe", bandwidth: "Unmetered", network: "25 Gbit/s", price: 2499 },
+      {
+        processor: "Intel Xeon E-2388G",
+        cores: "8c / 16t",
+        ram: "32 GB DDR4 ECC",
+        storage: "2x 512 GB NVMe",
+        bandwidth: "10 TB",
+        network: "1 Gbit/s",
+        price: 99,
+      },
+      {
+        processor: "AMD Ryzen 9 7950X",
+        cores: "16c / 32t",
+        ram: "64 GB DDR5",
+        storage: "2x 1 TB NVMe",
+        bandwidth: "20 TB",
+        network: "1 Gbit/s",
+        price: 179,
+      },
+      {
+        processor: "AMD EPYC 7443P",
+        cores: "24c / 48t",
+        ram: "128 GB DDR4 ECC",
+        storage: "2x 1.92 TB NVMe",
+        bandwidth: "30 TB",
+        network: "10 Gbit/s",
+        price: 329,
+      },
+      {
+        processor: "AMD EPYC 9354P",
+        cores: "32c / 64t",
+        ram: "256 GB DDR5 ECC",
+        storage: "2x 3.84 TB NVMe",
+        bandwidth: "50 TB",
+        network: "10 Gbit/s",
+        price: 549,
+      },
+      {
+        processor: "2x AMD EPYC 9654",
+        cores: "2x96c / 384t",
+        ram: "512 GB DDR5 ECC",
+        storage: "4x 3.84 TB NVMe",
+        bandwidth: "100 TB",
+        network: "25 Gbit/s",
+        price: 1299,
+      },
+      {
+        processor: "2x AMD EPYC 9754",
+        cores: "2x128c / 512t",
+        ram: "1 TB DDR5 ECC",
+        storage: "8x 3.84 TB NVMe",
+        bandwidth: "Unmetered",
+        network: "25 Gbit/s",
+        price: 2499,
+      },
     ],
   },
 ];
@@ -226,279 +382,506 @@ interface ComputePricingSectionProps {
   categories?: ComputeCategory[];
 }
 
-export default function ComputePricingSection({ categories = FALLBACK_CATEGORIES }: ComputePricingSectionProps) {
+function isBareMetalPlan(plan: VirtualPlan | BareMetalPlan): plan is BareMetalPlan {
+  return "processor" in plan;
+}
+
+function getCategoryMeta(category: ComputeCategory) {
+  return (
+    CATEGORY_META[category.key] ?? {
+      audience: "General-purpose workloads",
+      cpuProfile: category.label,
+      summary: category.description,
+    }
+  );
+}
+
+function formatHourlyPrice(monthlyPrice: number) {
+  const hourly = monthlyPrice / 730;
+  const decimals = hourly >= 1 ? 2 : hourly >= 0.1 ? 3 : 4;
+  return hourly.toFixed(decimals);
+}
+
+function getPlanName(index: number, isBareMetalCategory: boolean) {
+  const labels = isBareMetalCategory ? BARE_METAL_PLAN_NAMES : VIRTUAL_PLAN_NAMES;
+  return labels[index] ?? `Plan ${index + 1}`;
+}
+
+function VirtualPlanCard({ plan, index }: { plan: VirtualPlan; index: number }) {
+  return (
+    <div className="border border-white/[0.12] bg-[#111214] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/28">
+            {getPlanName(index, false)}
+          </p>
+          <h5 className="mt-2 text-lg font-semibold text-white">
+            {plan.vcpu} {plan.vcpu === 1 ? "vCPU" : "vCPUs"}
+          </h5>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-semibold tracking-tight text-white">${plan.price}</div>
+          <div className="text-[12px] text-white/32">${formatHourlyPrice(plan.price)}/hr</div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Memory</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.ram}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Storage</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.storage}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Transfer</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.bandwidth}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Billing</div>
+          <div className="mt-1 text-sm font-medium text-white/80">Monthly, hourly billed</div>
+        </div>
+      </div>
+
+      <AuthAwareServiceCta
+        service="compute"
+        intent="new"
+        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
+      >
+        Deploy {getPlanName(index, false)}
+        <ArrowRight className="h-4 w-4" />
+      </AuthAwareServiceCta>
+    </div>
+  );
+}
+
+function BareMetalPlanCard({ plan, index }: { plan: BareMetalPlan; index: number }) {
+  const isIntel = plan.processor.includes("Intel");
+
+  return (
+    <div className="border border-white/[0.12] bg-[#111214] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/28">
+            {getPlanName(index, true)}
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <Image
+              src={isIntel ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
+              alt={isIntel ? "Intel" : "AMD"}
+              width={22}
+              height={22}
+              className="h-5 w-5 object-contain brightness-0 invert opacity-50"
+            />
+            <h5 className="text-base font-semibold text-white">{plan.processor}</h5>
+          </div>
+          <p className="mt-1 text-sm text-white/45">{plan.cores}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-semibold tracking-tight text-white">${plan.price}</div>
+          <div className="text-[12px] text-white/32">${formatHourlyPrice(plan.price)}/hr</div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">RAM</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.ram}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Storage</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.storage}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Network</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.network}</div>
+        </div>
+        <div className="border border-white/[0.1] bg-white/[0.04] px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-white/36">Transfer</div>
+          <div className="mt-1 text-sm font-medium text-white/80">{plan.bandwidth}</div>
+        </div>
+      </div>
+
+      <AuthAwareServiceCta
+        service="compute"
+        intent="new"
+        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
+      >
+        Configure {getPlanName(index, true)}
+        <ArrowRight className="h-4 w-4" />
+      </AuthAwareServiceCta>
+    </div>
+  );
+}
+
+export default function ComputePricingSection({
+  categories = FALLBACK_CATEGORIES,
+}: ComputePricingSectionProps) {
   const [activeKey, setActiveKey] = useState("shared");
-  const active = categories.find((c) => c.key === activeKey)!;
-  const isBM = !!(active.isBareMetalCategory);
+  const active = categories.find((category) => category.key === activeKey) ?? categories[0];
+  const isBareMetalCategory = !!active.isBareMetalCategory;
+  const activeMeta = getCategoryMeta(active);
 
   return (
     <section className="relative z-10 py-16 lg:py-24">
-      <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-black" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       </div>
 
       <Container>
-        {/* ═══════════ SECTION 1: HARDWARE ═══════════ */}
-        <div className="text-center mb-12 lg:mb-16">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-[400] tracking-tight leading-[1.1] text-white">
-            Built on{" "}
-            <span className="text-[#0095FF]">Next-Gen Hardware</span>
+        <div className="mx-auto max-w-4xl text-center">
+          <span className="inline-flex items-center border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/48">
+            Compute Pricing
+          </span>
+          <h2 className="mt-5 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+            Built on <span className="text-[#0095FF]">Next-Gen Hardware</span>, priced for real workloads
           </h2>
-          <p className="mt-4 mx-auto max-w-2xl text-sm lg:text-base leading-relaxed text-white/40">
-            Every instance runs on AMD EPYC &amp; Ryzen 9 processors with DDR5 memory and enterprise NVMe — no spinning disks, no shared bottlenecks.
+          <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-white/45 lg:text-base">
+            Compare CPU families fast, then scan plans with cleaner monthly and hourly pricing.
           </p>
-
-          {/* Powered-by brand strip */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-6">
-            <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3 py-1 sm:px-4 sm:py-2">
-              <Image
-                src="/images/compute-page/amd.png"
-                alt="AMD"
-                width={60}
-                height={22}
-                className="object-contain w-12 sm:w-16 h-auto brightness-0 invert opacity-50"
-              />
-              <span className="text-[9px] sm:text-[10px] text-white/25 uppercase tracking-wider">EPYC &bull; Ryzen 9</span>
-            </div>
-            <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3 py-1 sm:px-4 sm:py-2">
-              <Image
-                src="/images/compute-page/intel.png"
-                alt="Intel"
-                width={52}
-                height={22}
-                className="object-contain w-12 sm:w-14 h-auto brightness-0 invert opacity-50"
-              />
-              <span className="text-[9px] sm:text-[10px] text-white/25 uppercase tracking-wider">Xeon &bull; Core</span>
-            </div>
-          </div>
         </div>
 
-        {/* Hardware cards — stat-driven design */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] mb-14 lg:mb-16">
-          {HIGHLIGHTS.map((h) => (
-            <div
-              key={h.title}
-              className="bg-[#0a0a0a] p-4 sm:p-6 lg:p-8 group hover:bg-[#0d0d0d] transition-colors duration-300"
-            >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
-                <div className="flex h-10 w-10 items-center justify-center bg-[#0095FF]/[0.08] border border-[#0095FF]/20 flex-shrink-0">
-                  <h.icon className="w-5 h-5 text-[#0095FF]" />
-                </div>
-                <span className="text-[18px] sm:text-[22px] lg:text-[26px] font-[600] text-white tabular-nums tracking-tight break-words">
-                  {h.stat}
-                </span>
-              </div>
-              <h3 className="text-[14px] sm:text-[15px] font-[500] text-white mb-1">
-                {h.title}
+        <div className="mt-14 border border-white/[0.08] bg-white/[0.02]">
+          <div className="grid gap-px bg-white/[0.06] lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className="bg-[#0a0a0a] p-6 lg:p-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/28">
+                Infrastructure Baseline
+              </p>
+              <h3 className="mt-3 text-2xl font-[400] tracking-tight text-white lg:text-3xl">
+                Hardware buyers can trust
               </h3>
-              <p className="text-[13px] leading-[1.5] text-white/40">
-                {h.desc}
+              <p className="mt-4 max-w-xl text-sm leading-7 text-white/45 lg:text-[15px]">
+                Every compute plan runs on modern server hardware, fast NVMe, and a premium network fabric.
+                The goal is simple: clear instance pricing backed by infrastructure details buyers actually use to
+                compare providers.
               </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
+                  <Image
+                    src="/images/compute-page/amd.png"
+                    alt="AMD"
+                    width={60}
+                    height={22}
+                    className="h-auto w-14 object-contain brightness-0 invert opacity-55"
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/30">EPYC and Ryzen</span>
+                </div>
+                <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
+                  <Image
+                    src="/images/compute-page/intel.png"
+                    alt="Intel"
+                    width={52}
+                    height={22}
+                    className="h-auto w-12 object-contain brightness-0 invert opacity-55"
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/30">Xeon platforms</span>
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        {/* ═══════════ SECTION 2: INSTANCE PICKER ═══════════ */}
-        <div className="mb-8 lg:mb-10">
-          <h3 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight text-white">
-            Choose Your{" "}
-            <span className="text-[#0095FF]">Instance</span>
-          </h3>
-          <p className="mt-2 text-sm text-white/40 max-w-lg">
-            6 instance families optimized for different workloads — from $6/mo shared VMs to enterprise bare metal.
-          </p>
-        </div>
-
-        {/* Category tabs — card style */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-12">
-          {categories.map((cat) => {
-            const isActive = cat.key === activeKey;
-            const Icon = cat.icon;
-            return (
-              <button
-                key={cat.key}
-                type="button"
-                onClick={() => setActiveKey(cat.key)}
-                className={`cursor-pointer relative flex flex-col items-start gap-2 p-4 text-left transition-all duration-200 border ${
-                  isActive
-                    ? "border-[#0095FF]/40 bg-[#0095FF]/[0.06]"
-                    : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.03]"
-                }`}
-              >
-                {isActive && (
-                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#0095FF]" />
-                )}
-                <Icon className={`w-5 h-5 ${isActive ? "text-[#0095FF]" : "text-white/30"}`} />
-                <span className={`text-[13px] font-medium leading-tight ${isActive ? "text-white" : "text-white/60"}`}>
-                  {cat.label}
-                </span>
-                <span className={`text-[11px] ${isActive ? "text-[#0095FF]" : "text-white/25"}`}>
-                  {cat.tagline}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Active category detail card */}
-        <div className="border border-white/[0.08] bg-white/[0.015] p-6 lg:p-8 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-            <div className="w-full lg:max-w-[520px]">
-              <h4 className="text-lg lg:text-xl font-[500] text-white mb-2">
-                {active.label}
-              </h4>
-              <p className="text-[14px] leading-[1.7] text-white/45">
-                {active.description}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 w-full sm:w-auto">
-              {active.features.map((f) => (
-                <div key={f} className="flex items-center gap-2.5">
-                  <Check className="w-3.5 h-3.5 text-[#0095FF] shrink-0" />
-                  <span className="text-[13px] text-white/55">{f}</span>
+            <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-3">
+              {HIGHLIGHTS.map((highlight) => (
+                <div
+                  key={highlight.title}
+                  className="bg-[#0a0a0a] p-5 transition-colors duration-200 hover:bg-[#0d0d0d]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center border border-[#0095FF]/20 bg-[#0095FF]/10">
+                      <highlight.icon className="h-5 w-5 text-[#0095FF]" />
+                    </div>
+                    <span className="text-xl font-semibold tracking-tight text-white">{highlight.stat}</span>
+                  </div>
+                  <h4 className="mt-4 text-[15px] font-medium text-white">{highlight.title}</h4>
+                  <p className="mt-2 text-[13px] leading-6 text-white/40">{highlight.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ── Pricing Table ── */}
-        <div className="border border-white/[0.08] overflow-x-auto">
-          {isBM ? (
-            <table className="w-full min-w-[800px]">
-              <thead>
-                <tr className="bg-white/[0.02]">
-                  {["Processor", "RAM", "Storage", "Network", "Price", ""].map((h) => (
-                    <th key={h} className="px-6 py-4 text-left text-[11px] font-medium text-white/25 uppercase tracking-[0.12em] border-b border-white/[0.06]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(active.plans as BareMetalPlan[]).map((plan, i: number) => (
-                  <tr
-                    key={`bm-${plan.processor}`}
-                    className={`transition-colors duration-150 hover:bg-white/[0.02] ${
-                      i % 2 === 0 ? "bg-transparent" : "bg-white/[0.01]"
-                    } ${i < active.plans.length - 1 ? "border-b border-white/[0.04]" : ""}`}
-                  >
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-2.5">
-                        <Image
-                          src={plan.processor.includes("Intel") ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
-                          alt={plan.processor.includes("Intel") ? "Intel" : "AMD"}
-                          width={24}
-                          height={24}
-                          className="object-contain brightness-0 invert opacity-50 shrink-0"
-                        />
-                        <div>
-                          <span className="text-[14px] font-[500] text-white block">{plan.processor}</span>
-                          <span className="text-[12px] text-white/30 tabular-nums">{plan.cores}</span>
+        <div className="mt-14 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/28">
+              Instance Families
+            </p>
+            <h3 className="mt-3 text-2xl font-[400] tracking-tight text-white sm:text-3xl lg:text-4xl">
+              Select a CPU family
+            </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/45 lg:text-[15px]">
+              Pick a family, then compare plans instantly.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] text-white/40">
+            <span>Monthly price</span>
+            <span className="h-1 w-1 rounded-full bg-white/20" />
+            <span>Hourly equivalent shown</span>
+          </div>
+        </div>
+
+        <div className="mt-8">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            {categories.map((category) => {
+              const isActive = category.key === activeKey;
+              const meta = getCategoryMeta(category);
+
+              return (
+                <button
+                  key={category.key}
+                  type="button"
+                  onClick={() => setActiveKey(category.key)}
+                  className={`group relative flex min-h-[90px] items-start gap-3 border px-4 py-3 text-left transition-all duration-300 ${
+                    isActive
+                      ? "cursor-pointer border-[#0095FF] bg-[linear-gradient(135deg,#ffffff_0%,#eef6ff_100%)] text-black shadow-[0_18px_50px_rgba(0,149,255,0.18)]"
+                      : "cursor-pointer border-white/[0.1] bg-[#0f1012] hover:-translate-y-0.5 hover:border-[#0095FF]/35 hover:bg-[#15171b]"
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute inset-y-3 left-2 w-[3px] bg-[#0095FF]" />
+                  )}
+                  <div className={`min-w-0 ${isActive ? "pl-3" : ""}`}>
+                    <div className={`text-[14px] font-medium leading-snug ${isActive ? "text-black" : "text-white/88"}`}>
+                      {category.label}
+                    </div>
+                    <div className={`mt-1 text-[11px] leading-snug ${isActive ? "text-black/58" : "text-white/42"}`}>
+                      {meta.cpuProfile}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-6 border border-white/[0.12] bg-[#111214]">
+          <div className="flex flex-col gap-4 border-b border-white/[0.08] bg-[linear-gradient(90deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_32%,rgba(255,255,255,0.02)_100%)] px-5 py-5 sm:px-6">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Plan Comparison
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="border border-[#0095FF]/35 bg-[#0095FF]/12 px-3 py-1 text-[12px] font-semibold text-[#8ecaff]">
+                  {active.label}
+                </span>
+                <span className="text-sm text-white/72">{activeMeta.audience}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 p-4 lg:hidden">
+            {active.plans.map((plan, index) =>
+              isBareMetalPlan(plan) ? (
+                <BareMetalPlanCard key={`${active.key}-${plan.processor}`} index={index} plan={plan} />
+              ) : (
+                <VirtualPlanCard key={`${active.key}-${plan.vcpu}-${plan.ram}`} index={index} plan={plan} />
+              ),
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto lg:block">
+            {isBareMetalCategory ? (
+              <table className="w-full min-w-[920px]">
+                <thead>
+                  <tr className="bg-[linear-gradient(90deg,rgba(0,149,255,0.10),rgba(255,255,255,0.04)_22%,rgba(255,255,255,0.03)_100%)]">
+                    {["Plan", "Processor", "RAM", "Storage", "Network", "Price", ""].map((heading) => (
+                      <th
+                        key={heading}
+                        className="border-b border-white/[0.08] px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50"
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {active.plans.map((plan, index) => {
+                    if (!isBareMetalPlan(plan)) {
+                      return null;
+                    }
+
+                    const isIntel = plan.processor.includes("Intel");
+
+                    return (
+                      <tr
+                        key={`bm-${plan.processor}`}
+                        className={`transition-colors duration-150 hover:bg-white/[0.07] ${
+                          index % 2 === 1 ? "bg-white/[0.025]" : "bg-transparent"
+                        } ${
+                          index < active.plans.length - 1 ? "border-b border-white/[0.06]" : ""
+                        }`}
+                      >
+                        <td className="px-6 py-5">
+                          <div className="text-[14px] font-medium text-white">{getPlanName(index, true)}</div>
+                          <div className="mt-1 text-[12px] text-white/45">{plan.cores}</div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2.5">
+                            <Image
+                              src={isIntel ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
+                              alt={isIntel ? "Intel" : "AMD"}
+                              width={22}
+                              height={22}
+                              className="h-5 w-5 shrink-0 object-contain brightness-0 invert opacity-50"
+                            />
+                            <span className="text-[14px] text-white/88">{plan.processor}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-[14px] text-white/74">{plan.ram}</td>
+                        <td className="px-6 py-5 text-[14px] text-white/74">{plan.storage}</td>
+                        <td className="px-6 py-5 text-[14px] text-white/74">
+                          <div>{plan.network}</div>
+                          <div className="mt-1 text-[12px] text-white/40">{plan.bandwidth} transfer</div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="text-[20px] font-semibold tracking-tight text-white">${plan.price}</div>
+                          <div className="text-[12px] text-white/55">${formatHourlyPrice(plan.price)}/hr</div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <AuthAwareServiceCta
+                            service="compute"
+                            intent="new"
+                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
+                          >
+                            Configure
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </AuthAwareServiceCta>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full min-w-[860px]">
+                <thead>
+                  <tr className="bg-[linear-gradient(90deg,rgba(0,149,255,0.10),rgba(255,255,255,0.04)_22%,rgba(255,255,255,0.03)_100%)]">
+                    {["Plan", "vCPUs", "Memory", "NVMe Storage", "Transfer", "Price", ""].map((heading) => (
+                      <th
+                        key={heading}
+                        className="border-b border-white/[0.08] px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50"
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {active.plans.map((plan, index) => {
+                    if (isBareMetalPlan(plan)) {
+                      return null;
+                    }
+
+                    return (
+                      <tr
+                        key={`${active.key}-${plan.vcpu}-${plan.ram}`}
+                        className={`transition-colors duration-150 hover:bg-white/[0.07] ${
+                          index % 2 === 1 ? "bg-white/[0.025]" : "bg-transparent"
+                        } ${
+                          index < active.plans.length - 1 ? "border-b border-white/[0.06]" : ""
+                        }`}
+                      >
+                        <td className="px-6 py-5">
+                          <div className="text-[14px] font-medium text-white">{getPlanName(index, false)}</div>
+                          <div className="mt-1 text-[12px] text-white/45">Monthly plan, hourly billed</div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-[15px] font-medium text-white">{plan.vcpu}</span>
+                          <span className="ml-1.5 text-[12px] text-white/45">
+                            {plan.vcpu === 1 ? "vCPU" : "vCPUs"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-5 text-[15px] text-white/74">{plan.ram}</td>
+                        <td className="px-6 py-5 text-[15px] text-white/74">{plan.storage}</td>
+                        <td className="px-6 py-5 text-[15px] text-white/74">{plan.bandwidth}</td>
+                        <td className="px-6 py-5">
+                          <div className="text-[20px] font-semibold tracking-tight text-white">${plan.price}</div>
+                          <div className="text-[12px] text-white/55">${formatHourlyPrice(plan.price)}/hr</div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <AuthAwareServiceCta
+                            service="compute"
+                            intent="new"
+                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
+                          >
+                            Deploy
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </AuthAwareServiceCta>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div className="relative mt-10">
+          <div className="relative grid gap-8 py-6 lg:grid-cols-[minmax(0,0.5fr)_minmax(0,1.5fr)] lg:items-start lg:gap-12 lg:py-8">
+            <div className="pb-2 lg:pr-4">
+              <div className="inline-flex items-center gap-2 px-0 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                <Globe className="h-3.5 w-3.5 text-[#8ecaff]" />
+                Global Footprint
+              </div>
+
+              <h3 className="mt-4 max-w-sm text-2xl font-[400] tracking-tight text-white lg:text-[30px]">
+                <span className="text-[#8ecaff]">Deploy</span> compute where your users actually are
+              </h3>
+            </div>
+
+            <div className="relative">
+              <div>
+                <div className="relative pb-2 pt-1">
+                  <div className="relative px-0 py-0">
+                    <div className="relative">
+                      <WorldMap locations={POP_LOCATIONS} dotColor="#0095FF" />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-x-10 gap-y-5 md:grid-cols-2">
+                    {AVAILABLE_REGIONS.map((region) => (
+                      <div key={region.continent} className="relative">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className={`h-2 w-2 rounded-full shadow-[0_0_10px_rgba(142,202,255,0.32)] ${
+                              REGION_ACCENTS[region.continent] ?? "bg-white"
+                            }`}
+                          />
+                          <h4 className="text-[12px] font-semibold uppercase tracking-[0.16em] text-white/76">
+                            {region.continent}
+                          </h4>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {region.locations.map((location) => (
+                            <span
+                              key={location.city}
+                              className="inline-flex items-center gap-2 px-0 py-1 text-[13px] font-medium text-white/82 transition-colors duration-200 hover:text-[#d9ecff]"
+                            >
+                              <Image
+                                src={`https://flagcdn.com/w40/${location.flag}.png`}
+                                alt={location.flag}
+                                width={16}
+                                height={11}
+                                className="h-[11px] w-4 rounded-[2px] object-cover opacity-90"
+                                unoptimized
+                              />
+                              <span className="decoration-[#8ecaff]/45 underline-offset-4 hover:underline">
+                                {location.city}
+                              </span>
+                            </span>
+                          ))}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-5 text-[14px] text-white/55 tabular-nums">{plan.ram}</td>
-                    <td className="px-6 py-5 text-[14px] text-white/55 tabular-nums">{plan.storage}</td>
-                    <td className="px-6 py-5 text-[14px] text-white/55 tabular-nums">{plan.network}</td>
-                    <td className="px-6 py-5">
-                      <span className="text-[20px] font-[600] text-white tabular-nums">${plan.price}</span>
-                      <span className="text-[12px] text-white/25 ml-0.5">/mo</span>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <a
-                        href="/signup"
-                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
-                      >
-                        Configure
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full min-w-[680px]">
-              <thead>
-                <tr className="bg-white/[0.02]">
-                  {["vCPUs", "Memory", "NVMe Storage", "Transfer", "Price", ""].map((h) => (
-                    <th key={h} className="px-6 py-4 text-left text-[11px] font-medium text-white/25 uppercase tracking-[0.12em] border-b border-white/[0.06]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(active.plans as VirtualPlan[]).map((plan, i: number) => (
-                  <tr
-                    key={`${active.key}-${plan.vcpu}-${plan.ram}`}
-                    className={`transition-colors duration-150 hover:bg-white/[0.02] ${
-                      i % 2 === 0 ? "bg-transparent" : "bg-white/[0.01]"
-                    } ${i < active.plans.length - 1 ? "border-b border-white/[0.04]" : ""}`}
-                  >
-                    <td className="px-6 py-5">
-                      <span className="text-[15px] font-[500] text-white tabular-nums">{plan.vcpu}</span>
-                      <span className="text-[12px] text-white/25 ml-1.5">{plan.vcpu === 1 ? "vCPU" : "vCPUs"}</span>
-                    </td>
-                    <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.ram}</td>
-                    <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.storage}</td>
-                    <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.bandwidth}</td>
-                    <td className="px-6 py-5">
-                      <span className="text-[20px] font-[600] text-white tabular-nums">${plan.price}</span>
-                      <span className="text-[12px] text-white/25 ml-0.5">/mo</span>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <a
-                        href="/signup"
-                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
-                      >
-                        Deploy
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* ── Included With Every Instance ── */}
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          {[
-            { label: "Free Inbound", icon: ArrowRight },
-            { label: "IPv4 + IPv6", icon: Globe },
-            { label: "Snapshots", icon: HardDrive },
-            { label: "DDoS Shield", icon: Shield },
-            { label: "99.99% SLA", icon: Check },
-            { label: "24/7 Monitoring", icon: Gauge },
-            { label: "IPMI Access", icon: Server },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.015] px-4 py-3"
-            >
-              <item.icon className="w-3.5 h-3.5 text-[#0095FF]/70 shrink-0" />
-              <span className="text-[12px] font-medium text-white/45">{item.label}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* ── CTA ── */}
-        <div className="mt-12 flex flex-col items-center">
-          <a
-            href="/signup"
-            className="cursor-pointer inline-flex items-center justify-center gap-2.5 bg-white text-black px-10 h-12 text-[15px] font-[500] hover:bg-white/90 transition-colors"
-          >
-            Deploy Your First Server
-            <ArrowRight className="w-4.5 h-4.5" />
-          </a>
-          <p className="mt-4 text-[13px] text-white/30">
-            No credit card required &middot; Pay only for what you use
-          </p>
-        </div>
       </Container>
     </section>
   );

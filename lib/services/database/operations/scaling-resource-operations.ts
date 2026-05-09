@@ -5,6 +5,8 @@ import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
+import { getRatesForDatabaseBySlug } from "@/config/pricing";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import type {
@@ -12,28 +14,35 @@ import type {
   ReadMigrationStatusResult,
   UpsizeStorageRequest,
 } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 export const scalingResourceOperations = {
   async updateStorage(
     clusterId: string,
-    requestedSize: string = "db-s-2vcpu-4gb"
+    requestedSize: string = "db-s-2vcpu-4gb",
+    userId: string
   ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     try {
-      const clusterData = await Database_Clusters.read(clusterId);
-      if (!clusterData.success || !clusterData.data) {
-        return { success: false, error: "Database cluster not found", errorCode: "NOT_FOUND" };
+      const access = await resolveOwnedCluster(clusterId, userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          errorCode: access.errorCode,
+        };
       }
+      const clusterData = access.cluster;
 
       const resizePayload: { size: string; num_nodes: number; storage_size_mib?: number } = {
         size: requestedSize,
-        num_nodes: clusterData.data.num_nodes || 1,
+        num_nodes: Number(clusterData.num_nodes) || 1,
       };
 
       if (
-        typeof clusterData.data.storage_size_mib === "number" &&
-        clusterData.data.storage_size_mib > 0
+        typeof clusterData.storage_size_mib === "number" &&
+        clusterData.storage_size_mib > 0
       ) {
-        resizePayload.storage_size_mib = clusterData.data.storage_size_mib;
+        resizePayload.storage_size_mib = clusterData.storage_size_mib;
       }
 
       let response;
@@ -55,7 +64,7 @@ export const scalingResourceOperations = {
         ) {
           const fallbackPayload = {
             size: requestedSize,
-            num_nodes: clusterData.data.num_nodes || 1,
+            num_nodes: Number(clusterData.num_nodes) || 1,
           };
           response = await axios.put(
             `https://api.digitalocean.com/v2/databases/${clusterId}/resize`,
@@ -77,9 +86,38 @@ export const scalingResourceOperations = {
 
       await Database_Clusters.update_storage(clusterId, requestedSize);
 
-      if (clusterData.data.project_id) {
+      // Update billing rate to match the new plan so future cron charges are correct
+      try {
+        const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+        if (hourlyRate > 0) {
+          await Billing.update_active_database_rate({
+            serviceId: clusterId,
+            newHourlyRate: hourlyRate,
+          });
+        }
+      } catch (billingRateErr) {
+        console.error("[updateStorage] Failed to update billing hourly rate:", billingRateErr);
+      }
+
+      try {
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: "user",
+          action: "update",
+          service_type: "database",
+          service_id: clusterId,
+          service_name: String(clusterData.name),
+          before_state: { size: clusterData.size },
+          after_state: { size: requestedSize },
+          metadata: { update_type: "tier_resize" },
+        });
+      } catch (auditErr) {
+        console.error("[updateStorage] Failed to create audit log:", auditErr);
+      }
+
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Settings",
           text: `Database storage tier upgraded to: ${requestedSize}`,
         });
@@ -88,11 +126,11 @@ export const scalingResourceOperations = {
       try {
         await NotificationService.create(
           createServiceNotification({
-            userId: clusterData.data.owner_id,
+            userId: String(clusterData.owner_id),
             type: "info",
             action: "updated",
             serviceType: "database",
-            serviceName: clusterData.data.name,
+            serviceName: String(clusterData.name),
             serviceId: clusterId,
             metadata: { updateType: "storage", newSize: requestedSize },
           })
@@ -136,9 +174,19 @@ export const scalingResourceOperations = {
   // for provider resize while storing requested size in Supabase.
   async updateStorageInternal(
     clusterId: string,
-    requestedSize: string
+    requestedSize: string,
+    userId: string
   ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(clusterId, userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
       const payload = {
         size: "db-s-2vcpu-4gb",
         num_nodes: 1,
@@ -157,33 +205,60 @@ export const scalingResourceOperations = {
           console.error("[updateStorageInternal] Failed to update Supabase:", supabaseUpdate.error);
         }
 
-        const clusterData = await Database_Clusters.read(clusterId);
-        if (clusterData.success && clusterData.data.project_id) {
+        // Update billing rate to match the new plan
+        try {
+          const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+          if (hourlyRate > 0) {
+            await Billing.update_active_database_rate({
+              serviceId: clusterId,
+              newHourlyRate: hourlyRate,
+            });
+          }
+        } catch (billingRateErr) {
+          console.error("[updateStorageInternal] Failed to update billing hourly rate:", billingRateErr);
+        }
+
+        const clusterData = access.cluster;
+
+        try {
+          await AuditLogService.create({
+            user_id: userId,
+            user_role: "user",
+            action: "update",
+            service_type: "database",
+            service_id: clusterId,
+            service_name: String(clusterData.name),
+            before_state: { size: clusterData.size },
+            after_state: { size: requestedSize },
+            metadata: { update_type: "tier_resize" },
+          });
+        } catch (auditErr) {
+          console.error("[updateStorageInternal] Failed to create audit log:", auditErr);
+        }
+
+        if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
           await Projects.add_log({
-            project_id: clusterData.data.project_id,
+            project_id: clusterData.project_id,
             event: "Settings",
             text: `Database storage tier upgraded to: ${requestedSize}`,
           });
         }
 
-        if (clusterData.success) {
-          try {
-            await NotificationService.create(
-              createServiceNotification({
-                userId: clusterData.data.owner_id,
-                type: "info",
-                action: "updated",
-                serviceType: "database",
-                serviceName: clusterData.data.name,
-                serviceId: clusterId,
-                metadata: { updateType: "storage", newSize: requestedSize },
-              })
-            );
-          } catch (notifErr) {
-            console.error("[updateStorageInternal] Failed to create notification:", notifErr);
-          }
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: String(clusterData.owner_id),
+              type: "info",
+              action: "updated",
+              serviceType: "database",
+              serviceName: String(clusterData.name),
+              serviceId: clusterId,
+              metadata: { updateType: "storage", newSize: requestedSize },
+            })
+          );
+        } catch (notifErr) {
+          console.error("[updateStorageInternal] Failed to create notification:", notifErr);
         }
-
         return { success: true, statusCode: 200 };
       }
 
@@ -223,10 +298,31 @@ export const scalingResourceOperations = {
   async updateRegion(
     clusterId: string,
     region: string,
+    userId: string,
     status: string = "migrating",
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(clusterId, userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          errorCode: access.errorCode,
+          statusCode: access.statusCode,
+        };
+      }
+      const clusterData = access.cluster;
+
+      if (clusterData.engine === "mongodb") {
+        return {
+          success: false,
+          error: "Region migration is not supported for MongoDB clusters",
+          errorCode: "UNSUPPORTED_OPERATION",
+          statusCode: 422,
+        };
+      }
+
       const response = await axios.put(
         `https://api.digitalocean.com/v2/databases/${clusterId}/migrate`,
         { region },
@@ -234,7 +330,12 @@ export const scalingResourceOperations = {
       );
 
       if (response.status !== 202) {
-        return { success: false, error: "Failed to migrate database cluster" };
+        return {
+          success: false,
+          error: "Failed to migrate database cluster",
+          errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: response.status,
+        };
       }
 
       const supabaseUpdate = await Database_Clusters.update_region(clusterId, region, status);
@@ -242,26 +343,25 @@ export const scalingResourceOperations = {
         console.error("[updateRegion] Failed to update Supabase:", supabaseUpdate.error);
       }
 
-      const clusterData = await Database_Clusters.read(clusterId);
-      if (clusterData.success && clusterData.data.project_id) {
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Globe",
           text: `Database cluster migrating to region: ${region}`,
         });
       }
 
-      if (clusterData.success && req) {
+      if (req) {
         try {
           const auditContext = getAuditContext(req);
           await AuditLogService.create({
-            user_id: clusterData.data.owner_id,
+            user_id: String(clusterData.owner_id),
             user_role: "user",
             action: "update",
             service_type: "database",
             service_id: clusterId,
-            service_name: clusterData.data.name,
-            before_state: { region: clusterData.data.region },
+            service_name: String(clusterData.name),
+            before_state: { region: clusterData.region },
             after_state: { region, status: "migrating" },
             metadata: { update_type: "region_migration" },
             ip_address: auditContext.ipAddress,
@@ -273,22 +373,19 @@ export const scalingResourceOperations = {
         }
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "migrated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: clusterId,
-              metadata: { updateType: "region", newRegion: region },
-            })
-          );
-        } catch (notifErr) {
-          console.error("[updateRegion] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create({
+          user_id: String(clusterData.owner_id),
+          type: "info",
+          title: "Database Migration",
+          message: `Database migration started...`,
+          service_type: "database",
+          service_id: clusterId,
+          action: "migrated",
+          metadata: { updateType: "region", newRegion: region },
+        });
+      } catch (notifErr) {
+        console.error("[updateRegion] Failed to create notification:", notifErr);
       }
 
       return { success: true };
@@ -300,25 +397,44 @@ export const scalingResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: axiosError?.response?.status || 500,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        errorCode: "UNKNOWN_ERROR",
+        statusCode: 500,
       };
     }
   },
 
   async readMigrationStatus(request: ReadMigrationStatusRequest): Promise<ReadMigrationStatusResult> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          errorCode: access.errorCode,
+          statusCode: access.statusCode,
+        };
+      }
+
       const response = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}`,
         { headers: getDigitalOceanHeaders() }
       );
 
       if (response.status !== 200) {
-        return { success: false, error: "Failed to fetch database cluster" };
+        return {
+          success: false,
+          error: "Failed to fetch database cluster",
+          errorCode: "UNKNOWN_ERROR",
+          statusCode: response.status,
+        };
       }
 
       const cluster = response.data.database;
@@ -326,6 +442,28 @@ export const scalingResourceOperations = {
 
       if (migrationComplete) {
         await Database_Clusters.update_region(request.clusterId, request.targetRegion, "online");
+
+        if (access.cluster.status !== "online") {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: String(access.cluster.owner_id),
+                type: "success",
+                action: "migrated",
+                serviceType: "database",
+                serviceName: String(access.cluster.name),
+                serviceId: request.clusterId,
+                metadata: {
+                  updateType: "region",
+                  newRegion: request.targetRegion,
+                },
+              })
+            );
+          } catch (notifErr) {
+            console.error("[readMigrationStatus] Failed to create notification:", notifErr);
+          }
+
+        }
       }
 
       return {
@@ -344,6 +482,8 @@ export const scalingResourceOperations = {
         error:
           axiosError?.response?.data?.message ||
           (err instanceof Error ? err.message : "Unknown error occurred"),
+        errorCode: axiosError?.response?.status === 404 ? "NOT_FOUND" : "UNKNOWN_ERROR",
+        statusCode: axiosError?.response?.status ?? 500,
       };
     }
   },
@@ -353,19 +493,30 @@ export const scalingResourceOperations = {
     req?: NextRequest
   ): Promise<{ success: boolean; error?: string; errorCode?: string; statusCode?: number }> {
     try {
-      const clusterData = await Database_Clusters.read(request.clusterId);
-      if (!clusterData.success || !clusterData.data) {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
         return {
           success: false,
-          error: "Database cluster not found",
-          errorCode: "NOT_FOUND",
-          statusCode: 404,
+          error: access.error,
+          errorCode: access.errorCode,
+          statusCode: access.statusCode,
         };
       }
+      const clusterData = access.cluster;
 
-      const currentSize = clusterData.data.size;
-      const currentStorageMib = clusterData.data.storage_size_mib || 0;
-      const engine = clusterData.data.engine || "pg";
+      const currentSize = String(clusterData.size || "");
+      const currentStorageMib =
+        typeof clusterData.storage_size_mib === "number" ? clusterData.storage_size_mib : 0;
+      const engine = String(clusterData.engine || "pg");
+
+      if (engine === "mongodb") {
+        return {
+          success: false,
+          error: "Storage upsize is not supported for MongoDB clusters",
+          errorCode: "UNSUPPORTED_OPERATION",
+          statusCode: 422,
+        };
+      }
 
       if (request.storageSizeMib <= currentStorageMib) {
         return {
@@ -415,7 +566,7 @@ export const scalingResourceOperations = {
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/resize`,
         {
           size: currentSize,
-          num_nodes: clusterData.data.num_nodes || 1,
+          num_nodes: Number(clusterData.num_nodes) || 1,
           storage_size_mib: request.storageSizeMib,
         },
         { headers: getDigitalOceanHeaders() }
@@ -432,9 +583,9 @@ export const scalingResourceOperations = {
 
       await Database_Clusters.update_storage_size(request.clusterId, request.storageSizeMib);
 
-      if (clusterData.data.project_id) {
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Settings",
           text: `Database storage upsized to: ${(request.storageSizeMib / 1024).toFixed(0)} GiB`,
         });
@@ -444,12 +595,12 @@ export const scalingResourceOperations = {
         try {
           const auditContext = getAuditContext(req);
           await AuditLogService.create({
-            user_id: clusterData.data.owner_id,
+            user_id: String(clusterData.owner_id),
             user_role: "user",
             action: "update",
             service_type: "database",
             service_id: request.clusterId,
-            service_name: clusterData.data.name,
+            service_name: String(clusterData.name),
             before_state: { storage_size_mib: currentStorageMib },
             after_state: { storage_size_mib: request.storageSizeMib },
             metadata: {
@@ -469,11 +620,11 @@ export const scalingResourceOperations = {
       try {
         await NotificationService.create(
           createServiceNotification({
-            userId: clusterData.data.owner_id,
+            userId: String(clusterData.owner_id),
             type: "info",
             action: "updated",
             serviceType: "database",
-            serviceName: clusterData.data.name,
+            serviceName: String(clusterData.name),
             serviceId: request.clusterId,
             metadata: {
               updateType: "storage_upsize",

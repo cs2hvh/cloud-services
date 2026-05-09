@@ -2,7 +2,7 @@
 // POST /api/v1/projects — create a new project
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
-import { v1ProjectServiceError } from "@/lib/api/v1-project-helpers";
+import { serializeProjectForV1, v1ProjectServiceError } from "@/lib/api/v1-project-helpers";
 import { ProjectService } from "@/lib/services/project-service";
 import { createProjectSchema } from "@/lib/validation/projects";
 
@@ -14,7 +14,7 @@ export const GET = withV1Auth("projects:list", async (_req, auth) => {
   }
 
   return v1Ok({
-    data: result.data,
+    data: result.data.map(serializeProjectForV1),
     meta: {
       total: result.data.length,
     },
@@ -45,5 +45,5 @@ export const POST = withV1Auth("projects:create", async (req, auth) => {
     return v1ProjectServiceError(result, "CREATE_FAILED", "Failed to create project");
   }
 
-  return v1Ok({ data: result.data }, 201);
+  return v1Ok({ data: serializeProjectForV1(result.data) }, 201);
 });

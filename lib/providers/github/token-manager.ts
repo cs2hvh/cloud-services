@@ -9,6 +9,13 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
+import { decryptOAuthToken, encryptOAuthToken } from '@/lib/security/token-crypto';
+
+// In-memory cache: tracks the last time a token was validated per user.
+// Avoids an extra GitHub API call on every getToken() invocation — validation
+// is re-run at most once per TOKEN_VALIDATION_TTL_MS (5 min).
+const tokenValidatedAt = new Map<string, number>();
+const TOKEN_VALIDATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export class GitHubTokenManager {
   /**
@@ -33,8 +40,28 @@ export class GitHubTokenManager {
         return null;
       }
 
-      console.log('[GitHub Token Manager] Found stored token for user:', userId);
-      return tokenData.access_token;
+      const decryptedAccessToken = decryptOAuthToken(tokenData.access_token);
+      if (!decryptedAccessToken) {
+        console.log('[GitHub Token Manager] Stored token could not be decrypted for user:', userId);
+        return null;
+      }
+
+      // Validate the token against GitHub to catch user revocations.
+      // Guarded by a 5-minute TTL per user so we don't double every API call.
+      const lastValidated = tokenValidatedAt.get(userId) ?? 0;
+      if (Date.now() - lastValidated > TOKEN_VALIDATION_TTL_MS) {
+        const valid = await this.validateToken(decryptedAccessToken);
+        if (!valid) {
+          console.warn('[GitHub Token Manager] Stored token rejected by GitHub (revoked?) — removing for user:', userId);
+          tokenValidatedAt.delete(userId);
+          await supabase.from('github_tokens').delete().eq('user_id', userId);
+          return null;
+        }
+        tokenValidatedAt.set(userId, Date.now());
+      }
+
+      console.log('[GitHub Token Manager] Found valid stored token for user:', userId);
+      return decryptedAccessToken;
     } catch (error) {
       console.error('[GitHub Token Manager] Error getting token:', error);
       return null;
@@ -65,20 +92,22 @@ export class GitHubTokenManager {
   /**
    * Store GitHub token in database
    */
-  async storeToken(userId: string, token: string): Promise<boolean> {
+  async storeToken(userId: string, token: string, meta?: { username?: string; githubUserId?: number }): Promise<boolean> {
     try {
       const supabase = await createServiceClient();
 
+      const row: Record<string, unknown> = {
+        user_id: userId,
+        access_token: encryptOAuthToken(token),
+        updated_at: new Date().toISOString(),
+      };
+      // Only update username/id if explicitly provided — prevents overwriting with null
+      if (meta?.username) row.github_username = meta.username;
+      if (meta?.githubUserId) row.github_user_id = meta.githubUserId;
+
       const { error } = await supabase
         .from('github_tokens')
-        .upsert(
-          {
-            user_id: userId,
-            access_token: token,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id' }
-        );
+        .upsert(row, { onConflict: 'user_id' });
 
       if (error) {
         console.error('[GitHub Token Manager] Failed to store token:', error);
@@ -86,6 +115,9 @@ export class GitHubTokenManager {
       }
 
       console.log('[GitHub Token Manager] Token stored for user:', userId);
+      // A freshly stored token is valid — prime the cache so the next getToken()
+      // doesn't immediately re-validate it.
+      tokenValidatedAt.set(userId, Date.now());
       return true;
     } catch (error) {
       console.error('[GitHub Token Manager] Store exception:', error);
@@ -111,6 +143,7 @@ export class GitHubTokenManager {
       }
 
       console.log('[GitHub Token Manager] Token deleted for user:', userId);
+      tokenValidatedAt.delete(userId);
       return true;
     } catch (error) {
       console.error('[GitHub Token Manager] Delete exception:', error);

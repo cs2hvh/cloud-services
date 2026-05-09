@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { ObjectStorageService } from "@/lib/services/object-storage-service";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -51,13 +52,12 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Bucket read_all error:", errorMessage);
+    logError("services/object-storage/buckets/read_all", error);
     
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

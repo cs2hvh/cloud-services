@@ -1,20 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import Image from 'next/image';
 import {
-  Bot,
   Plus,
   RotateCw,
-  Settings,
   MessageSquare,
   Copy,
   ExternalLink,
   MoreVertical,
   Trash2,
   Play,
+  Settings,
   Pause,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -168,7 +167,7 @@ export default function AIAgentsPage() {
               onClick={loadAgents}
               variant="outline"
               disabled={loading}
-              className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
+              className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08] cursor-pointer"
             >
               <RotateCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -184,54 +183,46 @@ export default function AIAgentsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="glass-panel overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div className="glass-panel p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agents</CardTitle>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agents</p>
               <div className="mt-3 text-2xl font-semibold text-white">{agents.length}</div>
               <p className="mt-1 text-sm text-white/45">Provisioned conversational agents</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
-              <Bot className="h-4 w-4" />
-            </div>
-          </CardHeader>
-        </Card>
-        <Card className="glass-panel overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <Image src="/dashboard-icons/agents.png" alt="Agents" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
+          </div>
+        </div>
+        <div className="glass-panel p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Active</CardTitle>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Active</p>
               <div className="mt-3 text-2xl font-semibold text-white">{activeAgents}</div>
               <p className="mt-1 text-sm text-white/45">Agents currently serving traffic</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-emerald-300">
-              <Play className="h-4 w-4" />
-            </div>
-          </CardHeader>
-        </Card>
-        <Card className="glass-panel overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <Image src="/dashboard-icons/active-1.png" alt="Active" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
+          </div>
+        </div>
+        <div className="glass-panel p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</CardTitle>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</p>
               <div className="mt-3 text-2xl font-semibold text-white">{totalMessages}</div>
               <p className="mt-1 text-sm text-white/45">Tracked requests across all agents</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-white/70">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-          </CardHeader>
-        </Card>
-        <Card className="glass-panel overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <Image src="/dashboard-icons/messages.png" alt="Messages" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
+          </div>
+        </div>
+        <div className="glass-panel p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Knowledge Links</CardTitle>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Knowledge Links</p>
               <div className="mt-3 text-2xl font-semibold text-white">{linkedKnowledgeBases}</div>
               <p className="mt-1 text-sm text-white/45">Knowledge-base attachments in use</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-purple-300">
-              <Settings className="h-4 w-4" />
-            </div>
-          </CardHeader>
-        </Card>
+            <Image src="/dashboard-icons/knowledge-links.png" alt="Knowledge Links" width={36} height={36} className="shrink-0 opacity-80"  unoptimized />
+          </div>
+        </div>
       </div>
 
       <div className="glass-panel overflow-hidden">
@@ -248,9 +239,7 @@ export default function AIAgentsPage() {
                 <div key={agent.id} className="border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]">
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-300">
-                        <Bot className="h-5 w-5" />
-                      </div>
+                      <Image src="/dashboard-icons/agents.png" alt="Agent" width={44} height={44} className="shrink-0 opacity-80"  unoptimized />
                       <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
@@ -328,7 +317,7 @@ export default function AIAgentsPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-16 text-center">
-              <Bot className="h-12 w-12 text-white/22" />
+              <Image src="/dashboard-icons/agents.png" alt="No agents" width={48} height={48} className="opacity-25"  unoptimized />
               <h3 className="mt-5 text-lg font-semibold text-white">No agents yet</h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-white/45">Create your first AI agent to launch conversational flows with model selection, knowledge grounding, and endpoint controls.</p>
               <Button asChild className="mt-6 border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">

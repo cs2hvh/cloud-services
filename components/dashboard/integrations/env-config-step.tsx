@@ -2,15 +2,12 @@
 
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { 
-  Key, 
-  Eye, 
-  EyeOff, 
-  RefreshCw,
+import {
+  Eye,
+  EyeOff,
+  RotateCcw,
   AlertTriangle,
-  Info
+  ShieldCheck,
 } from 'lucide-react';
 import type { EnvVarConfig } from './types';
 
@@ -22,10 +19,9 @@ interface EnvConfigStepProps {
   disabled?: boolean;
 }
 
-/**
- * Environment variable configuration step
- * Allows users to customize env key names before injection
- */
+const isPlaceholderValue = (value: string) =>
+  value.startsWith('(fetched') || value === '' || value === 'creating...' || value === 'will be generated';
+
 export function EnvConfigStep({
   envVarConfigs,
   onChange,
@@ -33,142 +29,146 @@ export function EnvConfigStep({
   onResolveConflicts,
   disabled = false,
 }: EnvConfigStepProps) {
-  const [showValues, setShowValues] = useState<Record<string, boolean>>({});
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 
-  const toggleShowValue = (key: string) => {
-    setShowValues(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleReveal = (key: string) => {
+    setRevealedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
   };
 
-  const handleKeyChange = (index: number, newKey: string) => {
+  const handleKeyChange = (index: number, raw: string) => {
     const updated = [...envVarConfigs];
-    // Sanitize: uppercase, alphanumeric + underscore only
-    updated[index].customKey = newKey.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+    updated[index] = { ...updated[index], customKey: raw.toUpperCase().replace(/[^A-Z0-9_]/g, '') };
     onChange(updated);
   };
 
-  const resetToDefault = (index: number) => {
+  const resetKey = (index: number) => {
     const updated = [...envVarConfigs];
-    updated[index].customKey = updated[index].originalKey;
+    updated[index] = { ...updated[index], customKey: updated[index].originalKey };
     onChange(updated);
   };
 
   const conflictSet = new Set(conflicts);
+  const allValuesArePlaceholders = envVarConfigs.every(c => isPlaceholderValue(c.value));
 
   return (
     <div className="space-y-4">
-      {/* Info Banner */}
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-blue-400 font-medium">Customize Environment Variables</p>
-            <p className="text-xs text-blue-400/70 mt-1">
-              You can rename the variable keys to match your app&apos;s configuration. 
-              These will be injected into your app.
-            </p>
-          </div>
+      {/* Info banner */}
+      {allValuesArePlaceholders ? (
+        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
+          <ShieldCheck className="w-4 h-4 text-white/40 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-white/50 leading-relaxed">
+            Connection credentials are fetched securely from DigitalOcean at link time and never exposed in this UI.
+            You can rename the variable keys below.
+          </p>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
+          <ShieldCheck className="w-4 h-4 text-white/40 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-white/50 leading-relaxed">
+            Rename keys to match your app&apos;s expected variable names. Values shown are the actual credentials that will be injected.
+          </p>
+        </div>
+      )}
 
-      {/* Conflict Warning */}
+      {/* Conflict warning */}
       {conflicts.length > 0 && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-yellow-400 font-medium">Variable Name Conflicts</p>
-              <p className="text-xs text-yellow-400/70 mt-1">
-                These variable names already exist in your app: {conflicts.join(', ')}
-              </p>
-              {onResolveConflicts && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onResolveConflicts}
-                  className="text-yellow-400 hover:text-yellow-300 mt-2 h-7 px-2"
-                >
-                  Force Overwrite
-                </Button>
-              )}
-            </div>
+        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-amber-400 font-medium mb-0.5">Variable name conflicts</p>
+            <p className="text-xs text-amber-400/70 break-all">{conflicts.join(', ')}</p>
+            {onResolveConflicts && (
+              <button
+                type="button"
+                onClick={onResolveConflicts}
+                className="mt-1.5 text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
+              >
+                Force overwrite
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Env Var List */}
-      <div className="space-y-3">
-        {envVarConfigs.map((config, index) => (
-          <div 
-            key={config.originalKey}
-            className={`p-3 rounded-lg border ${
-              conflictSet.has(config.customKey)
-                ? 'bg-yellow-500/5 border-yellow-500/30'
-                : 'bg-white/5 border-white/10'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-xs text-white/50">{config.description}</Label>
-              {config.customKey !== config.originalKey && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => resetToDefault(index)}
-                  disabled={disabled}
-                  className="h-6 px-2 text-xs text-white/40 hover:text-white"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  Reset
-                </Button>
-              )}
-            </div>
-            
-            {/* Key Input */}
-            <div className="flex items-center gap-2 mb-2">
-              <Key className="w-4 h-4 text-white/40" />
-              <Input
-                value={config.customKey}
-                onChange={(e) => handleKeyChange(index, e.target.value)}
-                disabled={disabled}
-                className={`flex-1 bg-white/5 border-white/10 text-white font-mono text-sm ${
-                  conflictSet.has(config.customKey) ? 'border-yellow-500/50' : ''
-                }`}
-                placeholder="VARIABLE_NAME"
-              />
-            </div>
+      {/* Variable rows — constrain height to prevent overflow */}
+      <div className="rounded-md border border-white/[0.08] overflow-hidden divide-y divide-white/[0.06] max-h-[280px] overflow-y-auto">
+        {envVarConfigs.map((config, index) => {
+          const hasConflict = conflictSet.has(config.customKey);
+          const isModified = config.customKey !== config.originalKey;
+          const isPlaceholder = isPlaceholderValue(config.value);
+          const isRevealed = revealedKeys.has(config.originalKey);
 
-            {/* Value Preview */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-white/30 w-4">=</span>
-              <div className="flex-1 relative">
-                <Input
-                  value={showValues[config.originalKey] ? config.value : '••••••••••••'}
-                  readOnly
-                  className="flex-1 bg-white/5 border-white/10 text-white/60 font-mono text-xs pr-10"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => toggleShowValue(config.originalKey)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                >
-                  {showValues[config.originalKey] ? (
-                    <EyeOff className="w-3 h-3 text-white/40" />
-                  ) : (
-                    <Eye className="w-3 h-3 text-white/40" />
+          return (
+            <div
+              key={config.originalKey}
+              className={`flex items-center gap-3 px-3 py-2.5 ${hasConflict ? 'bg-amber-500/5' : 'bg-transparent'}`}
+            >
+              {/* Key column */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={config.customKey}
+                    onChange={(e) => handleKeyChange(index, e.target.value)}
+                    disabled={disabled}
+                    className={`
+                      h-7 font-mono text-xs bg-white/[0.04] border-white/10 text-white/90 px-2
+                      focus:ring-0 focus:ring-offset-0
+                      ${hasConflict ? 'border-amber-500/50 text-amber-400' : ''}
+                    `}
+                    spellCheck={false}
+                  />
+                  {isModified && (
+                    <button
+                      type="button"
+                      onClick={() => resetKey(index)}
+                      disabled={disabled}
+                      title="Reset to default"
+                      className="text-white/30 hover:text-white/60 flex-shrink-0"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
                   )}
-                </Button>
+                </div>
+                <p className="text-[10px] text-white/30 mt-0.5 truncate">{config.description}</p>
+              </div>
+
+              {/* Value column */}
+              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                {isPlaceholder ? (
+                  <span className="text-[11px] text-white/30 italic font-mono truncate">
+                    Injected on link
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex-1 font-mono text-[11px] text-white/50 truncate">
+                      {isRevealed ? config.value : '•'.repeat(Math.min(config.value.length, 20))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleReveal(config.originalKey)}
+                      className="text-white/30 hover:text-white/60 flex-shrink-0"
+                    >
+                      {isRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Summary */}
-      <div className="pt-2 border-t border-white/10">
-        <p className="text-xs text-white/40">
-          {envVarConfigs.length} environment variable{envVarConfigs.length !== 1 ? 's' : ''} will be injected
-        </p>
-      </div>
+      <p className="text-[11px] text-white/30">
+        {envVarConfigs.length} variable{envVarConfigs.length !== 1 ? 's' : ''} will be injected
+      </p>
     </div>
   );
 }

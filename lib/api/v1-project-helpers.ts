@@ -6,6 +6,19 @@ type ProjectServiceFailure = {
   errorCode: string;
 };
 
+type ProjectV1Response = {
+  id: string;
+  name: string;
+  description: string | null;
+  users: string[];
+  created_at: string | null;
+  default_project: boolean | null;
+};
+
+type ProjectServiceModel = ProjectV1Response & {
+  owner_id?: string | null;
+};
+
 export function v1ProjectServiceError(
   failure: ProjectServiceFailure,
   fallbackCode: string,
@@ -23,4 +36,15 @@ export function v1ProjectServiceError(
     default:
       return v1Error(fallbackCode, 500, message);
   }
+}
+
+export function serializeProjectForV1(project: ProjectServiceModel): ProjectV1Response {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    users: project.users,
+    created_at: project.created_at,
+    default_project: project.default_project,
+  };
 }

@@ -1,125 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
-import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
-import { Billing } from "@/lib/supabase/queries/billing";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
+import { SpectrumService } from "@/lib/services/spectrum-service";
+import { getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
-  const {ok: authorized}=await requireAdmin();
   if (!auth.authenticated) return auth.response;
 
   try {
+    const rl = await limitByUser(auth.user!.id, {
+      prefix: "rl:spectrum-delete",
+      limit: 3,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too Many Requests",
+          message: `Retry after ${rl.retryAfterSec}s`,
+        },
+        { status: 429 }
+      );
+    }
 
-     const rl = await limitByUser(auth.user!.id, {
-       prefix: "rl:bucket-create",
-       limit: 3,
-       windowMs: 60_000,
-     });
-     if (!rl.allowed) {
-       return NextResponse.json(
-         {
-           error: "Too Many Requests",
-           message: `Retry after ${rl.retryAfterSec}s`,
-         },
-         { status: 429 }
-       );
-     }
-    
     const body = await req.json();
     const validation = validateRequest(deleteSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
-    const appRecord = await Spectrum_Apps.get(validation.data.app_id);
-    if (!appRecord.success || !appRecord.data) {
+    const adminCheck = await requireAdmin();
+    const isAdmin = !!adminCheck.ok;
+
+    const auditContext = getAuditContext(req);
+
+    // Use centralized service — handles billing closure, audit, notifications
+    const result = await SpectrumService.deleteApp({
+      appId: validation.data.app_id,
+      userId: auth.user!.id,
+      isAdmin,
+      audit_context: {
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        user_email: auth.user?.email,
+        user_role: isAdmin ? 'admin' : 'user',
+      },
+    });
+
+    return NextResponse.json(result, { status: 200 });
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string };
+
+    // Map error codes to HTTP status codes
+    if (err.code === "NOT_FOUND") {
       return NextResponse.json(
-        { error: "Spectrum app not found" },
+        { error: "Not found" },
         { status: 404 }
       );
     }
 
-    if (!authorized && appRecord.data.owner_id !== auth.user!.id) {
+    if (err.code === "FORBIDDEN") {
       return NextResponse.json(
-        { error: "Unauthorized - Admin access required" },
+        { error: "Unauthorized" },
         { status: 403 }
       );
     }
 
-    // Close billing for spectrum app
-    try {
-      console.log(`[deleteSpectrumApp] Closing billing`, { userId: auth.user!.id, serviceId: validation.data.app_id });
-      const billingResult = await Billing.close_active_service("spectrum", {
-        userId: auth.user!.id,
-        serviceId: validation.data.id,
-        failOnInsufficient: false,
-      });
-      console.log(`[deleteSpectrumApp] Billing closed`, billingResult);
-    } catch (billErr: unknown) {
-      console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr instanceof Error ? billErr.message : String(billErr)}`);
-    }
-
-    // Create audit log before deletion
-    const auditContext = getAuditContext(req);
-    
-    await AuditLogService.create({
-      user_id: auth.user!.id,
-      user_role: authorized ? 'admin' : 'user',
-      user_email: auth.user?.email,
-      action: 'delete',
-      service_type: 'network_ddos',
-      service_id: validation.data.app_id,
-      service_name: 'Spectrum App',
-      before_state: appRecord.data,
-      ip_address: auditContext.ipAddress,
-      user_agent: auditContext.userAgent,
-      request_id: auditContext.requestId,
-    });
-
-    const result = await deleteSpectrumApp(validation.data.app_id);
-
-    // Create notification
-    await NotificationService.create(
-      createServiceNotification({
-        userId: auth.user!.id,
-        type: 'success',
-        action: 'deleted',
-        serviceType: 'network_ddos',
-        serviceName: 'Spectrum App',
-        serviceId: validation.data.app_id,
-      })
-    );
-
-    return NextResponse.json(result, { status: 200 });
-  } catch (error) {
-    // Create error notification
-    try {
-      await NotificationService.create(
-        createServiceNotification({
-          userId: auth.user!.id,
-          type: 'error',
-          action: 'deleted',
-          serviceType: 'network_ddos',
-          serviceName: 'Spectrum App',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
-      );
-    } catch (notifErr) {
-      console.error('Failed to create error notification:', notifErr);
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Spectrum app delete error:", errorMessage);
-    
+    // Generic error
+    logError("services/spectrum/apps/delete", err);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(err),
       },
       { status: 500 }
     );

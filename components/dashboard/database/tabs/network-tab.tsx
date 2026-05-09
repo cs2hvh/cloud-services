@@ -19,7 +19,7 @@ import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { network_rules } from "@/lib/supabase/types";
-import { AxiosError } from "axios";
+import { getDatabaseErrorMessage } from "../error-messages";
 
 interface NetworkTabProps {
   clusterId: string;
@@ -55,16 +55,6 @@ export const NetworkTab = ({
   }>({ show: false, rule: null, confirmText: "" });
   const [deletingRule, setDeletingRule] = useState(false);
 
-  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-    if (error instanceof AxiosError) {
-      return error.response?.data?.error || defaultMessage;
-    }
-    if (error instanceof Error) {
-      return error.message;
-    }
-    return defaultMessage;
-  };
-
   const validateIP = (ip: string): boolean => {
     const ipv4Regex =
       /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
@@ -79,11 +69,13 @@ export const NetworkTab = ({
       });
 
       if (response.status === 200) {
-        setRules(response.data.data || []);
+        setRules(response?.data?.data || []);
       }
     } catch (error) {
       console.error("[fetchNetworkRules] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to fetch network rules"));
+      toast.error(
+        getDatabaseErrorMessage(error, "Failed to fetch network rules.")
+      );
     } finally {
       setLoading(false);
     }
@@ -133,7 +125,7 @@ export const NetworkTab = ({
     } catch (error) {
       console.error("[handleAddRule] Error:", error);
       toast.error(
-        getErrorMessage(error, "Failed to add IP address to firewall")
+        getDatabaseErrorMessage(error, "Failed to add IP address.")
       );
     } finally {
       setAddingRule(false);
@@ -164,7 +156,9 @@ export const NetworkTab = ({
       }
     } catch (error) {
       console.error("[handleDeleteRule] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to delete firewall rule"));
+      toast.error(
+        getDatabaseErrorMessage(error, "Failed to delete firewall rule.")
+      );
     } finally {
       setDeletingRule(false);
     }

@@ -16,9 +16,7 @@ export async function GET(request: Request) {
   if (!user) {
     const authHeader = request.headers.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
-      console.log("18");
       const token = authHeader.replace("Bearer ", "");
-      // console.log(token,"20")
       const {
         data: { user: tokenUser },
       } = await supabase.auth.getUser(token);
@@ -30,59 +28,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const allProviders = ["github", "google", "gitlab", "bitbucket", "email"];
-
-  //const lastLoginProvider = user.app_metadata?.provider ?? null;
+  // Only git providers — Google removed (no repo use case)
+  const allProviders = ["github", "gitlab", "bitbucket"];
 
   const linkedProviders = (user.identities ?? []).map((i) => i.provider);
 
-  // Check for OAuth tokens stored in our database (for API access)
-  // These are different from Supabase identity providers
-  const tokenChecks = await Promise.all([
-    // Check github_tokens table
-    supabase.from('github_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
-    // Check gitlab_tokens table
-    supabase.from('gitlab_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
-    // Check bitbucket_tokens table
-    supabase.from('bitbucket_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
+  // Check for OAuth tokens stored in our database (for repo access)
+  const [ghResult, glResult, bbResult] = await Promise.all([
+    supabase.from('github_tokens').select('user_id, github_username').eq('user_id', user.id).maybeSingle(),
+    supabase.from('gitlab_tokens').select('user_id, gitlab_username').eq('user_id', user.id).maybeSingle(),
+    supabase.from('bitbucket_tokens').select('user_id, bitbucket_username').eq('user_id', user.id).maybeSingle(),
   ]);
 
-  const hasGitHubToken = tokenChecks[0]?.data !== null;
-  const hasGitLabToken = tokenChecks[1]?.data !== null;
-  const hasBitbucketToken = tokenChecks[2]?.data !== null;
+  const tokenMap: Record<string, { connected: boolean; username: string | null }> = {
+    github:    { connected: ghResult.data !== null, username: ghResult.data?.github_username ?? null },
+    gitlab:    { connected: glResult.data !== null, username: glResult.data?.gitlab_username ?? null },
+    bitbucket: { connected: bbResult.data !== null, username: bbResult.data?.bitbucket_username ?? null },
+  };
 
-
-  // Build the array of { provider, status }
-  // Status is true if:
-  // 1. For GitLab/Bitbucket: ONLY check token tables (direct OAuth for API access)
-  // 2. For GitHub: Check both identity and token (backwards compatibility)
-  // 3. For other providers (google, email): Only check Supabase identities
-  const providers = allProviders.map((provider) => {
-    // For GitLab and Bitbucket, ONLY check token tables (direct OAuth for API access)
-    // We don't want to show them as "connected" if they were used for sign-in but no longer have API tokens
-    if (provider === 'gitlab') {
-      return { provider, status: hasGitLabToken };
-    }
-    if (provider === 'bitbucket') {
-      return { provider, status: hasBitbucketToken };
-    }
-    
-    // For GitHub, check both identity and token (backwards compatibility)
-    if (provider === 'github') {
-      return { provider, status: linkedProviders.includes(provider) || hasGitHubToken };
-    }
-    
-    // For other providers (google, email), only check Supabase identities
-    return {
-      provider,
-      status: linkedProviders.includes(provider),
-    };
-  });
-  
+  const providers = allProviders.map((provider) => ({
+    provider,
+    status: tokenMap[provider].connected, // repo access status only
+    identity_linked: linkedProviders.includes(provider),
+    integration_connected: tokenMap[provider].connected,
+    integration_username: tokenMap[provider].username,
+  }));
 
   return NextResponse.json({
     user_id: user.id,
-    providers: providers,
+    providers,
     identities: user.identities ?? [],
   });
 }

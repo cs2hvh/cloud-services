@@ -21,7 +21,7 @@ export default function DDoSSettingsTab() {
     const fetchPrice = async () => {
       try {
         const response = await axios.get("/api/admin/products?type=network-ddos");
-        const products = response.data.products;
+        const products = response?.data?.products;
 
         if (products && products.length > 0) {
           const ddosProduct = products[0];

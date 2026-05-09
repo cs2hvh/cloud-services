@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Cpu, HardDrive, Network, MemoryStick } from "lucide-react";
 import { Container } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 const bareMetalServers = [
   {
@@ -166,8 +167,9 @@ const ComputeReleaseSection = () => {
                       <span className="text-[26px] font-[600] text-white tabular-nums tracking-tight">${server.price}</span>
                       <span className="text-[11px] text-white/20 ml-0.5">/mo</span>
                     </div>
-                    <a
-                      href="/signup"
+                    <AuthAwareServiceCta
+                      service="compute"
+                      intent="new"
                       className={`cursor-pointer inline-flex items-center justify-center w-full sm:w-auto gap-1.5 px-4 py-2 text-[12px] font-medium transition-colors ${
                         isFeatured
                           ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
@@ -176,7 +178,7 @@ const ComputeReleaseSection = () => {
                     >
                       Configure
                       <ArrowRight className="w-3 h-3" />
-                    </a>
+                    </AuthAwareServiceCta>
                   </div>
                 </div>
               );

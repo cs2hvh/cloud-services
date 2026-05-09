@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { createSSRClient } from "@/lib/supabase/server"; // your server-side helper
+import { createSSRClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic"; // avoid caching
 
 type Row = {
+  create_droplet: boolean | null;
   create_status: boolean | null;
   connect_status: boolean | null;
   verify_status: boolean | null;
@@ -17,16 +18,15 @@ export async function POST(
 
   //console.log(,"...............params")
   const body = await req.json().catch(() => null);
-  console.log(body,"...............params 22222")
   const { data, error } = await supabase
     .from("clusters")
-    .select("*")
+    .select("create_droplet, create_status, connect_status, verify_status, status")
     .eq("cluster_id", body.clusterId)
     .single<Row>();
 
   if (error) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: "Cluster not found" },
       { status: 400 }
     );
   }
@@ -41,6 +41,7 @@ export async function POST(
   return NextResponse.json({
     success: true,
     clusterId: body.clusterId,
+    createDropletStatus: data.create_droplet ?? false,
     createStatus: data.create_status ?? false,
     connectStatus: data.connect_status ?? false,
     verifyStatus: data.verify_status ?? false,

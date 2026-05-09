@@ -9,6 +9,7 @@ export function KubernetesIcon({ className = "" }) {
         width={24}
         height={24}
         className="object-contain"
+        unoptimized
       />
     </div>
   );

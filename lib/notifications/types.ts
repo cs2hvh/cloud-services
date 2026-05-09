@@ -12,7 +12,8 @@ export type ServiceType =
   | 'spectrum'
   | 'ai_agent'
   | 'knowledge_base'
-  | 'domain';
+  | 'domain'
+  | 'billing';
 
 export type ActionType = 
   | 'created' 

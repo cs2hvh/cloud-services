@@ -22,6 +22,7 @@ export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYo
 
   return (
     <section
+      id="what-you-can-build"
       className={cn(
         "relative w-full bg-[#0E0F0F] py-16 md:py-20 lg:py-24 border-b border-[#6b6b6b]",
         className

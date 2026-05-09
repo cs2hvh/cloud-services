@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { logError } from "@/lib/api/error-sanitizer";
 import {
   NameComRegistrarAdapter,
   type NameComRecordType,
@@ -13,6 +14,7 @@ import {
   userOwnsDomain,
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
+import { DEFAULT_MANAGED_NAMESERVERS, NAMECOM_MANAGED_NAMESERVER_RE } from "@/lib/domain-service/managed-nameservers";
 
 type NameComDnsRecordView = {
   id: number | null;
@@ -34,6 +36,8 @@ const SUPPORTED_DNS_TYPES: NameComRecordType[] = [
   "SRV",
   "TXT",
 ];
+
+const MIN_NAMESERVERS = 2;
 
 function normalizeHost(host: string | null | undefined): string {
   if (!host || host === "") return "@";
@@ -81,6 +85,23 @@ function isSupportedDnsType(value: string): value is NameComRecordType {
   return SUPPORTED_DNS_TYPES.includes(value as NameComRecordType);
 }
 
+function sameNameservers(a: string[], b: string[]): boolean {
+  const left = a.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  const right = b.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+async function hasManagedNameservers(adapter: NameComRegistrarAdapter, zone: string): Promise<boolean> {
+  const domain = await adapter.getDomain(zone);
+  const nameservers = Array.isArray(domain.nameservers) ? domain.nameservers : [];
+  const normalized = nameservers.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean);
+  return (
+    sameNameservers(normalized, DEFAULT_MANAGED_NAMESERVERS) ||
+    (normalized.length >= MIN_NAMESERVERS && normalized.every((value) => NAMECOM_MANAGED_NAMESERVER_RE.test(value)))
+  );
+}
+
 async function ensureOwnedDomain(input: { userId: string; domain: string }): Promise<{
   ok: true;
 } | {
@@ -109,13 +130,13 @@ async function ensureOwnedDomain(input: { userId: string; domain: string }): Pro
     }
 
     return { ok: true };
-  } catch (error: unknown) {
+  } catch {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Failed to load domain ownership",
+          message: "Failed to load domain ownership",
         },
         { status: 500 }
       ),
@@ -178,6 +199,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const nameserversManaged = await hasManagedNameservers(adapter, managed.zone);
+    if (!nameserversManaged) {
+      return NextResponse.json({
+        data: {
+          managed: false,
+          zone: managed.zone,
+          host: managed.host,
+          records: [] as NameComDnsRecordView[],
+          message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider.",
+        },
+      });
+    }
+
     const records: NameComDnsRecordView[] = [];
     let page = 1;
     let safety = 0;
@@ -205,10 +239,11 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/GET", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to load DNS records",
+        message: "Failed to load DNS records",
       },
       { status: 500 }
     );
@@ -276,6 +311,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     const record = await adapter.createRecord(managed.zone, {
       host: toProviderHost(host),
@@ -293,10 +334,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/POST", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to create DNS record",
+        message: "Failed to create DNS record",
       },
       { status: 500 }
     );
@@ -368,6 +410,12 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     const record = await adapter.updateRecord(managed.zone, recordId, {
       host: toProviderHost(host),
@@ -385,10 +433,11 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/PATCH", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to update DNS record",
+        message: "Failed to update DNS record",
       },
       { status: 500 }
     );
@@ -437,6 +486,12 @@ export async function DELETE(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     await adapter.deleteRecord(managed.zone, recordId);
 
@@ -449,10 +504,11 @@ export async function DELETE(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/dns/DELETE", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to delete DNS record",
+        message: "Failed to delete DNS record",
       },
       { status: 500 }
     );

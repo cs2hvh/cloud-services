@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { AuditLogService } from "@/lib/audit";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/admin/audit-logs/[logId]
@@ -56,10 +57,9 @@ export async function GET(
       data: result,
     });
   } catch (error) {
-    console.error('[audit-logs/detail] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logError('GET /api/admin/audit-logs/[logId]', error);
     return NextResponse.json(
-      { error: 'Failed to fetch audit log', details: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

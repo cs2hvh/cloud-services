@@ -2,6 +2,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
+import { githubTokenManager } from "@/lib/providers/github/token-manager";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -20,7 +22,6 @@ export async function POST(request: Request) {
   if (!user) {
     const authHeader = request.headers.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
-      console.log("18");
       const token = authHeader.replace("Bearer ", "");
       // console.log(token,"20")
       const {
@@ -53,6 +54,31 @@ export async function POST(request: Request) {
       (i) => i.provider === provider,
     );
     if (alreadyLinked) {
+      if (provider === "github") {
+        // GitHub identity already linked. Re-trigger OAuth so /api/auth/callback
+        // receives a fresh provider_token and stores it in github_tokens.
+        // This handles the case where the token was deleted or never stored.
+        const origin = request.headers.get("origin") || "http://localhost:3000";
+        const callbackUrl = returnTo
+          ? `${origin}/api/auth/callback?next=${encodeURIComponent(returnTo)}`
+          : `${origin}/api/auth/callback`;
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "github",
+          options: {
+            redirectTo: callbackUrl,
+            scopes: "repo user:email",
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error || !data?.url) {
+          logError("POST /api/auth/link github re-auth", error);
+          return NextResponse.json(
+            { error: "Failed to initiate GitHub re-authentication" },
+            { status: 400 }
+          );
+        }
+        return NextResponse.json({ url: data.url }, { status: 200 });
+      }
       return NextResponse.json(
         { message: `Already connected with ${provider}.` },
         { status: 409 },
@@ -64,7 +90,6 @@ export async function POST(request: Request) {
   // After consent, the provider redirects back to Supabase then to your app's /auth/callback,
   // where you call exchangeCodeForSession (you likely have this already).
   const origin = request.headers.get("origin") || "http://localhost:3000";
-  console.log(origin, "....................52");
 
   // Define scopes for each provider
   const getProviderScopes = (p: string): string | undefined => {
@@ -98,10 +123,10 @@ export async function POST(request: Request) {
     if (error) {
       // If that provider account is already linked to ANOTHER Supabase user,
       // Supabase returns an error. Surface a friendly message.
-      console.log({ ...error }, ".......................58");
+        logError("POST /api/auth/link connect", error);
       const msg = /already linked/i.test(error.message)
         ? `This ${provider} account is already connected to a different user. You may be logged in somewhere else.`
-        : error.message || "Could not start linking flow.";
+        : sanitizeAuthError(error);
       return NextResponse.json({ error: msg }, { status: 409 });
     }
     
@@ -138,17 +163,24 @@ export async function POST(request: Request) {
     if (identity) {
       const response = await supabase.auth.unlinkIdentity(identity);
       if (response.error !== null) {
-        return NextResponse.json({ error: response.error.message }, { status: 400 });
+        logError("POST /api/auth/link disconnect", response.error);
+        return NextResponse.json({ error: sanitizeAuthError(response.error) }, { status: 400 });
       }
     }
     
-    // Also delete from database token tables (for git API access)
+    // GitHub tokens are sourced from Supabase OAuth, so they're tied to the identity.
+    // GitLab and Bitbucket tokens come from a separate direct OAuth flow (/api/gitlab/app-auth,
+    // /api/bitbucket/app-auth) and are completely independent — unlinking login must NOT remove them.
+    // Only delete github_tokens when we actually unlinked a GitHub identity.
     if (provider === 'github') {
-      await supabase.from('github_tokens').delete().eq('user_id', user.id);
-    } else if (provider === 'gitlab') {
-      await supabase.from('gitlab_tokens').delete().eq('user_id', user.id);
-    } else if (provider === 'bitbucket') {
-      await supabase.from('bitbucket_tokens').delete().eq('user_id', user.id);
+      if (identity) {
+        await githubTokenManager.deleteToken(user.id);
+      } else {
+        // Disconnect was requested but no GitHub identity was found on this user —
+        // this can happen if the user manually removed the identity elsewhere.
+        // Log it so we can detect stale state issues, but don't error out.
+        console.warn('[Auth/Link] Disconnect requested for github but no identity found on user', user.id);
+      }
     }
     
     // Audit log: provider disconnect

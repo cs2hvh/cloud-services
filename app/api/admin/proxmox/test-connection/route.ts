@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createWorkerClient } from "@/lib/supabase/server";
 import { Agent as UndiciAgent } from "undici";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,6 @@ interface AuthInfo {
   hasTokenSecret: boolean;
   hasUsername: boolean;
   hasPassword: boolean;
-  tokenId: string | null;
 }
 
 interface ConnectionTestResponse {
@@ -60,6 +61,13 @@ function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
 
 export async function GET(req: NextRequest) {
   try {
+     const auth = await requireAdmin();
+      if (!auth.ok) {
+        return NextResponse.json(
+          { ok: false, error: "Not authorized" },
+          { status: 403 }
+        );
+      }
     const { searchParams } = new URL(req.url);
     const hostId = searchParams.get('hostId');
 
@@ -75,7 +83,7 @@ export async function GET(req: NextRequest) {
     // Get host configuration
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("*")
+      .select("id, name, host_url, allow_insecure_tls, node, token_id, token_secret, username, password")
       .eq("id", hostId)
       .maybeSingle();
 
@@ -107,7 +115,6 @@ export async function GET(req: NextRequest) {
         hasTokenSecret: !!(host.token_secret),
         hasUsername: !!(host.username),
         hasPassword: !!(host.password),
-        tokenId: host.token_id || null,
       },
       tests: [],
     };
@@ -118,7 +125,7 @@ export async function GET(req: NextRequest) {
       const testResult: TestResult = {
         name: 'Token Authentication',
         url: `${apiBase}/api2/json/version`,
-        authHeader: `PVEAPIToken=${host.token_id}=${(host.token_secret as string).substring(0, 10)}...`,
+        authHeader: "PVEAPIToken=<redacted>",
       };
 
       try {
@@ -236,12 +243,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    logError("POST /api/admin/proxmox/test-connection", error);
     return NextResponse.json(
       {
         ok: false,
-        error: err.message,
-        stack: err.stack,
+        error: sanitizeError(error),
       },
       { status: 500 }
     );

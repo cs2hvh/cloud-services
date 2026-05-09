@@ -26,7 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, Network, Key, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import Image from "next/image";
 import { StepProps } from "./types";
 
 interface SettingsStepProps extends StepProps {
@@ -75,8 +76,8 @@ export const SettingsStep = ({
                 Security Controls
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
-                  <Key className="h-4.5 w-4.5" />
+                <div className="flex h-10 w-10 items-center justify-center">
+                  <Image src="/dashboard-icons/agent-api-keys.png" alt="Advanced Settings" width={36} height={36} className="object-contain" unoptimized />
                 </div>
                 <div>
                   <CardTitle className="text-xl font-semibold tracking-tight text-white">
@@ -122,8 +123,8 @@ export const SettingsStep = ({
           <div className="border border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-10 w-10 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
-                  <Shield className="h-4.5 w-4.5" />
+                <div className="mt-0.5 flex h-10 w-10 items-center justify-center">
+                  <Image src="/dashboard-icons/ip-acess-rules.png" alt="IP Access Rules" width={36} height={36} className="object-contain" unoptimized />
                 </div>
                 <div className="max-w-2xl">
                   <div className="flex flex-wrap items-center gap-2">
@@ -157,8 +158,8 @@ export const SettingsStep = ({
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_240px]">
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-10 w-10 items-center justify-center border border-violet-400/20 bg-violet-500/10 text-violet-300">
-                    <Network className="h-4.5 w-4.5" />
+                  <div className="mt-0.5 flex h-10 w-10 items-center justify-center">
+                    <Image src="/dashboard-icons/proxy-protocol.png" alt="Proxy Protocol" width={36} height={36} className="object-contain" unoptimized />
                   </div>
                   <div className="max-w-2xl">
                     <div className="text-sm font-semibold text-white">Proxy Protocol</div>

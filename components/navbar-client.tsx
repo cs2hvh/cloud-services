@@ -111,6 +111,12 @@ const PRODUCTS: SolutionItem[] = [
     href: "/services/app-deployment",
     tags: ["Docker", "CI/CD", "Auto Deploy", "GitHub", "GitLab"],
   },
+  {
+    label: "Domains",
+    desc: "Register, transfer, and manage domains",
+    href: "/services/domain",
+    tags: ["Registrar", "Marketplace", "Transfer", "DNS"],
+  },
 ];
 
 export function NavbarClient({ initialUser }: NavbarClientProps) {
@@ -162,7 +168,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
 
   const handleSolutionsEnter = () => {
     if (solutionsTimeout.current) clearTimeout(solutionsTimeout.current);
+    if (productsTimeout.current) clearTimeout(productsTimeout.current);
     setSolutionsOpen(true);
+    setProductsOpen(false);
   };
 
   const handleSolutionsLeave = () => {
@@ -171,7 +179,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
 
   const handleProductsEnter = () => {
     if (productsTimeout.current) clearTimeout(productsTimeout.current);
+    if (solutionsTimeout.current) clearTimeout(solutionsTimeout.current);
     setProductsOpen(true);
+    setSolutionsOpen(false);
   };
 
   const handleProductsLeave = () => {
@@ -181,7 +191,8 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const navLinks = [
     { href: "/pricing", label: "Pricing" },
     { href: "/resources", label: "Resources" },
-    { href: "/docs", label: "Docs" },
+    { href: "/terms", label: "Legal" },
+    { href: "/api-docs", label: "Docs" },
   ];
 
   return (
@@ -265,7 +276,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       <button onClick={() => router.push("/dashboard")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
                         <LayoutDashboard className="w-4 h-4 text-red-100" /><span>Dashboard</span>
                       </button>
-                      <button onClick={() => router.push("/dashboard/profile")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
+                      <button onClick={() => router.push("/dashboard/nav/profile")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
                         <User className="w-4 h-4" /><span>Profile</span>
                       </button>
                       <button onClick={() => router.push("/dashboard/settings")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
@@ -302,163 +313,128 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
         </button>
       </div>
 
-      {/* Solutions mega-menu dropdown */}
-      <AnimatePresence>
-        {solutionsOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="hidden lg:block mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] mt-2"
-            onMouseEnter={handleSolutionsEnter}
-            onMouseLeave={handleSolutionsLeave}
-          >
-            <div className=" bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
-              <div className="grid grid-cols-3">
-                {/* Left side - Solutions grid (2 columns) */}
-                <div className="col-span-2 p-8">
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                    {SOLUTIONS.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setSolutionsOpen(false)}
-                        className="group block"
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
-                            {item.label}
-                          </span>
-                          <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
-                        </div>
-                        <p className="text-[12px] text-black/50 leading-relaxed mb-2">
-                          {item.desc}
-                        </p>
-                        {item.tags && item.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50"
-                              >
-                                {tag}
+      {/* Mega-menu panels — absolute so both panels share the same position and never stack */}
+      <div className="hidden lg:block absolute inset-x-4 top-[72px] z-50">
+        <div className="mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] relative">
+
+          <AnimatePresence>
+            {solutionsOpen && (
+              <motion.div
+                key="solutions"
+                initial={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
+                animate={{ opacity: 1, clipPath: "inset(0 0% 0 0)" }}
+                exit={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-x-0 top-0"
+                onMouseEnter={handleSolutionsEnter}
+                onMouseLeave={handleSolutionsLeave}
+              >
+                <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+                  <div className="grid grid-cols-3">
+                    <div className="col-span-2 p-8">
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                        {SOLUTIONS.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setSolutionsOpen(false)}
+                            className="group block"
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                                {item.label}
                               </span>
-                            ))}
-                          </div>
-                        )}
-                      </Link>
-                    ))}
+                              <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                            </div>
+                            <p className="text-[12px] text-black/50 leading-relaxed mb-2">{item.desc}</p>
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.tags.map((tag) => (
+                                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="relative overflow-hidden">
+                      <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
+                        <Image src="/images/main-page/solutions-navbar-1.png" alt="Solutions" fill className="object-contain object-right" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
+                    <Link href="/solutions" onClick={() => setSolutionsOpen(false)} className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200">
+                      View all solutions
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+                    </Link>
                   </div>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                {/* Right side - Image */}
-                <div className="relative overflow-hidden">
-                  <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
-                    <Image
-                      src="/images/main-page/solutions-navbar-1.png"
-                      alt="Solutions"
-                      fill
-                      className="object-contain object-right"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* View all solutions link */}
-              <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
-                <Link
-                  href="/solutions"
-                  onClick={() => setSolutionsOpen(false)}
-                  className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200"
-                >
-                  View all solutions
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Products mega-menu dropdown */}
-      <AnimatePresence>
-        {productsOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="hidden lg:block mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] mt-2"
-            onMouseEnter={handleProductsEnter}
-            onMouseLeave={handleProductsLeave}
-          >
-            <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
-              <div className="grid grid-cols-3">
-                {/* Left side - Products grid (2 columns) */}
-                <div className="col-span-2 p-8">
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                    {PRODUCTS.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setProductsOpen(false)}
-                        className="group block"
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
-                            {item.label}
-                          </span>
-                          <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
-                        </div>
-                        <p className="text-[12px] text-black/50 leading-relaxed mb-2">
-                          {item.desc}
-                        </p>
-                        {item.tags && item.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50"
-                              >
-                                {tag}
+          <AnimatePresence>
+            {productsOpen && (
+              <motion.div
+                key="products"
+                initial={{ opacity: 0, clipPath: "inset(0 0% 0 100%)" }}
+                animate={{ opacity: 1, clipPath: "inset(0 0% 0 0%)" }}
+                exit={{ opacity: 0, clipPath: "inset(0 0% 0 100%)" }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-x-0 top-0"
+                onMouseEnter={handleProductsEnter}
+                onMouseLeave={handleProductsLeave}
+              >
+                <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+                  <div className="grid grid-cols-3">
+                    <div className="col-span-2 p-8">
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                        {PRODUCTS.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setProductsOpen(false)}
+                            className="group block"
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                                {item.label}
                               </span>
-                            ))}
-                          </div>
-                        )}
-                      </Link>
-                    ))}
+                              <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                            </div>
+                            <p className="text-[12px] text-black/50 leading-relaxed mb-2">{item.desc}</p>
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.tags.map((tag) => (
+                                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="relative overflow-hidden">
+                      <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
+                        <Image src="/images/main-page/solutions-navbar-1.png" alt="Products" fill className="object-contain object-right" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
+                    <Link href="/products" onClick={() => setProductsOpen(false)} className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200">
+                      View all products
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+                    </Link>
                   </div>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                {/* Right side - Image */}
-                <div className="relative overflow-hidden">
-                  <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
-                    <Image
-                      src="/images/main-page/solutions-navbar-1.png"
-                      alt="Products"
-                      fill
-                      className="object-contain object-right"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* View all products link */}
-              <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
-                <Link
-                  href="/products"
-                  onClick={() => setProductsOpen(false)}
-                  className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200"
-                >
-                  View all products
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
 
       {/* Mobile menu */}
       <AnimatePresence>

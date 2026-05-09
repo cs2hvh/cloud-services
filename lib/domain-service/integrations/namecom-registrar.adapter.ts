@@ -1,5 +1,5 @@
 import { DOMAIN_ERROR_CODES, DomainServiceError } from "@/lib/domain-service/core/errors";
-import type { DomainRegistrarPort } from "@/lib/domain-service/core/ports";
+import type { DomainRegistrarPort, DomainTransferRegistrarPort, RegistrarSettings } from "@/lib/domain-service/core/ports";
 
 export type NameComRecordType = "A" | "AAAA" | "ANAME" | "CNAME" | "MX" | "NS" | "SRV" | "TXT";
 
@@ -18,6 +18,11 @@ export interface NameComDomainResponse {
   privacyEnabled?: boolean;
   autorenewEnabled?: boolean;
   nameservers?: string[];
+  // Returned by GET /domains/{name}, PATCH /domains/{name}, and POST /domains
+  renewalPrice?: number;
+  // Present in live API responses but not consumed by our code
+  locks?: unknown[];
+  contacts?: Record<string, unknown>;
 }
 
 export interface NameComListDomainsResponse {
@@ -103,6 +108,23 @@ export interface NameComUpdateDomainInput {
   privacyEnabled?: boolean;
 }
 
+export interface NameComContactInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
+export interface NameComSetContactsInput {
+  registrant?: NameComContactInput;
+}
+
 type NameComAdapterOptions = {
   baseUrl?: string;
   username?: string;
@@ -115,7 +137,33 @@ type NameComErrorPayload = {
   details?: string | null;
 };
 
-export class NameComRegistrarAdapter implements DomainRegistrarPort {
+export interface NameComTransferInput {
+  domainName: string;
+  authCode: string;
+  purchasePrice?: number;
+  privacyEnabled?: boolean;
+  promoCode?: string;
+}
+
+export interface NameComTransferRecord {
+  domainName: string;
+  email?: string;
+  status: string;
+}
+
+export interface NameComCreateTransferResponse {
+  transfer: NameComTransferRecord;
+  order?: number;
+  totalPaid?: number;
+}
+
+export interface NameComListTransfersResponse {
+  transfers: NameComTransferRecord[];
+  nextPage?: number;
+  lastPage?: number;
+}
+
+export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTransferRegistrarPort {
   private readonly baseUrl: string;
   private readonly username: string;
   private readonly token: string;
@@ -138,16 +186,33 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
   async getDomainSummary(domainName: string): Promise<{ domainName: string; expiresAt?: string; createdAt?: string } | null> {
     const encodedDomain = encodeURIComponent(domainName);
     const data = await this.request<NameComDomainResponse>(`/domains/${encodedDomain}`);
+    if (!data?.domainName) return null;
+    return { domainName: data.domainName, createdAt: data.createDate, expiresAt: data.expireDate };
+  }
 
-    if (!data?.domainName) {
-      return null;
+  async resolveZone(fqdn: string): Promise<{ zone: string; host: string } | null> {
+    const parts = fqdn.trim().toLowerCase().replace(/\.$/, "").split(".").filter(Boolean);
+    if (parts.length < 2) return null;
+    for (let i = 0; i <= parts.length - 2; i++) {
+      const zone = parts.slice(i).join(".");
+      try {
+        const s = await this.getDomainSummary(zone);
+        if (s?.domainName.toLowerCase() === zone) {
+          return { zone, host: i === 0 ? "@" : parts.slice(0, i).join(".") };
+        }
+      } catch { /* keep iterating */ }
     }
+    return null;
+  }
 
-    return {
-      domainName: data.domainName,
-      createdAt: data.createDate,
-      expiresAt: data.expireDate,
-    };
+  async getRegistrarSettings(zone: string): Promise<RegistrarSettings> {
+    const d = await this.getDomain(zone);
+    return { autorenewEnabled: d.autorenewEnabled ?? null, locked: d.locked ?? null, privacyEnabled: d.privacyEnabled ?? null, expireDate: d.expireDate ?? null };
+  }
+
+  async updateRegistrarSettings(zone: string, updates: { autorenewEnabled?: boolean; locked?: boolean; privacyEnabled?: boolean }): Promise<RegistrarSettings> {
+    const d = await this.updateDomain(zone, updates);
+    return { autorenewEnabled: d.autorenewEnabled ?? null, locked: d.locked ?? null, privacyEnabled: d.privacyEnabled ?? null, expireDate: d.expireDate ?? null };
   }
 
   async getDomain(domainName: string): Promise<NameComDomainResponse> {
@@ -169,6 +234,16 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
       body.privacyEnabled = input.privacyEnabled;
     }
 
+    // Name.com requires at least one of autorenewEnabled/locked/privacyEnabled.
+    // Sending an empty body returns a 400 error. Guard here so callers with
+    // no-op updates fail fast with a clear message instead of a cryptic 400.
+    if (Object.keys(body).length === 0) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+        message: "updateDomain requires at least one field: autorenewEnabled, locked, or privacyEnabled",
+      });
+    }
+
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -181,6 +256,15 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}:setNameservers`, {
       method: "POST",
       body: JSON.stringify({ nameservers }),
+    });
+  }
+
+  async setContacts(domainName: string, input: NameComSetContactsInput): Promise<NameComDomainResponse> {
+    const encodedDomain = encodeURIComponent(domainName);
+
+    return this.request<NameComDomainResponse>(`/domains/${encodedDomain}:setContacts`, {
+      method: "POST",
+      body: JSON.stringify({ contacts: input }),
     });
   }
 
@@ -316,6 +400,48 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
     });
   }
 
+  /* ─── Transfer endpoints (/v4/transfers) ─── */
+
+  async createTransfer(input: NameComTransferInput): Promise<NameComCreateTransferResponse> {
+    const payload: Record<string, unknown> = {
+      domainName: input.domainName,
+      authCode: input.authCode,
+    };
+
+    if (input.purchasePrice !== undefined) {
+      payload.purchasePrice = input.purchasePrice;
+    }
+    if (typeof input.privacyEnabled === "boolean") {
+      payload.privacyEnabled = input.privacyEnabled;
+    }
+
+    return this.requestV4<NameComCreateTransferResponse>("/transfers", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getTransfer(domainName: string): Promise<NameComTransferRecord> {
+    const encodedDomain = encodeURIComponent(domainName);
+    return this.requestV4<NameComTransferRecord>(`/transfers/${encodedDomain}`);
+  }
+
+  async cancelTransfer(domainName: string): Promise<NameComTransferRecord> {
+    const encodedDomain = encodeURIComponent(domainName);
+    return this.requestV4<NameComTransferRecord>(`/transfers/${encodedDomain}:cancel`, {
+      method: "POST",
+    });
+  }
+
+  async listTransfers(params?: { page?: number; perPage?: number }): Promise<NameComListTransfersResponse> {
+    const search = new URLSearchParams();
+    if (params?.page !== undefined) search.set("page", String(params.page));
+    if (params?.perPage !== undefined) search.set("perPage", String(params.perPage));
+
+    const qs = search.toString();
+    return this.requestV4<NameComListTransfersResponse>(`/transfers${qs ? `?${qs}` : ""}`);
+  }
+
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     this.assertConfigured();
 
@@ -332,6 +458,7 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
       ...init,
       headers,
       cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
@@ -360,6 +487,50 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
           "Domain registrar credentials are not configured.",
       });
     }
+  }
+
+  /**
+   * Name.com transfer endpoints live under /v4/ instead of /core/v1/.
+   * Derive the v4 base URL from the configured base URL.
+   */
+  private v4BaseUrl(): string {
+    // Replace /core/v1 suffix with /v4
+    return this.baseUrl.replace(/\/core\/v1$/i, "/v4");
+  }
+
+  /**
+   * Like request(), but uses the /v4/ base path for transfer endpoints.
+   */
+  private async requestV4<T>(path: string, init: RequestInit = {}): Promise<T> {
+    this.assertConfigured();
+
+    const headers = new Headers(init.headers || {});
+    headers.set("Authorization", this.authorizationHeader());
+    headers.set("Accept", "application/json");
+
+    if (init.method && ["POST", "PUT", "PATCH"].includes(init.method.toUpperCase())) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const res = await fetch(`${this.v4BaseUrl()}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+      const payload = (await parseResponseBody(res)) as NameComErrorPayload | string | null;
+      const message = extractErrorMessage(payload, res.status);
+      throw this.toProviderError(res.status, message);
+    }
+
+    if (res.status === 204) {
+      return undefined as T;
+    }
+
+    const body = await parseResponseBody(res);
+    return (body ?? undefined) as T;
   }
 
   private authorizationHeader(): string {
