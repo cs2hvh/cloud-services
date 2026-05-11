@@ -136,8 +136,8 @@ fi
  * Shell function to detect package manager from lockfile
  * Returns: PACKAGE_MANAGER variable (npm, pnpm, or yarn)
  * 
- * WARNING: CRITICAL: This variable MUST be passed to docker build/kaniko via:
- *    --build-arg PACKAGE_MANAGER="$PACKAGE_MANAGER"
+ * WARNING: CRITICAL: This variable MUST be passed to BuildKit via:
+ *    --opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER
  * 
  * Without the build arg, ARG PACKAGE_MANAGER in Dockerfiles will be empty,
  * causing setupPm logic to silently fail and breaking pnpm/yarn builds.

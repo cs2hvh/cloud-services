@@ -3,11 +3,11 @@
  * Export Jenkins Container Configuration as JSON
  * 
  * Usage: 
- *   npx tsx scripts/export-jenkins-containers.ts > jenkins-containers.json
- *   npx tsx scripts/export-jenkins-containers.ts --format=yaml > jenkins-containers.yaml
+ *   npx tsx infra/jenkins/export-jenkins-containers.ts > jenkins-containers.json
+ *   npx tsx infra/jenkins/export-jenkins-containers.ts --format=yaml > jenkins-containers.yaml
  */
 
-import { getContainerUsageReport } from '../lib/jenkins/security';
+import { getContainerUsageReport } from '../../lib/jenkins/security';
 
 const args = process.argv.slice(2);
 const format = args.find(arg => arg.startsWith('--format='))?.split('=')[1] || 'json';

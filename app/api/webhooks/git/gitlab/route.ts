@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GitLabWebhookHandler } from '@/lib/webhooks/gitlab';
 import { Platform_App_Webhooks } from '@/lib/supabase/queries';
-import { AutoDeployService } from '@/lib/services/auto-deploy';
+import { queueBuild } from '@/lib/build-job';
 import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 import { KubernetesInfoService } from '@/lib/services/kubernetes-info';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
@@ -85,10 +85,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       }`
     );
 
-    // 7. Find app by repository ID (GitLab project ID)
+    // 7. Find app by repository ID (GitLab project ID) + pushed branch for correct multi-app routing
     const app = await Platform_App_Webhooks.find_by_repository(
       payload.repository.id,
-      'gitlab'
+      'gitlab',
+      payload.branch,
     );
 
     if (!app) {
@@ -159,53 +160,26 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       });
     }
 
-    // 11. Trigger deployment via AutoDeployService (handles token refresh)
-    console.log(`[GitLab Webhook] Triggering deployment for ${app.name}...`);
+    // 11. Queue the deployment — the build worker picks it up and calls AutoDeployService.
+    console.log(`[GitLab Webhook] Queuing deployment for ${app.name} commit ${payload.commit.sha.substring(0, 7)}`);
 
-    const deployResult = await AutoDeployService.deploy({
+    await queueBuild({
       appId: app.id,
-      appName: app.name,
-      userId: app.user_id,
-      gitProvider: 'gitlab',
-      repositoryUrl: app.repository_url,
+      buildType: 'full',
+      sourceHash: payload.commit.sha,
       branch: payload.branch,
-      framework: app.framework,
-      size: app.size || 'small',
-      commitSha: payload.commit.sha,
-      deliveryId: deliveryId || undefined,
+      timestamp: Date.now(),
+      deliveryId: deliveryId ?? undefined,
+      webhookId: app.webhook_id,
     });
 
-    if (!deployResult.success) {
-      console.error('[GitLab Webhook] Failed to trigger build:', deployResult.error);
-
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, deployResult.error);
-
-      return NextResponse.json(
-        {
-          success: false,
-          action: 'error',
-          message: `Failed to trigger build: ${deployResult.error}`,
-          app_name: app.name,
-        },
-        { status: 500 }
-      );
-    }
-
-    // 12. Record successful trigger
+    // 12. Record the queued trigger immediately
     await Platform_App_Webhooks.record_trigger(app.webhook_id);
 
     const duration = Date.now() - startTime;
-    console.log(
-      `[GitLab Webhook] Deployment triggered for ${app.name} (${duration}ms)`
-    );
-    console.log(
-      `[GitLab Webhook] Build #${deployResult.buildNumber} - Commit: ${payload.commit.sha.substring(
-        0,
-        7
-      )}`
-    );
+    console.log(`[GitLab Webhook] Deployment queued for ${app.name} (${duration}ms)`);
 
-    // Audit log: webhook received and deployment triggered
+    // Audit log
     const auditContext = getAuditContext(req);
     await AuditLogService.create({
       user_id: app.user_id,
@@ -222,9 +196,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
         branch: payload.branch,
         commit_sha: payload.commit.sha,
         commit_message: payload.commit.message.split('\n')[0],
-        build_number: deployResult.buildNumber,
         duration_ms: duration,
-        result: 'triggered',
+        result: 'queued',
       },
       ip_address: auditContext.ipAddress,
       user_agent: auditContext.userAgent,
@@ -233,13 +206,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
 
     return NextResponse.json({
       success: true,
-      action: 'triggered',
-      message: `Deployment triggered for ${app.name}`,
+      action: 'queued',
+      message: `Deployment queued for ${app.name}`,
       app_name: app.name,
       branch: payload.branch,
       commit_sha: payload.commit.sha,
-      build_number: deployResult.buildNumber,
-    });
+    }, { status: 202 });
   } catch (error: unknown) {
     logError('POST /api/webhooks/git/gitlab', error);
     return NextResponse.json(

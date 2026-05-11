@@ -1,10 +1,10 @@
 /**
  * Express.js Pipeline - Express, Node.js Backend
- * Auto-creates Dockerfile, builds with Kaniko
+ * Auto-creates Dockerfile, builds with BuildKit
  * Uses Kubernetes Secrets for environment variables (secure)
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateNodejsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -66,7 +66,7 @@ export function createExpressPipeline(
   <actions/>
   <description>
     Express.js deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
@@ -223,57 +223,7 @@ ${generateNodejsDockerfileStage()}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          script {
-            echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
-            withCredentials([usernamePassword(
-              credentialsId: 'dockerhublogin',
-              usernameVariable: 'DOCKER_USER',
-              passwordVariable: 'DOCKER_PASS'
-            )]) {
-              sh(
-                script: '''
-                  mkdir -p /kaniko/.docker
-                AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
-
-                cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "\$AUTH"
-    }
-  }
-}
-EOF
-
-                # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-                echo 'Executing Kaniko build'
-                /kaniko/executor \\
-                  --context=\${WORKSPACE} \\
-                  --dockerfile=Dockerfile \\
-                  --destination=\${DOCKER_IMAGE_VERSION} \\
-                  --destination=\${DOCKER_IMAGE_LATEST} \\
-                  --build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER \\
-                  --cache=true \\
-                  --cache-repo=hav0ky/${appName}-cache \\
-                  --use-new-run \\
-                  --digest-file=image-digest.txt
-                
-                echo 'Image build completed successfully'
-                ''',
-                returnStatus: false,
-                returnStdout: false
-              )
-            }
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, ['--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER'], getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 
