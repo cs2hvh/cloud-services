@@ -1,6 +1,6 @@
 /**
  * Python Pipeline - Django, Flask, FastAPI
- * Auto-creates Dockerfile, builds with Kaniko
+ * Auto-creates Dockerfile, builds with BuildKit
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
  * DEPLOYMENT CONTRACT:
@@ -70,7 +70,7 @@ export function createPythonPipeline(
   <actions/>
   <description>
     Python deployment pipeline for ${name}
-    Supports Django, Flask, FastAPI, builds with Kaniko
+    Supports Django, Flask, FastAPI, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

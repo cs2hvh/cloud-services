@@ -1,6 +1,6 @@
 /**
  * SvelteKit Pipeline - SvelteKit with Node adapter
- * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * SvelteKit with adapter-node produces a Node.js server (not static files)
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
@@ -85,7 +85,7 @@ export function createSvelteKitPipeline(
   <actions/>
   <description>
     SvelteKit deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

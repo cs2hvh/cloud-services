@@ -1,6 +1,6 @@
 /**
  * Angular Pipeline - Angular with Angular CLI build tool
- * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
  * DEPLOYMENT CONTRACT:
@@ -80,7 +80,7 @@ export function createAngularPipeline(
   <actions/>
   <description>
     Angular deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

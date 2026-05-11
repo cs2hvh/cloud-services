@@ -7,7 +7,7 @@
  * 3. No framework-specific auto-generation needed
  * 
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
- * Just builds the existing Dockerfile with Kaniko and deploys to K8s
+ * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
 import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
@@ -199,8 +199,8 @@ ${generateSecurityStages({ language: 'docker' })}
 
             # ── ARG Detection ──────────────────────────────────────────
             # Detect ARG instructions that expect build-time values.
-            # Platform does NOT pass --build-arg to Kaniko, so any ARG
-            # without a default value will silently resolve to empty.
+            # Platform does NOT pass --opt build-arg to BuildKit for generic Dockerfiles,
+            # so any ARG without a default value will silently resolve to empty.
             echo "Checking for build-time ARG instructions..."
             ARG_LINES=$(grep -n "^ARG " Dockerfile 2>/dev/null || true)
             if [ -n "$ARG_LINES" ]; then

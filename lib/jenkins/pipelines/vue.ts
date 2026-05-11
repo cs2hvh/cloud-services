@@ -1,6 +1,6 @@
 /**
  * Vue.js Pipeline - Vue with Vite build tool
- * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * Uses Kubernetes Secrets for environment variables (secure)
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
@@ -80,7 +80,7 @@ export function createVuePipeline(
   <actions/>
   <description>
     Vue.js deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

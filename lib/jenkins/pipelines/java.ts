@@ -4,7 +4,7 @@
  * This pipeline is used when:
  * 1. User selects "Java" framework
  * 2. Project has a valid pom.xml file
- * 3. Auto-creates Dockerfile if missing, builds with Kaniko, deploys to K8s
+ * 3. Auto-creates Dockerfile if missing, builds with BuildKit, deploys to K8s
  */
 import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
@@ -68,7 +68,7 @@ export function createJavaPipeline(
   <actions/>
   <description>
     Java/Maven deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

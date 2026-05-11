@@ -1,6 +1,6 @@
 /**
  * Express.js Pipeline - Express, Node.js Backend
- * Auto-creates Dockerfile, builds with Kaniko
+ * Auto-creates Dockerfile, builds with BuildKit
  * Uses Kubernetes Secrets for environment variables (secure)
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
@@ -66,7 +66,7 @@ export function createExpressPipeline(
   <actions/>
   <description>
     Express.js deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>

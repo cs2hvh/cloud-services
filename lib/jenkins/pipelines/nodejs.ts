@@ -1,6 +1,6 @@
 /**
  * Node.js Pipeline - Plain Node.js Applications
- * Auto-creates Dockerfile, builds with Kaniko
+ * Auto-creates Dockerfile, builds with BuildKit
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
@@ -65,7 +65,7 @@ export function createNodeJsPipeline(
   <actions/>
   <description>
     Node.js deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
