@@ -6,6 +6,10 @@ import {
 } from "@/lib/domain-service/core/errors";
 import type { DnsProviderPort } from "@/lib/domain-service/core/ports";
 import {
+  DEFAULT_MANAGED_NAMESERVERS,
+  NAMECOM_MANAGED_NAMESERVER_RE,
+} from "@/lib/domain-service/managed-nameservers";
+import {
   NameComRegistrarAdapter,
   type NameComRecord,
 } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
@@ -169,15 +173,31 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
       const candidateZone = parts.slice(i).join(".");
 
       try {
-        const summary = await this.nameCom.getDomainSummary(candidateZone);
+        const domain = await this.nameCom.getDomain(candidateZone);
         // Name.com Core v1 returns HTTP 200 with the PARENT domain's data when
         // queried for a subdomain path (e.g. GET /domains/api.example.com returns
         // { domainName: "example.com" }). Guard against this: only treat the
         // candidate as a managed zone when the API confirms the exact name.
         if (
-          summary?.domainName &&
-          summary.domainName.toLowerCase() === candidateZone.toLowerCase()
+          domain?.domainName &&
+          domain.domainName.toLowerCase() === candidateZone.toLowerCase()
         ) {
+          // Domain is registered with Name.com — but only auto-manage DNS if the
+          // nameservers are still pointing at the platform. When the user switches
+          // to external nameservers, writing records to Name.com
+          // has no effect because Name.com is no longer authoritative. In that
+          // case we surface routing instructions so the user can add records
+          // manually at their DNS provider.
+          const nameservers = (domain.nameservers ?? [])
+            .map((ns) => ns.trim().toLowerCase().replace(/\.$/, ""))
+            .filter(Boolean);
+          if (!isPlatformManagedNs(nameservers)) {
+            throw new DomainServiceError({
+              code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+              message: "No platform-managed DNS zone found: domain uses custom nameservers",
+              details: { domain: fqdn, zone: candidateZone },
+            });
+          }
           const host = i === 0 ? "@" : parts.slice(0, i).join(".");
           return { zone: candidateZone, host };
         }
@@ -196,6 +216,17 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
       details: { domain: fqdn },
     });
   }
+}
+
+function isPlatformManagedNs(nameservers: string[]): boolean {
+  // When Name.com returns no nameservers, assume the zone is still platform-managed
+  // and let the DNS record write attempt proceed. If it fails because nameservers
+  // were actually changed, the "NS not authoritative" safety net in
+  // shouldSkipManagedDnsAutomation catches it and degrades gracefully.
+  if (nameservers.length === 0) return true;
+  return nameservers.every(
+    (ns) => NAMECOM_MANAGED_NAMESERVER_RE.test(ns) || DEFAULT_MANAGED_NAMESERVERS.includes(ns)
+  );
 }
 
 function normalizeFqdn(fqdn: string): string {

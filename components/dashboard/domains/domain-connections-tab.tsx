@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   ClipboardCopy,
   ExternalLink,
@@ -163,6 +164,8 @@ interface DomainConnectionsTabProps {
   checkingSslId: string | null;
   /** True when ANY operation across any connection is in progress. */
   anyOperationRunning: boolean;
+  /** True when the domain's nameservers point to an external DNS provider instead of AhuraCloud. */
+  usingCustomNameservers?: boolean;
   onSubdomainChange: (value: string) => void;
   onAttached: () => void;
   onVerify: (id: string) => void;
@@ -190,6 +193,7 @@ export function DomainConnectionsTab({
   removingConnectionId,
   checkingSslId,
   anyOperationRunning,
+  usingCustomNameservers,
   onSubdomainChange,
   onAttached,
   onVerify,
@@ -279,6 +283,36 @@ export function DomainConnectionsTab({
         )}
       </div>
 
+      {/* ── Custom nameserver notice ── */}
+      {usingCustomNameservers && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-500/15 bg-amber-500/[0.04]">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <p className="text-xs font-semibold text-amber-300 tracking-wide uppercase">DNS is managed outside AhuraCloud</p>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-4">
+              {([
+                { n: '1', text: 'Add a connection to an app' },
+                { n: '2', text: 'Add the TXT record and click Verify' },
+                { n: '3', text: 'Add the routing record at your DNS provider' },
+                { n: '4', text: 'Click Activate; SSL provisions after DNS propagates' },
+              ] as const).map((step) => (
+                <div key={step.n} className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-[10px] font-bold text-amber-400">
+                    {step.n}
+                  </span>
+                  <p className="text-xs text-amber-200/60 leading-relaxed pt-0.5">{step.text}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-200/35 border-t border-amber-500/10 pt-2.5">
+              If your DNS provider offers proxy or CDN mode, keep this record as direct DNS while SSL is provisioning. After SSL is active, proxy mode can be enabled when the provider&apos;s TLS mode is compatible.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Connect domain form ── */}
       <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 space-y-4">
         <div>
@@ -351,6 +385,19 @@ export function DomainConnectionsTab({
             const isRoot = connection.hostLabel === '@';
             const routingIps = [...new Set(connection.routingIps.filter(Boolean))];
 
+            // Compute routing mode early — SslStatusBadge needs it to avoid redundant messaging.
+            const hasRoutingRecord =
+              (connection.status === 'verified' || connection.status === 'active') &&
+              !!(connection.routingTarget || routingIps.length > 0);
+            const dnsConfirmedReady = connection.dnsReady === true || connection.sslStatus === 'active';
+            const routingMode: 'action-warn' | 'action-add' | 'info' = hasRoutingRecord
+              ? connection.dnsReady === false && connection.sslStatus !== 'active'
+                ? 'action-warn'
+                : usingCustomNameservers && connection.status === 'active' && !dnsConfirmedReady
+                  ? 'action-add'
+                  : 'info'
+              : 'info';
+
             return (
               <div
                 key={connection.id}
@@ -391,7 +438,13 @@ export function DomainConnectionsTab({
                         className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs border-0"
                         disabled={anyOperationRunning || connection.appStatus !== 'running'}
                         onClick={() => onActivate(connection.id)}
-                        title={connection.appStatus !== 'running' ? 'App must be running first' : undefined}
+                        title={
+                          connection.appStatus !== 'running'
+                            ? 'App must be running first'
+                            : usingCustomNameservers
+                              ? 'DNS records must be added manually at your DNS provider after activation'
+                              : undefined
+                        }
                       >
                         {activatingConnectionId === connection.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -482,7 +535,7 @@ export function DomainConnectionsTab({
                     onCheck={connection.status === 'active' && !anyOperationRunning ? onCheckSsl : undefined}
                     checkingId={checkingSslId}
                     variant="row"
-                    dnsMessage={connection.dnsReady === false ? connection.dnsMessage : undefined}
+                    dnsMessage={connection.dnsReady === false && routingMode !== 'action-add' ? connection.dnsMessage : undefined}
                   />
 
                   {/* Verification record */}
@@ -526,70 +579,116 @@ export function DomainConnectionsTab({
                     )}
 
                   {/* Routing record */}
-                  {(connection.status === 'verified' || connection.status === 'active') &&
-                    (connection.routingTarget || routingIps.length > 0) && (
-                      <div className="rounded-md border border-cyan-500/15 bg-cyan-500/[0.04] p-3 space-y-2">
-                        <p className="text-xs font-medium text-cyan-300/80 flex items-center gap-1.5">
-                          <Globe className="h-3.5 w-3.5" />
-                          {connection.status === 'verified'
-                            ? 'Step 2: Add this DNS record to route traffic'
-                            : 'Routing record'}
-                        </p>
-                        <div className="overflow-x-auto rounded border border-white/[0.06] bg-black/30">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-white/25">
-                                <th className="px-3 py-1.5 text-left w-14">Type</th>
-                                <th className="px-3 py-1.5 text-left">Host / Name</th>
-                                <th className="px-3 py-1.5 text-left">Value / Points to</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {isRoot && routingIps.length > 0 ? (
-                                routingIps.map((ip) => (
-                                  <tr key={ip} className="text-white/65 border-t border-white/[0.04] first:border-t-0">
+                  {hasRoutingRecord && (() => {
+                      const mode = routingMode;
+                      const isVerified = connection.status === 'verified';
+                      const showProxyNote = usingCustomNameservers && !isRoot && (isVerified || mode !== 'info');
+
+                      const borderClass =
+                        isVerified || mode === 'action-add'
+                          ? 'border-cyan-500/15 bg-cyan-500/[0.04]'
+                          : mode === 'action-warn'
+                            ? 'border-amber-500/20 bg-amber-500/[0.04]'
+                            : 'border-white/[0.06] bg-white/[0.015]';
+
+                      const headerIcon = isVerified || mode === 'action-add'
+                        ? <Globe className="h-3.5 w-3.5" />
+                        : mode === 'action-warn'
+                          ? <AlertTriangle className="h-3.5 w-3.5" />
+                          : <Globe className="h-3.5 w-3.5" />;
+
+                      const headerTextClass =
+                        isVerified || mode === 'action-add'
+                          ? 'text-cyan-300/80'
+                          : mode === 'action-warn'
+                            ? 'text-amber-300/80'
+                            : 'text-white/35';
+
+                      const recordBadgeClass =
+                        isVerified || mode === 'action-add'
+                          ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-300'
+                          : mode === 'action-warn'
+                            ? 'border-amber-500/25 bg-amber-500/10 text-amber-300'
+                            : 'border-white/10 bg-white/5 text-white/50';
+
+                      const headerLabel = isVerified
+                        ? 'Step 2: Add this DNS record to route traffic'
+                        : mode === 'action-warn'
+                          ? 'DNS not pointing to platform — update this record'
+                          : mode === 'action-add'
+                            ? 'Add this record at your DNS provider'
+                            : 'Routing record';
+
+                      const footerNote = isVerified
+                        ? 'Add this record at your DNS provider, then click Activate. SSL issues automatically.'
+                        : mode === 'action-add'
+                          ? 'Go to your DNS provider dashboard, add the record above, then click Check SSL to confirm propagation.'
+                          : null;
+
+                      return (
+                        <div className={`rounded-md border p-3 space-y-2 ${borderClass}`}>
+                          <p className={`text-xs font-medium flex items-center gap-1.5 ${headerTextClass}`}>
+                            {headerIcon}
+                            {headerLabel}
+                          </p>
+                          <div className="overflow-x-auto rounded border border-white/[0.06] bg-black/30">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-white/25">
+                                  <th className="px-3 py-1.5 text-left w-14">Type</th>
+                                  <th className="px-3 py-1.5 text-left">Host / Name</th>
+                                  <th className="px-3 py-1.5 text-left">Value / Points to</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {isRoot && routingIps.length > 0 ? (
+                                  routingIps.map((ip) => (
+                                    <tr key={ip} className="text-white/65 border-t border-white/[0.04] first:border-t-0">
+                                      <td className="px-3 py-1.5">
+                                        <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold font-mono ${recordBadgeClass}`}>A</span>
+                                      </td>
+                                      <td className="px-3 py-1.5 font-mono">
+                                        @<span className="text-white/25 ml-1.5">({domainName})</span>
+                                      </td>
+                                      <td className="px-3 py-1.5 font-mono">
+                                        {ip}<CopyBtn value={ip} label="IP address" />
+                                      </td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr className="text-white/65">
                                     <td className="px-3 py-1.5">
-                                      <span className="inline-flex items-center rounded border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold font-mono text-cyan-300">A</span>
+                                      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold font-mono ${recordBadgeClass}`}>
+                                        {isRoot ? (routingIps.length > 0 ? 'A' : 'ANAME') : 'CNAME'}
+                                      </span>
                                     </td>
                                     <td className="px-3 py-1.5 font-mono">
-                                      @
-                                      <span className="text-white/25 ml-1.5">({domainName})</span>
+                                      {isRoot ? '@' : connection.hostLabel}
+                                      {isRoot && <span className="text-white/25 ml-1.5">({domainName})</span>}
                                     </td>
-                                    <td className="px-3 py-1.5 font-mono">
-                                      {ip}
-                                      <CopyBtn value={ip} label="IP address" />
+                                    <td className="px-3 py-1.5 font-mono break-all">
+                                      {connection.routingTarget || 'Pending…'}
+                                      {connection.routingTarget && (
+                                        <CopyBtn value={connection.routingTarget} label="Routing value" />
+                                      )}
                                     </td>
                                   </tr>
-                                ))
-                              ) : (
-                                <tr className="text-white/65">
-                                  <td className="px-3 py-1.5">
-                                    <span className="inline-flex items-center rounded border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold font-mono text-cyan-300">
-                                      {isRoot ? (routingIps.length > 0 ? 'A' : 'ANAME') : 'CNAME'}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-1.5 font-mono">
-                                    {isRoot ? '@' : connection.hostLabel}
-                                    {isRoot && <span className="text-white/25 ml-1.5">({domainName})</span>}
-                                  </td>
-                                  <td className="px-3 py-1.5 font-mono break-all">
-                                    {connection.routingTarget || 'Pending…'}
-                                    {connection.routingTarget && (
-                                      <CopyBtn value={connection.routingTarget} label="Routing value" />
-                                    )}
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                          {footerNote && (
+                            <p className="text-[10px] text-white/30">{footerNote}</p>
+                          )}
+                          {showProxyNote && (
+                            <p className="text-[10px] text-amber-200/35">
+                              If your provider has proxy or CDN mode, keep this record as direct DNS while SSL is provisioning.
+                            </p>
+                          )}
                         </div>
-                        {connection.status === 'verified' && (
-                          <p className="text-[10px] text-cyan-200/40">
-                            Add this record at your DNS provider, then click Activate. SSL issues automatically.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      );
+                    })()
+                  }
 
                   {/* Error */}
                   {connection.lastError && (
