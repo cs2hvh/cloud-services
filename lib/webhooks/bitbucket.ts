@@ -17,14 +17,13 @@ export class BitbucketWebhookHandler {
     secret: string
   ): boolean {
     if (!secret) {
-      // No secret configured, skip strict validation
-      console.warn('[BitbucketWebhook] No secret configured, skipping signature validation');
-      return true;
+      console.error('[BitbucketWebhook] No secret configured — rejecting to prevent unauthenticated deploys');
+      return false;
     }
 
     if (!signature) {
-      console.warn('[BitbucketWebhook] No signature header present, skipping validation');
-      return true;
+      console.error('[BitbucketWebhook] Missing X-Hub-Signature header');
+      return false;
     }
 
     try {
@@ -38,10 +37,8 @@ export class BitbucketWebhookHandler {
       const sigBuffer = Buffer.from(provided, 'utf8');
       const digBuffer = Buffer.from(digest, 'utf8');
 
-      // If lengths differ, don't attempt timing-safe comparison; treat as non-fatal and skip
       if (sigBuffer.length !== digBuffer.length) {
-        console.warn('[BitbucketWebhook] Signature length mismatch, skipping strict validation');
-        return true;
+        return false;
       }
 
       return crypto.timingSafeEqual(sigBuffer, digBuffer);

@@ -69,7 +69,7 @@ export interface AppWithWebhook {
 // Result of webhook processing
 export interface WebhookResult {
   success: boolean;
-  action: 'triggered' | 'skipped' | 'error';
+  action: 'triggered' | 'queued' | 'skipped' | 'error';
   message: string;
   app_name?: string;
   branch?: string;

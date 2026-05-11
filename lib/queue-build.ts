@@ -15,7 +15,6 @@ export const buildQueue = new Proxy({} as Queue, {
         defaultJobOptions: {
           removeOnComplete: true,
           attempts: 1,
-          backoff: { type: "exponential", delay: 2000 },
         },
       });
     }
