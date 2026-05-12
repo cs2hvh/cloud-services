@@ -9,6 +9,8 @@ import {
   Archive,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   ExternalLink,
   Eye,
@@ -463,6 +465,17 @@ export default function DomainTransferPage() {
   const [domain, setDomain] = useState("");
   const [authCode, setAuthCode] = useState("");
   const [showAuthCode, setShowAuthCode] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactFirstName, setContactFirstName] = useState("");
+  const [contactLastName, setContactLastName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactCompany, setContactCompany] = useState("");
+  const [contactAddress, setContactAddress] = useState("");
+  const [contactCity, setContactCity] = useState("");
+  const [contactState, setContactState] = useState("");
+  const [contactZip, setContactZip] = useState("");
+  const [contactCountry, setContactCountry] = useState("");
   const [stage, setStage] = useState<TransferStage>("lookup");
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -598,6 +611,23 @@ export default function DomainTransferPage() {
     }
   }, [domain]);
 
+  function buildRegistrantContact() {
+    const fields = {
+      firstName: contactFirstName.trim(),
+      lastName: contactLastName.trim(),
+      email: contactEmail.trim(),
+      phone: contactPhone.trim(),
+      companyName: contactCompany.trim(),
+      address1: contactAddress.trim(),
+      city: contactCity.trim(),
+      state: contactState.trim(),
+      zip: contactZip.trim(),
+      country: contactCountry.trim(),
+    };
+    const filled = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== ""));
+    return Object.keys(filled).length > 0 ? filled : undefined;
+  }
+
   const handleStartTransfer = useCallback(async () => {
     if (!eligibility?.eligible || !authCode.trim()) { setEligibilityFeedback("Enter the authorization code from your current registrar."); return; }
     if (authCode.trim().length < 6) { setEligibilityFeedback("Authorization code must be at least 6 characters."); return; }
@@ -607,10 +637,14 @@ export default function DomainTransferPage() {
       const response = await fetch("/api/domains/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: eligibility.domain,
-          auth_code: authCode.trim(),
-        }),
+        body: JSON.stringify((() => {
+          const rc = buildRegistrantContact();
+          return {
+            domain: eligibility.domain,
+            auth_code: authCode.trim(),
+            ...(rc ? { registrant_contact: rc } : {}),
+          };
+        })()),
       });
       const json = await response.json();
       if (!response.ok) {
@@ -627,6 +661,10 @@ export default function DomainTransferPage() {
       }
       setSubmittedDomain(eligibility.domain);
       setDomain(""); setAuthCode(""); setStage("lookup"); setEligibility(null); setEligibilityFeedback(null);
+      setShowContactForm(false);
+      setContactFirstName(""); setContactLastName(""); setContactEmail(""); setContactPhone("");
+      setContactCompany(""); setContactAddress(""); setContactCity(""); setContactState("");
+      setContactZip(""); setContactCountry("");
       setActivityTab("active");
       toast.success("Transfer initiated. Status updates will appear as it progresses.");
       void fetchTransfers(false, false);
@@ -635,7 +673,9 @@ export default function DomainTransferPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [authCode, eligibility, fetchTransfers]);
+  }, [authCode, eligibility, fetchTransfers,
+    contactFirstName, contactLastName, contactEmail, contactPhone,
+    contactCompany, contactAddress, contactCity, contactState, contactZip, contactCountry]);
 
   const handleCancelTransfer = useCallback(async (transferId: string) => {
     setCancellingId(transferId);
@@ -906,11 +946,62 @@ export default function DomainTransferPage() {
                     ))}
                   </div>
 
+                  {/* Optional registrant contact */}
+                  <div className="border border-white/[0.07]">
+                    <button
+                      type="button"
+                      onClick={() => setShowContactForm((v) => !v)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white/70 hover:bg-white/[0.04] transition-colors"
+                    >
+                      <span className="font-medium">
+                        Registrant Contact
+                        <span className="ml-2 text-[11px] font-normal text-white/40">Optional — WHOIS / ICANN records</span>
+                      </span>
+                      {showContactForm
+                        ? <ChevronUp className="h-4 w-4 shrink-0 text-white/40" />
+                        : <ChevronDown className="h-4 w-4 shrink-0 text-white/40" />}
+                    </button>
+
+                    {showContactForm && (
+                      <div className="border-t border-white/[0.07] px-4 pb-4 pt-3">
+                        <p className="mb-3 text-xs text-white/40">
+                          Applied when the transfer completes. Leave blank to use your account email and platform address defaults.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            ["First Name", contactFirstName, setContactFirstName, "col-span-1", "text"],
+                            ["Last Name", contactLastName, setContactLastName, "col-span-1", "text"],
+                            ["Email", contactEmail, setContactEmail, "col-span-2", "email"],
+                            ["Phone (e.g. +1.2025551234)", contactPhone, setContactPhone, "col-span-1", "text"],
+                            ["Company (optional)", contactCompany, setContactCompany, "col-span-1", "text"],
+                            ["Address", contactAddress, setContactAddress, "col-span-2", "text"],
+                            ["City", contactCity, setContactCity, "col-span-1", "text"],
+                            ["State / Province", contactState, setContactState, "col-span-1", "text"],
+                            ["ZIP / Postal Code", contactZip, setContactZip, "col-span-1", "text"],
+                            ["Country Code (e.g. US)", contactCountry, setContactCountry, "col-span-1", "text"],
+                          ] as const).map(([label, value, setter, span, type]) => (
+                            <div key={label} className={span}>
+                              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/38">
+                                {label}
+                              </label>
+                              <input
+                                type={type}
+                                value={value}
+                                onChange={(e) => setter(e.target.value)}
+                                className="h-9 w-full border border-white/[0.08] bg-black/20 px-3 text-sm text-white placeholder:text-white/20 focus:border-white/20 focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
                       className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
-                      onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); }}
+                      onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); setShowContactForm(false); }}
                     >
                       Back
                     </Button>

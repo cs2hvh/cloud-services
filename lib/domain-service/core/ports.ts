@@ -49,7 +49,7 @@ export interface DomainMarketplaceRegistrarPort {
    */
   setRegistrantContact?(
     domainName: string,
-    contact: { email: string; firstName?: string; lastName?: string }
+    contact: RegistrantContactInput
   ): Promise<void>;
 }
 
@@ -266,6 +266,20 @@ export interface DomainEmailPort {
   }): Promise<void>;
 }
 
+/** Full registrant contact submitted to the registrar for WHOIS/ICANN records. */
+export interface RegistrantContactInput {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  companyName?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
 /* ──────────────────────────────────────────────────────────
  * Domain Transfer Ports
  * ──────────────────────────────────────────────────────────*/
@@ -309,6 +323,9 @@ export interface DomainTransferRegistrarPort {
     page?: number;
     perPage?: number;
   }): Promise<{ transfers: NameComTransferResponse[] }>;
+
+  /** Optional: set registrant contact after transfer completes. Same semantics as DomainMarketplaceRegistrarPort. */
+  setRegistrantContact?(domainName: string, contact: RegistrantContactInput): Promise<void>;
 }
 
 export interface DomainUserResolverPort {

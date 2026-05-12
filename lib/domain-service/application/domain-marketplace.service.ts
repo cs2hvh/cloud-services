@@ -176,6 +176,18 @@ export class DomainMarketplaceService {
     domain: string;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
+    registrantContact?: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      phone?: string;
+      companyName?: string;
+      address1?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+      country?: string;
+    };
   }): Promise<DomainPurchaseRequest> {
     const cleanDomain = normalizeDomainCandidate(input.domain);
     ensureDomainFormat(cleanDomain);
@@ -253,6 +265,7 @@ export class DomainMarketplaceService {
       metadata: {
         purchase_type: first.purchaseType || null,
         premium: Boolean(first.premium),
+        ...(input.registrantContact ? { registrant_contact: input.registrantContact } : {}),
         ...(input.metadata || {}),
       },
       status: "processing",
@@ -407,33 +420,42 @@ export class DomainMarketplaceService {
     });
 
     // After a successful purchase the name.com account-level contacts are used as
-    // the default registrant. For white-label: update the registrant email to the
+    // the default registrant. For white-label: update the registrant contact to the
     // purchasing user so ICANN contact-verification emails are routed to them, not
-    // to the platform admin inbox. This is non-blocking — a failure here does NOT
-    // roll back the purchase.
-    if (actor.userEmail && this.registrar.setRegistrantContact) {
-      const [rawFirst, ...rest] = (actor.userName || "").trim().split(" ");
-      const firstName = rawFirst || undefined;
-      const lastName = rest.join(" ") || undefined;
+    // to the platform admin inbox. User-supplied contact fields override the defaults.
+    // This is non-blocking — a failure here does NOT roll back the purchase.
+    const rc = input.registrantContact;
+    const [rawFirst, ...rest] = (actor.userName || "").trim().split(" ");
+    const derivedFirst = rawFirst || undefined;
+    const derivedLast = rest.join(" ") || undefined;
+    const contactEmail = rc?.email || actor.userEmail;
+
+    if (contactEmail && this.registrar.setRegistrantContact) {
       this.emitNonBlocking(async () => {
         let contactSynced = false;
         try {
           await this.registrar.setRegistrantContact!(cleanDomain, {
-            email: actor.userEmail!,
-            ...(firstName ? { firstName } : {}),
-            ...(lastName ? { lastName } : {}),
+            email: contactEmail,
+            firstName: rc?.firstName || derivedFirst,
+            lastName: rc?.lastName || derivedLast,
+            phone: rc?.phone,
+            companyName: rc?.companyName,
+            address1: rc?.address1,
+            city: rc?.city,
+            state: rc?.state,
+            zip: rc?.zip,
+            country: rc?.country,
           });
           contactSynced = true;
-          // Persist the email so operators can trace ICANN verification issues.
           await this.purchaseRequests.updateStatus({
             requestId: request.id,
             status: "completed",
-            registrantEmail: actor.userEmail,
+            registrantEmail: contactEmail,
           });
         } catch (err) {
           console.warn("[DomainMarketplace] setRegistrantContact failed (non-fatal)", {
             domain: cleanDomain,
-            email: actor.userEmail,
+            email: contactEmail,
             error: err instanceof Error ? err.message : String(err),
           });
         }
@@ -444,7 +466,7 @@ export class DomainMarketplaceService {
           serviceName: cleanDomain,
           metadata: {
             event: "domain_registrant_contact_sync",
-            registrant_email: actor.userEmail,
+            registrant_email: contactEmail,
             contact_synced: contactSynced,
           },
         });

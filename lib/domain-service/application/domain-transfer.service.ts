@@ -11,6 +11,7 @@ import type {
   DomainUserResolverPort,
 } from "@/lib/domain-service/core/ports";
 import type { ActorContext, DomainTransferRequest, DomainTransferRequestStatus } from "@/lib/domain-service/core/types";
+import type { RegistrantContactInput } from "@/lib/domain-service/core/ports";
 
 /** Name.com statuses mapped to internal statuses */
 const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
@@ -162,6 +163,7 @@ export class DomainTransferService {
     privacyEnabled?: boolean;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
+    registrantContact?: Omit<RegistrantContactInput, "email"> & { email?: string };
   }): Promise<DomainTransferRequest> {
     const domain = normalizeDomain(input.domain);
     ensureDomainFormat(domain);
@@ -207,6 +209,7 @@ export class DomainTransferService {
       metadata: {
         privacy_enabled: input.privacyEnabled || false,
         pricing_source: "namecom_check_availability",
+        ...(input.registrantContact ? { registrant_contact: input.registrantContact } : {}),
         ...(input.metadata || {}),
       },
       status: "initiated",
@@ -725,6 +728,28 @@ export class DomainTransferService {
     };
 
     if (newStatus === "completed") {
+      // Set registrant contact now that the domain is fully owned.
+      // Use stored user-supplied contact if present, falling back to resolved platform email.
+      const storedContact = (transfer.metadata as Record<string, unknown>)
+        ?.registrant_contact as Partial<RegistrantContactInput> | undefined;
+      const contactEmail = storedContact?.email || resolvedEmail;
+      if (contactEmail && this.registrar.setRegistrantContact) {
+        await this.safeAsync(async () => {
+          await this.registrar.setRegistrantContact!(transfer.domain, {
+            email: contactEmail,
+            firstName: storedContact?.firstName,
+            lastName: storedContact?.lastName,
+            phone: storedContact?.phone,
+            companyName: storedContact?.companyName,
+            address1: storedContact?.address1,
+            city: storedContact?.city,
+            state: storedContact?.state,
+            zip: storedContact?.zip,
+            country: storedContact?.country,
+          });
+        });
+      }
+
       await this.safeAsync(async () => {
         await this.emitAudit({
           actor: systemActor,

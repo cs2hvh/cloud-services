@@ -79,41 +79,20 @@ export class NameComApiService implements DomainMarketplaceRegistrarPort {
 
   async setRegistrantContact(
     domainName: string,
-    contact: { email: string; firstName?: string; lastName?: string }
-  ): Promise<void> {
-    // name.com requires a complete contact object — partial objects fail with a
-    // validation error. Use platform-registered address as the defaults so the
-    // address sub-fields always satisfy the API, while only the email is
-    // overridden to route ICANN verification to the correct user inbox.
-    const phone = process.env.PLATFORM_CONTACT_PHONE;
-    const address1 = process.env.PLATFORM_CONTACT_ADDRESS;
-    const city = process.env.PLATFORM_CONTACT_CITY;
-    const state = process.env.PLATFORM_CONTACT_STATE;
-    const zip = process.env.PLATFORM_CONTACT_ZIP;
-    const country = process.env.PLATFORM_CONTACT_COUNTRY;
-
-    if (!phone || !address1 || !city || !state || !zip || !country) {
-      throw new Error(
-        "setRegistrantContact: one or more PLATFORM_CONTACT_* environment variables are not set. " +
-        "Required: PLATFORM_CONTACT_PHONE, PLATFORM_CONTACT_ADDRESS, PLATFORM_CONTACT_CITY, " +
-        "PLATFORM_CONTACT_STATE, PLATFORM_CONTACT_ZIP, PLATFORM_CONTACT_COUNTRY. " +
-        "Set these to the platform's registered name.com contact address."
-      );
+    contact: {
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      companyName?: string;
+      address1?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+      country?: string;
     }
-
-    await this.client.setContacts(domainName, {
-      registrant: {
-        email: contact.email,
-        ...(contact.firstName ? { firstName: contact.firstName } : {}),
-        ...(contact.lastName ? { lastName: contact.lastName } : {}),
-        phone,
-        address1,
-        city,
-        state,
-        zip,
-        country,
-      },
-    });
+  ): Promise<void> {
+    await this.client.setRegistrantContact(domainName, contact);
   }
 
   async listDnsRecords(domainName: string, params?: { page?: number; perPage?: number }): Promise<NameComListRecordsResponse> {

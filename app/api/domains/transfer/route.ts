@@ -103,6 +103,7 @@ export async function POST(req: Request) {
       authCode: parsed.data.auth_code,
       privacyEnabled: parsed.data.privacy_enabled,
       idempotencyKey,
+      registrantContact: parsed.data.registrant_contact,
       metadata: { source: "dashboard" },
     });
 
