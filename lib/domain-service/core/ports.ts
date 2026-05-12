@@ -311,6 +311,10 @@ export interface DomainTransferRegistrarPort {
   }): Promise<{ transfers: NameComTransferResponse[] }>;
 }
 
+export interface DomainUserResolverPort {
+  getUserEmail(userId: string): Promise<string | null>;
+}
+
 export interface DomainTransferRequestRepositoryPort {
   create(params: {
     userId: string;

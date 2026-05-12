@@ -1473,6 +1473,42 @@ cron.schedule("0 * * * *", async () => {
 });
 
 // -----------------------------
+// DOMAIN TRANSFER POLL
+// Runs every 30 minutes — polls Name.com for status updates on pending
+// transfers. Transfers stay stuck forever without this job because the
+// poll endpoint is never called otherwise.
+// -----------------------------
+cron.schedule("*/30 * * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[domain-transfer-poll] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[domain-transfer-poll] Polling pending transfers:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/domains/transfer/poll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 50 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[domain-transfer-poll] Poll failed:", data);
+    } else {
+      console.log("[domain-transfer-poll] Poll completed:", data.message);
+    }
+  } catch (error) {
+    console.error("[domain-transfer-poll] Poll error:", error.message);
+  }
+});
+
+// -----------------------------
 // DOMAIN RENEWAL BILLING
 // Runs daily at 09:00 UTC — charges users' credit balances for domains
 // expiring within the next 30 days. Name.com handles the actual renewal

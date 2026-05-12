@@ -5,19 +5,23 @@ import type {
   DomainBillingPort,
   DomainEmailPort,
   DomainNotificationPort,
+  DomainPurchaseRequestRepositoryPort,
   DomainTransferRegistrarPort,
   DomainTransferRequestRepositoryPort,
+  DomainUserResolverPort,
 } from "@/lib/domain-service/core/ports";
 import type { ActorContext, DomainTransferRequest, DomainTransferRequestStatus } from "@/lib/domain-service/core/types";
 
 /** Name.com statuses mapped to internal statuses */
 const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
+  "submitting transfer": "pending",
   "retrieving email": "pending",
   "pending approval": "pending",
   "pending_transfer": "pending",
   "pending": "pending",
   "approved": "approved",
   "completed": "completed",
+  "transferred": "completed",
   "cancelled": "cancelled",
   "rejected": "failed",
   "denied": "failed",
@@ -60,6 +64,8 @@ export class DomainTransferService {
     audit?: DomainAuditLogPort;
     notifications?: DomainNotificationPort;
     email?: DomainEmailPort;
+    userResolver?: DomainUserResolverPort;
+    purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   };
 
   constructor(
@@ -70,6 +76,8 @@ export class DomainTransferService {
       audit?: DomainAuditLogPort;
       notifications?: DomainNotificationPort;
       email?: DomainEmailPort;
+      userResolver?: DomainUserResolverPort;
+      purchaseRequests?: DomainPurchaseRequestRepositoryPort;
     } = {}
   ) {
     this.deps = deps;
@@ -629,6 +637,37 @@ export class DomainTransferService {
         await this.transfers.clearAuthCode(transfer.id);
       }
 
+      // On completion, create a domain_purchase_requests record so the domain
+      // appears in inventory and the renewal cron can pick it up.
+      if (newMappedStatus === "completed" && newMappedStatus !== oldStatus && this.deps.purchaseRequests) {
+        await this.safeAsync(async () => {
+          const existing = await this.deps.purchaseRequests!.findLatestByDomain({
+            userId: transfer.user_id,
+            domain: transfer.domain,
+          });
+          if (!existing) {
+            await this.deps.purchaseRequests!.create({
+              userId: transfer.user_id,
+              domain: transfer.domain,
+              purchasePrice: transfer.purchase_price ?? null,
+              renewalPrice: completionRenewalPrice ?? transfer.renewal_price ?? null,
+              currency: transfer.currency || "USD",
+              provider: "namecom",
+              providerRequestId: transfer.provider_order_id ?? null,
+              status: "completed",
+              metadata: {
+                source: "transfer",
+                transfer_request_id: transfer.id,
+                expires_at: null,
+                renewal_charged: false,
+                autorenew_enabled: true,
+                nameservers: completionMetadata?.nameservers ?? [],
+              },
+            });
+          }
+        });
+      }
+
       // If status changed to a notable state, emit events
       if (newMappedStatus !== oldStatus) {
         await this.emitStatusChangeEvents(transfer, oldStatus as DomainTransferRequestStatus, newMappedStatus);
@@ -673,11 +712,15 @@ export class DomainTransferService {
     _oldStatus: DomainTransferRequestStatus,
     newStatus: DomainTransferRequestStatus
   ): Promise<void> {
-    // NOTE: We don't have the user's email in the transfer record (provider_email is the WHOIS contact).
-    // Audit + notifications still work via userId. Emails are skipped during polling.
+    // Resolve user email so completion/failure emails reach the user from the polling path.
+    // provider_email is the WHOIS registrant contact, not the platform user's email.
+    const resolvedEmail = this.deps.userResolver
+      ? await this.deps.userResolver.getUserEmail(transfer.user_id).catch(() => null)
+      : null;
+
     const systemActor: ActorContext = {
       userId: transfer.user_id,
-      userEmail: undefined,
+      userEmail: resolvedEmail ?? undefined,
       userRole: "system",
     };
 

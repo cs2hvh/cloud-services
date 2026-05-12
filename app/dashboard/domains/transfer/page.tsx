@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  Archive,
   ArrowRight,
   CheckCircle2,
   Clock3,
@@ -14,7 +16,6 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
-  Trash2,
   X,
   XCircle,
 } from "lucide-react";
@@ -46,10 +47,14 @@ interface TransferRequest {
   purchase_price: number | null;
   renewal_price: number | null;
   currency: string;
+  provider: string;
+  provider_order_id: string | null;
   provider_status: string | null;
   provider_email: string | null;
   last_error: string | null;
   failure_reason: string | null;
+  last_polled_at: string | null;
+  poll_count: number;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -173,6 +178,15 @@ function formatDateTime(value: string) {
   });
 }
 
+function formatRelativeTime(value: string | null): string {
+  if (!value) return "Never";
+  try {
+    return formatDistanceToNow(new Date(value), { addSuffix: true });
+  } catch {
+    return "Unknown";
+  }
+}
+
 function looksLikeRegistrableRoot(parts: string[]) {
   if (parts.length === 2) return true;
   if (parts.length !== 3) return false;
@@ -227,23 +241,63 @@ function TransferActivityCard({
             </div>
 
             <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: "Started", value: formatDateTime(transfer.created_at) },
-                { label: "Last update", value: formatDateTime(transfer.updated_at) },
-                { label: "Transfer fee", value: formatCurrency(transfer.purchase_price, transfer.currency) },
-                { label: "Approval email", value: transfer.provider_email || "Waiting for registrar" },
-              ].map(({ label, value }) => (
-                <div key={label} className="border border-white/[0.07] bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">{label}</p>
-                  <p className="mt-1 break-all text-sm text-white/75">{value}</p>
+              {/* Always-visible fields */}
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Started</p>
+                <p className="mt-1 break-all text-sm text-white/75">{formatDateTime(transfer.created_at)}</p>
+              </div>
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Last status change</p>
+                <p className="mt-1 break-all text-sm text-white/75">{formatDateTime(transfer.updated_at)}</p>
+              </div>
+
+              {/* Transfer fee: active → "Confirmed on initiation" or price; terminal → actual price or "—" */}
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Transfer fee</p>
+                <p className="mt-1 break-all text-sm text-white/75">
+                  {transfer.purchase_price !== null
+                    ? formatCurrency(transfer.purchase_price, transfer.currency)
+                    : isActive
+                      ? "Confirmed on initiation"
+                      : "Included in renewal"}
+                </p>
+              </div>
+
+              {/* Approval email: only meaningful while waiting; hide for terminal states unless we have an address */}
+              {(isActive || transfer.provider_email) && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Approval email</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {transfer.provider_email || (isActive ? "Waiting for registrar" : "—")}
+                  </p>
                 </div>
-              ))}
+              )}
+
+              {/* Last polled: only for in-flight transfers */}
+              {isActive && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Last polled</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {transfer.last_polled_at ? formatRelativeTime(transfer.last_polled_at) : "Pending first check"}
+                  </p>
+                </div>
+              )}
+
+              {/* Renewal price: show once known */}
               {transfer.renewal_price !== null && (
                 <div className="border border-white/[0.07] bg-white/[0.03] p-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Renewal price</p>
                   <p className="mt-1 break-all text-sm text-white/75">
                     {formatCurrency(transfer.renewal_price, transfer.currency)}
                   </p>
+                </div>
+              )}
+
+              {/* Order ID: show for completed/failed to help with support queries */}
+              {transfer.provider_order_id && isTerminal && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Order ID</p>
+                  <p className="mt-1 break-all text-sm font-mono text-white/75">{transfer.provider_order_id}</p>
                 </div>
               )}
             </div>
@@ -323,29 +377,74 @@ function TransferActivityCard({
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {isTerminal && (
+            {/* Completed: archive the record. Domain is safe — make that explicit. */}
+            {transfer.status === "completed" && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    className="rounded-none border-white/15 text-white/60 hover:bg-white/[0.08] hover:text-white"
+                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                     disabled={deletingId === transfer.id}
                   >
-                    {deletingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    Delete
+                    {deletingId === transfer.id
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      : <Archive className="mr-2 h-4 w-4" />}
+                    Archive record
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="border-white/10 bg-zinc-900">
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-white">Delete transfer from history?</AlertDialogTitle>
+                    <AlertDialogTitle className="text-white">Archive transfer record?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/60">
+                      This removes the transfer entry from your activity list.{" "}
+                      <span className="font-medium text-white/85">
+                        {transfer.domain} remains fully active in your account
+                      </span>{" "}
+                      and can still be managed from My Domains. Billing and audit records are retained.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="rounded-none bg-white/10 text-white hover:bg-white/20"
+                      onClick={() => onDelete(transfer.id)}
+                    >
+                      Archive
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
+            {/* Failed / Cancelled: dismiss the record. No live domain to worry about. */}
+            {(transfer.status === "failed" || transfer.status === "cancelled") && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    disabled={deletingId === transfer.id}
+                  >
+                    {deletingId === transfer.id
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      : <X className="mr-2 h-4 w-4" />}
+                    Dismiss
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-white/10 bg-zinc-900">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-white">Remove from history?</AlertDialogTitle>
                     <AlertDialogDescription className="text-white/60">
                       Remove <span className="font-medium text-white/80">{transfer.domain}</span> from your transfer activity list. Billing and audit records are retained for account security.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
-                    <AlertDialogAction className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => onDelete(transfer.id)}>
-                      Delete
+                    <AlertDialogAction
+                      className="rounded-none bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => onDelete(transfer.id)}
+                    >
+                      Remove
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -370,12 +469,16 @@ export default function DomainTransferPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoChecking, setAutoChecking] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [eligibilityFeedback, setEligibilityFeedback] = useState<string | null>(null);
   const [submittedDomain, setSubmittedDomain] = useState<string | null>(null);
+  const [activityTab, setActivityTab] = useState<"active" | "history" | "all">("active");
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const domainParam = searchParams.get("domain");
@@ -387,22 +490,66 @@ export default function DomainTransferPage() {
     }
   }, [searchParams]);
 
-  const fetchTransfers = useCallback(async () => {
+  const fetchTransfers = useCallback(async (isAuto = false, selectTab = false) => {
+    if (isAuto) setAutoChecking(true);
     try {
       const response = await fetch("/api/domains/transfer?limit=50");
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || "Failed to fetch transfers");
-      setTransfers(json.data || []);
+      const fetched: TransferRequest[] = json.data || [];
+      setTransfers(fetched);
+      setLastCheckedAt(new Date());
       setActivityError(null);
+      // Auto-select the most relevant tab on first load or after submission
+      if (selectTab) {
+        const hasActive = fetched.some((t) => ["initiated", "pending", "approved"].includes(t.status));
+        const hasHistory = fetched.some((t) => ["completed", "failed", "cancelled"].includes(t.status));
+        setActivityTab(hasActive ? "active" : hasHistory ? "history" : "all");
+      }
     } catch (error) {
       setActivityError(error instanceof Error ? error.message : "Failed to fetch transfers");
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setAutoChecking(false);
     }
   }, []);
 
-  useEffect(() => { void fetchTransfers(); }, [fetchTransfers]);
+  // Initial load — select the right tab based on what exists
+  useEffect(() => { void fetchTransfers(false, true); }, [fetchTransfers]);
+
+  // Auto-refresh every 30s when there are active transfers; stop when all settle.
+  // When an active transfer settles (completes/fails), switch the tab to history so
+  // the user sees the result without a manual click.
+  const prevActiveCountRef = useRef(0);
+  useEffect(() => {
+    const hasActive = transfers.some((t) => ["initiated", "pending", "approved"].includes(t.status));
+    const activeCount = transfers.filter((t) => ["initiated", "pending", "approved"].includes(t.status)).length;
+
+    // If we just went from having active transfers to having none, switch to history
+    if (prevActiveCountRef.current > 0 && activeCount === 0 && transfers.length > 0) {
+      setActivityTab("history");
+    }
+    prevActiveCountRef.current = activeCount;
+
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+      autoRefreshRef.current = null;
+    }
+
+    if (hasActive) {
+      autoRefreshRef.current = setInterval(() => {
+        void fetchTransfers(true);
+      }, 30_000);
+    }
+
+    return () => {
+      if (autoRefreshRef.current) {
+        clearInterval(autoRefreshRef.current);
+        autoRefreshRef.current = null;
+      }
+    };
+  }, [transfers, fetchTransfers]);
 
   const activeTransfers = useMemo(() => transfers.filter((t) => ["initiated", "pending", "approved"].includes(t.status)), [transfers]);
   const historyTransfers = useMemo(() => transfers.filter((t) => ["completed", "failed", "cancelled"].includes(t.status)), [transfers]);
@@ -480,8 +627,9 @@ export default function DomainTransferPage() {
       }
       setSubmittedDomain(eligibility.domain);
       setDomain(""); setAuthCode(""); setStage("lookup"); setEligibility(null); setEligibilityFeedback(null);
+      setActivityTab("active");
       toast.success("Transfer initiated. Status updates will appear as it progresses.");
-      void fetchTransfers();
+      void fetchTransfers(false, false);
     } catch {
       setEligibilityFeedback("Failed to start transfer. Please try again.");
     } finally {
@@ -841,16 +989,25 @@ export default function DomainTransferPage() {
             <h2 className="text-lg font-semibold text-white">Transfer Activity</h2>
             <p className="mt-1 text-sm text-white/45">Current requests, status details, and completed or failed attempts.</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-none border-white/15 text-white hover:bg-white/[0.08] self-start"
-            onClick={() => { setRefreshing(true); void fetchTransfers(); }}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex flex-col items-end gap-1.5 self-start">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
+              onClick={() => { setRefreshing(true); void fetchTransfers(); }}
+              disabled={refreshing || autoChecking}
+            >
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing || autoChecking ? "animate-spin" : ""}`} />
+              {autoChecking ? "Checking…" : "Refresh"}
+            </Button>
+            {lastCheckedAt && (
+              <p className="text-[10px] text-white/30">
+                {transfers.some((t) => ["initiated", "pending", "approved"].includes(t.status))
+                  ? `Auto-updating · checked ${formatRelativeTime(lastCheckedAt.toISOString())}`
+                  : `Last checked ${formatRelativeTime(lastCheckedAt.toISOString())}`}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="px-6 py-5">
@@ -870,7 +1027,7 @@ export default function DomainTransferPage() {
               </div>
             </div>
           ) : (
-            <Tabs defaultValue="active" className="space-y-4">
+            <Tabs value={activityTab} onValueChange={(v) => setActivityTab(v as typeof activityTab)} className="space-y-4">
               <TabsList className="h-auto flex-wrap gap-1 border border-white/[0.08] bg-white/[0.04] p-1">
                 <TabsTrigger value="active" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   Active ({activeTransfers.length})
