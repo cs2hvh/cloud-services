@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDomainService } from "@/lib/domain-service";
 import { createServiceClient } from "@/lib/supabase/server";
-import { createAdminDomainActor, requireDomainAdmin, resolveUserEmail } from "../../../_lib/admin-domain-utils";
+import { createAdminDomainActor, logAdminDomainAction, requireDomainAdmin, resolveUserEmail } from "../../../_lib/admin-domain-utils";
 
 export async function POST(
   req: Request,
@@ -9,6 +9,7 @@ export async function POST(
 ) {
   const adminCheck = await requireDomainAdmin();
   if (!adminCheck.ok) return adminCheck.response;
+  const { admin } = adminCheck;
 
   const { id } = await params;
   const supabase = await createServiceClient();
@@ -62,6 +63,20 @@ export async function POST(
       if (verifyErr) {
         return NextResponse.json({ error: verifyErr.message }, { status: 500 });
       }
+
+      await logAdminDomainAction({
+        admin,
+        req,
+        action: "update",
+        serviceId: id,
+        serviceName: domain.domain,
+        metadata: {
+          event: "domain_force_verified_during_admin_activation",
+          target_user_id: domain.user_id,
+          app_id: domain.app_id,
+          previous_status: domain.status,
+        },
+      });
     }
 
     const service = getDomainService();

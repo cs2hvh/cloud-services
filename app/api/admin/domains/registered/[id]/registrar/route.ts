@@ -4,7 +4,7 @@ import { getDomainService } from "@/lib/domain-service";
 import { DEFAULT_MANAGED_NAMESERVERS, NAMECOM_MANAGED_NAMESERVER_RE } from "@/lib/domain-service/managed-nameservers";
 import { NameComRegistrarAdapter } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
 import { createServiceClient } from "@/lib/supabase/server";
-import { createAdminDomainActor, requireDomainAdmin, resolveUserEmail } from "../../../_lib/admin-domain-utils";
+import { createAdminDomainActor, logAdminDomainAction, requireDomainAdmin, resolveUserEmail } from "../../../_lib/admin-domain-utils";
 
 const PatchSchema = z.object({
   autorenew_enabled: z.boolean().optional(),
@@ -115,6 +115,7 @@ export async function PATCH(
 ) {
   const adminCheck = await requireDomainAdmin();
   if (!adminCheck.ok) return adminCheck.response;
+  const { admin } = adminCheck;
 
   const body = await req.json().catch(() => ({}));
   const parsed = PatchSchema.safeParse(body ?? {});
@@ -177,6 +178,25 @@ export async function PATCH(
       const live = await adapter.setNameservers(data.zone, nameservers);
       nameservers = Array.isArray(live.nameservers) ? live.nameservers : nameservers;
     }
+
+    await logAdminDomainAction({
+      admin,
+      req,
+      action: "update",
+      serviceId: id,
+      serviceName: domain.domain,
+      metadata: {
+        event: "domain_registrar_settings_updated_by_admin",
+        target_user_id: domain.user_id,
+        zone: data.zone,
+        updates: {
+          ...(updates.autorenew_enabled !== undefined && { autorenew_enabled: updates.autorenew_enabled }),
+          ...(updates.locked !== undefined && { locked: updates.locked }),
+          ...(updates.privacy_enabled !== undefined && { privacy_enabled: updates.privacy_enabled }),
+          ...(nameservers && { nameservers, nameserver_mode: nameserverMode(nameservers) }),
+        },
+      },
+    });
 
     return NextResponse.json({
       data: {

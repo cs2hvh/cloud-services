@@ -603,6 +603,12 @@ export class DomainTransferService {
     await this.transfers.updatePolled(request.id).catch(() => {});
 
     const updated = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!updated) {
+      console.warn("[DomainTransferService] Transfer disappeared after polling", {
+        requestId: input.requestId,
+        userId: input.actor.userId,
+      });
+    }
     return toPublicTransferRequest(updated || request);
   }
 
