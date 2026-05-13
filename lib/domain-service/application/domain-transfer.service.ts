@@ -587,6 +587,25 @@ export class DomainTransferService {
     return { polled: pending.length, processed, errors };
   }
 
+  async pollTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    await this.pollSingleTransfer(request);
+    await this.transfers.updatePolled(request.id).catch(() => {});
+
+    const updated = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    return toPublicTransferRequest(updated || request);
+  }
+
   private async pollSingleTransfer(transfer: DomainTransferRequest): Promise<void> {
     let providerData: Awaited<ReturnType<DomainTransferRegistrarPort["getTransfer"]>>;
 

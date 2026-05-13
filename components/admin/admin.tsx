@@ -2,7 +2,7 @@
 
 // import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Server, Network, Users, Database, Bot, Activity } from 'lucide-react';
+import { Server, Network, Users, Database, Bot, Activity, Globe } from 'lucide-react';
 
 export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) {
 //   const [isAdmin, setIsAdmin] = useState(false);
@@ -142,6 +142,20 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
                 <div>
                   <h3 className="text-xl font-semibold text-white">Cluster Monitor</h3>
                   <p className="text-white/60 text-sm mt-1">Deployments, events & node health</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/domains" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-sky-500/10 rounded-lg">
+                  <Globe className="h-6 w-6 text-sky-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Domains</h3>
+                  <p className="text-white/60 text-sm mt-1">Purchases, transfers & registrations</p>
                 </div>
               </div>
             </a>
