@@ -33,7 +33,7 @@ const RECORD_TYPE_INFO: Record<string, { desc: string; example: string }> = {
   TXT:  { desc: 'Used for verification, SPF, DKIM, and other metadata', example: 'v=spf1 include:_spf.google.com ~all' },
   MX:   { desc: 'Specifies which mail servers handle email for this domain', example: 'mail.example.com' },
   NS:   { desc: 'Delegates a subdomain to specific nameservers', example: 'ns1.example.com' },
-  SRV:  { desc: 'Defines the location of specific services (e.g. SIP, XMPP)', example: '0 5 5269 xmpp-server.example.com' },
+  SRV:  { desc: 'Defines the location of specific services. Value format: weight port target (priority set separately)', example: '0 5269 xmpp-server.example.com' },
 };
 
 const TYPE_COLORS: Record<string, string> = {
