@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { createSSRClient, createServiceClient } from "@/lib/supabase/server";
-
-async function buildUserEmailMap(userIds: string[]): Promise<Map<string, string>> {
-  if (!userIds.length) return new Map();
-  try {
-    const supabase = await createSSRClient();
-    const { data } = await supabase.auth.admin.listUsers({ perPage: 1000, page: 1 });
-    const map = new Map<string, string>();
-    (data?.users ?? []).forEach((u) => {
-      if (userIds.includes(u.id)) map.set(u.id, u.email ?? u.id);
-    });
-    return map;
-  } catch {
-    return new Map();
-  }
-}
+import { createServiceClient } from "@/lib/supabase/server";
+import { buildUserEmailMap } from "../_lib/admin-domain-utils";
 
 export async function GET(req: Request) {
   const admin = await requireAdmin();
@@ -31,7 +17,10 @@ export async function GET(req: Request) {
   const supabase = await createServiceClient();
   let query = supabase
     .from("domain_transfer_requests")
-    .select("*", { count: "exact" })
+    .select(
+      "id, user_id, domain, status, purchase_price, renewal_price, currency, provider, provider_order_id, provider_status, provider_email, last_error, failure_reason, last_polled_at, poll_count, metadata, created_at, updated_at",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false })
     .range(from, from + limit - 1);
 

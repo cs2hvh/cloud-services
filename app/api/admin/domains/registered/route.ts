@@ -1,37 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { createSSRClient, createServiceClient } from "@/lib/supabase/server";
-
-async function buildUserEmailMap(userIds: string[]): Promise<Map<string, string>> {
-  if (!userIds.length) return new Map();
-  try {
-    const supabase = await createSSRClient();
-    const { data } = await supabase.auth.admin.listUsers({ perPage: 1000, page: 1 });
-    const map = new Map<string, string>();
-    (data?.users ?? []).forEach((u) => {
-      if (userIds.includes(u.id)) map.set(u.id, u.email ?? u.id);
-    });
-    return map;
-  } catch {
-    return new Map();
-  }
-}
-
-async function buildAppNameMap(appIds: string[]): Promise<Map<string, { name: string; slug: string }>> {
-  if (!appIds.length) return new Map();
-  try {
-    const supabase = await createServiceClient();
-    const { data } = await supabase
-      .from("platform_apps")
-      .select("id, name, slug")
-      .in("id", appIds);
-    const map = new Map<string, { name: string; slug: string }>();
-    (data ?? []).forEach((a: { id: string; name: string; slug: string }) => map.set(a.id, { name: a.name, slug: a.slug }));
-    return map;
-  } catch {
-    return new Map();
-  }
-}
+import { createServiceClient } from "@/lib/supabase/server";
+import { buildAppNameMap, buildUserEmailMap } from "../_lib/admin-domain-utils";
 
 export async function GET(req: Request) {
   const admin = await requireAdmin();
@@ -47,7 +17,10 @@ export async function GET(req: Request) {
   const supabase = await createServiceClient();
   let query = supabase
     .from("platform_app_domains")
-    .select("*", { count: "exact" })
+    .select(
+      "id, user_id, app_id, domain, status, ssl_status, is_primary, redirect_to_primary, verified_at, activated_at, last_error, created_at, updated_at",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false })
     .range(from, from + limit - 1);
 

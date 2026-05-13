@@ -32,17 +32,7 @@ export async function POST(
     );
   }
 
-  const { error: updateErr } = await supabase
-    .from("domain_purchase_requests")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
-  }
-
   let refunded = false;
-  let refundError: string | null = null;
   const price = Number(purchase.purchase_price ?? 0);
   if (price > 0) {
     try {
@@ -56,16 +46,51 @@ export async function POST(
       });
       refunded = true;
     } catch (e) {
-      refundError = e instanceof Error ? e.message : "Refund failed";
+      const refundError = e instanceof Error ? e.message : "Refund failed";
       console.error("[admin/domains/purchases/cancel] Refund failed:", e);
       await supabase
         .from("domain_purchase_requests")
         .update({
-          last_error: `Cancelled by admin but refund failed: ${refundError}`,
+          last_error: `Admin cancellation blocked because refund failed: ${refundError}`,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
+
+      await logAdminDomainAction({
+        admin,
+        req,
+        action: "update",
+        serviceId: purchase.id,
+        serviceName: purchase.domain,
+        metadata: {
+          event: "domain_purchase_cancel_refund_failed",
+          target_user_id: purchase.user_id,
+          app_id: purchase.app_id,
+          status_preserved: purchase.status,
+          amount: price,
+          currency: purchase.currency || "USD",
+          error: refundError,
+        },
+      });
+
+      return NextResponse.json(
+        { error: `Purchase was not cancelled because refund failed: ${refundError}` },
+        { status: 500 }
+      );
     }
+  }
+
+  const { error: updateErr } = await supabase
+    .from("domain_purchase_requests")
+    .update({
+      status: "cancelled",
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
   await logAdminDomainAction({
@@ -84,13 +109,6 @@ export async function POST(
       currency: purchase.currency || "USD",
     },
   });
-
-  if (refundError) {
-    return NextResponse.json(
-      { error: `Purchase cancelled, but refund failed: ${refundError}` },
-      { status: 500 }
-    );
-  }
 
   return NextResponse.json({
     message: refunded

@@ -41,6 +41,42 @@ export async function resolveUserEmail(userId: string): Promise<string | undefin
   }
 }
 
+export async function buildUserEmailMap(userIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (!uniqueIds.length) return new Map();
+
+  const entries = await Promise.all(
+    uniqueIds.map(async (userId) => [userId, await resolveUserEmail(userId)] as const)
+  );
+
+  const map = new Map<string, string>();
+  entries.forEach(([userId, email]) => {
+    if (email) map.set(userId, email);
+  });
+  return map;
+}
+
+export async function buildAppNameMap(appIds: string[]): Promise<Map<string, { name: string; slug: string }>> {
+  const uniqueIds = [...new Set(appIds.filter(Boolean))];
+  if (!uniqueIds.length) return new Map();
+
+  try {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .from("platform_apps")
+      .select("id, name, slug")
+      .in("id", uniqueIds);
+
+    const map = new Map<string, { name: string; slug: string }>();
+    (data ?? []).forEach((app: { id: string; name: string; slug: string }) => {
+      map.set(app.id, { name: app.name, slug: app.slug });
+    });
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
 export async function logAdminDomainAction(params: {
   admin: { userId: string; email: string };
   action: "create" | "update" | "delete";
