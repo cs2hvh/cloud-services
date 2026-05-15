@@ -377,7 +377,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
   // Download logs
   const downloadLogs = useCallback(() => {
     const allLogs = logs.map(instanceLog => 
-      `=== ${instanceLog.displayName} ===\n${instanceLog.logs}${instanceLog.previousLogs ? `\n\n=== Previous Container ===\n${instanceLog.previousLogs}` : ''}`
+      `=== ${instanceLog.displayName} ===\n${instanceLog.logs}${instanceLog.previousLogs ? `\n\n=== Previous Instance ===\n${instanceLog.previousLogs}` : ''}`
     ).join('\n\n');
     
     const blob = new Blob([allLogs], { type: 'text/plain' });
@@ -518,7 +518,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                 className={`h-7 px-2 rounded-none border-white/[0.12] ${
                   showPrevious ? 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' : 'bg-white/[0.03] text-white/60 hover:text-white'
                 }`}
-                title="Show previous container logs"
+                title="Show logs before last restart"
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
               </Button>
@@ -713,7 +713,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                   </button>
                 </>
               ) : instances.some((i) => i.status === 'Pending' || !i.ready) ? (
-                <p className="text-yellow-400/70">Container is starting — logs will appear shortly</p>
+                <p className="text-yellow-400/70">Instance is starting — logs will appear shortly</p>
               ) : instances.some((i) => i.status === 'Failed') ? (
                 <p className="text-red-400/70">Instance failed to start. Check build logs for errors.</p>
               ) : streaming ? (
@@ -764,7 +764,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                     <div className="border-t border-yellow-500/20 bg-yellow-500/[0.03]">
                       <div className="flex items-center gap-2 px-4 py-2 text-[11px] text-yellow-400/70">
                         <Clock className="w-3 h-3" />
-                        Previous container (before restart)
+                        Previous instance (before restart)
                       </div>
                       <pre className="font-mono text-xs text-yellow-400/60 px-4 pb-4 whitespace-pre">
                         {instanceLog.previousLogs}

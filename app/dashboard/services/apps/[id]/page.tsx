@@ -120,9 +120,9 @@ const PLATFORM_APP_SIZE_SPECS: Record<
   SizeKey,
   { cpu: string; memory: string; replicas: number }
 > = {
-  small: { cpu: '0.5 CPU', memory: '512MB', replicas: 1 },
-  medium: { cpu: '1 CPU', memory: '1GB', replicas: 2 },
-  large: { cpu: '2 CPU', memory: '2GB', replicas: 3 },
+  small: { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
+  medium: { cpu: '0.5 CPU', memory: '512 MB', replicas: 2 },
+  large: { cpu: '1 CPU', memory: '1 GB', replicas: 3 },
 };
 
 const SECTION_META: Array<{
@@ -1300,7 +1300,7 @@ export default function AppDetailPage() {
                 <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
                   <RefreshCw className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Pod has restarted {restartCount} times. This may indicate a CrashLoop � check Runtime Logs.
+                    Your app has restarted {restartCount} times. It may be repeatedly crashing — check Runtime Logs.
                   </span>
                 </div>
               )}
@@ -1557,7 +1557,7 @@ export default function AppDetailPage() {
                           </Badge>
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Pods</p>
+                          <p className="text-xs text-white/40 mb-1">Instances</p>
                           <p className="text-xl font-bold text-white">
                             {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
                           </p>
@@ -1568,7 +1568,7 @@ export default function AppDetailPage() {
                             {restartCount}
                           </p>
                           {hasHighRestarts && (
-                            <p className="text-xs text-yellow-400/70 mt-1">Possible CrashLoop</p>
+                            <p className="text-xs text-yellow-400/70 mt-1">Repeatedly restarting</p>
                           )}
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
@@ -1582,7 +1582,7 @@ export default function AppDetailPage() {
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                             <Box className="w-4 h-4" />
-                            Running Container
+                            Running Version
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
@@ -1590,13 +1590,13 @@ export default function AppDetailPage() {
                               <p className="text-sm font-mono text-white">{details.container.imageTag || 'latest'}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Container State</p>
+                              <p className="text-xs text-white/40 mb-1">State</p>
                               <Badge className={`rounded-none text-xs ${
                                 details.container.state === 'Running' ? 'bg-green-500/20 text-green-400' :
                                 details.container.state?.includes('CrashLoop') ? 'bg-red-500/20 text-red-400' :
                                 'bg-yellow-500/20 text-yellow-400'
                               }`}>
-                                {details.container.state || 'Unknown'}
+                                {details.container.state?.includes('CrashLoop') ? 'Restarting' : details.container.state || 'Unknown'}
                               </Badge>
                             </div>
                             <div>
@@ -1642,8 +1642,8 @@ export default function AppDetailPage() {
                               </div>
                               <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
                               <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                                <p>Request: {details.container.resources.requests?.cpu || '-'}</p>
-                                <p>Limit: {details.container.resources.limits?.cpu || '-'}</p>
+                                <p>Allocated: {details.container.resources.requests?.cpu || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.cpu || '-'}</p>
                               </div>
                             </div>
                             <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
@@ -1657,8 +1657,8 @@ export default function AppDetailPage() {
                               </div>
                               <Progress value={metrics.memory_usage ?? 0} className="h-2" />
                               <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                                <p>Request: {details.container.resources.requests?.memory || '-'}</p>
-                                <p>Limit: {details.container.resources.limits?.memory || '-'}</p>
+                                <p>Allocated: {details.container.resources.requests?.memory || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.memory || '-'}</p>
                               </div>
                             </div>
                           </div>
@@ -1696,13 +1696,13 @@ export default function AppDetailPage() {
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Ingress Host</p>
+                              <p className="text-xs text-white/40 mb-1">Hostname</p>
                               <div className="flex items-center gap-1">
                                 <p className="text-xs font-mono text-white truncate flex-1">{details.network.ingressHost}</p>
                                 <button
                                   onClick={() => copyToClipboard(details.network?.ingressHost || '', 'ingress-host')}
                                   className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                                  title="Copy ingress host"
+                                  title="Copy hostname"
                                 >
                                   {copiedField === 'ingress-host' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                                 </button>
@@ -2109,7 +2109,7 @@ export default function AppDetailPage() {
                             </div>
                             <div className="flex items-center gap-2 text-white/70">
                               <Layers className="w-3 h-3" />
-                              <span>{specs.replicas} replica{specs.replicas > 1 ? 's' : ''}</span>
+                              <span>{specs.replicas} instance{specs.replicas > 1 ? 's' : ''}</span>
                             </div>
                           </div>
 
