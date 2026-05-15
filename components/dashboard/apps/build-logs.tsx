@@ -64,6 +64,17 @@ export function BuildLogsPanel({
   const [showJumpButton, setShowJumpButton] = useState(false);
   const [showJumpTopButton, setShowJumpTopButton] = useState(false);
 
+  const formatBuildStatus = (status: string): string => {
+    switch (status) {
+      case 'SUCCESS':  return 'Succeeded';
+      case 'FAILURE':  return 'Failed';
+      case 'BUILDING': return 'In Progress';
+      case 'ABORTED':  return 'Cancelled';
+      case 'UNSTABLE': return 'Unstable';
+      default:         return status;
+    }
+  };
+
   const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
     if (deployment.trigger === 'resize') {
       return `Resize #${deployment.build_number}`;
@@ -254,9 +265,14 @@ export function BuildLogsPanel({
         lineClass = 'text-blue-400';
       }
 
+      // Strip internal build system markers from displayed text
+      const displayLine = line.startsWith('[Pipeline] ')
+        ? line.slice('[Pipeline] '.length)
+        : line;
+
       // Highlight search matches
       if (searchTerm) {
-        const parts = line.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        const parts = displayLine.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
         return (
           <div key={i} className={lineClass}>
             {parts.map((part, j) =>
@@ -272,7 +288,7 @@ export function BuildLogsPanel({
         );
       }
 
-      return <div key={i} className={lineClass}>{line}</div>;
+      return <div key={i} className={lineClass}>{displayLine}</div>;
     });
   };
 
@@ -329,7 +345,7 @@ export function BuildLogsPanel({
                             : 'text-red-400'
                         }`}
                       >
-                        {d.status === 'BUILDING' ? '⟳' : '●'} {d.status}
+                        {d.status === 'BUILDING' ? '⟳' : '●'} {formatBuildStatus(d.status)}
                       </span>
                       <span className="text-white/30 font-sans">
                         {new Date(d.started_at).toLocaleDateString(undefined, {

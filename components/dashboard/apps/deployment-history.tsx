@@ -46,6 +46,28 @@ function statusColor(status: string): string {
   return "bg-yellow-500/20 text-yellow-400";
 }
 
+function formatBuildStatus(status: string): string {
+  switch (status) {
+    case "SUCCESS":  return "Succeeded";
+    case "FAILURE":  return "Failed";
+    case "BUILDING": return "In Progress";
+    case "ABORTED":  return "Cancelled";
+    case "UNSTABLE": return "Unstable";
+    default:         return status;
+  }
+}
+
+function formatTrigger(trigger: string): string {
+  switch (trigger) {
+    case "push":       return "Git Push";
+    case "manual":     return "Manual";
+    case "rollback":   return "Rollback";
+    case "resize":     return "Resize";
+    case "env_update": return "Env Update";
+    default:           return trigger.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 /** A compact single-line row for resize / env_update / other operations */
@@ -64,7 +86,7 @@ function OperationRow({
         <Box className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
         <span className="text-sm font-mono text-white/70 truncate">{label}</span>
         <Badge className={`rounded-none text-[10px] flex-shrink-0 ${statusColor(deployment.status)}`}>
-          {deployment.status}
+          {formatBuildStatus(deployment.status)}
         </Badge>
         {deployment.operation_details?.verification?.status === "degraded" && (
           <span className="text-xs text-orange-300 truncate">
@@ -113,7 +135,7 @@ function BuildRow({
         <div className="flex items-center gap-3">
           <span className="text-sm font-mono text-white">{label}</span>
           <Badge className={`rounded-none ${statusColor(deployment.status)}`}>
-            {deployment.status}
+            {formatBuildStatus(deployment.status)}
           </Badge>
           {isCurrentlyServing && (
             <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/15 text-emerald-300 text-xs">
@@ -157,8 +179,8 @@ function BuildRow({
 
       {deployment.trigger && (
         <div className="flex items-center gap-2 text-xs text-white/40 pl-1">
-          <Badge variant="outline" className="rounded-none text-xs capitalize">
-            {deployment.trigger}
+          <Badge variant="outline" className="rounded-none text-xs">
+            {formatTrigger(deployment.trigger)}
           </Badge>
         </div>
       )}
@@ -182,7 +204,7 @@ function RollbackRow({
         <Layers className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
         <span className="text-sm font-mono text-white/70 truncate">{label}</span>
         <Badge className={`rounded-none text-[10px] flex-shrink-0 ${statusColor(deployment.status)}`}>
-          {deployment.status}
+          {formatBuildStatus(deployment.status)}
         </Badge>
         {deployment.operation_details?.verification?.status === "degraded" && (
           <span className="text-xs text-orange-300 truncate">

@@ -27,9 +27,9 @@ const SIZE_ORDER: Record<string, number> = {
 
 // Size specifications for display/logging
 const SIZE_SPECS: Record<string, { cpu: string; memory: string; replicas: number }> = {
-  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1 },
-  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2 },
-  large: { cpu: "2 CPU", memory: "2GB", replicas: 3 },
+  small: { cpu: "0.25 CPU", memory: "256 MB", replicas: 1 },
+  medium: { cpu: "0.5 CPU", memory: "512 MB", replicas: 2 },
+  large: { cpu: "1 CPU", memory: "1 GB", replicas: 3 },
 };
 
 /**

@@ -248,7 +248,7 @@ export function StepConfigure({
           {/* Container port */}
           {showPortInput && (
             <div className="mt-4 border border-white/[0.08] bg-black/20 p-4">
-              <Label className="mb-2 block text-sm font-medium text-white/80">Container port</Label>
+              <Label className="mb-2 block text-sm font-medium text-white/80">Application port</Label>
               <Input
                 type="number" min="1" max="65535"
                 value={containerPort ?? ""}
@@ -262,7 +262,7 @@ export function StepConfigure({
               {!detectedPort && containerPort === undefined && (
                 <p className="mt-1.5 text-xs text-amber-300">Port not auto-detected. Confirm before deploying.</p>
               )}
-              <p className="mt-1.5 text-xs text-white/40">The port your container listens on internally.</p>
+              <p className="mt-1.5 text-xs text-white/40">The port your application listens on.</p>
             </div>
           )}
         </section>
@@ -297,7 +297,7 @@ export function StepConfigure({
                       </div>
                       <div>
                         <div className="text-sm font-semibold capitalize text-white">{opt}</div>
-                        <div className="text-xs text-white/45">{cfg.cpu} CPU · {cfg.ram} RAM · {cfg.replicas} replica{cfg.replicas > 1 ? "s" : ""}</div>
+                        <div className="text-xs text-white/45">{cfg.cpu} CPU · {cfg.ram} RAM · {cfg.replicas} instance{cfg.replicas > 1 ? "s" : ""}</div>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">

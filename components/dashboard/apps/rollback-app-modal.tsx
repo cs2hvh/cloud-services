@@ -172,7 +172,7 @@ export function RollbackAppModal({
               <div className="flex items-start gap-2 border border-amber-400/20 bg-amber-500/10 p-3 text-amber-200/85">
                 <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                 <span>
-                  This only switches the serving release image and restarts pods. It does not
+                  This only switches the serving release and restarts the application. It does not
                   revert runtime size, environment variables, domains, or project assignment. No
                   new build will be created.
                 </span>

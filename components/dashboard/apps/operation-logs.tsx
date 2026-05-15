@@ -26,6 +26,17 @@ interface OperationSummary {
   };
 }
 
+function formatBuildStatus(status: string): string {
+  switch (status) {
+    case 'SUCCESS':  return 'Succeeded';
+    case 'FAILURE':  return 'Failed';
+    case 'BUILDING': return 'In Progress';
+    case 'ABORTED':  return 'Cancelled';
+    case 'UNSTABLE': return 'Unstable';
+    default:         return status;
+  }
+}
+
 function getOperationLabel(operation: OperationSummary) {
   return getAppOperationLabel({
     buildNumber: operation.build_number,
@@ -108,7 +119,7 @@ export function OperationLogsPanel({
                       ? 'border-red-500/20 bg-red-500/10 text-red-300'
                       : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300'
                 }`}>
-                  {selectedOperation.status}
+                  {formatBuildStatus(selectedOperation.status)}
                 </Badge>
                 {selectedOperation.operation_details?.verification?.status === 'degraded' && (
                   <Badge className="rounded-none border-orange-500/20 bg-orange-500/10 text-orange-300">

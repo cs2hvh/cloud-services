@@ -66,9 +66,9 @@ export const frameworkConfigs: Record<string, { buildCommand: string; outputDir:
 };
 
 export const instanceSizeConfigs = {
-  small: { cpu: "250m", ram: "256Mi", replicas: 1 },
-  medium: { cpu: "500m", ram: "512Mi", replicas: 2 },
-  large: { cpu: "1", ram: "1Gi", replicas: 3 },
+  small: { cpu: "0.25", ram: "256 MB", replicas: 1 },
+  medium: { cpu: "0.5", ram: "512 MB", replicas: 2 },
+  large: { cpu: "1", ram: "1 GB", replicas: 3 },
 };
 
 export const STEP_META = [
