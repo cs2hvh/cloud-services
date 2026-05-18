@@ -67,7 +67,7 @@ export function parseAxiosError(error: unknown): string {
       message?: string;
     };
     const message = axiosError.response?.data?.message || axiosError.message;
-    return `DigitalOcean API error: ${message}`;
+    return `API error: ${message}`;
   }
   return error instanceof Error ? error.message : String(error);
 }

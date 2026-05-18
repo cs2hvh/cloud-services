@@ -6,11 +6,59 @@ import {
   CreateKubernetesClusterRequestSchema,
   KubernetesClusterDeleteResponseSchema,
   KubernetesClusterListResponseSchema,
+  KubernetesOptionsResponseSchema,
   KubernetesClusterResponseSchema,
+  KubernetesWorkerDeleteResponseSchema,
   UpdateKubernetesClusterRequestSchema,
 } from '@/lib/openapi/schemas/kubernetes';
 
 export function registerKubernetesPaths(registry: OpenAPIRegistry) {
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/kubernetes/options',
+  tags: ['Kubernetes'],
+  summary: 'List Kubernetes options',
+  description: 'Returns supported Kubernetes versions, regions, and node sizes.',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'Kubernetes options',
+      content: {
+        'application/json': {
+          schema: KubernetesOptionsResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' },
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } },
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch Kubernetes options' },
+        },
+      },
+    },
+  },
+});
 
 // GET /api/v1/kubernetes — List all Kubernetes clusters
 registry.registerPath({
@@ -53,6 +101,171 @@ registry.registerPath({
         'application/json': {
           schema: ErrorResponseSchema,
           example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch Kubernetes clusters' },
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/kubernetes/{id}/kubeconfig',
+  tags: ['Kubernetes'],
+  summary: 'Retrieve kubeconfig',
+  description: 'Returns decrypted kubeconfig content for a cluster.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({
+        example: '23549dc5-53ee-4ff2-904d-a59250065545',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Kubeconfig retrieved as raw YAML/plain text',
+      content: {
+        'text/plain': {
+          schema: z.string().openapi({
+            example: "apiVersion: v1\nkind: Config\nclusters:\n- name: do-nyc1-prod-cluster-01\n  cluster:\n    server: https://example.k8s.ondigitalocean.com",
+          }),
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid cluster ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } },
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' },
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'FORBIDDEN', message: 'You do not have permission to access this cluster' },
+        },
+      },
+    },
+    404: {
+      description: 'Cluster or kubeconfig not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'NOT_FOUND', message: 'Kubeconfig not found' },
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } },
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'INTERNAL_ERROR', message: 'Failed to fetch kubeconfig' },
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/kubernetes/{id}/workers/{dropletId}',
+  tags: ['Kubernetes'],
+  summary: 'Delete worker node',
+  description: 'Deletes a worker node from an existing Kubernetes cluster by droplet ID.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({
+        example: '23549dc5-53ee-4ff2-904d-a59250065545',
+      }),
+      dropletId: z.string().regex(/^\d+$/).openapi({
+        example: '539342404',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Worker node deleted',
+      content: {
+        'application/json': {
+          schema: KubernetesWorkerDeleteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'INVALID_ID', message: 'Invalid dropletId format', details: { field: 'dropletId' } },
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' },
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this cluster' },
+        },
+      },
+    },
+    404: {
+      description: 'Cluster or worker not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'NOT_FOUND', message: 'Worker node not found' },
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } },
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'DELETE_FAILED', message: 'Failed to delete worker node' },
         },
       },
     },

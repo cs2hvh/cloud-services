@@ -128,7 +128,8 @@ export const clusterLifecycleOperations = {
         names: nodeNames,
         region: request.region,
         size: request.node_pool.size,
-        image: "ubuntu-25-04-x64",
+        // Use an LTS image slug that is broadly available across regions.
+        image: "ubuntu-24-04-x64",
         backups: false,
         ipv6: true,
         monitoring: true,
@@ -869,7 +870,7 @@ export const clusterLifecycleOperations = {
     } catch (doErr: unknown) {
       const doRes = (doErr as { response?: { data?: unknown; status?: number } })?.response;
       console.error("[addNode] DigitalOcean API error:", doRes?.status, JSON.stringify(doRes?.data));
-      return { success: false, error: `DigitalOcean API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
+      return { success: false, error: `API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
     }
 
     if (response.status !== 202) {
