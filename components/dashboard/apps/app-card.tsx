@@ -20,14 +20,14 @@ import {
   AlertTriangle,
   TrendingUp,
   HardDrive,
-  Server,
+  // Server,
   Network,
-  Container,
+  // Container,
   Shield,
   Layers,
   RefreshCw,
-  Copy,
-  Check,
+  // Copy,
+  // Check,
   X,
   Eye,
 } from 'lucide-react';
@@ -76,7 +76,7 @@ export function AppCard({
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
-  const [copiedField, setCopiedField] = useState<string | null>(null);
+  // const [copiedField, setCopiedField] = useState<string | null>(null);
   const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
 
   // When the card is expanded and the active build number changes (new build started),
@@ -116,11 +116,11 @@ export function AppCard({
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  // const copyToClipboard = (text: string, field: string) => {
+  //   navigator.clipboard.writeText(text);
+  //   setCopiedField(field);
+  //   setTimeout(() => setCopiedField(null), 2000);
+  // };
 
   const canRollback = !!app.can_rollback;
   const isAppBuilding = app.status === 'building';

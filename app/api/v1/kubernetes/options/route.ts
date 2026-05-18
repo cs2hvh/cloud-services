@@ -5,10 +5,10 @@ import { vmLocations } from "@/config/locations";
 import { Products } from "@/lib/supabase/queries/products";
 import type { Tables } from "@/lib/supabase/types";
 
-type DoKubernetesOption = {
-  slug: string;
-  kubernetes_versions: string[];
-};
+// type DoKubernetesOption = {
+//   slug: string;
+//   kubernetes_versions: string[];
+// };
 
 type DoRegion = {
   slug: string;

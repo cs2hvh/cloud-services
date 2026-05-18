@@ -4,6 +4,7 @@ import { v1Forbidden, v1NotFound } from "@/lib/api/v1-errors";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { decryptKubeconfig } from "@/lib/services/kubernetes/helpers";
 import type { EncryptedData } from "@/config/functions";
+import { NextResponse } from "next/server";
 
 function normalizeKubeconfig(raw: unknown): string | null {
   if (!raw) return null;
@@ -58,7 +59,7 @@ export const GET = withV1Auth("kubernetes:kubeconfig:read", async (_req, auth, c
     return v1Error("NOT_FOUND", 404, "Kubeconfig not found");
   }
 
-  return new Response(kubeconfig, {
+  return new NextResponse(kubeconfig, {
     status: 200,
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
