@@ -61,7 +61,7 @@ export function AppCard({
   build,
   logs,
   logsLoading,
-  // logsError,
+  logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
@@ -84,7 +84,7 @@ export function AppCard({
   useEffect(() => {
     const prev = prevBuildNumberRef.current;
     prevBuildNumberRef.current = build?.number;
-    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== build.number) {
       onFetchLogs(build.number);
     }
   }, [build?.number, isExpanded, activeTab, onFetchLogs]);
@@ -96,15 +96,10 @@ export function AppCard({
   });
 
   const handleToggleLogs = () => {
-    // Always try to fetch logs when expanding IF we have a build number
-    if (!isExpanded) {
-      if (build?.number) {
-        onFetchLogs(build.number);
-      } else {
-        // If no build info yet, try build #1 (most apps will have at least one build)
-        onFetchLogs(1);
-      }
+    if (!isExpanded && build?.number) {
+      onFetchLogs(build.number);
     }
+    // If build info isn't available yet, the useEffect above will fetch once it arrives.
     setActiveTab('logs');
     onToggleLogs();
   };
@@ -393,6 +388,7 @@ export function AppCard({
                 buildInfo={build ?? null}
                 buildLogs={logs ?? ''}
                 initialLoading={!!logsLoading}
+                logsError={logsError}
                 appName={app.name}
                 fetchBuildLogs={(_, buildNumber) => {
                   onFetchLogs(buildNumber);

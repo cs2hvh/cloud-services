@@ -39,6 +39,7 @@ interface BuildLogsPanelProps {
   buildLogs: string;
   /** Show skeleton instead of logs — only for initial/build-switch fetch, not live polling */
   initialLoading?: boolean;
+  logsError?: string;
   appName: string;
   // raw: true = raw Jenkins log (used while building); false = deployment-filtered view.
   // append: true = incremental append; false = full replacement.
@@ -52,6 +53,7 @@ export function BuildLogsPanel({
   buildInfo,
   buildLogs,
   initialLoading = false,
+  logsError,
   appName,
   fetchBuildLogs,
   deployments = [],
@@ -241,8 +243,12 @@ export function BuildLogsPanel({
     if (!filteredLogs) {
       return (
         <div className="flex items-center gap-2 text-white/30 italic">
-          {buildInfo?.building ? (
+          {logsError ? (
+            <span className="text-red-400/70 not-italic">{logsError}</span>
+          ) : buildInfo?.building ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" />Waiting for build output…</>
+          ) : buildInfo === null ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Fetching build information…</>
           ) : (
             'No logs available'
           )}
