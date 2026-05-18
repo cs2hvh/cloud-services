@@ -35,6 +35,7 @@ async function processBuildJob(job: Job<BuildJobData>): Promise<void> {
     deploy_branch?: string | null;
     framework?: string | null;
     size?: string | null;
+    port?: number | null;
   };
 
   if (!app.repository_url) {
@@ -53,6 +54,7 @@ async function processBuildJob(job: Job<BuildJobData>): Promise<void> {
     branch: targetBranch,
     framework: app.framework ?? 'nodejs',
     size: app.size ?? 'small',
+    containerPort: app.port ?? undefined,
     commitSha: sourceHash,
     deliveryId: deliveryId,
   });

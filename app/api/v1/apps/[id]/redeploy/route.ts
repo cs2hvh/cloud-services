@@ -102,7 +102,8 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
           app.framework || undefined,
           app.size || "small",
           "manual",
-          envVars
+          envVars,
+          app.port ?? undefined
         );
 
         const execution = await jenkins.triggerBuild({
