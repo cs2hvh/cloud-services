@@ -160,7 +160,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       }
     } catch (e) { console.error("Framework detection error:", e); }
     finally { setDetectingFramework(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Effects ──────────────────────────────────────────────────
