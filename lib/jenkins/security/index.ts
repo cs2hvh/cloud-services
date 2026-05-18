@@ -323,7 +323,7 @@ const defaultConfig: SecurityConfig = {
  * Runs AFTER Docker image is built, BEFORE deployment
  * Uses dedicated 'trivy' container from Jenkins pod template (1Gi memory)
  */
-export function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}): string {
+function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}): string {
   const { failOnCritical = false, failOnHigh = false } = config;
   
   // Determine severity levels based on config
@@ -440,7 +440,7 @@ ${generateLoggingHelpers()}
  * Generate dependency vulnerability scan stage
  * Runs BEFORE Docker build to catch issues early
  */
-export function generateDependencyScanStage(language: 'node' | 'python' | 'docker'): string {
+function generateDependencyScanStage(language: 'node' | 'python' | 'docker'): string {
   // Generic dependency scan - auto-detect package manager
   if (language === 'docker') {
     return `
@@ -717,7 +717,7 @@ ${generateLoggingHelpers()}
  * Generate Dockerfile linting stage (Hadolint)
  * Works for BOTH user-provided and auto-generated Dockerfiles
  */
-export function generateDockerfileLintStage(): string {
+function generateDockerfileLintStage(): string {
   const hadolintVersion = SECURITY_TOOL_VERSIONS.hadolint.version;
   const hadolintSha256 = SECURITY_TOOL_VERSIONS.hadolint.sha256;
   
@@ -854,7 +854,7 @@ ${generateLoggingHelpers()}
  * - Users can add .gitleaks.toml to exclude specific patterns
  * - Platform business > false positive blocking
  */
-export function generateSecretScanStage(): string {
+function generateSecretScanStage(): string {
   const gitleaksVersion = SECURITY_TOOL_VERSIONS.gitleaks.version;
   const gitleaksSha256 = SECURITY_TOOL_VERSIONS.gitleaks.sha256;
   
@@ -1006,7 +1006,7 @@ TOML_EOF
  * Generate static code analysis stage (ESLint for Node, pylint for Python)
  * Checks for code quality and potential security issues
  */
-export function generateStaticAnalysisStage(language: 'node' | 'python' | 'docker'): string {
+function generateStaticAnalysisStage(language: 'node' | 'python' | 'docker'): string {
   // Generic security checks for unknown languages (works for Go, Rust, Elixir, PHP, Java, Ruby, etc.)
   if (language === 'docker') {
     return `
@@ -1268,7 +1268,7 @@ ${generateLoggingHelpers()}
  * Generate Kubernetes manifest validation stage (kubesec)
  * Checks for security misconfigurations in K8s manifests
  */
-export function generateK8sManifestValidationStage(): string {
+function generateK8sManifestValidationStage(): string {
   return `
     stage('Security: K8s Manifest Validation') {
       steps {

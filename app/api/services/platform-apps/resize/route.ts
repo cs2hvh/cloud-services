@@ -75,12 +75,11 @@ export async function POST(req: NextRequest) {
     const app = existing.data;
 
     const currentSize = app.size || "small";
-    // Validate upsize only
     if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
       return NextResponse.json(
-        { 
+        {
           error: "Invalid resize operation",
-          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is allowed.`,
+          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is supported.`,
           current_size: currentSize,
           requested_size: new_size,
         },

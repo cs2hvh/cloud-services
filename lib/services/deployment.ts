@@ -85,6 +85,8 @@ export class DeploymentService {
       case 'flask':
       case 'fastapi':
         return 8000;
+      case 'dockerfile':
+      case 'custom':
       case 'nodejs':
       case 'node':
       case 'express':
