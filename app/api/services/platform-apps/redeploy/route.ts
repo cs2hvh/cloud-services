@@ -148,7 +148,8 @@ export async function POST(req: NextRequest) {
             app.framework || undefined,
             app.size || "small",
             "manual",
-            envVars
+            envVars,
+            app.port ?? undefined,
           );
           console.log(`[Redeploy] Pipeline XML updated successfully`);
 

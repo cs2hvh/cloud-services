@@ -32,6 +32,7 @@ interface Props {
   size: string;
   autoDeploy: boolean;
   envVars: EnvVar[];
+  containerPort?: number;
   isLoading: boolean;
   onPrev: () => void;
   onSubmit: () => void;
@@ -39,7 +40,7 @@ interface Props {
 
 export function StepReview({
   projects, pricing, selectedProject, appName, selectedRepoData,
-  selectedBranch, framework, size, autoDeploy, envVars, isLoading, onPrev, onSubmit,
+  selectedBranch, framework, size, autoDeploy, envVars, containerPort, isLoading, onPrev, onSubmit,
 }: Props) {
   const sizeConfig = instanceSizeConfigs[size as keyof typeof instanceSizeConfigs];
   const sizePrice = pricing?.[size];
@@ -64,6 +65,9 @@ export function StepReview({
           <Row label="Repository" value={selectedRepoData?.fullName ?? "—"} />
           <Row label="Branch" value={selectedBranch} />
           <Row label="Framework" value={framework} />
+          {containerPort !== undefined && (
+            <Row label="App port" value={<span className="font-mono">{containerPort}</span>} />
+          )}
           <Row
             label="Instance"
             value={sizeConfig ? `${size.charAt(0).toUpperCase()}${size.slice(1)} — ${sizeConfig.cpu} CPU / ${sizeConfig.ram} RAM` : size}
