@@ -5,9 +5,12 @@ import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries"
 import jenkins from "@/lib/jenkins";
 import { getAppHistoryType, isReleaseHistoryEntry, parseOperationDetails } from "@/lib/app-operations";
 import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
+import {
+  clampDeploymentHistoryLimit,
+  getPlatformAppRetentionPolicy,
+} from "@/lib/platform-apps/retention";
 
-// Limit for deployment history - matches UI pagination and reduces API calls
-const DEPLOYMENT_HISTORY_LIMIT = 10;
+const RETENTION_POLICY = getPlatformAppRetentionPolicy();
 
 interface BuildInfo {
   build_number: number | null;
@@ -51,6 +54,12 @@ export async function GET(req: NextRequest) {
     // Get app_id from query params
     const { searchParams } = new URL(req.url);
     const appId = searchParams.get("app_id");
+    const rawLimit = searchParams.get("limit");
+    const requestedLimit = rawLimit === null ? undefined : Number(rawLimit);
+    const deploymentHistoryLimit = clampDeploymentHistoryLimit(
+      Number.isFinite(requestedLimit) ? requestedLimit : undefined,
+      RETENTION_POLICY
+    );
 
     if (!appId) {
       return NextResponse.json(
@@ -86,7 +95,7 @@ export async function GET(req: NextRequest) {
     const deployments: BuildInfo[] = [];
 
     // First, get deployment records from database (has failure_reason)
-    const dbDeployments = await Platform_App_Deployments.list_by_app(appId, DEPLOYMENT_HISTORY_LIMIT);
+    const dbDeployments = await Platform_App_Deployments.list_by_app(appId, deploymentHistoryLimit);
     const dbDeploymentMap = new Map<number, typeof dbDeployments[0]>();
     for (const dep of dbDeployments) {
       if (typeof dep.build_number === 'number') {
@@ -101,7 +110,7 @@ export async function GET(req: NextRequest) {
       
       if (jobInfo && jobInfo.builds && Array.isArray(jobInfo.builds)) {
         // Get details for each build
-        const buildPromises = jobInfo.builds.slice(0, DEPLOYMENT_HISTORY_LIMIT).map(async (build: { number: number }) => {
+        const buildPromises = jobInfo.builds.slice(0, deploymentHistoryLimit).map(async (build: { number: number }) => {
           try {
             const buildInfo = await jenkins.build.get(jobName, build.number);
             
@@ -278,6 +287,14 @@ export async function GET(req: NextRequest) {
       app_name: app.name,
       deployments,
       total: deployments.length,
+      retention_policy: {
+        visible_limit: deploymentHistoryLimit,
+        max_loadable: RETENTION_POLICY.deploymentHistory.maxLoadable,
+        rollback_successful_builds: RETENTION_POLICY.rollback.successfulBuilds,
+        successful_log_days: RETENTION_POLICY.logs.successfulBuildDays,
+        failed_log_days: RETENTION_POLICY.logs.failedBuildDays,
+        production_log_days: RETENTION_POLICY.logs.productionBuildDays,
+      },
     });
   } catch (err: unknown) {
     logError("services/platform-apps/deployments", err);

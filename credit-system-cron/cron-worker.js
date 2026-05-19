@@ -1544,6 +1544,41 @@ cron.schedule("0 9 * * *", async () => {
   }
 });
 
+// -----------------------------
+// PLATFORM APP BUILD LOG CLEANUP
+// Runs daily — removes expired archived build logs from private storage.
+// Deployment metadata remains available; only stored log objects expire.
+// -----------------------------
+cron.schedule("20 3 * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[platform-build-log-cleanup] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[platform-build-log-cleanup] Running cleanup:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/services/platform-apps/cleanup-logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 100 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[platform-build-log-cleanup] Cleanup failed:", data);
+    } else {
+      console.log("[platform-build-log-cleanup] Cleanup completed:", data);
+    }
+  } catch (error) {
+    console.error("[platform-build-log-cleanup] Cleanup error:", error.message);
+  }
+});
+
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +
@@ -1563,4 +1598,3 @@ console.log(
     : "disabled"
 );
 console.log("Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());
-

@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
+import { PlatformAppLogRetentionService } from "@/lib/services/platform-app-log-retention";
 import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { createServiceClient } from "@/lib/supabase/server";
+import { limitByUser } from "@/lib/cooldown/userbased";
+
+async function getOwnedAppId(userId: string, appName: string): Promise<string | null> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("platform_apps")
+    .select("id")
+    .eq("name", appName)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data?.id ?? null;
+}
 
 /**
  * GET /api/jenkins/build-logs?app=myapp&build=1&start=0
@@ -25,6 +41,18 @@ export async function GET(req: NextRequest) {
     const auth = await authenticateUser();
     if (!auth.authenticated) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = await limitByUser(auth.user!.id, {
+      prefix: "rl:jenkins-build-logs",
+      limit: 180,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
     }
 
     if (!appName) {
@@ -51,11 +79,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const appId = await getOwnedAppId(auth.user!.id, appName);
+    if (!appId) {
+      return NextResponse.json({ error: "App not found" }, { status: 404 });
+    }
+
     const deploymentOnly = searchParams.get("deployment") === "true";
 
     if (deploymentOnly) {
-      const raw = await JenkinsService.getDeploymentLog(appName, buildNum);
-      const logs = raw ?? '';
+      const cached = await PlatformAppLogRetentionService.retrieve(appId, buildNum);
+      const logs = cached ?? await JenkinsService.getDeploymentLog(appName, buildNum) ?? '';
       return NextResponse.json({
         app_name: appName,
         build_number: buildNum,
@@ -63,6 +96,7 @@ export async function GET(req: NextRequest) {
         logs,
         next_start: startOffset + logs.length,
         more: false,
+        cached: cached !== null,
       });
     }
 

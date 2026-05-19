@@ -7,6 +7,7 @@ import { AppStatusService } from "./app-status";
 import { KubernetesInfoService } from "./kubernetes-info";
 import { AppOperationFinalizer } from "@/lib/app-operations";
 import { extractDigestFromImageID, parseImageRef } from "@/lib/container-image/image-ref";
+import { PlatformAppLogRetentionService } from "@/lib/services/platform-app-log-retention";
 import {
   BUILD_POLLING_FINALIZATION_GRACE_MS,
   BUILD_POLLING_HEALTH_CHECK_INTERVAL_MS,
@@ -211,6 +212,7 @@ export class BuildPollingService {
       failureReason?: string | null;
       allowedCurrentStatuses: Array<'building' | 'success' | 'failed'>;
       resizeContext?: BuildPollConfig['resizeContext'];
+      archiveLog?: boolean;
     }
   ): Promise<void> {
     const {
@@ -222,6 +224,7 @@ export class BuildPollingService {
       status,
       failureReason,
       allowedCurrentStatuses,
+      archiveLog,
     } = params;
 
     // For resize, operationId is the identity; for all others, buildNumber is required
@@ -242,6 +245,41 @@ export class BuildPollingService {
       imageDigest: imageIdentity.image_digest,
       allowedCurrentStatuses: allowedCurrentStatuses,
       allowLegacyCreate: false,
+    });
+
+    if (archiveLog) {
+      this.archiveBuildLogAfterFinalization({
+        appId,
+        appName,
+        buildNumber,
+        trigger,
+        status,
+      });
+    }
+  }
+
+  private static archiveBuildLogAfterFinalization(params: {
+    appId: string;
+    appName: string;
+    buildNumber?: number;
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
+    status: 'success' | 'failed';
+  }): void {
+    if (
+      !params.buildNumber ||
+      (params.trigger !== 'manual' && params.trigger !== 'webhook')
+    ) {
+      return;
+    }
+
+    void PlatformAppLogRetentionService.archiveBuildLog({
+      appId: params.appId,
+      appName: params.appName,
+      buildNumber: params.buildNumber,
+      status: params.status,
+      production: params.trigger === 'manual',
+    }).catch((archiveError) => {
+      console.error('[BuildPolling] Build log archival failed:', archiveError);
     });
   }
 
@@ -458,6 +496,7 @@ export class BuildPollingService {
   ): Promise<void> {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
+    const shouldArchiveReleaseLog = trigger === 'manual' || trigger === 'webhook';
 
     // If build failed, delegate to finalizer (single status writer)
     if (buildStatus.status === 'failed' || buildStatus.result !== 'SUCCESS') {
@@ -473,6 +512,7 @@ export class BuildPollingService {
         failureReason,
         allowedCurrentStatuses: ['building'],
         resizeContext,
+        archiveLog: shouldArchiveReleaseLog,
       });
       if (trigger === 'resize' && resizeContext && userId) {
         await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
@@ -504,6 +544,7 @@ export class BuildPollingService {
             failureReason,
             allowedCurrentStatuses: ['building', 'success'],
             resizeContext,
+            archiveLog: shouldArchiveReleaseLog,
           });
           if (userId) {
             await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
@@ -526,6 +567,7 @@ export class BuildPollingService {
         status: 'success',
         allowedCurrentStatuses: ['building'],
         resizeContext,
+        archiveLog: shouldArchiveReleaseLog,
       });
       // Audit log fires after finalization so it only records confirmed outcomes
       if (trigger === 'resize' && resizeContext && userId) {
@@ -550,6 +592,7 @@ export class BuildPollingService {
         failureReason,
         allowedCurrentStatuses: ['building', 'success'],
         resizeContext,
+        archiveLog: shouldArchiveReleaseLog,
       });
       if (trigger === 'resize' && resizeContext && userId) {
         await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
@@ -659,6 +702,7 @@ export class BuildPollingService {
       failureReason,
       allowedCurrentStatuses: ['building'],
       resizeContext,
+      archiveLog: trigger === 'manual' || trigger === 'webhook',
     });
   }
 

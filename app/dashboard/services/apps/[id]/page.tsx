@@ -71,6 +71,7 @@ import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-edit
 import { DeploymentHistory } from '@/components/dashboard/apps/deployment-history';
 import { AppStatusBadge } from '@/components/dashboard/apps/app-status-badge';
 import { generateIdempotencyKey } from '@/lib/idempotency';
+import { getPlatformAppRetentionPolicy } from '@/lib/platform-apps/retention';
 
 
 
@@ -199,6 +200,8 @@ const SECTION_META: Array<{
   },
 ];
 
+const PLATFORM_APP_RETENTION_POLICY = getPlatformAppRetentionPolicy();
+
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -282,7 +285,7 @@ export default function AppDetailPage() {
     refetch: refetchDeployments,
   } = useRealtimeDeployments({ 
     appId,
-    limit: 50,
+    limit: PLATFORM_APP_RETENTION_POLICY.deploymentHistory.maxLoadable,
     enabled: !!app 
   });
 

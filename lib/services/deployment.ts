@@ -9,6 +9,7 @@ import { InfrastructureCleanupService } from "./infrastructure-cleanup";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { randomBytes } from "crypto";
 import { AppReleaseBuildService, JenkinsBuildAdapter } from "@/lib/app-operations";
+import { PlatformAppLogRetentionService } from "@/lib/services/platform-app-log-retention";
 
 // Generate a random ID
 function generateId(length: number = 10): string {
@@ -326,6 +327,20 @@ export class DeploymentService {
 
       // Clean up custom domains BEFORE database deletion (to avoid cascade)
       await this.cleanupCustomDomains(appId, app.name);
+
+      try {
+        const logCleanup = await PlatformAppLogRetentionService.deleteBuildLogsForApp(appId);
+        if (logCleanup.deletedObjects > 0) {
+          console.log(
+            `[DeploymentService] Deleted ${logCleanup.deletedObjects} archived build log object(s)`
+          );
+        }
+      } catch (logCleanupError) {
+        console.warn(
+          `[DeploymentService] Build log storage cleanup failed for ${appId}:`,
+          logCleanupError
+        );
+      }
 
       // Delete from database (will cascade to platform_app_domains)
       const deleteResult = isAdmin
