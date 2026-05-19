@@ -38,619 +38,369 @@ function ArrowGlyph({ className = "" }: { className?: string }) {
     );
 }
 
-// ─── Premium GPU silicon illustration ────────────────────────────
-// Hand-crafted top-down view of a GPU package: substrate, four
-// HBM memory stacks, a central die with a grid of compute blocks,
-// pin connectors along the bottom edge, surface PCB traces, and a
-// brand-blue glow halo from underneath. A faint highlight sweeps
-// across the surface every ~9 seconds to simulate ambient light.
-function ChipIllustration({
-    suffix = "main",
-    width = 560,
-    height = 380,
-    label = "AHURA",
-    sublabel = "AH-100 · SXM5",
-    interactive = true,
+// ─── Custom service marks (no lucide) ────────────────────────────
+// Hand-drawn 12×12 monoline glyphs — distinctive per service but
+// share one visual language: thin strokes, square caps, no fills.
+function ServiceMark({
+    kind,
+    className = "",
 }: {
-    suffix?: string;
-    width?: number;
-    height?: number;
-    label?: string;
-    sublabel?: string;
-    interactive?: boolean;
+    kind:
+        | "gpu"
+        | "compute"
+        | "k8s"
+        | "database"
+        | "storage"
+        | "app"
+        | "agent"
+        | "network";
+    className?: string;
 }) {
-    const id = `chip-${suffix}`;
+    const common = {
+        stroke: "currentColor",
+        strokeWidth: 1,
+        fill: "none",
+        strokeLinecap: "square" as const,
+        strokeLinejoin: "miter" as const,
+    };
+    switch (kind) {
+        case "gpu":
+            // outer pkg + inner die + 4 corner dots
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <rect x="1" y="1" width="10" height="10" {...common} />
+                    <rect x="3.5" y="3.5" width="5" height="5" {...common} />
+                    <circle cx="1" cy="1" r="0.4" fill="currentColor" />
+                    <circle cx="11" cy="1" r="0.4" fill="currentColor" />
+                    <circle cx="1" cy="11" r="0.4" fill="currentColor" />
+                    <circle cx="11" cy="11" r="0.4" fill="currentColor" />
+                </svg>
+            );
+        case "compute":
+            // stacked rectangles (servers)
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <rect x="1" y="2" width="10" height="2.5" {...common} />
+                    <rect x="1" y="5.5" width="10" height="2.5" {...common} />
+                    <rect x="1" y="9" width="10" height="1.5" {...common} />
+                    <circle cx="3" cy="3.25" r="0.35" fill="currentColor" />
+                    <circle cx="3" cy="6.75" r="0.35" fill="currentColor" />
+                </svg>
+            );
+        case "k8s":
+            // hexagonal node with 6 spokes
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <polygon
+                        points="6,1.5 10,3.75 10,8.25 6,10.5 2,8.25 2,3.75"
+                        {...common}
+                    />
+                    <circle cx="6" cy="6" r="1.3" {...common} />
+                </svg>
+            );
+        case "database":
+            // 3 stacked ellipses (cylinder)
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <ellipse cx="6" cy="2.5" rx="4" ry="1.2" {...common} />
+                    <path d="M2 2.5 V 9.5" {...common} />
+                    <path d="M10 2.5 V 9.5" {...common} />
+                    <path d="M2 5.5 Q 6 7 10 5.5" {...common} />
+                    <path d="M2 9.5 Q 6 11 10 9.5" {...common} />
+                </svg>
+            );
+        case "storage":
+            // 4 cubes in 2×2
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <rect x="1.5" y="1.5" width="3.5" height="3.5" {...common} />
+                    <rect x="7" y="1.5" width="3.5" height="3.5" {...common} />
+                    <rect x="1.5" y="7" width="3.5" height="3.5" {...common} />
+                    <rect x="7" y="7" width="3.5" height="3.5" {...common} />
+                </svg>
+            );
+        case "app":
+            // arrow up out of box (deploy)
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <path d="M2 7 V 11 H 10 V 7" {...common} />
+                    <path d="M6 9 V 1.5 M3 4.5 L 6 1.5 L 9 4.5" {...common} />
+                </svg>
+            );
+        case "agent":
+            // node + 3 connection arms
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <circle cx="6" cy="6" r="2" {...common} />
+                    <path d="M6 4 V 1" {...common} />
+                    <path d="M4 7 L 1.5 10" {...common} />
+                    <path d="M8 7 L 10.5 10" {...common} />
+                    <circle cx="6" cy="1" r="0.6" fill="currentColor" />
+                    <circle cx="1.5" cy="10" r="0.6" fill="currentColor" />
+                    <circle cx="10.5" cy="10" r="0.6" fill="currentColor" />
+                </svg>
+            );
+        case "network":
+        default:
+            // shield outline
+            return (
+                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+                    <path
+                        d="M6 1.5 L 10.5 3 V 6.5 Q 10.5 9.5 6 10.5 Q 1.5 9.5 1.5 6.5 V 3 Z"
+                        {...common}
+                    />
+                </svg>
+            );
+    }
+}
+
+// ─── Premium platform mockup — multi-service running workloads ──
+// A clean dashboard panel showing the actual product: a list of
+// running workloads spanning every service tier on the platform.
+// Conveys breadth (GPU + DB + K8s + App + Storage + Compute) and
+// what the product actually does, without filling the visual with
+// nested boxes.
+type Workload = {
+    kind: Parameters<typeof ServiceMark>[0]["kind"];
+    service: string;
+    spec: string;
+    price: string;
+    accent?: boolean;
+};
+
+const WORKLOADS: Workload[] = [
+    {
+        kind: "gpu",
+        service: "GPU pod",
+        spec: "H200 SXM · 141 GB",
+        price: "$3.99/hr",
+        accent: true,
+    },
+    {
+        kind: "database",
+        service: "Database",
+        spec: "Postgres 16 · pro",
+        price: "$0.18/hr",
+    },
+    {
+        kind: "k8s",
+        service: "Kubernetes",
+        spec: "prod-cluster · 6 nodes",
+        price: "$0.04/n·hr",
+    },
+    {
+        kind: "app",
+        service: "App deploy",
+        spec: "support-bot · main",
+        price: "$0.012/hr",
+    },
+    {
+        kind: "storage",
+        service: "Object storage",
+        spec: "models · 2.4 TB",
+        price: "$0.02/GB",
+    },
+];
+
+function PlatformMockup() {
     return (
-        <svg
-            viewBox="0 0 560 380"
-            width={width}
-            height={height}
-            preserveAspectRatio="xMidYMid meet"
-            className="h-auto w-full max-w-full"
-            aria-hidden="true"
-            xmlns="http://www.w3.org/2000/svg"
+        <div
+            className="relative overflow-hidden border border-white/[0.08] bg-[#0a0d14]"
+            style={{
+                boxShadow:
+                    "0 0 0 1px rgba(255,255,255,0.015), 0 40px 100px -30px rgba(0,149,255,0.28), 0 20px 60px -20px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.03)",
+            }}
         >
-            <defs>
-                <linearGradient id={`${id}-substrate`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#0e1422" />
-                    <stop offset="0.6" stopColor="#0a0f1a" />
-                    <stop offset="1" stopColor="#070b14" />
-                </linearGradient>
-                <linearGradient id={`${id}-mem`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#1d232f" />
-                    <stop offset="0.5" stopColor="#10141d" />
-                    <stop offset="1" stopColor="#1a1f2a" />
-                </linearGradient>
-                <linearGradient id={`${id}-die`} x1="0" y1="0" x2="0.6" y2="1">
-                    <stop offset="0" stopColor="#1a2230" />
-                    <stop offset="1" stopColor="#0c111c" />
-                </linearGradient>
-                <linearGradient id={`${id}-pin`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#c7ccd6" />
-                    <stop offset="0.5" stopColor="#52596a" />
-                    <stop offset="1" stopColor="#9aa1ad" />
-                </linearGradient>
-                <radialGradient
-                    id={`${id}-glow`}
-                    cx="0.5"
-                    cy="0.5"
-                    r="0.5"
-                    fx="0.5"
-                    fy="0.5"
-                >
-                    <stop offset="0" stopColor={BRAND} stopOpacity="0.55" />
-                    <stop offset="0.6" stopColor={BRAND} stopOpacity="0.10" />
-                    <stop offset="1" stopColor={BRAND} stopOpacity="0" />
-                </radialGradient>
-                <linearGradient id={`${id}-sweep`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0" stopColor="#ffffff" stopOpacity="0" />
-                    <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.06" />
-                    <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-                </linearGradient>
-                <linearGradient id={`${id}-edge`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0" stopColor={BRAND} stopOpacity="0.5" />
-                    <stop offset="0.5" stopColor={BRAND} stopOpacity="0.05" />
-                    <stop offset="1" stopColor={BRAND} stopOpacity="0.5" />
-                </linearGradient>
-                <pattern
-                    id={`${id}-trace`}
-                    x="0"
-                    y="0"
-                    width="14"
-                    height="14"
-                    patternUnits="userSpaceOnUse"
-                >
-                    <path
-                        d="M0 7 H14"
-                        stroke="rgba(120,180,255,0.045)"
-                        strokeWidth="0.5"
-                    />
-                    <path
-                        d="M7 0 V14"
-                        stroke="rgba(120,180,255,0.035)"
-                        strokeWidth="0.5"
-                    />
-                </pattern>
-                <filter
-                    id={`${id}-soft`}
-                    x="-50%"
-                    y="-50%"
-                    width="200%"
-                    height="200%"
-                >
-                    <feGaussianBlur stdDeviation="2" />
-                </filter>
-            </defs>
-
-            {/* Underlying floor glow */}
-            <ellipse
-                cx="280"
-                cy="345"
-                rx="230"
-                ry="22"
-                fill={`url(#${id}-glow)`}
-                opacity="0.85"
-            />
-
-            {/* Substrate / PCB */}
-            <g>
-                <rect
-                    x="40"
-                    y="50"
-                    width="480"
-                    height="280"
-                    rx="4"
-                    fill={`url(#${id}-substrate)`}
-                    stroke="rgba(255,255,255,0.06)"
-                    strokeWidth="1"
-                />
-                {/* Trace grid */}
-                <rect
-                    x="40"
-                    y="50"
-                    width="480"
-                    height="280"
-                    rx="4"
-                    fill={`url(#${id}-trace)`}
-                />
-                {/* Curved decorative traces */}
-                <path
-                    d="M 60 80 H 130 Q 150 80 150 100 V 130"
-                    stroke="rgba(0,149,255,0.18)"
-                    strokeWidth="0.8"
-                    fill="none"
-                />
-                <path
-                    d="M 500 80 H 430 Q 410 80 410 100 V 130"
-                    stroke="rgba(0,149,255,0.18)"
-                    strokeWidth="0.8"
-                    fill="none"
-                />
-                <path
-                    d="M 60 300 H 200 Q 220 300 220 280"
-                    stroke="rgba(0,149,255,0.12)"
-                    strokeWidth="0.8"
-                    fill="none"
-                />
-                <path
-                    d="M 500 300 H 360 Q 340 300 340 280"
-                    stroke="rgba(0,149,255,0.12)"
-                    strokeWidth="0.8"
-                    fill="none"
-                />
-                {/* Vias (small dots along traces) */}
-                {[
-                    [60, 80], [130, 80], [150, 130], [500, 80], [430, 80],
-                    [410, 130], [60, 300], [200, 300], [220, 280], [500, 300],
-                    [360, 300], [340, 280],
-                ].map(([cx, cy], i) => (
-                    <circle
-                        key={`v-${i}`}
-                        cx={cx}
-                        cy={cy}
-                        r="1.4"
-                        fill="rgba(0,149,255,0.6)"
-                    />
-                ))}
-            </g>
-
-            {/* Top edge accent line */}
-            <line
-                x1="40"
-                y1="50"
-                x2="520"
-                y2="50"
-                stroke={`url(#${id}-edge)`}
-                strokeWidth="1"
-            />
-
-            {/* Pin connectors along the bottom */}
-            {Array.from({ length: 36 }).map((_, i) => (
-                <rect
-                    key={`pin-${i}`}
-                    x={60 + i * 12}
-                    y="326"
-                    width="6"
-                    height="22"
-                    fill={`url(#${id}-pin)`}
-                    rx="0.5"
-                />
-            ))}
-            {/* Pin row backing strip */}
-            <rect
-                x="56"
-                y="322"
-                width="448"
-                height="4"
-                fill="rgba(255,255,255,0.04)"
-            />
-
-            {/* HBM memory stacks — 4 around the central die */}
-            {[
-                { x: 76, y: 96 },
-                { x: 76, y: 204 },
-                { x: 412, y: 96 },
-                { x: 412, y: 204 },
-            ].map((p, idx) => (
-                <g key={`hbm-${idx}`}>
-                    <rect
-                        x={p.x}
-                        y={p.y}
-                        width="72"
-                        height="80"
-                        fill={`url(#${id}-mem)`}
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="0.8"
-                    />
-                    {/* Layered HBM ridges (representing stack) */}
-                    {[14, 28, 42, 56, 70].map((y, i) => (
-                        <line
-                            key={i}
-                            x1={p.x + 4}
-                            y1={p.y + y}
-                            x2={p.x + 68}
-                            y2={p.y + y}
-                            stroke="rgba(255,255,255,0.05)"
-                            strokeWidth="0.6"
-                        />
-                    ))}
-                    {/* Marking */}
-                    <text
-                        x={p.x + 36}
-                        y={p.y + 47}
-                        textAnchor="middle"
-                        fontSize="8"
-                        fill="rgba(255,255,255,0.32)"
-                        fontFamily="ui-monospace, 'SF Mono', monospace"
-                        fontWeight="600"
-                        letterSpacing="0.06em"
-                    >
-                        HBM3
-                    </text>
-                    {/* Corner notch */}
-                    <path
-                        d={`M ${p.x + 2} ${p.y + 2} L ${p.x + 8} ${p.y + 2} L ${p.x + 2} ${p.y + 8} Z`}
-                        fill="rgba(0,149,255,0.18)"
-                    />
-                </g>
-            ))}
-
-            {/* Central die package (outer ring) */}
-            <rect
-                x="170"
-                y="80"
-                width="220"
-                height="220"
-                fill="rgba(255,255,255,0.025)"
-                stroke="rgba(0,149,255,0.22)"
-                strokeWidth="0.8"
-            />
-
-            {/* Central die (inner) */}
-            <rect
-                x="184"
-                y="94"
-                width="192"
-                height="192"
-                fill={`url(#${id}-die)`}
-                stroke="rgba(0,149,255,0.30)"
-                strokeWidth="0.6"
-            />
-
-            {/* Die grid — 4x4 functional blocks */}
-            {Array.from({ length: 4 }).map((_, row) =>
-                Array.from({ length: 4 }).map((_, col) => {
-                    const cx = 188 + col * 46 + 21;
-                    const cy = 98 + row * 46 + 18;
-                    const isCenter =
-                        (row === 1 || row === 2) && (col === 1 || col === 2);
-                    return (
-                        <g key={`b-${row}-${col}`}>
-                            <rect
-                                x={188 + col * 46}
-                                y={98 + row * 46}
-                                width="42"
-                                height="42"
-                                fill={
-                                    isCenter
-                                        ? "rgba(0,149,255,0.10)"
-                                        : "rgba(255,255,255,0.025)"
-                                }
-                                stroke="rgba(0,149,255,0.20)"
-                                strokeWidth="0.5"
-                            />
-                            {/* Inner block ID */}
-                            <text
-                                x={cx}
-                                y={cy}
-                                textAnchor="middle"
-                                fontSize="5"
-                                fill="rgba(255,255,255,0.22)"
-                                fontFamily="ui-monospace, 'SF Mono', monospace"
-                                letterSpacing="0.05em"
-                            >
-                                {`${String.fromCharCode(65 + row)}${col + 1}`}
-                            </text>
-                        </g>
-                    );
-                })
-            )}
-
-            {/* Glowing center pulse (active core indicator) */}
-            <motion.rect
-                x="252"
-                y="186"
-                width="56"
-                height="8"
-                fill="rgba(0,149,255,0.6)"
-                animate={
-                    interactive
-                        ? { opacity: [0.45, 0.95, 0.45] }
-                        : undefined
-                }
-                transition={{
-                    duration: 2.6,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                }}
-            />
-            <motion.rect
-                x="252"
-                y="186"
-                width="56"
-                height="8"
-                fill="none"
-                stroke={BRAND}
-                strokeWidth="0.6"
-                animate={
-                    interactive
-                        ? { opacity: [0.8, 0.3, 0.8] }
-                        : undefined
-                }
-                transition={{
-                    duration: 2.6,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                }}
-            />
-
-            {/* Brand wordmark on die */}
-            <text
-                x="280"
-                y="174"
-                textAnchor="middle"
-                fontSize="10"
-                fill="rgba(255,255,255,0.78)"
-                fontFamily="ui-monospace, 'SF Mono', monospace"
-                fontWeight="700"
-                letterSpacing="0.32em"
+            {/* Top scanning sweep */}
+            <div
+                aria-hidden="true"
+                className="absolute -inset-x-px -top-px h-px overflow-hidden"
             >
-                {label}
-            </text>
-
-            {/* Die corner index markers */}
-            <text
-                x="190"
-                y="106"
-                fontSize="6"
-                fill="rgba(255,255,255,0.32)"
-                fontFamily="ui-monospace, monospace"
-            >
-                A1
-            </text>
-            <text
-                x="370"
-                y="106"
-                fontSize="6"
-                fill="rgba(255,255,255,0.32)"
-                fontFamily="ui-monospace, monospace"
-                textAnchor="end"
-            >
-                A4
-            </text>
-            <text
-                x="190"
-                y="282"
-                fontSize="6"
-                fill="rgba(255,255,255,0.32)"
-                fontFamily="ui-monospace, monospace"
-            >
-                D1
-            </text>
-            <text
-                x="370"
-                y="282"
-                fontSize="6"
-                fill="rgba(255,255,255,0.32)"
-                fontFamily="ui-monospace, monospace"
-                textAnchor="end"
-            >
-                D4
-            </text>
-
-            {/* Top header labels */}
-            <text
-                x="60"
-                y="44"
-                fontSize="9"
-                fill="rgba(255,255,255,0.45)"
-                fontFamily="ui-monospace, monospace"
-                letterSpacing="0.12em"
-            >
-                {sublabel}
-            </text>
-            <g>
-                <circle cx="490" cy="40" r="2.5" fill={BRAND} opacity="0.9" />
-                <text
-                    x="500"
-                    y="44"
-                    fontSize="9"
-                    fill="rgba(255,255,255,0.45)"
-                    fontFamily="ui-monospace, monospace"
-                    letterSpacing="0.12em"
-                >
-                    ACTIVE
-                </text>
-            </g>
-
-            {/* Subtle highlight sweep across surface */}
-            {interactive && (
-                <motion.rect
-                    y="50"
-                    width="160"
-                    height="280"
-                    fill={`url(#${id}-sweep)`}
-                    initial={{ x: -180 }}
-                    animate={{ x: 580 }}
-                    transition={{
-                        duration: 7,
-                        repeat: Infinity,
-                        ease: "linear",
-                        delay: 1.8,
+                <motion.div
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "100%" }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                    className="h-full w-[40%]"
+                    style={{
+                        background: `linear-gradient(90deg, transparent, ${BRAND}, transparent)`,
                     }}
                 />
-            )}
-        </svg>
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-5">
+                <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/40">
+                        Active workloads
+                    </p>
+                    <p className="mt-1 font-semibold text-white text-[15px]">
+                        Your platform · all services
+                    </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.20em] text-white/40">
+                        Live
+                    </span>
+                </div>
+            </div>
+
+            {/* Workload list */}
+            <ul className="mt-5 divide-y divide-white/[0.05] border-y border-white/[0.05]">
+                {WORKLOADS.map((w) => (
+                    <li
+                        key={w.service}
+                        className="relative flex items-center gap-4 px-6 py-3.5"
+                    >
+                        {/* active indicator stripe (left edge) */}
+                        {w.accent && (
+                            <motion.span
+                                aria-hidden="true"
+                                className="absolute inset-y-0 left-0 w-[2px]"
+                                style={{ backgroundColor: BRAND }}
+                                animate={{ opacity: [0.4, 1, 0.4] }}
+                                transition={{
+                                    duration: 2.4,
+                                    repeat: Infinity,
+                                    ease: "easeInOut",
+                                }}
+                            />
+                        )}
+                        {/* service mark */}
+                        <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center ${
+                                w.accent ? "text-[#0095FF]" : "text-white/45"
+                            }`}
+                        >
+                            <ServiceMark kind={w.kind} className="h-4 w-4" />
+                        </span>
+                        {/* labels */}
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2">
+                                <p className="truncate text-[13px] font-semibold text-white/90">
+                                    {w.service}
+                                </p>
+                                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">
+                                    {w.spec}
+                                </span>
+                            </div>
+                        </div>
+                        {/* price */}
+                        <p
+                            className="shrink-0 font-mono text-[12.5px] font-semibold tabular-nums"
+                            style={{
+                                color: w.accent ? BRAND : "rgba(255,255,255,0.7)",
+                            }}
+                        >
+                            {w.price}
+                        </p>
+                        {/* status dot */}
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                    </li>
+                ))}
+            </ul>
+
+            {/* Footer summary */}
+            <div className="flex items-center justify-between px-6 py-4">
+                <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/40">
+                        Burn rate · /hr
+                    </p>
+                    <p className="mt-1 font-mono text-[20px] font-semibold tabular-nums text-white leading-none">
+                        $4.27
+                        <span className="ml-1 text-[11px] font-normal text-white/35">
+                            USD
+                        </span>
+                    </p>
+                </div>
+                <Link
+                    href="/dashboard"
+                    tabIndex={-1}
+                    className="group inline-flex items-center gap-1.5 text-[12.5px] font-medium text-white/65 transition-colors hover:text-white"
+                >
+                    Open dashboard
+                    <ArrowGlyph className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+            </div>
+        </div>
     );
 }
 
-// ─── Small chip icon used in the GPU lockup ──────────────────────
-function ChipMini({
-    accent = BRAND,
-    keyId,
-}: {
-    accent?: string;
-    keyId: string;
-}) {
-    const id = `mini-${keyId}`;
-    return (
-        <svg
-            viewBox="0 0 60 60"
-            className="h-12 w-12"
-            aria-hidden="true"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            <defs>
-                <linearGradient id={`${id}-pkg`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#161c28" />
-                    <stop offset="1" stopColor="#0a0f18" />
-                </linearGradient>
-                <radialGradient id={`${id}-glow`} cx="0.5" cy="0.55" r="0.5">
-                    <stop offset="0" stopColor={accent} stopOpacity="0.55" />
-                    <stop offset="1" stopColor={accent} stopOpacity="0" />
-                </radialGradient>
-            </defs>
+// ─── All-services lineup (replaces GPU-only lockup) ─────────────
+type ServiceRow = {
+    kind: Parameters<typeof ServiceMark>[0]["kind"];
+    name: string;
+    tagline: string;
+    price: string;
+    href: string;
+};
 
-            {/* halo glow */}
-            <circle cx="30" cy="36" r="22" fill={`url(#${id}-glow)`} />
+const SERVICES: ServiceRow[] = [
+    {
+        kind: "gpu",
+        name: "GPU Cloud",
+        tagline: "H100 · H200 · B200",
+        price: "from $2.59/hr",
+        href: "/services/gpu",
+    },
+    {
+        kind: "compute",
+        name: "Compute",
+        tagline: "VPS · bare metal",
+        price: "from $5/mo",
+        href: "/services/compute",
+    },
+    {
+        kind: "k8s",
+        name: "Kubernetes",
+        tagline: "managed · autoscale",
+        price: "from $0.04/n·hr",
+        href: "/services/kubernetes",
+    },
+    {
+        kind: "database",
+        name: "Databases",
+        tagline: "Postgres · MySQL · Redis",
+        price: "from $0.18/hr",
+        href: "/services/database",
+    },
+    {
+        kind: "storage",
+        name: "Object Storage",
+        tagline: "S3 API · global CDN",
+        price: "$0.02/GB·mo",
+        href: "/services/object-storage",
+    },
+    {
+        kind: "app",
+        name: "App Platform",
+        tagline: "Docker · CI/CD · GitHub",
+        price: "from $0.012/hr",
+        href: "/services/app-deployment",
+    },
+    {
+        kind: "agent",
+        name: "AI Agents",
+        tagline: "multi-LLM · serverless",
+        price: "from $0.10/run",
+        href: "/services/ai-agents",
+    },
+];
 
-            {/* outer package */}
-            <rect
-                x="8"
-                y="8"
-                width="44"
-                height="44"
-                fill={`url(#${id}-pkg)`}
-                stroke="rgba(255,255,255,0.10)"
-                strokeWidth="0.8"
-            />
-
-            {/* pins top + bottom */}
-            {[12, 18, 24, 30, 36, 42, 48].map((x) => (
-                <rect
-                    key={`pt-${x}`}
-                    x={x - 1}
-                    y="4"
-                    width="2"
-                    height="4"
-                    fill="rgba(255,255,255,0.25)"
-                />
-            ))}
-            {[12, 18, 24, 30, 36, 42, 48].map((x) => (
-                <rect
-                    key={`pb-${x}`}
-                    x={x - 1}
-                    y="52"
-                    width="2"
-                    height="4"
-                    fill="rgba(255,255,255,0.25)"
-                />
-            ))}
-            {/* pins left + right */}
-            {[14, 20, 26, 32, 38, 44].map((y) => (
-                <rect
-                    key={`pl-${y}`}
-                    x="4"
-                    y={y - 1}
-                    width="4"
-                    height="2"
-                    fill="rgba(255,255,255,0.25)"
-                />
-            ))}
-            {[14, 20, 26, 32, 38, 44].map((y) => (
-                <rect
-                    key={`pr-${y}`}
-                    x="52"
-                    y={y - 1}
-                    width="4"
-                    height="2"
-                    fill="rgba(255,255,255,0.25)"
-                />
-            ))}
-
-            {/* inner die */}
-            <rect
-                x="16"
-                y="16"
-                width="28"
-                height="28"
-                fill="rgba(0,149,255,0.04)"
-                stroke={accent}
-                strokeOpacity="0.4"
-                strokeWidth="0.6"
-            />
-
-            {/* 2x2 die grid */}
-            <line
-                x1="30"
-                y1="16"
-                x2="30"
-                y2="44"
-                stroke={accent}
-                strokeOpacity="0.25"
-                strokeWidth="0.5"
-            />
-            <line
-                x1="16"
-                y1="30"
-                x2="44"
-                y2="30"
-                stroke={accent}
-                strokeOpacity="0.25"
-                strokeWidth="0.5"
-            />
-
-            {/* center pulse */}
-            <motion.rect
-                x="26"
-                y="28"
-                width="8"
-                height="4"
-                fill={accent}
-                fillOpacity="0.8"
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{
-                    duration: 2.4,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                }}
-            />
-
-            {/* corner notch */}
-            <path
-                d="M 10 10 L 14 10 L 10 14 Z"
-                fill={accent}
-                fillOpacity="0.5"
-            />
-        </svg>
-    );
-}
-
-// ─── GPU price lockup ────────────────────────────────────────────
-function GpuLockup({ inventory }: { inventory: HeroInventoryItem[] }) {
-    if (inventory.length === 0) return null;
-    const shown = inventory.slice(0, 5);
-
+function ServicesLineup() {
     const stagger = {
         hidden: {},
-        show: { transition: { staggerChildren: 0.08, delayChildren: 1.1 } },
+        show: { transition: { staggerChildren: 0.05, delayChildren: 0.9 } },
     };
     const item = {
-        hidden: { opacity: 0, y: 10 },
+        hidden: { opacity: 0, y: 8 },
         show: {
             opacity: 1,
             y: 0,
-            transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const },
+            transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const },
         },
     };
 
@@ -659,114 +409,98 @@ function GpuLockup({ inventory }: { inventory: HeroInventoryItem[] }) {
             variants={stagger}
             initial="hidden"
             animate="show"
-            className="flex flex-wrap items-start justify-center gap-x-10 gap-y-10 sm:gap-x-14 lg:gap-x-20"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-7 lg:gap-x-14"
         >
-            {shown.map((it) => {
-                const out = it.stockStatus === "none";
-                const stockColor = out
-                    ? "rgba(255,255,255,0.20)"
-                    : it.stockStatus === "high"
-                      ? "#34d399"
-                      : "#f59e0b";
-                return (
-                    <motion.div
-                        key={it.gpuCatalogId}
-                        variants={item}
-                        className="group flex flex-col items-center text-center"
+            {SERVICES.map((s) => (
+                <motion.div key={s.name} variants={item}>
+                    <Link
+                        href={s.href}
+                        className="group flex items-start gap-3.5"
                     >
-                        <ChipMini keyId={it.gpuCatalogId} accent={BRAND} />
-                        <div className="mt-3 flex items-center gap-1.5">
-                            <span
-                                className="h-1.5 w-1.5 rounded-full"
-                                style={{ backgroundColor: stockColor }}
+                        <span className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center text-white/35 transition-colors group-hover:text-[#0095FF]">
+                            <ServiceMark
+                                kind={s.kind}
+                                className="h-3.5 w-3.5"
                             />
-                            <p className="text-[15px] font-semibold text-white/85 transition-colors group-hover:text-white">
-                                {it.displayName}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2">
+                                <p className="text-[14px] font-semibold tracking-tight text-white/90 transition-colors group-hover:text-white">
+                                    {s.name}
+                                </p>
+                            </div>
+                            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                                {s.tagline}
+                            </p>
+                            <p
+                                className="mt-1.5 font-mono text-[12px] font-semibold tabular-nums"
+                                style={{ color: BRAND }}
+                            >
+                                {s.price}
                             </p>
                         </div>
-                        <p className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/35">
-                            {it.memoryGb} GB · HBM
-                        </p>
-                        <p
-                            className="mt-2 font-mono text-[15px] font-semibold tabular-nums"
-                            style={{
-                                color: out ? "rgba(255,255,255,0.30)" : BRAND,
-                            }}
-                        >
-                            ${it.onDemandPerHr !== null
-                                ? it.onDemandPerHr.toFixed(2)
-                                : "—"}
-                            <span className="text-[11px] font-normal text-white/45">
-                                /hr
-                            </span>
-                        </p>
-                    </motion.div>
-                );
-            })}
+                    </Link>
+                </motion.div>
+            ))}
         </motion.div>
     );
 }
 
 // ─── Hero ────────────────────────────────────────────────────────
 export default function HeroClient({
-    inventory,
+    inventory: _inventory,
 }: {
     inventory: HeroInventoryItem[];
 }) {
     return (
         <section
             className="relative w-full overflow-hidden bg-[#08080a]"
-            aria-label="Ahura — one cloud for AI builders"
+            aria-label="Ahura — one cloud, every workload"
         >
             {/* ── Background layers ─────────────────────────────── */}
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 left-[5%] hidden w-px bg-white/[0.04] lg:block"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-[5%] hidden w-px bg-white/[0.04] lg:block"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 opacity-[0.30]"
+                className="pointer-events-none absolute inset-0 opacity-[0.22]"
                 style={{
                     backgroundImage:
                         "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
-                    backgroundSize: "30px 30px",
+                    backgroundSize: "32px 32px",
                     maskImage:
-                        "radial-gradient(ellipse 90% 80% at 50% 45%, black 30%, transparent 80%)",
+                        "radial-gradient(ellipse 95% 80% at 50% 45%, black 30%, transparent 80%)",
                     WebkitMaskImage:
-                        "radial-gradient(ellipse 90% 80% at 50% 45%, black 30%, transparent 80%)",
+                        "radial-gradient(ellipse 95% 80% at 50% 45%, black 30%, transparent 80%)",
                 }}
             />
+            {/* Brand wash upper-right */}
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-40 right-[-10%] h-[640px] w-[820px] rounded-full"
+                className="pointer-events-none absolute -top-40 right-[-12%] h-[680px] w-[860px] rounded-full"
                 style={{
                     background:
-                        "radial-gradient(closest-side, rgba(0,149,255,0.20), rgba(0,149,255,0.05) 55%, transparent 80%)",
+                        "radial-gradient(closest-side, rgba(0,149,255,0.20), rgba(0,149,255,0.05) 50%, transparent 80%)",
                 }}
             />
+            {/* Cool wash lower-left */}
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -bottom-32 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full"
+                className="pointer-events-none absolute -bottom-40 left-[-10%] h-[520px] w-[760px] rounded-full"
                 style={{
                     background:
-                        "radial-gradient(closest-side, rgba(105,183,255,0.10), rgba(105,183,255,0.02) 55%, transparent 80%)",
+                        "radial-gradient(closest-side, rgba(105,183,255,0.10), rgba(105,183,255,0.03) 55%, transparent 80%)",
                 }}
             />
 
             {/* ── Main asymmetric grid ──────────────────────────── */}
-            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pt-28 pb-12 sm:px-8 sm:pt-32 lg:pt-36">
-                <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_1.05fr] lg:gap-16 lg:items-center">
+            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pt-28 pb-16 sm:px-8 sm:pt-32 lg:pt-36 lg:pb-20">
+                <div className="grid grid-cols-1 gap-12 lg:grid-cols-[0.95fr_1.15fr] lg:gap-16 lg:items-center">
                     {/* LEFT — text */}
                     <div>
+                        {/* Eyebrow (no boxy chip — just a dot + text) */}
                         <motion.div
                             initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5 }}
-                            className="inline-flex items-center gap-2.5 border border-white/[0.10] bg-white/[0.02] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55"
+                            className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45"
                         >
                             <span className="relative flex h-1.5 w-1.5">
                                 <span
@@ -778,21 +512,19 @@ export default function HeroClient({
                                     style={{ backgroundColor: BRAND }}
                                 />
                             </span>
-                            <span>The cloud for AI builders</span>
+                            <span>One platform · Every workload</span>
                         </motion.div>
 
+                        {/* H1 */}
                         <motion.h1
                             initial={{ opacity: 0, y: 18 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.12 }}
-                            className="mt-7 text-[clamp(40px,5.6vw,76px)] font-semibold leading-[0.96] tracking-[-0.045em] text-white"
+                            className="mt-7 text-[clamp(40px,5.6vw,80px)] font-semibold leading-[0.97] tracking-[-0.045em] text-white"
                             style={{ fontFeatureSettings: '"ss01", "ss02"' }}
                         >
-                            Built for the
+                            One cloud.
                             <br />
-                            next generation
-                            <br />
-                            of{" "}
                             <motion.span
                                 className="inline-block bg-clip-text text-transparent"
                                 style={{
@@ -806,21 +538,23 @@ export default function HeroClient({
                                     ease: "linear",
                                 }}
                             >
-                                AI builders.
+                                Every workload.
                             </motion.span>
                         </motion.h1>
 
+                        {/* Subhead */}
                         <motion.p
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.28 }}
                             className="mt-7 max-w-[520px] text-[15px] leading-[1.65] text-white/55 sm:text-[16.5px]"
                         >
-                            GPU pods, managed databases, Kubernetes, object storage, and
-                            AI agents — one cloud, per-second billing, 12 regions
-                            worldwide.
+                            GPU clouds for AI. Compute, Kubernetes, databases, app
+                            deploys, object storage, and AI agents — provisioned in
+                            seconds, billed by the second, across 12 regions.
                         </motion.p>
 
+                        {/* CTAs */}
                         <motion.div
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -829,10 +563,10 @@ export default function HeroClient({
                         >
                             <motion.div
                                 aria-hidden="true"
-                                className="pointer-events-none absolute left-12 top-1/2 -z-10 h-24 w-56 -translate-y-1/2 blur-3xl"
+                                className="pointer-events-none absolute left-10 top-1/2 -z-10 h-24 w-56 -translate-y-1/2 blur-3xl"
                                 style={{ backgroundColor: BRAND }}
                                 initial={{ opacity: 0 }}
-                                animate={{ opacity: [0.16, 0.34, 0.16] }}
+                                animate={{ opacity: [0.16, 0.32, 0.16] }}
                                 transition={{
                                     duration: 4.5,
                                     repeat: Infinity,
@@ -855,22 +589,23 @@ export default function HeroClient({
                                 </AuthAwareServiceCta>
                                 <Link
                                     href="/pricing"
-                                    className="inline-flex h-12 items-center justify-center border border-white/[0.10] px-7 text-[14px] font-medium text-white/70 transition-colors hover:border-white/25 hover:text-white"
+                                    className="group inline-flex h-12 items-center justify-center gap-1.5 text-[14px] font-medium text-white/70 transition-colors hover:text-white"
                                 >
                                     View pricing
+                                    <ArrowGlyph className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                                 </Link>
                             </div>
                         </motion.div>
 
-                        {/* mini proof row */}
+                        {/* Proof row */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 1, delay: 0.7 }}
-                            className="mt-12 flex flex-wrap items-baseline gap-x-7 gap-y-2 border-t border-white/[0.06] pt-5 text-[11px] text-white/45"
+                            className="mt-12 flex flex-wrap items-baseline gap-x-8 gap-y-2 text-[11px] text-white/40"
                         >
                             <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[13px] font-semibold text-white tabular-nums">
+                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
                                     12
                                 </span>
                                 <span className="uppercase tracking-[0.18em]">
@@ -879,7 +614,7 @@ export default function HeroClient({
                             </span>
                             <span className="hidden h-3 w-px bg-white/[0.10] sm:inline-block" />
                             <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[13px] font-semibold text-white tabular-nums">
+                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
                                     99.998%
                                 </span>
                                 <span className="uppercase tracking-[0.18em]">
@@ -888,29 +623,29 @@ export default function HeroClient({
                             </span>
                             <span className="hidden h-3 w-px bg-white/[0.10] sm:inline-block" />
                             <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[13px] font-semibold text-white tabular-nums">
+                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
                                     &lt;90s
                                 </span>
                                 <span className="uppercase tracking-[0.18em]">
-                                    Pod boot
+                                    Provisioning
                                 </span>
                             </span>
                         </motion.div>
                     </div>
 
-                    {/* RIGHT — premium chip illustration */}
+                    {/* RIGHT — platform mockup */}
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.96, y: 24 }}
+                        initial={{ opacity: 0, scale: 0.96, y: 18 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         transition={{
                             duration: 0.9,
-                            delay: 0.35,
+                            delay: 0.3,
                             ease: [0.16, 1, 0.3, 1],
                         }}
-                        className="relative mx-auto w-full max-w-[640px]"
+                        className="relative mx-auto w-full max-w-[600px]"
                     >
                         <motion.div
-                            animate={{ y: [0, -8, 0] }}
+                            animate={{ y: [0, -6, 0] }}
                             transition={{
                                 duration: 8,
                                 repeat: Infinity,
@@ -918,66 +653,28 @@ export default function HeroClient({
                                 delay: 1.2,
                             }}
                         >
-                            <ChipIllustration />
-                        </motion.div>
-
-                        {/* Floating spec badges around the chip — premium detail */}
-                        <motion.div
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.6, delay: 1.4 }}
-                            className="absolute left-2 top-[18%] hidden border border-white/[0.10] bg-[#0c0f17]/85 px-3 py-2 backdrop-blur-sm lg:block"
-                        >
-                            <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/35">
-                                Compute
-                            </p>
-                            <p className="font-mono text-[13px] font-semibold tabular-nums text-white">
-                                2,000{" "}
-                                <span className="text-[10px] font-normal text-white/40">
-                                    TFLOPS
-                                </span>
-                            </p>
-                        </motion.div>
-
-                        <motion.div
-                            initial={{ opacity: 0, x: 8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.6, delay: 1.55 }}
-                            className="absolute right-2 top-[58%] hidden border border-white/[0.10] bg-[#0c0f17]/85 px-3 py-2 backdrop-blur-sm lg:block"
-                        >
-                            <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/35">
-                                Bandwidth
-                            </p>
-                            <p
-                                className="font-mono text-[13px] font-semibold tabular-nums"
-                                style={{ color: BRAND }}
-                            >
-                                3.35{" "}
-                                <span className="text-[10px] font-normal text-white/40">
-                                    TB/s
-                                </span>
-                            </p>
+                            <PlatformMockup />
                         </motion.div>
                     </motion.div>
                 </div>
             </div>
 
-            {/* ── GPU price lockup — replaces the logo row ──────── */}
-            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pb-20 pt-4 sm:px-8 sm:pb-24 sm:pt-8">
+            {/* ── All-services lineup ───────────────────────────── */}
+            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pb-20 sm:px-8 sm:pb-24">
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.8, delay: 0.9 }}
+                    transition={{ duration: 0.8, delay: 0.8 }}
                     className="mb-10 flex items-center justify-center sm:mb-14"
                 >
                     <span className="h-px w-10 bg-white/[0.10]" />
                     <span className="mx-4 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/35">
-                        Live pricing · Available now
+                        One platform · Seven services
                     </span>
                     <span className="h-px w-10 bg-white/[0.10]" />
                 </motion.div>
 
-                <GpuLockup inventory={inventory} />
+                <ServicesLineup />
             </div>
 
             {/* Bottom separator */}
