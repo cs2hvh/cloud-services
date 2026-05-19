@@ -173,7 +173,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     const { data: host } = await supabase
       .from("proxmox_hosts")
       .select(
-        "id, name, host_url, allow_insecure_tls, token_id, token_secret, username, password, node, storage, bridge, gateway_ip, dns_primary, dns_secondary"
+        "id, name, host_url, allow_insecure_tls, token_id, token_secret, username, password, node, storage, bridge, gateway_ip, dns_primary, dns_secondary, network_mode"
       )
       .eq("id", hostId)
       .maybeSingle();
@@ -205,7 +205,10 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
 
         // Clean up host route
         if (server.ip) {
-          await removeHostRoute(cfg, server.ip, cfg.bridge || "vmbr0");
+          const routeModes = new Set(["legacy_public_gateway", "ovh_hg_scale_routed", "ovh_advance_gen3_routed"]);
+          if (routeModes.has(String((cfg as { network_mode?: string | null }).network_mode || "legacy_public_gateway"))) {
+            await removeHostRoute(cfg, server.ip, cfg.bridge || "vmbr0");
+          }
         }
       } catch (e) {
         console.error("[VM Delete] Proxmox cleanup failed:", e instanceof Error ? e.message : e);

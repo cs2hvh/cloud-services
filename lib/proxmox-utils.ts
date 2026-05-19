@@ -24,6 +24,14 @@ export interface ProxmoxHost {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
   template_vmid?: number;
   is_active?: boolean;
 }
@@ -332,6 +340,31 @@ function isValidIPv4(ip: string): boolean {
 /** Validate bridge name (alphanumeric + limited chars only) */
 function isValidBridgeName(name: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9_-]{0,15}$/.test(name);
+}
+
+function isSafeSnippetFilename(name: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,80}\.ya?ml$/.test(name);
+}
+
+/**
+ * Write a cloud-init snippet to Proxmox local snippet storage.
+ * The app stores cicustom references as <storage>:snippets/<filename>, while
+ * the default Proxmox "local" file storage maps snippets to /var/lib/vz/snippets.
+ */
+export async function writeCloudInitSnippet(host: ProxmoxHost, filename: string, content: string): Promise<void> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to write cloud-init snippets");
+  }
+  if (!isSafeSnippetFilename(filename)) {
+    throw new Error("Invalid cloud-init snippet filename");
+  }
+
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const encoded = Buffer.from(content, "utf8").toString("base64");
+  const command = `mkdir -p /var/lib/vz/snippets && printf '%s' '${encoded}' | base64 -d > /var/lib/vz/snippets/${filename}`;
+
+  await sshExec(sshHost, username, host.password, command, 20000);
 }
 
 /**

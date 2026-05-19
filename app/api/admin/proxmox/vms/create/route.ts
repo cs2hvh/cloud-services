@@ -3,7 +3,8 @@ import { createWorkerClient } from "@/lib/supabase/server";
 import { checkAdminAuth } from "@/lib/auth/check-admin";
 import { Agent as UndiciAgent } from "undici";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
-import { addHostRoute } from "@/lib/proxmox-utils";
+import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
+import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,14 @@ type HostConfig = {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
 };
 
 interface ProxmoxResponse<T = unknown> {
@@ -175,8 +184,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!body.cpuCores || body.cpuCores < 1 || body.cpuCores > 32) {
-      return NextResponse.json({ ok: false, error: "Invalid cpuCores (1-32)" }, { status: 400 });
+    if (!body.cpuCores || body.cpuCores < 1 || body.cpuCores > 64) {
+      return NextResponse.json({ ok: false, error: "Invalid cpuCores (1-64)" }, { status: 400 });
     }
 
     if (!body.memoryMB || body.memoryMB < 512 || body.memoryMB > 262144) {
@@ -220,7 +229,7 @@ export async function POST(req: NextRequest) {
     // Verify host exists and is active
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password")
+      .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
       .eq("id", body.hostId)
       .eq("is_active", true)
       .single();
@@ -235,10 +244,7 @@ export async function POST(req: NextRequest) {
     const apiBase = (cfg.host_url.startsWith("http:") ? cfg.host_url.replace(/^http:/, "https:") : cfg.host_url).replace(/\/+$/, "");
     const node = cfg.node;
     const storage = body.storage || cfg.storage || "local";
-    const bridge = body.bridge || cfg.bridge || "vmbr0";
-    const gateway = cfg.gateway_ip || undefined;
-    const dns1 = cfg.dns_primary || "8.8.8.8";
-    const dns2 = cfg.dns_secondary || "1.1.1.1";
+    const bridgeOverride = body.bridge || undefined;
 
     // IP auto-assign from pools
     let assignedIp: string | undefined;
@@ -249,15 +255,24 @@ export async function POST(req: NextRequest) {
 
     const { data: pools } = await supabase
       .from("public_ip_pools")
-      .select("id, mac")
+      .select("id, mac, label, is_active")
       .eq("host_id", cfg.id)
-      .or("label.is.null,label.not.ilike.*IPXO*");
+      .neq("is_active", false);
 
     if (pools && pools.length > 0) {
       const poolIds = pools.map((p: Record<string, unknown>) => Number(p.id));
       const macByPool = new Map<number, string | undefined>(
         pools.map((p: Record<string, unknown>) => [Number(p.id), p.mac as string | undefined])
       );
+      const labelByPool = new Map<number, string | null>(
+        pools.map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null])
+      );
+      const routedMode = cfg.network_mode === "ovh_hg_scale_routed" || cfg.network_mode === "ovh_advance_gen3_routed" || cfg.network_mode === "ovh_vrack_block";
+      const isRoutedPool = (mac?: string, label?: string | null) => {
+        const normalizedMac = String(mac || "").toLowerCase();
+        const normalizedLabel = String(label || "").toLowerCase();
+        return normalizedMac.startsWith("route:") || normalizedLabel.includes("byoip") || normalizedLabel.includes("routed");
+      };
 
       const { data: ipRows } = await supabase
         .from("public_ip_pool_ips")
@@ -267,19 +282,25 @@ export async function POST(req: NextRequest) {
       for (const r of ipRows || []) {
         const ip = String((r as Record<string, unknown>).ip);
         const poolId = Number((r as Record<string, unknown>).pool_id);
+        const mac = macByPool.get(poolId);
+        const label = labelByPool.get(poolId);
+        const routedPool = isRoutedPool(mac, label);
+        if (routedMode && !routedPool) continue;
+        if (!routedMode && routedPool) continue;
         if (!usedSet.has(ip)) {
           assignedIp = ip;
-          macAddress = macByPool.get(poolId);
+          macAddress = routedPool ? undefined : mac;
           break;
         }
       }
     }
 
-    if (!assignedIp || !gateway) {
-      return NextResponse.json({ ok: false, error: "No available IPs or gateway missing" }, { status: 409 });
+    if (!assignedIp) {
+      return NextResponse.json({ ok: false, error: "No available IPs" }, { status: 409 });
     }
-    if (!macAddress) {
-      return NextResponse.json({ ok: false, error: "MAC address required for routed IP" }, { status: 400 });
+    const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
+    if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
+      return NextResponse.json({ ok: false, error: "MAC address required for this network profile" }, { status: 400 });
     }
 
     // Calculate pricing
@@ -376,8 +397,22 @@ export async function POST(req: NextRequest) {
       await waitTask(apiBase, node, String(cloneUpid), auth, dispatcher);
 
       // Configure VM — different settings for Windows vs Linux
-      const ipConfig0 = `ip=${assignedIp}/32,gw=${gateway}`;
-      const nameservers = `${dns1}${dns2 ? ` ${dns2}` : ""}`;
+      const networkPlan = buildVmNetworkPlan({
+        host: { ...cfg, bridge: bridgeOverride || cfg.bridge },
+        publicIp: assignedIp,
+        vmid: newVmid,
+        reservationId,
+        isWindows,
+      });
+      if (networkPlan.networkSnippetFilename && networkPlan.networkSnippetContent) {
+        await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.networkSnippetFilename, networkPlan.networkSnippetContent);
+      }
+      if (networkPlan.vendorSnippetFilename && networkPlan.vendorSnippetContent) {
+        await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.vendorSnippetFilename, networkPlan.vendorSnippetContent);
+      }
+      const ipConfig0 = networkPlan.ipconfig0;
+      const nameservers = networkPlan.nameservers;
+      const bridge = networkPlan.bridge;
 
       // Bandwidth rate limit (MBps) based on vCPU count
       const rateMBps = body.cpuCores <= 2 ? 4 : body.cpuCores <= 4 ? 8 : body.cpuCores <= 6 ? 15 : 30;
@@ -387,9 +422,10 @@ export async function POST(req: NextRequest) {
         sockets: 1,
         cores: body.cpuCores,
         memory: body.memoryMB,
+        ciupgrade: 0,
         onboot: 1,
         nameserver: nameservers,
-        net0: `virtio=${macAddress},bridge=${bridge},rate=${rateMBps}`,
+        net0: `${macAddress ? `virtio=${macAddress}` : "virtio"},bridge=${bridge},rate=${rateMBps}`,
         ipconfig0: ipConfig0,
         cipassword: body.sshPassword,
       };
@@ -411,6 +447,12 @@ export async function POST(req: NextRequest) {
         configPayload.ciuser = "admin";
       } else {
         configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+        const vendorSnippet = networkPlan.cicustomVendor || `vendor=${networkPlan.snippetStorage}:snippets/linux-cloud-init.yml`;
+        const cicustom = buildCiCustomValue({
+          networkSnippet: networkPlan.cicustomNetwork,
+          vendorSnippet,
+        });
+        if (cicustom) configPayload.cicustom = cicustom;
       }
 
       await postForm(
@@ -465,8 +507,9 @@ export async function POST(req: NextRequest) {
         );
       } catch {}
 
-      // Add host route for this VM's IP (OVH routed IP model)
-      await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], assignedIp, bridge);
+      if (networkPlan.addHostRoute) {
+        await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], assignedIp, bridge);
+      }
 
       // Start VM
       const startRes = await postForm<ProxmoxResponse<string>>(
@@ -484,7 +527,7 @@ export async function POST(req: NextRequest) {
       // Update DB record with actual VMID
       await supabase
         .from("servers")
-        .update({ vmid: newVmid, status: "running" })
+        .update({ vmid: newVmid, status: "running", details: { network: networkPlan.details } })
         .eq("id", reservationId);
 
       return NextResponse.json({

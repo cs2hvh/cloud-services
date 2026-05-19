@@ -25,6 +25,14 @@ export type HostRow = {
   gateway_ip?: string | null;
   dns_primary?: string | null;
   dns_secondary?: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
   is_active?: boolean | null;
   created_by_email?: string | null;
   created_at?: string | null;

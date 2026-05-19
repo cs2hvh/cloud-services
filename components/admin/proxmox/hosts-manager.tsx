@@ -6,8 +6,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Trash2, Plus, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+
+const SERVER_SERIES_OPTIONS = [
+  { value: 'generic', label: 'Generic / existing setup' },
+  { value: 'ovh_rise_game', label: 'OVH Rise / Game / legacy' },
+  { value: 'ovh_advance_gen3', label: 'OVH Advance Gen3' },
+  { value: 'ovh_high_grade_scale', label: 'OVH High Grade / Scale' },
+] as const;
+
+const NETWORK_MODE_OPTIONS = [
+  { value: 'legacy_public_gateway', label: 'Legacy routed public gateway' },
+  { value: 'ovh_failover_vmac', label: 'OVH Additional IP with vMAC' },
+  { value: 'ovh_hg_scale_routed', label: 'OVH High Grade / Scale routed BYOIP' },
+  { value: 'ovh_advance_gen3_routed', label: 'OVH Advance Gen3 routed BYOIP' },
+  { value: 'ovh_vrack_block', label: 'OVH vRack routed block' },
+] as const;
+
+function defaultNetworkModeForSeries(series: string): string {
+  if (series === 'ovh_high_grade_scale') return 'ovh_hg_scale_routed';
+  if (series === 'ovh_advance_gen3') return 'ovh_advance_gen3_routed';
+  if (series === 'ovh_rise_game') return 'ovh_failover_vmac';
+  return 'legacy_public_gateway';
+}
 
 interface HostData {
   id: string;
@@ -22,6 +45,14 @@ interface HostData {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider: string | null;
+  server_series: string | null;
+  network_mode: string | null;
+  vm_private_cidr: string | null;
+  vm_private_gateway: string | null;
+  vm_private_ip_start: number | null;
+  public_prefix_length: number | null;
+  snippet_storage: string | null;
   region: string;
   display_region: string;
   total_cpu_cores: number;
@@ -30,7 +61,7 @@ interface HostData {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  public_ip_pools?: Array<{ id: string; mac: string; public_ip_pool_ips?: Array<{ id: string; ip: string }> }>;
+  public_ip_pools?: Array<{ id: string; mac: string; label?: string | null; public_ip_pool_ips?: Array<{ id: string; ip: string }> }>;
   proxmox_templates?: Array<{ id: string; vmid: number; name: string; os_type: string | null; os_display_name: string | null }>;
 }
 
@@ -49,6 +80,14 @@ interface FormState {
   gateway_ip: string;
   dns_primary: string;
   dns_secondary: string;
+  provider: string;
+  server_series: string;
+  network_mode: string;
+  vm_private_cidr: string;
+  vm_private_gateway: string;
+  vm_private_ip_start: string;
+  public_prefix_length: string;
+  snippet_storage: string;
   template_vmid: string;
   region: string;
   display_region: string;
@@ -56,7 +95,7 @@ interface FormState {
   total_memory_mb: string;
   total_disk_gb: string;
   is_active: boolean;
-  ipAddresses: Array<{ ip: string; mac: string }>;
+  ipAddresses: Array<{ ip: string; mac: string; label?: string }>;
   templates: Array<{ name: string; vmid: string; os_type: string; os_display_name: string }>;
 }
 
@@ -74,6 +113,14 @@ const emptyForm: FormState = {
   gateway_ip: '',
   dns_primary: '',
   dns_secondary: '',
+  provider: 'ovh',
+  server_series: 'generic',
+  network_mode: 'legacy_public_gateway',
+  vm_private_cidr: '',
+  vm_private_gateway: '',
+  vm_private_ip_start: '10',
+  public_prefix_length: '32',
+  snippet_storage: 'local',
   template_vmid: '',
   region: '',
   display_region: '',
@@ -93,6 +140,8 @@ export function ProxmoxHostsManager() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [expandedHostId, setExpandedHostId] = useState<string | null>(null);
   const [usedIps, setUsedIps] = useState<Set<string>>(new Set());
+  const isPrivateRoutedMode = form.network_mode === 'ovh_hg_scale_routed' || form.network_mode === 'ovh_advance_gen3_routed';
+  const isVrackMode = form.network_mode === 'ovh_vrack_block';
 
   // Load hosts + used IPs
   const loadHosts = useCallback(async () => {
@@ -148,6 +197,14 @@ export function ProxmoxHostsManager() {
       gateway_ip: host.gateway_ip || '',
       dns_primary: host.dns_primary || '',
       dns_secondary: host.dns_secondary || '',
+      provider: host.provider || 'ovh',
+      server_series: host.server_series || 'generic',
+      network_mode: host.network_mode || 'legacy_public_gateway',
+      vm_private_cidr: host.vm_private_cidr || '',
+      vm_private_gateway: host.vm_private_gateway || '',
+      vm_private_ip_start: host.vm_private_ip_start?.toString() || '10',
+      public_prefix_length: host.public_prefix_length?.toString() || '32',
+      snippet_storage: host.snippet_storage || 'local',
       template_vmid: host.template_vmid?.toString() || '',
       region: host.region || '',
       display_region: host.display_region || '',
@@ -156,7 +213,7 @@ export function ProxmoxHostsManager() {
       total_disk_gb: host.total_disk_gb?.toString() || '',
       is_active: host.is_active,
       ipAddresses: host.public_ip_pools?.flatMap(p =>
-        (p.public_ip_pool_ips || []).map(ip => ({ ip: ip.ip, mac: p.mac }))
+        (p.public_ip_pool_ips || []).map(ip => ({ ip: ip.ip, mac: p.mac, label: p.label || '' }))
       ) || [],
       templates: host.proxmox_templates?.map(t => ({
         name: t.name,
@@ -172,9 +229,9 @@ export function ProxmoxHostsManager() {
   const addIpAddress = useCallback(() => {
     setForm(prev => ({
       ...prev,
-      ipAddresses: [...prev.ipAddresses, { ip: '', mac: '' }]
+      ipAddresses: [...prev.ipAddresses, { ip: '', mac: '', label: isPrivateRoutedMode || isVrackMode ? 'BYOIP routed' : 'OVH Additional IP' }]
     }));
-  }, []);
+  }, [isPrivateRoutedMode, isVrackMode]);
 
   // Remove IP address
   const removeIpAddress = useCallback((idx: number) => {
@@ -271,6 +328,14 @@ export function ProxmoxHostsManager() {
         gateway_ip: form.gateway_ip || undefined,
         dns_primary: form.dns_primary || undefined,
         dns_secondary: form.dns_secondary || undefined,
+        provider: form.provider || 'ovh',
+        server_series: form.server_series,
+        network_mode: form.network_mode,
+        vm_private_cidr: form.vm_private_cidr || undefined,
+        vm_private_gateway: form.vm_private_gateway || undefined,
+        vm_private_ip_start: form.vm_private_ip_start ? Number(form.vm_private_ip_start) : undefined,
+        public_prefix_length: form.public_prefix_length ? Number(form.public_prefix_length) : undefined,
+        snippet_storage: form.snippet_storage || 'local',
         template_vmid: form.template_vmid ? Number(form.template_vmid) : undefined,
         region: form.region || undefined,
         display_region: form.display_region || undefined,
@@ -279,8 +344,8 @@ export function ProxmoxHostsManager() {
         total_disk_gb: form.total_disk_gb ? Number(form.total_disk_gb) : undefined,
         is_active: form.is_active,
         pools: form.ipAddresses
-          .filter(a => a.ip && a.mac)
-          .map(a => ({ mac: a.mac, ips: [a.ip] })),
+          .filter(a => a.ip && (a.mac || isPrivateRoutedMode || isVrackMode))
+          .map(a => ({ mac: a.mac || `route:${a.ip}`, ips: [a.ip], label: a.label || (isPrivateRoutedMode || isVrackMode ? 'BYOIP routed' : 'OVH Additional IP') })),
         templates: form.templates.filter(t => t.name && t.vmid),
       };
 
@@ -304,7 +369,7 @@ export function ProxmoxHostsManager() {
     } finally {
       setSaving(false);
     }
-  }, [form, resetForm, loadHosts]);
+  }, [form, isPrivateRoutedMode, isVrackMode, resetForm, loadHosts]);
 
   return (
     <div className="space-y-6">
@@ -374,6 +439,58 @@ export function ProxmoxHostsManager() {
                   placeholder="e.g., 9001"
                   className="bg-black/50 text-white border-white/10 mt-1"
                 />
+              </div>
+            </div>
+
+            {/* Provider & Network Profile */}
+            <div className="border-t border-white/10 pt-4">
+              <h3 className="text-white font-semibold mb-3">Provider & Network Profile</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-white">Provider</Label>
+                  <Select value={form.provider} onValueChange={(value) => setForm(prev => ({ ...prev, provider: value }))}>
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ovh">OVHcloud</SelectItem>
+                      <SelectItem value="generic">Generic</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-white">Server Series</Label>
+                  <Select
+                    value={form.server_series}
+                    onValueChange={(value) => setForm(prev => ({
+                      ...prev,
+                      server_series: value,
+                      network_mode: defaultNetworkModeForSeries(value),
+                    }))}
+                  >
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Server series" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SERVER_SERIES_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-white">Network Mode</Label>
+                  <Select value={form.network_mode} onValueChange={(value) => setForm(prev => ({ ...prev, network_mode: value }))}>
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Network mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NETWORK_MODE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -498,11 +615,11 @@ export function ProxmoxHostsManager() {
               <h3 className="text-white font-semibold mb-3">Network Settings</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-white">Gateway IP</Label>
+                  <Label className="text-white">{isPrivateRoutedMode ? 'Host Public Gateway' : 'Gateway IP'}</Label>
                   <Input
                     value={form.gateway_ip}
                     onChange={(e) => setForm(prev => ({ ...prev, gateway_ip: e.target.value }))}
-                    placeholder="192.168.1.1"
+                    placeholder={isPrivateRoutedMode ? '100.64.0.1' : '192.168.1.1'}
                     className="bg-black/50 text-white border-white/10 mt-1"
                   />
                 </div>
@@ -525,6 +642,63 @@ export function ProxmoxHostsManager() {
                   />
                 </div>
               </div>
+              {(isPrivateRoutedMode || isVrackMode) && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                  {isPrivateRoutedMode && (
+                    <>
+                      <div>
+                        <Label className="text-white">VM Private CIDR</Label>
+                        <Input
+                          value={form.vm_private_cidr}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_cidr: e.target.value }))}
+                          placeholder="192.168.0.0/24"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-white">VM Private Gateway</Label>
+                        <Input
+                          value={form.vm_private_gateway}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_gateway: e.target.value }))}
+                          placeholder="192.168.0.1"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-white">Private IP Start</Label>
+                        <Input
+                          type="number"
+                          value={form.vm_private_ip_start}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_ip_start: e.target.value }))}
+                          placeholder="10"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <Label className="text-white">Public Prefix Length</Label>
+                    <Input
+                      type="number"
+                      value={form.public_prefix_length}
+                      onChange={(e) => setForm(prev => ({ ...prev, public_prefix_length: e.target.value }))}
+                      placeholder={isVrackMode ? '28' : '32'}
+                      className="bg-black/50 text-white border-white/10 mt-1"
+                    />
+                  </div>
+                  {isPrivateRoutedMode && (
+                    <div>
+                      <Label className="text-white">Snippet Storage</Label>
+                      <Input
+                        value={form.snippet_storage}
+                        onChange={(e) => setForm(prev => ({ ...prev, snippet_storage: e.target.value }))}
+                        placeholder="local"
+                        className="bg-black/50 text-white border-white/10 mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* IP Addresses */}
@@ -540,11 +714,16 @@ export function ProxmoxHostsManager() {
                   <Plus className="w-4 h-4 mr-1" /> Add IP
                 </Button>
               </div>
-              <p className="text-xs text-white/50 mb-3">Each IP requires its own unique vMAC from OVH.</p>
+              <p className="text-xs text-white/50 mb-3">
+                {isVrackMode || isPrivateRoutedMode
+                  ? 'Add usable BYOIP/Additional IP addresses. MAC can be left empty for routed BYOIP/vRack profiles.'
+                  : 'Each IP requires its own unique vMAC from OVH unless this host uses route-only networking.'}
+              </p>
               {form.ipAddresses.length > 0 && (
                 <div className="flex gap-2 text-xs text-white/40 px-1 mb-1">
                   <span className="flex-1">IP Address</span>
                   <span className="flex-1">vMAC Address</span>
+                  <span className="flex-1">Pool Label</span>
                   <span className="w-9" />
                 </div>
               )}
@@ -570,6 +749,17 @@ export function ProxmoxHostsManager() {
                           ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, mac: e.target.value } : a)
                         }))}
                         placeholder="02:00:00:17:73:3d"
+                        className="bg-black/50 text-white border-white/10"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        value={entry.label || ''}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, label: e.target.value } : a)
+                        }))}
+                        placeholder={isVrackMode || isPrivateRoutedMode ? 'BYOIP routed' : 'OVH Additional IP'}
                         className="bg-black/50 text-white border-white/10"
                       />
                     </div>
@@ -795,6 +985,10 @@ export function ProxmoxHostsManager() {
                           <p className="text-white/60">Bridge</p>
                           <p className="text-white">{host.bridge}</p>
                         </div>
+                        <div>
+                          <p className="text-white/60">Network</p>
+                          <p className="text-white">{host.network_mode || 'legacy_public_gateway'}</p>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3 text-sm">
@@ -839,6 +1033,7 @@ export function ProxmoxHostsManager() {
                                     <span className={`w-2 h-2 rounded-full ${inUse ? 'bg-red-500' : 'bg-green-500'}`} />
                                     <span className="text-white/70 font-mono">{ip.ip}</span>
                                     <span className="text-white/40">MAC: {pool.mac || '-'}</span>
+                                    {pool.label && <span className="text-white/40">Label: {pool.label}</span>}
                                     {inUse && (
                                       <span className="text-red-400/80 text-[10px] px-1.5 py-0.5 bg-red-500/10 rounded">
                                         in use
