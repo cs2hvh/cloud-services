@@ -312,7 +312,7 @@ export function DeploymentHistory({
   const rollbackTimestamps = useMemo(
     () =>
       operations
-        .filter((d) => d.trigger === "rollback" && d.status === "SUCCESS")
+        .filter((d) => d.trigger === "rollback" && d.status === "SUCCESS" && d.started_at)
         .map((d) => new Date(d.started_at).getTime()),
     [operations]
   );

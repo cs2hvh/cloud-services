@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import * as crypto from 'crypto';
 import { AppOperationFinalizer } from '@/lib/app-operations';
-import { PlatformAppLogRetentionService } from '@/lib/services/platform-app-log-retention';
 
 type DeploymentRecordPayload = {
   app_id: string;
@@ -136,22 +135,6 @@ export async function POST(req: NextRequest) {
     const deployment = finalization.record;
 
     console.log('[DeploymentRecordWebhook] ✅ Deployment record finalized:', deployment.id);
-
-    if (
-      buildNumber !== null &&
-      (body.trigger === 'manual' || body.trigger === 'webhook')
-    ) {
-      void PlatformAppLogRetentionService.archiveBuildLog({
-        appId: body.app_id,
-        deploymentId: deployment.id,
-        appName,
-        buildNumber,
-        status: body.status,
-        production: body.trigger === 'manual',
-      }).catch((archiveError) => {
-        console.error('[DeploymentRecordWebhook] Build log archival failed:', archiveError);
-      });
-    }
 
     return NextResponse.json({
       success: true,
