@@ -20,14 +20,14 @@ import {
   AlertTriangle,
   TrendingUp,
   HardDrive,
-  Server,
+  // Server,
   Network,
-  Container,
+  // Container,
   Shield,
   Layers,
   RefreshCw,
-  Copy,
-  Check,
+  // Copy,
+  // Check,
   X,
   Eye,
 } from 'lucide-react';
@@ -61,7 +61,7 @@ export function AppCard({
   build,
   logs,
   logsLoading,
-  // logsError,
+  logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
@@ -76,7 +76,7 @@ export function AppCard({
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
-  const [copiedField, setCopiedField] = useState<string | null>(null);
+  // const [copiedField, setCopiedField] = useState<string | null>(null);
   const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
 
   // When the card is expanded and the active build number changes (new build started),
@@ -84,7 +84,7 @@ export function AppCard({
   useEffect(() => {
     const prev = prevBuildNumberRef.current;
     prevBuildNumberRef.current = build?.number;
-    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== build.number) {
       onFetchLogs(build.number);
     }
   }, [build?.number, isExpanded, activeTab, onFetchLogs]);
@@ -96,15 +96,10 @@ export function AppCard({
   });
 
   const handleToggleLogs = () => {
-    // Always try to fetch logs when expanding IF we have a build number
-    if (!isExpanded) {
-      if (build?.number) {
-        onFetchLogs(build.number);
-      } else {
-        // If no build info yet, try build #1 (most apps will have at least one build)
-        onFetchLogs(1);
-      }
+    if (!isExpanded && build?.number) {
+      onFetchLogs(build.number);
     }
+    // If build info isn't available yet, the useEffect above will fetch once it arrives.
     setActiveTab('logs');
     onToggleLogs();
   };
@@ -116,11 +111,11 @@ export function AppCard({
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  // const copyToClipboard = (text: string, field: string) => {
+  //   navigator.clipboard.writeText(text);
+  //   setCopiedField(field);
+  //   setTimeout(() => setCopiedField(null), 2000);
+  // };
 
   const canRollback = !!app.can_rollback;
   const isAppBuilding = app.status === 'building';
@@ -393,6 +388,7 @@ export function AppCard({
                 buildInfo={build ?? null}
                 buildLogs={logs ?? ''}
                 initialLoading={!!logsLoading}
+                logsError={logsError}
                 appName={app.name}
                 fetchBuildLogs={(_, buildNumber) => {
                   onFetchLogs(buildNumber);

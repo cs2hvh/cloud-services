@@ -30,11 +30,12 @@ interface Props {
   selectedProject: string;
   size: string;
   autoDeploy: boolean;
+  containerPort?: number;
 }
 
 export function SummarySidebar({
   projects, pricing, selectedProviderData, selectedRepoData,
-  selectedBranch, appName, framework, selectedProject, size, autoDeploy,
+  selectedBranch, appName, framework, selectedProject, size, autoDeploy, containerPort,
 }: Props) {
   const sizeConfig = instanceSizeConfigs[size as keyof typeof instanceSizeConfigs] ?? instanceSizeConfigs.small;
   const sizePrice = pricing?.[size];
@@ -57,6 +58,9 @@ export function SummarySidebar({
             <SummaryRow label="Branch" value={(selectedBranch || selectedRepoData?.defaultBranch) ?? "—"} empty={!(selectedBranch || selectedRepoData?.defaultBranch)} />
             <SummaryRow icon="/dashboard-icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
             <SummaryRow icon="/dashboard-icons/apptype.png" label="Framework" value={framework || "—"} empty={!framework} />
+            {containerPort !== undefined && (
+              <SummaryRow label="Port" value={String(containerPort)} />
+            )}
           </div>
 
           <div className="my-3 border-t border-white/[0.05]" />

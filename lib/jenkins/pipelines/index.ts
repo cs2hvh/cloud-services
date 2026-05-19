@@ -49,6 +49,7 @@ export const PipelineType = {
   ANGULAR: 'angular',
   SVELTEKIT: 'sveltekit',
   JAVA: 'java',
+  DOCKERFILE: 'dockerfile',
 } as const;
 
 export type PipelineTypeValue = typeof PipelineType[keyof typeof PipelineType];
@@ -82,6 +83,8 @@ export function getPipelineGenerator(type: PipelineTypeValue) {
       return createSvelteKitPipeline;
     case PipelineType.JAVA:
       return createJavaPipeline;
+    case PipelineType.DOCKERFILE:
+      return createDockerfilePipeline;
     default:
       throw new Error(`Unknown pipeline type: ${type}`);
   }

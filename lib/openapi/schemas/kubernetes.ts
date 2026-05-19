@@ -76,3 +76,27 @@ export const KubernetesClusterDeleteResponseSchema = z.object({
     deleted: z.boolean().openapi({ example: true }),
   }),
 }).openapi('KubernetesClusterDeleteResponse');
+
+export const KubernetesKubeconfigResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '23549dc5-53ee-4ff2-904d-a59250065545' }),
+    kubeconfig: z.string().openapi({ description: 'Decrypted kubeconfig content as raw YAML string.' }),
+  }),
+}).openapi('KubernetesKubeconfigResponse');
+
+export const KubernetesWorkerDeleteResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '23549dc5-53ee-4ff2-904d-a59250065545' }),
+    droplet_id: z.string().openapi({ example: '539342404' }),
+    deleted: z.boolean().openapi({ example: true }),
+    workers: z.array(WorkerNodeSchema).openapi({ description: 'Remaining worker nodes after deletion.' }),
+  }),
+}).openapi('KubernetesWorkerDeleteResponse');
+
+export const KubernetesOptionsResponseSchema = z.object({
+  data: z.object({
+    versions: z.array(z.string()).openapi({ example: ['1.29.1-do.0', '1.28.6-do.0'] }),
+    regions: z.array(z.string()).openapi({ example: ['ams3', 'blr1', 'nyc1', 'sgp1'] }),
+    node_sizes: z.array(z.string()).openapi({ example: ['s-2vcpu-4gb', 's-4vcpu-8gb', 'c-4'] }),
+  }),
+}).openapi('KubernetesOptionsResponse');

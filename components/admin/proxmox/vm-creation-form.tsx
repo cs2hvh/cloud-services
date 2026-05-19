@@ -321,7 +321,7 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
             <Input
               type="number"
               min={1}
-              max={32}
+              max={64}
               value={cpuCores}
               onChange={(e) => setCpuCores(Math.max(1, parseInt(e.target.value || '1', 10)))}
               className="bg-black text-white border-white/10"

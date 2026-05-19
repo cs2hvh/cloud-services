@@ -2,7 +2,8 @@ import { NextRequest, after } from "next/server";
 import { Agent as UndiciAgent } from "undici";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
-import { addHostRoute } from "@/lib/proxmox-utils";
+import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
+import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
@@ -28,10 +29,13 @@ interface DbReservation {
   error: string | null;
 }
 
+type ProxmoxFormValue = string | number | boolean | Array<string | number | boolean>;
+
 interface PoolItem {
   ip: string;
   mac?: string;
   poolId: number;
+  label?: string | null;
 }
 
 function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
@@ -40,6 +44,15 @@ function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
     p.then((v) => { clearTimeout(id); resolve(v); })
      .catch((e) => { clearTimeout(id); reject(e); });
   });
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    const causeMessage = cause instanceof Error ? `: ${cause.message}` : cause ? `: ${String(cause)}` : "";
+    return `${error.message}${causeMessage}`;
+  }
+  return String(error);
 }
 
 type HostConfig = {
@@ -58,6 +71,14 @@ type HostConfig = {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
 };
 
 async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig): Promise<ProxmoxAuthHeaders> {
@@ -70,16 +91,21 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
   if (rawUsername && password) {
     const username = rawUsername.includes("@") ? rawUsername : `${rawUsername}@pam`;
     const body = new URLSearchParams({ username, password });
-  const ticketRes = await withTimeout(
-    fetch(`${apiBase}/api2/json/access/ticket`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  let ticketRes: Response;
+  try {
+    ticketRes = await withTimeout(
+      fetch(`${apiBase}/api2/json/access/ticket`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        redirect: "follow",
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`Proxmox login request failed: ${errorMessage(error)}`);
+  }
   if (!ticketRes.ok) {
     const t = await ticketRes.text();
     throw new Error(`login failed (${ticketRes.status}): ${t}`);
@@ -113,15 +139,20 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
 }
 
 async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
-  const res = await withTimeout(
-    fetch(`${apiBase}${path}`, {
-      cache: "no-store",
-      redirect: "follow",
-      headers: init?.headers || {},
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  let res: Response;
+  try {
+    res = await withTimeout(
+      fetch(`${apiBase}${path}`, {
+        cache: "no-store",
+        redirect: "follow",
+        headers: init?.headers || {},
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`${path} request failed: ${errorMessage(error)}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${path} failed (${res.status}): ${text}`);
@@ -129,24 +160,145 @@ async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeader
   return res.json();
 }
 
-async function postForm<T = unknown>(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<T> {
+async function postForm<T = unknown>(apiBase: string, path: string, form: Record<string, ProxmoxFormValue>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<T> {
   const body = new URLSearchParams();
-  Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
-  const res = await withTimeout(
-    fetch(`${apiBase}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  Object.entries(form).forEach(([k, v]) => {
+    if (Array.isArray(v)) {
+      v.forEach((item) => body.append(k, String(item)));
+    } else {
+      body.append(k, String(v));
+    }
+  });
+  let res: Response;
+  try {
+    res = await withTimeout(
+      fetch(`${apiBase}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
+        body,
+        redirect: "follow",
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`${path} request failed: ${errorMessage(error)}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${path} failed (${res.status}): ${text}`);
   }
   return res.json() as Promise<T>;
+}
+
+function buildLinuxGuestNetworkScript(args: {
+  publicIp: string;
+  privateIp: string;
+  privatePrefixLength: number;
+  privateGateway: string;
+  dnsPrimary: string;
+  dnsSecondary: string;
+}): string {
+  return [
+    "set -eu",
+    `PUB='${args.publicIp}'`,
+    `PRIV='${args.privateIp}'`,
+    `PREFIX='${args.privatePrefixLength}'`,
+    `GW='${args.privateGateway}'`,
+    `DNS1='${args.dnsPrimary}'`,
+    `DNS2='${args.dnsSecondary}'`,
+    "DEV=$(ip -o link show | awk -F': ' '$2 != \"lo\" && $0 ~ /link\\/ether/ {print $2; exit}')",
+    "[ -n \"$DEV\" ]",
+    "ip link set \"$DEV\" up",
+    "ip addr flush dev \"$DEV\" scope global || true",
+    "ip addr replace \"$PRIV/$PREFIX\" dev \"$DEV\"",
+    "ip addr replace \"$PUB/32\" dev \"$DEV\"",
+    "ip route replace default via \"$GW\" dev \"$DEV\" onlink src \"$PUB\"",
+    "if [ -d /etc/netplan ]; then",
+    "  mkdir -p /etc/netplan /etc/cloud/cloud.cfg.d",
+    "  cat > /etc/netplan/99-byoip.yaml <<NETEOF",
+    "network:",
+    "  version: 2",
+    "  ethernets:",
+    "    ${DEV}:",
+    "      match:",
+    "        name: \"${DEV}\"",
+    "      addresses:",
+    "        - ${PRIV}/${PREFIX}",
+    "        - ${PUB}/32",
+    "      nameservers:",
+    "        addresses:",
+    "          - ${DNS1}",
+    "          - ${DNS2}",
+    "      routes:",
+    "        - to: default",
+    "          via: ${GW}",
+    "          on-link: true",
+    "          from: ${PUB}",
+    "NETEOF",
+    "  chmod 600 /etc/netplan/99-byoip.yaml",
+    "  rm -f /etc/netplan/50-cloud-init.yaml",
+    "  echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg",
+    "  netplan generate",
+    "  netplan apply || true",
+    "fi",
+    "systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true",
+    "ip -4 addr show \"$DEV\"",
+    "ip route",
+  ].join("\n");
+}
+
+async function configureLinuxNetworkViaGuestAgent(args: {
+  apiBase: string;
+  node: string;
+  vmid: number;
+  auth: ProxmoxAuthHeaders;
+  dispatcher?: UndiciAgent;
+  script: string;
+  timeoutMs?: number;
+}): Promise<void> {
+  const timeoutMs = args.timeoutMs ?? 180000;
+  const start = Date.now();
+  let lastError = "";
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const exec = await postForm<ProxmoxResponse<{ pid?: number }>>(
+        args.apiBase,
+        `/api2/json/nodes/${encodeURIComponent(args.node)}/qemu/${args.vmid}/agent/exec`,
+        { command: ["/bin/bash", "-lc", args.script], "capture-output": 1 },
+        args.auth,
+        args.dispatcher
+      );
+      const pid = Number(exec.data?.pid);
+      if (!pid) throw new Error("guest agent exec did not return pid");
+
+      const statusDeadline = Date.now() + 60000;
+      while (Date.now() < statusDeadline) {
+        const statusJson = await fetchJson(
+          args.apiBase,
+          `/api2/json/nodes/${encodeURIComponent(args.node)}/qemu/${args.vmid}/agent/exec-status?pid=${encodeURIComponent(String(pid))}`,
+          args.auth,
+          args.dispatcher
+        );
+        const status = ((statusJson as ProxmoxResponse)?.data ?? statusJson) as Record<string, unknown>;
+        if (status.exited) {
+          const exitCode = Number(status.exitcode || 0);
+          if (exitCode === 0) return;
+          const out = status["out-data"] ? Buffer.from(String(status["out-data"]), "base64").toString("utf8") : "";
+          const err = status["err-data"] ? Buffer.from(String(status["err-data"]), "base64").toString("utf8") : "";
+          throw new Error(`guest network setup failed (${exitCode}): ${out || err}`);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      throw new Error("guest network setup timed out");
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+
+  throw new Error(`QEMU guest agent did not configure networking: ${lastError}`);
 }
 
 async function waitTask(apiBase: string, node: string, upid: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent, timeoutMs = 180000): Promise<boolean> {
@@ -235,7 +387,7 @@ export async function POST(req: NextRequest) {
   // 1. Find all active hosts in the requested region
   const { data: regionHosts, error: regionErr } = await supabase
     .from("proxmox_hosts")
-    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
     .eq("region", region)
     .eq("is_active", true);
 
@@ -340,12 +492,19 @@ export async function POST(req: NextRequest) {
 
   const { data: pools } = await supabase
     .from("public_ip_pools")
-    .select("id, mac, host_id, label")
-    .in("host_id", regionHostIds)
-    .or("label.is.null,label.not.ilike.*IPXO*");
+    .select("id, mac, host_id, label, is_active")
+    .in("host_id", regionHostIds);
   const poolIds = (pools || []).map((p: Record<string, unknown>) => Number(p.id));
   const macByPool = new Map<number, string | undefined>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), p.mac as string | undefined]));
   const hostByPool = new Map<number, string>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), String(p.host_id)]));
+  const labelByPool = new Map<number, string | null>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null]));
+  const activeByPool = new Map<number, boolean>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.is_active as boolean | null) !== false]));
+
+  const isRoutedPool = (mac?: string, label?: string | null) => {
+    const normalizedMac = String(mac || "").toLowerCase();
+    const normalizedLabel = String(label || "").toLowerCase();
+    return normalizedMac.startsWith("route:") || normalizedLabel.includes("byoip") || normalizedLabel.includes("routed");
+  };
 
   // Build available IP list per host
   const ipCandidatesByHost = new Map<string, PoolItem[]>();
@@ -359,9 +518,16 @@ export async function POST(req: NextRequest) {
       const ip = String((r as Record<string, unknown>).ip);
       const mac = macByPool.get(poolId);
       const hostId = hostByPool.get(poolId);
+      const label = labelByPool.get(poolId);
+      const host = regionHosts.find((h) => h.id === hostId);
+      const routedMode = host?.network_mode === "ovh_hg_scale_routed" || host?.network_mode === "ovh_advance_gen3_routed" || host?.network_mode === "ovh_vrack_block";
+      const routedPool = isRoutedPool(mac, label);
+      if (!activeByPool.get(poolId)) continue;
+      if (routedMode && !routedPool) continue;
+      if (!routedMode && routedPool) continue;
       if (!usedIpSet.has(ip) && hostId) {
         const list = ipCandidatesByHost.get(hostId) || [];
-        list.push({ ip, mac, poolId });
+        list.push({ ip, mac: routedPool ? undefined : mac, poolId, label });
         ipCandidatesByHost.set(hostId, list);
       }
     }
@@ -451,7 +617,8 @@ export async function POST(req: NextRequest) {
   const macAddress = allocatedIp.mac;
   const hostId = cfg.id;
 
-  if (!macAddress) {
+  const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
+  if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
     console.error("[VM Create] No MAC address for IP:", ipPrimary);
     return Response.json({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
   }
@@ -482,18 +649,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const gateway = cfg.gateway_ip || undefined;
-  const dns1 = cfg.dns_primary || "8.8.8.8";
-  const dns2 = cfg.dns_secondary || "1.1.1.1";
-
-  if (!gateway) {
-    console.error("[VM Create] Gateway missing on host:", hostId);
-    return Response.json({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
-  }
-
   const node = cfg.node;
   const storage = cfg.storage || "local";
-  const bridge = cfg.bridge || "vmbr0";
 
   // Reserve DB record to avoid reuse
   let reservationId: number | null = null;
@@ -614,8 +771,22 @@ export async function POST(req: NextRequest) {
     await updateStage('configuring', 50, 'Configuring hardware...');
 
     // Configure — different approach for Windows vs Linux
-    const ipConfig0 = `ip=${ipPrimary}/32,gw=${gateway}`;
-    const nameservers = `${dns1}${dns2 ? ` ${dns2}` : ""}`;
+    const networkPlan = buildVmNetworkPlan({
+      host: cfg,
+      publicIp: ipPrimary,
+      vmid: newid,
+      reservationId: reservationId || newid,
+      isWindows,
+    });
+    if (networkPlan.networkSnippetFilename && networkPlan.networkSnippetContent) {
+      await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.networkSnippetFilename, networkPlan.networkSnippetContent);
+    }
+    if (networkPlan.vendorSnippetFilename && networkPlan.vendorSnippetContent) {
+      await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.vendorSnippetFilename, networkPlan.vendorSnippetContent);
+    }
+    const ipConfig0 = networkPlan.ipconfig0;
+    const nameservers = networkPlan.nameservers;
+    const bridge = networkPlan.bridge;
 
     // Bandwidth rate limit (MBps) based on vCPU count
     const rateMBps = cpuCores <= 2 ? 4 : cpuCores <= 4 ? 8 : cpuCores <= 6 ? 15 : 30;
@@ -625,9 +796,11 @@ export async function POST(req: NextRequest) {
       sockets: 1,
       cores: cpuCores,
       memory: memoryMB,
+      agent: "enabled=1",
       onboot: 1,
+      ciupgrade: 0,
       nameserver: nameservers,
-      net0: `virtio=${macAddress},bridge=${bridge},rate=${rateMBps}`,
+      net0: `${macAddress ? `virtio=${macAddress}` : "virtio"},bridge=${bridge},rate=${rateMBps}`,
       ipconfig0: ipConfig0,
       cipassword: sshPassword,
     };
@@ -648,8 +821,12 @@ export async function POST(req: NextRequest) {
       configPayload.ciuser = "admin";
     } else {
       configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
-      // Apply vendor cloud-init snippet to enable SSH password auth on Linux VMs
-      configPayload.cicustom = "vendor=local:snippets/linux-cloud-init.yml";
+      const vendorSnippet = networkPlan.cicustomVendor || `vendor=${networkPlan.snippetStorage}:snippets/linux-cloud-init.yml`;
+      const cicustom = buildCiCustomValue({
+        networkSnippet: networkPlan.cicustomNetwork,
+        vendorSnippet,
+      });
+      if (cicustom) configPayload.cicustom = cicustom;
     }
     
     await postForm(
@@ -739,8 +916,9 @@ export async function POST(req: NextRequest) {
 
     await updateStage('networking', 70, 'Setting up network...');
 
-    // Add host route for this VM's IP (OVH routed IP model)
-    await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], ipPrimary, bridge);
+    if (networkPlan.addHostRoute) {
+      await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], ipPrimary, bridge);
+    }
 
     await updateStage('booting', 85, 'Starting server...');
 
@@ -753,6 +931,29 @@ export async function POST(req: NextRequest) {
     );
     const startUpid = startRes.data;
     if (startUpid) await waitTask(apiBase, node, startUpid, auth, dispatcher, 60000).catch(() => {});
+
+    if (process.env.PROXMOX_USE_GUEST_AGENT_NETWORK === "1" && (networkPlan.mode === "ovh_hg_scale_routed" || networkPlan.mode === "ovh_advance_gen3_routed")) {
+      if (!networkPlan.privateIp || !networkPlan.privateGateway || !networkPlan.privatePrefixLength) {
+        throw new Error("Missing routed BYOIP network plan values");
+      }
+      await updateStage('networking', 90, 'Applying routed BYOIP network inside server...');
+      const dnsServers = networkPlan.nameservers.split(/\s+/).filter(Boolean);
+      await configureLinuxNetworkViaGuestAgent({
+        apiBase,
+        node,
+        vmid: newid,
+        auth,
+        dispatcher,
+        script: buildLinuxGuestNetworkScript({
+          publicIp: ipPrimary,
+          privateIp: networkPlan.privateIp,
+          privatePrefixLength: networkPlan.privatePrefixLength,
+          privateGateway: networkPlan.privateGateway,
+          dnsPrimary: dnsServers[0] || "8.8.8.8",
+          dnsSecondary: dnsServers[1] || "1.1.1.1",
+        }),
+      });
+    }
 
     await updateStage('verifying', 95, 'Verifying server status...');
 
@@ -771,6 +972,7 @@ export async function POST(req: NextRequest) {
           vmid: newid,
           status: vmStatus,
           details: {
+            network: networkPlan.details,
             provisioning: {
               stage: 'complete',
               progress: 100,
@@ -783,7 +985,8 @@ export async function POST(req: NextRequest) {
         .eq("id", reservationId);
     }
   } catch (e: unknown) {
-    console.error("[VM Create] Provisioning failed:", e instanceof Error ? e.message : e);
+    const failureMessage = errorMessage(e);
+    console.error("[VM Create] Provisioning failed:", failureMessage, e);
     try {
       if (reservationId != null) {
         await supabase
@@ -794,7 +997,7 @@ export async function POST(req: NextRequest) {
               provisioning: {
                 stage: 'failed',
                 progress: 0,
-                message: 'Deployment failed. Our team has been notified.',
+                message: failureMessage,
                 started_at: provisioningStarted,
                 failed_at: new Date().toISOString(),
               }
