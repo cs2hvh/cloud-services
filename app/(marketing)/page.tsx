@@ -13,7 +13,7 @@ import GlobalNetworkSection from "@/components/global-network-section";
 export const metadata: Metadata = {
   title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
   description:
-    "Deploy VMs, Kubernetes, managed databases, GPU instances, and AI agents across 12 global regions. 99.99% uptime SLA. Provision your entire infrastructure in seconds.",
+    "Deploy GPU instances, VMs, Kubernetes, managed databases, storage, apps, and AI agents from one production cloud control plane.",
   alternates: {
     canonical: siteConfig.url,
   },
@@ -91,7 +91,7 @@ const jsonLd = {
       isPartOf: { "@id": `${siteConfig.url}/#website` },
       about: { "@id": `${siteConfig.url}/#organization` },
       description:
-        "Deploy virtual machines, Kubernetes clusters, GPU instances, managed databases, and AI agents. Enterprise cloud infrastructure with 99.99% uptime SLA across 12 global regions.",
+        "Deploy virtual machines, Kubernetes clusters, GPU instances, managed databases, storage, apps, and AI agents from one production cloud control plane.",
       breadcrumb: {
         "@type": "BreadcrumbList",
         itemListElement: [

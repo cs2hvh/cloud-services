@@ -1,687 +1,497 @@
 "use client";
 
-import { motion } from "motion/react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import {
+    ArrowRight,
+    Bot,
+    Boxes,
+    Cpu,
+    Database,
+    HardDrive,
+    Network,
+    Rocket,
+    Server,
+    ShieldCheck,
+    type LucideIcon,
+} from "lucide-react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
-export type StockStatus = "high" | "medium" | "low" | "none";
-
-export interface HeroInventoryItem {
-    gpuCatalogId: string;
-    displayName: string;
-    memoryGb: number;
-    onDemandPerHr: number | null;
-    stockStatus: StockStatus;
-    maxCount?: number;
-}
-
 const BRAND = "#0095FF";
 
-// ─── Custom arrow glyph (no lucide) ──────────────────────────────
-function ArrowGlyph({ className = "" }: { className?: string }) {
-    return (
-        <svg
-            className={className}
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-        >
-            <path
-                d="M2.5 8H13.5M9 3.5L13.5 8L9 12.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="square"
-                strokeLinejoin="miter"
-            />
-        </svg>
-    );
-}
-
-// ─── Custom service marks (no lucide) ────────────────────────────
-// Hand-drawn 12×12 monoline glyphs — distinctive per service but
-// share one visual language: thin strokes, square caps, no fills.
-function ServiceMark({
-    kind,
-    className = "",
-}: {
-    kind:
-        | "gpu"
-        | "compute"
-        | "k8s"
-        | "database"
-        | "storage"
-        | "app"
-        | "agent"
-        | "network";
-    className?: string;
-}) {
-    const common = {
-        stroke: "currentColor",
-        strokeWidth: 1,
-        fill: "none",
-        strokeLinecap: "square" as const,
-        strokeLinejoin: "miter" as const,
-    };
-    switch (kind) {
-        case "gpu":
-            // outer pkg + inner die + 4 corner dots
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <rect x="1" y="1" width="10" height="10" {...common} />
-                    <rect x="3.5" y="3.5" width="5" height="5" {...common} />
-                    <circle cx="1" cy="1" r="0.4" fill="currentColor" />
-                    <circle cx="11" cy="1" r="0.4" fill="currentColor" />
-                    <circle cx="1" cy="11" r="0.4" fill="currentColor" />
-                    <circle cx="11" cy="11" r="0.4" fill="currentColor" />
-                </svg>
-            );
-        case "compute":
-            // stacked rectangles (servers)
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <rect x="1" y="2" width="10" height="2.5" {...common} />
-                    <rect x="1" y="5.5" width="10" height="2.5" {...common} />
-                    <rect x="1" y="9" width="10" height="1.5" {...common} />
-                    <circle cx="3" cy="3.25" r="0.35" fill="currentColor" />
-                    <circle cx="3" cy="6.75" r="0.35" fill="currentColor" />
-                </svg>
-            );
-        case "k8s":
-            // hexagonal node with 6 spokes
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <polygon
-                        points="6,1.5 10,3.75 10,8.25 6,10.5 2,8.25 2,3.75"
-                        {...common}
-                    />
-                    <circle cx="6" cy="6" r="1.3" {...common} />
-                </svg>
-            );
-        case "database":
-            // 3 stacked ellipses (cylinder)
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <ellipse cx="6" cy="2.5" rx="4" ry="1.2" {...common} />
-                    <path d="M2 2.5 V 9.5" {...common} />
-                    <path d="M10 2.5 V 9.5" {...common} />
-                    <path d="M2 5.5 Q 6 7 10 5.5" {...common} />
-                    <path d="M2 9.5 Q 6 11 10 9.5" {...common} />
-                </svg>
-            );
-        case "storage":
-            // 4 cubes in 2×2
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <rect x="1.5" y="1.5" width="3.5" height="3.5" {...common} />
-                    <rect x="7" y="1.5" width="3.5" height="3.5" {...common} />
-                    <rect x="1.5" y="7" width="3.5" height="3.5" {...common} />
-                    <rect x="7" y="7" width="3.5" height="3.5" {...common} />
-                </svg>
-            );
-        case "app":
-            // arrow up out of box (deploy)
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <path d="M2 7 V 11 H 10 V 7" {...common} />
-                    <path d="M6 9 V 1.5 M3 4.5 L 6 1.5 L 9 4.5" {...common} />
-                </svg>
-            );
-        case "agent":
-            // node + 3 connection arms
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <circle cx="6" cy="6" r="2" {...common} />
-                    <path d="M6 4 V 1" {...common} />
-                    <path d="M4 7 L 1.5 10" {...common} />
-                    <path d="M8 7 L 10.5 10" {...common} />
-                    <circle cx="6" cy="1" r="0.6" fill="currentColor" />
-                    <circle cx="1.5" cy="10" r="0.6" fill="currentColor" />
-                    <circle cx="10.5" cy="10" r="0.6" fill="currentColor" />
-                </svg>
-            );
-        case "network":
-        default:
-            // shield outline
-            return (
-                <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
-                    <path
-                        d="M6 1.5 L 10.5 3 V 6.5 Q 10.5 9.5 6 10.5 Q 1.5 9.5 1.5 6.5 V 3 Z"
-                        {...common}
-                    />
-                </svg>
-            );
-    }
-}
-
-// ─── Premium platform mockup — multi-service running workloads ──
-// A clean dashboard panel showing the actual product: a list of
-// running workloads spanning every service tier on the platform.
-// Conveys breadth (GPU + DB + K8s + App + Storage + Compute) and
-// what the product actually does, without filling the visual with
-// nested boxes.
-type Workload = {
-    kind: Parameters<typeof ServiceMark>[0]["kind"];
-    service: string;
-    spec: string;
-    price: string;
-    accent?: boolean;
-};
-
-const WORKLOADS: Workload[] = [
-    {
-        kind: "gpu",
-        service: "GPU pod",
-        spec: "H200 SXM · 141 GB",
-        price: "$3.99/hr",
-        accent: true,
-    },
-    {
-        kind: "database",
-        service: "Database",
-        spec: "Postgres 16 · pro",
-        price: "$0.18/hr",
-    },
-    {
-        kind: "k8s",
-        service: "Kubernetes",
-        spec: "prod-cluster · 6 nodes",
-        price: "$0.04/n·hr",
-    },
-    {
-        kind: "app",
-        service: "App deploy",
-        spec: "support-bot · main",
-        price: "$0.012/hr",
-    },
-    {
-        kind: "storage",
-        service: "Object storage",
-        spec: "models · 2.4 TB",
-        price: "$0.02/GB",
-    },
-];
-
-function PlatformMockup() {
-    return (
-        <div
-            className="relative overflow-hidden border border-white/[0.08] bg-[#0a0d14]"
-            style={{
-                boxShadow:
-                    "0 0 0 1px rgba(255,255,255,0.015), 0 40px 100px -30px rgba(0,149,255,0.28), 0 20px 60px -20px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.03)",
-            }}
-        >
-            {/* Top scanning sweep */}
-            <div
-                aria-hidden="true"
-                className="absolute -inset-x-px -top-px h-px overflow-hidden"
-            >
-                <motion.div
-                    initial={{ x: "-100%" }}
-                    animate={{ x: "100%" }}
-                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                    className="h-full w-[40%]"
-                    style={{
-                        background: `linear-gradient(90deg, transparent, ${BRAND}, transparent)`,
-                    }}
-                />
-            </div>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 pt-5">
-                <div>
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/40">
-                        Active workloads
-                    </p>
-                    <p className="mt-1 font-semibold text-white text-[15px]">
-                        Your platform · all services
-                    </p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <span className="relative flex h-1.5 w-1.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.20em] text-white/40">
-                        Live
-                    </span>
-                </div>
-            </div>
-
-            {/* Workload list */}
-            <ul className="mt-5 divide-y divide-white/[0.05] border-y border-white/[0.05]">
-                {WORKLOADS.map((w) => (
-                    <li
-                        key={w.service}
-                        className="relative flex items-center gap-4 px-6 py-3.5"
-                    >
-                        {/* active indicator stripe (left edge) */}
-                        {w.accent && (
-                            <motion.span
-                                aria-hidden="true"
-                                className="absolute inset-y-0 left-0 w-[2px]"
-                                style={{ backgroundColor: BRAND }}
-                                animate={{ opacity: [0.4, 1, 0.4] }}
-                                transition={{
-                                    duration: 2.4,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
-                                }}
-                            />
-                        )}
-                        {/* service mark */}
-                        <span
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center ${
-                                w.accent ? "text-[#0095FF]" : "text-white/45"
-                            }`}
-                        >
-                            <ServiceMark kind={w.kind} className="h-4 w-4" />
-                        </span>
-                        {/* labels */}
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline gap-2">
-                                <p className="truncate text-[13px] font-semibold text-white/90">
-                                    {w.service}
-                                </p>
-                                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">
-                                    {w.spec}
-                                </span>
-                            </div>
-                        </div>
-                        {/* price */}
-                        <p
-                            className="shrink-0 font-mono text-[12.5px] font-semibold tabular-nums"
-                            style={{
-                                color: w.accent ? BRAND : "rgba(255,255,255,0.7)",
-                            }}
-                        >
-                            {w.price}
-                        </p>
-                        {/* status dot */}
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                    </li>
-                ))}
-            </ul>
-
-            {/* Footer summary */}
-            <div className="flex items-center justify-between px-6 py-4">
-                <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/40">
-                        Burn rate · /hr
-                    </p>
-                    <p className="mt-1 font-mono text-[20px] font-semibold tabular-nums text-white leading-none">
-                        $4.27
-                        <span className="ml-1 text-[11px] font-normal text-white/35">
-                            USD
-                        </span>
-                    </p>
-                </div>
-                <Link
-                    href="/dashboard"
-                    tabIndex={-1}
-                    className="group inline-flex items-center gap-1.5 text-[12.5px] font-medium text-white/65 transition-colors hover:text-white"
-                >
-                    Open dashboard
-                    <ArrowGlyph className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-            </div>
-        </div>
-    );
-}
-
-// ─── All-services lineup (replaces GPU-only lockup) ─────────────
 type ServiceRow = {
-    kind: Parameters<typeof ServiceMark>[0]["kind"];
+    icon: LucideIcon;
     name: string;
     tagline: string;
-    price: string;
     href: string;
 };
 
 const SERVICES: ServiceRow[] = [
     {
-        kind: "gpu",
+        icon: Cpu,
         name: "GPU Cloud",
-        tagline: "H100 · H200 · B200",
-        price: "from $2.59/hr",
+        tagline: "H100 / H200 / B200",
         href: "/services/gpu",
     },
     {
-        kind: "compute",
+        icon: Server,
         name: "Compute",
-        tagline: "VPS · bare metal",
-        price: "from $5/mo",
+        tagline: "VMs and bare metal",
         href: "/services/compute",
     },
     {
-        kind: "k8s",
+        icon: Network,
         name: "Kubernetes",
-        tagline: "managed · autoscale",
-        price: "from $0.04/n·hr",
+        tagline: "Managed clusters",
         href: "/services/kubernetes",
     },
     {
-        kind: "database",
+        icon: Database,
         name: "Databases",
-        tagline: "Postgres · MySQL · Redis",
-        price: "from $0.18/hr",
+        tagline: "Postgres / MySQL / Redis",
         href: "/services/database",
     },
     {
-        kind: "storage",
-        name: "Object Storage",
-        tagline: "S3 API · global CDN",
-        price: "$0.02/GB·mo",
+        icon: HardDrive,
+        name: "Storage",
+        tagline: "S3-compatible object store",
         href: "/services/object-storage",
     },
     {
-        kind: "app",
-        name: "App Platform",
-        tagline: "Docker · CI/CD · GitHub",
-        price: "from $0.012/hr",
+        icon: Rocket,
+        name: "Apps",
+        tagline: "Git and Docker deploys",
         href: "/services/app-deployment",
     },
     {
-        kind: "agent",
+        icon: Bot,
         name: "AI Agents",
-        tagline: "multi-LLM · serverless",
-        price: "from $0.10/run",
+        tagline: "Serverless automation",
         href: "/services/ai-agents",
     },
 ];
 
-function ServicesLineup() {
-    const stagger = {
-        hidden: {},
-        show: { transition: { staggerChildren: 0.05, delayChildren: 0.9 } },
-    };
-    const item = {
-        hidden: { opacity: 0, y: 8 },
-        show: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const },
-        },
-    };
+const CAPABILITIES = [
+    { icon: ShieldCheck, label: "Private networking" },
+    { icon: Boxes, label: "Unified billing" },
+    { icon: Network, label: "Automated deployments" },
+];
+
+function InfrastructureCanvas() {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const context = canvas.getContext("2d");
+        if (!context) return;
+
+        const reduceMotion = window.matchMedia(
+            "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+        let animationFrame = 0;
+        let width = 0;
+        let height = 0;
+        let pixelRatio = 1;
+        let visible = true;
+        const start = performance.now();
+
+        type Point3D = { x: number; y: number; z: number };
+        const points: Point3D[] = [];
+        const edges: Array<[number, number]> = [];
+        const grid = 5;
+
+        for (let z = 0; z < grid; z += 1) {
+            for (let y = 0; y < grid; y += 1) {
+                for (let x = 0; x < grid; x += 1) {
+                    points.push({
+                        x: (x / (grid - 1) - 0.5) * 2,
+                        y: (y / (grid - 1) - 0.5) * 2,
+                        z: (z / (grid - 1) - 0.5) * 2,
+                    });
+                }
+            }
+        }
+
+        const index = (x: number, y: number, z: number) =>
+            z * grid * grid + y * grid + x;
+
+        for (let z = 0; z < grid; z += 1) {
+            for (let y = 0; y < grid; y += 1) {
+                for (let x = 0; x < grid; x += 1) {
+                    if (x < grid - 1) edges.push([index(x, y, z), index(x + 1, y, z)]);
+                    if (y < grid - 1) edges.push([index(x, y, z), index(x, y + 1, z)]);
+                    if (z < grid - 1) edges.push([index(x, y, z), index(x, y, z + 1)]);
+                }
+            }
+        }
+
+        const resize = () => {
+            const rect = canvas.getBoundingClientRect();
+            width = Math.max(1, rect.width);
+            height = Math.max(1, rect.height);
+            pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = Math.round(width * pixelRatio);
+            canvas.height = Math.round(height * pixelRatio);
+            context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        };
+
+        const project = (point: Point3D, time: number) => {
+            const rotationY = reduceMotion ? -0.44 : time * 0.00008 - 0.52;
+            const rotationX = reduceMotion ? 0.28 : Math.sin(time * 0.00022) * 0.08 + 0.28;
+            const contentWidth = Math.min(width, 1440);
+            const contentLeft = (width - contentWidth) / 2;
+            const cubeCenterX =
+                width < 720 ? width * 0.7 : contentLeft + contentWidth * 0.73;
+            const cubeCenterY = height * (width < 720 ? 0.63 : 0.5);
+
+            const cosY = Math.cos(rotationY);
+            const sinY = Math.sin(rotationY);
+            const cosX = Math.cos(rotationX);
+            const sinX = Math.sin(rotationX);
+
+            const x1 = point.x * cosY - point.z * sinY;
+            const z1 = point.x * sinY + point.z * cosY;
+            const y1 = point.y * cosX - z1 * sinX;
+            const z2 = point.y * sinX + z1 * cosX;
+
+            const depth = 3.1 + z2;
+            const scaleBase =
+                width < 720
+                    ? Math.min(width, height) * 0.4
+                    : Math.min(width, height) * 0.43;
+            const scale = scaleBase / depth;
+            return {
+                x: cubeCenterX + x1 * scale,
+                y: cubeCenterY + y1 * scale,
+                z: z2,
+                scale,
+            };
+        };
+
+        const drawGridBackground = () => {
+            context.save();
+            context.globalAlpha = 0.18;
+            context.strokeStyle = "rgba(255,255,255,0.04)";
+            context.lineWidth = 1;
+            const cell = width < 720 ? 44 : 64;
+            for (let x = width * 0.34; x < width; x += cell) {
+                context.beginPath();
+                context.moveTo(x, 0);
+                context.lineTo(x, height);
+                context.stroke();
+            }
+            for (let y = 0; y < height; y += cell) {
+                context.beginPath();
+                context.moveTo(width * 0.34, y);
+                context.lineTo(width, y);
+                context.stroke();
+            }
+            context.restore();
+        };
+
+        const draw = (now: number) => {
+            const elapsed = reduceMotion ? 0 : Math.max(0, now - start);
+            context.clearRect(0, 0, width, height);
+
+            const bg = context.createLinearGradient(0, 0, width, height);
+            bg.addColorStop(0, "#020406");
+            bg.addColorStop(0.52, "#04101a");
+            bg.addColorStop(1, "#020406");
+            context.fillStyle = bg;
+            context.fillRect(0, 0, width, height);
+
+            drawGridBackground();
+
+            const glow = context.createRadialGradient(
+                width < 720 ? width * 0.7 : (width - Math.min(width, 1440)) / 2 + Math.min(width, 1440) * 0.73,
+                height * (width < 720 ? 0.62 : 0.5),
+                0,
+                width < 720 ? width * 0.7 : (width - Math.min(width, 1440)) / 2 + Math.min(width, 1440) * 0.73,
+                height * (width < 720 ? 0.62 : 0.5),
+                Math.min(width, height) * 0.66
+            );
+            glow.addColorStop(0, "rgba(0,149,255,0.43)");
+            glow.addColorStop(0.42, "rgba(0,149,255,0.16)");
+            glow.addColorStop(1, "rgba(0,0,0,0)");
+            context.fillStyle = glow;
+            context.fillRect(0, 0, width, height);
+
+            const projected = points.map((point) => project(point, elapsed));
+
+            context.save();
+            context.lineWidth = width < 720 ? 1.15 : 1.45;
+            context.shadowBlur = width < 720 ? 2 : 4;
+            context.shadowColor = "rgba(0,149,255,0.26)";
+            for (const [a, b] of edges) {
+                const pa = projected[a];
+                const pb = projected[b];
+                const opacity = 0.28 + (pa.z + pb.z + 2.3) * 0.08;
+                context.strokeStyle = `rgba(96, 210, 255, ${Math.max(
+                    0.22,
+                    Math.min(0.72, opacity)
+                )})`;
+                context.beginPath();
+                context.moveTo(pa.x, pa.y);
+                context.lineTo(pb.x, pb.y);
+                context.stroke();
+            }
+            context.restore();
+
+            const scan = (elapsed * 0.00018) % 1;
+            const planeZ = -1 + scan * 2;
+            context.save();
+            context.strokeStyle = "rgba(0,149,255,0.92)";
+            context.fillStyle = "rgba(0,149,255,0.1)";
+            context.lineWidth = width < 720 ? 1.4 : 1.8;
+            context.shadowBlur = width < 720 ? 5 : 9;
+            context.shadowColor = "rgba(0,149,255,0.36)";
+            const plane = [
+                project({ x: -1.04, y: -1.04, z: planeZ }, elapsed),
+                project({ x: 1.04, y: -1.04, z: planeZ }, elapsed),
+                project({ x: 1.04, y: 1.04, z: planeZ }, elapsed),
+                project({ x: -1.04, y: 1.04, z: planeZ }, elapsed),
+            ];
+            context.beginPath();
+            context.moveTo(plane[0].x, plane[0].y);
+            for (const p of plane.slice(1)) context.lineTo(p.x, p.y);
+            context.closePath();
+            context.fill();
+            context.stroke();
+            context.restore();
+
+            context.save();
+            context.shadowColor = "rgba(100, 214, 255, 0.45)";
+            for (let i = 0; i < projected.length; i += 1) {
+                const p = projected[i];
+                const hot = i % 17 === 0 || i % 29 === 0;
+                context.shadowBlur = hot ? 8 : 4;
+                context.fillStyle = hot
+                    ? "rgba(255,198,71,0.98)"
+                    : "rgba(221,249,255,0.95)";
+                context.beginPath();
+                context.arc(p.x, p.y, hot ? 3 : 2.05, 0, Math.PI * 2);
+                context.fill();
+            }
+            context.restore();
+
+            const pulses = 9;
+            context.save();
+            context.shadowBlur = 9;
+            context.shadowColor = "rgba(0,149,255,0.52)";
+            for (let i = 0; i < pulses; i += 1) {
+                const edge =
+                    edges[
+                        (i * 23 + Math.floor(elapsed * 0.00016)) %
+                            edges.length
+                    ];
+                if (!edge) continue;
+                const a = projected[edge[0]];
+                const b = projected[edge[1]];
+                const t = (elapsed * 0.00028 + i * 0.137) % 1;
+                const x = a.x + (b.x - a.x) * t;
+                const y = a.y + (b.y - a.y) * t;
+                context.fillStyle = i % 3 === 0 ? "rgba(52,255,179,0.95)" : "rgba(0,149,255,0.98)";
+                context.beginPath();
+                context.arc(x, y, width < 720 ? 2.6 : 3.15, 0, Math.PI * 2);
+                context.fill();
+            }
+            context.restore();
+
+            if (!reduceMotion && visible) {
+                animationFrame = requestAnimationFrame(draw);
+            }
+        };
+
+        resize();
+        const hydrationResize = window.setTimeout(resize, 250);
+        window.addEventListener("resize", resize, { passive: true });
+        const resizeObserver = new ResizeObserver(resize);
+        resizeObserver.observe(canvas);
+        const intersectionObserver = new IntersectionObserver(([entry]) => {
+            visible = entry?.isIntersecting ?? true;
+            if (visible && !reduceMotion) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = requestAnimationFrame(draw);
+            }
+        });
+        intersectionObserver.observe(canvas);
+        animationFrame = requestAnimationFrame((timestamp) => {
+            resize();
+            draw(timestamp);
+        });
+
+        return () => {
+            window.removeEventListener("resize", resize);
+            window.clearTimeout(hydrationResize);
+            resizeObserver.disconnect();
+            intersectionObserver.disconnect();
+            cancelAnimationFrame(animationFrame);
+        };
+    }, []);
 
     return (
-        <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-7 lg:gap-x-14"
-        >
-            {SERVICES.map((s) => (
-                <motion.div key={s.name} variants={item}>
-                    <Link
-                        href={s.href}
-                        className="group flex items-start gap-3.5"
-                    >
-                        <span className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center text-white/35 transition-colors group-hover:text-[#0095FF]">
-                            <ServiceMark
-                                kind={s.kind}
-                                className="h-3.5 w-3.5"
-                            />
-                        </span>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
-                                <p className="text-[14px] font-semibold tracking-tight text-white/90 transition-colors group-hover:text-white">
-                                    {s.name}
-                                </p>
-                            </div>
-                            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                                {s.tagline}
-                            </p>
-                            <p
-                                className="mt-1.5 font-mono text-[12px] font-semibold tabular-nums"
-                                style={{ color: BRAND }}
-                            >
-                                {s.price}
-                            </p>
-                        </div>
-                    </Link>
-                </motion.div>
-            ))}
-        </motion.div>
+        <canvas
+            ref={canvasRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+        />
     );
 }
 
-// ─── Hero ────────────────────────────────────────────────────────
-export default function HeroClient({
-    inventory: _inventory,
-}: {
-    inventory: HeroInventoryItem[];
-}) {
+function Capabilities() {
+    return (
+        <div className="mt-6 grid max-w-[640px] grid-cols-1 gap-2 text-xs text-white/62 sm:grid-cols-3">
+            {CAPABILITIES.map((capability) => {
+                const Icon = capability.icon;
+                return (
+                    <div
+                        key={capability.label}
+                        className="flex items-center gap-2"
+                    >
+                        <Icon
+                            className="h-4 w-4 text-[#6fd0ff]"
+                            aria-hidden="true"
+                        />
+                        {capability.label}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function ServiceRail() {
+    return (
+        <div className="relative z-20 h-[88px] border-y border-white/10 bg-[#020407] shadow-[0_-28px_80px_-52px_rgba(0,149,255,0.55)] lg:h-[100px]">
+            <div className="mx-auto flex h-full max-w-[1440px] overflow-x-auto">
+                <div className="hidden w-[190px] shrink-0 flex-col justify-center border-r border-white/10 px-8 lg:flex">
+                    <p className="text-[10px] font-semibold uppercase text-white/36">
+                        Platform
+                    </p>
+                    <p className="mt-1.5 text-sm font-semibold text-white">
+                        Services
+                    </p>
+                </div>
+
+                <div className="flex min-w-max flex-1 lg:grid lg:min-w-0 lg:grid-cols-7">
+                    {SERVICES.map((service, index) => {
+                        const Icon = service.icon;
+                        return (
+                            <Link
+                                key={service.name}
+                                href={service.href}
+                                className="group relative flex h-[88px] w-[174px] flex-col justify-between border-r border-white/10 px-4 py-3 transition-colors hover:bg-white/[0.045] lg:h-[100px] lg:w-auto"
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="absolute inset-x-0 top-0 h-[2px] bg-[#0095FF] opacity-0 transition-opacity group-hover:opacity-100"
+                                />
+                                <div className="flex items-center justify-between gap-3">
+                                    <Icon
+                                        className="h-4 w-4 text-white/45 transition-colors group-hover:text-[#0095FF]"
+                                        aria-hidden="true"
+                                    />
+                                    <span className="font-mono text-[10px] text-white/28">
+                                        {String(index + 1).padStart(2, "0")}
+                                    </span>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-white">
+                                        {service.name}
+                                    </p>
+                                    <p className="mt-1 truncate text-[11px] text-white/42">
+                                        {service.tagline}
+                                    </p>
+                                </div>
+                            </Link>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default function HeroClient() {
     return (
         <section
-            className="relative w-full overflow-hidden bg-[#08080a]"
-            aria-label="Ahura — one cloud, every workload"
+            className="relative isolate h-[100svh] min-h-[700px] w-full overflow-hidden bg-[#020406] text-white lg:min-h-[740px]"
+            aria-label="Ahura Cloud AI infrastructure"
         >
-            {/* ── Background layers ─────────────────────────────── */}
+            <InfrastructureCanvas />
+
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 opacity-[0.22]"
-                style={{
-                    backgroundImage:
-                        "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
-                    backgroundSize: "32px 32px",
-                    maskImage:
-                        "radial-gradient(ellipse 95% 80% at 50% 45%, black 30%, transparent 80%)",
-                    WebkitMaskImage:
-                        "radial-gradient(ellipse 95% 80% at 50% 45%, black 30%, transparent 80%)",
-                }}
+                className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,#020406_0%,#020406_28%,rgba(2,4,6,0.86)_43%,rgba(2,4,6,0.12)_66%,rgba(2,4,6,0.46)_90%,#020406_100%)]"
             />
-            {/* Brand wash upper-right */}
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-40 right-[-12%] h-[680px] w-[860px] rounded-full"
-                style={{
-                    background:
-                        "radial-gradient(closest-side, rgba(0,149,255,0.20), rgba(0,149,255,0.05) 50%, transparent 80%)",
-                }}
-            />
-            {/* Cool wash lower-left */}
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -bottom-40 left-[-10%] h-[520px] w-[760px] rounded-full"
-                style={{
-                    background:
-                        "radial-gradient(closest-side, rgba(105,183,255,0.10), rgba(105,183,255,0.03) 55%, transparent 80%)",
-                }}
+                className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(0deg,#020406_0%,rgba(2,4,6,0.2)_24%,rgba(2,4,6,0.02)_76%,#020406_100%)]"
             />
 
-            {/* ── Main asymmetric grid ──────────────────────────── */}
-            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pt-28 pb-16 sm:px-8 sm:pt-32 lg:pt-36 lg:pb-20">
-                <div className="grid grid-cols-1 gap-12 lg:grid-cols-[0.95fr_1.15fr] lg:gap-16 lg:items-center">
-                    {/* LEFT — text */}
-                    <div>
-                        {/* Eyebrow (no boxy chip — just a dot + text) */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5 }}
-                            className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45"
-                        >
-                            <span className="relative flex h-1.5 w-1.5">
+            <div className="relative z-10 mx-auto flex h-[calc(100svh-88px)] min-h-[612px] w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-100px)] lg:min-h-[640px]">
+                <div className="grid flex-1 items-center gap-10 pb-10 pt-20 sm:pt-24 lg:grid-cols-[minmax(0,650px)_minmax(520px,1fr)] lg:gap-14 lg:pb-12 lg:pt-24">
+                    <div className="max-w-[660px]">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold uppercase text-white/56 sm:text-[11px]">
+                            <span className="flex items-center gap-2">
                                 <span
-                                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+                                    className="h-1.5 w-1.5"
                                     style={{ backgroundColor: BRAND }}
                                 />
-                                <span
-                                    className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                                    style={{ backgroundColor: BRAND }}
-                                />
+                                AI infrastructure
                             </span>
-                            <span>One platform · Every workload</span>
-                        </motion.div>
+                            <span className="hidden h-3 w-px bg-white/20 sm:block" />
+                            <span>GPU cloud</span>
+                            <span>compute</span>
+                            <span>Kubernetes</span>
+                        </div>
 
-                        {/* H1 */}
-                        <motion.h1
-                            initial={{ opacity: 0, y: 18 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.7, delay: 0.12 }}
-                            className="mt-7 text-[clamp(40px,5.6vw,80px)] font-semibold leading-[0.97] tracking-[-0.045em] text-white"
-                            style={{ fontFeatureSettings: '"ss01", "ss02"' }}
-                        >
-                            One cloud.
-                            <br />
-                            <motion.span
-                                className="inline-block bg-clip-text text-transparent"
-                                style={{
-                                    backgroundImage: `linear-gradient(110deg, #ffffff 0%, #cfe9ff 22%, ${BRAND} 50%, #69b7ff 78%, #ffffff 100%)`,
-                                    backgroundSize: "220% 100%",
-                                }}
-                                animate={{ backgroundPositionX: ["0%", "-220%"] }}
-                                transition={{
-                                    duration: 9,
-                                    repeat: Infinity,
-                                    ease: "linear",
-                                }}
+                        <h1 className="mt-5 max-w-[660px] text-[44px] font-semibold leading-[0.94] text-white sm:text-7xl lg:text-[88px]">
+                            Ahura Cloud
+                        </h1>
+
+                        <p className="mt-5 max-w-[590px] text-[15px] leading-7 text-white/70 sm:text-base lg:text-lg lg:leading-8">
+                            GPU capacity, compute, Kubernetes, storage,
+                            databases, apps, and AI agents managed from one
+                            production control plane.
+                        </p>
+
+                        <div className="mt-7 flex flex-wrap items-center gap-3">
+                            <AuthAwareServiceCta
+                                service="main"
+                                intent="main"
+                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-[#0095FF] bg-[#0095FF] px-6 text-sm font-semibold text-white shadow-[0_18px_46px_-18px_rgba(0,149,255,0.8)] transition-colors hover:bg-[#0aa0ff]"
                             >
-                                Every workload.
-                            </motion.span>
-                        </motion.h1>
+                                Launch console
+                                <ArrowRight
+                                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                                    aria-hidden="true"
+                                />
+                            </AuthAwareServiceCta>
+                            <Link
+                                href="/services/gpu"
+                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-white/16 bg-white/[0.045] px-5 text-sm font-semibold text-white/84 backdrop-blur transition-colors hover:border-white/30 hover:bg-white/[0.085] hover:text-white"
+                            >
+                                Explore GPUs
+                                <ArrowRight
+                                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                                    aria-hidden="true"
+                                />
+                            </Link>
+                        </div>
 
-                        {/* Subhead */}
-                        <motion.p
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.7, delay: 0.28 }}
-                            className="mt-7 max-w-[520px] text-[15px] leading-[1.65] text-white/55 sm:text-[16.5px]"
-                        >
-                            GPU clouds for AI. Compute, Kubernetes, databases, app
-                            deploys, object storage, and AI agents — provisioned in
-                            seconds, billed by the second, across 12 regions.
-                        </motion.p>
-
-                        {/* CTAs */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.7, delay: 0.42 }}
-                            className="relative mt-9"
-                        >
-                            <motion.div
-                                aria-hidden="true"
-                                className="pointer-events-none absolute left-10 top-1/2 -z-10 h-24 w-56 -translate-y-1/2 blur-3xl"
-                                style={{ backgroundColor: BRAND }}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: [0.16, 0.32, 0.16] }}
-                                transition={{
-                                    duration: 4.5,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
-                                    delay: 1,
-                                }}
-                            />
-                            <div className="flex flex-wrap items-center gap-3">
-                                <AuthAwareServiceCta
-                                    service="main"
-                                    intent="main"
-                                    className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden border border-[#0095FF] bg-[#0095FF] px-7 text-[14px] font-semibold text-white transition-all hover:shadow-[0_12px_40px_-8px_rgba(0,149,255,0.55)]"
-                                >
-                                    <span
-                                        aria-hidden="true"
-                                        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent"
-                                    />
-                                    <span className="relative">Get Started</span>
-                                    <ArrowGlyph className="relative h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                                </AuthAwareServiceCta>
-                                <Link
-                                    href="/pricing"
-                                    className="group inline-flex h-12 items-center justify-center gap-1.5 text-[14px] font-medium text-white/70 transition-colors hover:text-white"
-                                >
-                                    View pricing
-                                    <ArrowGlyph className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                                </Link>
-                            </div>
-                        </motion.div>
-
-                        {/* Proof row */}
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 1, delay: 0.7 }}
-                            className="mt-12 flex flex-wrap items-baseline gap-x-8 gap-y-2 text-[11px] text-white/40"
-                        >
-                            <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
-                                    12
-                                </span>
-                                <span className="uppercase tracking-[0.18em]">
-                                    Regions
-                                </span>
-                            </span>
-                            <span className="hidden h-3 w-px bg-white/[0.10] sm:inline-block" />
-                            <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
-                                    99.998%
-                                </span>
-                                <span className="uppercase tracking-[0.18em]">
-                                    Uptime · 90d
-                                </span>
-                            </span>
-                            <span className="hidden h-3 w-px bg-white/[0.10] sm:inline-block" />
-                            <span className="flex items-baseline gap-2">
-                                <span className="font-mono text-[14px] font-semibold text-white tabular-nums">
-                                    &lt;90s
-                                </span>
-                                <span className="uppercase tracking-[0.18em]">
-                                    Provisioning
-                                </span>
-                            </span>
-                        </motion.div>
+                        <Capabilities />
                     </div>
 
-                    {/* RIGHT — platform mockup */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.96, y: 18 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        transition={{
-                            duration: 0.9,
-                            delay: 0.3,
-                            ease: [0.16, 1, 0.3, 1],
-                        }}
-                        className="relative mx-auto w-full max-w-[600px]"
-                    >
-                        <motion.div
-                            animate={{ y: [0, -6, 0] }}
-                            transition={{
-                                duration: 8,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                                delay: 1.2,
-                            }}
-                        >
-                            <PlatformMockup />
-                        </motion.div>
-                    </motion.div>
+                    <div className="hidden h-full min-h-[420px] lg:block" />
                 </div>
             </div>
 
-            {/* ── All-services lineup ───────────────────────────── */}
-            <div className="relative z-10 mx-auto w-full max-w-[1320px] px-5 pb-20 sm:px-8 sm:pb-24">
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.8, delay: 0.8 }}
-                    className="mb-10 flex items-center justify-center sm:mb-14"
-                >
-                    <span className="h-px w-10 bg-white/[0.10]" />
-                    <span className="mx-4 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/35">
-                        One platform · Seven services
-                    </span>
-                    <span className="h-px w-10 bg-white/[0.10]" />
-                </motion.div>
-
-                <ServicesLineup />
-            </div>
-
-            {/* Bottom separator */}
-            <div
-                aria-hidden="true"
-                className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent"
-            />
+            <ServiceRail />
         </section>
     );
 }
