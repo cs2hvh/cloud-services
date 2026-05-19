@@ -19,10 +19,12 @@ import {
   createJavaPipeline,
   createResizePipeline,
 } from "@/lib/jenkins/pipelines";
+import { getPlatformAppRetentionPolicy } from "@/lib/platform-apps/retention";
 
 export class JenkinsService {
   private static readonly QUEUE_BUILD_NUMBER_POLL_TIMEOUT_MS = 120_000; // 2 minutes
   private static readonly QUEUE_BUILD_NUMBER_POLL_INTERVAL_MS = 1_500; // 1.5 seconds
+  private static readonly RETENTION_POLICY = getPlatformAppRetentionPolicy();
 
   /**
    * Get Jenkins URL without credentials for safe logging
@@ -91,7 +93,42 @@ export class JenkinsService {
       }
     );
 
+    xml = this.injectBuildRetentionOptions(xml);
+
     return xml;
+  }
+
+  private static injectBuildRetentionOptions(pipelineXml: string): string {
+    if (
+      pipelineXml.includes("buildDiscarder(") ||
+      !pipelineXml.includes("pipeline {")
+    ) {
+      return pipelineXml;
+    }
+
+    const policy = this.RETENTION_POLICY.jenkins;
+    const optionsBlock = `  options {
+    buildDiscarder(logRotator(
+      numToKeepStr: '${policy.buildsToKeep}',
+      daysToKeepStr: '${policy.daysToKeep}',
+      artifactNumToKeepStr: '${policy.artifactBuildsToKeep}',
+      artifactDaysToKeepStr: '${policy.artifactDaysToKeep}'
+    ))
+  }
+
+`;
+
+    const environmentIndex = pipelineXml.indexOf("\n  environment {");
+    if (environmentIndex !== -1) {
+      return `${pipelineXml.slice(0, environmentIndex + 1)}${optionsBlock}${pipelineXml.slice(environmentIndex + 1)}`;
+    }
+
+    const stagesIndex = pipelineXml.indexOf("\n  stages {");
+    if (stagesIndex !== -1) {
+      return `${pipelineXml.slice(0, stagesIndex + 1)}${optionsBlock}${pipelineXml.slice(stagesIndex + 1)}`;
+    }
+
+    return pipelineXml.replace("pipeline {\n", `pipeline {\n${optionsBlock}`);
   }
 
   private static async getLatestBuildNumberForJob(jobName: string): Promise<number | null> {
@@ -373,7 +410,9 @@ export class JenkinsService {
     console.log(`[JenkinsService] Creating deletion job: ${jobName}`);
 
     // Create delete pipeline
-    const pipeline = createDeletePipeline(appName, APP_DOMAIN);
+    const pipeline = this.injectBuildRetentionOptions(
+      createDeletePipeline(appName, APP_DOMAIN)
+    );
 
     // Create the job
     try {
@@ -719,71 +758,59 @@ export class JenkinsService {
    * No need to update when adding new frameworks/pipelines.
    */
   /**
-   * Shared block-list used by both sanitizeRawBuildLogs (during-build) and
-   * filterDeploymentLogs (after-build) so the two views are always consistent.
-   *
-   * All patterns are matched against the trimmed line AFTER the Kaniko INFO[XXXX]
-   * prefix has been stripped.  Add patterns here once; both callers pick them up.
+   * Stages the user should see in both live and archived logs.
+   * Any stage not in this set (Security/*, and anything added in future) is
+   * silently dropped at the section boundary — no regex needed.
    */
-  private static readonly LOG_BLOCK_PATTERNS: RegExp[] = [
-    // ── Jenkins pipeline engine ─────────────────────────────────────────────
+  private static readonly VISIBLE_STAGES = new Set([
+    'Initialize',
+    'Checkout Repository',
+    'Validate Prerequisites',
+    'Detect Project Type',
+    'Inspect Files',
+    'Validate Structure',
+    'Prepare Dockerfile',
+    'Validate Dockerfile',
+    'Create Environment Secret',
+    'Build Docker Image',
+    'Deploy to Kubernetes',
+    'Verify Deployment',
+    'Verify Deletion',
+    'Verify Environment Secret',
+    'Delete Kubernetes Resources',
+  ]);
+
+  /**
+   * Per-line cleanup applied only inside user-visible sections.
+   * Security tool output is excluded at the section level, so this list covers
+   * only noise that leaks within user-facing stages (credentials, Jenkins engine
+   * lines, Kaniko internals, Dockerfile directives, git progress).
+   */
+  private static readonly LINE_BLOCK_PATTERNS: RegExp[] = [
+    // Jenkins pipeline engine
     /^\[Pipeline\]/,
     /^\[PodInfo\]/,
     /^Started by user/,
     /^Created Pod:/,
     /^Agent .* is provisioned/,
     /^Running on .* in \/home\/jenkins/,
-    /^\*{8,}/,                        // masked credentials ********
+    /^\*{8,}/,
     /^Masking supported pattern/,
-
-    // ── Kubernetes pod template YAML ────────────────────────────────────────
-    /^(apiVersion|kind|metadata|spec|containers|volumes|initContainers|nodeSelector):/,
-    /^(dnsConfig|dnsPolicy|hostNetwork|restartPolicy|activeDeadlineSeconds):/,
-    /^(labels|annotations|namespace|nameservers|buildUrl|runUrl|label):/,
-    /^(imagePullPolicy|resources|limits|requests|volumeMounts|mountPath):/,
-    /^(workingDir|tty|env|readOnly|medium|memory|cpu|value):/,
-    /^- (name|command|mountPath|emptyDir)/i,
-    /^- ".*"$/,
-    /^---$/,
-    /^kubernetes\.io\//,
-    /^name:.*(-job-|workspace|jenkins)/i,
-
-    // ── Jenkins agent environment variables ─────────────────────────────────
+    // Credentials / tokens
     /JENKINS_(SECRET|AGENT|URL|NAME|WEB_SOCKET)/,
     /REMOTING_OPTS/,
     /withCredentials/,
-    /kubernetes\.jenkins\.io/,
-
-    // ── Infrastructure container images ────────────────────────────────────
-    /gcr\.io\/kaniko-project/,
-    /jenkins\/inbound-agent/,
-    /alpine\/(git|k8s)/,
-    /\/jenkins-agent/,
-    /agent\.jar/,
-    /^image: "/,
-    /^index\.docker\.io/,
-    /^jenkins(\/|:)/,
-    /^name: "(git|kaniko|kubectl|trivy|jnlp)"$/,
-
-    // ── Pod lifecycle ───────────────────────────────────────────────────────
-    /Container \[.*\] .* waiting/,
-    /Pod \[Pending\]/,
-    /\[Containers(NotReady|NotInitialized)\]/,
-    /\[PodInitializing\]/,
-
-    // ── Credentials / tokens ────────────────────────────────────────────────
     /AUTH=/,
     /\$DOCKER_PASS/,
     /\$KUBECONFIG/,
     /gh[op]_[a-zA-Z0-9]{20,}/,
-
-    // ── Shell set -x echo prefix ────────────────────────────────────────────
+    // Shell set -x echo prefix
     /^\+ /,
-
-    // ── HTML error pages ────────────────────────────────────────────────────
+    // HTML error pages
     /^<[!a-zA-Z\/]/,
-
-    // ── Webhook / deployment record noise ───────────────────────────────────
+    // Build result line (shown via banner instead)
+    /^Finished: (SUCCESS|FAILURE|ABORTED)$/,
+    // Webhook curl noise within Deploy stage
     /^Sending deployment record/,
     /^Payload:/,
     /^Response \(HTTP/,
@@ -792,54 +819,14 @@ export class JenkinsService {
     /^'\d{3}'$/,
     /^\d{3}'$/,
     /^'$/,
-    /^Finished: (SUCCESS|FAILURE|ABORTED)$/,
-
-    // ── MiB / KiB progress bars ─────────────────────────────────────────────
+    // MiB/KiB progress bars
     /^\d+\.\d+ (MiB|KiB) \/ \d+\.\d+ (MiB|KiB)/,
-
-    // ── Trivy ISO timestamp INFO/WARN lines ─────────────────────────────────
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+(INFO|WARN)\b/,
-
-    // ── Gitleaks ────────────────────────────────────────────────────────────
-    /^\d{1,2}:\d{2}(AM|PM) INF /,
-    /^[○│╲░ ]*gitleaks\s*$/,
-    /^[○│╲░ ]+$/,
-    /^Generated CI gitleaks config/,
-
-    // ── npm noise ───────────────────────────────────────────────────────────
+    // npm noise within Build stage
     /^npm notice/,
     /^npm warn config only/,
     /^\d+ packages are looking for funding/,
     /^run `npm fund` for details/,
-
-    // ── Tool binary download lines ──────────────────────────────────────────
-    /^Downloading (gitleaks|hadolint|trivy|kubectl) v/,
-
-    // ── Checksum verification ───────────────────────────────────────────────
-    /^\/tmp\/.*:\s*(OK|FAILED)$/,
-
-    // ── Security section banners & headers ──────────────────────────────────
-    /^={10,}$/,
-    /^SECRET DETECTION SCAN/,
-    /^STATIC CODE ANALYSIS /,
-    /^NPM DEPENDENCY AUDIT$/,
-    /^DOCKERFILE SECURITY LINT$/,
-    /^KUBERNETES MANIFEST SECURITY CHECK/,
-    /^TRIVY VULNERABILITY SCAN$/,
-
-    // ── Security instructional / descriptive text ────────────────────────────
-    /^This scan reports potential secrets but does NOT block/,
-    /^Review findings and add \.gitleaks\.toml/,
-    /^Consider adding ESLint for code quality/,
-
-    // ── Security stage progress markers ─────────────────────────────────────
-    /^Running gitleaks scan\.\.\./,
-    /^Running basic security pattern check\.\.\./,
-    /^Linting Dockerfile\.\.\./,
-    /^Checking for (security anti-patterns|secret exposure patterns)/,
-    /^Validating deployment template security\.\.\./,
-
-    // ── Kaniko internal build ops (INFO[XXXX] prefix already stripped) ───────
+    // Kaniko internals within Build Docker Image
     /^Retrieving image /,
     /^Returning cached image manifest/,
     /^Built cross stage deps:/,
@@ -859,15 +846,11 @@ export class JenkinsService {
     /^Pushing layer /,
     /^Pushing image to .*-cache[:/]/,
     /^Pushed .*@sha256:/,
-    // Newer Kaniko versions omit INFO[XXXX] prefix entirely
     /^Resolved base name .* to /,
     /^Building stage '.*' \[idx:/,
     /^Using caching version of cmd:/,
     /^Found cached layer/,
-
-    // ── Dockerfile directive lines ───────────────────────────────────────────
-    // These appear in both pipeline Dockerfile dumps and Kaniko execution echoes.
-    // The actual *output* of running RUN commands (npm, build tools) still passes through.
+    // Dockerfile directive echoes from Kaniko
     /^FROM /,
     /^WORKDIR /,
     /^ARG /,
@@ -875,15 +858,22 @@ export class JenkinsService {
     /^USER /,
     /^HEALTHCHECK/,
     /^ENTRYPOINT/,
-    /^COPY --from=/,             // multi-stage copy instructions
-    /^RUN (if \[|corepack|addgroup|adduser|mkdir -p )/,  // infra-only shell blocks
-    /^# ---/,                    // Dockerfile section header comments
-
-    // ── Git clone progress ──────────────────────────────────────────────────
+    /^COPY --from=/,
+    /^RUN (if \[|corepack|addgroup|adduser|mkdir -p )/,
+    /^# ---/,
+    // Git clone progress
     /^Updating files:\s+\d+%/,
     /^remote: (Counting|Compressing|Enumerating) objects:/,
     /^Receiving objects:\s+\d+%/,
     /^Resolving deltas:\s+\d+%/,
+    // Section banner lines (=====) used in Prepare Dockerfile and similar stages
+    /^={10,}$/,
+    // PIPELINE: type label lines within sections (e.g. "PIPELINE: Express Deployment Pipeline")
+    /^PIPELINE:/,
+    // BuildKit noise — only user build steps (#N [X/Y] ...) and CACHED survive.
+    // Filters: internal ops, auth tokens, layer hash progress, timing, push/export/cache ops.
+    /^#\d+ \[(?:internal|auth)\]/,
+    /^#\d+ (?:sha256:|extracting |exporting |pushing |writing |sending |preparing |importing |inferred |transferring |resolve |DONE \d|\.{3}$)/,
   ];
 
   /**
@@ -934,19 +924,43 @@ export class JenkinsService {
   }
 
   /**
-   * Strip Jenkins-injected infrastructure noise from raw build logs (during-build view).
+   * Split a cleaned log string into sections at STAGE:/PIPELINE: boundaries.
+   * Lines before the first marker are discarded — that is where pod bootstrap YAML lives.
    */
-  private static sanitizeRawBuildLogs(raw: string): string {
-    const log = raw
-      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
-      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')
-      .replace(/\r/g, '')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  private static parseSections(cleanLog: string) {
+    const sections: Array<{ type: 'STAGE' | 'PIPELINE'; name: string; lines: string[] }> = [];
+    let current: (typeof sections)[number] | null = null;
 
-    const lines = log.split('\n');
+    for (const line of cleanLog.split('\n')) {
+      const trimmed = JenkinsService.normalizeLine(line);
+      // Only STAGE: lines and the three terminal PIPELINE: markers are section boundaries.
+      // Other PIPELINE: lines (e.g. "PIPELINE: Express Deployment Pipeline") stay inside
+      // the current section so their content (App Name, Branch, etc.) is shown to the user.
+      const stageMatch = trimmed.match(/^STAGE:\s+(.+)$/);
+      const terminalMatch = trimmed.match(/^PIPELINE:\s+(Success|Failure|Cleanup)$/);
+      if (stageMatch) {
+        current = { type: 'STAGE', name: stageMatch[1].trim(), lines: [] };
+        sections.push(current);
+      } else if (terminalMatch) {
+        current = { type: 'PIPELINE', name: terminalMatch[1].trim(), lines: [] };
+        sections.push(current);
+      } else if (current) {
+        current.lines.push(line);
+      }
+    }
+    return sections;
+  }
+
+  /**
+   * Per-line cleanup applied only inside user-visible sections.
+   * Security tool output never reaches here — excluded at the section level.
+   */
+  private static filterSectionLines(lines: string[]): string[] {
     const out: string[] = [];
     let skipDockerfile = false;
+    // BuildKit repeats the step header (#N [X/Y] step) each time it has a progress
+    // update. After stripping the noise lines in between, only the first occurrence matters.
+    const seenBuildkitSteps = new Set<string>();
 
     for (const line of lines) {
       const trimmed = JenkinsService.normalizeLine(line);
@@ -960,84 +974,88 @@ export class JenkinsService {
         continue;
       }
 
-      if (JenkinsService.LOG_BLOCK_PATTERNS.some((p) => p.test(trimmed))) continue;
+      if (JenkinsService.LINE_BLOCK_PATTERNS.some((p: RegExp) => p.test(trimmed))) continue;
+
+      // Deduplicate repeated BuildKit step headers
+      if (/^#\d+ \[\d+\/\d+\] /.test(trimmed)) {
+        if (seenBuildkitSteps.has(trimmed)) continue;
+        seenBuildkitSteps.add(trimmed);
+      }
 
       out.push(JenkinsService.transformLine(trimmed));
     }
+    return out;
+  }
 
+  /** Live build view — same section-based logic as archived logs. */
+  private static sanitizeRawBuildLogs(raw: string): string {
+    const cleanLog = raw
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')
+      .replace(/\r/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+
+    const out: string[] = [];
+    for (const section of JenkinsService.parseSections(cleanLog)) {
+      if (section.type === 'PIPELINE') continue;
+      if (!JenkinsService.VISIBLE_STAGES.has(section.name)) continue;
+      out.push(`[STAGE] ${section.name}`);
+      out.push(...JenkinsService.filterSectionLines(section.lines));
+      if (out[out.length - 1] !== '') out.push('');
+    }
     return out.filter((l, i, arr) => !(l === '' && i > 0 && arr[i - 1] === '')).join('\n');
   }
 
-
+  /** Archived log view — identical section logic, plus final status banner. */
   private static filterDeploymentLogs(fullLog: string): string {
-    // Step 1: Clean Jenkins encoding artifacts (universal across all pipelines)
     const cleanLog = fullLog
-      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')           // Jenkins hash markers
-      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')                // ANSI escape
-      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')              // Unicode ANSI
-      .replace(/\r/g, '')                                    // carriage returns (npm/Gradle progress)
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');        // Control chars
+      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\r/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
-    const lines = cleanLog.split('\n');
-    const outputLines: string[] = [];
-    
-    // Track state for final banner
+    const out: string[] = [];
     let domain = '';
     let isFinalSuccess = false;
     let isFinalFailure = false;
 
-    // Shared block-list (see LOG_BLOCK_PATTERNS) plus any filterDeploymentLogs-specific patterns
-    const blockPatterns = JenkinsService.LOG_BLOCK_PATTERNS;
-
-    let skipDockerfile = false;
-
-    for (const line of lines) {
-      const trimmed = JenkinsService.normalizeLine(line);
-
-      const df = JenkinsService.updateDockerfileSkip(trimmed, skipDockerfile);
-      skipDockerfile = df.skip;
-      if (df.hide) continue;
-
-      // Skip empty, preserve one blank line for spacing
-      if (!trimmed) {
-        if (outputLines.length > 0 && outputLines[outputLines.length - 1] !== '') {
-          outputLines.push('');
+    for (const section of JenkinsService.parseSections(cleanLog)) {
+      if (section.type === 'PIPELINE') {
+        if (section.name === 'Success') {
+          isFinalSuccess = true;
+          for (const line of section.lines) {
+            const m = JenkinsService.normalizeLine(line).match(/(?:Domain|Service URL):\s*(?:https?:\/\/)?(\S+)/);
+            if (m) domain = m[1];
+          }
+        } else if (section.name === 'Failure') {
+          isFinalFailure = true;
         }
         continue;
       }
 
-      // Track final state
-      if (trimmed.includes('PIPELINE: Success') || trimmed.includes('Finished: SUCCESS')) isFinalSuccess = true;
-      if (trimmed.includes('PIPELINE: Failure') || trimmed.includes('Finished: FAILURE')) isFinalFailure = true;
-      
-      // Extract domain (handle both "Domain:" and "Service URL:" formats)
-      const domainMatch = trimmed.match(/(?:Domain|Service URL):\s*(?:https?:\/\/)?(\S+)/);
-      if (domainMatch) domain = domainMatch[1];
+      if (!JenkinsService.VISIBLE_STAGES.has(section.name)) continue;
 
-      // Check blocklist
-      if (blockPatterns.some(p => p.test(trimmed))) continue;
-
-      outputLines.push(JenkinsService.transformLine(trimmed));
+      out.push(`[STAGE] ${section.name}`);
+      out.push(...JenkinsService.filterSectionLines(section.lines));
+      if (out[out.length - 1] !== '') out.push('');
     }
 
-    // Add final status banner
     if (isFinalSuccess) {
-      outputLines.push('', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      outputLines.push('DEPLOYMENT SUCCESSFUL');
-      if (domain) outputLines.push(`URL: https://${domain}`);
-      outputLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      out.push('DEPLOYMENT SUCCESSFUL');
+      if (domain) out.push(`URL: https://${domain}`);
+      out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } else if (isFinalFailure) {
-      outputLines.push('', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      outputLines.push('DEPLOYMENT FAILED');
-      outputLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      out.push('DEPLOYMENT FAILED');
+      out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 
-    // Remove consecutive blank lines
-    const result = outputLines.filter((line, i, arr) => 
-      !(line === '' && i > 0 && arr[i - 1] === '')
-    );
-
-    return result.join('\n').trim() || 'Build in progress...';
+    return out
+      .filter((l, i, arr) => !(l === '' && i > 0 && arr[i - 1] === ''))
+      .join('\n').trim() || 'Build in progress...';
   }
 
   /**
@@ -1141,16 +1159,18 @@ export class JenkinsService {
     const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
     const deploymentRecordSecret = process.env.JENKINS_DEPLOYMENT_RECORD_SECRET || '';
 
-    const pipeline = createResizePipeline(
-      appName,
-      size,
-      appId,
-      webhookBaseUrl,
-      deploymentRecordSecret,
-      envVars,
-      containerPort,
-      framework,
-      operationId ?? '',
+    const pipeline = this.injectBuildRetentionOptions(
+      createResizePipeline(
+        appName,
+        size,
+        appId,
+        webhookBaseUrl,
+        deploymentRecordSecret,
+        envVars,
+        containerPort,
+        framework,
+        operationId ?? '',
+      )
     );
 
     console.log(`[JenkinsService] Ensuring resize job: ${jobName} (size: ${size})`);
