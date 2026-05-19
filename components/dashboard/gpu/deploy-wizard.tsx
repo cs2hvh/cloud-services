@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -18,7 +19,6 @@ import {
     AlertTriangle,
     ChevronDown,
     ChevronRight,
-    HardDrive,
     Image as ImageIcon,
     Key as KeyIcon,
     Loader2,
@@ -669,7 +669,7 @@ export default function DeployWizard({
                                     </SelectTrigger>
                                     <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
                                         <SelectItem value="none">
-                                            None — don't attach a network volume
+                                            None — don&apos;t attach a network volume
                                         </SelectItem>
                                         {volumeOptions.map((v) => (
                                             <SelectItem
@@ -690,17 +690,17 @@ export default function DeployWizard({
                                             <span className="font-mono">
                                                 {selectedVolume.dataCenterId}
                                             </span>{" "}
-                                            (the volume's datacenter).
+                                            (the volume&apos;s datacenter).
                                         </span>
                                     ) : (
                                         <>
                                             Manage volumes on the{" "}
-                                            <a
+                                            <Link
                                                 href="/dashboard/services/gpu/storage"
                                                 className="text-fuchsia-300 underline hover:text-fuchsia-200"
                                             >
                                                 Storage page
-                                            </a>
+                                            </Link>
                                             . Mounted at <code>/workspace</code>.
                                         </>
                                     )}

@@ -5,7 +5,7 @@ export interface PostProvisionBillingArgs {
   initialCost: number;
   hourlyRate: number;
   serviceId: string;
-  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps";
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod";
   addActive: (args: { userId: string; serviceId: string; hourlyRate: number }) => Promise<void>;
 }
 
@@ -100,7 +100,7 @@ export async function closeActiveBilling({
 }: {
   userId: string;
   serviceId: string;
-  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps";
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod";
   closeActive: () => Promise<{ finalCharge: number }>;
 }): Promise<void> {
   const { finalCharge } = await closeActive();

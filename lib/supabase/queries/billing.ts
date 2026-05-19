@@ -119,7 +119,8 @@ type BillableServiceType =
   | "objectspace"
   | "spectrum"
   | "platform_apps"
-  | "domain";
+  | "domain"
+  | "gpu_pod";
 
 type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;

@@ -51,4 +51,54 @@ export const BillingCredits = {
       });
     if (error) throw new Error(`Failed to insert active_kubernetes: ${error.message}`);
   },
+
+  addActiveGpuPod: async (params: {
+    userId: string;
+    serviceId: number;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_gpu_pods")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_gpu_pods: ${error.message}`);
+  },
+
+  closeActiveGpuPod: async (params: { serviceId: number }): Promise<{ finalCharge: number }> => {
+    const supabase = await createServiceClient();
+    const { data: row, error: getErr } = await supabase
+      .schema("billing")
+      .from("active_gpu_pods")
+      .select("hourly_rate, last_billed_at")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+
+    if (getErr) throw new Error(`Failed to fetch active_gpu_pods: ${getErr.message}`);
+
+    let finalCharge = 0;
+    if (row) {
+      const rate = parseFloat(String(row.hourly_rate));
+      if (rate > 0) {
+        const lastBilledAt = row.last_billed_at as string | undefined;
+        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
+        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
+        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
+      }
+    }
+
+    await supabase
+      .schema("billing")
+      .from("active_gpu_pods")
+      .delete()
+      .eq("service_id", params.serviceId);
+
+    return { finalCharge };
+  },
 };

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -223,7 +222,7 @@ export default function GpuStorage() {
                                 /workspace
                             </code>{" "}
                             on attached pods. Use this for model weights, datasets, and any
-                            work you don't want to lose.
+                            work you don&apos;t want to lose.
                         </p>
                         <div className="mt-4 flex flex-wrap gap-2">
                             <Button
@@ -506,7 +505,7 @@ export default function GpuStorage() {
                             mounts one will be deployed in that datacenter automatically.
                         </li>
                         <li>
-                            Attach a volume to a new pod in the deploy wizard's Storage section.
+                            Attach a volume to a new pod in the deploy wizard&apos;s Storage section.
                             You cannot attach or detach mid-flight without destroying the pod.
                         </li>
                     </ul>
