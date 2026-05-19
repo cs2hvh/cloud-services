@@ -20,7 +20,7 @@ type Row = {
   kubeconfig: string | null;
   owner_id: string;
   project_id: string | null;
-  node_config: {cpu:number,ram:number,storage:number} | null;
+  node_config: { cpu: number; ram: number; storage: number; provision_config?: { type?: string; plan_id?: string; node_count?: number; [key: string]: unknown } } | null;
   control_plane:{public_ip:string,private_ip:string,droplet_id:string} | null;
   workers: {public_ip:string,private_ip:string,droplet_id:string}[] | null;
 };
@@ -105,9 +105,23 @@ export async function POST(
 
   const supabase = await createSSRClient();
 
- // console.log("...............18.......params")
-  const body = await req.json().catch(() => null);
- // console.log(body,"...............params 22222")
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
+
+  if (!body?.clusterId) {
+    return NextResponse.json(
+      { success: false, error: "clusterId is required" },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("clusters")
     .select("cluster_name, create_droplet, create_status, connect_status, verify_status, status, kubeconfig, node_config, control_plane, workers, owner_id, project_id")
@@ -129,13 +143,20 @@ export async function POST(
   }
 
   try {
-    await ensureBillingActivatedForReadyCluster(body.clusterId, data);
+    // Skip billing and notifications for internal clusters (explicit marker, not project_id nullness)
+    const isInternalCluster = data.node_config?.provision_config?.type === "internal";
+    if (!isInternalCluster) {
+      await ensureBillingActivatedForReadyCluster(body.clusterId, data);
+    }
   } catch (billingErr) {
     console.error("[kubernetes/status] Failed to activate ready billing:", billingErr);
   }
 
   try {
-    await ensureReadyNotification(body.clusterId, data);
+    const isInternalCluster = data.node_config?.provision_config?.type === "internal";
+    if (!isInternalCluster) {
+      await ensureReadyNotification(body.clusterId, data);
+    }
   } catch (notificationErr) {
     console.error("[kubernetes/status] Failed to ensure ready notification:", notificationErr);
   }

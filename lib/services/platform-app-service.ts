@@ -613,7 +613,8 @@ export class PlatformAppService {
         const syncResult = await AppStatusService.syncStatus(
           appId,
           app.name,
-          app.status as "running" | "failed" | "pending" | "building" | "stopped"
+          app.status as "running" | "failed" | "pending" | "building" | "stopped",
+          app.updated_at ?? undefined
         );
         syncedStatus = syncResult.currentStatus;
       } catch (syncErr) {

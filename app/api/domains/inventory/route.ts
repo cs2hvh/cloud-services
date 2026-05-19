@@ -40,11 +40,20 @@ type DomainPurchase = {
   registrant_email: string | null;
 };
 
+type DomainTransferRow = {
+  id: string;
+  domain: string;
+  purchase_price: number | null;
+  renewal_price: number | null;
+  currency: string;
+  created_at: string;
+};
+
 type DomainInventoryItem = {
   domain: string;
   purchase: DomainPurchase | null;
   connections: DomainConnection[];
-  source: 'purchased' | 'external' | 'mixed';
+  source: 'purchased' | 'external' | 'mixed' | 'transferred';
   expires_at: string | null;
   auto_renew: boolean | null;
 };
@@ -179,7 +188,11 @@ export async function GET(req: NextRequest) {
 
     const appById = new Map(apps.map((app) => [app.id, app]));
 
-    const [{ data: domainRows, error: domainError }, { data: purchaseRows, error: purchaseError }] = await Promise.all([
+    const [
+      { data: domainRows, error: domainError },
+      { data: purchaseRows, error: purchaseError },
+      { data: transferRows },
+    ] = await Promise.all([
       supabase
         .from('platform_app_domains')
         .select('id, app_id, domain, status, ssl_status, is_primary, verification_token, last_error, created_at')
@@ -188,10 +201,19 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false }),
       supabase
         .from('domain_purchase_requests')
-        .select('id, app_id, domain, status, created_at, last_error, registrant_email')
+        .select('id, app_id, domain, status, created_at, last_error, registrant_email, metadata')
         .eq('user_id', auth.user.id)
         .order('created_at', { ascending: false })
         .limit(1000),
+      // Safety-net: completed transfers that pre-date Gap-1 fix (no purchase record yet).
+      // Once Gap-1 creates the purchase record, this query's results are skipped.
+      supabase
+        .from('domain_transfer_requests')
+        .select('id, domain, purchase_price, renewal_price, currency, created_at')
+        .eq('user_id', auth.user.id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(200),
     ]);
 
     if (domainError) {
@@ -209,6 +231,9 @@ export async function GET(req: NextRequest) {
     }
 
     const purchaseByDomain = new Map<string, DomainPurchase>();
+    // DB-stored expiry/auto_renew written by the marketplace service at purchase time.
+    // Used as fallback when the Name.com live API call times out.
+    const dbMetaByDomain = new Map<string, { expires_at: string | null; auto_renew: boolean | null }>();
 
     (purchaseRows || []).forEach((row) => {
       const domain = normalizeDomain(row.domain || '');
@@ -222,19 +247,25 @@ export async function GET(req: NextRequest) {
         last_error: row.last_error || null,
         registrant_email: row.registrant_email || null,
       });
+
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const storedExpiresAt = typeof meta.expires_at === 'string' ? meta.expires_at : null;
+      const storedAutoRenew = typeof meta.autorenew_enabled === 'boolean' ? meta.autorenew_enabled : null;
+      dbMetaByDomain.set(domain, { expires_at: storedExpiresAt, auto_renew: storedAutoRenew });
     });
 
     const inventoryByDomain = new Map<string, DomainInventoryItem>();
 
     for (const [domain, purchase] of purchaseByDomain.entries()) {
       const providerMeta = resolveProviderMeta(domain, nameComMeta);
+      const dbMeta = dbMetaByDomain.get(domain);
       inventoryByDomain.set(domain, {
         domain,
         purchase,
         connections: [],
         source: 'purchased',
-        expires_at: providerMeta?.expires_at || null,
-        auto_renew: providerMeta?.auto_renew ?? null,
+        expires_at: providerMeta?.expires_at || dbMeta?.expires_at || null,
+        auto_renew: providerMeta?.auto_renew ?? dbMeta?.auto_renew ?? null,
       });
     }
 
@@ -280,6 +311,31 @@ export async function GET(req: NextRequest) {
 
       existing.connections.push(connection);
       existing.source = existing.source === 'purchased' ? 'mixed' : existing.source;
+    });
+
+    // Safety-net: inject completed transfers that don't yet have a purchase record.
+    // This covers domains transferred before Gap-1 was deployed. Once a purchase
+    // record exists for the domain, this loop skips it (inventoryByDomain already has it).
+    (transferRows as DomainTransferRow[] | null || []).forEach((row) => {
+      const domain = normalizeDomain(row.domain || '');
+      if (!domain || inventoryByDomain.has(domain)) return;
+
+      const providerMeta = resolveProviderMeta(domain, nameComMeta);
+      inventoryByDomain.set(domain, {
+        domain,
+        purchase: {
+          id: row.id,
+          app_id: null,
+          status: 'completed',
+          created_at: row.created_at,
+          last_error: null,
+          registrant_email: null,
+        },
+        connections: [],
+        source: 'transferred',
+        expires_at: providerMeta?.expires_at || null,
+        auto_renew: providerMeta?.auto_renew ?? null,
+      });
     });
 
     let domains = Array.from(inventoryByDomain.values()).sort((a, b) => a.domain.localeCompare(b.domain));

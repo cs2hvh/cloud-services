@@ -5,17 +5,24 @@ import type {
   DomainBillingPort,
   DomainEmailPort,
   DomainNotificationPort,
+  DomainPurchaseRequestRepositoryPort,
   DomainTransferRegistrarPort,
   DomainTransferRequestRepositoryPort,
+  DomainUserResolverPort,
 } from "@/lib/domain-service/core/ports";
 import type { ActorContext, DomainTransferRequest, DomainTransferRequestStatus } from "@/lib/domain-service/core/types";
+import type { RegistrantContactInput } from "@/lib/domain-service/core/ports";
 
 /** Name.com statuses mapped to internal statuses */
 const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
+  "submitting transfer": "pending",
   "retrieving email": "pending",
   "pending approval": "pending",
+  "pending_transfer": "pending",
+  "pending": "pending",
   "approved": "approved",
   "completed": "completed",
+  "transferred": "completed",
   "cancelled": "cancelled",
   "rejected": "failed",
   "denied": "failed",
@@ -48,6 +55,7 @@ export interface DomainTransferEligibility {
   eligible: boolean;
   reason: string | null;
   transferPrice: number | null;
+  renewalPrice: number | null;
   currency: string;
 }
 
@@ -57,6 +65,8 @@ export class DomainTransferService {
     audit?: DomainAuditLogPort;
     notifications?: DomainNotificationPort;
     email?: DomainEmailPort;
+    userResolver?: DomainUserResolverPort;
+    purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   };
 
   constructor(
@@ -67,6 +77,8 @@ export class DomainTransferService {
       audit?: DomainAuditLogPort;
       notifications?: DomainNotificationPort;
       email?: DomainEmailPort;
+      userResolver?: DomainUserResolverPort;
+      purchaseRequests?: DomainPurchaseRequestRepositoryPort;
     } = {}
   ) {
     this.deps = deps;
@@ -94,6 +106,7 @@ export class DomainTransferService {
           ? "You already have a transfer in progress for this domain"
           : "A transfer is already in progress for this domain",
         transferPrice: null,
+        renewalPrice: null,
         currency: "USD",
       };
     }
@@ -110,6 +123,7 @@ export class DomainTransferService {
           eligible: false,
           reason: "Domain is not registered or is not available for transfer. Please verify the domain name.",
           transferPrice: null,
+          renewalPrice: null,
           currency: "USD",
         };
       }
@@ -119,6 +133,7 @@ export class DomainTransferService {
         eligible: true,
         reason: null,
         transferPrice: result.purchasePrice ?? null,
+        renewalPrice: result.renewalPrice ?? result.purchasePrice ?? null,
         currency: "USD",
       };
     } catch (error: unknown) {
@@ -131,6 +146,7 @@ export class DomainTransferService {
         eligible: false,
         reason: "Could not verify transfer eligibility. Please try again later.",
         transferPrice: null,
+        renewalPrice: null,
         currency: "USD",
       };
     }
@@ -144,10 +160,10 @@ export class DomainTransferService {
     actor: ActorContext;
     domain: string;
     authCode: string;
-    purchasePrice?: number;
     privacyEnabled?: boolean;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
+    registrantContact?: Omit<RegistrantContactInput, "email"> & { email?: string };
   }): Promise<DomainTransferRequest> {
     const domain = normalizeDomain(input.domain);
     ensureDomainFormat(domain);
@@ -177,18 +193,23 @@ export class DomainTransferService {
       });
     }
 
+    const pricing = await this.resolveTransferPricing(domain);
+
     // Create the DB record first (status: initiated)
     const authCodeHashed = hashAuthCode(input.authCode);
     const request = await this.transfers.create({
       userId: actor.userId,
       domain,
       authCodeHash: authCodeHashed,
-      purchasePrice: input.purchasePrice ?? null,
+      purchasePrice: pricing.purchasePrice,
+      renewalPrice: pricing.renewalPrice,
       currency: "USD",
       provider: "namecom",
       idempotencyKey: input.idempotencyKey || null,
       metadata: {
         privacy_enabled: input.privacyEnabled || false,
+        pricing_source: "namecom_check_availability",
+        ...(input.registrantContact ? { registrant_contact: input.registrantContact } : {}),
         ...(input.metadata || {}),
       },
       status: "initiated",
@@ -196,16 +217,16 @@ export class DomainTransferService {
 
     // Charge billing credits if applicable
     let chargedAmount = 0;
-    if (input.purchasePrice && input.purchasePrice > 0 && this.deps.billing) {
+    if (pricing.purchasePrice && pricing.purchasePrice > 0 && this.deps.billing) {
       try {
         await this.deps.billing.chargeDomainPurchase({
           userId: actor.userId,
           purchaseRequestId: request.id,
           domain,
-          amount: input.purchasePrice,
+          amount: pricing.purchasePrice,
           currency: "USD",
         });
-        chargedAmount = input.purchasePrice;
+        chargedAmount = pricing.purchasePrice;
       } catch (error: unknown) {
         const serviceError = error instanceof DomainServiceError
           ? error
@@ -239,7 +260,7 @@ export class DomainTransferService {
       transferResponse = await this.registrar.createTransfer({
         domainName: domain,
         authCode: input.authCode,
-        purchasePrice: input.purchasePrice,
+        purchasePrice: pricing.purchasePrice ?? undefined,
         privacyEnabled: input.privacyEnabled,
       });
     } catch (error: unknown) {
@@ -382,12 +403,60 @@ export class DomainTransferService {
   async listTransferRequests(input: {
     actor: ActorContext;
     limit?: number;
+    includeArchived?: boolean;
   }): Promise<DomainTransferRequest[]> {
     const requests = await this.transfers.listByUser({
       userId: input.actor.userId,
       limit: input.limit || 20,
+      includeArchived: input.includeArchived,
     });
     return requests.map(toPublicTransferRequest);
+  }
+
+  /**
+   * Hide a terminal transfer from the default activity list without deleting
+   * billing/audit history.
+   */
+  async archiveTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    if (isActiveTransferStatus(request.status)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+        message: "Active transfers cannot be archived. Cancel the transfer first if it should not continue.",
+        details: { currentStatus: request.status },
+      });
+    }
+
+    await this.transfers.archive(request.id, input.actor.userId);
+
+    await this.safeAsync(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "update",
+        serviceId: request.id,
+        serviceName: request.domain,
+        metadata: { event: "domain_transfer_archived" },
+      });
+    });
+
+    return toPublicTransferRequest({
+      ...request,
+      metadata: {
+        ...(request.metadata || {}),
+        archived_at: new Date().toISOString(),
+        archived_by: input.actor.userId,
+      },
+    });
   }
 
   /**
@@ -518,6 +587,31 @@ export class DomainTransferService {
     return { polled: pending.length, processed, errors };
   }
 
+  async pollTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    await this.pollSingleTransfer(request);
+    await this.transfers.updatePolled(request.id).catch(() => {});
+
+    const updated = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!updated) {
+      console.warn("[DomainTransferService] Transfer disappeared after polling", {
+        requestId: input.requestId,
+        userId: input.actor.userId,
+      });
+    }
+    return toPublicTransferRequest(updated || request);
+  }
+
   private async pollSingleTransfer(transfer: DomainTransferRequest): Promise<void> {
     let providerData: Awaited<ReturnType<DomainTransferRegistrarPort["getTransfer"]>>;
 
@@ -537,6 +631,22 @@ export class DomainTransferService {
     const newMappedStatus = mapProviderStatus(newProviderStatus);
     const oldStatus = transfer.status;
 
+    let completionMetadata: Record<string, unknown> | undefined;
+    let completionRenewalPrice: number | null | undefined;
+
+    if (newMappedStatus === "completed") {
+      try {
+        const domainInfo = await this.registrar.getDomain(transfer.domain);
+        completionMetadata = { nameservers: domainInfo.nameservers ?? [] };
+        completionRenewalPrice = domainInfo.renewalPrice ?? transfer.renewal_price ?? null;
+      } catch (error: unknown) {
+        console.warn(
+          `[DomainTransferService] Could not load completed domain info for ${transfer.domain}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
     // Only update if status actually changed
     if (newMappedStatus !== oldStatus || newProviderStatus !== transfer.provider_status) {
       await this.transfers.updateStatus({
@@ -546,11 +656,44 @@ export class DomainTransferService {
         providerEmail: providerData.email || transfer.provider_email,
         lastError: null,
         failureReason: newMappedStatus === "failed" ? "provider_rejected" : null,
+        renewalPrice: completionRenewalPrice,
+        metadata: completionMetadata,
       });
 
       // Clear auth code when transfer reaches a terminal state
       if (newMappedStatus === "completed" || newMappedStatus === "failed" || newMappedStatus === "cancelled") {
         await this.transfers.clearAuthCode(transfer.id);
+      }
+
+      // On completion, create a domain_purchase_requests record so the domain
+      // appears in inventory and the renewal cron can pick it up.
+      if (newMappedStatus === "completed" && newMappedStatus !== oldStatus && this.deps.purchaseRequests) {
+        await this.safeAsync(async () => {
+          const existing = await this.deps.purchaseRequests!.findLatestByDomain({
+            userId: transfer.user_id,
+            domain: transfer.domain,
+          });
+          if (!existing) {
+            await this.deps.purchaseRequests!.create({
+              userId: transfer.user_id,
+              domain: transfer.domain,
+              purchasePrice: transfer.purchase_price ?? null,
+              renewalPrice: completionRenewalPrice ?? transfer.renewal_price ?? null,
+              currency: transfer.currency || "USD",
+              provider: "namecom",
+              providerRequestId: transfer.provider_order_id ?? null,
+              status: "completed",
+              metadata: {
+                source: "transfer",
+                transfer_request_id: transfer.id,
+                expires_at: null,
+                renewal_charged: false,
+                autorenew_enabled: true,
+                nameservers: completionMetadata?.nameservers ?? [],
+              },
+            });
+          }
+        });
       }
 
       // If status changed to a notable state, emit events
@@ -560,20 +703,78 @@ export class DomainTransferService {
     }
   }
 
+  private async resolveTransferPricing(domain: string): Promise<{
+    purchasePrice: number | null;
+    renewalPrice: number | null;
+  }> {
+    try {
+      const availability = await this.registrar.checkAvailability([domain]);
+      const result = availability.results[0];
+
+      if (!result || result.purchasable) {
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+          message: "Domain is not registered or is not available for transfer.",
+          details: { domain },
+        });
+      }
+
+      return {
+        purchasePrice: result.purchasePrice ?? null,
+        renewalPrice: result.renewalPrice ?? result.purchasePrice ?? null,
+      };
+    } catch (error: unknown) {
+      if (error instanceof DomainServiceError) {
+        throw error;
+      }
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: "Could not resolve transfer pricing from registrar.",
+        details: { domain },
+      });
+    }
+  }
+
   private async emitStatusChangeEvents(
     transfer: DomainTransferRequest,
     _oldStatus: DomainTransferRequestStatus,
     newStatus: DomainTransferRequestStatus
   ): Promise<void> {
-    // NOTE: We don't have the user's email in the transfer record (provider_email is the WHOIS contact).
-    // Audit + notifications still work via userId. Emails are skipped during polling.
+    // Resolve user email so completion/failure emails reach the user from the polling path.
+    // provider_email is the WHOIS registrant contact, not the platform user's email.
+    const resolvedEmail = this.deps.userResolver
+      ? await this.deps.userResolver.getUserEmail(transfer.user_id).catch(() => null)
+      : null;
+
     const systemActor: ActorContext = {
       userId: transfer.user_id,
-      userEmail: undefined,
+      userEmail: resolvedEmail ?? undefined,
       userRole: "system",
     };
 
     if (newStatus === "completed") {
+      // Set registrant contact now that the domain is fully owned.
+      // Use stored user-supplied contact if present, falling back to resolved platform email.
+      const storedContact = (transfer.metadata as Record<string, unknown>)
+        ?.registrant_contact as Partial<RegistrantContactInput> | undefined;
+      const contactEmail = storedContact?.email || resolvedEmail;
+      if (contactEmail && this.registrar.setRegistrantContact) {
+        await this.safeAsync(async () => {
+          await this.registrar.setRegistrantContact!(transfer.domain, {
+            email: contactEmail,
+            firstName: storedContact?.firstName,
+            lastName: storedContact?.lastName,
+            phone: storedContact?.phone,
+            companyName: storedContact?.companyName,
+            address1: storedContact?.address1,
+            city: storedContact?.city,
+            state: storedContact?.state,
+            zip: storedContact?.zip,
+            country: storedContact?.country,
+          });
+        });
+      }
+
       await this.safeAsync(async () => {
         await this.emitAudit({
           actor: systemActor,
@@ -869,6 +1070,27 @@ function ensureDomainFormat(domain: string): void {
       details: { domain },
     });
   }
+
+  if (!looksLikeRegistrableRoot(labels)) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Transfers must use a root-level domain, such as example.com. Subdomains like app.example.com cannot be transferred.",
+      details: { domain },
+    });
+  }
+}
+
+function looksLikeRegistrableRoot(labels: string[]): boolean {
+  if (labels.length === 2) return true;
+  if (labels.length !== 3) return false;
+
+  const secondLevel = labels[1];
+  const countryCodeTld = labels[2];
+  const commonSecondLevelTlds = new Set([
+    "ac", "co", "com", "edu", "gov", "net", "org",
+  ]);
+
+  return countryCodeTld.length === 2 && commonSecondLevelTlds.has(secondLevel);
 }
 
 function mapTransferProviderError(error: DomainServiceError, domain: string): DomainServiceError {

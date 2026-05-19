@@ -1,18 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  Archive,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   ExternalLink,
   Eye,
   EyeOff,
   Loader2,
   RefreshCw,
+  RotateCcw,
   X,
   XCircle,
 } from "lucide-react";
@@ -42,11 +47,17 @@ interface TransferRequest {
   domain: string;
   status: "initiated" | "pending" | "approved" | "completed" | "failed" | "cancelled";
   purchase_price: number | null;
+  renewal_price: number | null;
   currency: string;
+  provider: string;
+  provider_order_id: string | null;
   provider_status: string | null;
   provider_email: string | null;
   last_error: string | null;
   failure_reason: string | null;
+  last_polled_at: string | null;
+  poll_count: number;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +67,7 @@ interface EligibilityResult {
   eligible: boolean;
   reason: string | null;
   transferPrice: number | null;
+  renewalPrice: number | null;
   currency: string;
 }
 
@@ -168,16 +180,41 @@ function formatDateTime(value: string) {
   });
 }
 
+function formatRelativeTime(value: string | null): string {
+  if (!value) return "Never";
+  try {
+    return formatDistanceToNow(new Date(value), { addSuffix: true });
+  } catch {
+    return "Unknown";
+  }
+}
+
+function looksLikeRegistrableRoot(parts: string[]) {
+  if (parts.length === 2) return true;
+  if (parts.length !== 3) return false;
+  return parts[2].length === 2 && ["ac", "co", "com", "edu", "gov", "net", "org"].includes(parts[1]);
+}
+
 function TransferActivityCard({
   transfer,
   cancellingId,
+  deletingId,
   onCancel,
+  onDelete,
+  onRetry,
 }: {
   transfer: TransferRequest;
   cancellingId: string | null;
+  deletingId: string | null;
   onCancel: (transferId: string) => void;
+  onDelete: (transferId: string) => void;
+  onRetry: (transfer: TransferRequest) => void;
 }) {
   const isActive = ["initiated", "pending", "approved"].includes(transfer.status);
+  const isTerminal = ["completed", "failed", "cancelled"].includes(transfer.status);
+  const nameservers = Array.isArray(transfer.metadata?.nameservers)
+    ? transfer.metadata.nameservers.filter((value): value is string => typeof value === "string")
+    : [];
 
   return (
     <div className="border border-white/[0.07] bg-white/[0.02]">
@@ -206,20 +243,68 @@ function TransferActivityCard({
             </div>
 
             <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: "Started", value: formatDateTime(transfer.created_at) },
-                { label: "Last update", value: formatDateTime(transfer.updated_at) },
-                { label: "Transfer fee", value: formatCurrency(transfer.purchase_price, transfer.currency) },
-                { label: "Approval email", value: transfer.provider_email || "Waiting for registrar" },
-              ].map(({ label, value }) => (
-                <div key={label} className="border border-white/[0.07] bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">{label}</p>
-                  <p className="mt-1 break-all text-sm text-white/75">{value}</p>
+              {/* Always-visible fields */}
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Started</p>
+                <p className="mt-1 break-all text-sm text-white/75">{formatDateTime(transfer.created_at)}</p>
+              </div>
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Last status change</p>
+                <p className="mt-1 break-all text-sm text-white/75">{formatDateTime(transfer.updated_at)}</p>
+              </div>
+
+              {/* Transfer fee: active → "Confirmed on initiation" or price; terminal → actual price or "—" */}
+              <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Transfer fee</p>
+                <p className="mt-1 break-all text-sm text-white/75">
+                  {transfer.purchase_price !== null
+                    ? formatCurrency(transfer.purchase_price, transfer.currency)
+                    : isActive
+                      ? "Confirmed on initiation"
+                      : "Included in renewal"}
+                </p>
+              </div>
+
+              {/* Approval email: only meaningful while waiting; hide for terminal states unless we have an address */}
+              {(isActive || transfer.provider_email) && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Approval email</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {transfer.provider_email || (isActive ? "Waiting for registrar" : "—")}
+                  </p>
                 </div>
-              ))}
+              )}
+
+              {/* Last polled: only for in-flight transfers */}
+              {isActive && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Last polled</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {transfer.last_polled_at ? formatRelativeTime(transfer.last_polled_at) : "Pending first check"}
+                  </p>
+                </div>
+              )}
+
+              {/* Renewal price: show once known */}
+              {transfer.renewal_price !== null && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Renewal price</p>
+                  <p className="mt-1 break-all text-sm text-white/75">
+                    {formatCurrency(transfer.renewal_price, transfer.currency)}
+                  </p>
+                </div>
+              )}
+
+              {/* Order ID: show for completed/failed to help with support queries */}
+              {transfer.provider_order_id && isTerminal && (
+                <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Order ID</p>
+                  <p className="mt-1 break-all text-sm font-mono text-white/75">{transfer.provider_order_id}</p>
+                </div>
+              )}
             </div>
 
-            {(transfer.provider_status || transfer.last_error) && (
+            {(transfer.provider_status || transfer.last_error || nameservers.length > 0) && (
               <div className="mt-3 grid gap-2 lg:grid-cols-2">
                 {transfer.provider_status && (
                   <div className="border border-white/[0.07] bg-white/[0.03] p-3">
@@ -231,6 +316,16 @@ function TransferActivityCard({
                   <div className="border border-red-500/20 bg-red-500/10 p-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/60">Last error</p>
                     <p className="mt-1 text-sm text-red-200/80">{transfer.last_error}</p>
+                  </div>
+                )}
+                {nameservers.length > 0 && (
+                  <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Nameservers</p>
+                    <div className="mt-1 text-sm text-white/75 space-y-1">
+                      {nameservers.map((nameserver) => (
+                        <p key={nameserver}>{nameserver}</p>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -245,6 +340,16 @@ function TransferActivityCard({
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
+            )}
+            {transfer.status === "failed" && (
+              <Button
+                variant="outline"
+                className="rounded-none border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/10"
+                onClick={() => onRetry(transfer)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
             )}
             {isActive && (
               <AlertDialog>
@@ -274,6 +379,79 @@ function TransferActivityCard({
                 </AlertDialogContent>
               </AlertDialog>
             )}
+            {/* Completed: archive the record. Domain is safe — make that explicit. */}
+            {transfer.status === "completed" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    disabled={deletingId === transfer.id}
+                  >
+                    {deletingId === transfer.id
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      : <Archive className="mr-2 h-4 w-4" />}
+                    Archive record
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-white/10 bg-zinc-900">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-white">Archive transfer record?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/60">
+                      This removes the transfer entry from your activity list.{" "}
+                      <span className="font-medium text-white/85">
+                        {transfer.domain} remains fully active in your account
+                      </span>{" "}
+                      and can still be managed from My Domains. Billing and audit records are retained.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="rounded-none bg-white/10 text-white hover:bg-white/20"
+                      onClick={() => onDelete(transfer.id)}
+                    >
+                      Archive
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
+            {/* Failed / Cancelled: dismiss the record. No live domain to worry about. */}
+            {(transfer.status === "failed" || transfer.status === "cancelled") && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    disabled={deletingId === transfer.id}
+                  >
+                    {deletingId === transfer.id
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      : <X className="mr-2 h-4 w-4" />}
+                    Dismiss
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-white/10 bg-zinc-900">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-white">Remove from history?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/60">
+                      Remove <span className="font-medium text-white/80">{transfer.domain}</span> from your transfer activity list. Billing and audit records are retained for account security.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="rounded-none bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => onDelete(transfer.id)}
+                    >
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
       </div>
@@ -287,17 +465,33 @@ export default function DomainTransferPage() {
   const [domain, setDomain] = useState("");
   const [authCode, setAuthCode] = useState("");
   const [showAuthCode, setShowAuthCode] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactFirstName, setContactFirstName] = useState("");
+  const [contactLastName, setContactLastName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactCompany, setContactCompany] = useState("");
+  const [contactAddress, setContactAddress] = useState("");
+  const [contactCity, setContactCity] = useState("");
+  const [contactState, setContactState] = useState("");
+  const [contactZip, setContactZip] = useState("");
+  const [contactCountry, setContactCountry] = useState("");
   const [stage, setStage] = useState<TransferStage>("lookup");
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoChecking, setAutoChecking] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<TransferRequest[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [eligibilityFeedback, setEligibilityFeedback] = useState<string | null>(null);
   const [submittedDomain, setSubmittedDomain] = useState<string | null>(null);
+  const [activityTab, setActivityTab] = useState<"active" | "history" | "all">("active");
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const domainParam = searchParams.get("domain");
@@ -309,22 +503,66 @@ export default function DomainTransferPage() {
     }
   }, [searchParams]);
 
-  const fetchTransfers = useCallback(async () => {
+  const fetchTransfers = useCallback(async (isAuto = false, selectTab = false) => {
+    if (isAuto) setAutoChecking(true);
     try {
       const response = await fetch("/api/domains/transfer?limit=50");
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || "Failed to fetch transfers");
-      setTransfers(json.data || []);
+      const fetched: TransferRequest[] = json.data || [];
+      setTransfers(fetched);
+      setLastCheckedAt(new Date());
       setActivityError(null);
+      // Auto-select the most relevant tab on first load or after submission
+      if (selectTab) {
+        const hasActive = fetched.some((t) => ["initiated", "pending", "approved"].includes(t.status));
+        const hasHistory = fetched.some((t) => ["completed", "failed", "cancelled"].includes(t.status));
+        setActivityTab(hasActive ? "active" : hasHistory ? "history" : "all");
+      }
     } catch (error) {
       setActivityError(error instanceof Error ? error.message : "Failed to fetch transfers");
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setAutoChecking(false);
     }
   }, []);
 
-  useEffect(() => { void fetchTransfers(); }, [fetchTransfers]);
+  // Initial load — select the right tab based on what exists
+  useEffect(() => { void fetchTransfers(false, true); }, [fetchTransfers]);
+
+  // Auto-refresh every 30s when there are active transfers; stop when all settle.
+  // When an active transfer settles (completes/fails), switch the tab to history so
+  // the user sees the result without a manual click.
+  const prevActiveCountRef = useRef(0);
+  useEffect(() => {
+    const hasActive = transfers.some((t) => ["initiated", "pending", "approved"].includes(t.status));
+    const activeCount = transfers.filter((t) => ["initiated", "pending", "approved"].includes(t.status)).length;
+
+    // If we just went from having active transfers to having none, switch to history
+    if (prevActiveCountRef.current > 0 && activeCount === 0 && transfers.length > 0) {
+      setActivityTab("history");
+    }
+    prevActiveCountRef.current = activeCount;
+
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+      autoRefreshRef.current = null;
+    }
+
+    if (hasActive) {
+      autoRefreshRef.current = setInterval(() => {
+        void fetchTransfers(true);
+      }, 30_000);
+    }
+
+    return () => {
+      if (autoRefreshRef.current) {
+        clearInterval(autoRefreshRef.current);
+        autoRefreshRef.current = null;
+      }
+    };
+  }, [transfers, fetchTransfers]);
 
   const activeTransfers = useMemo(() => transfers.filter((t) => ["initiated", "pending", "approved"].includes(t.status)), [transfers]);
   const historyTransfers = useMemo(() => transfers.filter((t) => ["completed", "failed", "cancelled"].includes(t.status)), [transfers]);
@@ -349,7 +587,7 @@ export default function DomainTransferPage() {
       setEligibilityFeedback("Domain contains invalid characters. Each label must start and end with a letter or number."); return;
     }
     if (parts[parts.length - 1].length < 2) { setEligibilityFeedback("Domain extension must be at least 2 characters."); return; }
-    if (parts.length > 3) { setEligibilityFeedback("This looks like a subdomain. Transfers only work on root-level domains."); return; }
+    if (!looksLikeRegistrableRoot(parts)) { setEligibilityFeedback("This looks like a subdomain. Transfers only work on root-level domains, such as yourbrand.com."); return; }
 
     setChecking(true);
     setEligibilityFeedback(null);
@@ -373,16 +611,40 @@ export default function DomainTransferPage() {
     }
   }, [domain]);
 
+  function buildRegistrantContact() {
+    const fields = {
+      firstName: contactFirstName.trim(),
+      lastName: contactLastName.trim(),
+      email: contactEmail.trim(),
+      phone: contactPhone.trim(),
+      companyName: contactCompany.trim(),
+      address1: contactAddress.trim(),
+      city: contactCity.trim(),
+      state: contactState.trim(),
+      zip: contactZip.trim(),
+      country: contactCountry.trim(),
+    };
+    const filled = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== ""));
+    return Object.keys(filled).length > 0 ? filled : undefined;
+  }
+
   const handleStartTransfer = useCallback(async () => {
     if (!eligibility?.eligible || !authCode.trim()) { setEligibilityFeedback("Enter the authorization code from your current registrar."); return; }
-    if (authCode.trim().length < 4) { setEligibilityFeedback("Authorization code must be at least 4 characters."); return; }
+    if (authCode.trim().length < 6) { setEligibilityFeedback("Authorization code must be at least 6 characters."); return; }
 
     setSubmitting(true);
     try {
       const response = await fetch("/api/domains/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: eligibility.domain, auth_code: authCode.trim(), purchase_price: eligibility.transferPrice ?? undefined }),
+        body: JSON.stringify((() => {
+          const rc = buildRegistrantContact();
+          return {
+            domain: eligibility.domain,
+            auth_code: authCode.trim(),
+            ...(rc ? { registrant_contact: rc } : {}),
+          };
+        })()),
       });
       const json = await response.json();
       if (!response.ok) {
@@ -399,14 +661,21 @@ export default function DomainTransferPage() {
       }
       setSubmittedDomain(eligibility.domain);
       setDomain(""); setAuthCode(""); setStage("lookup"); setEligibility(null); setEligibilityFeedback(null);
+      setShowContactForm(false);
+      setContactFirstName(""); setContactLastName(""); setContactEmail(""); setContactPhone("");
+      setContactCompany(""); setContactAddress(""); setContactCity(""); setContactState("");
+      setContactZip(""); setContactCountry("");
+      setActivityTab("active");
       toast.success("Transfer initiated. Status updates will appear as it progresses.");
-      void fetchTransfers();
+      void fetchTransfers(false, false);
     } catch {
       setEligibilityFeedback("Failed to start transfer. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  }, [authCode, eligibility, fetchTransfers]);
+  }, [authCode, eligibility, fetchTransfers,
+    contactFirstName, contactLastName, contactEmail, contactPhone,
+    contactCompany, contactAddress, contactCity, contactState, contactZip, contactCountry]);
 
   const handleCancelTransfer = useCallback(async (transferId: string) => {
     setCancellingId(transferId);
@@ -422,6 +691,30 @@ export default function DomainTransferPage() {
       setCancellingId(null);
     }
   }, [fetchTransfers]);
+
+  const handleDeleteTransfer = useCallback(async (transferId: string) => {
+    setDeletingId(transferId);
+    try {
+      const response = await fetch(`/api/domains/transfer/${transferId}`, { method: "DELETE" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) { toast.error(json.message || "Failed to delete transfer from history."); return; }
+      toast.success("Transfer deleted from history.");
+      void fetchTransfers();
+    } catch {
+      toast.error("Failed to delete transfer from history.");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [fetchTransfers]);
+
+  const handleRetryTransfer = useCallback((transfer: TransferRequest) => {
+    setDomain(transfer.domain);
+    setAuthCode("");
+    setEligibility(null);
+    setEligibilityFeedback("Fix the registrar-side issue, then re-check eligibility and submit a fresh authorization code.");
+    setStage("lookup");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   const stageIndex = stage === "lookup" ? 1 : 2;
   const inputCls = "rounded-none border-white/[0.18] bg-black/35 text-white placeholder:text-white/45 focus:border-white/30 transition-colors";
@@ -593,6 +886,9 @@ export default function DomainTransferPage() {
                       <p className="mt-2 text-xs text-white/45">
                         Transfer fee: {formatCurrency(eligibility.transferPrice, eligibility.currency)}
                       </p>
+                      <p className="text-xs text-white/45">
+                        Renewal price: {formatCurrency(eligibility.renewalPrice, eligibility.currency)}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
@@ -650,11 +946,62 @@ export default function DomainTransferPage() {
                     ))}
                   </div>
 
+                  {/* Optional registrant contact */}
+                  <div className="border border-white/[0.07]">
+                    <button
+                      type="button"
+                      onClick={() => setShowContactForm((v) => !v)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white/70 hover:bg-white/[0.04] transition-colors"
+                    >
+                      <span className="font-medium">
+                        Registrant Contact
+                        <span className="ml-2 text-[11px] font-normal text-white/40">Optional — WHOIS / ICANN records</span>
+                      </span>
+                      {showContactForm
+                        ? <ChevronUp className="h-4 w-4 shrink-0 text-white/40" />
+                        : <ChevronDown className="h-4 w-4 shrink-0 text-white/40" />}
+                    </button>
+
+                    {showContactForm && (
+                      <div className="border-t border-white/[0.07] px-4 pb-4 pt-3">
+                        <p className="mb-3 text-xs text-white/40">
+                          Applied when the transfer completes. Leave blank to use your account email and platform address defaults.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            ["First Name", contactFirstName, setContactFirstName, "col-span-1", "text"],
+                            ["Last Name", contactLastName, setContactLastName, "col-span-1", "text"],
+                            ["Email", contactEmail, setContactEmail, "col-span-2", "email"],
+                            ["Phone (e.g. +1.2025551234)", contactPhone, setContactPhone, "col-span-1", "text"],
+                            ["Company (optional)", contactCompany, setContactCompany, "col-span-1", "text"],
+                            ["Address", contactAddress, setContactAddress, "col-span-2", "text"],
+                            ["City", contactCity, setContactCity, "col-span-1", "text"],
+                            ["State / Province", contactState, setContactState, "col-span-1", "text"],
+                            ["ZIP / Postal Code", contactZip, setContactZip, "col-span-1", "text"],
+                            ["Country Code (e.g. US)", contactCountry, setContactCountry, "col-span-1", "text"],
+                          ] as const).map(([label, value, setter, span, type]) => (
+                            <div key={label} className={span}>
+                              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/38">
+                                {label}
+                              </label>
+                              <input
+                                type={type}
+                                value={value}
+                                onChange={(e) => setter(e.target.value)}
+                                className="h-9 w-full border border-white/[0.08] bg-black/20 px-3 text-sm text-white placeholder:text-white/20 focus:border-white/20 focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
                       className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
-                      onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); }}
+                      onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); setShowContactForm(false); }}
                     >
                       Back
                     </Button>
@@ -733,16 +1080,25 @@ export default function DomainTransferPage() {
             <h2 className="text-lg font-semibold text-white">Transfer Activity</h2>
             <p className="mt-1 text-sm text-white/45">Current requests, status details, and completed or failed attempts.</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-none border-white/15 text-white hover:bg-white/[0.08] self-start"
-            onClick={() => { setRefreshing(true); void fetchTransfers(); }}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex flex-col items-end gap-1.5 self-start">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
+              onClick={() => { setRefreshing(true); void fetchTransfers(); }}
+              disabled={refreshing || autoChecking}
+            >
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing || autoChecking ? "animate-spin" : ""}`} />
+              {autoChecking ? "Checking…" : "Refresh"}
+            </Button>
+            {lastCheckedAt && (
+              <p className="text-[10px] text-white/30">
+                {transfers.some((t) => ["initiated", "pending", "approved"].includes(t.status))
+                  ? `Auto-updating · checked ${formatRelativeTime(lastCheckedAt.toISOString())}`
+                  : `Last checked ${formatRelativeTime(lastCheckedAt.toISOString())}`}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="px-6 py-5">
@@ -762,7 +1118,7 @@ export default function DomainTransferPage() {
               </div>
             </div>
           ) : (
-            <Tabs defaultValue="active" className="space-y-4">
+            <Tabs value={activityTab} onValueChange={(v) => setActivityTab(v as typeof activityTab)} className="space-y-4">
               <TabsList className="h-auto flex-wrap gap-1 border border-white/[0.08] bg-white/[0.04] p-1">
                 <TabsTrigger value="active" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   Active ({activeTransfers.length})
@@ -787,7 +1143,10 @@ export default function DomainTransferPage() {
                         key={transfer.id}
                         transfer={transfer}
                         cancellingId={cancellingId}
+                        deletingId={deletingId}
                         onCancel={(id) => void handleCancelTransfer(id)}
+                        onDelete={(id) => void handleDeleteTransfer(id)}
+                        onRetry={handleRetryTransfer}
                       />
                     ))
                   ) : (

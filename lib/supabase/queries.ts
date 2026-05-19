@@ -3612,7 +3612,8 @@ export const Platform_App_Deployments = {
         if (!failureReason) return true;
         return (
           failureReason === 'Build never started' ||
-          failureReason.startsWith('Build timeout:')
+          failureReason.startsWith('Build timeout:') ||
+          failureReason.startsWith('Build failed:')
         );
       };
       const updatePayload = {

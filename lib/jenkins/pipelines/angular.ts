@@ -1,13 +1,13 @@
 /**
  * Angular Pipeline - Angular with Angular CLI build tool
- * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
  * DEPLOYMENT CONTRACT:
  * 1. Build stage
  * 2. Create Environment Secret stage
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateAngularDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -66,27 +66,21 @@ export function createAngularPipeline(
   const envFromSection = generateEnvFromSection(secretName, false); // No secret needed
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
   
-  // Generate build args for ALL env vars (Angular requires build-time injection)
-  // [WARN] WARNING: All Angular env vars will be visible in build logs!
-  // [WARN] DO NOT use sensitive data - use Kubernetes Secrets for backend APIs instead
-  const buildArgs = envVars.length > 0
-    ? envVars.map(e => {
-        // Escape special characters for shell
-        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-        return `--build-arg ${e.key}="${escapedValue}"`;
-      }).join(' \\\\\n                    ')
-    : '';
-  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
-  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
-  const buildArgsLine = buildArgs
-    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
-    : ` \\\\\n                    ${pmBuildArg}`;
+  // Angular requires build-time injection for ALL env vars (no runtime env in static output).
+  // [WARN] All Angular env vars will be visible in image layers — avoid sensitive values.
+  const buildOpts: string[] = [
+    ...envVars.map(e => {
+      const escapedValue = e.value.replace(/\$/g, '\\$');
+      return `--opt build-arg:${e.key}=${escapedValue}`;
+    }),
+    '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
+  ];
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
     Angular deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
@@ -241,56 +235,7 @@ ${generateAngularDockerfileStage(envVars)}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          script {
-            echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
-            withCredentials([usernamePassword(
-              credentialsId: 'dockerhublogin',
-              usernameVariable: 'DOCKER_USER',
-              passwordVariable: 'DOCKER_PASS'
-            )]) {
-              sh(
-                script: '''
-                  mkdir -p /kaniko/.docker
-                  AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
-
-                  cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "\$AUTH"
-    }
-  }
-}
-EOF
-
-                  # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-                  echo 'Executing Kaniko build'
-                  /kaniko/executor \\
-                    --context=\${WORKSPACE} \\
-                    --dockerfile=Dockerfile \\
-                    --destination=\${DOCKER_IMAGE_VERSION} \\
-                    --destination=\${DOCKER_IMAGE_LATEST}${buildArgsLine} \\
-                    --cache=true \\
-                    --cache-repo=hav0ky/${appName}-cache \\
-                    --use-new-run \\
-                    --digest-file=image-digest.txt
-                  
-                  echo 'Image build completed successfully'
-                ''',
-                returnStatus: false,
-                returnStdout: false
-              )
-            }
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, buildOpts, getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 

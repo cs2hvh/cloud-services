@@ -112,10 +112,10 @@ export function DeleteAppModal({
               <br />
               This action will permanently remove:
               <ul className="list-disc list-inside mt-2 space-y-1 text-white/60">
-                <li>Kubernetes deployment, service, and ingress</li>
-                <li>SSL certificate and TLS secret</li>
+                <li>Application deployment and network routing</li>
+                <li>SSL certificate</li>
                 <li>DNS record</li>
-                <li>Jenkins build job</li>
+                <li>Build pipeline</li>
               </ul>
               <p className="text-red-400 font-medium mt-4">This action cannot be undone.</p>
             </div>

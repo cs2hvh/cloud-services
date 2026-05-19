@@ -2504,6 +2504,57 @@
           "name"
         ]
       },
+      "KubernetesOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "versions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "1.29.1-do.0",
+                  "1.28.6-do.0"
+                ]
+              },
+              "regions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "ams3",
+                  "blr1",
+                  "nyc1",
+                  "sgp1"
+                ]
+              },
+              "node_sizes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "s-2vcpu-4gb",
+                  "s-4vcpu-8gb",
+                  "c-4"
+                ]
+              }
+            },
+            "required": [
+              "versions",
+              "regions",
+              "node_sizes"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "ControlPlane": {
         "type": "object",
         "nullable": true,
@@ -2702,6 +2753,45 @@
         "required": [
           "data",
           "meta"
+        ]
+      },
+      "KubernetesWorkerDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "cluster_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+              },
+              "droplet_id": {
+                "type": "string",
+                "example": "539342404"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              },
+              "workers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WorkerNode"
+                },
+                "description": "Remaining worker nodes after deletion."
+              }
+            },
+            "required": [
+              "cluster_id",
+              "droplet_id",
+              "deleted",
+              "workers"
+            ]
+          }
+        },
+        "required": [
+          "data"
         ]
       },
       "KubernetesClusterResponse": {
@@ -3588,6 +3678,71 @@
           "data"
         ]
       },
+      "RegistrantContact": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "example": "Jane"
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "example": "Smith"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 128,
+            "format": "email",
+            "example": "jane@example.com"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 32,
+            "example": "+1.2025551234"
+          },
+          "companyName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "example": "Acme Corp"
+          },
+          "address1": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "example": "123 Main St"
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "example": "San Francisco"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "example": "CA"
+          },
+          "zip": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20,
+            "example": "94105"
+          },
+          "country": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "example": "US"
+          }
+        }
+      },
       "DomainMarketplacePurchaseRequest": {
         "type": "object",
         "properties": {
@@ -3607,6 +3762,9 @@
             "minLength": 8,
             "maxLength": 128,
             "example": "idem-domain-001"
+          },
+          "registrant_contact": {
+            "$ref": "#/components/schemas/RegistrantContact"
           }
         },
         "required": [
@@ -9802,6 +9960,77 @@
         }
       }
     },
+    "/api/v1/kubernetes/options": {
+      "get": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "List Kubernetes options",
+        "description": "Returns supported Kubernetes versions, regions, and node sizes.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kubernetes options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesOptionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch Kubernetes options"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/kubernetes": {
       "get": {
         "tags": [
@@ -10007,6 +10236,273 @@
                 "example": {
                   "error": "CREATE_FAILED",
                   "message": "Failed to create Kubernetes cluster"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/kubernetes/{id}/kubeconfig": {
+      "get": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Retrieve kubeconfig",
+        "description": "Returns decrypted kubeconfig content for a cluster.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kubeconfig retrieved as raw YAML/plain text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "apiVersion: v1\nkind: Config\nclusters:\n- name: do-nyc1-prod-cluster-01\n  cluster:\n    server: https://example.k8s.ondigitalocean.com"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid cluster ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster or kubeconfig not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Kubeconfig not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch kubeconfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/kubernetes/{id}/workers/{dropletId}": {
+      "delete": {
+        "tags": [
+          "Kubernetes"
+        ],
+        "summary": "Delete worker node",
+        "description": "Deletes a worker node from an existing Kubernetes cluster by droplet ID.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "23549dc5-53ee-4ff2-904d-a59250065545"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "example": "539342404"
+            },
+            "required": true,
+            "name": "dropletId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Worker node deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesWorkerDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid dropletId format",
+                  "details": {
+                    "field": "dropletId"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this cluster"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cluster or worker not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Worker node not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete worker node"
                 }
               }
             }

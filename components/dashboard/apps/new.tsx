@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -8,10 +8,13 @@ import { Tables } from "@/lib/supabase/types";
 import { EnvVar } from "./env-vars-editor";
 import {
   Repository, Branch, GitProvider, ProviderConnection, PricingRates,
-  FRAMEWORK_MAP,
+  FRAMEWORK_MAP, STEP_META,
 } from "./new-types";
 import { StepProvider } from "./new-step-provider";
 import { StepRepository } from "./new-step-repository";
+import { StepConfigure } from "./new-step-configure";
+import { StepReview } from "./new-step-review";
+import { SummarySidebar } from "./new-summary-sidebar";
 
 
 interface PageProps {
@@ -62,6 +65,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [containerPort, setContainerPort] = useState<number | undefined>(undefined);
   const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined);
   const [detectingFramework, setDetectingFramework] = useState(false);
+  const userEditedPortRef = useRef(false);
 
   // ── Derived ──────────────────────────────────────────────────
   const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
@@ -146,11 +150,17 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         else { toast.error("Framework not directly supported. Add a Dockerfile or choose a pipeline."); setFramework(""); }
       } else { setFramework(normalized); }
       setHasDockerfile(dockerfileDetected);
-      if (data.detectedPort) { setDetectedPort(data.detectedPort); if (containerPort === undefined) setContainerPort(data.detectedPort); }
-      else { setDetectedPort(undefined); }
+      if (data.detectedPort) {
+        setDetectedPort(data.detectedPort);
+        // Auto-fill detected ports until the user explicitly edits the port.
+        if (!userEditedPortRef.current) setContainerPort(data.detectedPort);
+      } else {
+        setDetectedPort(undefined);
+        if (!userEditedPortRef.current) setContainerPort(undefined);
+      }
     } catch (e) { console.error("Framework detection error:", e); }
     finally { setDetectingFramework(false); }
-  }, [containerPort]);
+  }, []);
 
   // ── Effects ──────────────────────────────────────────────────
   useEffect(() => { fetchProviderStatus(); }, [fetchProviderStatus]);
@@ -171,7 +181,12 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   useEffect(() => {
     if (!selectedRepo) return;
     const repo = repositories.find((r) => r.id === selectedRepo);
-    if (repo) setAppName(repo.name);
+    if (repo) {
+      setAppName(repo.name);
+      userEditedPortRef.current = false;
+      setContainerPort(undefined);
+      setDetectedPort(undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRepo]);
 
@@ -184,13 +199,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     detectFramework(selectedProvider, repo, selectedBranch || repo.defaultBranch);
   }, [selectedRepo, selectedProvider, fetchBranches, detectFramework, selectedBranch, repositories]);
 
-  useEffect(() => {
-    if (!selectedRepo) return;
-    const repo = repositories.find((r) => r.id === selectedRepo);
-    if (!repo || !selectedBranch) return;
-    detectFramework(selectedProvider, repo, selectedBranch);
-  }, [selectedBranch, selectedRepo, selectedProvider, repositories, detectFramework]);
-
   // ── Provider connection ──────────────────────────────────────
   const { connectProvider: performConnection } = useProviderConnection({ returnTo: "/dashboard/services/apps/new", mode: "integration" });
 
@@ -201,6 +209,22 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       setConnectionError({ provider: providerId, message: result.error });
       setIsLoading(false); setConnectingProvider(null);
     }
+  };
+
+  // Clear port when user manually picks a framework that auto-generates its own Dockerfile
+  // so stale detected ports don't bleed into pipelines that ignore the passed port anyway.
+  const autoDockerfileFrameworks = new Set(["Next.js", "Nuxt.js", "Vite-React", "Vue.js", "Angular", "SvelteKit", "express", "python", "django", "flask", "fastapi", "Node.js"]);
+  const handleFrameworkChange = (v: string) => {
+    setFramework(v);
+    if (autoDockerfileFrameworks.has(v)) {
+      userEditedPortRef.current = false;
+      setContainerPort(undefined);
+    }
+  };
+
+  const handleContainerPortChange = (port: number | undefined) => {
+    userEditedPortRef.current = port !== undefined;
+    setContainerPort(port);
   };
 
   // ── Step navigation ──────────────────────────────────────────
@@ -380,11 +404,11 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
               branches={branches}
               loadingBranches={loadingBranches}
               framework={framework}
-              onFrameworkChange={setFramework}
+              onFrameworkChange={handleFrameworkChange}
               detectingFramework={detectingFramework}
               hasDockerfile={hasDockerfile}
               containerPort={containerPort}
-              onContainerPortChange={setContainerPort}
+              onContainerPortChange={handleContainerPortChange}
               detectedPort={detectedPort}
               size={size}
               onSizeChange={setSize}
@@ -412,6 +436,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
               size={size}
               autoDeploy={autoDeploy}
               envVars={envVars}
+              containerPort={containerPort}
               isLoading={isLoading}
               onPrev={() => setCurrentStep((s) => s - 1)}
               onSubmit={onSubmit}
@@ -430,6 +455,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
           selectedProject={selectedProject}
           size={size}
           autoDeploy={autoDeploy}
+          containerPort={containerPort}
         />
       </div>
     </div>

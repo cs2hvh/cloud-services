@@ -44,7 +44,7 @@ interface DomainInventoryItem {
   domain: string;
   purchase: DomainPurchase | null;
   connections: DomainConnection[];
-  source: 'purchased' | 'external' | 'mixed';
+  source: 'purchased' | 'external' | 'mixed' | 'transferred';
   expires_at: string | null;
   auto_renew: boolean | null;
 }
@@ -61,7 +61,11 @@ function getDomainStatus(item: DomainInventoryItem): { status: DomainStatus; lab
   if (hasFailed) return { status: 'attention', label: 'Needs Attention' };
   if (hasPendingPurchase || hasPendingSetup) return { status: 'pending', label: 'Pending' };
   if (hasActive) return { status: 'active', label: 'Active' };
-  if (purchaseStatus === 'completed') return { status: 'purchased', label: 'Purchased' };
+  if (purchaseStatus === 'completed') {
+    return item.source === 'transferred'
+      ? { status: 'purchased', label: 'Transferred' }
+      : { status: 'purchased', label: 'Purchased' };
+  }
   return { status: 'unknown', label: 'Unknown' };
 }
 
@@ -94,7 +98,7 @@ function StatusLabel({ status, label }: { status: DomainStatus; label: string })
 
 function needsAttention(item: DomainInventoryItem): boolean {
   if (item.purchase?.status === 'failed') return true;
-  return item.connections.some((c) => c.status === 'failed' || c.status === 'pending');
+  return item.connections.some((c) => c.status === 'failed');
 }
 
 function isExpiringSoon(expiresAt: string | null, days: number): boolean {

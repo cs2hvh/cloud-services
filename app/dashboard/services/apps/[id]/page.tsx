@@ -64,6 +64,7 @@ import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
 import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
+import { applyLiveBuildStatus } from '@/lib/app-operations/core/live-build-status';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
 import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-editor';
@@ -119,9 +120,9 @@ const PLATFORM_APP_SIZE_SPECS: Record<
   SizeKey,
   { cpu: string; memory: string; replicas: number }
 > = {
-  small: { cpu: '0.5 CPU', memory: '512MB', replicas: 1 },
-  medium: { cpu: '1 CPU', memory: '1GB', replicas: 2 },
-  large: { cpu: '2 CPU', memory: '2GB', replicas: 3 },
+  small: { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
+  medium: { cpu: '0.5 CPU', memory: '512 MB', replicas: 2 },
+  large: { cpu: '1 CPU', memory: '1 GB', replicas: 3 },
 };
 
 const SECTION_META: Array<{
@@ -305,6 +306,10 @@ export default function AppDetailPage() {
     () => buildDeployments.filter((deployment) => deployment.history_type === 'release'),
     [buildDeployments]
   );
+  const deploymentsForHistory = useMemo(
+    () => deployments.map((deployment) => applyLiveBuildStatus(deployment, buildInfo)),
+    [deployments, buildInfo]
+  );
   const latestReleaseDeployment = releaseDeployments[0] ?? null;
   const activeBuildTrigger = latestBuildDeployment?.status === 'BUILDING'
     ? latestBuildDeployment.trigger
@@ -357,7 +362,7 @@ export default function AppDetailPage() {
     }
 
     return buildInfo;
-  }, [activeBuildNumber, activeBuildTrigger, buildInfo, viewingBuildNumber]);
+  }, [activeBuildNumber, buildInfo, viewingBuildNumber]);
   const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
@@ -624,6 +629,9 @@ export default function AppDetailPage() {
 
     if (wasBuilding === true && !isBuilding) {
       refetchDeployments();
+      // Re-fetch full app state: last_failure_reason, can_rollback, rollback_target_build_number
+      // and other server-computed fields are not carried by the Supabase realtime payload.
+      fetchApp();
 
       // Poll details every 5s for up to 60s until the K8s pod image updates
       let attempts = 0;
@@ -637,7 +645,7 @@ export default function AppDetailPage() {
       }, 5000);
       return () => clearInterval(pollId);
     }
-  }, [isBuilding, refetchDetails, refetchDeployments]);
+  }, [isBuilding, refetchDetails, refetchDeployments, fetchApp]);
 
   // Idle poll: when no build is running, check Jenkins every 15 s so webhook-triggered
   // builds (started entirely on the backend) are detected promptly. Once Jenkins
@@ -672,9 +680,8 @@ export default function AppDetailPage() {
     if (latestResize.id !== prevResizeOpIdRef.current && latestResize.status !== 'BUILDING') {
       prevResizeOpIdRef.current = latestResize.id;
       setPendingResizeSize(null);
-      if (latestResize.status === 'SUCCESS') {
-        fetchApp();
-      }
+      // Refresh on both success and failure: failure reason and status are updated server-side
+      fetchApp();
     }
   }, [operationDeployments, fetchApp]);
 
@@ -1266,18 +1273,25 @@ export default function AppDetailPage() {
                 </button>
               </div>
 
-              {app.status === 'failed' && app.last_failure_reason && !isBuilding && (
-                <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {/* Failure reason: shown for failed apps AND running apps with a recent operation failure (e.g. resize, redeploy on first-ever build) that did NOT leave a prior release live */}
+              {app.last_failure_reason && !isBuilding && !isDegraded &&
+                (app.status === 'failed' || app.status === 'running') && (
+                <div className={`mt-3 flex items-center gap-2 border px-3 py-2 text-sm ${
+                  app.status === 'failed'
+                    ? 'border-red-400/20 bg-red-500/10 text-red-300'
+                    : 'border-orange-400/20 bg-orange-500/10 text-orange-300'
+                }`}>
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
                 </div>
               )}
-              {/* Degraded state warning: newer deploy exists but old build is still serving */}
+              {/* Degraded state warning: newer release failed but old pod is still serving */}
               {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over — still serving Build #${servingBuildNumber}.`}
+                    {app.last_failure_reason ? ` Failure: ${app.last_failure_reason}` : ''}
                   </span>
                 </div>
               )}
@@ -1286,7 +1300,7 @@ export default function AppDetailPage() {
                 <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
                   <RefreshCw className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Pod has restarted {restartCount} times. This may indicate a CrashLoop � check Runtime Logs.
+                    Your app has restarted {restartCount} times. It may be repeatedly crashing — check Runtime Logs.
                   </span>
                 </div>
               )}
@@ -1543,7 +1557,7 @@ export default function AppDetailPage() {
                           </Badge>
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Pods</p>
+                          <p className="text-xs text-white/40 mb-1">Instances</p>
                           <p className="text-xl font-bold text-white">
                             {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
                           </p>
@@ -1554,7 +1568,7 @@ export default function AppDetailPage() {
                             {restartCount}
                           </p>
                           {hasHighRestarts && (
-                            <p className="text-xs text-yellow-400/70 mt-1">Possible CrashLoop</p>
+                            <p className="text-xs text-yellow-400/70 mt-1">Repeatedly restarting</p>
                           )}
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
@@ -1568,7 +1582,7 @@ export default function AppDetailPage() {
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                             <Box className="w-4 h-4" />
-                            Running Container
+                            Running Version
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
@@ -1576,13 +1590,13 @@ export default function AppDetailPage() {
                               <p className="text-sm font-mono text-white">{details.container.imageTag || 'latest'}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Container State</p>
+                              <p className="text-xs text-white/40 mb-1">State</p>
                               <Badge className={`rounded-none text-xs ${
                                 details.container.state === 'Running' ? 'bg-green-500/20 text-green-400' :
                                 details.container.state?.includes('CrashLoop') ? 'bg-red-500/20 text-red-400' :
                                 'bg-yellow-500/20 text-yellow-400'
                               }`}>
-                                {details.container.state || 'Unknown'}
+                                {details.container.state?.includes('CrashLoop') ? 'Restarting' : details.container.state || 'Unknown'}
                               </Badge>
                             </div>
                             <div>
@@ -1611,30 +1625,64 @@ export default function AppDetailPage() {
                         </div>
                       )}
 
+
+
                       {/* Resource Usage */}
-                      {metrics && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <Cpu className="w-3.5 h-3.5" /> CPU Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.cpu_usage ?? 0).toFixed(2)}%
-                              </span>
+                      {metrics && details?.container?.resources && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <Cpu className="w-3.5 h-3.5" /> CPU Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.cpu_usage ?? 0).toFixed(2)}%
+                                </span>
+                              </div>
+                              <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Allocated: {details.container.resources.requests?.cpu || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.cpu || '-'}</p>
+                              </div>
                             </div>
-                            <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <HardDrive className="w-3.5 h-3.5" /> Memory Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.memory_mb ?? 0).toFixed(1)} Mi
+                                </span>
+                              </div>
+                              <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Allocated: {details.container.resources.requests?.memory || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.memory || '-'}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <HardDrive className="w-3.5 h-3.5" /> Memory Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.memory_mb ?? 0).toFixed(1)} Mi
-                              </span>
+                        </div>
+                      )}
+
+                      {/* Capacity */}
+                      {details?.deployment && (
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                              <p className="text-2xl font-bold text-white">{details.deployment.readyReplicas}/{details.deployment.replicas}</p>
                             </div>
-                            <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                            <div className="text-right">
+                              <p className="text-xs text-white/40 mb-1">Status</p>
+                              <Badge className={`rounded-none ${
+                                details.deployment.readyReplicas >= details.deployment.replicas
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1648,13 +1696,13 @@ export default function AppDetailPage() {
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Ingress Host</p>
+                              <p className="text-xs text-white/40 mb-1">Hostname</p>
                               <div className="flex items-center gap-1">
                                 <p className="text-xs font-mono text-white truncate flex-1">{details.network.ingressHost}</p>
                                 <button
                                   onClick={() => copyToClipboard(details.network?.ingressHost || '', 'ingress-host')}
                                   className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                                  title="Copy ingress host"
+                                  title="Copy hostname"
                                 >
                                   {copiedField === 'ingress-host' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                                 </button>
@@ -1834,7 +1882,7 @@ export default function AppDetailPage() {
           {/* Deployments Tab */}
           <TabsContent value="deployments">
             <DeploymentHistory
-              deployments={deployments}
+              deployments={deploymentsForHistory}
               deploymentsLoading={deploymentsLoading}
               connectionStatus={connectionStatus}
               servingBuildNumber={servingBuildNumber}
@@ -2061,7 +2109,7 @@ export default function AppDetailPage() {
                             </div>
                             <div className="flex items-center gap-2 text-white/70">
                               <Layers className="w-3 h-3" />
-                              <span>{specs.replicas} replica{specs.replicas > 1 ? 's' : ''}</span>
+                              <span>{specs.replicas} instance{specs.replicas > 1 ? 's' : ''}</span>
                             </div>
                           </div>
 

@@ -276,7 +276,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       <button onClick={() => router.push("/dashboard")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
                         <LayoutDashboard className="w-4 h-4 text-red-100" /><span>Dashboard</span>
                       </button>
-                      <button onClick={() => router.push("/dashboard/profile")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
+                      <button onClick={() => router.push("/dashboard/nav/profile")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
                         <User className="w-4 h-4" /><span>Profile</span>
                       </button>
                       <button onClick={() => router.push("/dashboard/settings")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">

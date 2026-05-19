@@ -29,8 +29,10 @@ const cspDirectives = [
 const contentSecurityPolicy = cspDirectives.join("; ");
 
 const nextConfig: NextConfig = {
+  // Produces a self-contained build under .next/standalone for Docker
+  output: 'standalone',
   // Keep native Node.js modules out of the webpack bundle
-  serverExternalPackages: ["ssh2"],
+  serverExternalPackages: ["ssh2", "ioredis", "bullmq"],
 
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,

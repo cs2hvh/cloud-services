@@ -131,14 +131,17 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
   async listByUser(params: {
     userId: string;
     limit?: number;
+    includeArchived?: boolean;
   }): Promise<DomainTransferRequest[]> {
     const supabase = await createServiceClient();
+    const requestedLimit = params.limit || 20;
+    const queryLimit = params.includeArchived ? requestedLimit : Math.min(requestedLimit * 4, 200);
     const { data, error } = await supabase
       .from(TABLE)
       .select("*")
       .eq("user_id", params.userId)
       .order("created_at", { ascending: false })
-      .limit(params.limit || 20);
+      .limit(queryLimit);
 
     if (error) {
       throw new DomainServiceError({
@@ -147,7 +150,12 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
       });
     }
 
-    return (data || []) as DomainTransferRequest[];
+    const rows = (data || []) as DomainTransferRequest[];
+    if (params.includeArchived) return rows;
+
+    return rows
+      .filter((row) => !isArchived(row.metadata))
+      .slice(0, requestedLimit);
   }
 
   async listPendingForPolling(params: {
@@ -186,6 +194,8 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
     providerEmail?: string | null;
     lastError?: string | null;
     failureReason?: string | null;
+    renewalPrice?: number | null;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
     const supabase = await createServiceClient();
     const update: Record<string, unknown> = {
@@ -197,6 +207,15 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
     if (params.providerEmail !== undefined) update.provider_email = params.providerEmail;
     if (params.lastError !== undefined) update.last_error = params.lastError;
     if (params.failureReason !== undefined) update.failure_reason = params.failureReason;
+    if (params.renewalPrice !== undefined) update.renewal_price = params.renewalPrice;
+    if (params.metadata !== undefined) {
+      const { data: existing } = await supabase
+        .from(TABLE)
+        .select("metadata")
+        .eq("id", params.requestId)
+        .maybeSingle();
+      update.metadata = { ...(existing?.metadata ?? {}), ...params.metadata };
+    }
 
     const { error } = await supabase
       .from(TABLE)
@@ -252,4 +271,44 @@ export class SupabaseDomainTransferRequestRepository implements DomainTransferRe
       });
     }
   }
+
+  async archive(requestId: string, archivedBy: string): Promise<void> {
+    const supabase = await createServiceClient();
+    const { data: existing, error: readError } = await supabase
+      .from(TABLE)
+      .select("metadata")
+      .eq("id", requestId)
+      .maybeSingle();
+
+    if (readError) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: `Failed to read transfer metadata: ${readError.message}`,
+      });
+    }
+
+    const metadata = {
+      ...(existing?.metadata ?? {}),
+      archived_at: new Date().toISOString(),
+      archived_by: archivedBy,
+    };
+
+    const { error } = await supabase
+      .from(TABLE)
+      .update({ metadata })
+      .eq("id", requestId);
+
+    if (error) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: `Failed to archive transfer request: ${error.message}`,
+      });
+    }
+  }
+}
+
+function isArchived(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false;
+  const archivedAt = (metadata as { archived_at?: unknown }).archived_at;
+  return typeof archivedAt === "string" && archivedAt.trim().length > 0;
 }

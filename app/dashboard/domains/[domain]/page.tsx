@@ -56,11 +56,19 @@ function computeRelated(domain: string, allDomains: string[]): RelatedDomain[] {
   });
 }
 
-type OverallStatus = 'Active' | 'Purchase Pending' | 'Setup Pending' | 'Needs Attention' | 'Purchased' | 'Unknown';
+type OverallStatus =
+  | 'Active'
+  | 'Partially Active'
+  | 'Purchase Pending'
+  | 'Setup Pending'
+  | 'Needs Attention'
+  | 'Purchased'
+  | 'Unknown';
 
 function StatusPill({ status }: { status: OverallStatus }) {
   const cfg: Record<OverallStatus, { dot: string; text: string }> = {
     Active:            { dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    'Partially Active':{ dot: 'bg-cyan-400',     text: 'text-cyan-300' },
     'Purchase Pending':{ dot: 'bg-amber-400',   text: 'text-amber-300' },
     'Setup Pending':   { dot: 'bg-amber-400',   text: 'text-amber-300' },
     'Needs Attention': { dot: 'bg-red-400',      text: 'text-red-300' },
@@ -126,11 +134,7 @@ export default function DomainDetailPage() {
     [setAutoRenew, setExpiresAt]
   );
 
-  const registrarData = useDomainRegistrarSettings(
-    domainName,
-    useCallback(() => refreshAllRef.current(), []),
-    syncDomainMeta
-  );
+  const registrarData = useDomainRegistrarSettings(domainName, syncDomainMeta);
   const { loadRegistrarSettings } = registrarData;
 
   const loadRelated = useCallback(async () => {
@@ -185,7 +189,10 @@ export default function DomainDetailPage() {
       domainData.purchaseRequest?.status === 'requested' ||
       domainData.purchaseRequest?.status === 'processing'
     ) return 'Purchase Pending';
-    if (domainData.connections.some((c) => c.status === 'pending' || c.status === 'verified')) return 'Setup Pending';
+    const hasActive = domainData.connections.some((c) => c.status === 'active');
+    const hasPendingSetup = domainData.connections.some((c) => c.status === 'pending' || c.status === 'verified');
+    if (hasActive && hasPendingSetup) return 'Partially Active';
+    if (hasPendingSetup) return 'Setup Pending';
     if (domainData.connections.some((c) => c.status === 'active')) return 'Active';
     if (domainData.purchaseRequest?.status === 'completed') return 'Purchased';
     return 'Unknown';
@@ -333,6 +340,7 @@ export default function DomainDetailPage() {
                   removingConnectionId={connectionsData.removingConnectionId}
                   checkingSslId={connectionsData.checkingSslId}
                   anyOperationRunning={connectionsData.anyOperationRunning}
+                  usingCustomNameservers={registrarData.registrarSettings?.nameserver_mode === 'custom'}
                   onSubdomainChange={setSubdomainInput}
                   onAttached={() => { setSubdomainInput(''); void handleRefresh(); }}
                   onVerify={connectionsData.onVerify}
@@ -374,7 +382,11 @@ export default function DomainDetailPage() {
                   registrarError={registrarData.registrarError}
                   registrarSettings={registrarData.registrarSettings}
                   savingAutorenew={registrarData.savingAutorenew}
+                  savingNameservers={registrarData.savingNameservers}
+                  connections={domainData.connections}
                   onToggleAutorenew={registrarData.onToggleAutorenew}
+                  onSetNameservers={registrarData.onSetNameservers}
+                  onUseManagedNameservers={registrarData.onUseManagedNameservers}
                 />
               </TabsContent>
             </div>

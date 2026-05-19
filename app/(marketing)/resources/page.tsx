@@ -82,19 +82,19 @@ const BUSINESS_GUIDES = [
 
 const LEARNING_TRACKS = [
   {
-    stage: "0 -> 1",
+    stage: "0 to 1",
     title: "Validate and Fund",
     description:
       "Nail ICP, establish early signal, and raise with confidence using evidence instead of assumptions.",
   },
   {
-    stage: "1 -> 10",
+    stage: "1 to 10",
     title: "Find Repeatable Growth",
     description:
       "Refine positioning, pricing, and pipeline systems until acquisition and onboarding become predictable.",
   },
   {
-    stage: "10 -> 100",
+    stage: "10 to 100",
     title: "Scale with Control",
     description:
       "Build teams, workflows, and governance that protect quality while accelerating execution.",

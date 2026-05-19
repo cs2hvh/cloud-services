@@ -7,9 +7,9 @@
  * 3. No framework-specific auto-generation needed
  * 
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
- * Just builds the existing Dockerfile with Kaniko and deploys to K8s
+ * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -199,8 +199,8 @@ ${generateSecurityStages({ language: 'docker' })}
 
             # ── ARG Detection ──────────────────────────────────────────
             # Detect ARG instructions that expect build-time values.
-            # Platform does NOT pass --build-arg to Kaniko, so any ARG
-            # without a default value will silently resolve to empty.
+            # Platform does NOT pass --opt build-arg to BuildKit for generic Dockerfiles,
+            # so any ARG without a default value will silently resolve to empty.
             echo "Checking for build-time ARG instructions..."
             ARG_LINES=$(grep -n "^ARG " Dockerfile 2>/dev/null || true)
             if [ -n "$ARG_LINES" ]; then
@@ -287,46 +287,7 @@ ${generateSecurityStages({ language: 'docker' })}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              echo "STAGE: Build Docker Image"
-              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-
-              echo 'Executing Kaniko build'
-              /kaniko/executor \\
-                --context=$WORKSPACE \\
-                --dockerfile=Dockerfile \\
-                --destination=$DOCKER_IMAGE_VERSION \\
-                --destination=$DOCKER_IMAGE_LATEST \\
-                --cache=true \\
-                --cache-repo=hav0ky/${appName}-cache \\
-                --use-new-run \\
-                --digest-file=image-digest.txt
-
-              echo 'Image build completed successfully'
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName)}
 
 ${generateImageScanStage({ language: 'docker' })}
 

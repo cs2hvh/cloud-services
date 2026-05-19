@@ -27,9 +27,9 @@ const SIZE_ORDER: Record<string, number> = {
 
 // Size specifications for display/logging
 const SIZE_SPECS: Record<string, { cpu: string; memory: string; replicas: number }> = {
-  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1 },
-  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2 },
-  large: { cpu: "2 CPU", memory: "2GB", replicas: 3 },
+  small: { cpu: "0.25 CPU", memory: "256 MB", replicas: 1 },
+  medium: { cpu: "0.5 CPU", memory: "512 MB", replicas: 2 },
+  large: { cpu: "1 CPU", memory: "1 GB", replicas: 3 },
 };
 
 /**
@@ -75,12 +75,11 @@ export async function POST(req: NextRequest) {
     const app = existing.data;
 
     const currentSize = app.size || "small";
-    // Validate upsize only
     if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
       return NextResponse.json(
-        { 
+        {
           error: "Invalid resize operation",
-          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is allowed.`,
+          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is supported.`,
           current_size: currentSize,
           requested_size: new_size,
         },

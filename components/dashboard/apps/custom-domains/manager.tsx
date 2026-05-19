@@ -314,7 +314,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             : '';
 
         toast.warning(
-          `${domainName || 'Domain'} activated. Add ${recordType} ${recordName}${recordValue ? ` -> ${recordValue}` : ''} at your DNS provider.`,
+          `${domainName || 'Domain'} activated. Add ${recordType} ${recordName}${recordValue ? ` with value ${recordValue}` : ''} at your DNS provider.`,
         );
       } else if (!dnsAutoConfigured) {
         toast.warning(

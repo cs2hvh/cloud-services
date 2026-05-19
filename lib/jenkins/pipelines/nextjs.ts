@@ -1,4 +1,4 @@
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
 import { generateNextjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -60,23 +60,15 @@ export function createNextJsPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
-  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
-  // This prevents secrets from being baked into Docker images
-  // Why: Next.js only needs public vars during build for static generation
-  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars
-        .map(e => {
-          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-          return `--build-arg ${e.key}="${escapedValue}"`;
-        }).join(' \\\\\n                    ')
-    : '';
-  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
-  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
-  const buildArgsLine = buildArgs
-    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
-    : ` \\\\\n                    ${pmBuildArg}`;
+  // Only NEXT_PUBLIC_* vars are baked into the image at build time.
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
+  const buildOpts: string[] = [
+    ...clientEnvVars.map(e => {
+      const escapedValue = e.value.replace(/\$/g, '\\$');
+      return `--opt build-arg:${e.key}=${escapedValue}`;
+    }),
+    '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
+  ];
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -224,48 +216,7 @@ ${generateNextjsDockerfileStage(envVars)}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              echo "STAGE: Build Docker Image"
-              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-                # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-              echo 'Executing Kaniko build'
-              /kaniko/executor \
-                --context=$WORKSPACE \
-                --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE_VERSION \
-                --destination=\$DOCKER_IMAGE_LATEST${buildArgsLine} \\
-                --cache=true \\
-                --cache-repo=hav0ky/${appName}-cache \\
-                --use-new-run \\
-                --digest-file=image-digest.txt
-
-              echo 'Image build completed successfully'
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, buildOpts, getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 

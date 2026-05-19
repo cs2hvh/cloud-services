@@ -2,7 +2,7 @@
 // AUDIT LOG TYPES
 // ============================================
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'logout' | 'token_expired' | 'token_refreshed' | 'webhook_received' | 'provider_connect' | 'provider_disconnect' | 'password_change';
+export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'logout' | 'token_expired' | 'token_refreshed' | 'webhook_received' | 'provider_connect' | 'provider_disconnect' | 'password_change' | 'access';
 
 export type AuditServiceType = 
   | 'kubernetes' 

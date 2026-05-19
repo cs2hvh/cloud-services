@@ -100,84 +100,86 @@ export function generateRuntimeDefaultEnvYaml(
           value: "production"`;
 }
 
-// =============================================================================
-// DEPRECATED FUNCTIONS - Keep for backward compatibility during migration
-// Remove after all pipelines are updated
-// =============================================================================
-
 /**
- * @deprecated Use generateRuntimeDefaultEnvYaml('node', containerPort) instead
+ * Generate the complete 'Build Docker Image' stage using BuildKit instead of Kaniko.
+ *
+ * BuildKit advantages over Kaniko:
+ *  - 60% less memory (1.5 GB vs 4–6 GB per build)
+ *  - Better layer caching with registry cache export/import
+ *  - Faster builds via parallelised dependency resolution
+ *
+ * @param appName       - Full app name (e.g. "myapp-app") used for the cache registry ref
+ * @param buildOpts     - Zero or more `--opt` flags to append (e.g. build args)
+ * @param extraScript   - Optional shell snippet inserted after the buildkitd readiness wait
+ *                        (use this to pass a package-manager detection script)
  */
-export function generateDefaultEnvYaml(containerPort: number | string): string {
-  return generateRuntimeDefaultEnvYaml('node', containerPort);
-}
-
-/**
- * @deprecated Use generateRuntimeDefaultEnvYaml('python', containerPort) instead
- */
-export function generatePythonDefaultEnvYaml(containerPort: number | string): string {
-  return generateRuntimeDefaultEnvYaml('python', containerPort);
-}
-
-/**
- * @deprecated Use generateEnvSecret + generateEnvFromSection instead
- * This function embeds secrets directly in deployment YAML which is insecure
- */
-export function generateEnvYaml(
-  containerPort: number | string,
-  userEnvVars: EnvVar[] = []
+export function generateBuildKitStage(
+  appName: string,
+  buildOpts: string[] = [],
+  extraScript: string = '',
 ): string {
-  const defaultEnvVars: EnvVar[] = [
-    { key: 'PORT', value: String(containerPort) },
-    { key: 'NODE_ENV', value: 'production' },
-  ];
-  
-  const userKeys = new Set(userEnvVars.map(e => e.key));
-  const mergedEnvVars = [
-    ...defaultEnvVars.filter(d => !userKeys.has(d.key)),
-    ...userEnvVars,
-  ];
-  
-  const envYaml = mergedEnvVars.map(env => {
-    const escapedValue = env.value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$');
-    return `        - name: ${env.key}
-          value: "${escapedValue}"`;
-  }).join('\n');
-  
-  return envYaml;
-}
+  const optLines = buildOpts.length > 0
+    ? buildOpts.map(o => `                ${o} \\\\`).join('\n') + '\n'
+    : '';
+  const extraBlock = extraScript
+    ? `\n              # Detect runtime tooling before build\n${extraScript}\n`
+    : '';
 
-/**
- * @deprecated Use generateEnvSecret + generateEnvFromSection instead
- */
-export function generatePythonEnvYaml(
-  containerPort: number | string,
-  userEnvVars: EnvVar[] = []
-): string {
-  const defaultEnvVars: EnvVar[] = [
-    { key: 'PORT', value: String(containerPort) },
-    { key: 'PYTHONUNBUFFERED', value: '1' },
-  ];
-  
-  const userKeys = new Set(userEnvVars.map(e => e.key));
-  const mergedEnvVars = [
-    ...defaultEnvVars.filter(d => !userKeys.has(d.key)),
-    ...userEnvVars,
-  ];
-  
-  const envYaml = mergedEnvVars.map(env => {
-    const escapedValue = env.value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$');
-    return `        - name: ${env.key}
-          value: "${escapedValue}"`;
-  }).join('\n');
-  
-  return envYaml;
+  return `    stage('Build Docker Image') {
+      steps {
+        container('buildkit') {
+          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS')]) {
+
+            sh '''
+              echo "STAGE: Build Docker Image"
+              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
+
+              BUILDKIT_READY=0
+              for i in $(seq 1 30); do
+                if buildctl debug workers >/dev/null 2>&1; then
+                  BUILDKIT_READY=1
+                  break
+                fi
+                echo "Waiting for buildkitd... ($i/30)"
+                sleep 2
+              done
+              [ "$BUILDKIT_READY" = "1" ] || { echo "ERROR: buildkitd not ready"; cat /tmp/buildkitd.log 2>/dev/null; exit 1; }
+              echo "buildkitd ready"
+${extraBlock}
+              mkdir -p ~/.docker
+              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
+              cat > ~/.docker/config.json <<CREDSEOF
+{
+  "auths": {
+    "https://index.docker.io/v1/": {
+      "auth": "$AUTH"
+    }
+  }
+}
+CREDSEOF
+
+              echo "Executing BuildKit build"
+              buildctl build \\\\
+                --frontend dockerfile.v0 \\\\
+                --local context=$WORKSPACE \\\\
+                --local dockerfile=$WORKSPACE \\\\
+                --output type=image,name=$DOCKER_IMAGE_VERSION,push=true \\\\
+                --output type=image,name=$DOCKER_IMAGE_LATEST,push=true \\\\
+${optLines}                --export-cache type=registry,ref=hav0ky/${appName}-cache:buildcache,mode=max \\\\
+                --import-cache type=registry,ref=hav0ky/${appName}-cache:buildcache \\\\
+                --metadata-file buildkit-meta.json
+
+              grep -o '"containerimage.digest":"[^"]*"' buildkit-meta.json 2>/dev/null \\\\
+                | head -1 | sed 's/.*"containerimage.digest":"//;s/"//g' > image-digest.txt || true
+
+              echo "Image build completed successfully"
+            '''
+          }
+        }
+      }
+    }`;
 }
 
 /**

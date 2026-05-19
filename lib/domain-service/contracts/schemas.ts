@@ -71,11 +71,30 @@ export const DomainMarketplaceSearchRequestSchema = z
   })
   .openapi("DomainMarketplaceSearchRequest");
 
+export const RegistrantContactSchema = z
+  .object({
+    firstName: z.string().min(1).max(64).optional().openapi({ example: "Jane" }),
+    lastName: z.string().min(1).max(64).optional().openapi({ example: "Smith" }),
+    email: z.string().email().max(128).optional().openapi({ example: "jane@example.com" }),
+    phone: z.string().min(4).max(32).optional().openapi({ example: "+1.2025551234" }),
+    companyName: z.string().min(1).max(128).optional().openapi({ example: "Acme Corp" }),
+    address1: z.string().min(1).max(128).optional().openapi({ example: "123 Main St" }),
+    city: z.string().min(1).max(64).optional().openapi({ example: "San Francisco" }),
+    state: z.string().min(1).max(64).optional().openapi({ example: "CA" }),
+    zip: z.string().min(1).max(20).optional().openapi({ example: "94105" }),
+    country: z.string().length(2).optional().openapi({ example: "US" }),
+  })
+  .optional()
+  .openapi("RegistrantContact");
+
+export type RegistrantContact = NonNullable<z.infer<typeof RegistrantContactSchema>>;
+
 export const DomainMarketplacePurchaseRequestSchema = z
   .object({
     app_id: z.string().uuid().optional().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     domain: z.string().min(3).max(253).openapi({ example: "mybrand.com" }),
     idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "idem-domain-001" }),
+    registrant_contact: RegistrantContactSchema,
   })
   .openapi("DomainMarketplacePurchaseRequest");
 
@@ -347,9 +366,9 @@ export const DomainTransferCreateSchema = z
         message: "Authorization code must be at least 6 characters",
       })
       .openapi({ example: "Auth@c0de123" }),
-    purchase_price: z.number().positive().optional().openapi({ example: 12.99 }),
     privacy_enabled: z.boolean().optional().openapi({ example: false }),
     idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "xfer-domain-001" }),
+    registrant_contact: RegistrantContactSchema,
   })
   .openapi("DomainTransferCreate");
 
@@ -373,6 +392,10 @@ export const DomainTransferListQuerySchema = z
         .max(100, "limit must be between 1 and 100")
         .optional()
     ),
+    include_archived: z.preprocess(
+      (value) => value === "true" || value === true,
+      z.boolean().optional()
+    ),
   })
   .openapi("DomainTransferListQuery");
 
@@ -388,6 +411,13 @@ export const DomainTransferRequestPublicSchema = z
     provider_email: z.string().nullable().openapi({ example: "admin@mybrand.com" }),
     last_error: z.string().nullable().openapi({ example: null }),
     failure_reason: z.string().nullable().openapi({ example: null }),
+    metadata: z.record(z.unknown()).openapi({
+      example: {
+        source: "dashboard",
+        pricing_source: "namecom_check_availability",
+        nameservers: ["ns1.example.net", "ns2.example.net"],
+      },
+    }),
     created_at: z.string().datetime().openapi({ example: "2026-03-27T10:00:00.000Z" }),
     updated_at: z.string().datetime().openapi({ example: "2026-03-27T10:00:01.000Z" }),
   })
@@ -399,6 +429,7 @@ export const DomainTransferEligibilitySchema = z
     eligible: z.boolean().openapi({ example: true }),
     reason: z.string().nullable().openapi({ example: null }),
     transferPrice: z.number().nullable().openapi({ example: 12.99 }),
+    renewalPrice: z.number().nullable().openapi({ example: 14.99 }),
     currency: z.string().openapi({ example: "USD" }),
   })
   .openapi("DomainTransferEligibility");

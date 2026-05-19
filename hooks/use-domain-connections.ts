@@ -176,36 +176,15 @@ export function useDomainConnections(
           responseData && typeof responseData.dns_auto_configured === 'boolean'
             ? responseData.dns_auto_configured
             : true;
-        const routingInstructions =
-          responseData && typeof responseData.routing_instructions === 'object'
-            ? (responseData.routing_instructions as Record<string, unknown>)
-            : null;
 
-        if (!dnsAutoConfigured && routingInstructions) {
-          const recordType =
-            typeof routingInstructions.record_type === 'string'
-              ? routingInstructions.record_type
-              : 'DNS';
-          const recordName =
-            typeof routingInstructions.record_name === 'string'
-              ? routingInstructions.record_name
-              : connectionDomain || domainName;
-          const recordValue =
-            typeof routingInstructions.record_value === 'string'
-              ? routingInstructions.record_value
-              : '';
+        if (!dnsAutoConfigured) {
           toast.warning(
-            `${connectionDomain || 'Domain'} activated. Add ${recordType} ${recordName}${
-              recordValue ? ` -> ${recordValue}` : ''
-            } at your DNS provider.`
-          );
-        } else if (!dnsAutoConfigured) {
-          toast.warning(
-            `${connectionDomain || 'Domain'} activated. Update DNS at your provider, then secure connection will finish.`
+            `${connectionDomain || 'Domain'} activated. Add the routing record shown below at your DNS provider — SSL will provision once DNS propagates.`,
+            { duration: 8000 }
           );
         } else {
           toast.success(
-            `${connectionDomain || 'Domain'} is now live—secure connection setup will be ready shortly.`
+            `${connectionDomain || 'Domain'} is now live — SSL will be ready shortly.`
           );
         }
         await onRefresh();
@@ -216,7 +195,7 @@ export function useDomainConnections(
         setActivatingConnectionId(null);
       }
     },
-    [connections, domainName, onRefresh]
+    [connections, onRefresh]
   );
 
   const onSetPrimary = useCallback(

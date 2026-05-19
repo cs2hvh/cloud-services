@@ -109,6 +109,7 @@ export async function POST(req: Request) {
       appId: parsed.data.app_id,
       domain: parsed.data.domain,
       idempotencyKey,
+      registrantContact: parsed.data.registrant_contact,
       metadata: {
         source: "dashboard-marketplace",
       },

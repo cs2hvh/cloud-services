@@ -39,6 +39,7 @@ interface BuildLogsPanelProps {
   buildLogs: string;
   /** Show skeleton instead of logs — only for initial/build-switch fetch, not live polling */
   initialLoading?: boolean;
+  logsError?: string;
   appName: string;
   // raw: true = raw Jenkins log (used while building); false = deployment-filtered view.
   // append: true = incremental append; false = full replacement.
@@ -52,6 +53,7 @@ export function BuildLogsPanel({
   buildInfo,
   buildLogs,
   initialLoading = false,
+  logsError,
   appName,
   fetchBuildLogs,
   deployments = [],
@@ -63,6 +65,17 @@ export function BuildLogsPanel({
   const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
   const [showJumpButton, setShowJumpButton] = useState(false);
   const [showJumpTopButton, setShowJumpTopButton] = useState(false);
+
+  const formatBuildStatus = (status: string): string => {
+    switch (status) {
+      case 'SUCCESS':  return 'Succeeded';
+      case 'FAILURE':  return 'Failed';
+      case 'BUILDING': return 'In Progress';
+      case 'ABORTED':  return 'Cancelled';
+      case 'UNSTABLE': return 'Unstable';
+      default:         return status;
+    }
+  };
 
   const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
     if (deployment.trigger === 'resize') {
@@ -230,8 +243,12 @@ export function BuildLogsPanel({
     if (!filteredLogs) {
       return (
         <div className="flex items-center gap-2 text-white/30 italic">
-          {buildInfo?.building ? (
+          {logsError ? (
+            <span className="text-red-400/70 not-italic">{logsError}</span>
+          ) : buildInfo?.building ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" />Waiting for build output…</>
+          ) : buildInfo === null ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Fetching build information…</>
           ) : (
             'No logs available'
           )}
@@ -254,9 +271,14 @@ export function BuildLogsPanel({
         lineClass = 'text-blue-400';
       }
 
+      // Strip internal build system markers from displayed text
+      const displayLine = line.startsWith('[Pipeline] ')
+        ? line.slice('[Pipeline] '.length)
+        : line;
+
       // Highlight search matches
       if (searchTerm) {
-        const parts = line.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        const parts = displayLine.split(new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
         return (
           <div key={i} className={lineClass}>
             {parts.map((part, j) =>
@@ -272,7 +294,7 @@ export function BuildLogsPanel({
         );
       }
 
-      return <div key={i} className={lineClass}>{line}</div>;
+      return <div key={i} className={lineClass}>{displayLine}</div>;
     });
   };
 
@@ -329,7 +351,7 @@ export function BuildLogsPanel({
                             : 'text-red-400'
                         }`}
                       >
-                        {d.status === 'BUILDING' ? '⟳' : '●'} {d.status}
+                        {d.status === 'BUILDING' ? '⟳' : '●'} {formatBuildStatus(d.status)}
                       </span>
                       <span className="text-white/30 font-sans">
                         {new Date(d.started_at).toLocaleDateString(undefined, {

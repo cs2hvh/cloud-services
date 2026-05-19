@@ -93,6 +93,7 @@ export interface RegistrarSettings {
   privacy_enabled: boolean | null;
   expires_at: string | null;
   nameservers: string[];
+  nameserver_mode: 'managed' | 'custom';
 }
 
 // ─── Error helpers ────────────────────────────────────────────────────────────

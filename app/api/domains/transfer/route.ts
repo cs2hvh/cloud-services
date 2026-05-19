@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const parsed = DomainTransferListQuerySchema.safeParse({
       limit: url.searchParams.get("limit") || undefined,
+      include_archived: url.searchParams.get("include_archived") || undefined,
     });
 
     if (!parsed.success) {
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
         userEmail: auth.user.email || undefined,
       }),
       limit: parsed.data.limit,
+      includeArchived: parsed.data.include_archived,
     });
 
     return NextResponse.json({
@@ -99,9 +101,9 @@ export async function POST(req: Request) {
       }),
       domain: parsed.data.domain,
       authCode: parsed.data.auth_code,
-      purchasePrice: parsed.data.purchase_price,
       privacyEnabled: parsed.data.privacy_enabled,
       idempotencyKey,
+      registrantContact: parsed.data.registrant_contact,
       metadata: { source: "dashboard" },
     });
 

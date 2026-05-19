@@ -128,12 +128,18 @@ export default function AppsListTab({ all_apps }: AppsListTabProps) {
 
     try {
       setIsDeleting(true);
-      await axios.post("/api/services/platform-apps/delete", {
+      const response = await axios.post("/api/services/platform-apps/delete", {
         app_id: selectedAppId,
         is_admin: true,
       });
 
       toast.success("App deleted successfully");
+      if (response.data?.warning) {
+        toast.warning("Deletion completed with warnings", {
+          description: response.data.warning,
+          duration: 7000,
+        });
+      }
 
       // Remove the deleted app from local state
       const updatedApps = allAppsLocal.filter(
@@ -496,7 +502,7 @@ export default function AppsListTab({ all_apps }: AppsListTabProps) {
                 </span>
               </span>
               <span className="mt-3 text-red-400 text-sm font-medium block">
-                ⚠️ This will delete the app, its Jenkins job, Kubernetes resources, and all associated data. This action cannot be undone.
+                ⚠️ This will delete the app, DNS records, Jenkins deploy/resize/domain pipelines, Kubernetes resources, and all associated data. This action cannot be undone.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

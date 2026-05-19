@@ -338,6 +338,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     { name: "Coupons", href: "/dashboard/admin/coupons", current: pathname === "/dashboard/admin/coupons" || pathname.startsWith("/dashboard/admin/coupons/"), icon: Ticket },
     { name: "Audit Logs", href: "/dashboard/admin/audit-logs", current: pathname === "/dashboard/admin/audit-logs" || pathname.startsWith("/dashboard/admin/audit-logs/"), icon: ShieldCheck },
     { name: "AI Agents", href: "/dashboard/admin/ai-agents", current: pathname === "/dashboard/admin/ai-agents" || pathname.startsWith("/dashboard/admin/ai-agents/"), icon: Bot },
+    { name: "Domains", href: "/dashboard/admin/domains", current: pathname === "/dashboard/admin/domains" || pathname.startsWith("/dashboard/admin/domains/"), icon: Globe },
   ];
 
   const supportLinks: NavLinkItem[] = [
