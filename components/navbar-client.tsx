@@ -126,6 +126,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [solutionsOpen, setSolutionsOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const solutionsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
@@ -135,6 +136,13 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
     setUser(initialUser);
     setIsLoading(false);
   }, [initialUser]);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -196,9 +204,15 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
-      {/* Pill-shaped glass bar */}
-      <div className="mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] flex items-center h-12 px-5 rounded-full bg-white/[0.04] backdrop-blur-[48px] border border-white/[0.08] shadow-[0_0_0_0.5px_rgba(255,255,255,0.06)_inset,0_8px_32px_rgba(0,0,0,0.4)]">
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 border-b transition-colors duration-300 ${
+        isScrolled
+          ? "border-white/[0.08] bg-[#08080a]/85 backdrop-blur-[14px]"
+          : "border-transparent bg-transparent"
+      }`}
+    >
+      {/* Boxy bar — sharp corners, wide container, scroll-aware bg */}
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center px-5 sm:px-8">
         {/* Logo */}
         <Link href="/" className="text-[22px] font-normal text-white shrink-0 font-[family-name:var(--font-nunito)]">
           ahura<span className="text-[#0095FF]">sense</span>
@@ -212,9 +226,10 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             onMouseEnter={handleSolutionsEnter}
             onMouseLeave={handleSolutionsLeave}
           >
-            <button className="cursor-pointer flex items-center gap-1 text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200">
+            <button className="group relative flex cursor-pointer items-center gap-1 py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white">
               Solutions
-              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`} />
+              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${solutionsOpen ? "scale-x-100" : ""}`} />
             </button>
           </div>
 
@@ -224,9 +239,10 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             onMouseEnter={handleProductsEnter}
             onMouseLeave={handleProductsLeave}
           >
-            <button className="cursor-pointer flex items-center gap-1 text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200">
+            <button className="group relative flex cursor-pointer items-center gap-1 py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white">
               Products
-              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
+              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${productsOpen ? "scale-x-100" : ""}`} />
             </button>
           </div>
 
@@ -234,9 +250,10 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             <Link
               key={link.href}
               href={link.href}
-              className="text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200"
+              className="group relative py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white"
             >
               {link.label}
+              <span className="pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100" />
             </Link>
           ))}
         </div>
@@ -296,12 +313,19 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
               </AnimatePresence>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
-              <Link href="/signin" className="text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200">
+            <div className="flex items-center gap-2">
+              <Link
+                href="/signin"
+                className="px-3 py-2 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white"
+              >
                 Log in
               </Link>
-              <Link href="/signup" className="text-[13px] font-medium text-white bg-[#0095FF] hover:bg-[#007ad6] px-4 py-1.5 rounded-full transition-colors duration-200">
-                Sign Up
+              <Link
+                href="/signup"
+                className="group inline-flex h-9 items-center gap-1.5 border border-transparent bg-white px-4 text-[13px] font-semibold text-black transition-colors duration-200 hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
+              >
+                Get Started
+                <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
               </Link>
             </div>
           )}
@@ -314,8 +338,8 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
       </div>
 
       {/* Mega-menu panels — absolute so both panels share the same position and never stack */}
-      <div className="hidden lg:block absolute inset-x-4 top-[72px] z-50">
-        <div className="mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] relative">
+      <div className="hidden lg:block absolute inset-x-0 top-16 z-50">
+        <div className="mx-auto max-w-[1440px] px-5 sm:px-8 relative">
 
           <AnimatePresence>
             {solutionsOpen && (
@@ -444,7 +468,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="lg:hidden mt-2 mx-auto max-w-[92%] sm:max-w-[85%] rounded-2xl bg-black/90 backdrop-blur-[48px] border border-white/[0.08] overflow-hidden"
+            className="lg:hidden mx-5 sm:mx-8 mt-0 border border-white/[0.08] bg-[#08080a]/95 backdrop-blur-[14px] overflow-hidden"
           >
             <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
               {/* Solutions accordion in mobile */}

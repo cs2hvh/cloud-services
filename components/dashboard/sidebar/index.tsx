@@ -33,6 +33,7 @@ import {
   Shield,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   Ticket,
   Users,
   X,
@@ -139,6 +140,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
+  const [gpuExpanded, setGpuExpanded] = useState(pathname.includes("/services/gpu"));
   const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.includes("/services/ai-agents"));
   const [domainsExpanded, setDomainsExpanded] = useState(pathname.includes("/dashboard/domains"));
   const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
@@ -153,6 +155,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   useEffect(() => {
     if (pathname.includes("/services/compute")) {
       setComputeExpanded(true);
+    }
+    if (pathname.includes("/services/gpu")) {
+      setGpuExpanded(true);
     }
     if (pathname.includes("/services/ai-agents")) {
       setAiAgentsExpanded(true);
@@ -294,6 +299,33 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/compute/vps",
       current: pathname.includes("/services/compute/vps"),
       icon: Server,
+    },
+  ];
+
+  const gpuServices: NavLinkItem[] = [
+    {
+      name: "Overview",
+      href: "/dashboard/services/gpu",
+      current: pathname === "/dashboard/services/gpu",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Deploy Pod",
+      href: "/dashboard/services/gpu/deploy",
+      current: pathname.includes("/services/gpu/deploy"),
+      icon: Plus,
+    },
+    {
+      name: "Storage",
+      href: "/dashboard/services/gpu/storage",
+      current: pathname.includes("/services/gpu/storage"),
+      icon: HardDrive,
+    },
+    {
+      name: "Enterprise / Clusters",
+      href: "/dashboard/services/gpu/enterprise",
+      current: pathname.includes("/services/gpu/enterprise"),
+      icon: Rocket,
     },
   ];
 
@@ -469,6 +501,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               onToggle={() => setComputeExpanded((prev) => !prev)}
             >
               {computeServices.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
+
+            <ExpandableGroup
+              label="GPU Cloud"
+              icon={Sparkles}
+              expanded={gpuExpanded}
+              active={pathname.includes("/services/gpu")}
+              onToggle={() => setGpuExpanded((prev) => !prev)}
+            >
+              {gpuServices.map((item) => (
                 <SidebarLink key={item.name} item={item} compact />
               ))}
             </ExpandableGroup>

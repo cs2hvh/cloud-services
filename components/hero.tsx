@@ -1,201 +1,118 @@
-"use client";
+// Marketing hero — GPU-forward, dark, restrained.
+//
+// Server component: reads a small live inventory snippet from Supabase at
+// request time so the homepage shows actual current pricing and stock
+// (gpu_inventory_snapshots is public-readable via RLS). Falls back to a
+// static snippet if the DB is unreachable so the page never breaks.
+//
+// We construct the Supabase client inline rather than reusing
+// `@/lib/supabase/server` — that module imports `next/headers` at top level,
+// which trips Next's static-analysis on marketing pages even though we'd
+// only call the cookieless export. Anon key only; RLS handles privacy.
 
-import Link from "next/link";
-import { Fragment } from "react";
-import { motion } from "motion/react";
-import Image from "next/image";
-import { LooperBackground } from "@/components/ui/looper-background";
-import { AuthAwareServiceCta } from "./services/auth-aware-service-cta";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (custom: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: custom * 0.1 },
-  }),
-};
+import HeroClient, { type HeroInventoryItem } from "./hero/hero-client";
 
-function Container({ children }: { children: React.ReactNode }) {
-  return <div className="w-full mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] px-4 sm:px-6">{children}</div>;
-}
-
-const TRUST_ITEMS = [
-  "99.99% Uptime SLA",
-  "12 Global Regions",
-  "SOC 2 Type II",
-  "ISO 27001",
+const FALLBACK_INVENTORY: HeroInventoryItem[] = [
+    { gpuCatalogId: "h100-sxm-80",  displayName: "H100 SXM",  memoryGb: 80,  onDemandPerHr: 2.99, stockStatus: "low" },
+    { gpuCatalogId: "h100-nvl-94",  displayName: "H100 NVL",  memoryGb: 94,  onDemandPerHr: 2.59, stockStatus: "low" },
+    { gpuCatalogId: "h200-141",     displayName: "H200 SXM",  memoryGb: 141, onDemandPerHr: 3.99, stockStatus: "low" },
+    { gpuCatalogId: "b200-180",     displayName: "B200",      memoryGb: 180, onDemandPerHr: 5.49, stockStatus: "low" },
 ];
 
-export function Hero() {
-  return (
-    <section
-      className="relative w-full h-screen overflow-hidden bg-[#0a0a0a]"
-      aria-label="AhuraSense Cloud — Deploy cloud infrastructure at the speed of light"
-    >
-      {/* Looper oval-line background */}
-      <LooperBackground className="z-0" />
+type LatestRow = {
+    gpu_catalog_id: string;
+    cloud_type: string;
+    stock_status: "high" | "medium" | "low" | "none";
+    on_demand_per_hr: number | null;
+    available_counts: number[] | null;
+};
 
-      {/* Top fade */}
-      <div
-        className="absolute top-0 left-0 right-0 h-40 pointer-events-none z-[1] bg-gradient-to-b from-[#0a0a0a] to-transparent"
-        aria-hidden="true"
-      />
+type CatalogRow = {
+    id: string;
+    display_name: string;
+    memory_gb: number;
+    sort_order: number;
+};
 
-      {/* Bottom fade */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-[1] bg-gradient-to-t from-[#0a0a0a] to-transparent"
-        aria-hidden="true"
-      />
+function getAnonSupabase() {
+    const url =
+        process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    if (!url || !anon) return null;
+    return createSupabaseClient(url, anon, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+        },
+    });
+}
 
-      {/* Bottom separator */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+async function loadInventorySnippet(): Promise<HeroInventoryItem[]> {
+    try {
+        const supabase = getAnonSupabase();
+        if (!supabase) return FALLBACK_INVENTORY;
 
-      {/* ── Main content ── */}
-      <div className="relative z-10 h-full flex items-center pt-16">
-        <div className="w-full mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] px-4 sm:px-6">
-          <div className="grid lg:grid-cols-2 items-center gap-10 lg:gap-6">
-            {/* Left — copy */}
-            <div className="text-center lg:text-left">
-              <motion.h1
-                className="text-[clamp(38px,5.2vw,68px)] font-semibold tracking-[-0.04em] leading-[1.07] text-white"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.08 }}
-              >
-                Deploy at the
-                <br />
-                <span
-                  className="text-transparent bg-clip-text"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(115deg, rgba(255,255,255,0.40) 0%, rgba(0,149,255,0.75) 100%)",
-                  }}
-                >
-                  speed of light
-                </span>
-              </motion.h1>
+        const [latestRes, catRes] = await Promise.all([
+            supabase
+                .from("gpu_inventory_latest")
+                .select(
+                    "gpu_catalog_id, cloud_type, stock_status, on_demand_per_hr, available_counts"
+                )
+                .eq("cloud_type", "SECURE"),
+            supabase
+                .from("gpu_catalog")
+                .select("id, display_name, memory_gb, sort_order")
+                .eq("is_active", true)
+                .order("sort_order", { ascending: true }),
+        ]);
 
-              <motion.p
-                className="mt-5 text-[16px] sm:text-[18px] leading-[1.7] text-white/55 max-w-[440px] mx-auto lg:mx-0"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-              >
-                One platform for compute, databases, Kubernetes, and AI.
-                Provision your entire infrastructure in seconds, not hours.
-              </motion.p>
+        if (latestRes.error || catRes.error) return FALLBACK_INVENTORY;
 
-              {/* CTAs — sharp corners */}
-              <motion.div
-                className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.32 }}
-              >
-                <AuthAwareServiceCta
-                  service="main"
-                  intent="main"
-                  className="inline-flex h-11 items-center justify-center rounded-none bg-white px-6 text-sm font-medium text-black transition-transform duration-300 hover:-translate-y-0.5 hover:bg-[#efefef] cursor-pointer"
-                >
-                  {" "}
-                  Get started free{" "}
-                </AuthAwareServiceCta>
+        const latest = (latestRes.data || []) as LatestRow[];
+        const catalog = (catRes.data || []) as CatalogRow[];
+        const byCatalogId = new Map(catalog.map((c) => [c.id, c]));
+        const latestById = new Map(latest.map((l) => [l.gpu_catalog_id, l]));
 
-                <Link
-                  href="/pricing"
-                  className="inline-flex items-center justify-center border border-white/[0.10] text-white/50 w-full sm:w-auto px-8 h-11 text-[14px] font-medium hover:text-white hover:border-white/20 transition-all cursor-pointer"
-                >
-                  View pricing
-                </Link>
-              </motion.div>
+        const items: HeroInventoryItem[] = [];
+        for (const c of catalog) {
+            const l = latestById.get(c.id);
+            if (!l) continue;
+            items.push({
+                gpuCatalogId: c.id,
+                displayName: c.display_name,
+                memoryGb: c.memory_gb,
+                onDemandPerHr: l.on_demand_per_hr,
+                stockStatus: l.stock_status,
+                maxCount:
+                    l.available_counts && l.available_counts.length > 0
+                        ? Math.max(...l.available_counts)
+                        : l.stock_status === "none"
+                          ? 0
+                          : 1,
+            });
+        }
 
-              {/* Trust indicators */}
-              <motion.div
-                className="mt-9 flex flex-wrap items-center justify-center lg:justify-start text-[12px] text-white/20"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 1, delay: 0.55 }}
-              >
-                {TRUST_ITEMS.map((item, i) => (
-                  <Fragment key={item}>
-                    <span className="pr-3 py-1">{item}</span>
-                    {i < TRUST_ITEMS.length - 1 && (
-                      <span
-                        className="hidden sm:block w-px h-3 bg-white/[0.08] mr-3"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </Fragment>
-                ))}
-              </motion.div>
-            </div>
+        // Prefer in-stock GPUs first, then catalog sort_order, then top 5.
+        items.sort((a, b) => {
+            const aIn = a.stockStatus !== "none" ? 0 : 1;
+            const bIn = b.stockStatus !== "none" ? 0 : 1;
+            if (aIn !== bIn) return aIn - bIn;
+            const aSort = byCatalogId.get(a.gpuCatalogId)?.sort_order ?? 9999;
+            const bSort = byCatalogId.get(b.gpuCatalogId)?.sort_order ?? 9999;
+            return aSort - bSort;
+        });
 
-            {/* Right — Hero image */}
-            <motion.div
-              className="hidden lg:flex items-center justify-center"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                duration: 1.2,
-                delay: 0.25,
-                ease: [0.25, 0.4, 0.25, 1],
-              }}
-            >
-              <Image
-                src="/images/main-page/home-section-1.png"
-                alt="Cloud infrastructure visualization"
-                width={800}
-                height={800}
-                className="w-full max-w-[680px] xl:max-w-[780px] h-auto object-contain"
-                priority
-              />
-            </motion.div>
-          </div>
-        </div>
-      </div>
+        const trimmed = items.slice(0, 5);
+        return trimmed.length > 0 ? trimmed : FALLBACK_INVENTORY;
+    } catch {
+        return FALLBACK_INVENTORY;
+    }
+}
 
-      <div className="relative z-10 w-full pb-6 sm:pb-8 md:pb-10">
-        {/* Whats New */}
-        <Container>
-          <motion.div
-            className="w-full max-w-[620px] overflow-hidden rounded-[30px] border border-white/15 shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={5}
-          >
-            <div className="flex min-h-[138px] sm:min-h-[152px]">
-              <div className="flex w-[44%] items-center justify-center bg-[#1B1B1B] px-3 py-3 sm:px-4">
-                <Image
-                  src="/images/main-page/hero-sec-1-whats-new.svg"
-                  alt="New GPU infrastructure"
-                  width={320}
-                  height={170}
-                  className="h-auto w-full max-w-[250px] object-contain"
-                />
-              </div>
-              <div className="flex flex-1 flex-col justify-center bg-[#FBD55A] px-4 py-4 sm:px-5">
-                <p className="text-[22px] leading-none font-semibold tracking-tight text-[#0095FF]">
-                  📣 What&apos;s New
-                </p>
-                <h3 className="mt-1 text-xl sm:text-[30px] font-bold leading-[1.05] text-[#000000]">
-                  Next-Gen GPU Instances are Here
-                </h3>
-                <p className="mt-1 text-sm sm:text-base leading-snug text-[#000000]">
-                  Experience a massive leap in compute density. Our new
-                  instances are engineered for:
-                </p>
-                <ul className="mt-1 list-disc pl-5 text-[13px] sm:text-sm leading-snug text-[#000000]">
-                  <li>LLM Training &amp; Inference</li>
-                  <li>Real-time 8K Rendering</li>
-                  <li>Complex Scientific Simulations</li>
-                </ul>
-              </div>
-            </div>
-          </motion.div>
-        </Container>
-      </div>
-    </section>
-  );
+export async function Hero() {
+    const inventory = await loadInventorySnippet();
+    return <HeroClient inventory={inventory} />;
 }
