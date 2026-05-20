@@ -161,7 +161,7 @@ export default function GpuDashboard() {
             >
                 <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
                     <div className="max-w-2xl">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/70">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#0095FF]/85">
                             GPU Cloud
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -206,7 +206,7 @@ export default function GpuDashboard() {
                             <Button
                                 asChild
                                 size="sm"
-                                className="rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400"
+                                className="rounded-none border border-[#0095FF] bg-[#0095FF] text-white shadow-[0_12px_32px_-12px_rgba(0,149,255,0.7)] hover:bg-[#0aa0ff]"
                             >
                                 <Link href="/dashboard/services/gpu/deploy">
                                     <Plus className="mr-2 h-3.5 w-3.5" />
@@ -227,7 +227,7 @@ export default function GpuDashboard() {
                         </div>
                     </div>
                     <div className="hidden shrink-0 items-center justify-center rounded-full lg:flex">
-                        <div className="glass-icon flex h-32 w-32 items-center justify-center text-fuchsia-200">
+                        <div className="glass-icon flex h-32 w-32 items-center justify-center text-[#0095FF]">
                             <Sparkles className="h-16 w-16" />
                         </div>
                     </div>
@@ -239,22 +239,23 @@ export default function GpuDashboard() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.04, duration: 0.24 }}
-                className="glass-panel overflow-hidden border-l-2 border-l-fuchsia-400/40"
+                className="glass-panel overflow-hidden border-l-2 border-l-[#0095FF]/60"
             >
                 <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-300/70">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0095FF]/85">
                             Reserved & Clusters
                         </p>
                         <p className="mt-1 text-sm text-white/80">
-                            Need 16+ GPUs, reserved capacity, or a multi-node cluster? Our team
-                            handles it directly.
+                            Need 16+ GPUs, reserved capacity, or a multi-node cluster?
+                            NVLink fabric, up to 60% off on-demand, dedicated support — our
+                            team handles it directly.
                         </p>
                     </div>
                     <Button
                         asChild
                         size="sm"
-                        className="shrink-0 rounded-none border border-white/[0.12] bg-white/[0.06] px-4 text-white hover:bg-white/[0.10]"
+                        className="shrink-0 rounded-none border border-[#0095FF] bg-[#0095FF] px-4 text-white shadow-[0_12px_32px_-12px_rgba(0,149,255,0.7)] hover:bg-[#0aa0ff]"
                     >
                         <Link href="/dashboard/services/gpu/enterprise">
                             Talk to sales

@@ -5,8 +5,8 @@ import { Hero } from "@/components/hero";
 import { ServicesSection } from "@/components/services-section";
 import { DomainSearchSection } from "@/components/domain-search-section";
 import { ComplianceCta } from "@/components/compliance-cta";
-import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
+import { ClustersSection } from "@/components/clusters-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 // import FeatureSection from "@/components/feature-section";
 
@@ -133,14 +133,14 @@ export default function Home() {
         {/* Everything you build */}
         <EverythingSection />
 
+        {/* Reserved & Cluster GPUs — talk to sales */}
+        <ClustersSection />
+
         {/* Domain Search */}
         <DomainSearchSection />
 
         {/* Global Network */}
         <GlobalNetworkSection />
-
-        {/* Why Trust Us */}
-        <WhyTrustUs />
 
         {/* Compliance CTA */}
         <ComplianceCta />

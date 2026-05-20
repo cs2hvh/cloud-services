@@ -8,6 +8,25 @@ import { useRouter } from "next/navigation";
 
 const TABS = [
   {
+    id: "gpu",
+    label: "GPU Pods",
+    title: "GPU Pods",
+    heading: "Premier GPU compute, ready in seconds",
+    description:
+      "H100, H200, and B200 accelerators on demand. Reserve a single GPU or a multi-node cluster across 12 regions — provisioned in under 90 seconds, billed by the second, with persistent volumes that follow your workload between sessions.",
+    bullets: [
+      "NVIDIA H100 SXM · H200 SXM · B200 — from $2.59/hr",
+      "Sub-90-second provisioning · per-second billing",
+      "Persistent network volumes · region-pinned snapshots",
+      "CUDA 12.4, PyTorch 2.x, JAX, vLLM pre-installed",
+      "Single GPU to 8× SXM clusters with NVLink fabric",
+      "Reserved pricing up to 60% off for committed capacity",
+      "Direct SSH access · idle pods stop billing instantly",
+    ],
+    imageSrc: "/images/main-page/gpu aniamtion resized.png",
+    imageAlt: "GPU server stack",
+  },
+  {
     id: "compute",
     label: "Compute",
     title: "Compute",
@@ -38,22 +57,6 @@ const TABS = [
     ],
     imageSrc: "/images/Features/database.png",
     imageAlt: "Database illustration",
-  },
-  {
-    id: "gpu",
-    label: "GPU Instance",
-    title: "GPU Instance",
-    heading: "Raw GPU power on demand",
-    description:
-      "Accelerate AI training, inference, 3D rendering, and video processing with dedicated NVIDIA GPUs. Bare-metal performance with cloud flexibility — scale from a single GPU to multi-node clusters.",
-    bullets: [
-      "NVIDIA H100 & A100 Tensor Core GPUs",
-      "Scalable clusters for deep learning and LLMs",
-      "Real-time 3D rendering and video transcoding",
-      "Pre-configured with CUDA, PyTorch, and Jupyter",
-    ],
-    imageSrc: "/images/main-page/gpu aniamtion resized.png",
-    imageAlt: "GPU server stack",
   },
   {
     id: "security",

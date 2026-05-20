@@ -1,415 +1,349 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import Link from "next/link";
-import {
-    ArrowRight,
-    Bot,
-    Boxes,
-    Cpu,
-    Database,
-    HardDrive,
-    Network,
-    Rocket,
-    Server,
-    ShieldCheck,
-    type LucideIcon,
-} from "lucide-react";
+import { motion } from "motion/react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { TensorScene } from "./tensor-scene";
 
 const BRAND = "#0095FF";
 
-type ServiceRow = {
-    icon: LucideIcon;
+// ─── Custom monoline marks — shared visual language ─────────────
+type MarkKind =
+    | "gpu"
+    | "compute"
+    | "k8s"
+    | "database"
+    | "storage"
+    | "app"
+    | "agent"
+    | "shield"
+    | "stack"
+    | "deploy"
+    | "arrow";
+
+function HeroMark({
+    kind,
+    className = "",
+}: {
+    kind: MarkKind;
+    className?: string;
+}) {
+    const stroke = {
+        stroke: "currentColor",
+        strokeWidth: 1.2,
+        fill: "none",
+        strokeLinecap: "square" as const,
+        strokeLinejoin: "miter" as const,
+    };
+    const svgProps = {
+        viewBox: "0 0 16 16",
+        className,
+        "aria-hidden": true,
+    } as const;
+    switch (kind) {
+        case "gpu":
+            return (
+                <svg {...svgProps}>
+                    <rect x="1.5" y="1.5" width="13" height="13" {...stroke} />
+                    <rect x="4.5" y="4.5" width="7" height="7" {...stroke} />
+                    <circle cx="1.5" cy="1.5" r="0.7" fill="currentColor" />
+                    <circle cx="14.5" cy="1.5" r="0.7" fill="currentColor" />
+                    <circle cx="1.5" cy="14.5" r="0.7" fill="currentColor" />
+                    <circle cx="14.5" cy="14.5" r="0.7" fill="currentColor" />
+                </svg>
+            );
+        case "compute":
+            return (
+                <svg {...svgProps}>
+                    <rect x="1.5" y="3" width="13" height="3" {...stroke} />
+                    <rect x="1.5" y="7.5" width="13" height="3" {...stroke} />
+                    <rect x="1.5" y="12" width="13" height="2" {...stroke} />
+                    <circle cx="3.5" cy="4.5" r="0.5" fill="currentColor" />
+                    <circle cx="3.5" cy="9" r="0.5" fill="currentColor" />
+                </svg>
+            );
+        case "k8s":
+            return (
+                <svg {...svgProps}>
+                    <polygon
+                        points="8,1.5 13.5,4.75 13.5,11.25 8,14.5 2.5,11.25 2.5,4.75"
+                        {...stroke}
+                    />
+                    <circle cx="8" cy="8" r="2" {...stroke} />
+                </svg>
+            );
+        case "database":
+            return (
+                <svg {...svgProps}>
+                    <ellipse cx="8" cy="3" rx="5.5" ry="1.5" {...stroke} />
+                    <path d="M2.5 3 V 13" {...stroke} />
+                    <path d="M13.5 3 V 13" {...stroke} />
+                    <path d="M2.5 7 Q 8 9 13.5 7" {...stroke} />
+                    <path d="M2.5 13 Q 8 15 13.5 13" {...stroke} />
+                </svg>
+            );
+        case "storage":
+            return (
+                <svg {...svgProps}>
+                    <rect x="1.5" y="1.5" width="6" height="6" {...stroke} />
+                    <rect x="8.5" y="1.5" width="6" height="6" {...stroke} />
+                    <rect x="1.5" y="8.5" width="6" height="6" {...stroke} />
+                    <rect x="8.5" y="8.5" width="6" height="6" {...stroke} />
+                </svg>
+            );
+        case "app":
+            return (
+                <svg {...svgProps}>
+                    <path d="M2.5 9 V 14 H 13.5 V 9" {...stroke} />
+                    <path
+                        d="M8 11 V 2 M4.5 5.5 L 8 2 L 11.5 5.5"
+                        {...stroke}
+                    />
+                </svg>
+            );
+        case "agent":
+            return (
+                <svg {...svgProps}>
+                    <circle cx="8" cy="8" r="2.6" {...stroke} />
+                    <path d="M8 5.4 V 1.5" {...stroke} />
+                    <path d="M5.6 9.5 L 2.5 13.5" {...stroke} />
+                    <path d="M10.4 9.5 L 13.5 13.5" {...stroke} />
+                    <circle cx="8" cy="1.5" r="0.8" fill="currentColor" />
+                    <circle cx="2.5" cy="13.5" r="0.8" fill="currentColor" />
+                    <circle cx="13.5" cy="13.5" r="0.8" fill="currentColor" />
+                </svg>
+            );
+        case "shield":
+            return (
+                <svg {...svgProps}>
+                    <path
+                        d="M8 1.5 L 13.5 3.5 V 8 Q 13.5 12 8 14.5 Q 2.5 12 2.5 8 V 3.5 Z"
+                        {...stroke}
+                    />
+                    <path d="M5.5 8 L 7.5 10 L 10.5 6.5" {...stroke} />
+                </svg>
+            );
+        case "stack":
+            return (
+                <svg {...svgProps}>
+                    <path
+                        d="M8 1.5 L 14 4.5 L 8 7.5 L 2 4.5 Z"
+                        {...stroke}
+                    />
+                    <path d="M2 8 L 8 11 L 14 8" {...stroke} />
+                    <path d="M2 11.5 L 8 14.5 L 14 11.5" {...stroke} />
+                </svg>
+            );
+        case "deploy":
+            return (
+                <svg {...svgProps}>
+                    <path d="M2 8 H 13" {...stroke} />
+                    <path d="M9 4 L 13 8 L 9 12" {...stroke} />
+                    <circle cx="2" cy="8" r="1" fill="currentColor" />
+                </svg>
+            );
+        case "arrow":
+        default:
+            return (
+                <svg {...svgProps}>
+                    <path d="M2.5 8 H 13.5 M9 3.5 L 13.5 8 L 9 12.5" {...stroke} />
+                </svg>
+            );
+    }
+}
+
+type GpuRow = {
+    id: string;
     name: string;
-    tagline: string;
+    memory: number;
+    gen: string;
+    price: number;
+    stock: "high" | "low";
     href: string;
 };
 
-const SERVICES: ServiceRow[] = [
+const GPU_PRICING: GpuRow[] = [
     {
-        icon: Cpu,
-        name: "GPU Cloud",
-        tagline: "H100 / H200 / B200",
-        href: "/services/gpu",
+        id: "h100-sxm",
+        name: "H100 SXM",
+        memory: 80,
+        gen: "HBM3",
+        price: 2.99,
+        stock: "high",
+        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
     },
     {
-        icon: Server,
-        name: "Compute",
-        tagline: "VMs and bare metal",
-        href: "/services/compute",
+        id: "h100-nvl",
+        name: "H100 NVL",
+        memory: 94,
+        gen: "HBM3",
+        price: 2.59,
+        stock: "high",
+        href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
     },
     {
-        icon: Network,
-        name: "Kubernetes",
-        tagline: "Managed clusters",
-        href: "/services/kubernetes",
+        id: "h200-sxm",
+        name: "H200 SXM",
+        memory: 141,
+        gen: "HBM3e",
+        price: 3.99,
+        stock: "low",
+        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
     },
     {
-        icon: Database,
-        name: "Databases",
-        tagline: "Postgres / MySQL / Redis",
-        href: "/services/database",
-    },
-    {
-        icon: HardDrive,
-        name: "Storage",
-        tagline: "S3-compatible object store",
-        href: "/services/object-storage",
-    },
-    {
-        icon: Rocket,
-        name: "Apps",
-        tagline: "Git and Docker deploys",
-        href: "/services/app-deployment",
-    },
-    {
-        icon: Bot,
-        name: "AI Agents",
-        tagline: "Serverless automation",
-        href: "/services/ai-agents",
+        id: "b200",
+        name: "B200",
+        memory: 180,
+        gen: "HBM3e",
+        price: 5.49,
+        stock: "low",
+        href: "/dashboard/services/gpu/deploy?gpu=b200-180",
     },
 ];
 
-const CAPABILITIES = [
-    { icon: ShieldCheck, label: "Private networking" },
-    { icon: Boxes, label: "Unified billing" },
-    { icon: Network, label: "Automated deployments" },
-];
-
-function InfrastructureCanvas() {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const context = canvas.getContext("2d");
-        if (!context) return;
-
-        const reduceMotion = window.matchMedia(
-            "(prefers-reduced-motion: reduce)"
-        ).matches;
-
-        let animationFrame = 0;
-        let width = 0;
-        let height = 0;
-        let pixelRatio = 1;
-        let visible = true;
-        const start = performance.now();
-
-        type Point3D = { x: number; y: number; z: number };
-        const points: Point3D[] = [];
-        const edges: Array<[number, number]> = [];
-        const grid = 5;
-
-        for (let z = 0; z < grid; z += 1) {
-            for (let y = 0; y < grid; y += 1) {
-                for (let x = 0; x < grid; x += 1) {
-                    points.push({
-                        x: (x / (grid - 1) - 0.5) * 2,
-                        y: (y / (grid - 1) - 0.5) * 2,
-                        z: (z / (grid - 1) - 0.5) * 2,
-                    });
-                }
-            }
-        }
-
-        const index = (x: number, y: number, z: number) =>
-            z * grid * grid + y * grid + x;
-
-        for (let z = 0; z < grid; z += 1) {
-            for (let y = 0; y < grid; y += 1) {
-                for (let x = 0; x < grid; x += 1) {
-                    if (x < grid - 1) edges.push([index(x, y, z), index(x + 1, y, z)]);
-                    if (y < grid - 1) edges.push([index(x, y, z), index(x, y + 1, z)]);
-                    if (z < grid - 1) edges.push([index(x, y, z), index(x, y, z + 1)]);
-                }
-            }
-        }
-
-        const resize = () => {
-            const rect = canvas.getBoundingClientRect();
-            width = Math.max(1, rect.width);
-            height = Math.max(1, rect.height);
-            pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = Math.round(width * pixelRatio);
-            canvas.height = Math.round(height * pixelRatio);
-            context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        };
-
-        const project = (point: Point3D, time: number) => {
-            const rotationY = reduceMotion ? -0.44 : time * 0.00008 - 0.52;
-            const rotationX = reduceMotion ? 0.28 : Math.sin(time * 0.00022) * 0.08 + 0.28;
-            const contentWidth = Math.min(width, 1440);
-            const contentLeft = (width - contentWidth) / 2;
-            const cubeCenterX =
-                width < 720 ? width * 0.7 : contentLeft + contentWidth * 0.73;
-            const cubeCenterY = height * (width < 720 ? 0.63 : 0.5);
-
-            const cosY = Math.cos(rotationY);
-            const sinY = Math.sin(rotationY);
-            const cosX = Math.cos(rotationX);
-            const sinX = Math.sin(rotationX);
-
-            const x1 = point.x * cosY - point.z * sinY;
-            const z1 = point.x * sinY + point.z * cosY;
-            const y1 = point.y * cosX - z1 * sinX;
-            const z2 = point.y * sinX + z1 * cosX;
-
-            const depth = 3.1 + z2;
-            const scaleBase =
-                width < 720
-                    ? Math.min(width, height) * 0.4
-                    : Math.min(width, height) * 0.43;
-            const scale = scaleBase / depth;
-            return {
-                x: cubeCenterX + x1 * scale,
-                y: cubeCenterY + y1 * scale,
-                z: z2,
-                scale,
-            };
-        };
-
-        const drawGridBackground = () => {
-            context.save();
-            context.globalAlpha = 0.18;
-            context.strokeStyle = "rgba(255,255,255,0.04)";
-            context.lineWidth = 1;
-            const cell = width < 720 ? 44 : 64;
-            for (let x = width * 0.34; x < width; x += cell) {
-                context.beginPath();
-                context.moveTo(x, 0);
-                context.lineTo(x, height);
-                context.stroke();
-            }
-            for (let y = 0; y < height; y += cell) {
-                context.beginPath();
-                context.moveTo(width * 0.34, y);
-                context.lineTo(width, y);
-                context.stroke();
-            }
-            context.restore();
-        };
-
-        const draw = (now: number) => {
-            const elapsed = reduceMotion ? 0 : Math.max(0, now - start);
-            context.clearRect(0, 0, width, height);
-
-            const bg = context.createLinearGradient(0, 0, width, height);
-            bg.addColorStop(0, "#020406");
-            bg.addColorStop(0.52, "#04101a");
-            bg.addColorStop(1, "#020406");
-            context.fillStyle = bg;
-            context.fillRect(0, 0, width, height);
-
-            drawGridBackground();
-
-            const glow = context.createRadialGradient(
-                width < 720 ? width * 0.7 : (width - Math.min(width, 1440)) / 2 + Math.min(width, 1440) * 0.73,
-                height * (width < 720 ? 0.62 : 0.5),
-                0,
-                width < 720 ? width * 0.7 : (width - Math.min(width, 1440)) / 2 + Math.min(width, 1440) * 0.73,
-                height * (width < 720 ? 0.62 : 0.5),
-                Math.min(width, height) * 0.66
-            );
-            glow.addColorStop(0, "rgba(0,149,255,0.43)");
-            glow.addColorStop(0.42, "rgba(0,149,255,0.16)");
-            glow.addColorStop(1, "rgba(0,0,0,0)");
-            context.fillStyle = glow;
-            context.fillRect(0, 0, width, height);
-
-            const projected = points.map((point) => project(point, elapsed));
-
-            context.save();
-            context.lineWidth = width < 720 ? 1.15 : 1.45;
-            context.shadowBlur = width < 720 ? 2 : 4;
-            context.shadowColor = "rgba(0,149,255,0.26)";
-            for (const [a, b] of edges) {
-                const pa = projected[a];
-                const pb = projected[b];
-                const opacity = 0.28 + (pa.z + pb.z + 2.3) * 0.08;
-                context.strokeStyle = `rgba(96, 210, 255, ${Math.max(
-                    0.22,
-                    Math.min(0.72, opacity)
-                )})`;
-                context.beginPath();
-                context.moveTo(pa.x, pa.y);
-                context.lineTo(pb.x, pb.y);
-                context.stroke();
-            }
-            context.restore();
-
-            const scan = (elapsed * 0.00018) % 1;
-            const planeZ = -1 + scan * 2;
-            context.save();
-            context.strokeStyle = "rgba(0,149,255,0.92)";
-            context.fillStyle = "rgba(0,149,255,0.1)";
-            context.lineWidth = width < 720 ? 1.4 : 1.8;
-            context.shadowBlur = width < 720 ? 5 : 9;
-            context.shadowColor = "rgba(0,149,255,0.36)";
-            const plane = [
-                project({ x: -1.04, y: -1.04, z: planeZ }, elapsed),
-                project({ x: 1.04, y: -1.04, z: planeZ }, elapsed),
-                project({ x: 1.04, y: 1.04, z: planeZ }, elapsed),
-                project({ x: -1.04, y: 1.04, z: planeZ }, elapsed),
-            ];
-            context.beginPath();
-            context.moveTo(plane[0].x, plane[0].y);
-            for (const p of plane.slice(1)) context.lineTo(p.x, p.y);
-            context.closePath();
-            context.fill();
-            context.stroke();
-            context.restore();
-
-            context.save();
-            context.shadowColor = "rgba(100, 214, 255, 0.45)";
-            for (let i = 0; i < projected.length; i += 1) {
-                const p = projected[i];
-                const hot = i % 17 === 0 || i % 29 === 0;
-                context.shadowBlur = hot ? 8 : 4;
-                context.fillStyle = hot
-                    ? "rgba(255,198,71,0.98)"
-                    : "rgba(221,249,255,0.95)";
-                context.beginPath();
-                context.arc(p.x, p.y, hot ? 3 : 2.05, 0, Math.PI * 2);
-                context.fill();
-            }
-            context.restore();
-
-            const pulses = 9;
-            context.save();
-            context.shadowBlur = 9;
-            context.shadowColor = "rgba(0,149,255,0.52)";
-            for (let i = 0; i < pulses; i += 1) {
-                const edge =
-                    edges[
-                        (i * 23 + Math.floor(elapsed * 0.00016)) %
-                            edges.length
-                    ];
-                if (!edge) continue;
-                const a = projected[edge[0]];
-                const b = projected[edge[1]];
-                const t = (elapsed * 0.00028 + i * 0.137) % 1;
-                const x = a.x + (b.x - a.x) * t;
-                const y = a.y + (b.y - a.y) * t;
-                context.fillStyle = i % 3 === 0 ? "rgba(52,255,179,0.95)" : "rgba(0,149,255,0.98)";
-                context.beginPath();
-                context.arc(x, y, width < 720 ? 2.6 : 3.15, 0, Math.PI * 2);
-                context.fill();
-            }
-            context.restore();
-
-            if (!reduceMotion && visible) {
-                animationFrame = requestAnimationFrame(draw);
-            }
-        };
-
-        resize();
-        const hydrationResize = window.setTimeout(resize, 250);
-        window.addEventListener("resize", resize, { passive: true });
-        const resizeObserver = new ResizeObserver(resize);
-        resizeObserver.observe(canvas);
-        const intersectionObserver = new IntersectionObserver(([entry]) => {
-            visible = entry?.isIntersecting ?? true;
-            if (visible && !reduceMotion) {
-                cancelAnimationFrame(animationFrame);
-                animationFrame = requestAnimationFrame(draw);
-            }
-        });
-        intersectionObserver.observe(canvas);
-        animationFrame = requestAnimationFrame((timestamp) => {
-            resize();
-            draw(timestamp);
-        });
-
-        return () => {
-            window.removeEventListener("resize", resize);
-            window.clearTimeout(hydrationResize);
-            resizeObserver.disconnect();
-            intersectionObserver.disconnect();
-            cancelAnimationFrame(animationFrame);
-        };
-    }, []);
-
+function GpuPricingRail() {
     return (
-        <canvas
-            ref={canvasRef}
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 h-full w-full"
-        />
-    );
-}
+        <div className="relative z-20 border-2 border-white/35 bg-[#04060a]/95 shadow-[0_-36px_100px_-58px_rgba(0,149,255,0.22)] backdrop-blur-sm">
+            {/* Scanning sweep across the top edge */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-x-px -top-px h-px overflow-hidden"
+            >
+                <motion.div
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "100%" }}
+                    transition={{
+                        duration: 7,
+                        repeat: Infinity,
+                        ease: "linear",
+                    }}
+                    className="h-full w-[36%]"
+                    style={{
+                        background:
+                            "linear-gradient(90deg, transparent, #0095FF, transparent)",
+                    }}
+                />
+            </div>
 
-function Capabilities() {
-    return (
-        <div className="mt-6 grid max-w-[640px] grid-cols-1 gap-2 text-xs text-white/62 sm:grid-cols-3">
-            {CAPABILITIES.map((capability) => {
-                const Icon = capability.icon;
-                return (
-                    <div
-                        key={capability.label}
-                        className="flex items-center gap-2"
-                    >
-                        <Icon
-                            className="h-4 w-4 text-[#6fd0ff]"
-                            aria-hidden="true"
-                        />
-                        {capability.label}
+            {/* Right-edge gradient fade as scroll affordance */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-20 bg-gradient-to-l from-[#04060a] via-[#04060a]/60 to-transparent lg:hidden"
+            />
+
+            <div className="mx-auto flex h-[124px] max-w-[1440px] overflow-x-auto lg:h-[140px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {/* Header */}
+                <div className="hidden w-[228px] shrink-0 flex-col justify-center border-r border-white/10 px-7 lg:flex">
+                    <div className="flex items-center gap-2">
+                        <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        </span>
+                        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">
+                            Live pricing
+                        </p>
                     </div>
-                );
-            })}
-        </div>
-    );
-}
-
-function ServiceRail() {
-    return (
-        <div className="relative z-20 h-[88px] border-y border-white/10 bg-[#020407] shadow-[0_-28px_80px_-52px_rgba(0,149,255,0.55)] lg:h-[100px]">
-            <div className="mx-auto flex h-full max-w-[1440px] overflow-x-auto">
-                <div className="hidden w-[190px] shrink-0 flex-col justify-center border-r border-white/10 px-8 lg:flex">
-                    <p className="text-[10px] font-semibold uppercase text-white/36">
-                        Platform
+                    <p className="mt-2 text-[15px] font-semibold tracking-tight text-white">
+                        GPU available
                     </p>
-                    <p className="mt-1.5 text-sm font-semibold text-white">
-                        Services
+                    <p className="mt-0.5 text-[11px] text-white/40">
+                        H100 · H200 · B200 · per-second billing
                     </p>
                 </div>
 
-                <div className="flex min-w-max flex-1 lg:grid lg:min-w-0 lg:grid-cols-7">
-                    {SERVICES.map((service, index) => {
-                        const Icon = service.icon;
+                {/* GPU pricing cells */}
+                <div className="flex min-w-max flex-1 lg:grid lg:min-w-0 lg:grid-cols-4">
+                    {GPU_PRICING.map((gpu) => {
+                        const stockBg =
+                            gpu.stock === "high"
+                                ? "bg-emerald-400"
+                                : "bg-amber-400";
+                        const stockText =
+                            gpu.stock === "high" ? "In stock" : "Limited";
                         return (
                             <Link
-                                key={service.name}
-                                href={service.href}
-                                className="group relative flex h-[88px] w-[174px] flex-col justify-between border-r border-white/10 px-4 py-3 transition-colors hover:bg-white/[0.045] lg:h-[100px] lg:w-auto"
+                                key={gpu.id}
+                                href={gpu.href}
+                                className="group relative flex h-[124px] w-[236px] flex-col justify-between border-r border-white/10 px-5 py-4 transition-all hover:bg-white/[0.04] lg:h-[140px] lg:w-auto"
                             >
                                 <span
                                     aria-hidden="true"
-                                    className="absolute inset-x-0 top-0 h-[2px] bg-[#0095FF] opacity-0 transition-opacity group-hover:opacity-100"
+                                    className="absolute inset-x-0 top-0 h-[2px] origin-left scale-x-0 bg-[#0095FF] transition-transform duration-300 group-hover:scale-x-100"
                                 />
-                                <div className="flex items-center justify-between gap-3">
-                                    <Icon
-                                        className="h-4 w-4 text-white/45 transition-colors group-hover:text-[#0095FF]"
-                                        aria-hidden="true"
-                                    />
-                                    <span className="font-mono text-[10px] text-white/28">
-                                        {String(index + 1).padStart(2, "0")}
-                                    </span>
-                                </div>
+
+                                {/* Top — GPU name + memory chip */}
                                 <div>
-                                    <p className="text-sm font-semibold text-white">
-                                        {service.name}
-                                    </p>
-                                    <p className="mt-1 truncate text-[11px] text-white/42">
-                                        {service.tagline}
-                                    </p>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <p className="text-[15.5px] font-semibold tracking-tight text-white">
+                                            {gpu.name}
+                                        </p>
+                                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
+                                            {gpu.memory} GB
+                                        </span>
+                                    </div>
+                                    <div className="mt-1 flex items-center gap-2 text-[10.5px]">
+                                        <span className="relative flex h-1.5 w-1.5">
+                                            <span
+                                                className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${stockBg}`}
+                                            />
+                                            <span
+                                                className={`relative inline-flex h-1.5 w-1.5 rounded-full ${stockBg}`}
+                                            />
+                                        </span>
+                                        <span className="font-mono uppercase tracking-[0.18em] text-white/45">
+                                            {stockText}
+                                        </span>
+                                        <span className="text-white/25">·</span>
+                                        <span className="font-mono uppercase tracking-[0.18em] text-white/35">
+                                            {gpu.gen}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Bottom — price + arrow */}
+                                <div className="flex items-end justify-between">
+                                    <div>
+                                        <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/35">
+                                            from
+                                        </p>
+                                        <p
+                                            className="mt-0.5 font-mono text-[24px] font-semibold tabular-nums leading-none"
+                                            style={{ color: BRAND }}
+                                        >
+                                            ${gpu.price.toFixed(2)}
+                                            <span className="ml-1 text-[11px] font-normal text-white/50">
+                                                /hr
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <HeroMark
+                                        kind="arrow"
+                                        className="h-3.5 w-3.5 text-white/25 transition-all group-hover:translate-x-0.5 group-hover:text-[#0095FF]"
+                                    />
                                 </div>
                             </Link>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* Secondary "all services" link row */}
+            <div className="border-t border-white/[0.06] bg-[#02040a]/50">
+                <div className="mx-auto flex h-10 max-w-[1440px] items-center justify-between px-5 sm:px-8">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/35">
+                        Plus 6 more services · compute · k8s · db · storage · apps · agents
+                    </p>
+                    <Link
+                        href="/products"
+                        className="group inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-white/50 transition-colors hover:text-white"
+                    >
+                        All services
+                        <HeroMark
+                            kind="arrow"
+                            className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
+                        />
+                    </Link>
                 </div>
             </div>
         </div>
@@ -419,79 +353,96 @@ function ServiceRail() {
 export default function HeroClient() {
     return (
         <section
-            className="relative isolate h-[100svh] min-h-[700px] w-full overflow-hidden bg-[#020406] text-white lg:min-h-[740px]"
-            aria-label="Ahura Cloud AI infrastructure"
+            className="relative isolate h-[100svh] min-h-[720px] w-full overflow-hidden bg-[#04060a] text-white lg:min-h-[760px]"
+            aria-label="Ahura Cloud infrastructure"
         >
-            <InfrastructureCanvas />
-
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,#020406_0%,#020406_28%,rgba(2,4,6,0.86)_43%,rgba(2,4,6,0.12)_66%,rgba(2,4,6,0.46)_90%,#020406_100%)]"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(0deg,#020406_0%,rgba(2,4,6,0.2)_24%,rgba(2,4,6,0.02)_76%,#020406_100%)]"
-            />
-
-            <div className="relative z-10 mx-auto flex h-[calc(100svh-88px)] min-h-[612px] w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-100px)] lg:min-h-[640px]">
-                <div className="grid flex-1 items-center gap-10 pb-10 pt-20 sm:pt-24 lg:grid-cols-[minmax(0,650px)_minmax(520px,1fr)] lg:gap-14 lg:pb-12 lg:pt-24">
-                    <div className="max-w-[660px]">
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold uppercase text-white/56 sm:text-[11px]">
-                            <span className="flex items-center gap-2">
+            <div className="relative z-10 mx-auto flex h-[calc(100svh-164px)] min-h-[604px] w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-180px)] lg:min-h-[620px]">
+                <div className="grid flex-1 items-center gap-10 pb-10 pt-20 sm:pt-24 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:gap-12 lg:pb-12 lg:pt-24">
+                    {/* LEFT — static, GPU-focused. The tensor cycles
+                        through formations on the right, but the pitch
+                        here doesn't shift — GPU is the main subject. */}
+                    <div className="relative max-w-[600px]">
+                        <div className="flex items-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/55">
+                            <span className="relative flex h-1.5 w-1.5">
                                 <span
-                                    className="h-1.5 w-1.5"
+                                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
                                     style={{ backgroundColor: BRAND }}
                                 />
-                                AI infrastructure
+                                <span
+                                    className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                                    style={{ backgroundColor: BRAND }}
+                                />
                             </span>
-                            <span className="hidden h-3 w-px bg-white/20 sm:block" />
-                            <span>GPU cloud</span>
-                            <span>compute</span>
-                            <span>Kubernetes</span>
+                            <span>GPU Cloud</span>
+                            <span className="h-3 w-px bg-white/15" />
+                            <span className="text-white/40">accelerated compute</span>
                         </div>
 
-                        <h1 className="mt-5 max-w-[660px] text-[44px] font-semibold leading-[0.94] text-white sm:text-7xl lg:text-[88px]">
-                            Ahura Cloud
+                        <h1 className="mt-6 max-w-[680px] text-[44px] font-semibold leading-[0.95] tracking-[-0.045em] text-white sm:text-6xl lg:text-[80px]">
+                            GPU Cloud,
+                            <br />
+                            on demand.
                         </h1>
 
-                        <p className="mt-5 max-w-[590px] text-[15px] leading-7 text-white/70 sm:text-base lg:text-lg lg:leading-8">
-                            GPU capacity, compute, Kubernetes, storage,
-                            databases, apps, and AI agents managed from one
-                            production control plane.
+                        <p className="mt-3 max-w-[560px] text-[15px] font-medium tracking-tight text-white/60 sm:text-[16.5px]">
+                            H100, H200, and B200 —
+                            <span className="text-white/85">
+                                {" "}from $2.59/hr, billed by the second.
+                            </span>
                         </p>
 
-                        <div className="mt-7 flex flex-wrap items-center gap-3">
+                        <p className="mt-7 max-w-[540px] text-[14px] leading-[1.7] text-white/55 sm:text-[14.5px]">
+                            Reserve a single accelerator or a full cluster across
+                            12 regions. Persistent volumes follow your jobs; idle
+                            pods cost you nothing.
+                        </p>
+
+                        <div className="mt-8 flex flex-wrap items-center gap-3">
                             <AuthAwareServiceCta
-                                service="main"
-                                intent="main"
-                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-[#0095FF] bg-[#0095FF] px-6 text-sm font-semibold text-white shadow-[0_18px_46px_-18px_rgba(0,149,255,0.8)] transition-colors hover:bg-[#0aa0ff]"
+                                service="gpu"
+                                intent="new"
+                                className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-[#0095FF] bg-[#0095FF] px-6 text-[13.5px] font-semibold text-white shadow-[0_18px_46px_-18px_rgba(0,149,255,0.8)] transition-colors hover:bg-[#0aa0ff]"
                             >
-                                Launch console
-                                <ArrowRight
-                                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                                <span
                                     aria-hidden="true"
+                                    className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/18 to-transparent"
+                                />
+                                <span className="relative">Launch a GPU</span>
+                                <HeroMark
+                                    kind="arrow"
+                                    className="relative h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                                 />
                             </AuthAwareServiceCta>
                             <Link
-                                href="/services/gpu"
-                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-white/16 bg-white/[0.045] px-5 text-sm font-semibold text-white/84 backdrop-blur transition-colors hover:border-white/30 hover:bg-white/[0.085] hover:text-white"
+                                href="/pricing"
+                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-white/16 bg-white/[0.04] px-5 text-[13.5px] font-medium text-white/82 backdrop-blur transition-colors hover:border-white/30 hover:bg-white/[0.08] hover:text-white"
                             >
-                                Explore GPUs
-                                <ArrowRight
-                                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
-                                    aria-hidden="true"
+                                GPU pricing
+                                <HeroMark
+                                    kind="arrow"
+                                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                                 />
                             </Link>
                         </div>
 
-                        <Capabilities />
                     </div>
 
-                    <div className="hidden h-full min-h-[420px] lg:block" />
+                    {/* RIGHT — Three.js tensor, no visible container */}
+                    <div
+                        className="relative h-[480px] w-full sm:h-[560px] lg:h-full lg:min-h-[520px]"
+                        style={{
+                            maskImage:
+                                "radial-gradient(ellipse 85% 92% at 50% 50%, black 55%, transparent 100%)",
+                            WebkitMaskImage:
+                                "radial-gradient(ellipse 85% 92% at 50% 50%, black 55%, transparent 100%)",
+                        }}
+                    >
+                        <TensorScene className="absolute inset-0" />
+                    </div>
                 </div>
             </div>
 
-            <ServiceRail />
+            <GpuPricingRail />
         </section>
     );
 }
