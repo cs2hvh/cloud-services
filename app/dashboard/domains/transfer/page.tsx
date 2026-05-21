@@ -21,7 +21,6 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import Image from "next/image";
 import { toast } from "sonner";
 
 import {
@@ -105,7 +104,7 @@ function statusColor(status: TransferRequest["status"]) {
     case "pending":
       return "bg-amber-500/15 text-amber-300 border-amber-500/25";
     case "approved":
-      return "bg-sky-500/15 text-sky-300 border-sky-500/25";
+      return "bg-[#0095FF]/15 text-[#82adfb] border-[#0095FF]/25";
     case "completed":
       return "bg-emerald-500/15 text-emerald-300 border-emerald-500/25";
     case "failed":
@@ -219,7 +218,7 @@ function TransferActivityCard({
   return (
     <div className="border border-white/[0.07] bg-white/[0.02]">
       {/* Status accent bar */}
-      <div className={`h-0.5 w-full ${transfer.status === "completed" ? "bg-emerald-500/60" : transfer.status === "failed" ? "bg-red-500/60" : transfer.status === "cancelled" ? "bg-white/20" : "bg-cyan-500/60"}`} />
+      <div className={`h-0.5 w-full ${transfer.status === "completed" ? "bg-emerald-500/60" : transfer.status === "failed" ? "bg-red-500/60" : transfer.status === "cancelled" ? "bg-white/20" : "bg-[#0095FF]/60"}`} />
 
       <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -335,7 +334,7 @@ function TransferActivityCard({
           <div className="flex shrink-0 flex-row gap-2 lg:flex-col lg:items-end">
             {transfer.status === "completed" && (
               <Link href={`/dashboard/domains/${encodeURIComponent(transfer.domain)}`}>
-                <Button variant="outline" className="rounded-none border-white/15 text-white hover:bg-white/[0.08]">
+                <Button variant="outline" className="border-white/15 text-white hover:bg-white/[0.08]">
                   Manage Domain
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </Button>
@@ -344,7 +343,7 @@ function TransferActivityCard({
             {transfer.status === "failed" && (
               <Button
                 variant="outline"
-                className="rounded-none border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/10"
+                className="border-[#0095FF]/25 text-[#82adfb] hover:bg-[#0095FF]/10"
                 onClick={() => onRetry(transfer)}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
@@ -356,7 +355,7 @@ function TransferActivityCard({
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    className="rounded-none border-red-500/25 text-red-300 hover:bg-red-500/10"
+                    className="border-red-500/25 text-red-300 hover:bg-red-500/10"
                     disabled={cancellingId === transfer.id}
                   >
                     {cancellingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -371,8 +370,8 @@ function TransferActivityCard({
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Transfer</AlertDialogCancel>
-                    <AlertDialogAction className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => onCancel(transfer.id)}>
+                    <AlertDialogCancel className="border-white/10 text-white hover:bg-white/10">Keep Transfer</AlertDialogCancel>
+                    <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={() => onCancel(transfer.id)}>
                       Cancel Transfer
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -385,7 +384,7 @@ function TransferActivityCard({
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    className="border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                     disabled={deletingId === transfer.id}
                   >
                     {deletingId === transfer.id
@@ -406,9 +405,9 @@ function TransferActivityCard({
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogCancel className="border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
                     <AlertDialogAction
-                      className="rounded-none bg-white/10 text-white hover:bg-white/20"
+                      className="bg-white/10 text-white hover:bg-white/20"
                       onClick={() => onDelete(transfer.id)}
                     >
                       Archive
@@ -424,7 +423,7 @@ function TransferActivityCard({
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    className="rounded-none border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    className="border-white/15 text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                     disabled={deletingId === transfer.id}
                   >
                     {deletingId === transfer.id
@@ -441,9 +440,9 @@ function TransferActivityCard({
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
+                    <AlertDialogCancel className="border-white/10 text-white hover:bg-white/10">Keep Visible</AlertDialogCancel>
                     <AlertDialogAction
-                      className="rounded-none bg-red-600 text-white hover:bg-red-700"
+                      className="bg-red-600 text-white hover:bg-red-700"
                       onClick={() => onDelete(transfer.id)}
                     >
                       Remove
@@ -717,54 +716,111 @@ export default function DomainTransferPage() {
   }, []);
 
   const stageIndex = stage === "lookup" ? 1 : 2;
-  const inputCls = "rounded-none border-white/[0.18] bg-black/35 text-white placeholder:text-white/45 focus:border-white/30 transition-colors";
+  const inputCls = "border-white/[0.08] bg-[#0d0e11] text-white placeholder:text-white/30 focus:border-white/25 transition-colors rounded-[5px] font-[var(--font-geist-mono),ui-monospace,monospace] text-[12.5px]";
+  const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+  const SERIF_STYLE: React.CSSProperties = { fontFamily: "var(--font-nunito), system-ui, sans-serif" };
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8">
-
-      {/* Header */}
-      <div className="mb-6 glass-panel overflow-hidden">
-        <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">Domain Transfer Center</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              Transfer an existing domain into your account.
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-              Validate eligibility, submit your auth code, and track progress from initiation to completion. Most transfers finish in 5–7 days.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {["Registrar-backed workflow", "Email & dashboard updates", "Zero-downtime transfer"].map((tag) => (
-                <span key={tag} className="inline-flex items-center border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/42">{tag}</span>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm" className="rounded-none border-white/15 text-white hover:bg-white/[0.08]">
-                <Link href="/dashboard/domains">Open Domains</Link>
-              </Button>
-              <Button asChild size="sm" className="rounded-none border border-cyan-400/25 bg-cyan-500/90 text-slate-950 hover:bg-cyan-400">
-                <Link href="/dashboard/domains/marketplace">
-                  Buy New Domain
-                  <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background layer (clipped, doesn't break sticky descendants) */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)" }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
       </div>
 
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+
+        {/* Back link */}
+        <Link
+          href="/dashboard/domains"
+          className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors mb-6`}
+        >
+          ← My domains
+        </Link>
+
+        {/* ── Hero ──────────────────────────────────────── */}
+        <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className={`${MONO} mb-3 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+              <span className="h-px w-4 bg-white/30" />
+              Domain Transfer Center
+            </div>
+            <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+              Transfer{" "}
+              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                an existing domain
+              </span>
+            </h1>
+            <p className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}>
+              Validate eligibility · submit auth code · track to completion · most transfers complete in 5–7 days
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/dashboard/domains"
+              className={`${MONO} h-10 inline-flex items-center px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            >
+              My domains
+            </Link>
+            <Link
+              href="/dashboard/domains/marketplace"
+              className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+              style={{
+                background: `linear-gradient(135deg, #0095FF, #0066B3)`,
+                color: "#ffffff",
+                boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = `linear-gradient(135deg, #33adff, #0095FF)`;
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = `linear-gradient(135deg, #0095FF, #0066B3)`;
+                e.currentTarget.style.transform = "none";
+              }}
+            >
+              Buy a new domain
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </header>
+
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {[
-          { label: "Active Transfers", value: String(activeTransfers.length), hint: "Waiting on registrar or approval" },
-          { label: "Completed", value: String(completedCount), hint: "Successfully transferred domains" },
-          { label: "Failed", value: String(failedCount), hint: "Need corrected code or unlock" },
-          { label: "Typical Window", value: "5–7 days", hint: "After approval & processing begins" },
+          { label: "Active", value: String(activeTransfers.length), hint: "Waiting on registrar or approval" },
+          { label: "Completed", value: String(completedCount), hint: "Successfully transferred" },
+          { label: "Failed", value: String(failedCount), hint: "Need code or unlock" },
+          { label: "Typical window", value: "5–7", unit: "days", hint: "After approval starts" },
         ].map((stat) => (
-          <div key={stat.label} className="glass-panel p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">{stat.label}</p>
-            <p className="mt-3 text-2xl font-semibold tracking-tight text-white tabular-nums">{stat.value}</p>
-            <p className="mt-1 text-xs text-white/40">{stat.hint}</p>
+          <div key={stat.label} className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-2">
+            <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>{stat.label}</p>
+            <div className="flex items-baseline gap-1.5">
+              <span
+                style={SERIF_STYLE}
+                className="text-[32px] leading-none font-bold tabular-nums tracking-[-0.03em] text-white"
+              >
+                {stat.value}
+              </span>
+              {stat.unit && (
+                <span className={`${MONO} text-[11px] text-white/45`}>{stat.unit}</span>
+              )}
+            </div>
+            <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{stat.hint}</p>
           </div>
         ))}
       </div>
@@ -773,13 +829,12 @@ export default function DomainTransferPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.9fr)]">
 
         {/* Transfer form */}
-        <div className="glass-panel overflow-hidden">
-          <div className="h-px w-full bg-gradient-to-r from-cyan-400/40 via-cyan-300/10 to-transparent" />
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+          <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/40 via-[#0095FF]/10 to-transparent" />
           <div className="border-b border-white/[0.06] px-6 py-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2.5">
-                  <Image src="/dashboard-icons/domain.png" alt="" width={20} height={20} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                   <h2 className="text-lg font-semibold text-white">Start a Transfer</h2>
                 </div>
                 <p className="mt-1.5 text-sm text-white/50">
@@ -797,19 +852,29 @@ export default function DomainTransferPage() {
             {/* Step indicators */}
             <div className="grid gap-3 md:grid-cols-2">
               {[
-                { n: 1, title: "Validate domain", desc: "Confirm the domain can enter the transfer flow.", icon: "/dashboard-icons/domain.png" },
-                { n: 2, title: "Submit auth code", desc: "Start the registrar transfer with the EPP code.", icon: "/dashboard-icons/valid-keys.png" },
-              ].map(({ n, title, desc, icon }) => (
-                <div key={n} className={`border p-4 ${stageIndex >= n ? "border-cyan-500/25 bg-cyan-500/[0.08]" : "border-white/[0.07] bg-white/[0.03]"}`}>
+                { n: 1, title: "Validate domain", desc: "Confirm the domain can enter the transfer flow." },
+                { n: 2, title: "Submit auth code", desc: "Start the registrar transfer with the EPP code." },
+              ].map(({ n, title, desc }) => (
+                <div
+                  key={n}
+                  className={`border rounded-[5px] p-3.5 ${stageIndex >= n ? "border-[#0095FF]/40 bg-[#0095FF]/[0.06]" : "border-white/[0.06] bg-[#0d0e11]"}`}
+                  style={stageIndex >= n ? { boxShadow: `0 0 0 1px #0095FF` } : {}}
+                >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center border text-sm font-semibold ${stageIndex >= n ? "border-cyan-400/40 bg-cyan-500/20 text-cyan-200" : "border-white/15 bg-white/[0.05] text-white/50"}`}>
-                      {n}
+                    <div
+                      className={`${MONO} flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] text-[11px] font-semibold transition-all`}
+                      style={
+                        stageIndex >= n
+                          ? { background: "#0095FF", color: "#001930", boxShadow: `0 0 0 3px rgba(0,149,255,0.18)` }
+                          : { background: "#111216", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }
+                      }
+                    >
+                      {n.toString().padStart(2, "0")}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white">{title}</p>
-                      <p className="text-xs text-white/45">{desc}</p>
+                      <p className="text-[13px] font-semibold tracking-[-0.005em] text-white">{title}</p>
+                      <p className={`${MONO} mt-0.5 text-[10.5px] text-white/45 leading-snug`}>{desc}</p>
                     </div>
-                    <Image src={icon} alt="" width={28} height={28} className={`h-7 w-7 shrink-0 object-contain ${stageIndex >= n ? "opacity-60" : "opacity-25"}`} unoptimized />
                   </div>
                 </div>
               ))}
@@ -835,11 +900,10 @@ export default function DomainTransferPage() {
 
             {/* Domain input */}
             <div className="overflow-hidden border border-white/[0.12] bg-white/[0.04]">
-              <div className="h-px w-full bg-gradient-to-r from-cyan-400/25 via-cyan-300/5 to-transparent" />
+              <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/30 via-[#0095FF]/5 to-transparent" />
               <div className="space-y-4 p-5">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Image src="/dashboard-icons/domain.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55"  unoptimized />
                   <Label htmlFor="domain" className="text-white/75">Domain name</Label>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -859,12 +923,12 @@ export default function DomainTransferPage() {
                   <Button
                     onClick={() => void handleCheckEligibility()}
                     disabled={checking || !domain.trim()}
-                    className="rounded-none h-12 min-w-44 bg-cyan-500 text-black hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/30"
+                    className="h-12 min-w-44 bg-[#0095FF] text-white hover:bg-[#33adff] disabled:bg-white/[0.07] disabled:text-white/30"
                   >
                     {checking ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Image src="/dashboard-icons/healthy.png" alt="" width={16} height={16} className="mr-2 h-4 w-4 shrink-0 object-contain"  unoptimized />
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
                     )}
                     Check Eligibility
                   </Button>
@@ -893,7 +957,7 @@ export default function DomainTransferPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="rounded-none justify-start text-white/60 hover:bg-white/[0.06] hover:text-white"
+                      className="justify-start text-white/60 hover:bg-white/[0.06] hover:text-white"
                       onClick={() => { setStage("lookup"); setEligibility(null); setAuthCode(""); setEligibilityFeedback(null); }}
                     >
                       Change domain
@@ -906,7 +970,6 @@ export default function DomainTransferPage() {
                 <div className="border border-white/[0.07] bg-white/[0.02] p-4 space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Image src="/dashboard-icons/valid-keys.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55"  unoptimized />
                       <Label htmlFor="auth-code" className="text-white/75">Authorization code (EPP code)</Label>
                     </div>
                     <div className="relative">
@@ -1000,13 +1063,13 @@ export default function DomainTransferPage() {
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
-                      className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
+                      className="border-white/15 text-white hover:bg-white/[0.08]"
                       onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); setShowContactForm(false); }}
                     >
                       Back
                     </Button>
                     <Button
-                      className="rounded-none bg-cyan-500 text-black hover:bg-cyan-400 sm:flex-1 disabled:bg-white/[0.07] disabled:text-white/30"
+                      className="bg-[#0095FF] text-white hover:bg-[#33adff] sm:flex-1 disabled:bg-white/[0.07] disabled:text-white/30"
                       onClick={() => void handleStartTransfer()}
                       disabled={submitting || !authCode.trim() || authCode.trim().length < 6}
                     >
@@ -1024,10 +1087,9 @@ export default function DomainTransferPage() {
         {/* Right sidebar */}
         <div className="space-y-5">
           {/* Before you transfer */}
-          <div className="glass-panel overflow-hidden">
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <Image src="/dashboard-icons/ip-firewall.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                 <h3 className="text-sm font-semibold text-white">Before You Transfer</h3>
               </div>
               <p className="mt-1 text-xs text-white/45">Complete these steps to avoid preventable failures.</p>
@@ -1035,7 +1097,6 @@ export default function DomainTransferPage() {
             <div className="px-5 py-4 space-y-2">
               {prepChecklist.map((item) => (
                 <div key={item} className="flex items-start gap-3 border border-white/[0.06] bg-white/[0.02] p-3 text-sm text-white/65">
-                  <Image src="/dashboard-icons/healthy.png" alt="" width={14} height={14} className="mt-0.5 h-3.5 w-3.5 shrink-0 object-contain opacity-70"  unoptimized />
                   <p>{item}</p>
                 </div>
               ))}
@@ -1043,29 +1104,25 @@ export default function DomainTransferPage() {
           </div>
 
           {/* Operational flow */}
-          <div className="glass-panel overflow-hidden">
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4">
               <div className="flex items-center gap-2.5">
-                <Image src="/dashboard-icons/configure.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70"  unoptimized />
                 <h3 className="text-sm font-semibold text-white">How It Works</h3>
               </div>
             </div>
             <div className="px-5 py-4 space-y-2">
-              {[
-                { ...journeySteps[0], icon: "/dashboard-icons/domain.png" },
-                { ...journeySteps[1], icon: "/dashboard-icons/valid-keys.png" },
-                { ...journeySteps[2], icon: "/dashboard-icons/messages.png" },
-                { ...journeySteps[3], icon: "/dashboard-icons/pending.png" },
-              ].map((step, i) => (
-                <div key={step.title} className="flex gap-3 border border-white/[0.06] bg-white/[0.02] p-3">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/15 bg-white/[0.05] text-xs font-semibold text-white/70">
-                    {i + 1}
+              {journeySteps.map((step, i) => (
+                <div
+                  key={step.title}
+                  className="flex gap-3 border border-white/[0.06] bg-[#0d0e11] rounded-[5px] p-3"
+                >
+                  <div className={`${MONO} flex h-6 w-6 shrink-0 items-center justify-center border border-white/15 bg-[#111216] rounded-[4px] text-[10.5px] font-semibold text-white/70`}>
+                    {String(i + 1).padStart(2, "0")}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white">{step.title}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-white/50">{step.description}</p>
+                    <p className="text-[12.5px] font-semibold text-white tracking-[-0.005em]">{step.title}</p>
+                    <p className={`${MONO} mt-0.5 text-[10.5px] leading-[1.5] text-white/45`}>{step.description}</p>
                   </div>
-                  <Image src={step.icon} alt="" width={22} height={22} className="mt-0.5 h-5 w-5 shrink-0 object-contain opacity-35" />
                 </div>
               ))}
             </div>
@@ -1074,7 +1131,7 @@ export default function DomainTransferPage() {
       </div>
 
       {/* Transfer Activity */}
-      <div id="transfer-activity" className="mt-6 glass-panel overflow-hidden">
+      <div id="transfer-activity" className="mt-6 border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/[0.06] px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Transfer Activity</h2>
@@ -1084,7 +1141,7 @@ export default function DomainTransferPage() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
+              className="border-white/15 text-white hover:bg-white/[0.08]"
               onClick={() => { setRefreshing(true); void fetchTransfers(); }}
               disabled={refreshing || autoChecking}
             >
@@ -1120,22 +1177,37 @@ export default function DomainTransferPage() {
           ) : (
             <Tabs value={activityTab} onValueChange={(v) => setActivityTab(v as typeof activityTab)} className="space-y-4">
               <TabsList className="h-auto flex-wrap gap-1 border border-white/[0.08] bg-white/[0.04] p-1">
-                <TabsTrigger value="active" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
+                <TabsTrigger value="active" className="data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   Active ({activeTransfers.length})
                 </TabsTrigger>
-                <TabsTrigger value="history" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
+                <TabsTrigger value="history" className="data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   History ({historyTransfers.length})
                 </TabsTrigger>
-                <TabsTrigger value="all" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
+                <TabsTrigger value="all" className="data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   All ({transfers.length})
                 </TabsTrigger>
               </TabsList>
 
-              {[
-                { value: "active", items: activeTransfers, emptyIcon: <Image src="/dashboard-icons/pending.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No active transfers", emptyMsg: "Start with the validation step above. Once submitted, progress appears here." },
-                { value: "history", items: historyTransfers, emptyIcon: <Image src="/dashboard-icons/review.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No transfer history yet", emptyMsg: "Completed, failed, and cancelled transfers will stay here for auditing." },
-                { value: "all", items: transfers, emptyIcon: <Image src="/dashboard-icons/domain.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20"  unoptimized />, emptyTitle: "No transfer records yet", emptyMsg: "Use the form above to start your first domain transfer request." },
-              ].map(({ value, items, emptyIcon, emptyTitle, emptyMsg }) => (
+              {([
+                {
+                  value: "active",
+                  items: activeTransfers,
+                  emptyTitle: "No active transfers",
+                  emptyMsg: "Start with the validation step above. Once submitted, progress appears here.",
+                },
+                {
+                  value: "history",
+                  items: historyTransfers,
+                  emptyTitle: "No transfer history yet",
+                  emptyMsg: "Completed, failed, and cancelled transfers will stay here for auditing.",
+                },
+                {
+                  value: "all",
+                  items: transfers,
+                  emptyTitle: "No transfer records yet",
+                  emptyMsg: "Use the form above to start your first domain transfer request.",
+                },
+              ] as const).map(({ value, items, emptyTitle, emptyMsg }) => (
                 <TabsContent key={value} value={value} className="space-y-3">
                   {items.length > 0 ? (
                     items.map((transfer) => (
@@ -1150,10 +1222,9 @@ export default function DomainTransferPage() {
                       />
                     ))
                   ) : (
-                    <div className="border border-dashed border-white/[0.08] bg-white/[0.01] px-6 py-14 text-center">
-                      {emptyIcon}
-                      <p className="mt-4 text-base font-semibold text-white">{emptyTitle}</p>
-                      <p className="mt-2 max-w-sm mx-auto text-sm text-white/45">{emptyMsg}</p>
+                    <div className="border border-dashed border-white/[0.08] bg-[#111216] rounded-[6px] px-6 py-14 text-center">
+                      <p className="text-[14px] font-semibold text-white">{emptyTitle}</p>
+                      <p className={`${MONO} mt-2 max-w-sm mx-auto text-[11px] text-white/45 leading-relaxed`}>{emptyMsg}</p>
                     </div>
                   )}
                 </TabsContent>
@@ -1161,6 +1232,7 @@ export default function DomainTransferPage() {
             </Tabs>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

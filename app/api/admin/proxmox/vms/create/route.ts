@@ -5,6 +5,8 @@ import { Agent as UndiciAgent } from "undici";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
 import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
+import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
+import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -149,6 +151,46 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Proxm
   throw new Error("task timeout");
 }
 
+// On-demand vMAC allocation.
+//
+// When network_mode=ovh_failover_vmac and the strict vMAC-pool scan
+// found nothing, we look at the routed pools (typically the BYOIP
+// block seeded by auto-setup) for an unused IP. For that IP we ask
+// OVH to mint a fresh vMAC, wait for the task, persist the new
+// (mac, ip) as its own public_ip_pools row, and return it.
+//
+// Requirements:
+//   - host.provider == "ovh"
+//   - OVH credentials in env (OVH_APP_KEY / _SECRET / OVH_CONSUMER_KEY)
+//   - the IP must already be attached as an additional IP on the
+//     server in OVH (i.e. createVirtualMac succeeds). If the BYOIP
+//     block isn't attached, OVH rejects and we surface the error.
+async function allocateOnDemandVmac(args: {
+  supabase: Awaited<ReturnType<typeof createWorkerClient>>;
+  host: HostConfig;
+  ipRows: Array<Record<string, unknown>>;
+  usedSet: Set<string>;
+  macByPool: Map<number, string | undefined>;
+  labelByPool: Map<number, string | null>;
+  isRoutedPool: (mac?: string, label?: string | null) => boolean;
+}): Promise<{ ip: string; mac: string } | null> {
+  // First unused IP in a routed pool
+  for (const r of args.ipRows) {
+    const ip = String((r as Record<string, unknown>).ip);
+    const poolId = Number((r as Record<string, unknown>).pool_id);
+    const mac = args.macByPool.get(poolId);
+    const label = args.labelByPool.get(poolId);
+    if (!args.isRoutedPool(mac, label)) continue;
+    if (args.usedSet.has(ip)) continue;
+    return allocateVmacForIp({
+      supabase: args.supabase,
+      host: { id: args.host.id, host_url: args.host.host_url, provider: args.host.provider },
+      ip,
+    });
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const { authorized, user } = await checkAdminAuth();
   if (!authorized || !user) {
@@ -243,7 +285,31 @@ export async function POST(req: NextRequest) {
     const dispatcher = allowInsecure ? new UndiciAgent({ connect: { rejectUnauthorized: false } }) : undefined;
     const apiBase = (cfg.host_url.startsWith("http:") ? cfg.host_url.replace(/^http:/, "https:") : cfg.host_url).replace(/\/+$/, "");
     const node = cfg.node;
-    const storage = body.storage || cfg.storage || "local";
+    // If the admin pinned a specific storage in body.storage, honor it.
+    // Otherwise auto-pick the storage with the most free space across
+    // every disk that accepts VM disk content.
+    let storage: string;
+    if (body.storage) {
+      storage = body.storage;
+    } else {
+      const pick = await pickBestStorage({
+        hostUrl: cfg.host_url,
+        username: cfg.username || "root",
+        password: cfg.password || "",
+        node: cfg.node,
+        requiredGB: body.diskGB || 20,
+        allowInsecure: !!cfg.allow_insecure_tls,
+        fallback: cfg.storage || "local",
+      });
+      storage = pick.storage;
+      if (pick.reason === "fallback-no-fit") {
+        return NextResponse.json({
+          ok: false,
+          error: `No storage with ${body.diskGB || 20} GB free on this host.`,
+        }, { status: 409 });
+      }
+      console.log(`[Admin VM Create] storage=${storage} (${pick.reason})`);
+    }
     const bridgeOverride = body.bridge || undefined;
 
     // IP auto-assign from pools
@@ -259,6 +325,8 @@ export async function POST(req: NextRequest) {
       .eq("host_id", cfg.id)
       .neq("is_active", false);
 
+    const vmacMode = cfg.network_mode === "ovh_failover_vmac";
+
     if (pools && pools.length > 0) {
       const poolIds = pools.map((p: Record<string, unknown>) => Number(p.id));
       const macByPool = new Map<number, string | undefined>(
@@ -268,11 +336,6 @@ export async function POST(req: NextRequest) {
         pools.map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null])
       );
       const routedMode = cfg.network_mode === "ovh_hg_scale_routed" || cfg.network_mode === "ovh_advance_gen3_routed" || cfg.network_mode === "ovh_vrack_block";
-      const isRoutedPool = (mac?: string, label?: string | null) => {
-        const normalizedMac = String(mac || "").toLowerCase();
-        const normalizedLabel = String(label || "").toLowerCase();
-        return normalizedMac.startsWith("route:") || normalizedLabel.includes("byoip") || normalizedLabel.includes("routed");
-      };
 
       const { data: ipRows } = await supabase
         .from("public_ip_pool_ips")
@@ -293,10 +356,42 @@ export async function POST(req: NextRequest) {
           break;
         }
       }
+
+      // On-demand vMAC allocation:
+      // If we're in vMAC mode (ovh_failover_vmac) on an OVH host and the
+      // strict vMAC-pool scan found nothing, fall back to the routed pool
+      // (typically the BYOIP block seeded by auto-setup). For the next
+      // unused routed IP we'll mint a fresh vMAC via the OVH API, persist
+      // it as its own (mac, ip) pool row, and hand both back to the VM.
+      // This is the "vMAC per IP, on demand" flow.
+      if (!assignedIp && vmacMode && (cfg.provider || "ovh") === "ovh") {
+        const allocation = await allocateOnDemandVmac({
+          supabase,
+          host: cfg,
+          ipRows: ipRows || [],
+          usedSet,
+          macByPool,
+          labelByPool,
+          isRoutedPool,
+        });
+        if (allocation) {
+          assignedIp = allocation.ip;
+          macAddress = allocation.mac;
+        }
+      }
     }
 
     if (!assignedIp) {
-      return NextResponse.json({ ok: false, error: "No available IPs" }, { status: 409 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            vmacMode
+              ? "No available IPs (vMAC pool empty and on-demand allocation failed — is the BYOIP block attached as additional IPs in OVH?)"
+              : "No available IPs",
+        },
+        { status: 409 }
+      );
     }
     const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
     if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {

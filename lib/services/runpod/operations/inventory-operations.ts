@@ -5,10 +5,11 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
 import {
+    PROBED_GPU_COUNTS,
     buildGpuTypesQuery,
     inferGpuTier,
     inferSortOrder,
-    normalizeAvailableCounts,
+    mergeAvailableCounts,
     normalizeStockStatus,
     slugifyGpuId,
 } from "../helpers";
@@ -16,10 +17,31 @@ import type {
     CloudType,
     InventoryRow,
     RunPodGpuType,
+    RunPodGpuTypeLowestPrice,
     ServiceResult,
     StockStatus,
     SyncInventoryResult,
 } from "../types";
+
+// Best stock signal across probes: the most-available probe wins, since the
+// `none` probes just mean RunPod can't satisfy that particular pod size.
+function bestStockStatus(statuses: StockStatus[]): StockStatus {
+    const order: StockStatus[] = ["high", "medium", "low", "none"];
+    return statuses.sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] ?? "none";
+}
+
+// Per-GPU price: derive from the smallest probe (typically p1). If p1 is null
+// fall back to the next-smallest non-null price divided by its gpuCount.
+function perGpuPrice(
+    probes: Array<{ gpuCount: number; price: number | null }>
+): number | null {
+    const valid = probes
+        .filter((p) => p.price !== null && p.price > 0)
+        .sort((a, b) => a.gpuCount - b.gpuCount);
+    if (valid.length === 0) return null;
+    const first = valid[0];
+    return (first.price as number) / first.gpuCount;
+}
 
 interface CatalogRow {
     id: string;
@@ -104,7 +126,6 @@ export const inventoryOperations = {
 
             for (const cloudType of cloudTypes) {
                 const { query, variables } = buildGpuTypesQuery(
-                    1,
                     cloudType === "SECURE"
                 );
                 let response: { gpuTypes: RunPodGpuType[] };
@@ -159,28 +180,48 @@ export const inventoryOperations = {
 
                     const supportedHere =
                         cloudType === "SECURE" ? gpu.secureCloud : gpu.communityCloud;
-                    const stockStatus: StockStatus = supportedHere
-                        ? normalizeStockStatus(gpu.lowestPrice?.stockStatus ?? null)
-                        : "none";
-                    const lp = gpu.lowestPrice;
+
+                    // Collect per-probe data. Each probe is `pN` keyed off the
+                    // PROBED_GPU_COUNTS array. A null probe = RunPod can't serve
+                    // a pod of that size right now (so that count is "none").
+                    const probes = PROBED_GPU_COUNTS.map((n) => {
+                        const lp = (gpu as unknown as Record<string, RunPodGpuTypeLowestPrice | null | undefined>)[
+                            `p${n}`
+                        ];
+                        const stockStatus: StockStatus = supportedHere
+                            ? normalizeStockStatus(lp?.stockStatus ?? null)
+                            : "none";
+                        return {
+                            gpuCount: n,
+                            stockStatus,
+                            availableGpuCounts: lp?.availableGpuCounts ?? null,
+                            onDemand: lp?.uninterruptablePrice ?? null,
+                            spot: lp?.minimumBidPrice ?? null,
+                        };
+                    });
+
+                    const availableCounts = supportedHere
+                        ? mergeAvailableCounts(probes)
+                        : [];
+
+                    const overallStock = bestStockStatus(probes.map((p) => p.stockStatus));
+
+                    // Per-GPU price (smallest probe wins, scaled down by its gpuCount).
+                    const onDemandPerGpu = supportedHere
+                        ? perGpuPrice(probes.map((p) => ({ gpuCount: p.gpuCount, price: p.onDemand })))
+                        : null;
+                    const spotPerGpu = supportedHere
+                        ? perGpuPrice(probes.map((p) => ({ gpuCount: p.gpuCount, price: p.spot })))
+                        : null;
 
                     const row: SnapshotRow = {
                         gpu_catalog_id: catalogRow.id,
                         cloud_type: cloudType,
                         data_center_id: null,
-                        stock_status: stockStatus,
-                        available_counts: supportedHere
-                            ? normalizeAvailableCounts(
-                                  lp?.availableGpuCounts ?? null,
-                                  stockStatus
-                              )
-                            : [],
-                        on_demand_per_hr: supportedHere
-                            ? (lp?.uninterruptablePrice ?? null)
-                            : null,
-                        spot_per_hr: supportedHere
-                            ? (lp?.minimumBidPrice ?? null)
-                            : null,
+                        stock_status: overallStock,
+                        available_counts: availableCounts,
+                        on_demand_per_hr: onDemandPerGpu,
+                        spot_per_hr: spotPerGpu,
                     };
 
                     // Defer rows whose catalog row was just created — they need

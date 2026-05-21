@@ -1,13 +1,15 @@
 'use client';
 
+// VPS detail page — editorial dark surface matching the GPU deploy /
+// apps wizard / VPS create design language. Aurora-glow canvas, Nunito
+// accent header, horizontal pill tab nav, sharp-edged tab panels.
+
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'motion/react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { useVMMetrics } from '@/hooks/use-vm-metrics';
 import { ArrowLeft, Server } from 'lucide-react';
 
@@ -20,6 +22,9 @@ import { VpsMonitoringTab } from './_components/vps-monitoring-tab';
 import { VpsConsoleTab } from './_components/vps-console-tab';
 import { VpsNetworkingTab } from './_components/vps-networking-tab';
 import { VpsSettingsTab } from './_components/vps-settings-tab';
+
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 
 export default function VMDetailPage() {
   const params = useParams();
@@ -220,36 +225,37 @@ export default function VMDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      <PageShell>
         <div className="mb-6 flex items-center gap-3">
           <Link href="/dashboard/services/compute/vps" className="text-white/40 hover:text-white transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="h-5 w-32 bg-white/[0.06] animate-pulse" />
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-panel h-24 animate-pulse" />
+            <div key={i} className="h-24 border border-white/[0.06] bg-[#111216] animate-pulse" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (!server) {
     return (
-      <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      <PageShell>
         <div className="flex flex-col items-center justify-center py-24">
           <Server className="mb-4 h-12 w-12 text-white/20" />
-          <h2 className="text-lg font-medium text-white">Server not found</h2>
-          <p className="mt-2 text-sm text-white/45">This server may have been deleted.</p>
-          <Button asChild className="mt-6 border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
-            <Link href="/dashboard/services/compute/vps">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to VPS
-            </Link>
-          </Button>
+          <h2 className="text-[16px] font-semibold text-white">Server not found</h2>
+          <p className="mt-2 text-[13px] text-white/45">This server may have been deleted.</p>
+          <Link
+            href="/dashboard/services/compute/vps"
+            className={`${MONO} mt-6 inline-flex h-9 items-center gap-2 px-4 border border-white/[0.1] bg-transparent text-[11px] uppercase tracking-[0.14em] text-white/75 hover:text-white hover:bg-white/[0.04] transition-colors`}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to VPS
+          </Link>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -264,12 +270,10 @@ export default function VMDetailPage() {
   const accessCmd = isRDP ? `${server.ip}:3389` : `ssh ${sshUser}@${server.ip}`;
   const memGB = Math.round(server.memory_mb / 1024);
 
-  const activeSection = TABS.find((t) => t.value === activeTab) || TABS[0];
-
   /* ─── render ────────────────────────────────────────── */
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+    <PageShell>
       <VpsHeader
         server={server}
         uptime={uptime}
@@ -288,145 +292,137 @@ export default function VMDetailPage() {
         monthlyCost={monthlyCost}
       />
 
-      {/* Tab layout */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[300px_minmax(0,1fr)] xl:items-start">
-          {/* Sidebar */}
-          <motion.div
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.08, duration: 0.24 }}
-            className="space-y-4 xl:sticky xl:top-8"
-          >
-            <div className="glass-panel overflow-hidden p-2">
-              <div className="px-3 pb-2 pt-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/28">
-                  Sections
-                </p>
-              </div>
-              <div className="space-y-1">
-                  {TABS.map((tab) => {
-                    const isActive = activeTab === tab.value;
-                    return (
-                      <button
-                        key={tab.value}
-                        type="button"
-                        onClick={() => setActiveTab(tab.value)}
-                        className={`relative w-full px-3 py-3 text-left transition-all duration-150 ${
-                          isActive
-                            ? 'border border-cyan-500/15 bg-cyan-500/[0.08]'
-                            : 'border border-transparent hover:bg-white/[0.02]'
-                        }`}
-                      >
-                        {isActive && (
-                          <motion.div
-                            layoutId="sidebar-active"
-                            className="absolute left-0 top-2 bottom-2 w-[2px] bg-cyan-400"
-                            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${isActive ? 'text-cyan-200' : 'text-white/24'}`}>
-                            {tab.eyebrow}
-                          </p>
-                          <p className={`mt-1 text-[13px] font-medium transition-colors ${isActive ? 'text-white' : 'text-white/54'}`}>
-                            {tab.label}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          </motion.div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
+        {/* Horizontal pill-tab nav (replaces sidebar tab list) */}
+        <div className="border-b border-white/[0.06] mb-5">
+          <div className="flex items-center gap-1 -mb-px overflow-x-auto no-scrollbar">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`${MONO} relative px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
+                  style={{
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.color = 'rgba(255,255,255,0.75)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
+                  }}
+                >
+                  {tab.label}
+                  {isActive && (
+                    <span
+                      className="absolute left-2 right-2 bottom-0 h-[2px]"
+                      style={{ background: ACCENT, boxShadow: `0 0 8px rgba(0,149,255,0.5)` }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          {/* Content */}
-          <motion.div
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1, duration: 0.24 }}
-          >
-            <div className="glass-panel overflow-hidden">
-              <div className="px-6 py-5 sm:px-7">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/28">
-                  {activeSection.eyebrow}
-                </p>
-                <h2 className="mt-2 text-base font-semibold text-white">
-                  {activeSection.label}
-                </h2>
-              </div>
+        <div>
+          <TabsContent value="overview" className="mt-0">
+            <VpsOverviewTab
+              server={server}
+              isRunning={isRunning}
+              isProvisioning={isProvisioning}
+              isFailed={isFailed}
+              isRDP={isRDP}
+              accessCmd={accessCmd}
+              memGB={memGB}
+              monthlyCost={monthlyCost}
+              dailyCost={dailyCost}
+              copyToClipboard={copyToClipboard}
+            />
+          </TabsContent>
 
-              <div className="border-t border-white/[0.06] px-6 py-6 sm:px-7">
-                <TabsContent value="overview" className="mt-0">
-                  <VpsOverviewTab
-                    server={server}
-                    isRunning={isRunning}
-                    isProvisioning={isProvisioning}
-                    isFailed={isFailed}
-                    isRDP={isRDP}
-                    accessCmd={accessCmd}
-                    memGB={memGB}
-                    monthlyCost={monthlyCost}
-                    dailyCost={dailyCost}
-                    copyToClipboard={copyToClipboard}
-                  />
-                </TabsContent>
+          <TabsContent value="monitoring" className="mt-0">
+            <VpsMonitoringTab
+              server={server}
+              isRunning={isRunning}
+              metrics={vmMetrics.metrics}
+              history={vmMetrics.history}
+              loading={vmMetrics.loading}
+              error={vmMetrics.error}
+              onRefetch={vmMetrics.refetch}
+            />
+          </TabsContent>
 
-                <TabsContent value="monitoring" className="mt-0">
-                  <VpsMonitoringTab
-                    server={server}
-                    isRunning={isRunning}
-                    metrics={vmMetrics.metrics}
-                    history={vmMetrics.history}
-                    loading={vmMetrics.loading}
-                    error={vmMetrics.error}
-                    onRefetch={vmMetrics.refetch}
-                  />
-                </TabsContent>
+          <TabsContent value="console" className="mt-0">
+            <VpsConsoleTab
+              server={server}
+              isRunning={isRunning}
+              consoleState={consoleState}
+              consoleWsPath={consoleWsPath}
+              consoleVncPassword={consoleVncPassword}
+              consoleError={consoleError}
+              onLaunchConsole={handleLaunchConsole}
+            />
+          </TabsContent>
 
-                <TabsContent value="console" className="mt-0">
-                  <VpsConsoleTab
-                    server={server}
-                    isRunning={isRunning}
-                    consoleState={consoleState}
-                    consoleWsPath={consoleWsPath}
-                    consoleVncPassword={consoleVncPassword}
-                    consoleError={consoleError}
-                    onLaunchConsole={handleLaunchConsole}
-                  />
-                </TabsContent>
+          <TabsContent value="networking" className="mt-0">
+            <VpsNetworkingTab
+              server={server}
+              isRunning={isRunning}
+              isRDP={isRDP}
+              copyToClipboard={copyToClipboard}
+              metrics={vmMetrics.metrics}
+              history={vmMetrics.history}
+            />
+          </TabsContent>
 
-                <TabsContent value="networking" className="mt-0">
-                  <VpsNetworkingTab
-                    server={server}
-                    isRunning={isRunning}
-                    isRDP={isRDP}
-                    copyToClipboard={copyToClipboard}
-                    metrics={vmMetrics.metrics}
-                    history={vmMetrics.history}
-                  />
-                </TabsContent>
-
-                <TabsContent value="settings" className="mt-0">
-                  <VpsSettingsTab
-                    server={server}
-                    editName={editName}
-                    setEditName={setEditName}
-                    showRenameInput={showRenameInput}
-                    setShowRenameInput={setShowRenameInput}
-                    renaming={renaming}
-                    onRename={renameServer}
-                    confirmName={confirmName}
-                    setConfirmName={setConfirmName}
-                    destroying={destroying}
-                    onDestroy={destroyServer}
-                  />
-                </TabsContent>
-              </div>
-            </div>
-          </motion.div>
+          <TabsContent value="settings" className="mt-0">
+            <VpsSettingsTab
+              server={server}
+              editName={editName}
+              setEditName={setEditName}
+              showRenameInput={showRenameInput}
+              setShowRenameInput={setShowRenameInput}
+              renaming={renaming}
+              onRename={renameServer}
+              confirmName={confirmName}
+              setConfirmName={setConfirmName}
+              destroying={destroying}
+              onDestroy={destroyServer}
+            />
+          </TabsContent>
         </div>
       </Tabs>
+    </PageShell>
+  );
+}
+
+// ─── Page shell with aurora + dotted grid (matches other pages) ─
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)' }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)' }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+      </div>
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">{children}</div>
     </div>
   );
 }

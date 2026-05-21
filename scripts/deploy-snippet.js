@@ -1,5 +1,14 @@
-// Load environment variables from .env.local (Next.js convention)
-require("dotenv").config({ path: require("path").resolve(__dirname, "../.env.local") });
+// Load env vars from project root. Try .env first (what the rest of
+// the repo uses) and fall back to .env.local for Next.js-style setups.
+const path = require("path");
+const fs = require("fs");
+const candidates = [
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, "../.env.local"),
+];
+for (const p of candidates) {
+  if (fs.existsSync(p)) require("dotenv").config({ path: p });
+}
 
 const { createClient } = require("@supabase/supabase-js");
 const { Client } = require("ssh2");

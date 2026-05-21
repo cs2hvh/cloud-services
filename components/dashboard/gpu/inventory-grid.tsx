@@ -1,9 +1,14 @@
 "use client";
 
+// GPU inventory grid. In-stock GPUs are shown first; out-of-stock
+// rows collapse behind a "Show unavailable" toggle so the page
+// doesn't drown in cards that the customer can't buy.
+
 import Link from "next/link";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Sparkles, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import type { InventoryRowClient, StockStatus } from "./types";
 
@@ -12,38 +17,17 @@ interface InventoryGridProps {
     rows: InventoryRowClient[];
 }
 
-function stockStyle(status: StockStatus) {
+function stockMeta(status: StockStatus): { dot: string; label: string } {
     switch (status) {
-        case "high":
-            return {
-                pill: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-                dot: "bg-emerald-400",
-                label: "In stock",
-            };
-        case "medium":
-            return {
-                pill: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-                dot: "bg-amber-400",
-                label: "Limited",
-            };
-        case "low":
-            return {
-                pill: "border-orange-500/20 bg-orange-500/10 text-orange-300",
-                dot: "bg-orange-400",
-                label: "Very limited",
-            };
+        case "high":   return { dot: "bg-emerald-400",  label: "In stock" };
+        case "medium": return { dot: "bg-amber-400",    label: "Limited" };
+        case "low":    return { dot: "bg-amber-400/70", label: "Very limited" };
         case "none":
-        default:
-            return {
-                pill: "border-white/[0.08] bg-white/[0.04] text-white/40",
-                dot: "bg-white/30",
-                label: "Out of stock",
-            };
+        default:       return { dot: "bg-white/25",     label: "Out of stock" };
     }
 }
 
 function maxAvailable(row: InventoryRowClient): number {
-    // Mirror server-side fallback: empty counts + non-zero stock ⇒ 1 max.
     if (row.availableCounts.length > 0) return Math.max(...row.availableCounts);
     return row.stockStatus === "none" ? 0 : 1;
 }
@@ -54,117 +38,97 @@ function formatPrice(v: number | null | undefined): string {
 }
 
 function GpuCard({ row }: { row: InventoryRowClient }) {
-    const status = row.stockStatus;
-    const style = stockStyle(status);
+    const stock = stockMeta(row.stockStatus);
     const max = maxAvailable(row);
-    const deployUrl = `/dashboard/services/gpu/deploy?gpu=${encodeURIComponent(
-        row.gpuCatalogId
-    )}`;
-    const outOfStock = status === "none";
+    const outOfStock = row.stockStatus === "none";
+    const deployUrl = `/dashboard/services/gpu/deploy?gpu=${encodeURIComponent(row.gpuCatalogId)}`;
 
     return (
-        <div className="glass-panel overflow-hidden">
-            {/* Header */}
-            <div className="border-b border-white/[0.04] px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h3 className="truncate text-base font-semibold text-white">
-                            {row.displayName}
-                        </h3>
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/35">
-                            {row.memoryGb} GB VRAM · NVIDIA
-                        </p>
-                    </div>
-                    {max > 0 && (
-                        <span
-                            className={`inline-flex shrink-0 items-center border px-2 py-0.5 text-[11px] font-mono font-semibold tabular-nums ${
-                                max >= 4
-                                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                                    : max >= 2
-                                      ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-                                      : "border-orange-500/20 bg-orange-500/10 text-orange-300"
-                            }`}
-                            title={
-                                row.availableCounts.length > 0
-                                    ? `Available counts: ${row.availableCounts.join(", ")}`
-                                    : "At least 1 GPU available"
-                            }
-                        >
-                            {max}× max
-                        </span>
-                    )}
+        <div className={`border bg-[#15171c] transition-colors ${
+            outOfStock
+                ? "border-white/[0.05] opacity-65"
+                : "border-white/[0.08] hover:border-white/[0.14]"
+        }`}>
+            <div className="px-4 py-3 border-b border-white/[0.06] flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h3 className="text-[14px] font-semibold text-white truncate tracking-tight">
+                        {row.displayName}
+                    </h3>
+                    <p className="mt-0.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40">
+                        {row.memoryGb} GB · NVIDIA
+                    </p>
+                </div>
+                <div className="inline-flex items-center gap-1.5 text-[11px] text-white/65 shrink-0">
+                    <span className={`h-1.5 w-1.5 rounded-full ${stock.dot}`} />
+                    {stock.label}
                 </div>
             </div>
 
-            {/* Stock + pricing */}
-            <div className="flex flex-col gap-3 px-5 py-4">
-                <span
-                    className={`inline-flex w-fit items-center gap-1.5 border px-2 py-0.5 text-[11px] font-medium ${style.pill}`}
-                >
-                    <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                    {style.label}
-                </span>
-
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
-                            On-demand
-                        </p>
-                        <p className="mt-1 font-mono text-base font-semibold text-white tabular-nums">
-                            {formatPrice(row.onDemandPerHr)}
-                            <span className="ml-1 text-[11px] font-normal text-white/40">
-                                /GPU/hr
-                            </span>
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
-                            Spot
-                        </p>
-                        <p className="mt-1 font-mono text-base font-semibold text-white tabular-nums">
-                            {formatPrice(row.spotPerHr)}
-                            <span className="ml-1 text-[11px] font-normal text-white/40">
-                                /GPU/hr
-                            </span>
-                        </p>
-                    </div>
+            <div className="px-4 py-3 grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                <div>
+                    <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        On-demand
+                    </p>
+                    <p className="mt-0.5 font-mono text-[14px] font-semibold text-white tabular-nums tracking-tight">
+                        {formatPrice(row.onDemandPerHr)}
+                        <span className="ml-0.5 text-[10px] font-normal text-white/40">/hr</span>
+                    </p>
+                </div>
+                <div>
+                    <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Spot
+                    </p>
+                    <p className="mt-0.5 font-mono text-[14px] font-semibold text-white tabular-nums tracking-tight">
+                        {formatPrice(row.spotPerHr)}
+                        <span className="ml-0.5 text-[10px] font-normal text-white/40">/hr</span>
+                    </p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Max
+                    </p>
+                    <p
+                        className="mt-0.5 font-mono text-[14px] font-semibold text-white tabular-nums tracking-tight"
+                        title={
+                            row.availableCounts.length > 0
+                                ? `Pod sizes: ${row.availableCounts.join(", ")}`
+                                : undefined
+                        }
+                    >
+                        {max > 0 ? `${max}×` : "—"}
+                    </p>
                 </div>
             </div>
 
-            {/* Deploy CTA */}
-            <div className="border-t border-white/[0.04] px-5 py-3">
-                <Button
-                    asChild
-                    size="sm"
-                    disabled={outOfStock}
-                    className={`w-full rounded-none border text-sm ${
-                        outOfStock
-                            ? "cursor-not-allowed border-white/[0.06] bg-white/[0.02] text-white/30"
-                            : "border-fuchsia-400/25 bg-fuchsia-500/85 text-slate-950 hover:bg-fuchsia-400"
-                    }`}
-                >
-                    {outOfStock ? (
-                        <span>Currently unavailable</span>
-                    ) : (
-                        <Link href={deployUrl}>
-                            <Zap className="mr-1.5 h-3.5 w-3.5" />
-                            Deploy
-                        </Link>
-                    )}
-                </Button>
+            <div className="border-t border-white/[0.06] px-4 py-2.5">
+                {outOfStock ? (
+                    <span className="block text-center text-[11.5px] text-white/35 py-1.5">
+                        Currently unavailable
+                    </span>
+                ) : (
+                    <Button
+                        asChild
+                        size="sm"
+                        className="w-full h-8 bg-[#0095FF] hover:bg-[#0aa0ff] text-white text-[12px] font-medium"
+                    >
+                        <Link href={deployUrl}>Deploy</Link>
+                    </Button>
+                )}
             </div>
         </div>
     );
 }
 
 export function InventoryGrid({ loading, rows }: InventoryGridProps) {
+    const [showUnavailable, setShowUnavailable] = useState(false);
+
     if (loading) {
         return (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
                     <div
                         key={i}
-                        className="glass-panel h-[210px] animate-pulse"
+                        className="h-[160px] border border-white/[0.06] bg-[#15171c] animate-pulse"
                         style={{ animationDelay: `${i * 60}ms` }}
                     />
                 ))}
@@ -172,17 +136,15 @@ export function InventoryGrid({ loading, rows }: InventoryGridProps) {
         );
     }
 
-    // Show only Secure cloud rows. Community is hidden from the UI by design;
-    // the sync still writes both so this can be re-enabled later without a
-    // schema change.
     const secureRows = rows.filter((r) => r.cloudType === "SECURE");
+    const inStock = secureRows.filter((r) => r.stockStatus !== "none");
+    const outOfStock = secureRows.filter((r) => r.stockStatus === "none");
 
     if (secureRows.length === 0) {
         return (
-            <div className="glass-panel px-6 py-12 text-center">
-                <Sparkles className="mx-auto mb-3 h-10 w-10 text-white/20" />
-                <p className="text-sm font-semibold text-white">No GPU inventory yet</p>
-                <p className="mt-1 text-xs text-white/45">
+            <div className="border border-white/[0.08] bg-[#15171c] px-6 py-12 text-center">
+                <p className="text-[14px] font-semibold text-white">No GPU inventory yet</p>
+                <p className="mt-1 text-[12px] text-white/45">
                     Inventory refreshes in the background. Check back shortly.
                 </p>
             </div>
@@ -190,10 +152,45 @@ export function InventoryGrid({ loading, rows }: InventoryGridProps) {
     }
 
     return (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {secureRows.map((r) => (
-                <GpuCard key={`${r.gpuCatalogId}-${r.cloudType}`} row={r} />
-            ))}
+        <div className="space-y-3">
+            {inStock.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {inStock.map((r) => (
+                        <GpuCard key={`${r.gpuCatalogId}-${r.cloudType}`} row={r} />
+                    ))}
+                </div>
+            ) : (
+                <div className="border border-white/[0.08] bg-[#15171c] px-5 py-6 text-center">
+                    <p className="text-[13px] text-white/65">All GPU types are temporarily out of stock.</p>
+                    <p className="mt-0.5 text-[11.5px] text-white/40">Check back shortly or join the waitlist for reserved capacity.</p>
+                </div>
+            )}
+
+            {outOfStock.length > 0 && (
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setShowUnavailable((s) => !s)}
+                        className="w-full flex items-center justify-between border border-white/[0.07] bg-transparent hover:bg-white/[0.02] px-4 py-2 text-[12px] text-white/55 hover:text-white/85 transition-colors"
+                    >
+                        <span>
+                            {showUnavailable ? "Hide" : "Show"} unavailable ({outOfStock.length})
+                        </span>
+                        {showUnavailable ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                    </button>
+                    {showUnavailable && (
+                        <div className="mt-2.5 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                            {outOfStock.map((r) => (
+                                <GpuCard key={`${r.gpuCatalogId}-${r.cloudType}`} row={r} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

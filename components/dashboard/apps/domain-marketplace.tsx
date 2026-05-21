@@ -142,21 +142,90 @@ export function DomainMarketplaceTab({
     void loadSummary();
   }, []);
 
-  const lastAutoSearched = useRef<string | null>(null);
-  useEffect(() => {
-    const autoQuery = initialQuery?.trim();
-    if (
-      autoQuery &&
-      summary?.configured &&
-      query.trim() === autoQuery &&
-      lastAutoSearched.current !== autoQuery
-    ) {
-      lastAutoSearched.current = autoQuery;
-      void handleSearch();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery, summary, query]);
+  // ─── Search execution ────────────────────────────────────────
+  //
+  // We support two modes:
+  //   • Auto-search (debounced ~350ms) — fires as the user types. Stays
+  //     silent: no toasts, keeps last results visible while loading.
+  //   • Explicit search — pressing Enter or clicking the button. Syncs
+  //     the URL and surfaces validation errors as toasts.
+  //
+  // Both paths funnel through `runSearch`. An AbortController per call
+  // cancels in-flight requests when the user keeps typing.
+  const lastSearchedRef = useRef<string | null>(null);
+  const lastSearchedTldsRef = useRef<string>('');
+  const abortRef = useRef<AbortController | null>(null);
 
+  const runSearch = async (
+    cleanQuery: string,
+    tlds: string[],
+    options: { silent?: boolean; syncUrl?: boolean } = {}
+  ) => {
+    if (!cleanQuery) return;
+    if (tlds.length === 0) return;
+
+    // Cancel any in-flight search.
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    setSearching(true);
+    try {
+      const res = await fetch('/api/domains/market/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: cleanQuery, tlds }),
+        signal: ctrl.signal,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (!options.silent) toast.error(data?.message || data?.error || 'Domain search failed');
+        return;
+      }
+      const items = (data?.data?.results || []) as SearchResultItem[];
+      setResults(items);
+      lastSearchedRef.current = cleanQuery;
+      lastSearchedTldsRef.current = tlds.join(',');
+      if (options.syncUrl) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('domain', cleanQuery);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+    } catch (err) {
+      // Aborted searches are expected when the user keeps typing.
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      if (!options.silent) toast.error('Domain search failed');
+    } finally {
+      // Only clear the spinner if we're still the active request.
+      if (abortRef.current === ctrl) setSearching(false);
+    }
+  };
+
+  // Auto-search: react to typing. Debounced 350ms. Min 2 characters.
+  useEffect(() => {
+    if (!summary?.configured) return;
+    if (selectedTlds.length === 0) return;
+    const cleanQuery = normalizeDomainQuery(query);
+    if (!cleanQuery || cleanQuery.length < 2) return;
+    // Skip if nothing changed since last successful search.
+    const tldsKey = selectedTlds.join(',');
+    if (
+      cleanQuery === lastSearchedRef.current &&
+      tldsKey === lastSearchedTldsRef.current
+    ) {
+      return;
+    }
+    const t = setTimeout(() => {
+      void runSearch(cleanQuery, selectedTlds, { silent: true });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, selectedTlds, summary]);
+
+  // Cancel the in-flight search on unmount.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Explicit search (Enter / button click). Validates loudly, syncs URL.
   const handleSearch = async ({
     syncUrl = false,
     searchValue,
@@ -173,34 +242,7 @@ export function DomainMarketplaceTab({
       toast.error('Select at least one TLD to search');
       return;
     }
-
-    setSearching(true);
-    setResults([]);
-    try {
-      lastAutoSearched.current = cleanQuery;
-      const res = await fetch('/api/domains/market/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: cleanQuery, tlds: selectedTlds }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Domain search failed');
-        return;
-      }
-      const items = (data?.data?.results || []) as SearchResultItem[];
-      setResults(items);
-      if (syncUrl) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('domain', cleanQuery);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-      }
-      if (items.length === 0) toast.info('No results for this query');
-    } catch {
-      toast.error('Domain search failed');
-    } finally {
-      setSearching(false);
-    }
+    await runSearch(cleanQuery, selectedTlds, { silent: false, syncUrl });
   };
 
   // Step 1: open the confirmation dialog
@@ -255,8 +297,8 @@ export function DomainMarketplaceTab({
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel overflow-hidden">
-        <div className="h-px w-full bg-gradient-to-r from-cyan-400/45 via-cyan-300/10 to-transparent" />
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/45 via-[#0095FF]/10 to-transparent" />
         <div className="grid gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/36">
@@ -283,7 +325,7 @@ export function DomainMarketplaceTab({
               <Button
                 onClick={() => void handleSearch({ syncUrl: true })}
                 disabled={isSearchDisabled}
-                className="h-12 shrink-0 rounded-none border border-cyan-400/25 bg-cyan-500/90 px-7 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/25"
+                className="h-12 shrink-0 rounded-none border border-[#0095FF]/30 bg-[#0095FF] px-7 text-sm font-semibold text-white hover:bg-[#0095FF] disabled:bg-white/[0.07] disabled:text-white/25"
               >
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
               </Button>
@@ -292,7 +334,7 @@ export function DomainMarketplaceTab({
             {querySuggestions.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
-                  <Sparkles className="h-3 w-3 text-cyan-300/80" />
+                  <Sparkles className="h-3 w-3 text-[#0095FF]" />
                   Related Searches
                 </span>
                 {querySuggestions.map((suggestion) => (
@@ -305,7 +347,7 @@ export function DomainMarketplaceTab({
                     }}
                     className={`border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       suggestion === normalizedQuery
-                        ? 'border-cyan-400/25 bg-cyan-500/12 text-cyan-200'
+                        ? 'border-[#0095FF]/30 bg-[#0095FF]/[0.10] text-[#82adfb]'
                         : 'border-white/[0.07] bg-white/[0.04] text-white/55 hover:border-white/[0.14] hover:text-white/78'
                     }`}
                   >
@@ -342,7 +384,7 @@ export function DomainMarketplaceTab({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+                <ShieldCheck className="h-3.5 w-3.5 text-[#0095FF]" />
                 Marketplace
               </div>
               <div className="mt-2 text-sm font-medium text-white">
@@ -378,7 +420,7 @@ export function DomainMarketplaceTab({
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="glass-panel overflow-hidden">
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
               <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
                 <h3 className="text-sm font-semibold text-white/92">TLD Filters</h3>
                 <p className="mt-1 text-sm text-white/45">
@@ -481,7 +523,7 @@ export function DomainMarketplaceTab({
               Cancel
             </Button>
             <Button
-              className="rounded-none bg-cyan-500/90 text-slate-950 hover:bg-cyan-400"
+              className="rounded-none bg-[#0095FF] text-white hover:bg-[#0095FF]"
               onClick={() => void handleConfirmPurchase()}
             >
               Confirm Purchase

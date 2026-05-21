@@ -1,16 +1,14 @@
 'use client';
 
-import {
-  Copy,
-  Cpu,
-  HardDrive,
-  MapPin,
-  ShieldCheck,
-  Terminal,
-  Zap,
-} from 'lucide-react';
+import { Copy, Download, FileText, RefreshCw } from 'lucide-react';
 
 import { type ServerActions, type ServerData } from './types';
+
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
+};
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 
 interface VpsOverviewTabProps extends ServerActions {
   server: ServerData;
@@ -24,52 +22,40 @@ interface VpsOverviewTabProps extends ServerActions {
   dailyCost: number;
 }
 
-function SectionTitle({
-  eyebrow,
+// ─── Section header ────────────────────────────────────────────────
+
+function SectionHead({
+  num,
   title,
   description,
+  action,
 }: {
-  eyebrow: string;
+  num: string;
   title: string;
-  description: string;
+  description?: string;
+  action?: { label: string; icon?: React.ReactNode; onClick?: () => void };
 }) {
   return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
-        {eyebrow}
-      </p>
-      <h3 className="mt-2 text-base font-semibold text-white">{title}</h3>
-      <p className="mt-1 text-sm text-white/42">{description}</p>
-    </div>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-  mono,
-  onCopy,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  onCopy?: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-t border-white/[0.04] py-3 first:border-0">
-      <span className="text-[12px] text-white/32">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className={`text-[13px] text-white/78 ${mono ? 'font-mono' : ''}`}>{value}</span>
-        {onCopy && (
-          <button
-            type="button"
-            onClick={onCopy}
-            className="text-white/18 transition-colors hover:text-white/55"
-          >
-            <Copy className="h-3 w-3" />
-          </button>
-        )}
+    <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="flex items-start gap-3.5 min-w-0">
+        <span className={`${MONO} pt-0.5 text-[11px] font-semibold tracking-[0.06em] text-white/35 min-w-[24px]`}>
+          {num}
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold tracking-[-0.015em] text-white mb-0.5">{title}</h3>
+          {description && <p className="text-[12px] text-white/50">{description}</p>}
+        </div>
       </div>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className={`${MONO} inline-flex items-center gap-1.5 h-7 px-2.5 text-[10px] uppercase tracking-[0.12em] text-white/55 hover:text-white border border-white/[0.08] hover:border-white/[0.14] bg-transparent hover:bg-white/[0.03] rounded-[4px] transition-colors shrink-0`}
+        >
+          {action.icon}
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -77,8 +63,6 @@ function InfoRow({
 export function VpsOverviewTab({
   server,
   isRunning,
-  isProvisioning,
-  isFailed,
   isRDP,
   accessCmd,
   memGB,
@@ -86,185 +70,279 @@ export function VpsOverviewTab({
   dailyCost,
   copyToClipboard,
 }: VpsOverviewTabProps) {
-  const quickConnectState = isProvisioning
-    ? 'Available after provisioning finishes.'
-    : isFailed
-      ? 'Unavailable until deployment is recovered.'
-      : isRDP
-        ? 'Use Remote Desktop.'
-        : 'Use SSH directly.';
+  // Parse the SSH command into prompt + cmd + arg pieces
+  const sshParts = (() => {
+    // accessCmd is either "ssh user@ip" or "ip:3389"
+    if (isRDP) return { cmd: '', user: '', host: accessCmd };
+    const m = accessCmd.match(/^ssh\s+(.+)$/);
+    return m ? { cmd: 'ssh', user: '', host: m[1] } : { cmd: 'ssh', user: '', host: accessCmd };
+  })();
 
   return (
-    <div className="space-y-5">
-      <div className="glass-panel overflow-hidden">
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.2fr)_380px]">
-          <div className="px-6 py-6 sm:px-7">
-            <SectionTitle
-              eyebrow="Access"
-              title="Quick access"
-              description={quickConnectState}
-            />
+    <div className="space-y-7">
+      {/* ── 01 · Quick access ─────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="01"
+          title="Quick access"
+          description={
+            isRDP
+              ? 'Connect via Remote Desktop. Use the server password set at provisioning.'
+              : 'SSH into the server. Default user is shown in the command.'
+          }
+          action={{ label: 'Download .pem', icon: <FileText className="h-3 w-3" /> }}
+        />
 
-            <div className="mt-5 flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.08] bg-white/[0.03]">
-                <Terminal className={`h-4 w-4 ${isRunning ? 'text-cyan-300' : 'text-white/35'}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  {isRDP ? 'RDP endpoint' : 'SSH command'}
-                </p>
-                <code className="mt-2 block truncate font-mono text-sm text-white/78">
-                  {accessCmd}
-                </code>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      copyToClipboard(accessCmd, isRDP ? 'RDP address' : 'SSH command')
-                    }
-                    className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-medium text-white/72 transition-colors hover:bg-white/[0.08]"
-                  >
-                    <Copy className="h-3 w-3" />
-                    Copy
-                  </button>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
-                    <ShieldCheck className="h-3 w-3" />
-                    {isRunning ? 'Ready' : 'Waiting'}
-                  </span>
-                </div>
-              </div>
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#08090b] border-b border-white/[0.06]">
+            <div className={`${MONO} flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] font-semibold text-white/55`}>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 6px #4ade80' }} />
+              {isRDP ? 'RDP Endpoint' : 'SSH Command'}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className={`${MONO} text-[10px] uppercase tracking-[0.06em] font-medium text-white/55 hover:text-white px-2.5 py-1 rounded-[4px] hover:bg-white/[0.04] transition-colors`}
+              >
+                Open in terminal
+              </button>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(accessCmd, isRDP ? 'RDP address' : 'SSH command')}
+                className={`${MONO} text-[10px] uppercase tracking-[0.06em] font-medium px-2.5 py-1 rounded-[4px] transition-colors`}
+                style={{ color: ACCENT }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,149,255,0.08)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                Copy
+              </button>
             </div>
           </div>
 
-          <div className="border-t border-white/[0.06] px-6 py-6 xl:border-l xl:border-t-0 sm:px-7">
-            <SectionTitle
-              eyebrow="Profile"
-              title="Instance profile"
-              description="Provisioned capacity and placement."
-            />
-
-            <div className="mt-5 grid gap-y-4">
-              {[
-                {
-                  label: 'Compute',
-                  value: `${server.cpu_cores} vCPU`,
-                  meta: 'Dedicated virtual cores',
-                  icon: Cpu,
-                  tone: 'text-cyan-300',
-                },
-                {
-                  label: 'Memory',
-                  value: `${memGB} GB`,
-                  meta: 'Provisioned RAM',
-                  icon: Zap,
-                  tone: 'text-blue-300',
-                },
-                {
-                  label: 'Storage',
-                  value: `${server.disk_gb} GB`,
-                  meta: 'Attached NVMe',
-                  icon: HardDrive,
-                  tone: 'text-violet-300',
-                },
-                {
-                  label: 'Placement',
-                  value: server.displayRegion || server.region || 'Pending',
-                  meta: `VMID ${server.vmid ?? 'pending'}`,
-                  icon: MapPin,
-                  tone: 'text-emerald-300',
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <div key={item.label}>
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      <Icon className={`h-3.5 w-3.5 ${item.tone}`} />
-                      {item.label}
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-white">{item.value}</div>
-                    <div className="mt-1 text-sm text-white/42">{item.meta}</div>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Body — terminal-style line */}
+          <div className={`${MONO} px-5 py-4 flex items-center gap-2.5 text-[13px]`}>
+            <span style={{ color: ACCENT }}>$</span>
+            {sshParts.cmd && <span className="text-white">{sshParts.cmd}</span>}
+            <span className="text-white/55">{sshParts.host}</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="glass-panel overflow-hidden">
-        <div className="grid gap-0 xl:grid-cols-2">
-          <div className="px-6 py-6 sm:px-7">
-            <SectionTitle
-              eyebrow="Instance"
-              title="Machine details"
-              description="Identity and system metadata."
-            />
+      {/* ── 02 · Instance profile ─────────────────────────── */}
+      <section>
+        <SectionHead
+          num="02"
+          title="Instance profile"
+          description="Capacity, placement, and hardware allocation."
+          action={{ label: 'Resize', icon: <RefreshCw className="h-3 w-3" /> }}
+        />
 
-            <div className="mt-5">
-              <InfoRow
-                label="Hostname"
-                value={server.name}
-                mono
-                onCopy={() => copyToClipboard(server.name, 'Hostname')}
-              />
-              <InfoRow
-                label="Public IP"
-                value={server.ip}
-                mono
-                onCopy={() => copyToClipboard(server.ip, 'IP address')}
-              />
-              <InfoRow label="Operating system" value={server.os} />
-              <InfoRow
-                label="Region"
-                value={server.displayRegion || server.region || 'Unavailable'}
-              />
-              <InfoRow
-                label="Created"
-                value={new Date(server.created_at).toLocaleDateString('en-US', {
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <InfoCell label="Compute" value={String(server.cpu_cores)} unit="vCPU" meta="Virtual cores · shared" />
+          <InfoCell label="Memory" value={String(memGB)} unit="GB" meta="Provisioned RAM" />
+          <InfoCell label="Storage" value={String(server.disk_gb)} unit="GB" meta="NVMe attached" />
+          <InfoCell
+            label="Placement"
+            value={server.displayRegion || server.region || 'Pending'}
+            mono
+            meta={server.vmid ? `VMID ${server.vmid}` : 'Awaiting provision'}
+          />
+        </div>
+      </section>
+
+      {/* ── 03 · Machine ──────────────────────────────────── */}
+      <section>
+        <SectionHead num="03" title="Machine" description="Identity, image, and system metadata." />
+
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+          <DataRow label="Hostname" value={server.name} mono action="Edit" />
+          <DataRow
+            label="Public IPv4"
+            value={server.ip || '—'}
+            mono
+            tag="Static"
+            action="Copy"
+            onAction={() => server.ip && copyToClipboard(server.ip, 'IP address')}
+          />
+          <DataRow
+            label="Operating system"
+            value={server.os}
+            tag="Linux"
+          />
+          <DataRow
+            label="Region"
+            value={server.displayRegion || server.region || 'Unavailable'}
+            tag={server.location ?? undefined}
+          />
+          {server.vmid !== null && server.vmid !== undefined && (
+            <DataRow label="VMID" value={String(server.vmid)} mono action="Copy" />
+          )}
+          <DataRow
+            label="Created"
+            value={new Date(server.created_at).toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          />
+        </div>
+      </section>
+
+      {/* ── 04 · Billing ──────────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="04"
+          title="Billing"
+          description="Rate and estimates. Billed per second since first boot."
+          action={{ label: 'Invoice history', icon: <Download className="h-3 w-3" /> }}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+          {/* Big monthly */}
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-5">
+            <div className="flex items-baseline gap-1 mb-2">
+              <span style={SERIF_STYLE} className="text-[20px] text-white/55 font-medium">$</span>
+              <span
+                style={SERIF_STYLE}
+                className="text-[40px] leading-none text-white font-bold tracking-[-0.035em] tabular-nums"
+              >
+                {monthlyCost.toFixed(2)}
+              </span>
+              <span className={`${MONO} ml-1.5 text-[12px] text-white/45`}>/mo</span>
+            </div>
+            <div className={`${MONO} flex items-center gap-2 text-[11px] text-white/55`}>
+              <span>${(server.hourly_cost || 0).toFixed(3)}/hr</span>
+              <span className="h-[3px] w-[3px] rounded-full bg-white/25" />
+              <span>billed per second</span>
+              {!isRunning && (
+                <>
+                  <span className="h-[3px] w-[3px] rounded-full bg-white/25" />
+                  <span className="text-amber-300/85">paused</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Breakdown */}
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex flex-col justify-between">
+            <BillingLine k="Hourly" v={`$${(server.hourly_cost || 0).toFixed(4)}`} />
+            <BillingLine k="Daily" v={`$${dailyCost.toFixed(2)}`} />
+            {server.billing_start && (
+              <BillingLine
+                k="Billing since"
+                v={new Date(server.billing_start).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'short',
                   day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
                 })}
               />
-            </div>
-          </div>
-
-          <div className="border-t border-white/[0.06] px-6 py-6 xl:border-l xl:border-t-0 sm:px-7">
-            <SectionTitle
-              eyebrow="Billing"
-              title="Billing"
-              description="Rate and estimate."
+            )}
+            <BillingLine
+              k="Next invoice"
+              v={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })}
+              last
             />
-
-            <div className="mt-5">
-              <InfoRow label="Monthly estimate" value={`$${monthlyCost.toFixed(2)} / mo`} />
-              <InfoRow
-                label="Hourly rate"
-                value={`$${server.hourly_cost?.toFixed(4) || '0.0000'} / hr`}
-                mono
-              />
-              <InfoRow label="Daily estimate" value={`$${dailyCost.toFixed(2)} / day`} />
-              {server.billing_start && (
-                <InfoRow
-                  label="Billing since"
-                  value={new Date(server.billing_start).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                />
-              )}
-            </div>
-
-            <p className="mt-4 border-t border-white/[0.04] pt-3 text-sm text-white/40">
-              Usage-based add-ons may bill separately.
-            </p>
           </div>
         </div>
+      </section>
+    </div>
+  );
+}
+
+// ─── Subcomponents ──────────────────────────────────────────────────
+
+function InfoCell({
+  label,
+  value,
+  unit,
+  meta,
+  mono,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  meta: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-1.5">
+      <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>{label}</span>
+      <div className="flex items-baseline gap-0.5">
+        <span
+          style={SERIF_STYLE}
+          className={`text-[22px] leading-none font-bold tabular-nums tracking-[-0.02em] text-white truncate ${mono ? MONO : ''}`}
+        >
+          {value}
+        </span>
+        {unit && <span className={`${MONO} ml-1 text-[11px] text-white/55`}>{unit}</span>}
       </div>
+      <span className={`${MONO} mt-auto text-[10.5px] text-white/40`}>{meta}</span>
+    </div>
+  );
+}
+
+function DataRow({
+  label,
+  value,
+  mono,
+  tag,
+  action,
+  onAction,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tag?: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-[140px_minmax(0,1fr)_auto] gap-3 items-center px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] transition-colors">
+      <span className={`${MONO} text-[10px] uppercase tracking-[0.08em] text-white/40 font-semibold`}>
+        {label}
+      </span>
+      <span className={`text-[12.5px] text-white flex items-center gap-2 min-w-0 ${mono ? MONO : ''}`}>
+        <span className="truncate">{value}</span>
+        {tag && (
+          <span
+            className={`${MONO} shrink-0 normal-case text-[9px] tracking-[0.06em] uppercase font-semibold px-1.5 py-0.5 border border-white/[0.08] bg-[#1a1c23] text-white/55 rounded-[3px]`}
+          >
+            {tag}
+          </span>
+        )}
+      </span>
+      {action ? (
+        <button
+          type="button"
+          onClick={onAction}
+          className={`${MONO} text-[10px] uppercase tracking-[0.08em] font-semibold text-white/45 hover:text-[#0095FF] px-2 py-1 rounded-[3px] hover:bg-[rgba(0,149,255,0.08)] transition-colors inline-flex items-center gap-1`}
+        >
+          {action === 'Copy' && <Copy className="h-2.5 w-2.5" />}
+          {action}
+        </button>
+      ) : (
+        <span />
+      )}
+    </div>
+  );
+}
+
+function BillingLine({ k, v, last }: { k: string; v: string; last?: boolean }) {
+  return (
+    <div
+      className={`${MONO} flex items-center justify-between py-2 text-[11px] ${
+        last ? '' : 'border-b border-dashed border-white/[0.06]'
+      }`}
+    >
+      <span className="text-[10px] uppercase tracking-[0.08em] font-semibold text-white/40">{k}</span>
+      <span className="text-white/85 font-medium">{v}</span>
     </div>
   );
 }

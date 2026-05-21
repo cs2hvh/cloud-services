@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Open_Sans, Nunito, Salsa } from "next/font/google";
+import { Open_Sans, Nunito, Salsa, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
@@ -18,6 +18,13 @@ const nunito = Nunito({
 const salsa = Salsa({
   variable: "--font-salsa",
   weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+// Mono used by the GPU deploy page (mono labels, prices, code spans).
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
 });
@@ -91,7 +98,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable}`}>
         <OfflineBanner />
         {children}
         <Toaster

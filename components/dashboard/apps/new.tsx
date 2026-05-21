@@ -1,7 +1,13 @@
 "use client";
+
+// App deploy wizard — editorial dark surface, Nunito-accent title,
+// 4-step horizontal indicator, single scrolling main column + sticky
+// summary. Brand blue is the only accent. Matches the design language
+// established on the GPU deploy + VPS pages.
+
 import { useState, useEffect, useCallback, useRef } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 import { Tables } from "@/lib/supabase/types";
@@ -16,6 +22,11 @@ import { StepConfigure } from "./new-step-configure";
 import { StepReview } from "./new-step-review";
 import { SummarySidebar } from "./new-summary-sidebar";
 
+// ─── Design tokens (scoped) ──────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface PageProps {
   projects: Tables<"projects">[];
@@ -27,7 +38,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
   // ── Navigation ──────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
-  const progressPct = (currentStep / STEP_META.length) * 100;
 
   // ── Provider ─────────────────────────────────────────────────
   const [gitProviders, setGitProviders] = useState<GitProvider[]>([
@@ -47,7 +57,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [repoSearchTerm, setRepoSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const reposPerPage = 3;
+  const reposPerPage = 5;
 
   // ── Branch ───────────────────────────────────────────────────
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -70,7 +80,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   // ── Derived ──────────────────────────────────────────────────
   const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
   const selectedProviderData = gitProviders.find((p) => p.id === selectedProvider);
-  const activeStepMeta = STEP_META[currentStep - 1];
 
   // ── API: Providers ───────────────────────────────────────────
   const fetchProviderStatus = useCallback(async () => {
@@ -152,7 +161,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       setHasDockerfile(dockerfileDetected);
       if (data.detectedPort) {
         setDetectedPort(data.detectedPort);
-        // Auto-fill detected ports until the user explicitly edits the port.
         if (!userEditedPortRef.current) setContainerPort(data.detectedPort);
       } else {
         setDetectedPort(undefined);
@@ -177,7 +185,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     setBranches([]); setSelectedBranch("");
   }, [selectedProvider, fetchRepositories]);
 
-  // Auto-fill app name ONLY when repo changes (not on branch changes)
   useEffect(() => {
     if (!selectedRepo) return;
     const repo = repositories.find((r) => r.id === selectedRepo);
@@ -211,9 +218,10 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     }
   };
 
-  // Clear port when user manually picks a framework that auto-generates its own Dockerfile
-  // so stale detected ports don't bleed into pipelines that ignore the passed port anyway.
-  const autoDockerfileFrameworks = new Set(["Next.js", "Nuxt.js", "Vite-React", "Vue.js", "Angular", "SvelteKit", "express", "python", "django", "flask", "fastapi", "Node.js"]);
+  const autoDockerfileFrameworks = new Set([
+    "Next.js", "Nuxt.js", "Vite-React", "Vue.js", "Angular", "SvelteKit",
+    "express", "python", "django", "flask", "fastapi", "Node.js",
+  ]);
   const handleFrameworkChange = (v: string) => {
     setFramework(v);
     if (autoDockerfileFrameworks.has(v)) {
@@ -294,172 +302,279 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     } finally { setIsLoading(false); }
   };
 
-  return (
-    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
-      {/* ── Top header / stepper ──────────────────────────────── */}
-      <div className="glass-panel overflow-hidden">
-        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">Application Deployment</p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Deploy repository-backed applications</h1>
-            <p className="mt-2 text-sm leading-6 text-white/48">{activeStepMeta.description}</p>
-          </div>
-          <Image
-            src="/dashboard-services-icons/da application deployment.png"
-            alt=""
-            width={160}
-            height={160}
-            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
-            priority
-            unoptimized
-          />
-        </div>
+  // ── Step completion flags (for the stepper visual) ───────────
+  const stepComplete: Record<number, boolean> = {
+    1: !!selectedProvider,
+    2: !!selectedRepo,
+    3: !!selectedProvider && !!selectedRepo && !!appName && !!framework,
+    4: false, // can't be "complete" — final action lives there
+  };
 
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="mb-3 h-1 w-full overflow-hidden bg-white/[0.05]">
-            <div className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {STEP_META.map((step) => {
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => { if (step.id < currentStep) setCurrentStep(step.id); }}
-                  className={`border px-3 py-3 text-left transition-colors ${isActive ? "border-blue-400/30 bg-blue-500/10" : isCompleted ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]" : "border-white/[0.06] bg-transparent"} ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
-                >
-                  <div className="flex h-full flex-col">
-                    <span className="text-xs font-semibold text-white/32">0{step.id}</span>
-                    <div className="mt-2 flex items-center justify-between gap-2 pt-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">{step.name}</div>
-                        <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-white/40">{step.title}</div>
-                      </div>
-                      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={40} height={40} className="h-10 w-10 object-contain" unoptimized />
-                        {isCompleted && (
-                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+  return (
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/*
+       * Background layer — its own overflow-hidden so the aurora gradients
+       * clip without making the page wrapper a sticky containing block
+       * (which would break the sticky summary).
+       */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
       </div>
 
-      {/* ── Main content + sidebar ──────────────────────────────── */}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div>
-          {currentStep === 1 && (
-            <StepProvider
-              gitProviders={gitProviders}
-              loadingProviders={loadingProviders}
-              selectedProvider={selectedProvider}
-              onSelectProvider={setSelectedProvider}
-              isLoading={isLoading}
-              connectingProvider={connectingProvider}
-              connectionError={connectionError}
-              onConnect={connectProvider}
-              onRefresh={fetchProviderStatus}
-              onNext={handleNext}
-            />
-          )}
-          {currentStep === 2 && (
-            <StepRepository
-              repositories={repositories}
-              loadingRepos={loadingRepos}
-              selectedRepo={selectedRepo}
-              onSelectRepo={setSelectedRepo}
-              selectedProvider={selectedProvider}
-              selectedProviderData={selectedProviderData}
-              repoSearchTerm={repoSearchTerm}
-              onSearchChange={setRepoSearchTerm}
-              currentPage={currentPage}
-              onPageChange={setCurrentPage}
-              reposPerPage={reposPerPage}
-              isLoading={isLoading}
-              onConnect={connectProvider}
-              onRefreshRepos={() => fetchRepositories(selectedProvider)}
-              onPrev={() => setCurrentStep((s) => s - 1)}
-              onNext={handleNext}
-            />
-          )}
-          {currentStep === 3 && (
-            <StepConfigure
-              projects={projects}
-              pricing={pricing}
-              selectedProject={selectedProject}
-              onSelectProject={setSelectedProject}
-              appName={appName}
-              onAppNameChange={setAppName}
-              selectedBranch={selectedBranch}
-              onSelectBranch={setSelectedBranch}
-              branches={branches}
-              loadingBranches={loadingBranches}
-              framework={framework}
-              onFrameworkChange={handleFrameworkChange}
-              detectingFramework={detectingFramework}
-              hasDockerfile={hasDockerfile}
-              containerPort={containerPort}
-              onContainerPortChange={handleContainerPortChange}
-              detectedPort={detectedPort}
-              size={size}
-              onSizeChange={setSize}
-              autoDeploy={autoDeploy}
-              onAutoDeployChange={setAutoDeploy}
-              envVars={envVars}
-              onEnvVarsChange={setEnvVars}
-              selectedRepoData={selectedRepoData}
-              selectedProvider={selectedProvider}
-              onDetectFramework={() => { if (selectedRepoData) detectFramework(selectedProvider, selectedRepoData, selectedBranch); }}
-              onRefreshBranches={() => { if (selectedRepoData) { fetchBranches(selectedProvider, selectedRepoData); detectFramework(selectedProvider, selectedRepoData, selectedBranch); } }}
-              onPrev={() => setCurrentStep((s) => s - 1)}
-              onNext={handleNext}
-            />
-          )}
-          {currentStep === 4 && (
-            <StepReview
-              projects={projects}
-              pricing={pricing}
-              selectedProject={selectedProject}
-              appName={appName}
-              selectedRepoData={selectedRepoData}
-              selectedBranch={selectedBranch}
-              framework={framework}
-              size={size}
-              autoDeploy={autoDeploy}
-              envVars={envVars}
-              containerPort={containerPort}
-              isLoading={isLoading}
-              onPrev={() => setCurrentStep((s) => s - 1)}
-              onSubmit={onSubmit}
-            />
-          )}
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+        {/* Header */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-[44px] sm:text-[52px] leading-[1] tracking-[-0.025em] text-white font-semibold">
+            Deploy{" "}
+            <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              an app
+            </span>
+          </h1>
+          <Link
+            href="/dashboard/services/apps"
+            className={`${MONO} h-9 inline-flex items-center px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] transition-colors`}
+          >
+            Cancel
+          </Link>
         </div>
 
-        <SummarySidebar
-          projects={projects}
-          pricing={pricing}
-          selectedProviderData={selectedProviderData}
-          selectedRepoData={selectedRepoData}
-          selectedBranch={selectedBranch}
-          appName={appName}
-          framework={framework}
-          selectedProject={selectedProject}
-          size={size}
-          autoDeploy={autoDeploy}
-          containerPort={containerPort}
-        />
+        {/* Stepper — per-cell progress line on top, badge left + text right */}
+        <div className="mt-8 mb-8 grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6">
+          {STEP_META.map((step) => (
+            <StepperCell
+              key={step.id}
+              num={step.id}
+              label={step.name}
+              hint={step.title}
+              active={currentStep === step.id}
+              complete={stepComplete[step.id] && currentStep !== step.id}
+              clickable={step.id < currentStep || stepComplete[step.id]}
+              onClick={() => {
+                if (step.id < currentStep || stepComplete[step.id]) setCurrentStep(step.id);
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0">
+            {currentStep === 1 && (
+              <StepProvider
+                gitProviders={gitProviders}
+                loadingProviders={loadingProviders}
+                selectedProvider={selectedProvider}
+                onSelectProvider={setSelectedProvider}
+                isLoading={isLoading}
+                connectingProvider={connectingProvider}
+                connectionError={connectionError}
+                onConnect={connectProvider}
+                onRefresh={fetchProviderStatus}
+                onNext={handleNext}
+              />
+            )}
+            {currentStep === 2 && (
+              <StepRepository
+                repositories={repositories}
+                loadingRepos={loadingRepos}
+                selectedRepo={selectedRepo}
+                onSelectRepo={setSelectedRepo}
+                selectedProvider={selectedProvider}
+                selectedProviderData={selectedProviderData}
+                repoSearchTerm={repoSearchTerm}
+                onSearchChange={setRepoSearchTerm}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                reposPerPage={reposPerPage}
+                isLoading={isLoading}
+                onConnect={connectProvider}
+                onRefreshRepos={() => fetchRepositories(selectedProvider)}
+                onPrev={() => setCurrentStep((s) => s - 1)}
+                onNext={handleNext}
+              />
+            )}
+            {currentStep === 3 && (
+              <StepConfigure
+                projects={projects}
+                pricing={pricing}
+                selectedProject={selectedProject}
+                onSelectProject={setSelectedProject}
+                appName={appName}
+                onAppNameChange={setAppName}
+                selectedBranch={selectedBranch}
+                onSelectBranch={setSelectedBranch}
+                branches={branches}
+                loadingBranches={loadingBranches}
+                framework={framework}
+                onFrameworkChange={handleFrameworkChange}
+                detectingFramework={detectingFramework}
+                hasDockerfile={hasDockerfile}
+                containerPort={containerPort}
+                onContainerPortChange={handleContainerPortChange}
+                detectedPort={detectedPort}
+                size={size}
+                onSizeChange={setSize}
+                autoDeploy={autoDeploy}
+                onAutoDeployChange={setAutoDeploy}
+                envVars={envVars}
+                onEnvVarsChange={setEnvVars}
+                selectedRepoData={selectedRepoData}
+                selectedProvider={selectedProvider}
+                onDetectFramework={() => { if (selectedRepoData) detectFramework(selectedProvider, selectedRepoData, selectedBranch); }}
+                onRefreshBranches={() => { if (selectedRepoData) { fetchBranches(selectedProvider, selectedRepoData); detectFramework(selectedProvider, selectedRepoData, selectedBranch); } }}
+                onPrev={() => setCurrentStep((s) => s - 1)}
+                onNext={handleNext}
+              />
+            )}
+            {currentStep === 4 && (
+              <StepReview
+                projects={projects}
+                pricing={pricing}
+                selectedProject={selectedProject}
+                appName={appName}
+                selectedRepoData={selectedRepoData}
+                selectedBranch={selectedBranch}
+                framework={framework}
+                size={size}
+                autoDeploy={autoDeploy}
+                envVars={envVars}
+                containerPort={containerPort}
+                isLoading={isLoading}
+                onPrev={() => setCurrentStep((s) => s - 1)}
+                onSubmit={onSubmit}
+              />
+            )}
+          </div>
+
+          <SummarySidebar
+            projects={projects}
+            pricing={pricing}
+            selectedProviderData={selectedProviderData}
+            selectedRepoData={selectedRepoData}
+            selectedBranch={selectedBranch}
+            appName={appName}
+            framework={framework}
+            selectedProject={selectedProject}
+            size={size}
+            autoDeploy={autoDeploy}
+            containerPort={containerPort}
+          />
+        </div>
       </div>
     </div>
   );
 };
+
+// ─── Stepper cell ─────────────────────────────────────────────────
+//
+// Per-cell progress line on top + badge-left + label/hint-right.
+// All cells share the same internal layout so they line up perfectly
+// regardless of which one is active. No outer box — the cells sit
+// directly on the page.
+
+function StepperCell({
+  num,
+  label,
+  hint,
+  active,
+  complete,
+  clickable,
+  onClick,
+}: {
+  num: number;
+  label: string;
+  hint: string;
+  active?: boolean;
+  complete?: boolean;
+  clickable?: boolean;
+  onClick: () => void;
+}) {
+  const ACCENT = "#0095FF";
+  const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+  const badgeStyle: React.CSSProperties = active
+    ? {
+        background: ACCENT,
+        color: "#001930",
+        boxShadow: `0 0 0 4px rgba(0,149,255,0.18), 0 0 0 1px ${ACCENT}`,
+      }
+    : complete
+      ? {
+          background: "rgba(0,149,255,0.12)",
+          color: ACCENT,
+          boxShadow: `0 0 0 1px ${ACCENT}`,
+        }
+      : {
+          background: "#111216",
+          color: "rgba(255,255,255,0.4)",
+          boxShadow: "0 0 0 1px rgba(255,255,255,0.08)",
+        };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!clickable && !active}
+      className={`flex flex-col gap-3.5 text-left ${
+        clickable || active ? "cursor-pointer" : "cursor-default"
+      }`}
+    >
+      {/* Top progress line */}
+      <span className="block h-[2px] w-full bg-white/[0.06] relative overflow-hidden">
+        <span
+          className="absolute inset-y-0 left-0 transition-all duration-500"
+          style={{
+            width: active || complete ? "100%" : "0%",
+            background: ACCENT,
+            boxShadow: active ? `0 0 10px rgba(0,149,255,0.5)` : "none",
+          }}
+        />
+      </span>
+
+      {/* Badge + labels row */}
+      <span className="flex items-start gap-3">
+        <span
+          className={`${MONO} h-7 w-7 shrink-0 inline-flex items-center justify-center text-[11px] font-semibold transition-all`}
+          style={badgeStyle}
+        >
+          {complete ? "✓" : String(num).padStart(2, "0")}
+        </span>
+        <span className="min-w-0 flex flex-col">
+          <span
+            className={`text-[13px] font-semibold tracking-[-0.01em] truncate ${
+              active || complete ? "text-white" : "text-white/55"
+            }`}
+          >
+            {label}
+          </span>
+          <span className={`${MONO} text-[10.5px] text-white/35 truncate mt-0.5`}>
+            {hint}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
 
 export default AppDeploymentSelect;

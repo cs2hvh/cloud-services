@@ -46,8 +46,8 @@ function SearchSkeleton({ count }: { count: number }) {
   const rows = Math.min(Math.max(count, 4), 8);
 
   return (
-    <div className="glass-panel overflow-hidden">
-      <div className="h-px w-full bg-gradient-to-r from-cyan-400/35 via-cyan-300/10 to-transparent" />
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+      <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/35 via-[#0095FF]/10 to-transparent" />
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
         <div>
           <div className="h-4 w-28 animate-pulse bg-white/[0.06]" />
@@ -126,7 +126,7 @@ function ResultRow({
     <motion.div
       layout
       className={`grid gap-4 border-t border-white/[0.04] px-5 py-4 first:border-0 md:grid-cols-[minmax(0,1.2fr)_180px_150px] md:items-center sm:px-6 ${
-        item.available ? 'hover:bg-cyan-400/[0.03]' : 'opacity-45'
+        item.available ? 'hover:bg-[#0095FF]/[0.03]' : 'opacity-45'
       } transition-colors`}
     >
       <div className="min-w-0">
@@ -138,7 +138,7 @@ function ResultRow({
           )}
           <span className="truncate font-mono text-sm font-medium text-white">{item.domainName}</span>
           {featured && (
-            <span className="inline-flex items-center gap-1 border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-200">
+            <span className="inline-flex items-center gap-1 border border-[#0095FF]/20 bg-[#0095FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#82adfb]">
               <Sparkles className="h-2.5 w-2.5" />
               Best match
             </span>
@@ -176,7 +176,7 @@ function ResultRow({
             size="sm"
             onClick={() => onRequestPurchase(item.domainName)}
             disabled={requesting}
-            className="h-9 min-w-[124px] rounded-none border border-cyan-400/20 bg-cyan-500/90 px-3 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:border-white/[0.08] disabled:bg-white/[0.06] disabled:text-white/30"
+            className="h-9 min-w-[124px] rounded-none border border-[#0095FF]/20 bg-[#0095FF] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#0095FF] disabled:border-white/[0.08] disabled:bg-white/[0.06] disabled:text-white/30"
           >
             {requesting ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -250,10 +250,10 @@ export function SearchResults({
 
   if (results.length === 0) {
     return (
-      <div className="glass-panel overflow-hidden">
-        <div className="h-px w-full bg-gradient-to-r from-cyan-400/30 via-cyan-300/5 to-transparent" />
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/30 via-[#0095FF]/5 to-transparent" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-          <Globe className="mb-3 h-7 w-7 text-cyan-300/50" />
+          <Globe className="mb-3 h-7 w-7 text-[#0095FF]/50" />
           <p className="text-sm font-medium text-white/72">Search for a domain</p>
           <p className="mt-1 max-w-sm text-sm leading-6 text-white/38">
             Start with a keyword or full domain to compare domain groups, pricing, and best matches.
@@ -264,8 +264,8 @@ export function SearchResults({
   }
 
   return (
-    <div className="glass-panel overflow-hidden">
-      <div className="h-px w-full bg-gradient-to-r from-cyan-400/35 via-cyan-300/10 to-transparent" />
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+      <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/35 via-[#0095FF]/10 to-transparent" />
       <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/34">

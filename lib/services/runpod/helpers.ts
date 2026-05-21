@@ -42,36 +42,45 @@ export function computeResalePerHour(args: {
 }
 
 /**
- * GraphQL gpuTypes query for stock + price.
- * We issue one query per cloudType per worker tick; results are joined to
- * gpu_catalog in the inventory operation.
+ * GraphQL gpuTypes query for stock + price across the standard pod sizes
+ * RunPod offers (1, 2, 4, 8). One query per cloudType per worker tick;
+ * aliased so we can detect which counts are actually available — RunPod's
+ * lowestPrice.availableGpuCounts is often null, so we probe explicitly.
  */
+// RunPod's machine SKUs come in non-power-of-two sizes (some flagships expose
+// 3, 5, 6, 7, 9× configurations). We probe every integer from 1 to 10 plus
+// a couple of common higher counts, so the UI mirrors RunPod's "X max"
+// indicator accurately.
+export const PROBED_GPU_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
 export function buildGpuTypesQuery(
-    gpuCount: number,
     secureCloud: boolean
 ): {
     query: string;
     variables: Record<string, unknown>;
 } {
+    const probes = PROBED_GPU_COUNTS.map(
+        (n) => `
+                    p${n}: lowestPrice(input: { gpuCount: ${n}, secureCloud: $secureCloud }) {
+                        stockStatus
+                        availableGpuCounts
+                        uninterruptablePrice
+                        minimumBidPrice
+                    }`
+    ).join("");
     return {
         query: `
-            query GpuTypes($gpuCount: Int!, $secureCloud: Boolean!) {
+            query GpuTypes($secureCloud: Boolean!) {
                 gpuTypes {
                     id
                     displayName
                     memoryInGb
                     secureCloud
-                    communityCloud
-                    lowestPrice(input: { gpuCount: $gpuCount, secureCloud: $secureCloud }) {
-                        stockStatus
-                        availableGpuCounts
-                        uninterruptablePrice
-                        minimumBidPrice
-                    }
+                    communityCloud${probes}
                 }
             }
         `,
-        variables: { gpuCount, secureCloud },
+        variables: { secureCloud },
     };
 }
 
@@ -152,17 +161,28 @@ export function inferSortOrder(runpodId: string, memoryInGb: number): number {
 }
 
 /**
- * Normalize the availableGpuCounts array from RunPod, accounting for the
- * common case where the field is null/empty but stock_status indicates
- * inventory is present. In that case we default to [1] so the UI can at least
- * offer a single-GPU pod.
+ * Merge availability signals from a multi-probe RunPod response.
+ *
+ * For each probed gpuCount we receive a `lowestPrice` block. We treat a
+ * non-"none" stockStatus at probe N as "N GPUs available". We also union in
+ * whatever RunPod hints at via `availableGpuCounts` (often null but
+ * occasionally populated for older GPUs). Result is a sorted, deduped list.
  */
-export function normalizeAvailableCounts(
-    raw: number[] | null | undefined,
-    stockStatus: ReturnType<typeof normalizeStockStatus>
+export function mergeAvailableCounts(
+    probes: Array<{
+        gpuCount: number;
+        stockStatus: StockStatus;
+        availableGpuCounts: number[] | null;
+    }>
 ): number[] {
-    if (Array.isArray(raw) && raw.length > 0) {
-        return raw.filter((n) => Number.isInteger(n) && n > 0 && n <= 64);
+    const counts = new Set<number>();
+    for (const p of probes) {
+        if (p.stockStatus !== "none") counts.add(p.gpuCount);
+        if (Array.isArray(p.availableGpuCounts)) {
+            for (const n of p.availableGpuCounts) {
+                if (Number.isInteger(n) && n > 0 && n <= 64) counts.add(n);
+            }
+        }
     }
-    return stockStatus === "none" ? [] : [1];
+    return Array.from(counts).sort((a, b) => a - b);
 }

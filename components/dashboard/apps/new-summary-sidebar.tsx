@@ -1,23 +1,13 @@
 "use client";
-import { Separator } from "@/components/ui/separator";
-// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Tables } from "@/lib/supabase/types";
 import { GitProvider, Repository, PricingRates, instanceSizeConfigs } from "./new-types";
 
-function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="flex items-center gap-2">
-        {icon && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
-        )}
-        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
-      </div>
-      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
-    </div>
-  );
-}
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
 
 interface Props {
   projects: Tables<"projects">[];
@@ -44,60 +34,128 @@ export function SummarySidebar({
       ? projects.find((p) => p.id === selectedProject)?.name ?? "Assigned"
       : null;
 
+  const isDraft = !selectedRepoData || !appName || !framework;
+
   return (
-    <div className="glass-panel overflow-hidden lg:sticky lg:top-8">
-      <div className="border-b border-white/[0.06] px-6 py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
-        <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
-      </div>
-
-      <div className="px-6 py-4">
-          <div className="space-y-0.5">
-            <SummaryRow icon="/dashboard-icons/provider.png" label="Git provider" value={selectedProviderData?.name ?? "—"} empty={!selectedProviderData} />
-            <SummaryRow icon="/dashboard-icons/repository.png" label="Repository" value={selectedRepoData?.name ?? "—"} empty={!selectedRepoData} />
-            <SummaryRow label="Branch" value={(selectedBranch || selectedRepoData?.defaultBranch) ?? "—"} empty={!(selectedBranch || selectedRepoData?.defaultBranch)} />
-            <SummaryRow icon="/dashboard-icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
-            <SummaryRow icon="/dashboard-icons/apptype.png" label="Framework" value={framework || "—"} empty={!framework} />
-            {containerPort !== undefined && (
-              <SummaryRow label="Port" value={String(containerPort)} />
-            )}
-          </div>
-
-          <div className="my-3 border-t border-white/[0.05]" />
-
-          <div className="space-y-0.5">
-            <SummaryRow icon="/dashboard-icons/plan-1.png" label="Instance" value={`${size.charAt(0).toUpperCase()}${size.slice(1)} / ${sizeConfig.cpu} CPU / ${sizeConfig.ram} RAM`} />
-            <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
-            {projectName && (
-              <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projectName} />
-            )}
-          </div>
-
-          <Separator className="my-4 bg-white/[0.08]" />
-
-          <div className="border border-blue-400/20 bg-blue-500/10 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-200/75">Estimated cost</p>
-            {sizePrice?.price && sizePrice.price > 0 ? (
-              <>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  ${sizePrice.price.toFixed(2)}
-                  <span className="ml-1 text-sm font-normal text-white/45">/mo</span>
-                </div>
-                <p className="mt-1 text-xs text-white/50">
-                  {sizePrice.hourlyRate > 0 ? `$${sizePrice.hourlyRate.toFixed(4)}/hour` : "Billed hourly on usage."}
-                </p>
-                {(sizePrice.initialCost ?? 0) > 0 && (
-                  <p className="mt-1.5 text-xs text-white/45">+ ${sizePrice.initialCost.toFixed(2)} one-time setup</p>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="mt-2 text-2xl font-semibold text-emerald-300">Free</div>
-                <p className="mt-1 text-xs text-white/45">Included in current platform profile.</p>
-              </>
-            )}
-          </div>
+    <aside className="border border-white/[0.06] bg-[#0d0e11] xl:sticky xl:top-6 xl:self-start">
+      {/* Header */}
+      <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
+        <div className="min-w-0">
+          <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35`}>
+            Configuration
+          </p>
+          <h3 className="mt-1 text-[15px] font-semibold tracking-[-0.01em] text-white">
+            Your{" "}
+            <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              deployment
+            </span>
+          </h3>
         </div>
+        <span
+          className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold`}
+          style={{ color: isDraft ? ACCENT : "#34d399" }}
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{
+              background: isDraft ? ACCENT : "#34d399",
+              boxShadow: isDraft ? `0 0 6px ${ACCENT}` : "0 0 6px #34d399",
+            }}
+          />
+          {isDraft ? "Draft" : "Ready"}
+        </span>
+      </header>
+
+      {/* Detail rows */}
+      <div className="px-5 py-3">
+        <SumRow label="Provider" value={selectedProviderData?.name} />
+        <SumRow
+          label="Repository"
+          value={selectedRepoData?.name}
+          mono
+        />
+        <SumRow
+          label="Branch"
+          value={selectedBranch || selectedRepoData?.defaultBranch}
+          mono
+        />
+        <SumRow label="Framework" value={framework} />
+        <SumRow label="App name" value={appName} mono />
+        {containerPort !== undefined && (
+          <SumRow label="Port" value={String(containerPort)} mono />
+        )}
+        <SumRow
+          label="Instance"
+          value={`${size.charAt(0).toUpperCase()}${size.slice(1)} · ${sizeConfig.cpu} vCPU · ${sizeConfig.ram}`}
+        />
+        <SumRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual"} />
+        {projectName && <SumRow label="Project" value={projectName} />}
       </div>
+
+      {/* Cost block */}
+      <div className="border-t border-white/[0.06] bg-[#08090b] px-5 py-4">
+        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35 mb-2`}>
+          Estimated cost
+        </p>
+        {sizePrice?.price && sizePrice.price > 0 ? (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span style={SERIF_STYLE} className="text-[18px] text-white/55 font-medium">$</span>
+              <span style={SERIF_STYLE} className="text-[34px] leading-none text-white font-bold tracking-[-0.03em] tabular-nums">
+                {sizePrice.price.toFixed(2)}
+              </span>
+              <span className={`${MONO} ml-1.5 text-[11px] text-white/45`}>/mo</span>
+            </div>
+            <p className={`${MONO} mt-2 text-[10.5px] text-white/45`}>
+              {sizePrice.hourlyRate > 0
+                ? `$${sizePrice.hourlyRate.toFixed(4)}/hr · billed by usage`
+                : "Billed hourly on usage"}
+            </p>
+            {(sizePrice.initialCost ?? 0) > 0 && (
+              <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>
+                + ${sizePrice.initialCost.toFixed(2)} one-time setup
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <span style={SERIF_STYLE} className="text-[28px] leading-none text-emerald-300 font-bold">
+              Free
+            </span>
+            <p className={`${MONO} mt-2 text-[10.5px] text-white/45`}>
+              Included in current platform profile
+            </p>
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+// ─── Subcomponents ──────────────────────────────────────────────
+
+function SumRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+}) {
+  const empty = !value;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-dashed border-white/[0.06] last:border-b-0">
+      <span className={`${MONO} text-[10.5px] uppercase tracking-[0.04em] text-white/40`}>
+        {label}
+      </span>
+      <span
+        className={`text-[11.5px] text-right truncate max-w-[180px] ${mono ? MONO : ""} ${
+          empty ? "text-white/25 italic" : "text-white/85"
+        }`}
+      >
+        {empty ? "—" : value}
+      </span>
+    </div>
   );
 }

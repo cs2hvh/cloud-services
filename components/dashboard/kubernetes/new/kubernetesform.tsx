@@ -1,57 +1,31 @@
 "use client";
-import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
+
+// Kubernetes cluster create page — single-page editorial layout matching
+// the rest of the dashboard (aurora canvas, dotted grid, Nunito accent
+// title, mono labels, brand-blue accent, sharp surfaces, sticky right
+// summary with Nunito-bold price). All wiring (state, validation,
+// submit) preserved from the original multi-step wizard.
+
 import { useEffect, useMemo, useState } from "react";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  ChevronRight,
-  Cpu,
-  //   Database,
-  HardDrive,
-  Loader2,
-  //   MapPin,
-  Server,
-  Box,
-} from "lucide-react";
-import Image from "next/image";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
-import { toast } from "sonner";
-// import { formatPrice } from "@/lib/utils";
-import { Tables } from "@/lib/supabase/types";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-// import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-// import { Progress } from "@/components/ui/progress";
-// import { Icons } from "@/components/ui/icons";
-import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
-// import axios from "axios";
-// import { headers } from "next/headers";
-// import { Json } from "@/lib/supabase/types";
-// import { stat } from "fs";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import z from "zod";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// import { Clusters } from "@/lib/supabase/queries";
-// import { send } from "process";
+
+import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
+import { Tables } from "@/lib/supabase/types";
+import api from "@/lib/axios/axios";
+
+// ─── Design tokens (scoped) ────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+const BORDER_ACCENT = "rgba(0,149,255,0.4)";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
 
 interface PageProps {
   locations: Tables<"locations">[];
@@ -60,46 +34,16 @@ interface PageProps {
   clusters: Tables<"clusters_get">[];
   products: Tables<"products">[];
   role?: "user" | "admin";
-  allUsers?: Array<{
-    id: string;
-    email: string;
-    username?: string;
-  }>;
+  allUsers?: Array<{ id: string; email: string; username?: string }>;
 }
 
 type K8sCpuType = "shared" | "dedicated" | "gpu";
 
-const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
-  shared: {
-    label: "Shared CPU",
-    description: "Cost-effective shared vCPU plans for development, staging, and lighter workloads.",
-  },
-  dedicated: {
-    label: "Dedicated CPU",
-    description: "Dedicated vCPU plans for production traffic requiring consistent performance.",
-  },
-  gpu: {
-    label: "GPU",
-    description: "GPU-accelerated instances for AI/ML, rendering, and compute-heavy tasks.",
-  },
-};
-
-const K8S_MACHINE_TYPES: Record<K8sCpuType, { value: string; label: string }[]> = {
-  shared: [
-    { value: "basic", label: "Basic" },
-    { value: "premium-intel", label: "Premium Intel" },
-    { value: "premium-amd", label: "Premium AMD" },
-  ],
-  dedicated: [
-    { value: "general-purpose", label: "General Purpose" },
-    { value: "cpu-optimized", label: "CPU-Optimized" },
-    { value: "memory-optimized", label: "Memory-Optimized" },
-    { value: "storage-optimized", label: "Storage-Optimized" },
-  ],
-  gpu: [
-    { value: "gpu", label: "GPU Droplet" },
-  ],
-};
+const CPU_TYPES: { value: K8sCpuType; label: string }[] = [
+  { value: "shared", label: "Shared CPU" },
+  { value: "dedicated", label: "Dedicated CPU" },
+  { value: "gpu", label: "GPU" },
+];
 
 function getProductCpuType(product: Tables<"products">): K8sCpuType {
   const cpuType = (product as { cpu_type?: string }).cpu_type;
@@ -109,11 +53,7 @@ function getProductCpuType(product: Tables<"products">): K8sCpuType {
   return "shared";
 }
 
-function getProductMachineType(product: Tables<"products">): string {
-  return (product as { machine_type?: string }).machine_type || "basic";
-}
-
-const NewClusterPage = ({
+const NewClusterForm = ({
   locations,
   projects,
   userId,
@@ -123,1390 +63,826 @@ const NewClusterPage = ({
   allUsers = [],
 }: PageProps) => {
   const router = useRouter();
-  // const planValue: string = "";
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [currentStep, setCurrentStep] = useState<number>(role === "admin" ? 0 : 1);
-  const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
-  const [validationErrors, setValidationErrors] = useState<{
-    name?: string;
-    nodes?: string;
-    user?: string;
-    plan?: string;
-    version?: string;
-    project?: string;
-  }>({
-    name: undefined,
-    nodes: undefined,
-    user: undefined,
-    plan: undefined,
-    version: undefined,
-    project: undefined,
-  });
-  //we need to make plan dynamic
-  // const [availablePlans] = useState([
-  //   {
-  //     planId: "Shared",
-  //     label: "s-1vcpu-1gb-amd",
-  //     ram: 1,
-  //     cpu: 1,
-  //     storage: 25,
-  //     processor: "amd",
-  //   },
-  //   {
-  //     planId: "Shared",
-  //     label: "s-2vcpu-2gb-amd",
-  //     ram: 2,
-  //     cpu: 1,
-  //     storage: 25,
-  //   },
-  //   {
-  //     planId: "Shared",
-  //     label: "s-2vcpu-4gb-amd",
-  //     ram: 4,
-  //     cpu: 2,
-  //     storage: 25,
-  //   },
-  // ]);
 
-  const [state, setState] = useState({
-    selectedUser: role === "admin" ? "" : userId,
-    userSearchQuery: "",
-    selectedPlan: "", // Selected database product
-    selectedName: "", // Cluster name
-    selectedNode: 0, // Number of nodes
-    selectedVersion: "", // Selected version
-    selectedLocation: "", // Selected location
-    selectedDbType: "", // Selected database type (mysql, mongodb, etc.)
-    selectedProject: "", // Selected project (if applicable)
-    versions: ["1.31.1"] as string[], // Available versions
-  });
+  // ─── State ────────────────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
+  const [selectedUser, setSelectedUser] = useState<string>(role === "admin" ? "" : userId);
+  const [userSearch, setUserSearch] = useState("");
+  const [clusterName, setClusterName] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState("1.31.1");
+  const [nodeCount, setNodeCount] = useState(3);
   const [selectedCpuType, setSelectedCpuType] = useState<K8sCpuType>("shared");
-  const [selectedMachineType, setSelectedMachineType] = useState<string>("basic");
+  const [selectedPlan, setSelectedPlan] = useState("");
+  const [selectedProject, setSelectedProject] = useState("");
 
-  // Filter products by selected cpu type and machine type
+  const versions = ["1.31.1", "1.30.4", "1.29.8"];
+
+  // ─── Derived ──────────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const productCpu = getProductCpuType(product);
-      const productMachine = getProductMachineType(product);
-      return productCpu === selectedCpuType && productMachine === selectedMachineType;
-    }).sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-  }, [products, selectedCpuType, selectedMachineType]);
+    return products
+      .filter((p) => getProductCpuType(p) === selectedCpuType)
+      .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+  }, [products, selectedCpuType]);
 
-  // Filter users based on search query
-  const filteredUsers = allUsers.filter(
-    (user) =>
-      !state.userSearchQuery ||
-      user.email.toLowerCase().includes(state.userSearchQuery.toLowerCase()) ||
-      (user.username &&
-        user.username.toLowerCase().includes(state.userSearchQuery.toLowerCase())) ||
-      user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
+  const selectedProductObj = useMemo(
+    () => products.find((p) => p.name === selectedPlan) ?? null,
+    [products, selectedPlan]
   );
 
-  // Filter projects based on selected user in admin mode
+  const filteredUsers = useMemo(
+    () =>
+      allUsers.filter(
+        (u) =>
+          !userSearch ||
+          u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+          (u.username && u.username.toLowerCase().includes(userSearch.toLowerCase()))
+      ),
+    [allUsers, userSearch]
+  );
+
   const filteredProjects = useMemo(() => {
     if (role === "admin") {
-      if (!state.selectedUser) {
-        return [];
-      }
-      return projects.filter((project) => project.owner === state.selectedUser);
+      if (!selectedUser) return [];
+      return projects.filter((p) => p.owner === selectedUser);
     }
     return projects;
-  }, [projects, role, state.selectedUser]);
+  }, [projects, role, selectedUser]);
 
-  // Keep selected project valid when user selection changes
   useEffect(() => {
-    if (!state.selectedProject) {
-      return;
+    if (selectedProject && !filteredProjects.some((p) => p.id === selectedProject)) {
+      setSelectedProject("");
     }
+  }, [filteredProjects, selectedProject]);
 
-    const isProjectAvailable = filteredProjects.some(
-      (project) => project.id === state.selectedProject
-    );
-
-    if (!isProjectAvailable) {
-      setState((prev) => ({ ...prev, selectedProject: "" }));
+  useEffect(() => {
+    if (selectedPlan && !filteredProducts.some((p) => p.name === selectedPlan)) {
+      setSelectedPlan("");
     }
-  }, [filteredProjects, state.selectedProject]);
+  }, [filteredProducts, selectedPlan]);
 
-  // Handle user selection
-  const handleUserSelect = (selectedUserId: string) => {
-    setState((prev) => ({
-      ...prev,
-      selectedUser: selectedUserId,
-      selectedProject: projects.some(
-        (project) =>
-          project.id === prev.selectedProject && project.owner === selectedUserId
-      )
-        ? prev.selectedProject
-        : "",
-    }));
-    if (validationErrors.user || validationErrors.project) {
-      setValidationErrors({ ...validationErrors, user: "", project: undefined });
-    }
-  };
-
-  const validateUser = (selectedUser: string): string => {
-    if (role === "admin" && !selectedUser) {
-      return "User selection is required";
-    }
-    return "";
-  };
-
-  const handleNextStep = () => {
-    // Validate user on step 0 (admin only)
-    if (currentStep === 0 && role === "admin") {
-      const userError = validateUser(state.selectedUser || "");
-      if (userError) {
-        setValidationErrors({ ...validationErrors, user: userError });
-        toast.error(userError);
-        return;
-      } else {
-        setValidationErrors({ ...validationErrors, user: "" });
-      }
-    }
-
-    if (currentStep === 1) {
-      try {
-        // debugger
-        //check if cluster name already exists
-        //const clusters = await Clusters.get_by_owner(userId);
-        if (state.selectedName.length > 20) {
-          setValidationErrors((prev) => ({
-            ...prev,
-            name: "Cluster name must not exceed 20 characters",
-          }));
-          return;
-        }
-        const clusterExists = clusters?.some(
-          (cluster) => cluster.cluster_name === state.selectedName
-        );
-        if (clusterExists) {
-          setValidationErrors((prev) => ({
-            ...prev,
-            name: "Cluster name already exists",
-          }));
-          return;
-        }
-
-        kubernetesClusterSchema.shape.name.parse(state.selectedName);
-        setValidationErrors((prev) => ({ ...prev, name: undefined }));
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          setValidationErrors((prev) => ({
-            ...prev,
-            name: error.errors[0].message,
-          }));
-          return;
-        }
-      }
-    }
-
-    if (currentStep === 2) {
-      if (!state.selectedLocation) {
-        toast.error("Please select a location");
-        return;
-      }
-    }
-
-    if (currentStep === 3) {
-      try {
-        kubernetesClusterSchema.shape.nodes.parse(state.selectedNode);
-        setValidationErrors((prev) => ({ ...prev, nodes: undefined }));
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          setValidationErrors((prev) => ({
-            ...prev,
-            nodes: error.errors[0].message,
-          }));
-          return;
-        }
-      }
-    }
-
-    if (currentStep === 4) {
-      if (!state.selectedPlan) {
-        setValidationErrors((prev) => ({
-          ...prev,
-          plan: "Please select a plan",
-        }));
-        toast.error("Please select a plan");
-        return;
-      }
-      setValidationErrors((prev) => ({ ...prev, plan: undefined }));
-    }
-
-    if (currentStep === 5) {
-      if (!state.selectedVersion) {
-        setValidationErrors((prev) => ({
-          ...prev,
-          version: "Please select a version",
-        }));
-        toast.error("Please select a version");
-        return;
-      }
-      setValidationErrors((prev) => ({ ...prev, version: undefined }));
-    }
-
-    if (currentStep === 6) {
-      if (!state.selectedProject) {
-        setValidationErrors((prev) => ({
-          ...prev,
-          project: "Please select a project",
-        }));
-        toast.error("Please select a project");
-        return;
-      }
-      setValidationErrors((prev) => ({ ...prev, project: undefined }));
-    }
-
-    // Continue with existing step logic
-    if (currentStep < 7) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handlePrevStep = () => {
-    const minStep = role === "admin" ? 0 : 1;
-    if (currentStep > minStep) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const onSubmit = async () => {
-    if (!termsAccepted) {
-      toast.error("Please accept the terms of service and privacy policy");
-      return;
-    }
-
-    const targetUserId = role === "admin" ? state.selectedUser : userId;
-    if (!targetUserId) {
-      toast.error("Invalid user selection");
-      return;
-    }
-
+  // ─── Validation ───────────────────────────────────────────────
+  const nameStatus = useMemo(() => {
+    if (!clusterName.trim()) return { ok: false, msg: "Required" };
+    if (clusterName.length > 20) return { ok: false, msg: "Max 20 chars" };
+    if (clusters?.some((c) => c.cluster_name === clusterName))
+      return { ok: false, msg: "Already exists" };
     try {
-     // debugger;
-      setIsLoading(true);
-      if (
-        !state.selectedNode ||
-        !state.selectedName ||
-        !state.selectedVersion ||
-        !state.selectedLocation ||
-        !state.selectedProject
-      ) {
-        toast.error("Please fill in all the required fields");
-        return;
-      }
+      kubernetesClusterSchema.shape.name.parse(clusterName);
+      return { ok: true, msg: "Available" };
+    } catch (e) {
+      if (e instanceof z.ZodError) return { ok: false, msg: e.errors[0].message };
+      return { ok: false, msg: "Invalid" };
+    }
+  }, [clusterName, clusters]);
 
-      const selectedProduct = products.find(
-        (product) => product.name === state.selectedPlan
-      );
-      if (!selectedProduct || !selectedProduct.slug) {
-        toast.error("Please select a valid plan");
-        return;
-      }
+  const valid = {
+    user: role === "admin" ? !!selectedUser : true,
+    name: nameStatus.ok,
+    location: !!selectedLocation,
+    version: !!selectedVersion,
+    nodes: nodeCount >= 1 && nodeCount <= 10,
+    plan: !!selectedPlan,
+    project: !!selectedProject,
+  };
+  const allValid = Object.values(valid).every(Boolean);
+  const canSubmit = allValid && termsAccepted && !isLoading;
 
+  // ─── Cost calculation ─────────────────────────────────────────
+  const planMonthly = selectedProductObj?.price ?? 0;
+  const nodesMonthly = planMonthly * nodeCount;
+  const totalMonthly = nodesMonthly; // (no HA add-on wired yet)
+  const totalHourly = totalMonthly / 730;
+
+  // ─── Submit ───────────────────────────────────────────────────
+  const onSubmit = async () => {
+    if (!canSubmit) {
+      if (!termsAccepted) {
+        toast.error("Please accept the terms of service");
+      } else {
+        toast.error("Complete every section before deploying");
+      }
+      return;
+    }
+    const targetUserId = role === "admin" ? selectedUser : userId;
+    if (!targetUserId || !selectedProductObj?.slug) {
+      toast.error("Invalid selection");
+      return;
+    }
+    setIsLoading(true);
+    try {
       const response = await api.post("/services/kubernetes/clusters/init", {
-        name: state.selectedName,
-        region: state.selectedLocation,
-        version: state.selectedVersion,
-        nodeCount: state.selectedNode,
-        size: selectedProduct.slug,
+        name: clusterName,
+        region: selectedLocation,
+        version: selectedVersion,
+        nodeCount,
+        size: selectedProductObj.slug,
         ownerId: targetUserId,
-        projectId: state.selectedProject,
-        planId: selectedProduct.id,
+        projectId: selectedProject,
+        planId: selectedProductObj.id,
         resources: {
-          cpu: selectedProduct.resources.cpu,
-          ram: selectedProduct.resources.ram,
-          storage: selectedProduct.resources.storage,
+          cpu: selectedProductObj.resources.cpu,
+          ram: selectedProductObj.resources.ram,
+          storage: selectedProductObj.resources.storage,
         },
       });
-      const settledResponse = response as typeof response & {
+      const settled = response as typeof response & {
         error?: unknown;
-        data?: { message?: string; clusterId?: string; balance?: number; required?: number };
+        data?: { message?: string; clusterId?: string };
       };
-
-      if (settledResponse.error) {
-        return;
-      }
-
-      if (settledResponse.status === 200) {
-        toast.info("Kubernetes Cluster Creation started.");
+      if (settled.error) return;
+      if (settled.status === 200) {
+        toast.info("Kubernetes cluster creation started");
         if (role === "admin") {
-          router.push('/dashboard/admin/kubernetes');
+          router.push("/dashboard/admin/kubernetes");
         } else {
-          const newClusterId = settledResponse.data?.clusterId;
-          if (!newClusterId) {
-            toast.error("Cluster created but ID missing — check dashboard.");
-            router.push('/dashboard/services/kubernetes');
-          } else {
-            router.push(
-              `/dashboard/services/kubernetes/clusters/${encodeURIComponent(newClusterId)}`
-            );
-          }
+          const id = settled.data?.clusterId;
+          router.push(
+            id
+              ? `/dashboard/services/kubernetes/clusters/${encodeURIComponent(id)}`
+              : "/dashboard/services/kubernetes"
+          );
         }
         return;
       }
-
-      toast.error(
-        settledResponse.data?.message || "Failed to initialize cluster.",
-      );
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.log(err.message, "...........................47");
-        toast.error(err.message || "Failed to initialize cluster.");
-      } else {
-        toast.error("Failed to initialize cluster.");
-      }
+      toast.error(settled.data?.message || "Failed to initialize cluster");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to initialize cluster");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const {
-    selectedUser,
-    userSearchQuery,
-    selectedName,
-    selectedNode,
-    selectedVersion,
-    selectedLocation,
-    // selectedDbType,
-    versions,
-    selectedProject,
-    selectedPlan,
-  } = state;
-
-  //const selectedDatabase = products?.find((db) => db.id === selectedDb);
-  // const selectedLocationData = locations?.find(
-  //   (location) => location.short === selectedLocation
-  // );
-
-  const steps = role === "admin" 
-    ? [
-        { id: 0, name: "User",     iconSrc: "/dashboard-icons/users-and-dbs.png" },
-        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
-      ]
-    : [
-        { id: 1, name: "Name",     iconSrc: "/dashboard-icons/name.png" },
-        { id: 2, name: "Location", iconSrc: "/dashboard-icons/location.png" },
-        { id: 3, name: "Number",   iconSrc: "/dashboard-icons/number.png" },
-        { id: 4, name: "Plan",     iconSrc: "/dashboard-icons/plan-1.png" },
-        { id: 5, name: "Version",  iconSrc: "/dashboard-icons/versioning.png" },
-        { id: 6, name: "Project",  iconSrc: "/dashboard-icons/project-1.png" },
-        { id: 7, name: "Payment",  iconSrc: "/dashboard-icons/payment.png" },
-      ];
-
-  const panelClassName = "glass-panel overflow-hidden";
-
-  function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
-    return (
-      <div className="flex items-center justify-between gap-4 py-2">
-        <div className="flex items-center gap-2">
-          {icon && (
-            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
-          )}
-          <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
-        </div>
-        <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
-      </div>
-    );
-  }
-  const wizardStartStep = role === "admin" ? 0 : 1;
-  const progressStep = currentStep - wizardStartStep + 1;
-  const progressPercentage = (progressStep / steps.length) * 100;
-  const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
-  // const totalNodes = Math.max(selectedNode + 1, 1);
-  // const planMonthlyRate =
-  //   typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
-  // const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
-  const nodePresets = [1, 2, 3, 5];
-  const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
-
-  // Use predefined database types
-  //   const dbTypes = Object.keys(databaseInfo);
-
+  // ─── Render ───────────────────────────────────────────────────
   return (
-    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
-      <div className={panelClassName}>
-        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <Link
-              href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
-              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
-            >
-              <ArrowLeft size={16} className="mr-2" />
-              Back to clusters
-            </Link>
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-              Kubernetes Provisioning
-            </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Create a managed Kubernetes cluster with clearer sizing and deployment controls.
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-              Move through cluster identity, region, node count, plan sizing, version, project assignment, and final review in a cleaner enterprise flow.
-            </p>
-          </div>
-          <Image
-            src="/dashboard-services-icons/da kuubernetes.png"
-            alt=""
-            width={160}
-            height={160}
-            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
-            priority
-            unoptimized
-          />
-        </div>
-
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
-
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
-            {steps.map((step) => {
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => {
-                    if (step.id < currentStep) {
-                      setCurrentStep(step.id);
-                    }
-                  }}
-                  className={`border px-3 py-3 text-left transition-colors ${
-                    isActive
-                      ? "border-blue-400/30 bg-blue-500/10"
-                      : isCompleted
-                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                        : "border-white/[0.06] bg-transparent"
-                  } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
-                >
-                  <div className="flex flex-col h-full">
-                    <span className="text-xs font-semibold text-white/32">0{step.id}</span>
-                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
-                      <div className="text-sm font-semibold text-white">{step.name}</div>
-                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
-                        {isCompleted && (
-                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background layer */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)" }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+        {/* Back link */}
+        <Link
+          href="/dashboard/services/kubernetes"
+          className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors mb-5`}
+        >
+          ← Back to clusters
+        </Link>
 
-        <div className="space-y-6">
-          {currentStep === 0 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white">Select User</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="relative space-y-2">
-                    <Label htmlFor="user-search" className="text-white/80">
-                      Search Users
-                    </Label>
-                    <Input
-                      id="user-search"
-                      value={userSearchQuery}
-                      onChange={(e) =>
-                        setState({ ...state, userSearchQuery: e.target.value })
-                      }
-                      type="text"
-                      placeholder="Search by email or username..."
-                      className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                   
-                    <div className="space-y-2">
-                  <Label className="text-white">Available Users</Label>
-                  <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
-                    {filteredUsers.length === 0 ? (
-                      <div className="p-4 text-center text-white/60">
-                        No users found
-                      </div>
-                    ) : (
-                      filteredUsers.map((user) => (
-                        <div
-                          key={user.id}
-                          onClick={() => handleUserSelect(user.id)}
-                          className={`p-4 cursor-pointer transition-colors border-b border-white/5 last:border-b-0 ${
-                            selectedUser === user.id
-                              ? "bg-blue-500/20 border-l-4 border-l-blue-500"
-                              : "hover:bg-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-white font-medium">
-                                {user.email}
-                              </div>
-                              {user.username && (
-                                <div className="text-xs text-white/60">
-                                  @{user.username}
-                                </div>
-                              )}
-                            </div>
-                            {selectedUser === user.id && (
-                              <CheckCircle2 className="h-5 w-5 text-blue-400" />
-                            )}
-                          </div>
-                        </div>
-                        
-                      ))
-                      
-                    )}
-                  </div>
-                </div>
-                    {validationErrors.user && (
-                      <p className="text-sm text-red-500">
-                        {validationErrors.user}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
+        {/* Title */}
+        <h1 className="text-[44px] sm:text-[52px] leading-[1] tracking-[-0.025em] text-white font-semibold">
+          Provision{" "}
+          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+            a cluster
+          </span>
+        </h1>
+        <p className={`${MONO} mt-3 max-w-xl text-[12px] text-white/45 leading-relaxed`}>
+          Managed control plane · automatic upgrades · kubectl-ready in ~4 minutes
+        </p>
 
-          {currentStep === 1 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Kubernetes Cluster Name
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Input
-                    value={selectedName}
-                    onChange={(e) =>
-                      setState({ ...state, selectedName: e.target.value })
-                    }
+        {/* Body */}
+        <div className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+          {/* Left: sections */}
+          <div className="space-y-4">
+            {/* 01 — Admin: user (only when admin role) */}
+            {role === "admin" && (
+              <Section num="01" title="User" description="Cluster owner for billing + IAM." status={valid.user ? "Ready" : "Pick a user"} ok={valid.user}>
+                <Field label="Search user">
+                  <input
                     type="text"
-                    maxLength={20}
-                    placeholder="my-cluster"
-                    className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
-                      validationErrors.name ? "border-red-500" : ""
-                    }`}
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="email or username…"
+                    className={`${MONO} h-9 w-full px-3 border border-white/[0.08] bg-[#0d0e11] text-[12px] text-white placeholder:text-white/30 outline-none focus:border-white/25 rounded-[5px]`}
                   />
-                  <p className="text-xs text-white/40">{selectedName.length}/20 characters</p>
-                  {validationErrors.name && (
-                    <p className="text-sm text-red-500">
-                      {validationErrors.name}
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className={role==='admin'?"flex justify-between":"flex justify-end"}>
-                {
-                  role === "admin" && (
-                     <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                  )
-                }
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {currentStep === 2 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white">Location</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={selectedLocation}
-                  onValueChange={(value) =>
-                    setState({ ...state, selectedLocation: value })
-                  }
-                  className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-                >
-                  {locations.map((region) => (
-                    <div key={region.id}>
-                      <RadioGroupItem
-                        value={region.short}
-                        id={region.city}
-                        className="peer sr-only"
-                        disabled={!region.available}
-                      />
-                      <Label
-                        htmlFor={region.city}
-                        className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
-                      >
-                        <Image
-                          src={`https://flagsapi.com/${region.country_code}/flat/64.png`}
-                          alt={region.city}
-                          width={32}
-                          height={24}
-                          className="rounded-sm"
-                          unoptimized
-                        />
-                        <div>
-                          <div className="font-medium text-white">
-                            {region.city}
-                          </div>
-                          <div className="text-xs text-white/60">
-                            {region.country}
-                          </div>
-                        </div>
-                        {!region.available && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs ml-auto text-white/70 border-white/30"
-                          >
-                            Coming soon
-                          </Badge>
-                        )}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {currentStep === 3 && (
-            <Card className={panelClassName}>
-              <CardHeader className="space-y-2">
-                <CardTitle className="text-white">Worker topology</CardTitle>
-                <p className="text-sm leading-6 text-white/50">
-                  Choose the worker count for the cluster. One control plane node is
-                  included automatically.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                  {nodePresets.map((count) => {
-                    const isSelected = selectedNode === count;
-
-                    return (
-                      <button
-                        key={count}
-                        type="button"
-                        onClick={() =>
-                          setState({
-                            ...state,
-                            selectedNode: count,
-                          })
-                        }
-                        className={
-                          isSelected
-                            ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
-                            : "border border-white/[0.08] bg-white/[0.03] p-4 text-left transition-colors hover:bg-white/[0.06]"
-                        }
-                      >
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          Preset
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold text-white">
-                          {count}
-                        </div>
-                        <div className="mt-1 text-sm text-white/68">
-                          Worker{count === 1 ? "" : "s"}
-                        </div>
-                        <div className="mt-3 text-xs text-white/40">
-                          {count + 1} total nodes with control plane
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <Label
-                      htmlFor="worker-count"
-                      className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40"
-                    >
-                      Custom count
-                    </Label>
-                    <Input
-                      id="worker-count"
-                      value={selectedNode}
-                      onChange={(e) =>
-                        setState({
-                          ...state,
-                          selectedNode: Number(e.target.value),
-                        })
-                      }
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 3"
-                      className={
-                        "mt-3 h-11 border-white/[0.12] bg-white/[0.04] text-white placeholder:text-white/35 " +
-                        (validationErrors.nodes ? "border-red-500" : "")
-                      }
-                    />
-                    {validationErrors.nodes && (
-                      <p className="mt-2 text-sm text-red-400">
-                        {validationErrors.nodes}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Total nodes
-                      </div>
-                      <div className="mt-2 text-lg font-semibold text-white">
-                        {selectedNode ? selectedNode + 1 : 0}
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-white/45">
-                        Includes one managed control plane node.
-                      </p>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Best for
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-white">
-                        API services and internal platforms
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-white/45">
-                        Scale workers later as workloads grow.
-                      </p>
-                    </div>
-                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Guidance
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-white">
-                        Start lean, expand safely
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-white/45">
-                        Keep smaller environments efficient during setup.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {currentStep === 4 && (
-            <Card className={panelClassName}>
-              <CardHeader className="space-y-2">
-                <CardTitle className="text-white">Cluster plan</CardTitle>
-                <p className="text-sm leading-6 text-white/50">
-                  Select a compute profile that matches the initial workload. Choose CPU type,
-                  machine type, then pick the right plan size.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* CPU Type Tabs */}
-                <div>
-                  <Label className="mb-3 block text-sm font-medium text-white/78">
-                    CPU type
-                  </Label>
-                  <Tabs
-                    value={selectedCpuType}
-                    onValueChange={(value) => {
-                      const newCpu = value as K8sCpuType;
-                      setSelectedCpuType(newCpu);
-                      setSelectedMachineType(K8S_MACHINE_TYPES[newCpu]?.[0]?.value || "basic");
-                      setState((prev) => ({ ...prev, selectedPlan: "" }));
-                    }}
-                    className="w-full"
-                  >
-                    <TabsList className="grid h-auto w-full grid-cols-3 border border-white/[0.08] bg-white/[0.04] p-1">
-                      {(Object.keys(K8S_CPU_META) as K8sCpuType[]).map((type) => (
-                        <TabsTrigger
-                          key={type}
-                          value={type}
-                          className="rounded-none px-3 py-2 text-xs data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
-                        >
-                          {K8S_CPU_META[type].label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </Tabs>
-                  <p className="mt-3 text-sm text-white/45">{K8S_CPU_META[selectedCpuType].description}</p>
-                </div>
-
-                {/* Machine Type Selector */}
-                <div>
-                  <Label className="mb-3 block text-sm font-medium text-white/78">
-                    Machine type
-                  </Label>
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                    {K8S_MACHINE_TYPES[selectedCpuType].map((mt) => {
-                      const isSelected = selectedMachineType === mt.value;
+                </Field>
+                <div className="mt-3 max-h-[200px] overflow-y-auto border border-white/[0.06] bg-[#0d0e11] rounded-[5px]">
+                  {filteredUsers.length === 0 ? (
+                    <p className={`${MONO} px-3 py-2.5 text-[11.5px] text-white/40`}>No users match.</p>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const sel = selectedUser === u.id;
                       return (
                         <button
-                          key={mt.value}
+                          key={u.id}
                           type="button"
-                          onClick={() => {
-                            setSelectedMachineType(mt.value);
-                            setState((prev) => ({ ...prev, selectedPlan: "" }));
-                          }}
-                          className={`border px-4 py-3 text-left transition-colors ${
-                            isSelected
-                              ? "border-blue-400/30 bg-blue-500/10"
-                              : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"
-                          }`}
+                          onClick={() => setSelectedUser(u.id)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-left border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02]"
+                          style={sel ? { background: ACCENT_DIM } : {}}
                         >
-                          <div className="text-sm font-semibold text-white">
-                            {mt.label}
+                          <span className="text-[12.5px] text-white truncate">{u.email}</span>
+                          {sel && <span className={`${MONO} text-[10px] uppercase tracking-[0.12em]`} style={{ color: ACCENT }}>Selected</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* Identity */}
+            <Section
+              num={role === "admin" ? "02" : "01"}
+              title="Cluster identity"
+              description="A name for your dashboard and kubeconfig context."
+              status={valid.name ? "Valid" : nameStatus.msg}
+              ok={valid.name}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <Field
+                  label="Cluster name"
+                  hint="required"
+                  helper={
+                    <span className="flex items-center gap-2">
+                      <span>Lowercase · numbers · hyphens · 1–20 chars</span>
+                      {clusterName && (
+                        <span
+                          className="ml-auto inline-flex items-center gap-1"
+                          style={{ color: nameStatus.ok ? "#4ade80" : "#f87171" }}
+                        >
+                          {nameStatus.ok ? "✓" : "✕"} {nameStatus.msg}
+                        </span>
+                      )}
+                    </span>
+                  }
+                >
+                  <input
+                    type="text"
+                    value={clusterName}
+                    onChange={(e) => setClusterName(e.target.value)}
+                    placeholder="prod-eu-1"
+                    className={`${MONO} h-9 w-full px-3 border border-white/[0.08] bg-[#0d0e11] text-[12.5px] text-white placeholder:text-white/30 outline-none focus:border-white/25 rounded-[5px]`}
+                  />
+                </Field>
+              </div>
+              <div className="mt-2.5">
+                <Field label="Description" hint="optional">
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What this cluster runs, who owns it…"
+                    rows={2}
+                    className="w-full px-3 py-2 border border-white/[0.08] bg-[#0d0e11] text-[12.5px] text-white placeholder:text-white/30 outline-none focus:border-white/25 resize-y rounded-[5px]"
+                  />
+                </Field>
+              </div>
+            </Section>
+
+            {/* Region */}
+            <Section
+              num={role === "admin" ? "03" : "02"}
+              title="Region"
+              description="Where the control plane and default node pool will be deployed."
+              status={valid.location ? (locations.find((l) => l.short === selectedLocation)?.city ?? "Selected") : "Pick a region"}
+              ok={valid.location}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {locations.map((loc) => {
+                  const sel = selectedLocation === loc.short;
+                  return (
+                    <button
+                      key={loc.short}
+                      type="button"
+                      onClick={() => loc.short && setSelectedLocation(loc.short)}
+                      className="text-left p-3 border rounded-[5px] transition-all"
+                      style={
+                        sel
+                          ? {
+                              borderColor: ACCENT,
+                              background:
+                                "linear-gradient(135deg, #0d0e11 0%, rgba(0,149,255,0.06) 100%)",
+                              boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
+                            }
+                          : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                      }
+                      onMouseEnter={(e) => {
+                        if (sel) return;
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+                        e.currentTarget.style.background = "#16181d";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (sel) return;
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                        e.currentTarget.style.background = "#0d0e11";
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className={`${MONO} text-[11px] font-semibold tracking-[0.06em] text-white/70`}>
+                          {(loc.short ?? "").toUpperCase()}
+                        </span>
+                        <span className={`${MONO} inline-flex items-center gap-1 text-[9.5px] uppercase tracking-[0.14em] text-emerald-300/85`}>
+                          <span className="h-1 w-1 rounded-full bg-emerald-400" />
+                          Ready
+                        </span>
+                      </div>
+                      <div className="text-[13px] font-semibold text-white tracking-[-0.01em] truncate">
+                        {loc.city}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+
+            {/* Version */}
+            <Section
+              num={role === "admin" ? "04" : "03"}
+              title="Kubernetes version"
+              description="Choose your control-plane version. Patch upgrades happen during maintenance windows."
+              status={selectedVersion ? `v${selectedVersion}` : "Pick a version"}
+              ok={valid.version}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {versions.map((v, idx) => {
+                  const sel = selectedVersion === v;
+                  const tag = idx === 0 ? "Stable" : idx === 1 ? "LTS" : "EOL soon";
+                  const tagColor = idx === 0 ? "#4ade80" : idx === 1 ? ACCENT : "#fbbf24";
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setSelectedVersion(v)}
+                      className="text-left p-3 border rounded-[5px] transition-all"
+                      style={
+                        sel
+                          ? {
+                              borderColor: ACCENT,
+                              background:
+                                "linear-gradient(135deg, #0d0e11 0%, rgba(0,149,255,0.06) 100%)",
+                              boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
+                            }
+                          : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                      }
+                    >
+                      <div className="flex items-start justify-between mb-1.5">
+                        <span
+                          style={SERIF_STYLE}
+                          className="text-[20px] leading-none font-bold tabular-nums tracking-[-0.02em] text-white"
+                        >
+                          v{v.split(".").slice(0, 2).join(".")}
+                        </span>
+                        <span
+                          className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold border px-1.5 py-px`}
+                          style={{
+                            color: tagColor,
+                            borderColor: `${tagColor}40`,
+                            background: `${tagColor}10`,
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      </div>
+                      <p className={`${MONO} text-[10.5px] text-white/40`}>
+                        Patch v{v}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+
+            {/* Node pool */}
+            <Section
+              num={role === "admin" ? "05" : "04"}
+              title="Node pool"
+              description="Worker nodes run your pods. Add more pools after creation for GPU workloads or isolated tenants."
+              status={
+                valid.plan && valid.nodes
+                  ? `${nodeCount} × ${selectedProductObj?.slug ?? ""}`
+                  : "Pick a size"
+              }
+              ok={valid.plan && valid.nodes}
+            >
+              {/* Tier toggle */}
+              <div className="inline-flex border border-white/[0.06] bg-[#0d0e11] p-1 mb-3 rounded-[5px]">
+                {CPU_TYPES.map((t) => {
+                  const sel = selectedCpuType === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setSelectedCpuType(t.value)}
+                      className="px-3 py-1.5 text-[11.5px] transition-colors"
+                      style={
+                        sel
+                          ? { background: "#ededee", color: "#08090b", fontWeight: 500 }
+                          : { color: "rgba(255,255,255,0.55)", background: "transparent" }
+                      }
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Count stepper */}
+              <div className="mb-3">
+                <Field label="Node count" hint={`${nodeCount} of 10 max`}>
+                  <div className="inline-flex items-center border border-white/[0.08] bg-[#0d0e11] w-fit rounded-[5px] overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setNodeCount(Math.max(1, nodeCount - 1))}
+                      className="w-9 h-9 text-white/65 hover:text-white hover:bg-white/[0.04] transition-colors"
+                    >
+                      −
+                    </button>
+                    <span
+                      style={SERIF_STYLE}
+                      className="px-5 h-9 inline-flex items-center justify-center min-w-[48px] text-[16px] font-bold tabular-nums text-white border-x border-white/[0.08]"
+                    >
+                      {nodeCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNodeCount(Math.min(10, nodeCount + 1))}
+                      className="w-9 h-9 text-white/65 hover:text-white hover:bg-white/[0.04] transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </Field>
+              </div>
+
+              {/* Size grid */}
+              <Field label="Node sizing">
+                {filteredProducts.length === 0 ? (
+                  <div className="border border-amber-400/20 bg-amber-400/[0.04] p-3 text-[12px] text-amber-200/85 rounded-[5px]">
+                    No {selectedCpuType} plans available. Switch tier or contact admin.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {filteredProducts.map((p) => {
+                      const sel = selectedPlan === p.name;
+                      const cpu = p.resources?.cpu ?? "?";
+                      const ram = p.resources?.ram ?? "?";
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => p.name && setSelectedPlan(p.name)}
+                          className="text-left p-3 border rounded-[5px] transition-all"
+                          style={
+                            sel
+                              ? {
+                                  borderColor: BORDER_ACCENT,
+                                  background: ACCENT_DIM,
+                                  boxShadow: `0 0 0 1px ${BORDER_ACCENT}`,
+                                }
+                              : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                          }
+                        >
+                          <div className={`${MONO} text-[10.5px] font-semibold tracking-[0.04em] text-white/65 mb-1.5 truncate`}>
+                            {p.slug ?? p.name}
+                          </div>
+                          <div className={`${MONO} text-[11.5px] text-white tabular-nums`}>
+                            {cpu} vCPU · {ram} GB
+                          </div>
+                          <div className={`${MONO} mt-2 text-[10.5px] text-white/45 tabular-nums`}>
+                            ${(p.price ?? 0).toFixed(0)}/mo
                           </div>
                         </button>
                       );
                     })}
                   </div>
+                )}
+              </Field>
+            </Section>
+
+            {/* Project */}
+            <Section
+              num={role === "admin" ? "06" : "05"}
+              title="Project"
+              description="Resource group for IAM, billing, and quota tracking."
+              status={valid.project ? (projects.find((p) => p.id === selectedProject)?.name ?? "Selected") : "Pick a project"}
+              ok={valid.project}
+            >
+              {filteredProjects.length === 0 ? (
+                <div className={`${MONO} border border-amber-400/20 bg-amber-400/[0.04] p-3 text-[11.5px] text-amber-200/85 rounded-[5px]`}>
+                  No projects available{role === "admin" ? " for this user" : ""}. Create one first.
                 </div>
-
-                {selectedPlan && (
-                  <div className="flex flex-col gap-3 border border-blue-400/20 bg-blue-500/8 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/70">
-                        Selected plan
-                      </div>
-                      <div className="mt-1 text-base font-semibold text-white">
-                        {selectedPlan}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-white/72">
-                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
-                        {selectedPlanDetails?.resources.cpu || 0} vCPU
-                      </span>
-                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
-                        {selectedPlanDetails?.resources.ram || 0} GB RAM
-                      </span>
-                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
-                        {selectedPlanDetails?.resources.storage || 0} GB Storage
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {filteredProducts.length === 0 ? (
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center">
-                    <Box className="mx-auto h-8 w-8 text-white/40" />
-                    <h3 className="mt-4 text-lg font-semibold text-white">No plans available</h3>
-                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-white/45">
-                      No plans match this CPU type and machine type. Try a different combination
-                      or contact support.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="max-h-[360px] overflow-y-auto pr-1">
-                    <RadioGroup
-                      value={state.selectedPlan}
-                      onValueChange={(value) => {
-                        setState({ ...state, selectedPlan: value });
-                        if (validationErrors.plan) {
-                          setValidationErrors((prev) => ({ ...prev, plan: undefined }));
-                        }
-                      }}
-                      className="space-y-3"
-                    >
-                      {filteredProducts.map((plan) => (
-                      <div key={plan.id}>
-                        <RadioGroupItem
-                          value={plan.name || ""}
-                          id={plan.name || ""}
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor={plan.name || ""}
-                          className="grid cursor-pointer gap-4 border border-white/[0.08] bg-white/[0.03] p-4 transition-colors peer-data-[state=checked]:border-blue-400/30 peer-data-[state=checked]:bg-blue-500/10 hover:bg-white/[0.05] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_120px] xl:items-center"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
-                              <Box className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-sm font-semibold text-white sm:text-base">
-                                  {plan.name}
-                                </h3>
-                                {state.selectedPlan === plan.name && (
-                                  <Badge className="border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/15">
-                                    Selected
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="mt-1 text-sm leading-6 text-white/48">
-                                {plan.description || "Balanced compute profile for Kubernetes workloads."}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2 sm:max-w-[360px]">
-                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                                <Cpu className="h-3.5 w-3.5 text-blue-300" /> CPU
-                              </div>
-                              <div className="mt-1.5 text-sm font-semibold text-white">
-                                {plan.resources.cpu || 0} vCPU
-                              </div>
-                            </div>
-                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                                <Server className="h-3.5 w-3.5 text-emerald-300" /> RAM
-                              </div>
-                              <div className="mt-1.5 text-sm font-semibold text-white">
-                                {plan.resources.ram || 0} GB
-                              </div>
-                            </div>
-                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                                <HardDrive className="h-3.5 w-3.5 text-violet-300" /> Disk
-                              </div>
-                              <div className="mt-1.5 text-sm font-semibold text-white">
-                                {plan.resources.storage || 0} GB
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-left xl:text-right">
-                            <div className="text-lg font-semibold text-white">
-                              {"$" + (plan.price?.toFixed(2) || "0.00")}
-                            </div>
-                            <div className="text-xs text-white/45">monthly rate</div>
-                          </div>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-                )}
-                {validationErrors.plan && (
-                  <p className="text-sm text-red-500">{validationErrors.plan}</p>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {currentStep === 5 && (
-            <Card className={panelClassName}>
-              <CardHeader className="space-y-2">
-                <CardTitle className="text-white">Version policy</CardTitle>
-                <p className="text-sm leading-6 text-white/50">
-                  Pick the Kubernetes version for this cluster. Keep the initial
-                  rollout predictable and aligned with supported workloads.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {versions.map((version, index) => {
-                    const isSelected = selectedVersion === version;
-
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {filteredProjects.map((p) => {
+                    const sel = selectedProject === p.id;
                     return (
                       <button
-                        key={version}
+                        key={p.id}
                         type="button"
-                        onClick={() => {
-                          setState({ ...state, selectedVersion: version });
-                          if (validationErrors.version) {
-                            setValidationErrors((prev) => ({ ...prev, version: undefined }));
-                          }
-                        }}
-                        className={
-                          isSelected
-                            ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
-                            : "border border-white/[0.08] bg-white/[0.03] p-4 text-left transition-colors hover:bg-white/[0.05]"
+                        onClick={() => setSelectedProject(p.id)}
+                        className="flex items-center justify-between p-3 border rounded-[5px] transition-all"
+                        style={
+                          sel
+                            ? {
+                                borderColor: ACCENT,
+                                background:
+                                  "linear-gradient(135deg, #0d0e11 0%, rgba(0,149,255,0.06) 100%)",
+                                boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
+                              }
+                            : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
                         }
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                            Kubernetes
-                          </div>
-                          {index === 0 && (
-                            <Badge className="border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/15">
-                              Recommended
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="mt-3 text-xl font-semibold text-white">
-                          {"v" + version}
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-white/48">
-                          Stable version for managed cluster provisioning.
-                        </p>
+                        <span className="text-[13px] font-medium text-white truncate">{p.name}</span>
+                        {sel && (
+                          <span
+                            aria-hidden
+                            className="h-4 w-4 rounded-full shrink-0 relative"
+                            style={{ border: `1.5px solid ${ACCENT}` }}
+                          >
+                            <span
+                              className="absolute inset-[3px] rounded-full block"
+                              style={{ background: ACCENT, boxShadow: `0 0 6px rgba(0,149,255,0.6)` }}
+                            />
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
+              )}
+            </Section>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Selected
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedVersion ? "v" + selectedVersion : "Not selected"}
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Track
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      Stable
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Upgrades
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      Managed later
-                    </div>
-                  </div>
+            {/* Terms */}
+            <label className={`${MONO} flex items-center gap-2.5 text-[11.5px] text-white/60 cursor-pointer select-none px-1`}>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[#0095FF]"
+              />
+              I accept the{" "}
+              <Link href="/legal/terms" className="underline" style={{ color: ACCENT }}>
+                terms of service
+              </Link>{" "}
+              and{" "}
+              <Link href="/legal/privacy" className="underline" style={{ color: ACCENT }}>
+                privacy policy
+              </Link>
+              .
+            </label>
+          </div>
+
+          {/* Right summary */}
+          <aside className="xl:sticky xl:top-6 xl:self-start space-y-3">
+            <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[6px] overflow-hidden">
+              <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
+                <div className="min-w-0">
+                  <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35`}>
+                    Configuration
+                  </p>
+                  <h3 className="mt-1 text-[15px] font-semibold tracking-[-0.01em] text-white">
+                    Your{" "}
+                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                      cluster
+                    </span>
+                  </h3>
                 </div>
-                {validationErrors.version && (
-                  <p className="text-sm text-red-500">{validationErrors.version}</p>
+                <span
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold`}
+                  style={{ color: allValid ? "#4ade80" : ACCENT }}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                      background: allValid ? "#4ade80" : ACCENT,
+                      boxShadow: allValid ? "0 0 6px #4ade80" : `0 0 6px ${ACCENT}`,
+                    }}
+                  />
+                  {allValid ? "Ready" : "Draft"}
+                </span>
+              </header>
+
+              <div className="px-5 py-3">
+                <SumRow label="Name" value={clusterName} mono />
+                <SumRow
+                  label="Region"
+                  value={locations.find((l) => l.short === selectedLocation)?.city ?? ""}
+                />
+                <SumRow label="Version" value={selectedVersion ? `v${selectedVersion}` : ""} mono />
+                <SumRow label="Tier" value={CPU_TYPES.find((t) => t.value === selectedCpuType)?.label} />
+                <SumRow label="Node size" value={selectedProductObj?.slug ?? ""} mono />
+                <SumRow
+                  label="Nodes"
+                  value={selectedProductObj ? `${nodeCount} × ${selectedProductObj.slug ?? ""}` : ""}
+                  mono
+                />
+                {selectedProductObj && (
+                  <SumRow
+                    label="Total capacity"
+                    value={`${(selectedProductObj.resources?.cpu ?? 0) * nodeCount} vCPU · ${
+                      (selectedProductObj.resources?.ram ?? 0) * nodeCount
+                    } GB`}
+                    mono
+                  />
                 )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
+                <SumRow label="Project" value={projects.find((p) => p.id === selectedProject)?.name} />
+              </div>
 
-          {currentStep === 6 && (
-            <Card className={panelClassName}>
-              <CardHeader className="space-y-2">
-                <CardTitle className="text-white">Project assignment</CardTitle>
-                <p className="text-sm leading-6 text-white/50">
-                  Attach this cluster to the project that should own operations and billing.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-                  <div>
-                    <Label htmlFor="project" className="mb-2 block text-white">
-                      Project
-                    </Label>
-                    <Select
-                      value={selectedProject}
-                      onValueChange={(value) => {
-                        setState({ ...state, selectedProject: value });
-                        if (validationErrors.project) {
-                          setValidationErrors((prev) => ({ ...prev, project: undefined }));
-                        }
-                      }}
-                    >
-                      <SelectTrigger
-                        id="project"
-                        className={
-                          "h-11 w-full border-white/[0.12] bg-white/[0.04] text-white " +
-                          (validationErrors.project ? "border-red-500" : "")
-                        }
-                      >
-                        <SelectValue placeholder="Select project" />
-                      </SelectTrigger>
-                      <SelectContent className="border-white/20 bg-black text-white">
-                        {filteredProjects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {filteredProjects.length === 0 && (
-                      <p className="mt-2 text-sm text-white/60">
-                        {role === "admin"
-                          ? "No projects found for selected user."
-                          : "No projects available."}
-                      </p>
-                    )}
-                    {validationErrors.project && (
-                      <p className="mt-2 text-sm text-red-500">{validationErrors.project}</p>
-                    )}
-                  </div>
-
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Selected project
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedProject
-                        ? filteredProjects.find((project) => project.id === selectedProject)?.name || "Unknown project"
-                        : "No project selected"}
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-white/45">
-                      Ownership, grouping, and later operations will follow this project.
-                    </p>
-                  </div>
+              {/* Cost block */}
+              <div className="border-t border-white/[0.06] bg-[#08090b] px-5 py-4">
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35`}>
+                    Monthly cost
+                  </p>
+                  <p className={`${MONO} text-[10.5px] text-white/45 tabular-nums`}>
+                    ${totalHourly.toFixed(3)}/hr
+                  </p>
                 </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {currentStep === 7 && (
-            <Card className={panelClassName}>
-              <CardHeader className="space-y-2">
-                <CardTitle className="text-white">Review and confirm</CardTitle>
-                <p className="text-sm leading-6 text-white/50">
-                  Verify the provisioning details before cluster creation begins.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Cluster
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedName || "Not set"}
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Location
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedLocationDetails?.city || "Not set"}
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Workers
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedNode || 0}
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Version
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-white">
-                      {selectedVersion ? "v" + selectedVersion : "Not set"}
-                    </div>
-                  </div>
+                <div className="flex items-baseline gap-1">
+                  <span style={SERIF_STYLE} className="text-[18px] text-white/55 font-medium">
+                    $
+                  </span>
+                  <span
+                    style={SERIF_STYLE}
+                    className="text-[34px] leading-none text-white font-bold tracking-[-0.03em] tabular-nums"
+                  >
+                    {totalMonthly.toFixed(2)}
+                  </span>
+                  <span className={`${MONO} ml-1.5 text-[11px] text-white/45`}>/mo</span>
                 </div>
-
-                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="terms"
-                      checked={termsAccepted}
-                      onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-                      className="mt-1 border-white/30 data-[state=checked]:border-blue-400 data-[state=checked]:bg-blue-500"
-                    />
-                    <div>
-                      <Label htmlFor="terms" className="text-sm font-medium text-white">
-                        I understand that provisioning starts immediately.
-                      </Label>
-                      <p className="mt-1 text-sm leading-6 text-white/45">
-                        Charges begin when infrastructure is created. Review the selected plan,
-                        project, and version before continuing.
-                      </p>
+                {selectedProductObj && (
+                  <div className={`${MONO} mt-3 pt-3 border-t border-white/[0.06] space-y-1 text-[10.5px] text-white/45 tabular-nums`}>
+                    <div className="flex justify-between">
+                      <span>
+                        {nodeCount} × {selectedProductObj.slug ?? "node"}
+                      </span>
+                      <span className="text-white/75">${nodesMonthly.toFixed(2)}</span>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
-                >
-                  Back
-                </Button>
-                <Button
+                )}
+              </div>
+
+              {/* CTA */}
+              <div className="border-t border-white/[0.06] p-3">
+                <button
+                  type="button"
                   onClick={onSubmit}
-                  disabled={isLoading || !termsAccepted}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canSubmit}
+                  className={`${MONO} w-full inline-flex items-center justify-center gap-2.5 py-3.5 text-[12px] uppercase tracking-[0.16em] font-semibold transition-all disabled:cursor-not-allowed disabled:bg-[#111216] disabled:text-white/30 rounded-[5px]`}
+                  style={
+                    !canSubmit
+                      ? {}
+                      : {
+                          background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                          color: "#ffffff",
+                          boxShadow:
+                            "0 12px 32px rgba(0,149,255,0.30), inset 0 1px 0 rgba(255,255,255,0.15)",
+                        }
+                  }
+                  onMouseEnter={(e) => {
+                    if (!canSubmit) return;
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 16px 40px rgba(0,149,255,0.40), inset 0 1px 0 rgba(255,255,255,0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!canSubmit) return;
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                    e.currentTarget.style.transform = "none";
+                    e.currentTarget.style.boxShadow =
+                      "0 12px 32px rgba(0,149,255,0.30), inset 0 1px 0 rgba(255,255,255,0.15)";
+                  }}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 size={16} className="mr-2 animate-spin" /> Creating
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Provisioning
                     </>
                   ) : (
                     <>
-                      Create Cluster <ChevronRight size={16} className="ml-2" />
+                      Create cluster
+                      <span aria-hidden>→</span>
                     </>
                   )}
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <div className={`${panelClassName} lg:sticky lg:top-8`}>
-            <div className="border-b border-white/[0.06] px-6 py-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
-            </div>
-            <div className="px-6 py-4">
-              <div className="space-y-0.5">
-                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster" value={selectedName || "—"} empty={!selectedName} />
-                <SummaryRow
-                  icon="/dashboard-icons/region.png"
-                  label="Location"
-                  value={selectedLocationDetails ? (
-                    <span className="flex items-center justify-end gap-2">
-                      {selectedLocationDetails.country_code && (
-                        <Image src={`https://flagsapi.com/${selectedLocationDetails.country_code}/flat/64.png`} alt={selectedLocation} width={16} height={12} className="rounded-sm object-contain" unoptimized />
-                      )}
-                      {selectedLocationDetails.city}
-                    </span>
-                  ) : "—"}
-                  empty={!selectedLocation}
-                />
-                <SummaryRow icon="/dashboard-icons/number.png" label="Workers" value={selectedNode ? `${selectedNode} (${selectedNode + 1} total)` : "—"} empty={!selectedNode} />
-                <SummaryRow icon="/dashboard-icons/versioning.png" label="Version" value={selectedVersion ? `v${selectedVersion}` : "—"} empty={!selectedVersion} />
-                {selectedProject && (
-                  <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || selectedProject} />
-                )}
-              </div>
-
-              {selectedPlan && (
-                <>
-                  <div className="my-3 border-t border-white/[0.05]" />
-                  <div className="space-y-0.5">
-                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedPlan} />
-                    {selectedPlanDetails && (
-                      <>
-                        <SummaryRow icon="/dashboard-icons/cpu.png" label="vCPU" value={selectedPlanDetails.resources.cpu} />
-                        <SummaryRow icon="/dashboard-icons/ram.png" label="RAM" value={selectedPlanDetails.resources.ram} />
-                        <SummaryRow icon="/dashboard-icons/storage.png" label="Disk" value={selectedPlanDetails.resources.storage} />
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-
-              <Separator className="my-4 bg-white/[0.08]" />
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Monthly rate</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">
-                    {selectedPlanDetails?.price != null ? `$${selectedPlanDetails.price.toFixed(2)}` : "—"}
-                  </div>
-                </div>
-                {selectedPlanDetails?.price != null && (
-                  <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">per month</Badge>
-                )}
+                </button>
+                <p className={`${MONO} mt-2.5 text-center text-[10px] text-white/35 tracking-[0.04em]`}>
+                  Ready in ~4 minutes · billed by second
+                </p>
               </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
   );
 };
 
-export default NewClusterPage;
+export default NewClusterForm;
+
+// ─── Subcomponents ───────────────────────────────────────────────
+
+function Section({
+  num,
+  title,
+  description,
+  status,
+  ok,
+  children,
+}: {
+  num: string;
+  title: string;
+  description?: string;
+  status?: string;
+  ok?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+      <header className="border-b border-white/[0.06] px-5 py-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
+            {num} · {title}
+          </p>
+          <h2 className="mt-1 text-[16px] font-semibold tracking-[-0.01em] text-white">{title}</h2>
+          {description && <p className="mt-1 text-[12px] text-white/45 max-w-2xl">{description}</p>}
+        </div>
+        {status && (
+          <span
+            className={`${MONO} shrink-0 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold`}
+            style={{ color: ok ? "#4ade80" : "rgba(255,255,255,0.4)" }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{
+                background: ok ? "#4ade80" : "rgba(255,255,255,0.25)",
+                boxShadow: ok ? "0 0 6px rgba(74,222,128,0.5)" : "none",
+              }}
+            />
+            {status}
+          </span>
+        )}
+      </header>
+      <div className="px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  helper,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  helper?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45`}>
+          {label}
+        </span>
+        {hint && <span className={`${MONO} text-[9.5px] text-white/30`}>{hint}</span>}
+      </div>
+      {children}
+      {helper && <div className={`${MONO} text-[10.5px] text-white/40 mt-1`}>{helper}</div>}
+    </div>
+  );
+}
+
+function SumRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value?: string | null;
+  mono?: boolean;
+}) {
+  const empty = !value;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-dashed border-white/[0.06] last:border-b-0">
+      <span className={`${MONO} text-[10.5px] uppercase tracking-[0.04em] text-white/40`}>
+        {label}
+      </span>
+      <span
+        className={`text-[11.5px] text-right truncate max-w-[180px] ${mono ? MONO : ""} ${
+          empty ? "text-white/25 italic" : "text-white/85"
+        }`}
+      >
+        {empty ? "—" : value}
+      </span>
+    </div>
+  );
+}

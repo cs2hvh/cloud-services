@@ -9,6 +9,7 @@ import {
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { releaseOnDemandVmac } from "@/lib/proxmox/on-demand-vmac";
 
 export const dynamic = "force-dynamic";
 
@@ -208,6 +209,30 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
           const routeModes = new Set(["legacy_public_gateway", "ovh_hg_scale_routed", "ovh_advance_gen3_routed"]);
           if (routeModes.has(String((cfg as { network_mode?: string | null }).network_mode || "legacy_public_gateway"))) {
             await removeHostRoute(cfg, server.ip, cfg.bridge || "vmbr0");
+          }
+        }
+
+        // Release the on-demand vMAC (OVH side + DB pool row) so the
+        // IP can be reallocated cleanly to a future VM.
+        if (
+          server.ip &&
+          (cfg as { network_mode?: string | null }).network_mode === "ovh_failover_vmac"
+        ) {
+          try {
+            const result = await releaseOnDemandVmac({
+              supabase,
+              host: { id: cfg.id, host_url: cfg.host_url, provider: (cfg as { provider?: string | null }).provider },
+              ip: server.ip,
+            });
+            if (result.released) {
+              console.log(
+                `[VM Delete] Released vMAC ${result.mac} for ${server.ip} (ovh deleted: ${result.ovhDeleted ?? false})`
+              );
+            }
+          } catch (e) {
+            console.warn(
+              `[VM Delete] vMAC release failed for ${server.ip}: ${e instanceof Error ? e.message : e} — DB cleanup may need manual attention`
+            );
           }
         }
       } catch (e) {

@@ -8,6 +8,9 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
+import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
+import { pickBestStorage } from "@/lib/proxmox/storage-picker";
+import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,10 @@ interface PoolItem {
   mac?: string;
   poolId: number;
   label?: string | null;
+  // When the host is in vMAC failover mode AND this IP comes from the
+  // routed BYOIP pool (i.e. no vMAC bound yet), we'll mint one via the
+  // OVH API after winning the IP lock and before VM creation.
+  needsVmac?: boolean;
 }
 
 function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
@@ -406,15 +413,50 @@ export async function POST(req: NextRequest) {
   }
   const hostname = rawHostname;
   const sshPassword = body.sshPassword as string | undefined;
-  const cpuCores = Number(body.cpuCores || 2);
-  const memoryMB = Number(body.memoryMB || 2048);
-  const diskGB = body.diskGB ? Number(body.diskGB) : undefined;
-  const os = body.os || "Ubuntu 24.04 LTS";
 
-  // Validate spec ranges
-  if (cpuCores < 1 || cpuCores > 32) return Response.json({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
-  if (memoryMB < 512 || memoryMB > 262144) return Response.json({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
-  if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return Response.json({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
+  // Resolve the spec from a plan slug if supplied; otherwise fall back
+  // to the legacy free-form cpuCores/memoryMB/diskGB body fields
+  // (kept for backward compatibility while the dashboard rolls over).
+  const planSlug = body.planSlug ? String(body.planSlug) : undefined;
+  let cpuCores: number;
+  let memoryMB: number;
+  let diskGB: number | undefined;
+  let planTier: "shared" | "dedicated" | null = null;
+  let planAllowedHostIds: string[] | null = null; // set when plan has a host whitelist
+
+  if (planSlug) {
+    const plan = await findPlanBySlug(supabase, planSlug);
+    if (!plan) {
+      return Response.json({ ok: false, error: `Unknown plan: ${planSlug}` }, { status: 400 });
+    }
+    if (!plan.isActive) {
+      return Response.json({ ok: false, error: `Plan ${planSlug} is no longer available` }, { status: 400 });
+    }
+    // Enforce region whitelist if the plan has one
+    if (plan.allowedRegions && plan.allowedRegions.length > 0 && !plan.allowedRegions.includes(region)) {
+      return Response.json({
+        ok: false,
+        error: `Plan ${planSlug} is not available in this region.`,
+      }, { status: 400 });
+    }
+    cpuCores = plan.vcpu;
+    memoryMB = plan.memoryMB;
+    diskGB = plan.diskGB;
+    planTier = plan.tier;
+    if (plan.allowedHostIds && plan.allowedHostIds.length > 0) {
+      planAllowedHostIds = plan.allowedHostIds;
+    }
+  } else {
+    cpuCores = Number(body.cpuCores || 2);
+    memoryMB = Number(body.memoryMB || 2048);
+    diskGB = body.diskGB ? Number(body.diskGB) : undefined;
+
+    // Validate spec ranges (only enforced on free-form path; plans are validated at admin write time)
+    if (cpuCores < 1 || cpuCores > 32) return Response.json({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
+    if (memoryMB < 512 || memoryMB > 262144) return Response.json({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
+    if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return Response.json({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
+  }
+  const os = body.os || "Ubuntu 24.04 LTS";
 
   // Determine if this is a Windows VM based on the OS name
   const osLower = String(os).toLowerCase();
@@ -500,12 +542,6 @@ export async function POST(req: NextRequest) {
   const labelByPool = new Map<number, string | null>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null]));
   const activeByPool = new Map<number, boolean>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.is_active as boolean | null) !== false]));
 
-  const isRoutedPool = (mac?: string, label?: string | null) => {
-    const normalizedMac = String(mac || "").toLowerCase();
-    const normalizedLabel = String(label || "").toLowerCase();
-    return normalizedMac.startsWith("route:") || normalizedLabel.includes("byoip") || normalizedLabel.includes("routed");
-  };
-
   // Build available IP list per host
   const ipCandidatesByHost = new Map<string, PoolItem[]>();
   if (poolIds.length > 0) {
@@ -521,15 +557,43 @@ export async function POST(req: NextRequest) {
       const label = labelByPool.get(poolId);
       const host = regionHosts.find((h) => h.id === hostId);
       const routedMode = host?.network_mode === "ovh_hg_scale_routed" || host?.network_mode === "ovh_advance_gen3_routed" || host?.network_mode === "ovh_vrack_block";
+      const vmacMode = host?.network_mode === "ovh_failover_vmac";
       const routedPool = isRoutedPool(mac, label);
       if (!activeByPool.get(poolId)) continue;
+      // Routed BYOIP host modes must draw only from routed pools
       if (routedMode && !routedPool) continue;
-      if (!routedMode && routedPool) continue;
+      // Non-vMAC + non-routed hosts must NOT pick up routed-pool IPs
+      if (!routedMode && !vmacMode && routedPool) continue;
+      // For vMAC-mode hosts we accept BOTH:
+      //   - existing (mac, ip) vMAC pool rows (fast path)
+      //   - routed BYOIP pool IPs (we'll mint the vMAC on demand at
+      //     VM-create time, then save the new pool row)
+      const needsVmac = vmacMode && routedPool;
       if (!usedIpSet.has(ip) && hostId) {
         const list = ipCandidatesByHost.get(hostId) || [];
-        list.push({ ip, mac: routedPool ? undefined : mac, poolId, label });
+        list.push({
+          ip,
+          mac: routedPool ? undefined : mac,
+          poolId,
+          label,
+          needsVmac,
+        });
         ipCandidatesByHost.set(hostId, list);
       }
+    }
+    // Dedupe per host: same IP can appear in BOTH the routed pool AND a
+    // vMAC pool (post on-demand allocation we keep the IP in both).
+    // Prefer the existing vMAC entry (needsVmac=false) so we reuse the
+    // already-provisioned MAC instead of asking OVH for a new one.
+    for (const [hostId, list] of ipCandidatesByHost.entries()) {
+      const bestByIp = new Map<string, typeof list[number]>();
+      for (const item of list) {
+        const existing = bestByIp.get(item.ip);
+        if (!existing || (!item.needsVmac && existing.needsVmac)) {
+          bestByIp.set(item.ip, item);
+        }
+      }
+      ipCandidatesByHost.set(hostId, [...bestByIp.values()]);
     }
   }
 
@@ -546,6 +610,9 @@ export async function POST(req: NextRequest) {
   const requestedDisk = diskGB || 20;
 
   for (const h of regionHosts) {
+    // Honor plan's host whitelist (if any)
+    if (planAllowedHostIds && !planAllowedHostIds.includes(h.id)) continue;
+
     // Must have matching template
     const tpl = templatesByHost.get(h.id);
     if (!tpl) continue;
@@ -614,8 +681,33 @@ export async function POST(req: NextRequest) {
   const cfg = selected.host as unknown as HostConfig;
   const selectedTemplate = selected.template;
   const ipPrimary = allocatedIp.ip;
-  const macAddress = allocatedIp.mac;
+  let macAddress = allocatedIp.mac;
   const hostId = cfg.id;
+
+  // On-demand vMAC minting: if the IP we won the lock for came from the
+  // routed BYOIP pool on a vMAC-mode host, we don't have a MAC yet. The
+  // 5-minute Redis IP lock comfortably covers the ~30-90s OVH provisioning.
+  if (allocatedIp.needsVmac) {
+    try {
+      const supabaseAdmin = await createWorkerClient();
+      const { mac } = await allocateVmacForIp({
+        supabase: supabaseAdmin,
+        host: { id: cfg.id, host_url: cfg.host_url, provider: cfg.provider },
+        ip: ipPrimary,
+      });
+      macAddress = mac;
+    } catch (e) {
+      if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error("[VM Create] On-demand vMAC failed:", errMsg);
+      return Response.json({
+        ok: false,
+        error:
+          `Could not allocate a vMAC for ${ipPrimary}: ${errMsg}. ` +
+          `If this persists, check that the BYOIP block is attached as additional IPs on the OVH server.`,
+      }, { status: 502 });
+    }
+  }
 
   const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
   if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
@@ -650,7 +742,30 @@ export async function POST(req: NextRequest) {
   }
 
   const node = cfg.node;
-  const storage = cfg.storage || "local";
+  // Auto-pick the storage with the most free space that can fit the
+  // requested disk. The host's configured `cfg.storage` is used as the
+  // fallback if the Proxmox API is unreachable or no storage fits.
+  const requestedDiskGB = diskGB || 20;
+  const storagePick = await pickBestStorage({
+    hostUrl: cfg.host_url,
+    username: cfg.username || "root",
+    password: cfg.password || "",
+    node: cfg.node,
+    requiredGB: requestedDiskGB,
+    allowInsecure: !!cfg.allow_insecure_tls,
+    fallback: cfg.storage || "local",
+  });
+  const storage = storagePick.storage;
+  if (storagePick.reason === "fallback-no-fit") {
+    if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
+    return Response.json({
+      ok: false,
+      error: `No storage with ${requestedDiskGB} GB free on the selected host. Please reduce the disk size or try a different region.`,
+    }, { status: 409 });
+  }
+  console.log(
+    `[VM Create] storage=${storage} (${storagePick.reason}) — required ${requestedDiskGB} GB`
+  );
 
   // Reserve DB record to avoid reuse
   let reservationId: number | null = null;
@@ -683,6 +798,8 @@ export async function POST(req: NextRequest) {
         cpu_cores: cpuCores,
         memory_mb: memoryMB,
         disk_gb: diskGB || 20,
+        tier: planTier ?? "shared",
+        plan_slug: planSlug ?? null,
         status: "provisioning",
         details: {
           provisioning: {

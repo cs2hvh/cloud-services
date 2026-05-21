@@ -35,7 +35,19 @@ export interface RunPodGpuType {
     memoryInGb: number;
     secureCloud: boolean;
     communityCloud: boolean;
-    lowestPrice: RunPodGpuTypeLowestPrice | null;
+    // Multi-probe aliases (gpuCount = 1..10). RunPod returns null at a probe
+    // when no machine matches that exact pod size. The non-null probes form
+    // the "available pod sizes" list and the largest one is the "max".
+    p1?: RunPodGpuTypeLowestPrice | null;
+    p2?: RunPodGpuTypeLowestPrice | null;
+    p3?: RunPodGpuTypeLowestPrice | null;
+    p4?: RunPodGpuTypeLowestPrice | null;
+    p5?: RunPodGpuTypeLowestPrice | null;
+    p6?: RunPodGpuTypeLowestPrice | null;
+    p7?: RunPodGpuTypeLowestPrice | null;
+    p8?: RunPodGpuTypeLowestPrice | null;
+    p9?: RunPodGpuTypeLowestPrice | null;
+    p10?: RunPodGpuTypeLowestPrice | null;
 }
 
 // ─── RunPod REST — pod resource ─────────────────────────────────────────────

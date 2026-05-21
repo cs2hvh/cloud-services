@@ -1,6 +1,9 @@
 "use client";
 
-import { motion } from "motion/react";
+// GPU network volumes. Persistent block storage that survives pod
+// destruction. Attached to pods at deploy time; pinned to a single
+// datacenter (the pod is forced into that DC when mounting).
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -17,18 +20,8 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { generateIdempotencyKey } from "@/lib/idempotency";
-import {
-    AlertTriangle,
-    ArrowLeft,
-    HardDrive,
-    Loader2,
-    Plus,
-    RotateCw,
-    Trash2,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-// Common RunPod datacenters that support network volumes. The full list is
-// not exhaustively documented; this covers the regions users actually pick.
 const DATA_CENTERS = [
     { id: "US-CA-2", label: "United States — California" },
     { id: "US-TX-3", label: "United States — Texas" },
@@ -57,26 +50,20 @@ interface VolumeSummary {
 }
 
 const inputClassName =
-    "border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
+    "h-9 border-white/[0.1] bg-[#0f1116] text-white text-[13px] placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
 
-function statusStyle(status: VolumeSummary["status"]) {
+function statusMeta(status: VolumeSummary["status"]): { dot: string; label: string } {
     switch (status) {
-        case "available":
-            return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
-        case "attached":
-            return "border-blue-500/20 bg-blue-500/10 text-blue-300";
-        case "creating":
-            return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-        case "error":
-            return "border-red-500/20 bg-red-500/10 text-red-300";
-        default:
-            return "border-white/[0.08] bg-white/[0.04] text-white/40";
+        case "available": return { dot: "bg-emerald-400",    label: "Available" };
+        case "attached":  return { dot: "bg-[#0095FF]",      label: "Attached"  };
+        case "creating":  return { dot: "bg-amber-400",      label: "Creating"  };
+        case "error":     return { dot: "bg-red-400",        label: "Error"     };
+        default:          return { dot: "bg-white/25",       label: "Deleted"   };
     }
 }
 
 function dcLabel(id: string): string {
-    const match = DATA_CENTERS.find((d) => d.id === id);
-    return match ? match.label : id;
+    return DATA_CENTERS.find((d) => d.id === id)?.label ?? id;
 }
 
 export default function GpuStorage() {
@@ -88,7 +75,6 @@ export default function GpuStorage() {
     const [showCreate, setShowCreate] = useState(false);
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-    // Create form
     const [name, setName] = useState("");
     const [sizeGb, setSizeGb] = useState(100);
     const [dataCenterId, setDataCenterId] = useState(DATA_CENTERS[0].id);
@@ -101,9 +87,7 @@ export default function GpuStorage() {
             if (!res.ok || !json.ok) throw new Error(json.error || "Failed");
             setVolumes(json.volumes as VolumeSummary[]);
         } catch (e) {
-            if (!silent) {
-                toast.error(e instanceof Error ? e.message : "Unable to load volumes");
-            }
+            if (!silent) toast.error(e instanceof Error ? e.message : "Unable to load volumes");
         } finally {
             setLoading(false);
         }
@@ -113,28 +97,18 @@ export default function GpuStorage() {
         load(false);
         const channel = supabase
             .channel("gpu-volumes-page")
-            .on(
-                "postgres_changes",
+            .on("postgres_changes",
                 { event: "*", schema: "public", table: "gpu_network_volumes" },
                 () => load(true)
-            )
-            .subscribe();
+            ).subscribe();
         channelRef.current = channel;
-        return () => {
-            channel.unsubscribe();
-        };
+        return () => { channel.unsubscribe(); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function onCreate() {
-        if (!name.trim()) {
-            toast.error("Name is required");
-            return;
-        }
-        if (sizeGb < 1 || sizeGb > 4000) {
-            toast.error("Size must be 1–4000 GB");
-            return;
-        }
+        if (!name.trim()) { toast.error("Name is required"); return; }
+        if (sizeGb < 1 || sizeGb > 4000) { toast.error("Size must be 1–4000 GB"); return; }
         setCreating(true);
         try {
             const res = await fetch("/api/services/gpu/volumes", {
@@ -143,11 +117,7 @@ export default function GpuStorage() {
                     "Content-Type": "application/json",
                     "Idempotency-Key": generateIdempotencyKey("gpu-vol"),
                 },
-                body: JSON.stringify({
-                    name: name.trim(),
-                    sizeGb,
-                    dataCenterId,
-                }),
+                body: JSON.stringify({ name: name.trim(), sizeGb, dataCenterId }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok || !json.ok) throw new Error(json.error || "Create failed");
@@ -165,17 +135,13 @@ export default function GpuStorage() {
 
     async function onDelete(vol: VolumeSummary) {
         if (vol.status === "attached") {
-            toast.error("Detach the pod first (destroy the pod that uses this volume)");
+            toast.error("Destroy the pod first — volumes can't be detached");
             return;
         }
-        if (!confirm(`Destroy volume "${vol.name}" (${vol.sizeGb} GB)? This is permanent.`)) {
-            return;
-        }
+        if (!confirm(`Destroy "${vol.name}" (${vol.sizeGb} GB)? This is permanent.`)) return;
         setDestroying((s) => ({ ...s, [vol.id]: true }));
         try {
-            const res = await fetch(`/api/services/gpu/volumes/${vol.id}`, {
-                method: "DELETE",
-            });
+            const res = await fetch(`/api/services/gpu/volumes/${vol.id}`, { method: "DELETE" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok || !json.ok) throw new Error(json.error || "Delete failed");
             toast.success("Volume destroyed");
@@ -189,115 +155,65 @@ export default function GpuStorage() {
 
     const totalGb = volumes.reduce((sum, v) => sum + v.sizeGb, 0);
     const monthlyTotal = volumes.reduce((sum, v) => sum + v.monthlyCostUsd, 0);
+    const attachedCount = volumes.filter((v) => v.status === "attached").length;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28 }}
-                className="glass-panel overflow-hidden"
-            >
-                <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="max-w-2xl">
-                        <nav className="mb-3 flex items-center gap-1.5 text-sm text-white/38">
-                            <Link
-                                href="/dashboard/services/gpu"
-                                className="flex items-center gap-1.5 transition-colors hover:text-white/70"
-                            >
-                                <ArrowLeft className="h-3.5 w-3.5" />
-                                GPU Cloud
-                            </Link>
-                        </nav>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/70">
-                            Persistent Storage
-                        </p>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                            Network volumes
-                        </h1>
-                        <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-                            Persistent block storage that survives pod destruction. Mounted at{" "}
-                            <code className="rounded-sm bg-white/[0.06] px-1 py-0.5 font-mono text-[12px] text-white/80">
-                                /workspace
-                            </code>{" "}
-                            on attached pods. Use this for model weights, datasets, and any
-                            work you don&apos;t want to lose.
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                            <Button
-                                onClick={() => load(false)}
-                                variant="outline"
-                                size="sm"
-                                className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                            >
-                                <RotateCw className="mr-2 h-3.5 w-3.5" />
-                                Refresh
-                            </Button>
-                            <Button
-                                onClick={() => setShowCreate((s) => !s)}
-                                size="sm"
-                                className="rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400"
-                            >
-                                <Plus className="mr-2 h-3.5 w-3.5" />
-                                Create volume
-                            </Button>
-                        </div>
-                    </div>
+            <header className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 className="text-[28px] font-semibold tracking-tight text-white">Network volumes</h1>
+                    <p className="mt-1.5 text-[14px] text-white/55 max-w-xl">
+                        Persistent storage that outlives pods. Mounted at <span className="font-mono text-white/70">/workspace</span>.
+                    </p>
                 </div>
-            </motion.div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => load(false)}
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 border-white/[0.1] bg-transparent hover:bg-white/[0.04] text-white/80 hover:text-white text-[12.5px] font-medium"
+                    >
+                        Refresh
+                    </Button>
+                    <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 border-white/[0.1] bg-transparent hover:bg-white/[0.04] text-white/80 hover:text-white text-[12.5px] font-medium"
+                    >
+                        <Link href="/dashboard/services/gpu">Back to GPU</Link>
+                    </Button>
+                    <Button
+                        onClick={() => setShowCreate((s) => !s)}
+                        size="sm"
+                        className="h-9 px-4 bg-[#0095FF] hover:bg-[#0aa0ff] text-white text-[12.5px] font-medium"
+                    >
+                        {showCreate ? "Close" : "Create volume"}
+                    </Button>
+                </div>
+            </header>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                {[
-                    {
-                        label: "Volumes",
-                        value: volumes.length,
-                        sub: "Across all datacenters",
-                    },
-                    { label: "Total size", value: `${totalGb} GB`, sub: "Allocated" },
-                    {
-                        label: "Monthly cost",
-                        value: `$${monthlyTotal.toFixed(2)}`,
-                        sub: "At current sizes",
-                    },
-                    {
-                        label: "Attached",
-                        value: volumes.filter((v) => v.status === "attached").length,
-                        sub: "In use by pods",
-                    },
-                ].map((s) => (
-                    <div key={s.label} className="glass-panel p-5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                            {s.label}
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold tracking-tight text-white tabular-nums">
-                            {s.value}
-                        </p>
-                        <p className="mt-1 text-xs text-white/40">{s.sub}</p>
-                    </div>
-                ))}
-            </div>
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatTile label="Volumes" value={String(volumes.length)} />
+                <StatTile label="Total size" value={`${totalGb} GB`} />
+                <StatTile label="Monthly cost" value={`$${monthlyTotal.toFixed(2)}`} />
+                <StatTile label="Attached" value={String(attachedCount)} />
+            </section>
 
             {/* Create form */}
             {showCreate && (
-                <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="glass-panel overflow-hidden"
-                >
-                    <div className="border-b border-white/[0.06] px-6 py-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                            New volume
+                <section className="border border-white/[0.08] bg-[#15171c]">
+                    <div className="border-b border-white/[0.06] px-5 py-3">
+                        <h2 className="text-[14px] font-semibold text-white">New volume</h2>
+                        <p className="mt-0.5 text-[12px] text-white/45">
+                            $0.07/GB-month up to 1 TB, $0.05/GB-month beyond.
                         </p>
-                        <h2 className="mt-1 text-base font-semibold text-white">
-                            Create a network volume
-                        </h2>
                     </div>
-                    <div className="grid gap-4 px-6 py-5 sm:grid-cols-[1fr_140px_220px_auto]">
+                    <div className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_120px_240px_auto]">
                         <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
+                            <Label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
                                 Name
                             </Label>
                             <Input
@@ -308,7 +224,7 @@ export default function GpuStorage() {
                             />
                         </div>
                         <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
+                            <Label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
                                 Size (GB)
                             </Label>
                             <Input
@@ -318,28 +234,23 @@ export default function GpuStorage() {
                                 value={sizeGb}
                                 onChange={(e) =>
                                     setSizeGb(
-                                        Math.max(
-                                            1,
-                                            Math.min(4000, parseInt(e.target.value || "1", 10))
-                                        )
+                                        Math.max(1, Math.min(4000, parseInt(e.target.value || "1", 10)))
                                     )
                                 }
                                 className={inputClassName}
                             />
                         </div>
                         <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
+                            <Label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
                                 Datacenter
                             </Label>
                             <Select value={dataCenterId} onValueChange={setDataCenterId}>
                                 <SelectTrigger className={inputClassName}>
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
+                                <SelectContent className="border-white/[0.1] bg-[#15171c] text-white">
                                     {DATA_CENTERS.map((d) => (
-                                        <SelectItem key={d.id} value={d.id}>
-                                            {d.label}
-                                        </SelectItem>
+                                        <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -347,170 +258,147 @@ export default function GpuStorage() {
                         <div className="flex items-end gap-2">
                             <Button
                                 variant="outline"
+                                size="sm"
                                 onClick={() => setShowCreate(false)}
-                                className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+                                className="h-9 px-3 border-white/[0.1] bg-transparent hover:bg-white/[0.04] text-white/80 hover:text-white text-[12.5px] font-medium"
                             >
                                 Cancel
                             </Button>
                             <Button
+                                size="sm"
                                 onClick={onCreate}
                                 disabled={creating}
-                                className="rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400 disabled:opacity-50"
+                                className="h-9 px-4 bg-[#0095FF] hover:bg-[#0aa0ff] text-white text-[12.5px] font-medium disabled:opacity-50"
                             >
                                 {creating ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Creating…
-                                    </>
-                                ) : (
-                                    "Create"
-                                )}
+                                    <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Creating</>
+                                ) : "Create"}
                             </Button>
                         </div>
                     </div>
-                    <div className="border-t border-white/[0.04] px-6 py-3 text-[11px] leading-5 text-white/45">
-                        <AlertTriangle className="mr-1.5 inline h-3 w-3 -translate-y-0.5 text-amber-300/80" />
-                        Pricing: <span className="font-mono text-white/70">$0.07/GB-month</span>{" "}
-                        up to 1 TB, $0.05/GB-month beyond. A volume can only be attached at pod
-                        creation time and cannot be detached without destroying the pod.
-                    </div>
-                </motion.div>
+                </section>
             )}
 
             {/* List */}
-            <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06, duration: 0.24 }}
-            >
+            <section>
+                <div className="mb-3 flex items-end justify-between flex-wrap gap-2">
+                    <h2 className="text-[17px] font-semibold tracking-tight text-white">Volumes</h2>
+                    {volumes.length > 0 && (
+                        <span className="text-[11.5px] text-white/45 font-mono tabular-nums">
+                            {volumes.length} total
+                        </span>
+                    )}
+                </div>
+
                 {loading ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {[1, 2, 3].map((i) => (
                             <div
                                 key={i}
-                                className="glass-panel h-[64px] animate-pulse"
+                                className="h-[56px] border border-white/[0.06] bg-[#15171c] animate-pulse"
                                 style={{ animationDelay: `${i * 60}ms` }}
                             />
                         ))}
                     </div>
                 ) : volumes.length === 0 ? (
-                    <div className="glass-panel overflow-hidden">
-                        <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-                            <HardDrive className="mb-3 h-10 w-10 text-white/20" />
-                            <p className="text-sm font-semibold text-white">No volumes yet</p>
-                            <p className="mt-1 max-w-sm text-xs text-white/45">
-                                Create a network volume to persist data across pod restarts and
-                                redeploys.
-                            </p>
-                            <Button
-                                onClick={() => setShowCreate(true)}
-                                size="sm"
-                                className="mt-5 rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400"
-                            >
-                                <Plus className="mr-2 h-3.5 w-3.5" />
-                                Create your first volume
-                            </Button>
-                        </div>
+                    <div className="border border-white/[0.08] bg-[#15171c] px-6 py-12 text-center">
+                        <p className="text-[14px] font-semibold text-white">No volumes yet</p>
+                        <p className="mt-1 text-[12px] text-white/45">
+                            Create one to persist data across pod restarts and redeploys.
+                        </p>
+                        <Button
+                            onClick={() => setShowCreate(true)}
+                            size="sm"
+                            className="mt-4 h-9 px-4 bg-[#0095FF] hover:bg-[#0aa0ff] text-white text-[12.5px] font-medium"
+                        >
+                            Create volume
+                        </Button>
                     </div>
                 ) : (
-                    <div className="glass-panel overflow-hidden">
-                        <div className="hidden border-b border-white/[0.06] px-5 py-3 sm:grid sm:grid-cols-[minmax(0,1.4fr)_120px_minmax(0,1.2fr)_120px_120px_36px] sm:gap-4">
-                            {["Name", "Size", "Datacenter", "Status", "Monthly"].map((h) => (
+                    <div className="border border-white/[0.08] bg-[#15171c]">
+                        <div className="hidden sm:grid grid-cols-[minmax(0,1.5fr)_100px_minmax(0,1.3fr)_140px_120px_40px] gap-4 border-b border-white/[0.06] px-5 py-2.5">
+                            {["Name", "Size", "Datacenter", "Status", "Monthly", ""].map((h, i) => (
                                 <div
-                                    key={h}
-                                    className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/28"
+                                    key={i}
+                                    className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40"
                                 >
                                     {h}
                                 </div>
                             ))}
-                            <div />
                         </div>
 
-                        {volumes.map((vol) => (
-                            <div
-                                key={vol.id}
-                                className="grid grid-cols-1 gap-2 border-b border-white/[0.04] px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1.4fr)_120px_minmax(0,1.2fr)_120px_120px_36px] sm:items-center sm:gap-4"
-                            >
-                                <div className="min-w-0">
-                                    <p className="truncate font-mono text-sm font-semibold text-white">
-                                        {vol.name}
-                                    </p>
-                                    {vol.runpodVolumeId && (
-                                        <p className="mt-0.5 truncate font-mono text-[11px] text-white/30">
-                                            {vol.runpodVolumeId}
+                        {volumes.map((vol) => {
+                            const s = statusMeta(vol.status);
+                            return (
+                                <div
+                                    key={vol.id}
+                                    className="grid grid-cols-1 gap-2 border-b border-white/[0.04] px-5 py-3.5 last:border-b-0 hover:bg-white/[0.015] transition-colors sm:grid-cols-[minmax(0,1.5fr)_100px_minmax(0,1.3fr)_140px_120px_40px] sm:items-center sm:gap-4"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="truncate font-mono text-[13px] font-semibold text-white">
+                                            {vol.name}
                                         </p>
-                                    )}
-                                </div>
-                                <p className="font-mono text-sm text-white tabular-nums">
-                                    {vol.sizeGb} GB
-                                </p>
-                                <p className="truncate text-sm text-white/55">
-                                    {dcLabel(vol.dataCenterId)}
-                                </p>
-                                <div>
-                                    <span
-                                        className={`inline-flex items-center border px-2 py-0.5 text-[11px] font-medium ${statusStyle(
-                                            vol.status
-                                        )}`}
-                                    >
-                                        {vol.status}
-                                    </span>
-                                </div>
-                                <p className="font-mono text-sm text-white tabular-nums">
-                                    ${vol.monthlyCostUsd.toFixed(2)}
-                                    <span className="ml-0.5 text-[11px] font-normal text-white/40">
-                                        /mo
-                                    </span>
-                                </p>
-                                <div className="flex justify-end">
-                                    <button
-                                        onClick={() => onDelete(vol)}
-                                        disabled={!!destroying[vol.id] || vol.status === "attached"}
-                                        title={
-                                            vol.status === "attached"
-                                                ? "Destroy the pod first"
-                                                : "Destroy volume"
-                                        }
-                                        className="flex h-7 items-center justify-center border border-red-500/15 bg-red-500/10 px-2 text-[11px] text-red-300 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-30"
-                                    >
-                                        {destroying[vol.id] ? (
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="h-3 w-3" />
+                                        {vol.runpodVolumeId && (
+                                            <p className="mt-0.5 truncate font-mono text-[10.5px] text-white/30">
+                                                {vol.runpodVolumeId}
+                                            </p>
                                         )}
-                                    </button>
+                                    </div>
+                                    <p className="font-mono text-[13px] text-white tabular-nums">
+                                        {vol.sizeGb} GB
+                                    </p>
+                                    <p className="truncate text-[12.5px] text-white/55">
+                                        {dcLabel(vol.dataCenterId)}
+                                    </p>
+                                    <div className="inline-flex items-center gap-1.5 text-[12px] text-white/75">
+                                        <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+                                        {s.label}
+                                    </div>
+                                    <p className="font-mono text-[13px] text-white tabular-nums">
+                                        ${vol.monthlyCostUsd.toFixed(2)}
+                                        <span className="ml-0.5 text-[10.5px] font-normal text-white/40">/mo</span>
+                                    </p>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => onDelete(vol)}
+                                            disabled={!!destroying[vol.id] || vol.status === "attached"}
+                                            title={
+                                                vol.status === "attached"
+                                                    ? "Destroy the pod first"
+                                                    : "Destroy volume"
+                                            }
+                                            className="h-7 px-2 border border-white/[0.08] bg-transparent text-[11px] text-white/65 hover:text-white hover:border-white/[0.2] transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                                        >
+                                            {destroying[vol.id] ? (
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                            ) : "Destroy"}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
-            </motion.div>
+            </section>
 
-            {/* Help */}
-            <div className="glass-panel overflow-hidden">
-                <div className="px-6 py-4 text-[12px] leading-5 text-white/55">
-                    <p className="font-semibold text-white/80">How storage works</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-white/45">
-                        <li>
-                            <strong className="text-white/65">Container disk</strong> on a pod is
-                            wiped every time the pod stops or restarts.
-                        </li>
-                        <li>
-                            <strong className="text-white/65">Pod volume</strong> persists across
-                            stops but disappears when the pod is destroyed.
-                        </li>
-                        <li>
-                            <strong className="text-white/65">Network volumes</strong> (this page)
-                            survive everything. They live in a specific datacenter; any pod that
-                            mounts one will be deployed in that datacenter automatically.
-                        </li>
-                        <li>
-                            Attach a volume to a new pod in the deploy wizard&apos;s Storage section.
-                            You cannot attach or detach mid-flight without destroying the pod.
-                        </li>
-                    </ul>
-                </div>
-            </div>
+            {/* Tip */}
+            <section className="border border-white/[0.06] bg-[#15171c] px-5 py-3.5">
+                <p className="text-[12px] leading-5 text-white/55">
+                    <span className="font-semibold text-white/80">Note</span> · Network volumes are pinned to a single datacenter. Any pod that mounts one is forced into that DC. Volumes can only be attached at pod-create time and cannot be detached without destroying the pod.
+                </p>
+            </section>
+        </div>
+    );
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="border border-white/[0.08] bg-[#15171c] px-4 py-3.5">
+            <p className="text-[10.5px] uppercase tracking-[0.16em] text-white/45 font-medium">{label}</p>
+            <p className="mt-1.5 text-[22px] font-semibold tabular-nums leading-none text-white tracking-tight">
+                {value}
+            </p>
         </div>
     );
 }

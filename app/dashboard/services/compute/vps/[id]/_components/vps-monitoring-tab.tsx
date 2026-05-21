@@ -32,7 +32,7 @@ export function VpsMonitoringTab({
 }: VpsMonitoringTabProps) {
   if (!isRunning) {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 text-center">
+      <div className="border border-white/[0.06] bg-[#111216] p-16 text-center">
         <BarChart3 className="mx-auto h-10 w-10 text-white/15 mb-4" />
         <p className="text-white/40 text-sm">Start the server to view real-time metrics</p>
       </div>
@@ -41,7 +41,7 @@ export function VpsMonitoringTab({
 
   if (loading && !met) {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 text-center">
+      <div className="border border-white/[0.06] bg-[#111216] p-16 text-center">
         <Loader2 className="mx-auto h-8 w-8 text-white/20 animate-spin mb-4" />
         <p className="text-white/30 text-sm">Loading metrics…</p>
       </div>
@@ -50,10 +50,10 @@ export function VpsMonitoringTab({
 
   if (error && !met) {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 text-center">
+      <div className="border border-white/[0.06] bg-[#111216] p-16 text-center">
         <AlertTriangle className="mx-auto h-10 w-10 text-amber-400/50 mb-4" />
         <p className="text-white/40 text-sm mb-3">{error}</p>
-        <button onClick={onRefetch} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">Retry</button>
+        <button onClick={onRefetch} className="text-xs text-[#0095FF] hover:text-[#0095FF] transition-colors">Retry</button>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export function VpsMonitoringTab({
           const circ = 2 * Math.PI * r;
           const offset = circ - (Math.min(g.value, 100) / 100) * circ;
           return (
-            <div key={g.label} className="border border-white/[0.06] rounded-lg bg-[#08080a] p-6 flex items-center gap-6">
+            <div key={g.label} className="border border-white/[0.06] bg-[#111216] p-6 flex items-center gap-6">
               <div className="relative flex-shrink-0">
                 <svg width="128" height="128" viewBox="0 0 128 128">
                   <circle cx="64" cy="64" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
@@ -128,7 +128,7 @@ export function VpsMonitoringTab({
         {ioCards.map((c) => {
           const Icon = c.icon;
           return (
-            <div key={c.label} className="border border-white/[0.06] rounded-lg bg-[#08080a] p-4">
+            <div key={c.label} className="border border-white/[0.06] bg-[#111216] p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Icon className={`h-3.5 w-3.5 ${c.color}`} />
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">{c.label}</p>
@@ -161,7 +161,7 @@ export function VpsMonitoringTab({
               }).join(' ');
               const areaPoints = `0,${h2} ${points} ${w},${h2}`;
               return (
-                <div key={chart.key} className="border border-white/[0.06] rounded-lg bg-[#08080a] p-4">
+                <div key={chart.key} className="border border-white/[0.06] bg-[#111216] p-4">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">{chart.label}</p>
                     <p className="text-xs font-bold text-white tabular-nums">
@@ -186,7 +186,7 @@ export function VpsMonitoringTab({
       )}
 
       {/* System Info */}
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-5">
+      <div className="border border-white/[0.06] bg-[#111216] p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30 mb-3">System Status</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
