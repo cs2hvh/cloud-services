@@ -14,13 +14,9 @@ import {
   ArrowUpRight,
   ChevronRight,
   Database,
-  HardDrive,
   Loader2,
   MapPin,
   Plus,
-  ShieldCheck,
-  Sparkles,
-  Workflow,
 } from "lucide-react";
 
 import { useSession } from "@/app/dashboard/provider";
@@ -148,36 +144,38 @@ function statusMeta(status: string): { dot: string; label: string } {
   return { dot: "bg-white/30", label: formatStatus(status) };
 }
 
-// ─── Use-case patterns ────────────────────────────────────────────
+// ─── Platform features (floating PNG illustrations) ──────────────
 
-const PATTERNS = [
+const FEATURES = [
   {
-    title: "Web app",
-    arrow: "PostgreSQL",
-    engineCode: "pg",
-    desc: "Relational primary with JSON columns, full-text search, and pgvector for AI features.",
-    icon: <Workflow className="h-4 w-4" />,
+    title: "Fully managed engines",
+    desc: "Patches, minor upgrades, and replication topology — handled. You get a connection string.",
+    image: "/images/kubernetes-ui/fully managed.png",
   },
   {
-    title: "Document store",
-    arrow: "MongoDB",
-    engineCode: "mongodb",
-    desc: "Flexible schemas for product catalogs, user profiles, and content with rich queries.",
-    icon: <Database className="h-4 w-4" />,
+    title: "Point-in-time recovery",
+    desc: "Continuous WAL streaming with 7–35 day retention. Restore to any second in the window.",
+    image: "/images/kubernetes-ui/life cycle.png",
   },
   {
-    title: "Event streaming",
-    arrow: "Apache Kafka",
-    engineCode: "kafka",
-    desc: "High-throughput pipelines for logs, telemetry, and async workflows between services.",
-    icon: <Sparkles className="h-4 w-4" />,
+    title: "Auto-scaling storage",
+    desc: "Disks grow with your data — no manual resizes, no downtime, no surprise outages.",
+    image: "/images/kubernetes-ui/auto scaling nodespng.png",
   },
   {
-    title: "Hybrid transactional",
-    arrow: "MySQL",
-    engineCode: "mysql",
-    desc: "OLTP workloads with mature replication, indexing, and ecosystem tooling.",
-    icon: <ShieldCheck className="h-4 w-4" />,
+    title: "Connection pooling",
+    desc: "Managed PgBouncer / ProxySQL with transactional and session modes baked in.",
+    image: "/images/kubernetes-ui/Built in load balancing png.png",
+  },
+  {
+    title: "Multi-region replicas",
+    desc: "Read replicas in any supported region, with cross-region streaming replication.",
+    image: "/images/kubernetes-ui/Multi region clusters png.png",
+  },
+  {
+    title: "99.99% uptime SLA",
+    desc: "Multi-AZ standby, automatic failover, and per-cluster lifecycle audit logs.",
+    image: "/images/kubernetes-ui/11 nine.png",
   },
 ] as const;
 
@@ -296,29 +294,11 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
         />
       </div>
 
-      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
         {/* ── Hero ────────────────────────────────────── */}
-        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-8">
-          <div className="max-w-3xl">
-            <div
-              className={`${MONO} mb-3 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}
-            >
-              <span className="h-px w-4 bg-white/45" />
-              Database Service
-              {engines.length > 0 && (
-                <span
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 border text-[9.5px] font-semibold rounded-[5px]"
-                  style={{
-                    color: ACCENT,
-                    borderColor: "rgba(0,149,255,0.25)",
-                    background: ACCENT_DIM,
-                  }}
-                >
-                  {engines.length} engine{engines.length === 1 ? "" : "s"}
-                </span>
-              )}
-            </div>
-            <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+        <header className="mb-14">
+          <div className="max-w-2xl">
+            <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Managed databases{" "}
               <span style={SERIF_STYLE} className="text-white/55 font-normal">
                 for production workloads
@@ -326,59 +306,65 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
               .
             </h1>
             <p
-              className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}
+              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
             >
-              Provision relational, document, and streaming engines with predictable
-              capacity, point-in-time recovery, and direct connection strings.
+              Provision relational, document, and streaming engines with
+              predictable capacity, point-in-time recovery, and direct
+              connection strings.
             </p>
+            <div className="mt-6 flex items-center gap-2">
+              <Link
+                href="/dashboard/services/database/new"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                style={{
+                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                  color: "#ffffff",
+                  boxShadow:
+                    "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                  e.currentTarget.style.transform = "none";
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New cluster
+              </Link>
+              <Link
+                href="#inventory"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              >
+                View inventory
+              </Link>
+            </div>
           </div>
-          <Link
-            href="/dashboard/services/database/new"
-            className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold transition-all rounded-[5px] shrink-0`}
-            style={{
-              background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
-              color: "#ffffff",
-              boxShadow:
-                "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-              e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
-              e.currentTarget.style.transform = "none";
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New cluster
-          </Link>
         </header>
 
-        {/* ── Stats strip ─────────────────────────────── */}
-        <section className="mb-10 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <StatTile
+        {/* ── Stats — horizontal divider strip ─────────── */}
+        <section className="mb-16 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+          <StatCell
             label="Total clusters"
             value={String(clusters.length)}
             hint="Managed environments"
-            icon={<Database className="h-3.5 w-3.5" />}
           />
-          <StatTile
+          <StatCell
             label="Healthy"
             value={String(onlineCount)}
             suffix={clusters.length > 0 ? `/ ${clusters.length}` : undefined}
             hint="Online and serving"
-            icon={<ShieldCheck className="h-3.5 w-3.5" />}
-            tone="green"
+            accent="#4ade80"
           />
-          <StatTile
+          <StatCell
             label="Provisioning"
             value={String(provisioningCount)}
             hint="Creating or updating"
-            icon={<Loader2 className="h-3.5 w-3.5" />}
-            tone="blue"
+            accent={ACCENT}
           />
-          <StatTile
+          <StatCell
             label="Footprint"
             value={regionsCount > 0 ? String(regionsCount) : "—"}
             suffix={regionsCount > 0 ? "regions" : undefined}
@@ -387,7 +373,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
                 ? `${totalNodes} total node${totalNodes === 1 ? "" : "s"}`
                 : "No deployed capacity yet"
             }
-            icon={<HardDrive className="h-3.5 w-3.5" />}
           />
         </section>
 
@@ -439,38 +424,44 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
           </div>
         )}
 
-        {/* ── Use-case patterns ───────────────────────── */}
+        {/* ── Platform features (floating illustrations) ─ */}
         <SectionHead
-          eyebrow="Common patterns"
-          title="What teams typically"
-          accent="reach for"
+          eyebrow="Why managed databases"
+          title="Engineered"
+          accent="for production"
+          link={{ label: "Read the docs", href: "#" }}
         />
-        <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-          {PATTERNS.map((p) => (
-            <PatternCard
-              key={p.title}
-              icon={p.icon}
-              title={p.title}
-              arrow={p.arrow}
-              desc={p.desc}
-              engineAvailable={engines.some(
-                (e) => e.code === p.engineCode,
-              )}
-            />
+        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
+          {FEATURES.map((f, i) => (
+            <FeatureCell key={f.title} index={i} {...f} />
           ))}
         </div>
 
+        <style>{`
+          @keyframes floaty {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-6px); }
+          }
+        `}</style>
+
         {/* ── Inventory ───────────────────────────────── */}
-        <SectionHead
-          eyebrow="Cluster inventory"
-          title="Your"
-          accent="clusters"
-        />
-        {sortedClusters.length > 0 ? (
-          <ClusterTable clusters={sortedClusters} />
-        ) : (
-          <EmptyState />
-        )}
+        <div id="inventory">
+          <SectionHead
+            eyebrow="Cluster inventory"
+            title="Your"
+            accent="clusters"
+            rightMeta={
+              clusters.length > 0
+                ? `${onlineCount} healthy · ${clusters.length} total`
+                : undefined
+            }
+          />
+          {sortedClusters.length > 0 ? (
+            <ClusterTable clusters={sortedClusters} />
+          ) : (
+            <EmptyState />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -485,98 +476,140 @@ function SectionHead({
   title,
   accent,
   link,
+  rightMeta,
 }: {
   eyebrow: string;
   title: string;
   accent: string;
   link?: { label: string; href: string };
+  rightMeta?: string;
 }) {
   return (
-    <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
+    <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
         <p
           className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
         >
           {eyebrow}
         </p>
-        <h2 className="text-[19px] font-semibold tracking-[-0.015em] text-white">
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
           <span style={SERIF_STYLE} className="text-white/55 font-normal">
             {accent}
           </span>
+          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
-      {link && (
-        <Link
-          href={link.href}
-          className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/50 hover:text-white transition-colors`}
-        >
-          {link.label}
-          <ChevronRight className="h-3 w-3" />
-        </Link>
-      )}
+      <div className="flex items-center gap-4">
+        {rightMeta && (
+          <span
+            className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 tabular-nums`}
+          >
+            {rightMeta}
+          </span>
+        )}
+        {link && (
+          <Link
+            href={link.href}
+            className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/50 hover:text-[#0095FF] transition-colors`}
+          >
+            {link.label}
+            <ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
 
-function StatTile({
+function StatCell({
   label,
   value,
   suffix,
   hint,
-  icon,
-  tone,
+  accent,
 }: {
   label: string;
   value: string;
   suffix?: string;
   hint: string;
-  icon: React.ReactNode;
-  tone?: "blue" | "green";
+  accent?: string;
 }) {
-  const iconTone =
-    tone === "blue"
-      ? { color: ACCENT, background: ACCENT_DIM, borderColor: "rgba(0,149,255,0.2)" }
-      : tone === "green"
-        ? {
-            color: "#4ade80",
-            background: "rgba(74,222,128,0.06)",
-            borderColor: "rgba(74,222,128,0.2)",
-          }
-        : {
-            color: "rgba(255,255,255,0.55)",
-            background: "#0d0e11",
-            borderColor: "rgba(255,255,255,0.08)",
-          };
   return (
-    <div className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+    <div className="px-5 py-5 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
         <span
-          className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}
+          className="h-1 w-1 rounded-full shrink-0"
+          style={{
+            background: accent ?? "rgba(255,255,255,0.55)",
+            boxShadow: accent ? `0 0 5px ${accent}` : "none",
+          }}
+        />
+        <span
+          className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}
         >
           {label}
-        </span>
-        <span
-          className="h-6 w-6 inline-flex items-center justify-center border rounded-[4px]"
-          style={iconTone}
-        >
-          {icon}
         </span>
       </div>
       <div className="flex items-baseline gap-1">
         <span
           style={SERIF_STYLE}
-          className="text-[34px] leading-none font-bold tabular-nums tracking-[-0.03em] text-white"
+          className="text-[40px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
         >
           {value}
         </span>
         {suffix && (
-          <span style={SERIF_STYLE} className="text-[16px] text-white/45 font-medium">
+          <span style={SERIF_STYLE} className="text-[16px] text-white/40 font-medium">
             {suffix}
           </span>
         )}
       </div>
-      <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>
+      <p className={`${MONO} text-[10.5px] text-white/40`}>{hint}</p>
+    </div>
+  );
+}
+
+function FeatureCell({
+  index,
+  title,
+  desc,
+  image,
+}: {
+  index: number;
+  title: string;
+  desc: string;
+  image: string;
+}) {
+  return (
+    <div className="flex items-start gap-4 py-2">
+      <div
+        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
+        style={{
+          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
+        }}
+      >
+        <div
+          className="absolute inset-0 blur-xl opacity-50"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
+          }}
+        />
+        <Image
+          src={image}
+          alt=""
+          width={80}
+          height={80}
+          className="relative object-contain"
+          unoptimized
+        />
+      </div>
+      <div className="min-w-0 pt-1.5">
+        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
+          {title}
+        </h3>
+        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
+      </div>
     </div>
   );
 }
@@ -733,52 +766,6 @@ function EngineCard({
           <ArrowUpRight className="h-3 w-3" />
         </Link>
       </div>
-    </div>
-  );
-}
-
-function PatternCard({
-  icon,
-  title,
-  arrow,
-  desc,
-  engineAvailable,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  arrow: string;
-  desc: string;
-  engineAvailable: boolean;
-}) {
-  return (
-    <div
-      className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-3"
-      style={{ opacity: engineAvailable ? 1 : 0.55 }}
-    >
-      <span
-        className="h-7 w-7 inline-flex items-center justify-center border rounded-[4px]"
-        style={{
-          color: ACCENT,
-          background: ACCENT_DIM,
-          borderColor: "rgba(0,149,255,0.2)",
-        }}
-      >
-        {icon}
-      </span>
-      <div>
-        <div
-          className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45 flex items-center gap-1.5`}
-        >
-          {title}
-          <ChevronRight className="h-3 w-3 text-white/25" />
-        </div>
-        <div className="mt-1 text-[14px] font-semibold tracking-[-0.01em] text-white">
-          {arrow}
-        </div>
-      </div>
-      <p className={`${MONO} text-[10.5px] text-white/45 leading-snug mt-auto`}>
-        {desc}
-      </p>
     </div>
   );
 }

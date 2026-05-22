@@ -16,6 +16,7 @@ import {
     Trash2,
 } from "lucide-react";
 
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { GpuPodSummaryClient, PodStatus } from "./types";
 
 // ─── Design tokens ────────────────────────────────────────────────
@@ -230,6 +231,7 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
                                     <div
                                         className={`${MONO} mt-1 flex items-center gap-1.5 text-[11px] text-white/55`}
                                     >
+                                        <NvidiaLogo width={14} height={10} className="shrink-0 opacity-90" />
                                         <span className="tabular-nums">
                                             {pod.gpuCount}×
                                         </span>
@@ -281,6 +283,7 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
                             <div
                                 className={`${MONO} flex items-center gap-1.5 text-[11.5px] text-white/75 min-w-0`}
                             >
+                                <NvidiaLogo width={16} height={11} className="shrink-0 opacity-90" />
                                 <span className="tabular-nums text-white/90 font-medium">
                                     {pod.gpuCount}×
                                 </span>

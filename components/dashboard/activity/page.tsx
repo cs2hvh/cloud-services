@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { motion } from "motion/react";
-import { Activity } from "lucide-react";
 import { ActivityStatsBar } from "./activity-stats-bar";
 import { ActivityFilterBar } from "./activity-filter-bar";
 import { ActivityTimeline } from "./activity-timeline";
@@ -15,18 +13,26 @@ import {
   type ActivityStats,
 } from "./activity.types";
 
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
 export default function ActivityPage({ logs }: { logs: ProjectLog[] }) {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<EventType | "all">("all");
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(1);
 
-  const stats: ActivityStats = useMemo(() => ({
-    create: logs.filter((l) => getEventType(l.event) === "create").length,
-    update: logs.filter((l) => getEventType(l.event) === "update").length,
-    delete: logs.filter((l) => getEventType(l.event) === "delete").length,
-    warn:   logs.filter((l) => getEventType(l.event) === "warn").length,
-  }), [logs]);
+  const stats: ActivityStats = useMemo(
+    () => ({
+      create: logs.filter((l) => getEventType(l.event) === "create").length,
+      update: logs.filter((l) => getEventType(l.event) === "update").length,
+      delete: logs.filter((l) => getEventType(l.event) === "delete").length,
+      warn: logs.filter((l) => getEventType(l.event) === "warn").length,
+    }),
+    [logs],
+  );
 
   const filtered = useMemo(() => {
     const result = logs.filter((log) => {
@@ -34,7 +40,8 @@ export default function ActivityPage({ logs }: { logs: ProjectLog[] }) {
         !search ||
         log.event.toLowerCase().includes(search.toLowerCase()) ||
         log.text.toLowerCase().includes(search.toLowerCase());
-      const matchesFilter = filterType === "all" || getEventType(log.event) === filterType;
+      const matchesFilter =
+        filterType === "all" || getEventType(log.event) === filterType;
       return matchesSearch && matchesFilter;
     });
     return [...result].sort((a, b) => {
@@ -49,75 +56,51 @@ export default function ActivityPage({ logs }: { logs: ProjectLog[] }) {
   const resetPage = () => setPage(1);
 
   return (
-    <div className="w-full">
-
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22 }}
-        className="flex items-center gap-3 mb-7"
+    <div className="min-w-0">
+      {/* Hero */}
+      <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+        Activity{" "}
+        <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          log
+        </span>
+        .
+      </h1>
+      <p
+        className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
       >
-        <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/[0.06] border border-white/[0.08]">
-          <Activity className="w-4 h-4 text-white/60" />
-        </div>
-        <div>
-          <h1 className="text-[18px] font-semibold text-white leading-tight">Activity Log</h1>
-          <p className="text-[12px] text-white/35 leading-tight mt-0.5">
-            {logs.length} event{logs.length !== 1 ? "s" : ""} recorded
-          </p>
-        </div>
-      </motion.div>
+        {logs.length} event{logs.length !== 1 ? "s" : ""} recorded across your
+        infrastructure.
+      </p>
 
-      {/* Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, delay: 0.06 }}
-      >
-        <ActivityStatsBar stats={stats} />
-      </motion.div>
+      <ActivityStatsBar stats={stats} />
 
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, delay: 0.1 }}
-      >
-        <ActivityFilterBar
-          search={search}
-          onSearch={(v) => { setSearch(v); resetPage(); }}
-          filterType={filterType}
-          onFilterType={(v) => { setFilterType(v); resetPage(); }}
-          sortAsc={sortAsc}
-          onToggleSort={() => { setSortAsc((v) => !v); resetPage(); }}
-          stats={stats}
-        />
-      </motion.div>
+      <ActivityFilterBar
+        search={search}
+        onSearch={(v) => {
+          setSearch(v);
+          resetPage();
+        }}
+        filterType={filterType}
+        onFilterType={(v) => {
+          setFilterType(v);
+          resetPage();
+        }}
+        sortAsc={sortAsc}
+        onToggleSort={() => {
+          setSortAsc((v) => !v);
+          resetPage();
+        }}
+        stats={stats}
+      />
 
-      {/* Timeline */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, delay: 0.14 }}
-      >
-        <ActivityTimeline paginated={paginated} totalLogs={logs.length} />
-      </motion.div>
+      <ActivityTimeline paginated={paginated} totalLogs={logs.length} />
 
-      {/* Pagination */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <ActivityPagination
-          page={page}
-          totalPages={totalPages}
-          totalFiltered={filtered.length}
-          onPage={setPage}
-        />
-      </motion.div>
-
+      <ActivityPagination
+        page={page}
+        totalPages={totalPages}
+        totalFiltered={filtered.length}
+        onPage={setPage}
+      />
     </div>
   );
 }

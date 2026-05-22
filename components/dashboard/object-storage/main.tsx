@@ -1,7 +1,11 @@
 "use client";
 
+// Object Storage overview — editorial canvas with horizontal stats
+// strip, floating PNG feature illustrations, and a clean bucket
+// inventory. Matches the editorial language used across Kubernetes,
+// Database, and Apps overviews.
+
 import { useMemo } from "react";
-import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,47 +13,62 @@ import Link from "next/link";
 import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
 import BucketsTable from "./buckets-table";
 
+// ─── Design tokens ─────────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+
 interface ObjectStorageMainProps {
   buckets: ObjectSpaceBucket[];
   projects: Tables<"projects">[];
   userId: string;
 }
 
-function MetricCard({
-  label,
-  value,
-  meta,
-  iconSrc,
-}: {
-  label: string;
-  value: string | number;
-  meta: string;
-  iconSrc: string;
-}) {
-  return (
-    <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-            {label}
-          </p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
-          <p className="mt-1 text-sm text-white/45">{meta}</p>
-        </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Platform features (floating PNG illustrations) ───────────────
+
+const FEATURES = [
+  {
+    title: "S3-compatible API",
+    desc: "Drop-in for the AWS S3 SDK. Bring your existing tooling — boto3, aws-cli, MinIO clients.",
+    image: "/images/kubernetes-ui/s3 Compatible API.png",
+  },
+  {
+    title: "11 nines durability",
+    desc: "Objects replicated across multiple nodes per region. Designed for 99.999999999% durability.",
+    image: "/images/11 nINES dURABILITY.png",
+  },
+  {
+    title: "Lifecycle policies",
+    desc: "Auto-transition cold objects to archival storage and expire stale data on a schedule.",
+    image: "/images/Life cycle policiese.png",
+  },
+  {
+    title: "Object versioning",
+    desc: "Per-object version history with point-in-time restore and soft-delete protection.",
+    image: "/images/kubernetes-ui/versoning.png",
+  },
+  {
+    title: "Global CDN",
+    desc: "Serve public assets from 150+ edge POPs with brotli compression and range requests.",
+    image: "/images/Global CDN Integration.png",
+  },
+  {
+    title: "Multi-region replication",
+    desc: "Replicate buckets across regions for low-latency reads and disaster recovery.",
+    image: "/images/kubernetes-ui/Multi region clusters png.png",
+  },
+] as const;
+
+// ─── Component ─────────────────────────────────────────────────────
 
 const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
   const stats = useMemo(() => {
-    const activeBuckets = buckets.filter((bucket) => bucket.status === "active").length;
-    const publicBuckets = buckets.filter((bucket) => bucket.acl === "public-read").length;
-    const versionedBuckets = buckets.filter((bucket) => bucket.versioning_enabled).length;
-
+    const activeBuckets = buckets.filter((b) => b.status === "active").length;
+    const publicBuckets = buckets.filter((b) => b.acl === "public-read").length;
+    const versionedBuckets = buckets.filter((b) => b.versioning_enabled).length;
     return {
       totalBuckets: buckets.length,
       activeBuckets,
@@ -59,108 +78,296 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
   }, [buckets]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"
-      >
-        <div className="max-w-3xl">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-            Storage Service
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            Object storage for files, assets, and application data.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">
-            Provision and manage Spaces buckets with cleaner access controls, region visibility,
-            and storage operations from a more enterprise dashboard surface.
-          </p>
-        </div>
-
-        <Link
-          href="/dashboard/services/object-storage/new"
-          className="inline-flex items-center justify-center gap-2 border border-blue-400/25 bg-blue-500/90 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
-        >
-          <Plus className="h-4 w-4" />
-          New Bucket
-        </Link>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, duration: 0.28 }}
-        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
-      >
-        <MetricCard
-          label="Buckets"
-          value={stats.totalBuckets}
-          meta="Provisioned object storage buckets"
-          iconSrc="/dashboard-icons/buckets.png"
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background layer */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[900px] w-[900px] blur-[60px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.08), transparent 60%)",
+          }}
         />
-        <MetricCard
-          label="Active"
-          value={stats.activeBuckets}
-          meta="Buckets currently available for traffic"
-          iconSrc="/dashboard-icons/active-1.png"
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+          }}
         />
-        <MetricCard
-          label="Public Access"
-          value={stats.publicBuckets}
-          meta="Buckets with public read access"
-          iconSrc="/dashboard-icons/public-acess.png"
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
         />
-        <MetricCard
-          label="Versioning"
-          value={stats.versionedBuckets}
-          meta="Buckets with object versioning enabled"
-          iconSrc="/dashboard-icons/versioning.png"
-        />
-      </motion.div>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.28 }}
-        className="glass-panel overflow-hidden"
-      >
-        <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                Bucket Inventory
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                Bucket access, region posture, and operational status.
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-                Review bucket visibility, ACL posture, and direct bucket access from one
-                operator-focused inventory.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                S3-compatible storage
+      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+        {/* Hero */}
+        <header className="mb-14">
+          <div className="max-w-2xl">
+            <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
+              Object storage{" "}
+              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                for files, assets, and data
               </span>
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                Access keys on demand
-              </span>
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                {stats.totalBuckets} total
-              </span>
+              .
+            </h1>
+            <p
+              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
+            >
+              S3-compatible buckets with versioning, lifecycle policies, and a
+              global CDN — backed by 11 nines of durability.
+            </p>
+            <div className="mt-6 flex items-center gap-2">
+              <Link
+                href="/dashboard/services/object-storage/new"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                style={{
+                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                  color: "#ffffff",
+                  boxShadow:
+                    "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                  e.currentTarget.style.transform = "none";
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New bucket
+              </Link>
+              <Link
+                href="#inventory"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              >
+                View inventory
+              </Link>
             </div>
           </div>
+        </header>
+
+        {/* Stats — horizontal divider strip */}
+        <section className="mb-16 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+          <StatCell
+            label="Buckets"
+            value={String(stats.totalBuckets)}
+            hint="Provisioned storage buckets"
+          />
+          <StatCell
+            label="Active"
+            value={String(stats.activeBuckets)}
+            suffix={
+              stats.totalBuckets > 0 ? `/ ${stats.totalBuckets}` : undefined
+            }
+            hint="Available for traffic"
+            accent="#4ade80"
+          />
+          <StatCell
+            label="Public access"
+            value={String(stats.publicBuckets)}
+            hint="Buckets with public read"
+            accent={ACCENT}
+          />
+          <StatCell
+            label="Versioning"
+            value={String(stats.versionedBuckets)}
+            hint="Buckets with object versioning"
+          />
+        </section>
+
+        {/* Platform features */}
+        <SectionHead
+          eyebrow="Why object storage"
+          title="Engineered"
+          accent="for scale"
+          link={{ label: "Read the docs", href: "/docs" }}
+        />
+        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
+          {FEATURES.map((f, i) => (
+            <FeatureCell key={f.title} index={i} {...f} />
+          ))}
         </div>
 
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
+        <style>{`
+          @keyframes floaty {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-6px); }
+          }
+        `}</style>
+
+        {/* Inventory */}
+        <div id="inventory">
+          <SectionHead
+            eyebrow="Bucket inventory"
+            title="Your"
+            accent="buckets"
+            rightMeta={
+              stats.totalBuckets > 0
+                ? `${stats.activeBuckets} active · ${stats.totalBuckets} total`
+                : undefined
+            }
+          />
           <BucketsTable buckets={buckets} />
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };
 
 export default ObjectStorageMain;
+
+// ─── Subcomponents ─────────────────────────────────────────────────
+
+function SectionHead({
+  eyebrow,
+  title,
+  accent,
+  link,
+  rightMeta,
+}: {
+  eyebrow: string;
+  title: string;
+  accent: string;
+  link?: { label: string; href: string };
+  rightMeta?: string;
+}) {
+  return (
+    <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
+      <div>
+        <p
+          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
+        >
+          {eyebrow}
+        </p>
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+          {title}{" "}
+          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+            {accent}
+          </span>
+          <span className="text-white/55 font-normal">.</span>
+        </h2>
+      </div>
+      <div className="flex items-center gap-4">
+        {rightMeta && (
+          <span
+            className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 tabular-nums`}
+          >
+            {rightMeta}
+          </span>
+        )}
+        {link && (
+          <Link
+            href={link.href}
+            className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/50 hover:text-[#0095FF] transition-colors`}
+          >
+            {link.label}
+            <span aria-hidden>→</span>
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  suffix,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  hint: string;
+  accent?: string;
+}) {
+  return (
+    <div className="px-5 py-5 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-1 w-1 rounded-full shrink-0"
+          style={{
+            background: accent ?? "rgba(255,255,255,0.55)",
+            boxShadow: accent ? `0 0 5px ${accent}` : "none",
+          }}
+        />
+        <span
+          className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}
+        >
+          {label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span
+          style={SERIF_STYLE}
+          className="text-[40px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
+        >
+          {value}
+        </span>
+        {suffix && (
+          <span
+            style={SERIF_STYLE}
+            className="text-[16px] text-white/40 font-medium"
+          >
+            {suffix}
+          </span>
+        )}
+      </div>
+      <p className={`${MONO} text-[10.5px] text-white/40`}>{hint}</p>
+    </div>
+  );
+}
+
+function FeatureCell({
+  index,
+  title,
+  desc,
+  image,
+}: {
+  index: number;
+  title: string;
+  desc: string;
+  image: string;
+}) {
+  return (
+    <div className="flex items-start gap-4 py-2">
+      <div
+        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
+        style={{
+          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
+        }}
+      >
+        <div
+          className="absolute inset-0 blur-xl opacity-50"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
+          }}
+        />
+        <Image
+          src={image}
+          alt=""
+          width={80}
+          height={80}
+          className="relative object-contain"
+          unoptimized
+        />
+      </div>
+      <div className="min-w-0 pt-1.5">
+        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
+          {title}
+        </h3>
+        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
+      </div>
+    </div>
+  );
+}

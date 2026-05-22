@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { generateIdempotencyKey } from "@/lib/idempotency";
 
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { InventoryRowClient, StockStatus } from "./types";
 
 // ─── Design tokens (scoped to the deploy page) ─────────────────────────
@@ -1193,9 +1194,12 @@ function GpuCard({
             {/* Top — name + arch + vram pill */}
             <div className="mb-1 flex items-start justify-between gap-2.5">
                 <div className="min-w-0 flex-1">
-                    <h3 className="text-[14.5px] font-medium tracking-[-0.015em] text-white">
-                        {row.displayName}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                        <NvidiaLogo width={18} height={13} className="shrink-0 opacity-95" />
+                        <h3 className="text-[14.5px] font-medium tracking-[-0.015em] text-white">
+                            {row.displayName}
+                        </h3>
+                    </div>
                     <div className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/35`}>
                         <span className="text-white/55">{vendor}</span>
                         <span className="opacity-40">·</span>

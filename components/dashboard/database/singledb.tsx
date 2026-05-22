@@ -1,17 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
-  Clock3,
-  Cpu,
-  HardDrive,
+  ChevronRight,
   Loader2,
-  MapPin,
   Network,
   Server,
   Settings2,
@@ -49,9 +45,15 @@ type TabItem = {
   value: string;
   label: string;
   icon: LucideIcon;
-  eyebrow: string;
   description: string;
 };
+
+// ─── Design tokens ────────────────────────────────────────────────
+const SERIF_STYLE: CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
 
 const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const searchParams = useSearchParams();
@@ -154,29 +156,35 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     }
   };
 
-  const statusConfig = useMemo(() => {
+  const statusMeta = useMemo(() => {
     const status = database?.status ?? "failed";
 
     if (status === "online") {
       return {
         label: "Online",
-        tone: "border-emerald-400/20 bg-emerald-500/10 text-emerald-300",
-        icon: CheckCircle2,
+        color: "#4ade80",
+        Icon: CheckCircle2,
+        pulse: true,
+        spin: false,
       };
     }
 
     if (status === "creating" || status === "migrating") {
       return {
         label: status === "migrating" ? "Migrating" : "Provisioning",
-        tone: "border-amber-400/20 bg-amber-500/10 text-amber-300",
-        icon: Loader2,
+        color: "#fbbf24",
+        Icon: Loader2,
+        pulse: false,
+        spin: true,
       };
     }
 
     return {
       label: "Attention Required",
-      tone: "border-red-400/20 bg-red-500/10 text-red-300",
-      icon: AlertCircle,
+      color: "#f87171",
+      Icon: AlertCircle,
+      pulse: false,
+      spin: false,
     };
   }, [database?.status]);
 
@@ -186,29 +194,25 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         value: "overview",
         label: "Overview",
         icon: Server,
-        eyebrow: "Overview",
-        description: "Review connectivity, status, and the deployed service profile.",
+        description: "Connectivity, status, and the deployed service profile.",
       },
       {
         value: "network",
         label: "Network",
         icon: Network,
-        eyebrow: "Security",
-        description: "Manage the trusted IP allowlist and inbound access posture.",
+        description: "Trusted IP allowlist and inbound access posture.",
       },
       {
         value: "users-dbs",
         label: getAccessTabLabel(database?.engine),
         icon: Users,
-        eyebrow: "Access",
         description: getAccessTabDescription(database?.engine),
       },
       {
         value: "settings",
         label: "Settings",
         icon: Settings2,
-        eyebrow: "Operations",
-        description: "Handle maintenance, sizing changes, migrations, and deletion.",
+        description: "Maintenance, sizing, migrations, and deletion.",
       },
     ],
     [database?.engine]
@@ -222,56 +226,50 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     [allTabs, database?.status]
   );
 
-  const activeSection =
-    visibleTabs.find((tab) => tab.value === activeTab) ?? visibleTabs[0];
-
   const summaryStats = useMemo(() => {
     if (!database) return [];
+
+    const storageGiB = getStorageGiB({
+      storageSizeMib: database.storage_size_mib,
+      size: database.size,
+      products,
+    });
 
     return [
       {
         label: "Engine",
         value: `${database.engine?.toUpperCase() || "Managed"} ${database.version || ""}`.trim(),
-        icon: Server,
+        hint: "Database engine",
+        accent: ACCENT,
       },
       {
         label: "Compute",
-        value: `${extractCpu(database.size)} · ${extractRam(database.size)}`,
-        icon: Cpu,
+        value: extractCpu(database.size),
+        hint: extractRam(database.size),
       },
       {
         label: "Storage",
-        value: (() => {
-          const storageGiB = getStorageGiB({
-            storageSizeMib: database.storage_size_mib,
-            size: database.size,
-            products,
-          });
-          return storageGiB ? `${storageGiB} GiB` : "Managed";
-        })(),
-        icon: HardDrive,
+        value: storageGiB ? `${storageGiB}` : "—",
+        suffix: storageGiB ? "GiB" : undefined,
+        hint: storageGiB ? "Provisioned" : "Managed",
+        accent: "#a78bfa",
       },
       {
         label: "Region",
         value: extractRegion(database.region),
-        icon: MapPin,
+        hint: "Deployment zone",
       },
     ];
   }, [database, products]);
 
   if (loading) {
     return (
-      <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
-        <div className="glass-panel flex min-h-[320px] items-center justify-center overflow-hidden">
-          <div className="text-center">
-            <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-400" />
-            <p className="text-lg font-medium text-white">
-              Loading database cluster...
-            </p>
-            <p className="mt-2 text-sm text-white/45">
-              Fetching current status, credentials, and operational details.
-            </p>
-          </div>
+      <div className="mx-auto max-w-[1600px]">
+        <div className="space-y-6">
+          <div className="h-8 w-48 animate-pulse bg-white/[0.04] rounded-[5px]" />
+          <div className="h-16 w-2/3 animate-pulse bg-white/[0.04] rounded-[5px]" />
+          <div className="h-24 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
+          <div className="h-64 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
         </div>
       </div>
     );
@@ -279,287 +277,251 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
   if (!database) {
     return (
-      <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
-        <div className="glass-panel flex min-h-[320px] items-center justify-center overflow-hidden">
-          <div className="text-center">
-            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
-            <p className="text-lg font-medium text-white">
-              Database cluster not found
-            </p>
-            <p className="mt-2 text-sm text-white/45">
-              The requested cluster may have been removed or is no longer
-              available.
-            </p>
-            <Link
-              href="/dashboard/services/database"
-              className="mt-5 inline-flex items-center gap-2 border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.07]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to databases
-            </Link>
-          </div>
+      <div className="mx-auto max-w-[900px]">
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-16 text-center">
+          <AlertCircle className="h-10 w-10 text-rose-300/70 mx-auto mb-4" />
+          <p className="text-[15px] font-semibold text-white">
+            Database cluster not found
+          </p>
+          <p className={`${MONO} mt-2 text-[11px] text-white/45`}>
+            The requested cluster may have been removed or is no longer
+            available.
+          </p>
+          <Link
+            href="/dashboard/services/database"
+            className={`${MONO} mt-6 inline-flex items-center gap-1.5 h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to databases
+          </Link>
         </div>
       </div>
     );
   }
 
-  const StatusIcon = statusConfig.icon;
-  const ActiveSectionIcon = activeSection.icon;
+  const StatusIcon = statusMeta.Icon;
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
-      <div className="glass-panel overflow-hidden">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <Link
-              href="/dashboard/services/database"
-              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to database inventory
-            </Link>
+    <div className="mx-auto max-w-[1600px] text-white">
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
+        <div className="max-w-3xl min-w-0">
+          <Link
+            href="/dashboard/services/database"
+            className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to databases
+          </Link>
 
-            <div className="mt-5 flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
-                <DatabaseIcon engine={database.engine} className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-                  Managed Databases
-                </p>
-                <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  {database.name}
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                  {`${database.engine?.toUpperCase() || "Database"} ${database.version || ""}`.trim()}{" "}
-                  cluster with {database.num_nodes} node
-                  {database.num_nodes !== 1 ? "s" : ""} deployed in{" "}
-                  {extractRegion(database.region)}.
-                </p>
-              </div>
-            </div>
+          <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+            <span>Managed Databases</span>
+            <ChevronRight className="h-3 w-3 text-white/20" />
+            <span className="text-white/65 truncate">{database.name}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Status
-              </div>
-              <div className="mt-2 inline-flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-2 border px-2.5 py-1 text-sm font-medium ${statusConfig.tone}`}
-                >
-                  <StatusIcon
-                    className={`h-4 w-4 ${
-                      database.status === "creating" || database.status === "migrating"
-                        ? "animate-spin"
-                        : ""
-                    }`}
-                  />
-                  {statusConfig.label}
-                </span>
-              </div>
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 shrink-0 inline-flex items-center justify-center border border-white/[0.08] bg-[#111216] rounded-[6px] text-[#0095FF]">
+              <DatabaseIcon engine={database.engine} className="h-6 w-6" />
             </div>
-
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Topology
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {database.num_nodes} node{database.num_nodes !== 1 ? "s" : ""}
-              </div>
+            <div className="min-w-0">
+              <h1 className={`${MONO} text-[28px] sm:text-[36px] leading-[1.05] tracking-[-0.015em] text-white font-semibold truncate`}>
+                {database.name}
+              </h1>
+              <p className={`${MONO} mt-2 text-[11.5px] text-white/45 flex flex-wrap items-center gap-1.5`}>
+                <span className="text-white/75 font-medium uppercase tracking-[0.06em]">
+                  {database.engine?.toUpperCase() || "Database"} {database.version || ""}
+                </span>
+                <span className="text-white/15">·</span>
+                <span className="tabular-nums">
+                  {database.num_nodes} node{database.num_nodes !== 1 ? "s" : ""}
+                </span>
+                <span className="text-white/15">·</span>
+                <span>{extractRegion(database.region)}</span>
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {summaryStats.map((item) => {
-              const Icon = item.icon;
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`${MONO} inline-flex items-center gap-1.5 h-10 px-3.5 border bg-[#111216] text-[11px] uppercase tracking-[0.14em] rounded-[5px]`}
+            style={{ borderColor: `${statusMeta.color}33`, color: statusMeta.color }}
+          >
+            {statusMeta.spin ? (
+              <StatusIcon className="h-3 w-3 animate-spin" />
+            ) : (
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: statusMeta.color, boxShadow: `0 0 6px ${statusMeta.color}` }}
+              />
+            )}
+            {statusMeta.label}
+          </span>
+        </div>
+      </header>
 
+      {/* ── Stats strip ───────────────────────────────────── */}
+      <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+        {summaryStats.map((s) => (
+          <StatCell
+            key={s.label}
+            label={s.label}
+            value={s.value}
+            suffix={s.suffix}
+            hint={s.hint}
+            accent={s.accent}
+          />
+        ))}
+      </section>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {/* ── Pill nav ───────────────────────────────────── */}
+        <div className="mb-10 border-b border-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-1 -mb-px">
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.value;
               return (
-                <div
-                  key={item.label}
-                  className="border border-white/[0.08] bg-white/[0.03] px-3 py-3"
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`${MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] transition-colors ${
+                    isActive ? "text-white" : "text-white/45 hover:text-white/75"
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                        {item.label}
-                      </div>
-                      <div className="mt-1.5 text-sm font-semibold text-white">
-                        {item.value}
-                      </div>
-                    </div>
-                    <div className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                  </div>
-                </div>
+                  <Icon className="h-3 w-3" />
+                  {tab.label}
+                  {isActive && (
+                    <span
+                      className="absolute left-2 right-2 -bottom-px h-[2px]"
+                      style={{
+                        background: ACCENT,
+                        boxShadow: `0 0 8px ${ACCENT}`,
+                      }}
+                    />
+                  )}
+                </button>
               );
             })}
           </div>
         </div>
-      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)] xl:items-start">
-          <motion.div
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.08, duration: 0.24 }}
-            className="space-y-4 xl:sticky xl:top-8"
-          >
-            <div className="glass-panel overflow-hidden">
-              <div className="p-4">
-                <div className="mb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Cluster Areas
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-white/45">
-                    Move between overview, access controls, identities, and
-                    lifecycle operations without leaving the cluster page.
-                  </p>
-                </div>
+        <div>
+          <TabsContent value="overview" className="mt-0">
+            <OverviewTab
+              database={database}
+              products={products}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              activeTab={connectionTab}
+              setActiveTab={setConnectionTab}
+              copyToClipboard={copyToClipboard}
+            />
+          </TabsContent>
 
-                <div className="space-y-2">
-                  {visibleTabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.value;
+          <TabsContent value="network" className="mt-0">
+            <NetworkTab
+              clusterId={database.cluster_id || ""}
+              databaseId={database.cluster_id || ""}
+              initialNetworkRules={database.network_rules}
+              onRulesUpdate={fetchDatabaseCluster}
+            />
+          </TabsContent>
 
-                    return (
-                      <button
-                        key={tab.value}
-                        type="button"
-                        onClick={() => setActiveTab(tab.value)}
-                        className={`w-full border px-3 py-3 text-left transition-colors ${
-                          isActive
-                            ? "border-blue-400/22 bg-white/[0.04]"
-                            : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={`flex h-9 w-9 items-center justify-center border ${
-                              isActive
-                                ? "border-blue-400/25 bg-white/[0.04] text-blue-200"
-                                : "border-white/[0.08] bg-white/[0.03] text-white/55"
-                            }`}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-white">
-                              {tab.label}
-                            </div>
-                            <div className="mt-1 text-xs leading-5 text-white/40">
-                              {tab.description}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </motion.div>
+          <TabsContent value="users-dbs" className="mt-0">
+            <UsersDbsTab
+              clusterId={database.cluster_id || ""}
+              engine={database.engine}
+            />
+          </TabsContent>
 
-          <motion.div
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1, duration: 0.24 }}
-          >
-            <div className="glass-panel overflow-hidden">
-              <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center border border-blue-500/16 bg-white/[0.03] text-blue-200">
-                    <ActiveSectionIcon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      {activeSection.eyebrow}
-                    </p>
-                    <h2 className="mt-1 text-xl font-semibold text-white">
-                      {activeSection.label}
-                    </h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-                      {activeSection.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-5 py-5 sm:px-6 sm:py-6">
-                <TabsContent value="overview" className="mt-0">
-                  <OverviewTab
-                    database={database}
-                    products={products}
-                    showPassword={showPassword}
-                    setShowPassword={setShowPassword}
-                    activeTab={connectionTab}
-                    setActiveTab={setConnectionTab}
-                    copyToClipboard={copyToClipboard}
-                  />
-                </TabsContent>
-
-                <TabsContent value="network" className="mt-0">
-                  <NetworkTab
-                    clusterId={database.cluster_id || ""}
-                    databaseId={database.cluster_id || ""}
-                    initialNetworkRules={database.network_rules}
-                    onRulesUpdate={fetchDatabaseCluster}
-                  />
-                </TabsContent>
-
-                <TabsContent value="users-dbs" className="mt-0">
-                  <UsersDbsTab
-                    clusterId={database.cluster_id || ""}
-                    engine={database.engine}
-                  />
-                </TabsContent>
-
-                <TabsContent value="settings" className="mt-0">
-                  <SettingsTab
-                    database={database}
-                    onDatabaseUpdate={fetchDatabaseCluster}
-                    products={products}
-                  />
-                </TabsContent>
-              </div>
-            </div>
-          </motion.div>
+          <TabsContent value="settings" className="mt-0">
+            <SettingsTab
+              database={database}
+              onDatabaseUpdate={fetchDatabaseCluster}
+              products={products}
+            />
+          </TabsContent>
         </div>
       </Tabs>
 
       {database.status !== "online" && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel overflow-hidden px-5 py-4 sm:px-6"
-        >
-          <div className="flex items-start gap-3">
-            {database.status === "creating" || database.status === "migrating" ? (
-              <Clock3 className="mt-0.5 h-5 w-5 text-amber-300" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-5 w-5 text-red-300" />
-            )}
-            <div>
-              <p className="text-sm font-medium text-white">
-                {database.status === "creating" || database.status === "migrating"
-                  ? "Additional management tabs will appear once the cluster is online."
-                  : "This cluster requires attention before full management is available."}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-white/45">
-                Overview remains available while provisioning finishes or while
-                support investigates an issue with the cluster state.
-              </p>
-            </div>
+        <div className="mt-10 border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex items-start gap-3">
+          {database.status === "creating" || database.status === "migrating" ? (
+            <Loader2 className="mt-0.5 h-4 w-4 text-amber-300 animate-spin shrink-0" />
+          ) : (
+            <AlertCircle className="mt-0.5 h-4 w-4 text-rose-300 shrink-0" />
+          )}
+          <div>
+            <p className="text-[13px] font-medium text-white">
+              {database.status === "creating" || database.status === "migrating"
+                ? "Additional management tabs will appear once the cluster is online."
+                : "This cluster requires attention before full management is available."}
+            </p>
+            <p className={`${MONO} mt-1.5 text-[11px] text-white/45 leading-relaxed`}>
+              Overview remains available while provisioning finishes or while
+              support investigates an issue with the cluster state.
+            </p>
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );
 };
+
+// ─── Subcomponents ─────────────────────────────────────────────────
+
+function StatCell({
+  label,
+  value,
+  suffix,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  hint?: string;
+  accent?: string;
+}) {
+  const dotColor = accent ?? "rgba(255,255,255,0.35)";
+  return (
+    <div className="px-5 py-5 flex flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{
+            background: dotColor,
+            boxShadow: accent ? `0 0 6px ${dotColor}` : "none",
+          }}
+        />
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+          {label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span
+          style={SERIF_STYLE}
+          className="text-[24px] sm:text-[28px] leading-none font-bold tabular-nums tracking-[-0.025em] text-white truncate"
+        >
+          {value}
+        </span>
+        {suffix && (
+          <span
+            style={SERIF_STYLE}
+            className="text-[14px] text-white/45 font-medium"
+          >
+            {suffix}
+          </span>
+        )}
+      </div>
+      {hint && (
+        <p className={`${MONO} text-[10.5px] text-white/40 mt-auto truncate`}>{hint}</p>
+      )}
+    </div>
+  );
+}
 
 export default Singledb;

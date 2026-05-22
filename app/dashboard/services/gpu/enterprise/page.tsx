@@ -1,25 +1,37 @@
-import Link from "next/link";
-
 import EnterpriseInquiryForm from "@/components/dashboard/gpu/enterprise-form";
-import { ArrowLeft, ChevronRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default function GpuEnterprisePage() {
     return (
-        <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-            <nav className="mb-5 flex items-center gap-1.5 text-sm text-white/38">
-                <Link
-                    href="/dashboard/services/gpu"
-                    className="flex items-center gap-1.5 transition-colors hover:text-white/70"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    GPU Cloud
-                </Link>
-                <ChevronRight className="h-3 w-3 text-white/20" />
-                <span className="text-white/55">Reserved & Clusters</span>
-            </nav>
-            <EnterpriseInquiryForm />
+        <div className="relative min-h-full bg-[#08090b] text-white">
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+                <div
+                    className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
+                    }}
+                />
+                <div
+                    className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+                    }}
+                />
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage:
+                            "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+                        backgroundSize: "28px 28px",
+                    }}
+                />
+            </div>
+            <div className="relative z-10 px-6 py-8 sm:px-8 xl:px-10">
+                <EnterpriseInquiryForm />
+            </div>
         </div>
     );
 }

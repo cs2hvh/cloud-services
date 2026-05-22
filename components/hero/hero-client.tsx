@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { TensorScene } from "./tensor-scene";
 
 const BRAND = "#0095FF";
@@ -247,7 +248,8 @@ function GpuPricingRail() {
                     <p className="mt-2 text-[15px] font-semibold tracking-tight text-white">
                         GPU available
                     </p>
-                    <p className="mt-0.5 text-[11px] text-white/40">
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/40">
+                        <NvidiaLogo width={14} height={10} className="opacity-90" />
                         H100 · H200 · B200 · per-second billing
                     </p>
                 </div>
@@ -275,9 +277,16 @@ function GpuPricingRail() {
                                 {/* Top — GPU name + memory chip */}
                                 <div>
                                     <div className="flex items-baseline justify-between gap-2">
-                                        <p className="text-[15.5px] font-semibold tracking-tight text-white">
-                                            {gpu.name}
-                                        </p>
+                                        <div className="flex items-center gap-1.5">
+                                            <NvidiaLogo
+                                                width={16}
+                                                height={11}
+                                                className="opacity-95"
+                                            />
+                                            <p className="text-[15.5px] font-semibold tracking-tight text-white">
+                                                {gpu.name}
+                                            </p>
+                                        </div>
                                         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35">
                                             {gpu.memory} GB
                                         </span>

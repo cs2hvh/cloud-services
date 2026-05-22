@@ -10,17 +10,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-    Activity,
     ChevronRight,
-    Cpu,
-    DollarSign,
+    Loader2,
     Plus,
-    Zap,
+    RefreshCw,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 
 import { ActivePodsTable } from "./active-pods-table";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { GpuPodSummaryClient, InventoryRowClient } from "./types";
 
 // ─── Design tokens ────────────────────────────────────────────────
@@ -314,65 +313,42 @@ export default function GpuDashboard() {
     }, [inventory]);
 
     return (
-        <div className="space-y-14">
+        <div>
             {/* ── Hero ─────────────────────────────────────────── */}
-            <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-3xl">
-                    <div className={`${MONO} mb-4 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-                        <span className="h-px w-4 bg-white/45" />
-                        GPU Cloud
-                        <span
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 border text-[9.5px] font-semibold rounded-[20px]"
-                            style={{
-                                color: ACCENT,
-                                borderColor: "rgba(0,149,255,0.25)",
-                                background: ACCENT_DIM,
-                            }}
-                        >
-                            {totalSkus} GPU types
-                        </span>
-                    </div>
+            <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-12">
+                <div className="max-w-2xl">
                     <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                         On-demand{" "}
-                        <span
-                            style={{
-                                ...SERIF_STYLE,
-                                background: `linear-gradient(135deg, ${ACCENT}, #82adfb)`,
-                                WebkitBackgroundClip: "text",
-                                backgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                            }}
-                        >
-                            Blackwell & Hopper
-                        </span>{" "}
-                        GPUs{" "}
                         <span style={SERIF_STYLE} className="text-white/55 font-normal">
-                            for inference and training
+                            GPUs for inference and training
                         </span>
                         .
                     </h1>
-                    <div className="mt-4 flex flex-wrap items-center gap-1.5">
-                        <Pip>Per-second billing</Pip>
-                        <Pip>NVLink & InfiniBand</Pip>
-                        <Pip>Persistent storage</Pip>
-                        <Pip>Deploy in 60s</Pip>
-                    </div>
+                    <p className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}>
+                        Blackwell, Hopper, Ada, and Ampere on demand. Per-second
+                        billing, NVLink fabric, and managed persistent storage.
+                    </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                        href="/dashboard/services/gpu/enterprise"
+                        className={`${MONO} h-10 inline-flex items-center gap-2 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                    >
+                        Reserved capacity
+                    </Link>
                     <button
                         type="button"
                         onClick={onRefresh}
                         disabled={refreshing}
-                        className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] disabled:opacity-50 rounded-[5px] transition-colors`}
+                        className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] disabled:opacity-50 rounded-[5px] transition-colors`}
+                        title="Refresh inventory"
                     >
-                        Refresh
+                        {refreshing ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                            <RefreshCw className="h-3 w-3" />
+                        )}
                     </button>
-                    <Link
-                        href="/dashboard/services/gpu/enterprise"
-                        className={`${MONO} h-10 inline-flex items-center px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-                    >
-                        Reserved & clusters
-                    </Link>
                     <Link
                         href="/dashboard/services/gpu/deploy"
                         className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
@@ -396,109 +372,153 @@ export default function GpuDashboard() {
                 </div>
             </header>
 
-            {/* ── Stats ─────────────────────────────────────────── */}
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                <StatTile
+            {/* ── Stats — horizontal divider strip ──────────── */}
+            <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+                <StatCell
                     label="Running"
                     value={String(runningCount)}
                     hint={`${pods.length} total pod${pods.length === 1 ? "" : "s"}`}
-                    icon={<Activity className="h-3.5 w-3.5" />}
+                    accent="#4ade80"
                     pulse={runningCount > 0}
-                    tone="green"
                 />
-                <StatTile
+                <StatCell
                     label="Provisioning"
                     value={String(provisioningCount)}
                     hint={provisioningCount > 0 ? "Coming online" : "All settled"}
-                    icon={<Zap className="h-3.5 w-3.5" />}
-                    tone="blue"
+                    accent={ACCENT}
+                    pulse={provisioningCount > 0}
                 />
-                <StatTile
+                <StatCell
                     label="Hourly burn"
                     value={`$${hourlyBurn.toFixed(2)}`}
                     hint={`≈ $${(hourlyBurn * 730).toFixed(0)}/mo at current usage`}
-                    icon={<DollarSign className="h-3.5 w-3.5" />}
                 />
-                <StatTile
+                <StatCell
                     label="In stock"
                     value={String(stockedTypes || totalSkus)}
                     suffix="SKUs"
                     hint="GPU types deployable now"
-                    icon={<Cpu className="h-3.5 w-3.5" />}
-                    tone="violet"
+                    accent="#a78bfa"
                 />
             </section>
 
-            {/* ── Featured GPUs ────────────────────────────────── */}
-            <section>
-                <SectionHead
-                    eyebrow="Available now"
-                    title="Featured"
-                    accent="GPUs"
-                    link={{
-                        label: `Browse all ${totalSkus} SKUs`,
-                        href: "/dashboard/services/gpu/deploy",
-                    }}
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {featured.map((row) => (
-                        <FeaturedGpuCard key={row.gpuCatalogId} row={row} />
-                    ))}
-                </div>
-            </section>
+            <div className="space-y-14">
+                {/* ── Featured GPUs ────────────────────────────────── */}
+                <section>
+                    <SectionHead
+                        eyebrow="Available now"
+                        title="Featured"
+                        accent="GPUs"
+                        link={{
+                            label: `Browse all ${totalSkus} SKUs`,
+                            href: "/dashboard/services/gpu/deploy",
+                        }}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {featured.map((row) => (
+                            <FeaturedGpuCard key={row.gpuCatalogId} row={row} />
+                        ))}
+                    </div>
+                </section>
 
-            {/* ── Workload patterns ────────────────────────────── */}
-            <section>
-                <SectionHead
-                    eyebrow="Not sure which to pick?"
-                    title="Choose by"
-                    accent="workload"
-                    link={{ label: "Read the guide", href: "/dashboard/services/gpu/deploy" }}
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                    {WORKLOADS.map((w, i) => (
-                        <WorkloadCard key={w.title} index={i + 1} {...w} />
-                    ))}
-                </div>
-            </section>
+                {/* ── Workload patterns ────────────────────────────── */}
+                <section>
+                    <SectionHead
+                        eyebrow="Not sure which to pick?"
+                        title="Choose by"
+                        accent="workload"
+                        link={{ label: "Read the guide", href: "/dashboard/services/gpu/deploy" }}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                        {WORKLOADS.map((w, i) => (
+                            <WorkloadCard key={w.title} index={i + 1} {...w} />
+                        ))}
+                    </div>
+                </section>
 
-            {/* ── Active pods ──────────────────────────────────── */}
-            <section>
-                <SectionHead
-                    eyebrow="Cluster inventory"
-                    title="Your"
-                    accent="pods"
-                    rightMeta={
-                        pods.length > 0
-                            ? `${runningCount} running · ${pods.length} total`
-                            : undefined
-                    }
-                    link={
-                        pods.length > 0
-                            ? { label: "Deploy another", href: "/dashboard/services/gpu/deploy" }
-                            : undefined
-                    }
-                />
-                <ActivePodsTable loading={podsLoading} pods={pods} />
-            </section>
+                {/* ── Active pods ──────────────────────────────────── */}
+                <section>
+                    <SectionHead
+                        eyebrow="Cluster inventory"
+                        title="Your"
+                        accent="pods"
+                        rightMeta={
+                            pods.length > 0
+                                ? `${runningCount} running · ${pods.length} total`
+                                : undefined
+                        }
+                        link={
+                            pods.length > 0
+                                ? { label: "Deploy another", href: "/dashboard/services/gpu/deploy" }
+                                : undefined
+                        }
+                    />
+                    <ActivePodsTable loading={podsLoading} pods={pods} />
+                </section>
+            </div>
         </div>
     );
 }
 
 // ─── Subcomponents ─────────────────────────────────────────────────
 
-function Pip({ children }: { children: React.ReactNode }) {
+function StatCell({
+    label,
+    value,
+    suffix,
+    hint,
+    accent,
+    pulse,
+}: {
+    label: string;
+    value: string;
+    suffix?: string;
+    hint?: string;
+    accent?: string;
+    pulse?: boolean;
+}) {
+    const dotColor = accent ?? "rgba(255,255,255,0.35)";
     return (
-        <span
-            className={`${MONO} inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] font-semibold rounded-[20px] border`}
-            style={{
-                color: "rgba(255,255,255,0.85)",
-                borderColor: "rgba(255,255,255,0.10)",
-                background: "#111216",
-            }}
-        >
-            {children}
-        </span>
+        <div className="px-5 py-5 flex flex-col gap-2">
+            <div className="flex items-center gap-1.5">
+                <span
+                    className="relative h-1.5 w-1.5 rounded-full"
+                    style={{
+                        background: dotColor,
+                        boxShadow: accent ? `0 0 6px ${dotColor}` : "none",
+                    }}
+                >
+                    {pulse && (
+                        <span
+                            className="absolute inset-0 rounded-full animate-ping"
+                            style={{ background: dotColor, opacity: 0.6 }}
+                        />
+                    )}
+                </span>
+                <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                    {label}
+                </span>
+            </div>
+            <div className="flex items-baseline gap-1">
+                <span
+                    style={SERIF_STYLE}
+                    className="text-[40px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
+                >
+                    {value}
+                </span>
+                {suffix && (
+                    <span
+                        style={SERIF_STYLE}
+                        className="text-[14px] text-white/45 font-medium"
+                    >
+                        {suffix}
+                    </span>
+                )}
+            </div>
+            {hint && (
+                <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>
+            )}
+        </div>
     );
 }
 
@@ -542,69 +562,6 @@ function SectionHead({
                 <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>
                     {rightMeta}
                 </span>
-            )}
-        </div>
-    );
-}
-
-function StatTile({
-    label,
-    value,
-    suffix,
-    hint,
-    icon,
-    pulse,
-    tone,
-}: {
-    label: string;
-    value: string;
-    suffix?: string;
-    hint?: string;
-    icon: React.ReactNode;
-    pulse?: boolean;
-    tone?: "blue" | "green" | "violet";
-}) {
-    const iconTone =
-        tone === "blue"
-            ? { color: ACCENT, background: ACCENT_DIM, borderColor: "rgba(0,149,255,0.2)" }
-            : tone === "green"
-                ? { color: "#4ade80", background: "rgba(74,222,128,0.06)", borderColor: "rgba(74,222,128,0.2)" }
-                : tone === "violet"
-                    ? { color: "#a78bfa", background: "rgba(167,139,250,0.06)", borderColor: "rgba(167,139,250,0.2)" }
-                    : { color: "rgba(255,255,255,0.55)", background: "#0d0e11", borderColor: "rgba(255,255,255,0.08)" };
-    return (
-        <div className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-3 min-h-[130px]">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                    <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                        {label}
-                    </span>
-                    {pulse && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    )}
-                </div>
-                <span
-                    className="h-6 w-6 inline-flex items-center justify-center border rounded-[4px]"
-                    style={iconTone}
-                >
-                    {icon}
-                </span>
-            </div>
-            <div className="flex items-baseline gap-1">
-                <span
-                    style={SERIF_STYLE}
-                    className="text-[34px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
-                >
-                    {value}
-                </span>
-                {suffix && (
-                    <span style={SERIF_STYLE} className="text-[15px] text-white/45 font-medium">
-                        {suffix}
-                    </span>
-                )}
-            </div>
-            {hint && (
-                <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>
             )}
         </div>
     );
@@ -697,20 +654,23 @@ function FeaturedGpuCard({
 
             {/* Top row: name + variant | stock pill */}
             <div className="flex items-center justify-between gap-2">
-                <div className="flex items-baseline gap-1.5 min-w-0">
-                    <span
-                        style={SERIF_STYLE}
-                        className="text-[20px] font-bold leading-none tracking-[-0.02em] text-white truncate"
-                    >
-                        {row.displayName}
-                    </span>
-                    {row.variant && (
+                <div className="flex items-center gap-2 min-w-0">
+                    <NvidiaLogo width={22} height={16} className="shrink-0 opacity-95" />
+                    <div className="flex items-baseline gap-1.5 min-w-0">
                         <span
-                            className={`${MONO} text-[10px] text-white/45 font-medium`}
+                            style={SERIF_STYLE}
+                            className="text-[20px] font-bold leading-none tracking-[-0.02em] text-white truncate"
                         >
-                            {row.variant}
+                            {row.displayName}
                         </span>
-                    )}
+                        {row.variant && (
+                            <span
+                                className={`${MONO} text-[10px] text-white/45 font-medium`}
+                            >
+                                {row.variant}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <span
                     className={`${MONO} shrink-0 text-[9px] uppercase tracking-[0.1em] font-semibold inline-flex items-center gap-1`}

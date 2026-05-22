@@ -1,1207 +1,1654 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X, Download } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+// Billing & payments — editorial pill-tab nav (Balance / Coupons /
+// Transactions), big Nunito balance hero, top-up form + recurring
+// card, coupon redemption, and a clean transactions table. All
+// Stripe / crypto / coupon / recurring wiring preserved.
+
+import { useState, useEffect, useMemo } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+    ArrowRight,
+    ChevronLeft,
+    ChevronRight,
+    CreditCard,
+    Download,
+    ExternalLink,
+    Loader2,
+    Receipt,
+    Search,
+    Shield,
+    Ticket,
+    Wallet,
+    X,
+} from "lucide-react";
+
 import api from "@/lib/axios/axios";
 import { createDepositPayment } from "@/actions/crypto-deposit";
+
+// ─── Design tokens ─────────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+    fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
 
 type Toast = { id: number; type: "success" | "error"; message: string };
 
 interface Coupon {
-  id: string;
-  code: string;
-  amount: number;
-  valid_till: string;
-  coupon_type: string;
+    id: string;
+    code: string;
+    amount: number;
+    valid_till: string;
+    coupon_type: string;
 }
 
 interface RecurringTopup {
-  id: string;
-  amount: number;
-  currency: string;
-  interval: "week" | "month" | "year";
-  status:
-    | "pending"
-    | "active"
-    | "past_due"
-    | "canceled"
-    | "incomplete"
-    | "incomplete_expired"
-    | "unpaid"
-    | "trialing"
-    | "paused";
-  cancel_at_period_end: boolean;
-  stripe_subscription_id: string | null;
+    id: string;
+    amount: number;
+    currency: string;
+    interval: "week" | "month" | "year";
+    status:
+        | "pending"
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "incomplete"
+        | "incomplete_expired"
+        | "unpaid"
+        | "trialing"
+        | "paused";
+    cancel_at_period_end: boolean;
+    stripe_subscription_id: string | null;
 }
+
+const TABS = [
+    { value: "balance", label: "Balance", icon: Wallet },
+    { value: "coupons", label: "Coupons", icon: Ticket },
+    { value: "transactions", label: "Transactions", icon: Receipt },
+] as const;
+
+type TabValue = (typeof TABS)[number]["value"];
 
 export default function BillingTabs({
-  initialBalance = 0.0,
-  availableCoupons = [],
-  paymentStatus,
-  initialRecurring = null,
+    initialBalance = 0.0,
+    availableCoupons = [],
+    paymentStatus,
+    initialRecurring = null,
 }: {
-  initialBalance?: number;
-  promoCredits?: number;
-  topupCredits?: number;
-  availableCoupons?: Coupon[];
-  paymentStatus?: string | null;
-  initialRecurring?: RecurringTopup | null;
+    initialBalance?: number;
+    promoCredits?: number;
+    topupCredits?: number;
+    availableCoupons?: Coupon[];
+    paymentStatus?: string | null;
+    initialRecurring?: RecurringTopup | null;
 }) {
-  const [tab, setTab] = useState<"balance" | "payment" | "coupons" | "transactions">("balance");
-  const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
-  const [amount, setAmount] = useState("");
-  const [loadingTopup, setLoadingTopup] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "crypto">("stripe");
-  const [balance, setBalance] = useState<number>(initialBalance);
-  const [manualCouponCode, setManualCouponCode] = useState("");
-  const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
-  const [recurringTopup, setRecurringTopup] = useState<RecurringTopup | null>(initialRecurring);
-  const [recurringAmount, setRecurringAmount] = useState(initialRecurring ? String(initialRecurring.amount) : "");
-  const [recurringInterval, setRecurringInterval] = useState<"week" | "month" | "year">(initialRecurring?.interval ?? "month");
-  const [loadingRecurring, setLoadingRecurring] = useState(false);
-  const [loadingCancelRecurring, setLoadingCancelRecurring] = useState(false);
+    const [tab, setTab] = useState<TabValue>("balance");
+    const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
+    const [amount, setAmount] = useState("");
+    const [loadingTopup, setLoadingTopup] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<"stripe" | "crypto">(
+        "stripe",
+    );
+    const [balance, setBalance] = useState<number>(initialBalance);
+    const [manualCouponCode, setManualCouponCode] = useState("");
+    const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
+    const [recurringTopup, setRecurringTopup] = useState<RecurringTopup | null>(
+        initialRecurring,
+    );
+    const [recurringAmount, setRecurringAmount] = useState(
+        initialRecurring ? String(initialRecurring.amount) : "",
+    );
+    const [recurringInterval, setRecurringInterval] = useState<
+        "week" | "month" | "year"
+    >(initialRecurring?.interval ?? "month");
+    const [loadingRecurring, setLoadingRecurring] = useState(false);
+    const [loadingCancelRecurring, setLoadingCancelRecurring] = useState(false);
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const pushToast = (type: Toast["type"], message: string) => {
-    const id = Date.now();
-    setToasts((t) => [...t, { id, type, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
-  };
+    const [toasts, setToasts] = useState<Toast[]>([]);
+    const pushToast = (type: Toast["type"], message: string) => {
+        const id = Date.now();
+        setToasts((t) => [...t, { id, type, message }]);
+        setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
+    };
 
-  // Show toast on return from Stripe checkout
-  useEffect(() => {
-    if (!paymentStatus) return;
+    useEffect(() => {
+        if (!paymentStatus) return;
+        if (paymentStatus === "success")
+            pushToast("success", "Payment successful. Balance will update shortly.");
+        else if (paymentStatus === "cancelled")
+            pushToast("error", "Payment was cancelled.");
+        else if (paymentStatus === "recurring_success")
+            pushToast("success", "Auto top-up enabled.");
+        else if (paymentStatus === "recurring_cancelled")
+            pushToast("error", "Recurring setup was cancelled.");
 
-    if (paymentStatus === "success") {
-      pushToast("success", "Payment successful! Your balance will update shortly.");
-    } else if (paymentStatus === "cancelled") {
-      pushToast("error", "Payment was cancelled.");
-    } else if (paymentStatus === "recurring_success") {
-      pushToast("success", "Recurring auto top-up enabled successfully.");
-    } else if (paymentStatus === "recurring_cancelled") {
-      pushToast("error", "Recurring auto top-up setup was cancelled.");
-    }
-
-    // Remove one-time payment query params so refresh doesn't replay the toast.
-    if (typeof window !== "undefined") {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete("status");
-      nextUrl.searchParams.delete("session_id");
-      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
-      window.history.replaceState({}, "", nextPath);
-    }
-  }, [paymentStatus]);
-
-  const remaining = balance;
-  const recurringConfigured = recurringTopup && recurringTopup.stripe_subscription_id;
-
-  const onTopup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = Number(amount);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      pushToast("error", "Enter a valid amount > 0");
-      return;
-    }
-    if (parsed > 10000) {
-      pushToast("error", "Maximum top-up amount is $10,000");
-      return;
-    }
-    try {
-      setLoadingTopup(true);
-      if (paymentMethod === "crypto") {
-        const formData = new FormData();
-        formData.set("amount_usd", String(parsed));
-        formData.set("currency", "USDT_TRC20");
-        const result = await createDepositPayment({ values: { amount_usd: parsed, currency: "USDT_TRC20" }, errors: null, success: false }, formData);
-        if (result.success && result.payment_url) {
-          window.location.href = result.payment_url;
-        } else {
-          const msg = result.errors?.amount_usd?.[0] ?? result.errors?.currency?.[0] ?? "Failed to create crypto payment";
-          pushToast("error", msg);
+        if (typeof window !== "undefined") {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete("status");
+            nextUrl.searchParams.delete("session_id");
+            const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+            window.history.replaceState({}, "", nextPath);
         }
-      } else {
-        const res = await api.post("/billing/create-checkout-session", {
-          amount: parsed,
-        });
-        const data = res?.data;
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          throw new Error("No checkout URL returned");
+    }, [paymentStatus]);
+
+    const recurringConfigured =
+        recurringTopup && recurringTopup.stripe_subscription_id;
+
+    const onTopup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const parsed = Number(amount);
+        if (Number.isNaN(parsed) || parsed <= 0) {
+            pushToast("error", "Enter a valid amount > 0");
+            return;
         }
-      }
-    } catch (_err: unknown) {
-      pushToast("error", _err instanceof Error ? _err?.message : "Failed to start payment");
-    } finally {
-      setLoadingTopup(false);
-    }
-  };
+        if (parsed > 10000) {
+            pushToast("error", "Maximum top-up amount is $10,000");
+            return;
+        }
+        try {
+            setLoadingTopup(true);
+            if (paymentMethod === "crypto") {
+                const formData = new FormData();
+                formData.set("amount_usd", String(parsed));
+                formData.set("currency", "USDT_TRC20");
+                const result = await createDepositPayment(
+                    {
+                        values: { amount_usd: parsed, currency: "USDT_TRC20" },
+                        errors: null,
+                        success: false,
+                    },
+                    formData,
+                );
+                if (result.success && result.payment_url) {
+                    window.location.href = result.payment_url;
+                } else {
+                    const msg =
+                        result.errors?.amount_usd?.[0] ??
+                        result.errors?.currency?.[0] ??
+                        "Failed to create crypto payment";
+                    pushToast("error", msg);
+                }
+            } else {
+                const res = await api.post("/billing/create-checkout-session", {
+                    amount: parsed,
+                });
+                const data = res?.data;
+                if (data.url) window.location.href = data.url;
+                else throw new Error("No checkout URL returned");
+            }
+        } catch (err: unknown) {
+            pushToast(
+                "error",
+                err instanceof Error ? err?.message : "Failed to start payment",
+            );
+        } finally {
+            setLoadingTopup(false);
+        }
+    };
 
-  const refreshRecurringTopup = async () => {
-    const res = await api.get("/billing/recurring");
-    if (res?.data?.success) {
-      setRecurringTopup(res?.data?.data ?? null);
-      if (res?.data?.data?.amount) {
-        setRecurringAmount(String(res?.data?.data?.amount));
-      }
-      if (res?.data?.data?.interval) {
-        setRecurringInterval(res?.data?.data?.interval);
-      }
-    }
-  };
+    const refreshRecurringTopup = async () => {
+        const res = await api.get("/billing/recurring");
+        if (res?.data?.success) {
+            setRecurringTopup(res?.data?.data ?? null);
+            if (res?.data?.data?.amount)
+                setRecurringAmount(String(res?.data?.data?.amount));
+            if (res?.data?.data?.interval)
+                setRecurringInterval(res?.data?.data?.interval);
+        }
+    };
 
-  const onEnableRecurring = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = Number(recurringAmount);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      pushToast("error", "Enter a valid recurring amount > 0");
-      return;
-    }
-    if (parsed > 10000) {
-      pushToast("error", "Maximum recurring amount is $10,000");
-      return;
-    }
+    const onEnableRecurring = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const parsed = Number(recurringAmount);
+        if (Number.isNaN(parsed) || parsed <= 0) {
+            pushToast("error", "Enter a valid recurring amount > 0");
+            return;
+        }
+        if (parsed > 10000) {
+            pushToast("error", "Maximum recurring amount is $10,000");
+            return;
+        }
+        try {
+            setLoadingRecurring(true);
+            const res = await api.post(
+                "/billing/recurring/create-checkout-session",
+                { amount: parsed, interval: recurringInterval },
+            );
+            if (res?.data?.url) {
+                window.location.href = res?.data?.url;
+                return;
+            }
+            pushToast("error", "Failed to start recurring checkout");
+        } finally {
+            setLoadingRecurring(false);
+        }
+    };
 
-    try {
-      setLoadingRecurring(true);
-      const res = await api.post("/billing/recurring/create-checkout-session", {
-        amount: parsed,
-        interval: recurringInterval,
-      });
+    const onCancelRecurring = async () => {
+        try {
+            setLoadingCancelRecurring(true);
+            const res = await api.post("/billing/recurring", { action: "cancel" });
+            if (res?.data?.success) {
+                pushToast(
+                    "success",
+                    "Recurring top-up will stop at period end.",
+                );
+                await refreshRecurringTopup();
+            }
+        } finally {
+            setLoadingCancelRecurring(false);
+        }
+    };
 
-      if (res?.data?.url) {
-        window.location.href = res?.data?.url;
-        return;
-      }
+    useEffect(() => {
+        if (paymentStatus === "recurring_success") refreshRecurringTopup();
+    }, [paymentStatus]);
 
-      pushToast("error", "Failed to start recurring checkout");
-    } finally {
-      setLoadingRecurring(false);
-    }
-  };
+    const handleRedeemCoupon = async (code: string) => {
+        const res = await api.post("/billing/coupons/redeem", { code });
+        if (res?.data?.success) {
+            setBalance((prev) => res?.data?.balance ?? prev);
+            setCoupons((cs) => cs.filter((c) => c.code !== code));
+            pushToast(
+                "success",
+                res?.data?.message || "Coupon redeemed successfully",
+            );
+        }
+    };
 
-  const onCancelRecurring = async () => {
-    try {
-      setLoadingCancelRecurring(true);
-      const res = await api.post("/billing/recurring", { action: "cancel" });
-      if (res?.data?.success) {
-        pushToast("success", "Recurring top-up will stop at period end.");
-        await refreshRecurringTopup();
-      }
-    } finally {
-      setLoadingCancelRecurring(false);
-    }
-  };
+    const handleManualCouponApply = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const code = manualCouponCode.trim();
+        if (!code) {
+            pushToast("error", "Please enter a coupon code");
+            return;
+        }
+        try {
+            setLoadingManualCoupon(true);
+            const res = await api.post("/billing/coupons/redeem", { code });
+            if (res?.data?.success) {
+                setBalance((prev) => res?.data?.balance ?? prev);
+                setCoupons((cs) => cs.filter((c) => c.code !== code));
+                pushToast(
+                    "success",
+                    res?.data?.message || "Coupon redeemed successfully",
+                );
+                setManualCouponCode("");
+            }
+        } finally {
+            setLoadingManualCoupon(false);
+        }
+    };
 
-  useEffect(() => {
-    if (paymentStatus === "recurring_success") {
-      refreshRecurringTopup();
-    }
-  }, [paymentStatus]);
-
-  const handleRedeemCoupon = async (code: string) => {
-    // try {
-      const res = await api.post("/billing/coupons/redeem", { code });
-      
-      if (res?.data?.success) {
-        setBalance((prev) => res?.data?.balance ?? prev);
-        setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
-      }
-      // } else {
-      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
-      // }
-    // } catch (error: unknown) {
-    //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
-    // }
-  // };
-    }
-
-  const handleManualCouponApply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = manualCouponCode.trim();
-    if (!code) {
-      pushToast("error", "Please enter a coupon code");
-      return;
-    }
-    try {
-      setLoadingManualCoupon(true);
-      const res = await api.post("/billing/coupons/redeem", { code });
-      
-      if (res?.data?.success) {
-        setBalance((prev) => res?.data?.balance ?? prev);
-        setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
-        setManualCouponCode("");
-      }
-      // } else {
-      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
-      // }
-    }
-    // } catch (error: unknown) {
-    //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
-    // } 
-    finally {
-      setLoadingManualCoupon(false);
-    }
-  };
-
-  return (
-    <div className="max-w-[1600px] mx-auto">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment" | "coupons" | "transactions")} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
-          <TabsTrigger
-            value="balance"
-            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
-          >
-            Balance
-          </TabsTrigger>
-          {/* <TabsTrigger
-            value="payment"
-            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
-          >
-            Payment Method
-          </TabsTrigger> */}
-          <TabsTrigger
-            value="coupons"
-            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
-          >
-            Coupons
-          </TabsTrigger>
-          <TabsTrigger
-            value="transactions"
-            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
-          >
-            Transactions
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="balance" className="mt-0">
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* <StatCard label="Promo Credits" value={promoCredits} />
-              <StatCard label="Top-up Credits" value={topupCredits} /> */}
-              <StatCard label="Remaining Balance" value={remaining} highlight />
-            </div>
-
-            <form onSubmit={onTopup} className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-300 mb-2">Enter amount to top up($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-                  placeholder="e.g. 25"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-2">Payment method</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="stripe"
-                      checked={paymentMethod === "stripe"}
-                      onChange={() => setPaymentMethod("stripe")}
-                      className="accent-blue-600 w-4 h-4 cursor-pointer"
-                    />
-                    <span className="text-sm text-white">Stripe</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="crypto"
-                      checked={paymentMethod === "crypto"}
-                      onChange={() => setPaymentMethod("crypto")}
-                      className="accent-blue-600 w-4 h-4 cursor-pointer"
-                    />
-                    <span className="text-sm text-white">Crypto</span>
-                  </label>
-                </div>
-              </div>
-              <button
-                disabled={loadingTopup}
-                type="submit"
-                className="cursor-pointer inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {loadingTopup ? (paymentMethod === "crypto" ? "Processing..." : "Redirecting to Stripe...") : "Pay"}
-              </button>
-            </form>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold text-white">Auto Top-up</h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Enable scheduled recurring payments to keep your balance topped up automatically.
-                </p>
-              </div>
-
-              {recurringTopup ? (
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <span className="text-neutral-300">
-                      ${Number(recurringTopup.amount).toFixed(2)} / {recurringTopup.interval}
-                    </span>
-                    <span className="px-2 py-1 rounded border border-white/10 bg-white/10 text-xs capitalize text-white">
-                      {recurringTopup.cancel_at_period_end ? "canceling" : recurringTopup.status}
-                    </span>
-                  </div>
-                  {!recurringTopup.cancel_at_period_end && recurringConfigured ? (
-                    <button
-                      type="button"
-                      onClick={onCancelRecurring}
-                      disabled={loadingCancelRecurring}
-                      className="cursor-pointer px-3 py-1.5 rounded-md bg-red-600/80 text-white text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {loadingCancelRecurring ? "Canceling..." : "Cancel at period end"}
-                    </button>
-                  ) : (
-                    <p className="text-xs text-neutral-400">
-                      {recurringTopup.cancel_at_period_end
-                        ? "Your recurring top-up is scheduled to stop at the end of the current billing period."
-                        : "Complete checkout to activate recurring top-up."}
-                    </p>
-                  )}
-                </div>
-              ) : null}
-
-              {!recurringConfigured && (
-                <form onSubmit={onEnableRecurring} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="1"
-                      value={recurringAmount}
-                      onChange={(e) => setRecurringAmount(e.target.value)}
-                      className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-                      placeholder="Recurring amount (USD)"
-                    />
-                    <select
-                      value={recurringInterval}
-                      onChange={(e) => setRecurringInterval(e.target.value as "week" | "month" | "year")}
-                      className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-                    >
-                      <option value="week">Weekly</option>
-                      <option value="month">Monthly</option>
-                      <option value="year">Yearly</option>
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loadingRecurring}
-                    className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {loadingRecurring ? "Redirecting to Stripe..." : "Enable auto top-up"}
-                  </button>
-                </form>
-              )}
-            </div>
-          </motion.div>
-        </TabsContent>
-
-        <TabsContent value="payment" className="mt-0">
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <PaymentMethod />
-          </motion.div>
-        </TabsContent>
-
-        <TabsContent value="coupons" className="mt-0">
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Manual Coupon Code Input */}
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
-              <h3 className="text-base font-semibold text-white mb-2">Have a Coupon Code?</h3>
-              <p className="text-sm text-neutral-400 mb-3">
-                Enter your coupon code below to redeem it
-              </p>
-              <form onSubmit={handleManualCouponApply} className="flex gap-2">
-                <input
-                  type="text"
-                  value={manualCouponCode}
-                  onChange={(e) => setManualCouponCode(e.target.value.toUpperCase())}
-                  className="w-full sm:w-64 md:w-80 lg:w-auto max-w-full  bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50 font-mono"
-                  placeholder="Enter coupon code"
-                />
-                <button
-                  disabled={loadingManualCoupon}
-                  type="submit"
-                  className="w-24 sm:w-auto cursor-pointer px-5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
-                >
-                  {loadingManualCoupon ? "Applying..." : "Apply"}
-                </button>
-              </form>
-            </div>
-
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-white mb-1">Available Coupons</h3>
-              <p className="text-sm text-neutral-400">
-                Apply coupons to add credits to your balance
-              </p>
-            </div>
-
-            {coupons.length === 0 ? (
-              <div className="text-center py-12 rounded-lg border border-white/10 bg-black/20">
-                <Ticket className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
-                <p className="text-neutral-400">No coupons available at the moment</p>
-                <p className="text-sm text-neutral-500 mt-1">
-                  Check back later for promotional offers
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {coupons.map((coupon) => (
-                  <CouponCard
-                    key={coupon.id}
-                    coupon={coupon}
-                    onRedeem={handleRedeemCoupon}
-                  />
-                ))}
-              </div>
-            )}
-          </motion.div>
-        </TabsContent>
-        <TabsContent value="transactions" className="mt-0">
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <TransactionsTab />
-          </motion.div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Toasts */}
-      <div className="fixed bottom-4 right-4 z-[60] space-y-2">
-        <AnimatePresence>
-          {toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className={`min-w-[240px] rounded-lg border shadow-xl px-4 py-3 backdrop-blur-xl ${
-                t.type === "success"
-                  ? "bg-emerald-500/15 text-emerald-100 border-emerald-400/20"
-                  : "bg-red-500/15 text-red-100 border-red-400/20"
-              }`}
+    return (
+        <div className="min-w-0">
+            {/* Hero */}
+            <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+                Billing{" "}
+                <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                    & payments
+                </span>
+                .
+            </h1>
+            <p
+                className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
             >
-              {t.message}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
+                Manage your balance, redeem coupons, and review every charge —
+                paid via Stripe or USDT.
+            </p>
 
-function StatCard({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
-  const formattedValue = Number.isFinite(value) ? value.toFixed(2) : "0.00";
-  return (
-    <div
-      className={`rounded-xl border border-white/10 p-4 backdrop-blur-xl ${
-        highlight ? "bg-white/5" : "bg-black/30"
-      }`}
-    >
-      <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-white">${formattedValue}</div>
-    </div>
-  );
-}
+            {/* Pill tab nav */}
+            <div className="border-b border-white/[0.06] mb-8">
+                <div className="flex items-center gap-1 -mb-px overflow-x-auto no-scrollbar">
+                    {TABS.map((t) => {
+                        const isActive = tab === t.value;
+                        const Icon = t.icon;
+                        return (
+                            <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setTab(t.value)}
+                                className={`${MONO} relative inline-flex items-center gap-2 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
+                                style={{
+                                    color: isActive
+                                        ? "#ffffff"
+                                        : "rgba(255,255,255,0.45)",
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isActive)
+                                        e.currentTarget.style.color =
+                                            "rgba(255,255,255,0.75)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isActive)
+                                        e.currentTarget.style.color =
+                                            "rgba(255,255,255,0.45)";
+                                }}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                {t.label}
+                                {isActive && (
+                                    <span
+                                        className="absolute left-2 right-2 bottom-0 h-[2px]"
+                                        style={{
+                                            background: ACCENT,
+                                            boxShadow:
+                                                "0 0 8px rgba(0,149,255,0.5)",
+                                        }}
+                                    />
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
 
-function CouponCard({ coupon, onRedeem }: { coupon: Coupon; onRedeem: (code: string) => void }) {
-  const [loading, setLoading] = useState(false);
+            {/* Tab content */}
+            {tab === "balance" && (
+                <BalanceTab
+                    balance={balance}
+                    amount={amount}
+                    setAmount={setAmount}
+                    paymentMethod={paymentMethod}
+                    setPaymentMethod={setPaymentMethod}
+                    onTopup={onTopup}
+                    loadingTopup={loadingTopup}
+                    recurringTopup={recurringTopup}
+                    recurringConfigured={!!recurringConfigured}
+                    recurringAmount={recurringAmount}
+                    setRecurringAmount={setRecurringAmount}
+                    recurringInterval={recurringInterval}
+                    setRecurringInterval={setRecurringInterval}
+                    onEnableRecurring={onEnableRecurring}
+                    loadingRecurring={loadingRecurring}
+                    onCancelRecurring={onCancelRecurring}
+                    loadingCancelRecurring={loadingCancelRecurring}
+                />
+            )}
 
-  const handleApply = async () => {
-    setLoading(true);
-    await onRedeem(coupon.code);
-    setLoading(false);
-  };
+            {tab === "coupons" && (
+                <CouponsTab
+                    coupons={coupons}
+                    onRedeem={handleRedeemCoupon}
+                    manualCouponCode={manualCouponCode}
+                    setManualCouponCode={setManualCouponCode}
+                    onManualApply={handleManualCouponApply}
+                    loadingManualCoupon={loadingManualCoupon}
+                />
+            )}
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+            {tab === "transactions" && <TransactionsTab />}
 
-  return (
-    <motion.div
-  initial={{ opacity: 0, scale: 0.95 }}
-  animate={{ opacity: 1, scale: 1 }}
-  className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-4 backdrop-blur-xl hover:border-white/20 transition-all"
->
-  <div className="flex items-center justify-between mb-3">
-    <div className="flex items-center gap-2">
-      <div className="p-1.5 bg-white/10 rounded">
-        <Ticket className="h-4 w-4 text-white" />
-      </div>
-      <code className="text-xs font-mono font-semibold text-white bg-white/10 px-2 py-0.5 rounded">
-        {coupon.code}
-      </code>
-    </div>
-    <div className="text-right">
-      <div className="text-base font-bold text-white">${coupon.amount}</div>
-    </div>
-  </div>
-  
-  <div className="mb-3 pb-3 border-b border-white/10">
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-neutral-300 capitalize">{coupon.coupon_type}</span>
-      <span className="text-neutral-300">Expires: {formatDate(coupon.valid_till)}</span>
-    </div>
-  </div>
-
-  <button
-    onClick={handleApply}
-    disabled={loading}
-    className="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer transition-all"
-  >
-    {loading ? "Applying..." : "Apply"}
-  </button>
-</motion.div>
-  );
-}
-
-function PaymentMethod() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-white/10 bg-black/30 p-5 backdrop-blur-xl">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white">
-            <Shield className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-white font-medium">Secure Payments by Stripe</div>
-            <div className="text-xs text-gray-400">Your payment details are handled securely by Stripe</div>
-          </div>
+            {/* Toasts */}
+            <div className="fixed bottom-4 right-4 z-[60] space-y-2">
+                <AnimatePresence>
+                    {toasts.map((t) => (
+                        <motion.div
+                            key={t.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className={`min-w-[240px] rounded-[6px] border shadow-xl px-4 py-3 ${MONO} text-[11.5px] ${
+                                t.type === "success"
+                                    ? "bg-emerald-500/15 text-emerald-100 border-emerald-400/25"
+                                    : "bg-red-500/15 text-red-100 border-red-400/25"
+                            }`}
+                        >
+                            {t.message}
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
+            </div>
         </div>
-
-        <div className="rounded-lg border border-white/5 bg-white/5 p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <CreditCard className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm text-white">Payment methods are managed during checkout</p>
-              <p className="text-xs text-neutral-400 mt-1">
-                When you top up your balance, you&apos;ll be redirected to Stripe&apos;s secure checkout
-                where you can pay with credit card, debit card, or other supported methods.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Shield className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm text-white">PCI-DSS Compliant</p>
-              <p className="text-xs text-neutral-400 mt-1">
-                Your card details never touch our servers. All payment processing is handled
-                entirely by Stripe, a PCI Level 1 certified payment processor.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <ExternalLink className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm text-white">How it works</p>
-              <p className="text-xs text-neutral-400 mt-1">
-                Go to the Balance tab, enter an amount, and click &quot;Top up&quot;.
-                You&apos;ll be securely redirected to Stripe to complete the payment.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-// ─── Transactions Tab ────────────────────────────────────────────────
+// ─── Balance tab ──────────────────────────────────────────────────
+
+function BalanceTab({
+    balance,
+    amount,
+    setAmount,
+    paymentMethod,
+    setPaymentMethod,
+    onTopup,
+    loadingTopup,
+    recurringTopup,
+    recurringConfigured,
+    recurringAmount,
+    setRecurringAmount,
+    recurringInterval,
+    setRecurringInterval,
+    onEnableRecurring,
+    loadingRecurring,
+    onCancelRecurring,
+    loadingCancelRecurring,
+}: {
+    balance: number;
+    amount: string;
+    setAmount: (v: string) => void;
+    paymentMethod: "stripe" | "crypto";
+    setPaymentMethod: (m: "stripe" | "crypto") => void;
+    onTopup: (e: React.FormEvent) => void;
+    loadingTopup: boolean;
+    recurringTopup: RecurringTopup | null;
+    recurringConfigured: boolean;
+    recurringAmount: string;
+    setRecurringAmount: (v: string) => void;
+    recurringInterval: "week" | "month" | "year";
+    setRecurringInterval: (v: "week" | "month" | "year") => void;
+    onEnableRecurring: (e: React.FormEvent) => void;
+    loadingRecurring: boolean;
+    onCancelRecurring: () => void;
+    loadingCancelRecurring: boolean;
+}) {
+    const formattedBalance = Number.isFinite(balance) ? balance : 0;
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
+            {/* Balance + top-up */}
+            <Section
+                num="01"
+                title="Available balance"
+                desc="Credits available for compute, storage, and managed services."
+            >
+                {/* Balance hero */}
+                <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden mb-5">
+                    <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                            background:
+                                "radial-gradient(circle at 80% 0%, rgba(0,149,255,0.08), transparent 60%)",
+                        }}
+                    />
+                    <div className="relative p-6">
+                        <div
+                            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}
+                        >
+                            Remaining balance
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                            <span
+                                style={SERIF_STYLE}
+                                className="text-[24px] text-white/55 font-medium leading-none"
+                            >
+                                $
+                            </span>
+                            <span
+                                style={SERIF_STYLE}
+                                className="text-[54px] font-bold tabular-nums tracking-[-0.035em] text-white leading-none"
+                            >
+                                {formattedBalance.toFixed(2)}
+                            </span>
+                        </div>
+                        <p
+                            className={`${MONO} mt-3 text-[10.5px] text-white/40`}
+                        >
+                            Auto-deducted hourly for running services
+                        </p>
+                    </div>
+                </div>
+
+                {/* Top-up form */}
+                <form onSubmit={onTopup} className="space-y-4">
+                    <div>
+                        <FieldLabel hint="USD · max $10,000">
+                            Top up amount
+                        </FieldLabel>
+                        <Input
+                            type="number"
+                            step="0.01"
+                            min="1"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="25"
+                            mono
+                        />
+                    </div>
+
+                    <div>
+                        <FieldLabel>Payment method</FieldLabel>
+                        <div className="grid grid-cols-2 gap-2">
+                            <PaymentMethodCard
+                                active={paymentMethod === "stripe"}
+                                onClick={() => setPaymentMethod("stripe")}
+                                icon={<CreditCard className="h-3.5 w-3.5" />}
+                                label="Stripe"
+                                desc="Card, Apple Pay, Google Pay"
+                            />
+                            <PaymentMethodCard
+                                active={paymentMethod === "crypto"}
+                                onClick={() => setPaymentMethod("crypto")}
+                                icon={
+                                    <span className={`${MONO} text-[11px] font-bold`}>
+                                        ₿
+                                    </span>
+                                }
+                                label="Crypto"
+                                desc="USDT (TRC20) · instant"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={loadingTopup}
+                        className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                        style={{
+                            background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                            color: "#ffffff",
+                            boxShadow:
+                                "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                        }}
+                        onMouseEnter={(e) => {
+                            if (loadingTopup) return;
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                        }}
+                        onMouseLeave={(e) => {
+                            if (loadingTopup) return;
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                        }}
+                    >
+                        {loadingTopup ? (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {paymentMethod === "crypto"
+                                    ? "Processing"
+                                    : "Redirecting"}
+                            </>
+                        ) : (
+                            <>
+                                Pay {amount && `$${amount}`}
+                                <ArrowRight className="h-3.5 w-3.5" />
+                            </>
+                        )}
+                    </button>
+                </form>
+            </Section>
+
+            {/* Auto top-up */}
+            <Section
+                num="02"
+                title="Auto top-up"
+                desc="Scheduled recurring payments to keep your balance funded."
+            >
+                {recurringTopup && (
+                    <div className="mb-4 flex items-center justify-between gap-3 border border-white/[0.06] bg-[#111216] rounded-[6px] px-4 py-3">
+                        <div className="min-w-0">
+                            <div className="flex items-baseline gap-1">
+                                <span
+                                    style={SERIF_STYLE}
+                                    className="text-[20px] font-bold tabular-nums tracking-[-0.02em] text-white"
+                                >
+                                    ${Number(recurringTopup.amount).toFixed(2)}
+                                </span>
+                                <span
+                                    className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40 ml-1`}
+                                >
+                                    / {recurringTopup.interval}
+                                </span>
+                            </div>
+                            <p
+                                className={`${MONO} mt-1 text-[10.5px] text-white/45`}
+                            >
+                                {recurringTopup.cancel_at_period_end
+                                    ? "Stops at end of current billing period"
+                                    : recurringConfigured
+                                      ? "Active subscription"
+                                      : "Awaiting checkout completion"}
+                            </p>
+                        </div>
+                        <StatusPill
+                            color={
+                                recurringTopup.cancel_at_period_end
+                                    ? "#fbbf24"
+                                    : recurringTopup.status === "active"
+                                      ? "#4ade80"
+                                      : "rgba(255,255,255,0.55)"
+                            }
+                            label={
+                                recurringTopup.cancel_at_period_end
+                                    ? "Canceling"
+                                    : recurringTopup.status
+                            }
+                        />
+                    </div>
+                )}
+
+                {!recurringConfigured && (
+                    <form onSubmit={onEnableRecurring} className="space-y-4">
+                        <div>
+                            <FieldLabel hint="USD · max $10,000">
+                                Recurring amount
+                            </FieldLabel>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min="1"
+                                value={recurringAmount}
+                                onChange={(e) =>
+                                    setRecurringAmount(e.target.value)
+                                }
+                                placeholder="50"
+                                mono
+                            />
+                        </div>
+
+                        <div>
+                            <FieldLabel>Interval</FieldLabel>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(
+                                    [
+                                        { v: "week", label: "Weekly" },
+                                        { v: "month", label: "Monthly" },
+                                        { v: "year", label: "Yearly" },
+                                    ] as const
+                                ).map((opt) => {
+                                    const sel = recurringInterval === opt.v;
+                                    return (
+                                        <button
+                                            key={opt.v}
+                                            type="button"
+                                            onClick={() =>
+                                                setRecurringInterval(opt.v)
+                                            }
+                                            className={`${MONO} h-9 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold border rounded-[5px] transition-colors`}
+                                            style={
+                                                sel
+                                                    ? {
+                                                          color: ACCENT,
+                                                          borderColor:
+                                                              "rgba(0,149,255,0.4)",
+                                                          background: ACCENT_DIM,
+                                                      }
+                                                    : {
+                                                          color: "rgba(255,255,255,0.55)",
+                                                          borderColor:
+                                                              "rgba(255,255,255,0.08)",
+                                                          background: "#111216",
+                                                      }
+                                            }
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loadingRecurring}
+                            className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold border border-white/[0.08] bg-[#111216] text-white/85 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            {loadingRecurring ? (
+                                <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    Redirecting
+                                </>
+                            ) : (
+                                <>
+                                    Enable auto top-up
+                                    <ArrowRight className="h-3.5 w-3.5" />
+                                </>
+                            )}
+                        </button>
+                    </form>
+                )}
+
+                {recurringTopup &&
+                    !recurringTopup.cancel_at_period_end &&
+                    recurringConfigured && (
+                        <button
+                            type="button"
+                            onClick={onCancelRecurring}
+                            disabled={loadingCancelRecurring}
+                            className={`${MONO} mt-3 inline-flex h-9 items-center gap-2 px-3.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold border border-red-500/25 bg-red-500/[0.06] text-red-300 hover:text-red-200 hover:bg-red-500/[0.14] rounded-[5px] transition-colors disabled:opacity-50`}
+                        >
+                            {loadingCancelRecurring ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : null}
+                            Cancel at period end
+                        </button>
+                    )}
+
+                {/* Stripe info card */}
+                <div className="mt-6 border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Shield className="h-3.5 w-3.5 text-emerald-300" />
+                        <span
+                            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/55`}
+                        >
+                            Secure payments by Stripe
+                        </span>
+                    </div>
+                    <p
+                        className={`${MONO} text-[10.5px] text-white/45 leading-relaxed`}
+                    >
+                        Card details never touch our servers. All payment
+                        processing is handled by Stripe (PCI Level 1
+                        certified). Crypto deposits are settled by our payment
+                        provider.
+                    </p>
+                </div>
+            </Section>
+        </div>
+    );
+}
+
+// ─── Coupons tab ──────────────────────────────────────────────────
+
+function CouponsTab({
+    coupons,
+    onRedeem,
+    manualCouponCode,
+    setManualCouponCode,
+    onManualApply,
+    loadingManualCoupon,
+}: {
+    coupons: Coupon[];
+    onRedeem: (code: string) => void;
+    manualCouponCode: string;
+    setManualCouponCode: (v: string) => void;
+    onManualApply: (e: React.FormEvent) => void;
+    loadingManualCoupon: boolean;
+}) {
+    return (
+        <div className="min-w-0">
+            <Section
+                num="01"
+                title="Redeem a code"
+                desc="Add credit to your balance with a promotional or referral code."
+            >
+                <form
+                    onSubmit={onManualApply}
+                    className="flex flex-col sm:flex-row gap-2 max-w-[640px]"
+                >
+                    <Input
+                        type="text"
+                        value={manualCouponCode}
+                        onChange={(e) =>
+                            setManualCouponCode(e.target.value.toUpperCase())
+                        }
+                        placeholder="ENTER-COUPON-CODE"
+                        mono
+                        className="sm:flex-1"
+                    />
+                    <button
+                        type="submit"
+                        disabled={loadingManualCoupon}
+                        className={`${MONO} inline-flex h-11 items-center justify-center gap-2 px-5 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                        style={{
+                            background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                            color: "#ffffff",
+                            boxShadow:
+                                "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                        }}
+                    >
+                        {loadingManualCoupon ? (
+                            <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Applying
+                            </>
+                        ) : (
+                            "Apply code"
+                        )}
+                    </button>
+                </form>
+            </Section>
+
+            <Section
+                num="02"
+                title="Available coupons"
+                desc="Codes assigned to your account, ready to redeem."
+                rightMeta={
+                    coupons.length > 0
+                        ? `${coupons.length} available`
+                        : undefined
+                }
+            >
+                {coupons.length === 0 ? (
+                    <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-14 text-center overflow-hidden">
+                        <div
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                                background:
+                                    "radial-gradient(circle at 30% 20%, rgba(0,149,255,0.04), transparent 50%)",
+                            }}
+                        />
+                        <div
+                            className="relative z-10 h-12 w-12 mb-5 mx-auto inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
+                            style={{ color: ACCENT }}
+                        >
+                            <Ticket className="h-5 w-5" />
+                        </div>
+                        <h3 className="relative z-10 text-[16px] font-semibold tracking-[-0.015em] text-white">
+                            No coupons assigned
+                        </h3>
+                        <p
+                            className={`${MONO} relative z-10 mt-2 max-w-md mx-auto text-[11px] text-white/45 leading-relaxed`}
+                        >
+                            Promotional offers and referral rewards will show
+                            up here automatically.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {coupons.map((c) => (
+                            <CouponCard
+                                key={c.id}
+                                coupon={c}
+                                onRedeem={onRedeem}
+                            />
+                        ))}
+                    </div>
+                )}
+            </Section>
+        </div>
+    );
+}
+
+function CouponCard({
+    coupon,
+    onRedeem,
+}: {
+    coupon: Coupon;
+    onRedeem: (code: string) => void;
+}) {
+    const [loading, setLoading] = useState(false);
+    const handle = async () => {
+        setLoading(true);
+        await onRedeem(coupon.code);
+        setLoading(false);
+    };
+    const formatDate = (d: string) =>
+        new Date(d).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+        });
+    return (
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <code
+                        className={`${MONO} text-[11px] text-white font-semibold px-1.5 py-0.5 rounded-[3px]`}
+                        style={{
+                            background: ACCENT_DIM,
+                            border: "1px solid rgba(0,149,255,0.25)",
+                            color: ACCENT,
+                        }}
+                    >
+                        {coupon.code}
+                    </code>
+                    <p
+                        className={`${MONO} mt-2 text-[10px] uppercase tracking-[0.12em] text-white/40`}
+                    >
+                        {coupon.coupon_type} · expires{" "}
+                        {formatDate(coupon.valid_till)}
+                    </p>
+                </div>
+                <div className="text-right shrink-0">
+                    <div className="flex items-baseline gap-0.5 justify-end">
+                        <span
+                            style={SERIF_STYLE}
+                            className="text-[12px] text-white/55 font-medium"
+                        >
+                            $
+                        </span>
+                        <span
+                            style={SERIF_STYLE}
+                            className="text-[24px] font-bold tabular-nums tracking-[-0.025em] text-white"
+                        >
+                            {coupon.amount}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={handle}
+                disabled={loading}
+                className={`${MONO} mt-auto inline-flex h-8 items-center justify-center gap-1.5 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold rounded-[4px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                style={{
+                    background: ACCENT,
+                    color: "#ffffff",
+                }}
+                onMouseEnter={(e) => {
+                    if (loading) return;
+                    e.currentTarget.style.background = ACCENT_BRIGHT;
+                }}
+                onMouseLeave={(e) => {
+                    if (loading) return;
+                    e.currentTarget.style.background = ACCENT;
+                }}
+            >
+                {loading ? (
+                    <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Applying
+                    </>
+                ) : (
+                    "Redeem"
+                )}
+            </button>
+        </div>
+    );
+}
+
+// ─── Transactions tab ─────────────────────────────────────────────
 
 interface Transaction {
-  id: string;
-  stripe_session_id: string | null;
-  stripe_invoice_id: string | null;
-  amount: number;
-  currency: string;
-  status: string;
-  type: string;
-  balance_after: number | null;
-  description: string | null;
-  receipt_url: string | null;
-  service_id: string | null;
-  service_type: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
+    id: string;
+    stripe_session_id: string | null;
+    stripe_invoice_id: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    type: string;
+    balance_after: number | null;
+    description: string | null;
+    receipt_url: string | null;
+    service_id: string | null;
+    service_type: string | null;
+    period_start: string | null;
+    period_end: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
 }
 
-type UsageBreakdown = {
-  serviceName: string;
-  hourlyRate: number | null;
-  hoursUsed: number | null;
-  cost: number;
-};
-
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage" | "purchase";
-type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps" | "domain";
+type TypeFilter =
+    | ""
+    | "topup"
+    | "refund"
+    | "coupon"
+    | "recurring"
+    | "setup"
+    | "usage"
+    | "purchase";
+type ServiceTypeFilter =
+    | ""
+    | "kubernetes"
+    | "database"
+    | "objectspace"
+    | "spectrum"
+    | "platform_apps"
+    | "domain";
 
-const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
+const CREDIT_TRANSACTION_TYPES = new Set([
+    "topup",
+    "refund",
+    "coupon",
+    "recurring",
+]);
 
 function TransactionsTab() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
-  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [searchId, setSearchId] = useState("");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+    const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+    const [serviceTypeFilter, setServiceTypeFilter] =
+        useState<ServiceTypeFilter>("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
+    const [searchId, setSearchId] = useState("");
 
-  const limit = 10;
+    const limit = 10;
 
-  const fetchTransactions = async (p: number) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(p));
-      params.set("limit", String(limit));
-      if (statusFilter) params.set("status", statusFilter);
-      if (typeFilter) params.set("type", typeFilter);
-      if (serviceTypeFilter) params.set("service_type", serviceTypeFilter);
-      if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
-      if (dateTo) {
-        const end = new Date(dateTo);
-        end.setHours(23, 59, 59, 999);
-        params.set("to", end.toISOString());
-      }
-
-      const res = await api.get(`/billing/transactions?${params.toString()}`);
-      const data = res?.data;
-      setTransactions(data.data ?? []);
-      setTotal(data.pagination?.total ?? 0);
-      setTotalPages(data.pagination?.totalPages ?? 1);
-      setPage(data.pagination?.page ?? 1);
-    } catch {
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTransactions(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter, serviceTypeFilter, dateFrom, dateTo]);
-
-  const clearFilters = () => {
-    setStatusFilter("");
-    setTypeFilter("");
-    setServiceTypeFilter("");
-    setDateFrom("");
-    setDateTo("");
-    setSearchId("");
-  };
-
-  const hasActiveFilters = statusFilter || typeFilter || serviceTypeFilter || dateFrom || dateTo;
-
-  const filteredTransactions = searchId
-    ? transactions.filter(
-        (t) =>
-          t.id.toLowerCase().includes(searchId.toLowerCase()) ||
-          (t.stripe_session_id?.toLowerCase().includes(searchId.toLowerCase()) ?? false) ||
-          (t.stripe_invoice_id?.toLowerCase().includes(searchId.toLowerCase()) ?? false) ||
-          (t.description?.toLowerCase().includes(searchId.toLowerCase()) ?? false)
-      )
-    : transactions;
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      completed: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
-      pending: "bg-yellow-500/15 text-yellow-300 border-yellow-500/20",
-      failed: "bg-red-500/15 text-red-300 border-red-500/20",
+    const fetchTransactions = async (p: number) => {
+        setLoading(true);
+        try {
+            const params = new URLSearchParams();
+            params.set("page", String(p));
+            params.set("limit", String(limit));
+            if (statusFilter) params.set("status", statusFilter);
+            if (typeFilter) params.set("type", typeFilter);
+            if (serviceTypeFilter) params.set("service_type", serviceTypeFilter);
+            if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+            if (dateTo) {
+                const end = new Date(dateTo);
+                end.setHours(23, 59, 59, 999);
+                params.set("to", end.toISOString());
+            }
+            const res = await api.get(
+                `/billing/transactions?${params.toString()}`,
+            );
+            const data = res?.data;
+            setTransactions(data.data ?? []);
+            setTotal(data.pagination?.total ?? 0);
+            setTotalPages(data.pagination?.totalPages ?? 1);
+            setPage(data.pagination?.page ?? 1);
+        } catch {
+            setTransactions([]);
+        } finally {
+            setLoading(false);
+        }
     };
-    return map[status] ?? "bg-white/10 text-neutral-300 border-white/10";
-  };
 
-  const typeBadge = (type: string) => {
-    const map: Record<string, string> = {
-      topup: "bg-blue-500/15 text-blue-300 border-blue-500/20",
-      refund: "bg-purple-500/15 text-purple-300 border-purple-500/20",
-      coupon: "bg-amber-500/15 text-amber-300 border-amber-500/20",
-      recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
-      setup: "bg-rose-500/15 text-rose-300 border-rose-500/20",
-      usage: "bg-orange-500/15 text-orange-300 border-orange-500/20",
-      purchase: "bg-violet-500/15 text-violet-300 border-violet-500/20",
+    useEffect(() => {
+        fetchTransactions(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [statusFilter, typeFilter, serviceTypeFilter, dateFrom, dateTo]);
+
+    const clearFilters = () => {
+        setStatusFilter("");
+        setTypeFilter("");
+        setServiceTypeFilter("");
+        setDateFrom("");
+        setDateTo("");
+        setSearchId("");
     };
-    return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
-  };
 
-  const formatAmount = (txn: Transaction) => {
-    const sign = CREDIT_TRANSACTION_TYPES.has(txn.type) ? "+" : "-";
-    return `${sign}$${txn.amount.toFixed(2)}`;
-  };
+    const hasActiveFilters =
+        statusFilter ||
+        typeFilter ||
+        serviceTypeFilter ||
+        dateFrom ||
+        dateTo;
 
-  const toNumber = (value: unknown): number | null => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+    const filteredTransactions = useMemo(() => {
+        if (!searchId) return transactions;
+        const q = searchId.toLowerCase();
+        return transactions.filter(
+            (t) =>
+                t.id.toLowerCase().includes(q) ||
+                (t.stripe_session_id?.toLowerCase().includes(q) ?? false) ||
+                (t.stripe_invoice_id?.toLowerCase().includes(q) ?? false) ||
+                (t.description?.toLowerCase().includes(q) ?? false),
+        );
+    }, [transactions, searchId]);
 
-  const formatCurrency = (value: number | null) =>
-    value == null ? "N/A" : `$${value.toFixed(2)}`;
+    const formatDate = (d: string) =>
+        new Date(d).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
 
-  const formatHours = (value: number | null) =>
-    value == null ? "N/A" : value.toFixed(2);
-
-  const getServiceTypeLabel = (serviceType: string | null) => {
-    const map: Record<string, string> = {
-      kubernetes: "Kubernetes",
-      database: "Database",
-      objectspace: "Object Storage",
-      spectrum: "Spectrum",
-      platform_apps: "Platform App",
-      domain: "Domain",
+    const statusMeta = (status: string) => {
+        if (status === "completed")
+            return { color: "#4ade80", label: "Completed" };
+        if (status === "pending")
+            return { color: "#fbbf24", label: "Pending" };
+        if (status === "failed") return { color: "#f87171", label: "Failed" };
+        return { color: "rgba(255,255,255,0.55)", label: status };
     };
-    if (!serviceType) return "Service";
-    return map[serviceType] ?? serviceType.replace("_", " ");
-  };
 
-  const getUsageBreakdown = (txn: Transaction): UsageBreakdown | null => {
-    if (txn.type !== "usage") return null;
-
-    const metadata = txn.metadata ?? {};
-    const metadataServiceName =
-      typeof metadata.service_name === "string"
-        ? metadata.service_name
-        : typeof metadata.serviceName === "string"
-          ? metadata.serviceName
-          : null;
-
-    const serviceTail = txn.service_id ? txn.service_id.slice(0, 8) : null;
-    const serviceName =
-      metadataServiceName ??
-      `${getServiceTypeLabel(txn.service_type)}${serviceTail ? ` (${serviceTail}...)` : ""}`;
-
-    let hoursUsed = toNumber(metadata.hours_used);
-    if (hoursUsed == null && txn.period_start && txn.period_end) {
-      const start = new Date(txn.period_start).getTime();
-      const end = new Date(txn.period_end).getTime();
-      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-        hoursUsed = (end - start) / (1000 * 60 * 60);
-      }
-    }
-
-    let hourlyRate = toNumber(metadata.hourly_rate);
-    if (hourlyRate == null && hoursUsed != null && hoursUsed > 0) {
-      hourlyRate = txn.amount / hoursUsed;
-    }
-
-    return {
-      serviceName,
-      hourlyRate,
-      hoursUsed,
-      cost: txn.amount,
+    const typeColor = (type: string) => {
+        const map: Record<string, string> = {
+            topup: ACCENT,
+            refund: "#a78bfa",
+            coupon: "#fbbf24",
+            recurring: "#06b6d4",
+            setup: "#fb7185",
+            usage: "#fb923c",
+            purchase: "#c084fc",
+        };
+        return map[type] ?? "rgba(255,255,255,0.55)";
     };
-  };
 
-  const renderUsageBreakdown = (txn: Transaction) => {
-    const breakdown = getUsageBreakdown(txn);
-    if (!breakdown) return null;
+    const formatAmount = (t: Transaction) => {
+        const sign = CREDIT_TRANSACTION_TYPES.has(t.type) ? "+" : "-";
+        return `${sign}$${t.amount.toFixed(2)}`;
+    };
+
+    const amountColor = (t: Transaction) =>
+        CREDIT_TRANSACTION_TYPES.has(t.type) ? "#4ade80" : "#ffffff";
 
     return (
-      <div className="mt-1.5 rounded-md border border-orange-500/25 bg-orange-500/5 p-2">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-          <span className="text-neutral-400">Service</span>
-          <span className="text-right text-neutral-200 truncate" title={breakdown.serviceName}>
-            {breakdown.serviceName}
-          </span>
-          <span className="text-neutral-400">Hourly rate</span>
-          <span className="text-right text-neutral-200">{formatCurrency(breakdown.hourlyRate)}</span>
-          <span className="text-neutral-400">Hours</span>
-          <span className="text-right text-neutral-200">{formatHours(breakdown.hoursUsed)}</span>
-          <span className="text-neutral-400">Formula</span>
-          <span className="text-right text-neutral-200">
-            {`${formatCurrency(breakdown.hourlyRate)} × ${formatHours(breakdown.hoursUsed)}`}
-          </span>
-          <span className="text-neutral-400">Cost</span>
-          <span className="text-right text-neutral-100 font-medium">
-            {formatCurrency(breakdown.cost)}
-          </span>
-        </div>
-      </div>
-    );
-  };
-
-  const renderDomainBreakdown = (txn: Transaction) => {
-    if (txn.type !== "purchase" || txn.service_type !== "domain") return null;
-    const metadata = txn.metadata ?? {};
-    const domain = typeof metadata.domain === "string" ? metadata.domain : null;
-    const isRenewal = metadata.renewal === true;
-    const currency = typeof metadata.currency === "string" ? metadata.currency.toUpperCase() : "USD";
-    if (!domain) return null;
-    return (
-      <div className="mt-1.5 rounded-md border border-violet-500/25 bg-violet-500/5 p-2">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-          <span className="text-neutral-400">Domain</span>
-          <span className="text-right text-neutral-200 font-mono truncate" title={domain}>{domain}</span>
-          <span className="text-neutral-400">Action</span>
-          <span className="text-right text-neutral-200">{isRenewal ? "Renewal" : "Registration"}</span>
-          <span className="text-neutral-400">Currency</span>
-          <span className="text-right text-neutral-200">{currency}</span>
-          <span className="text-neutral-400">Amount</span>
-          <span className="text-right text-neutral-100 font-medium">{formatCurrency(txn.amount)}</span>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Filters */}
-      <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-            <input
-              type="text"
-              value={searchId}
-              onChange={(e) => setSearchId(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-              placeholder="Search by transaction ID..."
-            />
-          </div>
-
-          {/* Status */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-          >
-            <option value="">All Statuses</option>
-            <option value="completed">Completed</option>
-            <option value="pending">Pending</option>
-            <option value="failed">Failed</option>
-          </select>
-
-          {/* Type */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-          >
-            <option value="">All Types</option>
-            <option value="topup">Top-up</option>
-            <option value="refund">Refund</option>
-            <option value="coupon">Coupon</option>
-            <option value="recurring">Recurring</option>
-            <option value="setup">Setup charge</option>
-            <option value="usage">Usage</option>
-            <option value="purchase">Purchase</option>
-          </select>
-
-          {/* Service Type */}
-          <select
-            value={serviceTypeFilter}
-            onChange={(e) => setServiceTypeFilter(e.target.value as ServiceTypeFilter)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-          >
-            <option value="">All Services</option>
-            <option value="kubernetes">Kubernetes</option>
-            <option value="database">Database</option>
-            <option value="objectspace">Object Storage</option>
-            <option value="spectrum">DDoS / Spectrum</option>
-            <option value="platform_apps">Platform Apps</option>
-            <option value="domain">Domains</option>
-          </select>
-
-          {/* Date From */}
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-            placeholder="From"
-          />
-
-          {/* Date To */}
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
-            placeholder="To"
-          />
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm transition-all"
-            >
-              <X className="w-3.5 h-3.5" /> Clear
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="flex items-center justify-between text-sm text-neutral-400 px-1">
-        <span>
-          {total} transaction{total !== 1 ? "s" : ""} found
-        </span>
-        {totalPages > 1 && (
-          <span>
-            Page {page} of {totalPages}
-          </span>
-        )}
-      </div>
-
-      {/* Table */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-        </div>
-      ) : filteredTransactions.length === 0 ? (
-        <div className="text-center py-16 rounded-lg border border-white/10 bg-black/20">
-          <Receipt className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-400">No transactions found</p>
-          <p className="text-sm text-neutral-500 mt-1">
-            {hasActiveFilters
-              ? "Try adjusting your filters"
-              : "Transactions will appear here after your first top-up or service charge"}
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden sm:block rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/5">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Transaction ID
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Balance
-                  </th>
-                  <th className="text-center py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-center py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Invoice
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filteredTransactions.map((txn) => (
-                  <tr key={txn.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 text-neutral-300 whitespace-nowrap">
-                      {formatDate(txn.created_at)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <code className="text-xs font-mono text-neutral-400">
-                        {txn.id.slice(0, 8)}...
-                      </code>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="space-y-1">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
-                        >
-                          {txn.type.replace("_", " ")}
-                        </span>
-                        {txn.description && (
-                          <p className="text-xs text-neutral-500">{txn.description}</p>
-                        )}
-                        {renderUsageBreakdown(txn)}
-                        {renderDomainBreakdown(txn)}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-right font-medium text-white">
-                      {formatAmount(txn)}
-                    </td>
-                    <td className="py-3 px-4 text-right text-neutral-300">
-                      {txn.balance_after != null ? `$${txn.balance_after.toFixed(2)}` : "—"}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${statusBadge(txn.status)}`}
-                      >
-                        {txn.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {txn.receipt_url ? (
-                        <a
-                          href={txn.receipt_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 hover:bg-blue-500/25 transition-colors"
-                        >
-                          <Download className="w-3 h-3" />
-                          Receipt
-                        </a>
-                      ) : (
-                        <span className="text-neutral-600">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="sm:hidden space-y-3">
-            {filteredTransactions.map((txn) => (
-              <div
-                key={txn.id}
-                className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-neutral-400">{formatDate(txn.created_at)}</span>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${statusBadge(txn.status)}`}
-                  >
-                    {txn.status}
-                  </span>
+        <div className="min-w-0">
+            {/* Filters */}
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between flex-wrap">
+                <div className="flex w-full sm:w-72 items-center gap-2 border border-white/[0.08] bg-[#0d0e11] px-3 h-9 rounded-[5px]">
+                    <Search className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                    <input
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        placeholder="Search transaction ID, description…"
+                        className={`${MONO} flex-1 bg-transparent text-[12px] text-white placeholder:text-white/30 outline-none`}
+                    />
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
-                    >
-                      {txn.type}
-                    </span>
-                    <code className="text-xs font-mono text-neutral-500">
-                      {txn.id.slice(0, 8)}...
-                    </code>
-                  </div>
-                  <span className="text-base font-semibold text-white">
-                    {formatAmount(txn)}
-                  </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <FilterSelect
+                        value={statusFilter}
+                        onChange={(v) => setStatusFilter(v as StatusFilter)}
+                        options={[
+                            { value: "", label: "All statuses" },
+                            { value: "completed", label: "Completed" },
+                            { value: "pending", label: "Pending" },
+                            { value: "failed", label: "Failed" },
+                        ]}
+                    />
+                    <FilterSelect
+                        value={typeFilter}
+                        onChange={(v) => setTypeFilter(v as TypeFilter)}
+                        options={[
+                            { value: "", label: "All types" },
+                            { value: "topup", label: "Top-up" },
+                            { value: "refund", label: "Refund" },
+                            { value: "coupon", label: "Coupon" },
+                            { value: "recurring", label: "Recurring" },
+                            { value: "setup", label: "Setup" },
+                            { value: "usage", label: "Usage" },
+                            { value: "purchase", label: "Purchase" },
+                        ]}
+                    />
+                    <FilterSelect
+                        value={serviceTypeFilter}
+                        onChange={(v) =>
+                            setServiceTypeFilter(v as ServiceTypeFilter)
+                        }
+                        options={[
+                            { value: "", label: "All services" },
+                            { value: "kubernetes", label: "Kubernetes" },
+                            { value: "database", label: "Database" },
+                            { value: "objectspace", label: "Object Storage" },
+                            { value: "spectrum", label: "DDoS / Spectrum" },
+                            { value: "platform_apps", label: "Platform Apps" },
+                            { value: "domain", label: "Domains" },
+                        ]}
+                    />
+                    <DateInput value={dateFrom} onChange={setDateFrom} />
+                    <DateInput value={dateTo} onChange={setDateTo} />
+                    {hasActiveFilters && (
+                        <button
+                            onClick={clearFilters}
+                            className={`${MONO} inline-flex items-center gap-1 h-9 px-3 border border-white/[0.08] bg-[#111216] text-[10.5px] uppercase tracking-[0.12em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                        >
+                            <X className="h-3 w-3" /> Clear
+                        </button>
+                    )}
                 </div>
-                {txn.balance_after != null && (
-                  <div className="flex items-center justify-between text-xs text-neutral-400">
-                    <span>Balance</span>
-                    <span>${txn.balance_after.toFixed(2)}</span>
-                  </div>
-                )}
-                {txn.description && (
-                  <div className="text-xs text-neutral-500">
-                    {txn.description}
-                  </div>
-                )}
-                {renderUsageBreakdown(txn)}
-                {renderDomainBreakdown(txn)}
-                {txn.receipt_url && (
-                  <a
-                    href={txn.receipt_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 hover:bg-blue-500/25 transition-colors w-fit"
-                  >
-                    <Download className="w-3 h-3" />
-                    Download Receipt
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                onClick={() => fetchTransactions(page - 1)}
-                disabled={page <= 1}
-                className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(
-                  (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1
-                )
-                .reduce<(number | "ellipsis")[]>((acc, p, idx, arr) => {
-                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("ellipsis");
-                  acc.push(p);
-                  return acc;
-                }, [])
-                .map((item, idx) =>
-                  item === "ellipsis" ? (
-                    <span key={`e-${idx}`} className="px-1 text-neutral-500">
-                      ...
-                    </span>
-                  ) : (
-                    <button
-                      key={item}
-                      onClick={() => fetchTransactions(item as number)}
-                      className={`cursor-pointer min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${
-                        page === item
-                          ? "bg-white text-black shadow-md"
-                          : "bg-white/10 hover:bg-white/15 text-white"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  )
-                )}
-              <button
-                onClick={() => fetchTransactions(page + 1)}
-                disabled={page >= totalPages}
-                className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
             </div>
-          )}
-        </>
-      )}
-    </div>
-  );
+
+            <div
+                className={`${MONO} flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-white/45 mb-2 px-1`}
+            >
+                <span>
+                    {total} transaction{total !== 1 ? "s" : ""}
+                </span>
+                {totalPages > 1 && (
+                    <span>
+                        Page {page} of {totalPages}
+                    </span>
+                )}
+            </div>
+
+            {loading ? (
+                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] flex items-center justify-center py-16">
+                    <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+                </div>
+            ) : filteredTransactions.length === 0 ? (
+                <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-14 text-center overflow-hidden">
+                    <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                            background:
+                                "radial-gradient(circle at 30% 20%, rgba(0,149,255,0.04), transparent 50%)",
+                        }}
+                    />
+                    <div
+                        className="relative z-10 h-12 w-12 mb-5 mx-auto inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
+                        style={{ color: ACCENT }}
+                    >
+                        <Receipt className="h-5 w-5" />
+                    </div>
+                    <h3 className="relative z-10 text-[16px] font-semibold tracking-[-0.015em] text-white">
+                        No transactions
+                    </h3>
+                    <p
+                        className={`${MONO} relative z-10 mt-2 text-[11px] text-white/45`}
+                    >
+                        {hasActiveFilters
+                            ? "Try clearing the filters."
+                            : "Transactions appear here after your first top-up or service charge."}
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                        {/* Desktop table */}
+                        <div className="hidden md:grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] gap-3 px-5 py-2.5 border-b border-white/[0.06]">
+                            <ColHead>Date</ColHead>
+                            <ColHead>Type</ColHead>
+                            <ColHead>Description</ColHead>
+                            <ColHead align="right">Amount</ColHead>
+                            <ColHead align="right">Status</ColHead>
+                            <ColHead align="right">Invoice</ColHead>
+                        </div>
+                        {filteredTransactions.map((txn) => {
+                            const status = statusMeta(txn.status);
+                            return (
+                                <div
+                                    key={txn.id}
+                                    className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] md:items-center"
+                                >
+                                    {/* Date */}
+                                    <div className="min-w-0">
+                                        <div
+                                            className={`${MONO} text-[11.5px] text-white/85`}
+                                        >
+                                            {formatDate(txn.created_at)}
+                                        </div>
+                                        <div
+                                            className={`${MONO} text-[10px] text-white/30 truncate uppercase tracking-[0.06em]`}
+                                            title={txn.id}
+                                        >
+                                            {txn.id.slice(0, 8)}…
+                                        </div>
+                                    </div>
+                                    {/* Type */}
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <span
+                                            className="h-1.5 w-1.5 rounded-full shrink-0"
+                                            style={{
+                                                background: typeColor(txn.type),
+                                                boxShadow: `0 0 5px ${typeColor(txn.type)}`,
+                                            }}
+                                        />
+                                        <span
+                                            className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold capitalize`}
+                                            style={{
+                                                color: typeColor(txn.type),
+                                            }}
+                                        >
+                                            {txn.type.replace("_", " ")}
+                                        </span>
+                                    </div>
+                                    {/* Description */}
+                                    <div
+                                        className={`${MONO} text-[11px] text-white/55 truncate min-w-0`}
+                                        title={txn.description || ""}
+                                    >
+                                        {txn.description || "—"}
+                                    </div>
+                                    {/* Amount */}
+                                    <div className="md:text-right">
+                                        <span
+                                            className="text-[16px] font-bold tabular-nums"
+                                            style={{
+                                                ...SERIF_STYLE,
+                                                color: amountColor(txn),
+                                            }}
+                                        >
+                                            {formatAmount(txn)}
+                                        </span>
+                                        {txn.balance_after != null && (
+                                            <div
+                                                className={`${MONO} text-[10px] text-white/35 mt-0.5`}
+                                            >
+                                                bal $
+                                                {txn.balance_after.toFixed(2)}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Status */}
+                                    <div className="md:text-right">
+                                        <StatusPill
+                                            color={status.color}
+                                            label={status.label}
+                                        />
+                                    </div>
+                                    {/* Invoice */}
+                                    <div className="md:text-right">
+                                        {txn.receipt_url ? (
+                                            <a
+                                                href={txn.receipt_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className={`${MONO} inline-flex items-center gap-1 h-7 px-2.5 text-[10px] uppercase tracking-[0.12em] font-semibold border rounded-[4px] transition-colors`}
+                                                style={{
+                                                    color: ACCENT,
+                                                    borderColor:
+                                                        "rgba(0,149,255,0.3)",
+                                                    background: ACCENT_DIM,
+                                                }}
+                                            >
+                                                <Download className="h-3 w-3" />
+                                                Receipt
+                                            </a>
+                                        ) : (
+                                            <span className="text-white/25">
+                                                —
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-4">
+                            <PageBtn
+                                onClick={() => fetchTransactions(page - 1)}
+                                disabled={page <= 1}
+                            >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                            </PageBtn>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(
+                                    (p) =>
+                                        p === 1 ||
+                                        p === totalPages ||
+                                        Math.abs(p - page) <= 1,
+                                )
+                                .reduce<(number | "ellipsis")[]>(
+                                    (acc, p, idx, arr) => {
+                                        if (
+                                            idx > 0 &&
+                                            p - (arr[idx - 1] as number) > 1
+                                        )
+                                            acc.push("ellipsis");
+                                        acc.push(p);
+                                        return acc;
+                                    },
+                                    [],
+                                )
+                                .map((item, idx) =>
+                                    item === "ellipsis" ? (
+                                        <span
+                                            key={`e-${idx}`}
+                                            className={`${MONO} px-1 text-white/30 text-[11px]`}
+                                        >
+                                            …
+                                        </span>
+                                    ) : (
+                                        <PageBtn
+                                            key={item}
+                                            active={page === item}
+                                            onClick={() =>
+                                                fetchTransactions(item)
+                                            }
+                                        >
+                                            {item}
+                                        </PageBtn>
+                                    ),
+                                )}
+                            <PageBtn
+                                onClick={() => fetchTransactions(page + 1)}
+                                disabled={page >= totalPages}
+                            >
+                                <ChevronRight className="h-3.5 w-3.5" />
+                            </PageBtn>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+// ─── Reusable subcomponents ────────────────────────────────────────
+
+function Section({
+    num,
+    title,
+    desc,
+    rightMeta,
+    children,
+}: {
+    num: string;
+    title: string;
+    desc: string;
+    rightMeta?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0">
+            <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-4">
+                    <span
+                        className={`${MONO} text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30 mt-0.5`}
+                    >
+                        {num}
+                    </span>
+                    <div>
+                        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-white">
+                            {title}
+                        </h2>
+                        <p
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                        >
+                            {desc}
+                        </p>
+                    </div>
+                </div>
+                {rightMeta && (
+                    <span
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45 tabular-nums`}
+                    >
+                        {rightMeta}
+                    </span>
+                )}
+            </header>
+            {children}
+        </section>
+    );
+}
+
+function FieldLabel({
+    children,
+    hint,
+}: {
+    children: React.ReactNode;
+    hint?: string;
+}) {
+    return (
+        <label className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[12px] font-medium text-white/85">
+                {children}
+            </span>
+            {hint && (
+                <span className={`${MONO} text-[10px] text-white/35`}>
+                    {hint}
+                </span>
+            )}
+        </label>
+    );
+}
+
+function Input({
+    mono,
+    className,
+    ...rest
+}: React.InputHTMLAttributes<HTMLInputElement> & { mono?: boolean }) {
+    return (
+        <input
+            {...rest}
+            className={`${mono ? MONO : ""} w-full h-11 bg-[#0d0e11] border border-white/[0.08] text-white text-[12.5px] px-3 rounded-[6px] outline-none placeholder:text-white/25 hover:border-white/15 focus:border-[${ACCENT}] focus:shadow-[0_0_0_3px_rgba(0,149,255,0.09)] transition-all ${className ?? ""}`}
+        />
+    );
+}
+
+function PaymentMethodCard({
+    active,
+    onClick,
+    icon,
+    label,
+    desc,
+}: {
+    active: boolean;
+    onClick: () => void;
+    icon: React.ReactNode;
+    label: string;
+    desc: string;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="text-left border rounded-[6px] p-3 flex items-start gap-3 transition-all"
+            style={
+                active
+                    ? {
+                          borderColor: ACCENT,
+                          background:
+                              "linear-gradient(135deg, #111216 0%, rgba(0,149,255,0.05) 100%)",
+                          boxShadow: `0 0 0 1px ${ACCENT}, 0 4px 14px rgba(0,149,255,0.08)`,
+                      }
+                    : {
+                          borderColor: "rgba(255,255,255,0.06)",
+                          background: "#111216",
+                      }
+            }
+        >
+            <span
+                className="h-8 w-8 shrink-0 inline-flex items-center justify-center border rounded-[5px]"
+                style={{
+                    color: active ? ACCENT : "rgba(255,255,255,0.65)",
+                    background: active ? ACCENT_DIM : "#0d0e11",
+                    borderColor: active
+                        ? "rgba(0,149,255,0.3)"
+                        : "rgba(255,255,255,0.08)",
+                }}
+            >
+                {icon}
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold text-white">
+                    {label}
+                </div>
+                <p
+                    className={`${MONO} mt-0.5 text-[10px] text-white/45 leading-snug`}
+                >
+                    {desc}
+                </p>
+            </div>
+        </button>
+    );
+}
+
+function StatusPill({ color, label }: { color: string; label: string }) {
+    return (
+        <span
+            className={`${MONO} inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] font-semibold border rounded-[4px] capitalize whitespace-nowrap`}
+            style={{
+                color,
+                borderColor:
+                    color === "rgba(255,255,255,0.55)"
+                        ? "rgba(255,255,255,0.08)"
+                        : `${color}40`,
+                background:
+                    color === "rgba(255,255,255,0.55)" ? "#0d0e11" : `${color}10`,
+            }}
+        >
+            <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{
+                    background: color,
+                    boxShadow:
+                        color === "rgba(255,255,255,0.55)"
+                            ? "none"
+                            : `0 0 5px ${color}`,
+                }}
+            />
+            {label}
+        </span>
+    );
+}
+
+function FilterSelect({
+    value,
+    onChange,
+    options,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    options: { value: string; label: string }[];
+}) {
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`${MONO} h-9 bg-[#111216] border border-white/[0.08] text-white text-[11px] px-3 rounded-[5px] outline-none hover:border-white/15 cursor-pointer`}
+        >
+            {options.map((o) => (
+                <option key={o.value} value={o.value}>
+                    {o.label}
+                </option>
+            ))}
+        </select>
+    );
+}
+
+function DateInput({
+    value,
+    onChange,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    return (
+        <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`${MONO} h-9 bg-[#111216] border border-white/[0.08] text-white text-[11px] px-3 rounded-[5px] outline-none hover:border-white/15 cursor-pointer [color-scheme:dark]`}
+        />
+    );
+}
+
+function ColHead({
+    children,
+    align = "left",
+}: {
+    children: React.ReactNode;
+    align?: "left" | "right";
+}) {
+    return (
+        <span
+            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40 ${
+                align === "right" ? "text-right" : ""
+            }`}
+        >
+            {children}
+        </span>
+    );
+}
+
+function PageBtn({
+    children,
+    onClick,
+    disabled,
+    active,
+}: {
+    children: React.ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+    active?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={`${MONO} inline-flex h-9 min-w-[36px] items-center justify-center px-2 text-[11px] font-semibold border rounded-[5px] transition-colors disabled:opacity-30 disabled:cursor-not-allowed`}
+            style={
+                active
+                    ? {
+                          color: ACCENT,
+                          borderColor: "rgba(0,149,255,0.4)",
+                          background: ACCENT_DIM,
+                      }
+                    : {
+                          color: "rgba(255,255,255,0.65)",
+                          borderColor: "rgba(255,255,255,0.08)",
+                          background: "#111216",
+                      }
+            }
+        >
+            {children}
+        </button>
+    );
 }

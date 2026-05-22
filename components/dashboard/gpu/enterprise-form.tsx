@@ -1,23 +1,46 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { CheckCircle, Loader2, Send, Sparkles } from "lucide-react";
+    ArrowLeft,
+    CheckCircle,
+    ChevronRight,
+    Layers,
+    Loader2,
+    Send,
+    Server,
+    Sparkles,
+    TrendingDown,
+    type LucideIcon,
+} from "lucide-react";
 
-const inputClassName =
-    "border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
+
+// ─── Design tokens ────────────────────────────────────────────────
+const SERIF_STYLE: CSSProperties = {
+    fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+
+const INPUT_CLASS =
+    "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white placeholder:text-white/30 rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
+
+const TEXTAREA_CLASS =
+    "block w-full resize-y border border-white/[0.08] bg-[#0d0e11] px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
+
+const SELECT_CLASS =
+    "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors appearance-none";
+
+const SELECT_OPTION_STYLE: CSSProperties = {
+    backgroundColor: "#0d0e11",
+    color: "#ffffff",
+};
 
 const GPU_CHOICES = ["H100 SXM", "H100 PCIe", "H100 NVL", "H200", "B200", "Mixed / not sure"];
 const DURATIONS = [
@@ -27,11 +50,45 @@ const DURATIONS = [
     { value: "6-months", label: "6 months" },
     { value: "1-year", label: "1 year+" },
 ];
-const PLAN_TYPES = [
-    { value: "reserved", label: "Reserved capacity" },
-    { value: "cluster", label: "Multi-node cluster" },
-    { value: "savings-plan", label: "Long-term savings plan" },
-    { value: "other", label: "Something else" },
+type PlanType = {
+    value: string;
+    label: string;
+    description: string;
+    icon: LucideIcon;
+};
+
+const PLAN_TYPES: PlanType[] = [
+    {
+        value: "reserved",
+        label: "Reserved capacity",
+        description: "Lock in dedicated GPUs for 1 month or longer at discounted rates.",
+        icon: Server,
+    },
+    {
+        value: "cluster",
+        label: "Multi-node cluster",
+        description: "Distributed training across NVLink and InfiniBand fabrics.",
+        icon: Layers,
+    },
+    {
+        value: "savings-plan",
+        label: "Savings plan",
+        description: "Commit for 6 months or longer and save up to 60% vs on-demand.",
+        icon: TrendingDown,
+    },
+    {
+        value: "other",
+        label: "Something else",
+        description: "Custom GPU, region, networking, or compliance requirements.",
+        icon: Sparkles,
+    },
+];
+
+const HERO_BULLETS = [
+    "Discounted long-term rates",
+    "Dedicated capacity, no spot",
+    "Custom SLA & compliance",
+    "Reply within 1 business day",
 ];
 
 export default function EnterpriseInquiryForm() {
@@ -44,7 +101,6 @@ export default function EnterpriseInquiryForm() {
     const [gpuCount, setGpuCount] = useState(16);
     const [duration, setDuration] = useState("1-month");
     const [workload, setWorkload] = useState("");
-    const [budget, setBudget] = useState("");
     const [region, setRegion] = useState("");
     const [contactPref, setContactPref] = useState("email");
     const [extra, setExtra] = useState("");
@@ -75,7 +131,6 @@ export default function EnterpriseInquiryForm() {
                     gpuCount,
                     duration,
                     workload: workload.trim(),
-                    budget: budget.trim() || null,
                     region: region.trim() || null,
                     contactPref,
                     extra: extra.trim() || null,
@@ -96,30 +151,48 @@ export default function EnterpriseInquiryForm() {
 
     if (submitted) {
         return (
-            <div className="glass-panel overflow-hidden">
-                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                    <div className="mb-5 flex h-14 w-14 items-center justify-center border border-emerald-500/30 bg-emerald-500/10">
+            <div className="mx-auto max-w-[1100px]">
+                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-16 text-center">
+                    <div className="mb-5 flex h-14 w-14 items-center justify-center border border-emerald-500/25 bg-emerald-500/[0.08] rounded-[8px] mx-auto">
                         <CheckCircle className="h-7 w-7 text-emerald-400" />
                     </div>
-                    <h2 className="text-xl font-semibold text-white">Inquiry received</h2>
-                    <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
+                    <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+                        Inquiry{" "}
+                        <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                            received
+                        </span>
+                        <span className="text-white/55 font-normal">.</span>
+                    </h2>
+                    <p className={`${MONO} mt-3 max-w-md text-[11.5px] text-white/45 leading-relaxed mx-auto`}>
                         Our team will reach out within one business day. You can track the
-                        conversation under <strong>Support → Tickets</strong>.
+                        conversation under Support → Tickets.
                     </p>
-                    <div className="mt-6 flex flex-wrap justify-center gap-3">
-                        <Button
-                            onClick={() => router.push("/dashboard/services/gpu")}
-                            className="rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400"
-                        >
-                            Back to GPU Cloud
-                        </Button>
-                        <Button
+                    <div className="mt-7 flex flex-wrap justify-center gap-2">
+                        <button
+                            type="button"
                             onClick={() => router.push("/dashboard/support")}
-                            variant="outline"
-                            className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+                            className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
                         >
                             View tickets
-                        </Button>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => router.push("/dashboard/services/gpu")}
+                            className={`${MONO} inline-flex h-10 items-center gap-1.5 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                            style={{
+                                background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                                color: "#ffffff",
+                                boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                            }}
+                        >
+                            Back to GPU Cloud
+                        </button>
                     </div>
                 </div>
             </div>
@@ -127,108 +200,199 @@ export default function EnterpriseInquiryForm() {
     }
 
     return (
-        <div className="space-y-6 text-white">
-            {/* Header */}
-            <div className="glass-panel overflow-hidden">
-                <div className="flex flex-col gap-3 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="max-w-3xl">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/70">
-                            Reserved & Clusters
-                        </p>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                            Talk to our sales team
-                        </h1>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                            For reserved capacity, multi-node training clusters, or long-term
-                            savings plans, our team works with you directly. Self-serve pods
-                            stay on the main page.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                            {[
-                                "Reserved 1mo+",
-                                "Multi-node InfiniBand",
-                                "Custom SLA",
-                                "Volume pricing",
-                            ].map((tag) => (
-                                <span
-                                    key={tag}
-                                    className="inline-flex items-center border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/42"
-                                >
-                                    {tag}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="glass-icon flex h-24 w-24 shrink-0 items-center justify-center text-fuchsia-200">
-                        <Sparkles className="h-12 w-12" />
-                    </div>
-                </div>
-            </div>
+        <div className="mx-auto max-w-[1100px] text-white">
+            {/* ── Hero ─────────────────────────────────────────── */}
+            <header className="mb-10">
+                <Link
+                    href="/dashboard/services/gpu"
+                    className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+                >
+                    <ArrowLeft className="h-3 w-3" />
+                    Back to GPU Cloud
+                </Link>
 
-            {/* Form */}
-            <div className="glass-panel overflow-hidden">
-                <div className="border-b border-white/[0.06] px-6 py-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                        Inquiry details
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-white">
-                        Tell us what you need
-                    </h2>
+                <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+                    <span>GPU Cloud</span>
+                    <ChevronRight className="h-3 w-3 text-white/20" />
+                    <span className="text-white/65">Reserved & Clusters</span>
                 </div>
-                <div className="space-y-6 px-6 py-6">
-                    <div>
-                        <Label className="mb-3 block text-sm font-medium text-white/78">
-                            What kind of plan are you looking for?
-                        </Label>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {PLAN_TYPES.map((p) => (
+
+                <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold max-w-3xl">
+                    Talk to our{" "}
+                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                        sales team
+                    </span>
+                    .
+                </h1>
+                <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
+                    For reserved capacity, multi-node training clusters, or long-term
+                    savings plans — our team works with you directly. Self-serve pods stay
+                    on the main page.
+                </p>
+
+                <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden">
+                    {HERO_BULLETS.map((bullet) => (
+                        <div
+                            key={bullet}
+                            className="bg-[#0d0e11] px-3 py-3 flex items-center gap-2"
+                        >
+                            <span
+                                className="h-1 w-1 rounded-full shrink-0"
+                                style={{ background: ACCENT, boxShadow: `0 0 5px ${ACCENT}` }}
+                            />
+                            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.08em] text-white/65 font-medium leading-tight`}>
+                                {bullet}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </header>
+
+            {/* ── 01 Plan ─────────────────────────────────────── */}
+            <div className="space-y-12">
+                <section>
+                    <SectionHead
+                        index="01"
+                        title="Plan"
+                        accent="type"
+                        meta={PLAN_TYPES.find((p) => p.value === planType)?.label}
+                    />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {PLAN_TYPES.map((p) => {
+                            const selected = planType === p.value;
+                            const Icon = p.icon;
+                            return (
                                 <button
                                     key={p.value}
                                     type="button"
                                     onClick={() => setPlanType(p.value)}
-                                    className={`border px-3 py-3 text-left text-sm transition-colors ${
-                                        planType === p.value
-                                            ? "border-fuchsia-400/30 bg-fuchsia-500/10 text-white"
-                                            : "border-white/[0.08] bg-white/[0.04] text-white/80 hover:bg-white/[0.06]"
-                                    }`}
+                                    className="group relative border rounded-[6px] p-4 text-left transition-all overflow-hidden"
+                                    style={
+                                        selected
+                                            ? {
+                                                  borderColor: `${ACCENT}55`,
+                                                  background: `linear-gradient(135deg, #111216 0%, rgba(0,149,255,0.06) 100%)`,
+                                                  boxShadow: `0 0 0 1px ${ACCENT}33, 0 6px 18px rgba(0,149,255,0.08)`,
+                                              }
+                                            : {
+                                                  borderColor: "rgba(255,255,255,0.06)",
+                                                  background: "#111216",
+                                              }
+                                    }
+                                    onMouseEnter={(e) => {
+                                        if (selected) return;
+                                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
+                                        e.currentTarget.style.background = "#16181d";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (selected) return;
+                                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                                        e.currentTarget.style.background = "#111216";
+                                    }}
                                 >
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                                    {selected && (
+                                        <span
+                                            className="absolute left-0 top-0 bottom-0 w-[2px]"
+                                            style={{
+                                                background: ACCENT,
+                                                boxShadow: `0 0 8px ${ACCENT}`,
+                                            }}
+                                        />
+                                    )}
 
-                    <div>
-                        <Label className="mb-3 block text-sm font-medium text-white/78">
-                            GPU types of interest
-                        </Label>
-                        <div className="flex flex-wrap gap-2">
-                            {GPU_CHOICES.map((g) => {
-                                const selected = gpus.includes(g);
-                                return (
-                                    <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() => toggleGpu(g)}
-                                        className={`border px-3 py-1.5 text-sm transition-colors ${
-                                            selected
-                                                ? "border-fuchsia-400/30 bg-fuchsia-500/10 text-white"
-                                                : "border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.06]"
-                                        }`}
+                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                        <div
+                                            className="h-9 w-9 inline-flex items-center justify-center border rounded-[6px] transition-colors"
+                                            style={{
+                                                borderColor: selected
+                                                    ? `${ACCENT}33`
+                                                    : "rgba(255,255,255,0.08)",
+                                                background: selected
+                                                    ? "rgba(0,149,255,0.08)"
+                                                    : "#0d0e11",
+                                                color: selected ? ACCENT_BRIGHT : "rgba(255,255,255,0.55)",
+                                            }}
+                                        >
+                                            <Icon className="h-4 w-4" />
+                                        </div>
+                                        <span
+                                            className="h-4 w-4 inline-flex items-center justify-center rounded-full border transition-all"
+                                            style={{
+                                                borderColor: selected
+                                                    ? ACCENT
+                                                    : "rgba(255,255,255,0.18)",
+                                                background: selected ? ACCENT : "transparent",
+                                            }}
+                                        >
+                                            {selected && (
+                                                <CheckCircle className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    <p
+                                        style={SERIF_STYLE}
+                                        className="text-[16px] leading-[1.15] tracking-[-0.015em] text-white font-semibold mb-1.5"
                                     >
-                                        {g}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                                        {p.label}
+                                    </p>
+                                    <p className={`${MONO} text-[10.5px] text-white/45 leading-relaxed`}>
+                                        {p.description}
+                                    </p>
+                                </button>
+                            );
+                        })}
                     </div>
+                </section>
 
-                    <div className="grid gap-4 sm:grid-cols-3">
-                        <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
-                                Target GPU count
-                            </Label>
-                            <Input
+                {/* ── 02 GPUs ─────────────────────────────────────── */}
+                <section>
+                    <SectionHead
+                        index="02"
+                        title="GPU"
+                        accent="types"
+                        meta={`${gpus.length} selected`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                        {GPU_CHOICES.map((g) => {
+                            const selected = gpus.includes(g);
+                            const isNvidia = g !== "Mixed / not sure";
+                            return (
+                                <button
+                                    key={g}
+                                    type="button"
+                                    onClick={() => toggleGpu(g)}
+                                    className={`${MONO} inline-flex items-center gap-1.5 border px-3 py-2 text-[12px] uppercase tracking-[0.08em] font-semibold rounded-[20px] transition-all ${
+                                        selected
+                                            ? "text-white"
+                                            : "border-white/[0.08] bg-[#111216] text-white/65 hover:bg-[#16181d] hover:border-white/[0.14]"
+                                    }`}
+                                    style={
+                                        selected
+                                            ? {
+                                                  borderColor: ACCENT,
+                                                  background: `rgba(0,149,255,0.08)`,
+                                                  boxShadow: `0 0 0 1px ${ACCENT}33`,
+                                              }
+                                            : undefined
+                                    }
+                                >
+                                    {isNvidia && (
+                                        <NvidiaLogo width={14} height={10} className="opacity-95" />
+                                    )}
+                                    {g}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                {/* ── 03 Sizing ───────────────────────────────────── */}
+                <section>
+                    <SectionHead index="03" title="Sizing &" accent="region" />
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 grid gap-4 sm:grid-cols-3">
+                        <FieldWrap label="Target GPU count">
+                            <input
                                 type="number"
                                 min={1}
                                 max={4096}
@@ -241,122 +405,197 @@ export default function EnterpriseInquiryForm() {
                                         )
                                     )
                                 }
-                                className={inputClassName}
+                                className={INPUT_CLASS}
                             />
-                        </div>
-                        <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
-                                Duration
-                            </Label>
-                            <Select value={duration} onValueChange={setDuration}>
-                                <SelectTrigger className={inputClassName}>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
-                                    {DURATIONS.map((d) => (
-                                        <SelectItem key={d.value} value={d.value}>
-                                            {d.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
-                                Region preference
-                            </Label>
-                            <Input
+                        </FieldWrap>
+                        <FieldWrap label="Duration">
+                            <select
+                                value={duration}
+                                onChange={(e) => setDuration(e.target.value)}
+                                className={SELECT_CLASS}
+                            >
+                                {DURATIONS.map((d) => (
+                                    <option style={SELECT_OPTION_STYLE} key={d.value} value={d.value}>
+                                        {d.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </FieldWrap>
+                        <FieldWrap label="Region preference">
+                            <input
+                                type="text"
                                 value={region}
                                 onChange={(e) => setRegion(e.target.value)}
                                 placeholder="e.g. US-East, EU, no preference"
-                                className={inputClassName}
+                                className={INPUT_CLASS}
                             />
-                        </div>
+                        </FieldWrap>
                     </div>
+                </section>
 
-                    <div>
-                        <Label className="mb-2 block text-sm font-medium text-white/78">
-                            Workload description
-                        </Label>
-                        <textarea
-                            value={workload}
-                            onChange={(e) => setWorkload(e.target.value)}
-                            placeholder="e.g. Pre-training a 70B model on 4×8 H100 nodes with FSDP; need NVLink/IB; data on S3-compatible storage."
-                            rows={5}
-                            className={`block w-full resize-y border px-3 py-2 text-sm ${inputClassName}`}
-                        />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
-                                Budget range (optional)
-                            </Label>
-                            <Input
-                                value={budget}
-                                onChange={(e) => setBudget(e.target.value)}
-                                placeholder="e.g. $50–100k/mo"
-                                className={inputClassName}
+                {/* ── 04 Workload ─────────────────────────────────── */}
+                <section>
+                    <SectionHead index="04" title="Workload &" accent="context" />
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
+                        <FieldWrap label="Workload description">
+                            <textarea
+                                value={workload}
+                                onChange={(e) => setWorkload(e.target.value)}
+                                placeholder="e.g. Pre-training a 70B model on 4×8 H100 nodes with FSDP; need NVLink/IB; data on S3-compatible storage."
+                                rows={5}
+                                className={TEXTAREA_CLASS}
                             />
-                        </div>
-                        <div>
-                            <Label className="mb-2 block text-sm font-medium text-white/78">
-                                Contact preference
-                            </Label>
-                            <Select value={contactPref} onValueChange={setContactPref}>
-                                <SelectTrigger className={inputClassName}>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
-                                    <SelectItem value="email">Email</SelectItem>
-                                    <SelectItem value="call">Phone / video call</SelectItem>
-                                    <SelectItem value="slack">Shared Slack channel</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
+                        </FieldWrap>
 
-                    <div>
-                        <Label className="mb-2 block text-sm font-medium text-white/78">
-                            Anything else? (optional)
-                        </Label>
-                        <textarea
-                            value={extra}
-                            onChange={(e) => setExtra(e.target.value)}
-                            placeholder="Compliance, networking, storage, special timelines, etc."
-                            rows={3}
-                            className={`block w-full resize-y border px-3 py-2 text-sm ${inputClassName}`}
+                        <FieldWrap label="Contact preference">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                    { value: "email", label: "Email" },
+                                    { value: "call", label: "Phone / video" },
+                                    { value: "slack", label: "Slack channel" },
+                                ].map((opt) => {
+                                    const selected = contactPref === opt.value;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => setContactPref(opt.value)}
+                                            className={`${MONO} h-10 inline-flex items-center justify-center gap-1.5 px-3 border text-[11px] uppercase tracking-[0.12em] rounded-[5px] transition-all ${
+                                                selected
+                                                    ? "text-white"
+                                                    : "border-white/[0.08] bg-[#0d0e11] text-white/55 hover:text-white hover:bg-white/[0.04]"
+                                            }`}
+                                            style={
+                                                selected
+                                                    ? {
+                                                          borderColor: `${ACCENT}55`,
+                                                          background: "rgba(0,149,255,0.08)",
+                                                          boxShadow: `0 0 0 1px ${ACCENT}33`,
+                                                      }
+                                                    : undefined
+                                            }
+                                        >
+                                            {selected && (
+                                                <span
+                                                    className="h-1.5 w-1.5 rounded-full"
+                                                    style={{
+                                                        background: ACCENT,
+                                                        boxShadow: `0 0 5px ${ACCENT}`,
+                                                    }}
+                                                />
+                                            )}
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </FieldWrap>
+
+                        <FieldWrap label="Anything else? (optional)">
+                            <textarea
+                                value={extra}
+                                onChange={(e) => setExtra(e.target.value)}
+                                placeholder="Compliance, networking, storage, special timelines, etc."
+                                rows={3}
+                                className={TEXTAREA_CLASS}
+                            />
+                        </FieldWrap>
+                    </div>
+                </section>
+
+                {/* ── Submit ───────────────────────────────────── */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-white/[0.06]">
+                    <p className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/40 flex items-center gap-1.5`}>
+                        <span
+                            className="h-1 w-1 rounded-full"
+                            style={{ background: "#4ade80", boxShadow: "0 0 5px #4ade80" }}
                         />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] pt-5">
-                        <Button
-                            variant="outline"
-                            onClick={() => router.push("/dashboard/services/gpu")}
-                            className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={onSubmit}
-                            disabled={submitting}
-                            className="rounded-none border border-fuchsia-400/25 bg-fuchsia-500/90 text-slate-950 hover:bg-fuchsia-400 disabled:opacity-50"
-                        >
-                            {submitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Sending…
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="mr-2 h-4 w-4" />
-                                    Send inquiry
-                                </>
-                            )}
-                        </Button>
+                        We typically respond within 1 business day
+                    </p>
+                    <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => router.push("/dashboard/services/gpu")}
+                        className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onSubmit}
+                        disabled={submitting}
+                        className={`${MONO} inline-flex h-10 items-center gap-1.5 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
+                        style={{
+                            background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                            color: "#ffffff",
+                            boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                        }}
+                        onMouseEnter={(e) => {
+                            if (submitting) return;
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                        }}
+                    >
+                        {submitting ? (
+                            <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Sending
+                            </>
+                        ) : (
+                            <>
+                                <Send className="h-3 w-3" />
+                                Send inquiry
+                            </>
+                        )}
+                    </button>
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ─── Subcomponents ─────────────────────────────────────────────────
+
+function SectionHead({
+    index,
+    title,
+    accent,
+    meta,
+}: {
+    index: string;
+    title: string;
+    accent: string;
+    meta?: React.ReactNode;
+}) {
+    return (
+        <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
+            <div className="flex items-baseline gap-3">
+                <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>{index}</span>
+                <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
+                    {title}{" "}
+                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                        {accent}
+                    </span>
+                    <span className="text-white/55 font-normal">.</span>
+                </h2>
+            </div>
+            {meta && (
+                <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>{meta}</span>
+            )}
+        </div>
+    );
+}
+
+function FieldWrap({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div>
+            <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                {label}
+            </label>
+            {children}
         </div>
     );
 }

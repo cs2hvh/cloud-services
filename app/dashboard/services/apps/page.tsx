@@ -1,10 +1,12 @@
 "use client";
 
 // Applications overview — editorial canvas (aurora + dotted grid),
-// Nunito-accent title, mono labels, brand-blue accent, rounded-[5px]/[6px]
-// surfaces. Hero + 4-stat strip + framework presets + apps inventory.
+// Nunito-accent title, mono labels, brand-blue accent. Magazine-style
+// horizontal stats strip, floating PNG feature illustrations, and a
+// clean app inventory.
 
 import { ChevronRight, Loader2, Plus } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -22,35 +24,39 @@ const SERIF_STYLE: React.CSSProperties = {
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
-const ACCENT_DIM = "rgba(0,149,255,0.08)";
 
 // ─── Static reference data ──────────────────────────────────────
 
-const PRESETS = [
+const FEATURES = [
   {
-    kind: "Framework",
-    name: "Next.js",
-    desc: "React framework with SSR, ISR, and edge routing.",
-    runtime: "Node 20 · auto-build",
-    featured: true,
+    title: "Auto-detect from repo",
+    desc: "Next.js, Vite, Vue, SvelteKit, Django, FastAPI — we read your repo and build it.",
+    image: "/images/kubernetes-ui/gitops ready.png",
   },
   {
-    kind: "Static",
-    name: "Static site",
-    desc: "Pure HTML/CSS/JS served from the global edge with zero cold start.",
-    runtime: "Edge CDN · instant",
+    title: "Fully managed runtime",
+    desc: "Container builds, TLS certificates, health checks, and zero-downtime rollouts.",
+    image: "/images/kubernetes-ui/fully managed.png",
   },
   {
-    kind: "API",
-    name: "Node API",
-    desc: "Express, Fastify, or NestJS backends with auto-scale and health checks.",
-    runtime: "Node 18 / 20 / 22",
+    title: "Auto-scaling instances",
+    desc: "Scales up under load and back down idle. Pay per second, not per slot.",
+    image: "/images/kubernetes-ui/auto scaling nodespng.png",
   },
   {
-    kind: "Python",
-    name: "Python service",
-    desc: "Django, Flask, or FastAPI — pip and poetry are auto-detected from the repo.",
-    runtime: "Python 3.10 – 3.12",
+    title: "Built-in load balancing",
+    desc: "Layer-7 routing with sticky sessions, blue-green deploys, and instant rollback.",
+    image: "/images/kubernetes-ui/Built in load balancing png.png",
+  },
+  {
+    title: "Global CDN",
+    desc: "Static assets served from 150+ edge POPs with brotli compression by default.",
+    image: "/images/kubernetes-ui/Global CDN Integration.png",
+  },
+  {
+    title: "99.99% uptime",
+    desc: "Multi-AZ replicas, automatic failover, and per-revision lifecycle tracking.",
+    image: "/images/kubernetes-ui/11 nine.png",
   },
 ] as const;
 
@@ -218,42 +224,11 @@ export default function ApplicationDeploymentPage() {
         />
       </div>
 
-      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
         {/* ── Hero ────────────────────────────────────────── */}
-        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-8">
-          <div className="max-w-3xl">
-            <div
-              className={`${MONO} mb-3 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}
-            >
-              <span className="h-px w-4 bg-white/45" />
-              Application Service
-              <span
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 border text-[9.5px] font-semibold rounded-[5px]"
-                style={
-                  liveConnection
-                    ? {
-                        color: "#4ade80",
-                        borderColor: "rgba(74,222,128,0.25)",
-                        background: "rgba(74,222,128,0.06)",
-                      }
-                    : {
-                        color: "#fbbf24",
-                        borderColor: "rgba(251,191,36,0.25)",
-                        background: "rgba(251,191,36,0.06)",
-                      }
-                }
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{
-                    background: liveConnection ? "#4ade80" : "#fbbf24",
-                    boxShadow: `0 0 6px ${liveConnection ? "#4ade80" : "#fbbf24"}`,
-                  }}
-                />
-                {liveConnection ? "Live updates" : "Sync pending"}
-              </span>
-            </div>
-            <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+        <header className="mb-14">
+          <div className="max-w-2xl">
+            <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Deploy and operate{" "}
               <span style={SERIF_STYLE} className="text-white/55 font-normal">
                 application workloads
@@ -261,58 +236,66 @@ export default function ApplicationDeploymentPage() {
               .
             </h1>
             <p
-              className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}
+              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
             >
               Repository-backed deployments with live build status, runtime
               metrics, and one-click rollbacks.
             </p>
+            <div className="mt-6 flex items-center gap-2">
+              <Link
+                href="/dashboard/services/apps/new"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                style={{
+                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                  color: "#ffffff",
+                  boxShadow:
+                    "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                  e.currentTarget.style.transform = "none";
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Deploy application
+              </Link>
+              <Link
+                href="#inventory"
+                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              >
+                View inventory
+              </Link>
+            </div>
           </div>
-          <Link
-            href="/dashboard/services/apps/new"
-            className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold transition-all rounded-[5px] shrink-0`}
-            style={{
-              background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
-              color: "#ffffff",
-              boxShadow:
-                "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-              e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
-              e.currentTarget.style.transform = "none";
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Deploy application
-          </Link>
         </header>
 
-        {/* ── Stats strip ─────────────────────────────────── */}
-        <section className="mb-12 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile
+        {/* ── Stats — horizontal divider strip ─────────────── */}
+        <section className="mb-16 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+          <StatCell
             label="Total apps"
             value={String(deployedApps.length)}
             hint="Deployment targets"
           />
-          <StatTile
+          <StatCell
             label="Healthy"
             value={String(runningApps)}
             suffix={
               deployedApps.length > 0 ? `/ ${deployedApps.length}` : undefined
             }
             hint="Serving live traffic"
-            tone="green"
+            accent="#4ade80"
           />
-          <StatTile
+          <StatCell
             label="Active builds"
             value={String(buildingApps)}
             hint="Builds or rollouts in flight"
-            tone="blue"
+            accent={ACCENT}
           />
-          <StatTile
+          <StatCell
             label="Success rate"
             value={successRate}
             hint={
@@ -323,47 +306,51 @@ export default function ApplicationDeploymentPage() {
           />
         </section>
 
-        {/* ── Framework presets ───────────────────────────── */}
+        {/* ── Platform features ───────────────────────────── */}
         <SectionHead
-          eyebrow="Quick start"
-          title="Deploy from a"
-          accent="framework preset"
-          link={{
-            label: "Or import any repo",
-            href: "/dashboard/services/apps/new",
-          }}
+          eyebrow="Why platform apps"
+          title="Engineered"
+          accent="for production"
+          link={{ label: "Read the docs", href: "#" }}
         />
-        <div className="mb-12 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {PRESETS.map((p, i) => (
-            <PresetCard key={p.name} index={i + 1} {...p} />
+        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
+          {FEATURES.map((f, i) => (
+            <FeatureCell key={f.title} index={i} {...f} />
           ))}
         </div>
 
-        {/* ── Inventory ───────────────────────────────────── */}
-        <SectionHead
-          eyebrow="Application inventory"
-          title="Your"
-          accent="deployments"
-          rightMeta={
-            <div className="flex items-center gap-1.5">
-              <Pill tone="default">
-                {deployedApps.length} total
-              </Pill>
-              <Pill tone="green">{runningApps} live</Pill>
-              <Pill tone="blue">{buildingApps} building</Pill>
-            </div>
+        <style>{`
+          @keyframes floaty {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-6px); }
           }
-        />
-        <AppsList
-          apps={deployedApps}
-          loading={loading}
-          buildInfo={buildInfo}
-          buildLogs={buildLogs}
-          logsLoading={logsLoading}
-          logsError={logsError}
-          onFetchLogs={fetchBuildLogs}
-          onUpdateApps={handleUpdateApps}
-        />
+        `}</style>
+
+        {/* ── Inventory ───────────────────────────────────── */}
+        <div id="inventory">
+          <SectionHead
+            eyebrow="Application inventory"
+            title="Your"
+            accent="deployments"
+            rightMeta={
+              deployedApps.length > 0
+                ? `${runningApps} healthy · ${buildingApps} building · ${deployedApps.length} total`
+                : liveConnection
+                  ? "Live updates"
+                  : undefined
+            }
+          />
+          <AppsList
+            apps={deployedApps}
+            loading={loading}
+            buildInfo={buildInfo}
+            buildLogs={buildLogs}
+            logsLoading={logsLoading}
+            logsError={logsError}
+            onFetchLogs={fetchBuildLogs}
+            onUpdateApps={handleUpdateApps}
+          />
+        </div>
       </div>
     </div>
   );
@@ -382,67 +369,67 @@ function SectionHead({
   title: string;
   accent: string;
   link?: { label: string; href: string };
-  rightMeta?: React.ReactNode;
+  rightMeta?: string;
 }) {
   return (
-    <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
+    <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
         <p
           className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
         >
           {eyebrow}
         </p>
-        <h2 className="text-[19px] font-semibold tracking-[-0.015em] text-white">
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
           <span style={SERIF_STYLE} className="text-white/55 font-normal">
             {accent}
           </span>
+          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
-      {link && (
-        <Link
-          href={link.href}
-          className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/50 hover:text-white transition-colors`}
-        >
-          {link.label}
-          <ChevronRight className="h-3 w-3" />
-        </Link>
-      )}
-      {rightMeta}
+      <div className="flex items-center gap-4">
+        {rightMeta && (
+          <span
+            className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 tabular-nums`}
+          >
+            {rightMeta}
+          </span>
+        )}
+        {link && (
+          <Link
+            href={link.href}
+            className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/50 hover:text-[#0095FF] transition-colors`}
+          >
+            {link.label}
+            <ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
 
-function StatTile({
+function StatCell({
   label,
   value,
   suffix,
   hint,
-  tone,
+  accent,
 }: {
   label: string;
   value: string;
   suffix?: string;
   hint: string;
-  tone?: "blue" | "green";
+  accent?: string;
 }) {
-  const accentColor =
-    tone === "blue"
-      ? ACCENT
-      : tone === "green"
-        ? "#4ade80"
-        : "rgba(255,255,255,0.55)";
   return (
-    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex flex-col gap-2.5">
+    <div className="px-5 py-5 flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
         <span
           className="h-1 w-1 rounded-full shrink-0"
           style={{
-            background: accentColor,
-            boxShadow:
-              accentColor === "rgba(255,255,255,0.55)"
-                ? "none"
-                : `0 0 5px ${accentColor}`,
+            background: accent ?? "rgba(255,255,255,0.55)",
+            boxShadow: accent ? `0 0 5px ${accent}` : "none",
           }}
         />
         <span
@@ -454,156 +441,62 @@ function StatTile({
       <div className="flex items-baseline gap-1">
         <span
           style={SERIF_STYLE}
-          className="text-[36px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
+          className="text-[40px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white"
         >
           {value}
         </span>
         {suffix && (
-          <span style={SERIF_STYLE} className="text-[15px] text-white/40 font-medium">
+          <span style={SERIF_STYLE} className="text-[16px] text-white/40 font-medium">
             {suffix}
           </span>
         )}
       </div>
-      <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>
+      <p className={`${MONO} text-[10.5px] text-white/40`}>{hint}</p>
     </div>
   );
 }
 
-function PresetCard({
+function FeatureCell({
   index,
-  kind,
-  name,
+  title,
   desc,
-  runtime,
-  featured,
+  image,
 }: {
   index: number;
-  kind: string;
-  name: string;
+  title: string;
   desc: string;
-  runtime: string;
-  featured?: boolean;
+  image: string;
 }) {
   return (
-    <Link
-      href="/dashboard/services/apps/new"
-      className="group relative border rounded-[6px] p-5 flex flex-col gap-3 transition-all overflow-hidden"
-      style={
-        featured
-          ? {
-              borderColor: ACCENT,
-              background:
-                "linear-gradient(135deg, #111216 0%, rgba(0,149,255,0.05) 100%)",
-              boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
-            }
-          : { borderColor: "rgba(255,255,255,0.06)", background: "#111216" }
-      }
-      onMouseEnter={(e) => {
-        if (featured) return;
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-        e.currentTarget.style.background = "#16181d";
-      }}
-      onMouseLeave={(e) => {
-        if (featured) return;
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-        e.currentTarget.style.background = "#111216";
-      }}
-    >
-      {featured && (
-        <span
-          className="absolute left-0 top-0 bottom-0 w-[2px]"
-          style={{ background: ACCENT }}
-        />
-      )}
-
-      {/* Eyebrow row: index · kind | optional Popular pill */}
-      <div className="flex items-center justify-between">
-        <span
-          className={`${MONO} inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] font-semibold`}
-          style={{ color: ACCENT }}
-        >
-          <span className="text-white/30 tabular-nums">
-            {String(index).padStart(2, "0")}
-          </span>
-          {kind}
-        </span>
-        {featured ? (
-          <span
-            className={`${MONO} text-[9px] uppercase tracking-[0.14em] font-semibold px-1.5 py-px rounded-[3px]`}
-            style={{
-              background: ACCENT_DIM,
-              color: ACCENT,
-              border: "1px solid rgba(0,149,255,0.25)",
-            }}
-          >
-            Popular
-          </span>
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-white/25 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all" />
-        )}
-      </div>
-
-      {/* Title + desc */}
-      <div>
+    <div className="flex items-start gap-4 py-2">
+      <div
+        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
+        style={{
+          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
+        }}
+      >
         <div
-          style={SERIF_STYLE}
-          className="text-[18px] font-bold tracking-[-0.015em] text-white leading-tight"
-        >
-          {name}
-        </div>
-        <p className="mt-1.5 text-[12px] text-white/55 leading-snug">
-          {desc}
-        </p>
+          className="absolute inset-0 blur-xl opacity-50"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
+          }}
+        />
+        <Image
+          src={image}
+          alt=""
+          width={80}
+          height={80}
+          className="relative object-contain"
+          unoptimized
+        />
       </div>
-
-      {/* Runtime footer */}
-      <div className="mt-auto pt-3 border-t border-white/[0.05]">
-        <span
-          className={`${MONO} block text-[9.5px] uppercase tracking-[0.12em] font-semibold text-white/40`}
-        >
-          Runtime
-        </span>
-        <span
-          className={`${MONO} mt-1 block text-[11.5px] text-white/85 font-semibold`}
-        >
-          {runtime}
-        </span>
+      <div className="min-w-0 pt-1.5">
+        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
+          {title}
+        </h3>
+        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
       </div>
-    </Link>
-  );
-}
-
-function Pill({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone: "default" | "green" | "blue";
-}) {
-  const styles =
-    tone === "green"
-      ? {
-          color: "#4ade80",
-          borderColor: "rgba(74,222,128,0.25)",
-          background: "rgba(74,222,128,0.06)",
-        }
-      : tone === "blue"
-        ? {
-            color: ACCENT,
-            borderColor: "rgba(0,149,255,0.25)",
-            background: ACCENT_DIM,
-          }
-        : {
-            color: "rgba(255,255,255,0.65)",
-            borderColor: "rgba(255,255,255,0.08)",
-            background: "#111216",
-          };
-  return (
-    <span
-      className={`${MONO} inline-flex items-center px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] rounded-[4px] border`}
-      style={styles}
-    >
-      {children}
-    </span>
+    </div>
   );
 }

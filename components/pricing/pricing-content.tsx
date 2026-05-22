@@ -3,9 +3,12 @@ import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
 
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
+
 type FilterTab = {
   value: string;
   label: string;
+  nvidia?: boolean;
 };
 
 const DATABASE_TYPE_TABS: FilterTab[] = [
@@ -24,9 +27,9 @@ const DEFAULT_CPU_TABS: FilterTab[] = [
 
 const GPU_CPU_TABS: FilterTab[] = [
   { value: "all", label: "All GPU Types" },
-  { value: "h200", label: "H200" },
-  { value: "h100", label: "H100" },
-  { value: "l4os", label: "L4OS" },
+  { value: "h200", label: "H200", nvidia: true },
+  { value: "h100", label: "H100", nvidia: true },
+  { value: "l4os", label: "L4OS", nvidia: true },
 ];
 
 function normalizeValue(value?: string | null): string {
@@ -96,12 +99,15 @@ function FilterTabs({
               type="button"
               onClick={() => onChange(tab.value)}
               className={cn(
-                "cursor-pointer border px-3 py-1.5 text-[11px] font-medium transition-colors",
+                "cursor-pointer inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors",
                 isActive
                   ? "border-white bg-white text-black"
                   : "border-white/20 bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
               )}
             >
+              {tab.nvidia && (
+                <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0")} />
+              )}
               {tab.label}
             </button>
           );

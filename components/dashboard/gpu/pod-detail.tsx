@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
     AlertTriangle,
@@ -21,6 +20,7 @@ import {
     XCircle,
 } from "lucide-react";
 
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { CloudType, PodStatus } from "./types";
 
 interface GpuPodDetailFromApi {
@@ -51,39 +51,30 @@ interface GpuPodDetailFromApi {
     billingEnd: string | null;
 }
 
-function statusStyle(status: PodStatus) {
+// ─── Design tokens ────────────────────────────────────────────────
+const SERIF_STYLE: CSSProperties = {
+    fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+
+function statusMeta(status: PodStatus): { color: string; label: string; pulse: boolean } {
     switch (status) {
         case "running":
-            return {
-                pill: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-                accent: "bg-emerald-500",
-            };
+            return { color: "#4ade80", label: "Running", pulse: true };
         case "provisioning":
+            return { color: ACCENT, label: "Provisioning", pulse: true };
         case "restarting":
-            return {
-                pill: "border-blue-500/20 bg-blue-500/10 text-blue-300",
-                accent: "bg-blue-500",
-            };
+            return { color: ACCENT, label: "Restarting", pulse: true };
         case "stopped":
-            return {
-                pill: "border-white/[0.08] bg-white/[0.04] text-white/55",
-                accent: "bg-white/30",
-            };
+            return { color: "#94a3b8", label: "Stopped", pulse: false };
         case "interrupted":
-            return {
-                pill: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-                accent: "bg-amber-500",
-            };
+            return { color: "#fbbf24", label: "Interrupted", pulse: false };
         case "failed":
-            return {
-                pill: "border-red-500/20 bg-red-500/10 text-red-300",
-                accent: "bg-red-500",
-            };
+            return { color: "#f87171", label: "Failed", pulse: false };
         default:
-            return {
-                pill: "border-white/[0.06] bg-white/[0.02] text-white/35",
-                accent: "bg-white/20",
-            };
+            return { color: "rgba(255,255,255,0.45)", label: String(status), pulse: false };
     }
 }
 
@@ -187,31 +178,35 @@ export default function GpuPodDetail() {
 
     if (loading) {
         return (
-            <div className="space-y-4">
-                <div className="h-12 w-1/3 animate-pulse bg-white/[0.06]" />
-                <div className="glass-panel h-32 animate-pulse" />
-                <div className="glass-panel h-48 animate-pulse" />
+            <div className="space-y-6">
+                <div className="h-8 w-48 animate-pulse bg-white/[0.04] rounded-[5px]" />
+                <div className="h-16 w-2/3 animate-pulse bg-white/[0.04] rounded-[5px]" />
+                <div className="h-24 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
+                <div className="h-64 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
             </div>
         );
     }
 
     if (!pod) {
         return (
-            <div className="glass-panel overflow-hidden">
-                <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                    <Sparkles className="mb-3 h-10 w-10 text-white/20" />
-                    <p className="text-sm font-semibold text-white">Pod not found</p>
-                    <Button asChild className="mt-5 rounded-none border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]">
-                        <Link href="/dashboard/services/gpu">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to GPU Cloud
-                        </Link>
-                    </Button>
-                </div>
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-16 text-center">
+                <Sparkles className="mb-4 h-10 w-10 text-white/20 mx-auto" />
+                <p className="text-[15px] font-semibold text-white">Pod not found</p>
+                <p className={`${MONO} mt-2 text-[11px] text-white/45`}>
+                    This pod may have been destroyed.
+                </p>
+                <Link
+                    href="/dashboard/services/gpu"
+                    className={`${MONO} mt-6 inline-flex items-center gap-1.5 h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                >
+                    <ArrowLeft className="h-3 w-3" />
+                    Back to GPU Cloud
+                </Link>
             </div>
         );
     }
 
-    const style = statusStyle(pod.status);
+    const status = statusMeta(pod.status);
     const isRunning = pod.status === "running";
     const isStopped = pod.status === "stopped";
     const isTerminal = pod.status === "terminated" || pod.status === "failed";
@@ -221,249 +216,324 @@ export default function GpuPodDetail() {
         | undefined;
 
     return (
-        <div className="space-y-6">
-            {/* Breadcrumb */}
-            <nav className="flex items-center gap-1.5 text-sm text-white/38">
-                <Link
-                    href="/dashboard/services/gpu"
-                    className="flex items-center gap-1.5 transition-colors hover:text-white/70"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    GPU Cloud
-                </Link>
-                <ChevronRight className="h-3 w-3 text-white/20" />
-                <span className="truncate text-white/55">{pod.name}</span>
-            </nav>
+        <div className="mx-auto max-w-[1600px]">
+            {/* ── Hero ─────────────────────────────────────────── */}
+            <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
+                <div className="max-w-3xl min-w-0">
+                    <Link
+                        href="/dashboard/services/gpu"
+                        className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+                    >
+                        <ArrowLeft className="h-3 w-3" />
+                        Back to GPU Cloud
+                    </Link>
 
-            {/* Header */}
-            <div className="glass-panel overflow-hidden">
-                <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/70">
-                            GPU Pod
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-3">
-                            <h1 className="truncate font-mono text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                                {pod.name}
-                            </h1>
-                            <span
-                                className={`inline-flex items-center gap-1.5 border px-2 py-1 text-xs font-medium ${style.pill}`}
-                            >
-                                {(pod.status === "provisioning" ||
-                                    pod.status === "restarting") && (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                )}
-                                {pod.status === "running" && (
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                )}
-                                {pod.status === "failed" && <XCircle className="h-3 w-3" />}
-                                {pod.status === "interrupted" && (
-                                    <AlertTriangle className="h-3 w-3" />
-                                )}
-                                {pod.status}
-                            </span>
-                            {pod.interruptible && (
-                                <span className="border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
+                    <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+                        <span>GPU Cloud</span>
+                        <ChevronRight className="h-3 w-3 text-white/20" />
+                        <span className="text-white/65 truncate">{pod.name}</span>
+                    </div>
+
+                    <h1 className={`${MONO} text-[28px] sm:text-[36px] leading-[1.05] tracking-[-0.015em] text-white font-semibold truncate`}>
+                        {pod.name}
+                    </h1>
+
+                    <div className={`${MONO} mt-3 text-[11.5px] text-white/45 flex flex-wrap items-center gap-1.5`}>
+                        <NvidiaLogo width={18} height={13} className="opacity-95" />
+                        <span className="text-white/75 tabular-nums font-medium">
+                            {pod.gpuCount}× {pod.gpuCatalogId.toUpperCase()}
+                        </span>
+                        <span className="text-white/15">·</span>
+                        <span>{pod.cloudType === "SECURE" ? "Secure cloud" : "Community"}</span>
+                        {pod.dataCenterId && (
+                            <>
+                                <span className="text-white/15">·</span>
+                                <span>{pod.dataCenterId}</span>
+                            </>
+                        )}
+                        {pod.interruptible && (
+                            <>
+                                <span className="text-white/15">·</span>
+                                <span className="text-amber-300/85 uppercase tracking-[0.1em]">
                                     Spot
                                 </span>
-                            )}
-                        </div>
-                        <p className="mt-2 text-sm text-white/45">
-                            {pod.gpuCount}× {pod.gpuCatalogId}
-                            {" · "}
-                            {pod.cloudType === "SECURE" ? "Secure cloud" : "Community"}
-                            {pod.dataCenterId ? ` · ${pod.dataCenterId}` : ""}
-                        </p>
-                        {provisioning?.stage && pod.status === "provisioning" && (
-                            <div className="mt-3 max-w-md">
-                                <div className="h-1 overflow-hidden bg-white/[0.06]">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-fuchsia-600 to-fuchsia-400 transition-all duration-700"
-                                        style={{ width: `${provisioning.progress || 10}%` }}
-                                    />
-                                </div>
-                                <p className="mt-1 text-[11px] text-fuchsia-400/80">
-                                    {provisioning.message}
-                                </p>
+                            </>
+                        )}
+                    </div>
+
+                    {provisioning?.stage && pod.status === "provisioning" && (
+                        <div className="mt-4 max-w-md">
+                            <div className="h-[3px] overflow-hidden bg-white/[0.06] rounded-full">
+                                <div
+                                    className="h-full transition-all duration-700"
+                                    style={{
+                                        width: `${provisioning.progress || 10}%`,
+                                        background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_BRIGHT})`,
+                                        boxShadow: `0 0 8px ${ACCENT}`,
+                                    }}
+                                />
                             </div>
+                            <p className={`${MONO} mt-1.5 text-[10.5px] text-white/55`}>
+                                {provisioning.message}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <span
+                        className={`${MONO} inline-flex items-center gap-1.5 h-10 px-3.5 border bg-[#111216] text-[11px] uppercase tracking-[0.14em] rounded-[5px]`}
+                        style={{ borderColor: `${status.color}33`, color: status.color }}
+                    >
+                        {pod.status === "provisioning" || pod.status === "restarting" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : pod.status === "failed" ? (
+                            <XCircle className="h-3 w-3" />
+                        ) : pod.status === "interrupted" ? (
+                            <AlertTriangle className="h-3 w-3" />
+                        ) : (
+                            <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: status.color, boxShadow: `0 0 6px ${status.color}` }}
+                            />
                         )}
+                        {status.label}
+                    </span>
+
+                    {isStopped && (
+                        <button
+                            type="button"
+                            disabled={acting}
+                            onClick={() => powerAction("start")}
+                            className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-emerald-500/25 bg-emerald-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-emerald-300 hover:bg-emerald-500/[0.10] rounded-[5px] transition-colors disabled:opacity-50`}
+                        >
+                            <Play className="h-3 w-3" />
+                            Start
+                        </button>
+                    )}
+                    {isRunning && (
+                        <button
+                            type="button"
+                            disabled={acting}
+                            onClick={() => powerAction("stop")}
+                            className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50`}
+                        >
+                            <Pause className="h-3 w-3" />
+                            Stop
+                        </button>
+                    )}
+                    {(isRunning || isStopped) && (
+                        <button
+                            type="button"
+                            disabled={acting}
+                            onClick={() => powerAction("restart")}
+                            className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50`}
+                        >
+                            <RotateCw className="h-3 w-3" />
+                            Restart
+                        </button>
+                    )}
+                    {!isTerminal && (
+                        <button
+                            type="button"
+                            disabled={acting}
+                            onClick={destroyPod}
+                            className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-rose-500/25 bg-rose-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.10] rounded-[5px] transition-colors disabled:opacity-50`}
+                        >
+                            {acting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-3 w-3" />
+                            )}
+                            Destroy
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {/* ── Stats strip ───────────────────────────────────── */}
+            <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+                <StatCell
+                    label="GPUs"
+                    value={`${pod.gpuCount}×`}
+                    suffix={pod.gpuCatalogId.split("-")[0].toUpperCase()}
+                    hint={pod.gpuCatalogId}
+                    accent="#a78bfa"
+                />
+                <StatCell
+                    label="Container disk"
+                    value={`${pod.containerDiskGb}`}
+                    suffix="GB"
+                    hint={pod.volumeGb > 0 ? `+ ${pod.volumeGb} GB volume` : "ephemeral"}
+                />
+                <StatCell
+                    label="Hourly cost"
+                    value={`$${pod.hourlyCostUsd.toFixed(2)}`}
+                    hint={`≈ $${monthlyEst.toFixed(0)}/mo`}
+                    accent={ACCENT}
+                />
+                <StatCell
+                    label="Cloud"
+                    value={pod.cloudType === "SECURE" ? "Secure" : "Community"}
+                    hint={pod.dataCenterId || "—"}
+                />
+            </section>
+
+            <div className="space-y-12">
+                {/* ── 01 Connection ─────────────────────────────── */}
+                <section>
+                    <SectionHead index="01" title="The" accent="connection" />
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.04]">
+                        <Row
+                            label="Public IP"
+                            value={pod.publicIp || "—"}
+                            mono
+                            onCopy={pod.publicIp ? () => copy(pod.publicIp!, "IP") : undefined}
+                        />
+                        <Row
+                            label="SSH command"
+                            value={pod.sshCommand || "Available once running"}
+                            mono
+                            onCopy={
+                                pod.sshCommand
+                                    ? () => copy(pod.sshCommand!, "SSH command")
+                                    : undefined
+                            }
+                        />
+                        <Row
+                            label="Exposed ports"
+                            value={pod.ports.length > 0 ? pod.ports.join(", ") : "—"}
+                            mono
+                        />
+                        <Row
+                            label="Port mappings"
+                            value={
+                                pod.portMappings && Object.keys(pod.portMappings).length > 0
+                                    ? Object.entries(pod.portMappings)
+                                          .map(([k, v]) => `${k}→${v}`)
+                                          .join(", ")
+                                    : "—"
+                            }
+                            mono
+                        />
                     </div>
+                </section>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        {isRunning && (
-                            <Button
-                                size="sm"
-                                disabled={acting}
-                                onClick={() => powerAction("stop")}
-                                className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                            >
-                                <Pause className="mr-1.5 h-3.5 w-3.5" /> Stop
-                            </Button>
-                        )}
-                        {isStopped && (
-                            <Button
-                                size="sm"
-                                disabled={acting}
-                                onClick={() => powerAction("start")}
-                                className="rounded-none border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
-                            >
-                                <Play className="mr-1.5 h-3.5 w-3.5" /> Start
-                            </Button>
-                        )}
-                        {(isRunning || isStopped) && (
-                            <Button
-                                size="sm"
-                                disabled={acting}
-                                onClick={() => powerAction("restart")}
-                                className="rounded-none border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                            >
-                                <RotateCw className="mr-1.5 h-3.5 w-3.5" /> Restart
-                            </Button>
-                        )}
-                        {!isTerminal && (
-                            <Button
-                                size="sm"
-                                disabled={acting}
-                                onClick={destroyPod}
-                                className="rounded-none border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15"
-                            >
-                                {acting ? (
-                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                )}
-                                Destroy
-                            </Button>
-                        )}
+                {/* ── 02 Configuration ──────────────────────────── */}
+                <section>
+                    <SectionHead index="02" title="Pod" accent="configuration" />
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.04]">
+                        <Row label="Image" value={pod.imageName} mono />
+                        <Row label="Template" value={pod.templateId || "—"} />
+                        <Row
+                            label="Pricing mode"
+                            value={pod.interruptible ? "Spot (interruptible)" : "On-demand"}
+                        />
+                        <Row
+                            label="Env variables"
+                            value={pod.envKeys.length > 0 ? pod.envKeys.join(", ") : "—"}
+                            mono
+                        />
+                        <Row
+                            label="RunPod ID"
+                            value={pod.runpodPodId || "—"}
+                            mono
+                            onCopy={
+                                pod.runpodPodId
+                                    ? () => copy(pod.runpodPodId!, "RunPod ID")
+                                    : undefined
+                            }
+                        />
+                        <Row label="Network volume" value={pod.networkVolumeId || "—"} mono />
+                        <Row label="Created" value={new Date(pod.createdAt).toLocaleString()} />
                     </div>
-                </div>
+                </section>
             </div>
+        </div>
+    );
+}
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                {[
-                    {
-                        label: "GPUs",
-                        value: `${pod.gpuCount}× ${pod.gpuCatalogId.split("-")[0].toUpperCase()}`,
-                        sub: pod.gpuCatalogId,
-                    },
-                    {
-                        label: "Container disk",
-                        value: `${pod.containerDiskGb} GB`,
-                        sub: pod.volumeGb > 0 ? `+ ${pod.volumeGb} GB volume` : "ephemeral",
-                    },
-                    {
-                        label: "Hourly cost",
-                        value: `$${pod.hourlyCostUsd.toFixed(2)}`,
-                        sub: `~$${monthlyEst.toFixed(2)}/mo`,
-                    },
-                    {
-                        label: "Cloud",
-                        value: pod.cloudType === "SECURE" ? "Secure" : "Community",
-                        sub: pod.dataCenterId || "—",
-                    },
-                ].map((s) => (
-                    <div key={s.label} className="glass-panel p-5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                            {s.label}
-                        </p>
-                        <p className="mt-3 text-xl font-semibold text-white tabular-nums">
-                            {s.value}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-white/40">{s.sub}</p>
-                    </div>
-                ))}
-            </div>
+// ─── Subcomponents ─────────────────────────────────────────────────
 
-            {/* Connection details */}
-            <div className="glass-panel overflow-hidden">
-                <div className="border-b border-white/[0.06] px-6 py-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                        Connection
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-white">SSH access</h2>
-                </div>
-                <div className="divide-y divide-white/[0.04]">
-                    <Row
-                        label="Public IP"
-                        value={pod.publicIp || "—"}
-                        mono
-                        onCopy={pod.publicIp ? () => copy(pod.publicIp!, "IP") : undefined}
-                    />
-                    <Row
-                        label="SSH command"
-                        value={pod.sshCommand || "Available once running"}
-                        mono
-                        onCopy={
-                            pod.sshCommand
-                                ? () => copy(pod.sshCommand!, "SSH command")
-                                : undefined
-                        }
-                    />
-                    <Row
-                        label="Exposed ports"
-                        value={pod.ports.length > 0 ? pod.ports.join(", ") : "—"}
-                        mono
-                    />
-                    <Row
-                        label="Port mappings"
-                        value={
-                            pod.portMappings && Object.keys(pod.portMappings).length > 0
-                                ? Object.entries(pod.portMappings)
-                                      .map(([k, v]) => `${k}→${v}`)
-                                      .join(", ")
-                                : "—"
-                        }
-                        mono
-                    />
-                </div>
+function StatCell({
+    label,
+    value,
+    suffix,
+    hint,
+    accent,
+}: {
+    label: string;
+    value: string;
+    suffix?: string;
+    hint?: string;
+    accent?: string;
+}) {
+    const dotColor = accent ?? "rgba(255,255,255,0.35)";
+    return (
+        <div className="px-5 py-5 flex flex-col gap-2">
+            <div className="flex items-center gap-1.5">
+                <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                        background: dotColor,
+                        boxShadow: accent ? `0 0 6px ${dotColor}` : "none",
+                    }}
+                />
+                <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                    {label}
+                </span>
             </div>
+            <div className="flex items-baseline gap-1">
+                <span
+                    style={SERIF_STYLE}
+                    className="text-[32px] sm:text-[36px] leading-none font-bold tabular-nums tracking-[-0.03em] text-white"
+                >
+                    {value}
+                </span>
+                {suffix && (
+                    <span
+                        style={SERIF_STYLE}
+                        className="text-[14px] text-white/45 font-medium"
+                    >
+                        {suffix}
+                    </span>
+                )}
+            </div>
+            {hint && (
+                <p className={`${MONO} text-[10.5px] text-white/40 mt-auto truncate`}>{hint}</p>
+            )}
+        </div>
+    );
+}
 
-            {/* Config */}
-            <div className="glass-panel overflow-hidden">
-                <div className="border-b border-white/[0.06] px-6 py-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                        Configuration
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-white">Pod spec</h2>
-                </div>
-                <div className="divide-y divide-white/[0.04]">
-                    <Row label="Image" value={pod.imageName} mono />
-                    <Row label="Template" value={pod.templateId || "—"} />
-                    <Row
-                        label="Pricing mode"
-                        value={pod.interruptible ? "Spot (interruptible)" : "On-demand"}
-                    />
-                    <Row
-                        label="Env variables"
-                        value={
-                            pod.envKeys.length > 0
-                                ? pod.envKeys.join(", ")
-                                : "—"
-                        }
-                        mono
-                    />
-                    <Row
-                        label="RunPod ID"
-                        value={pod.runpodPodId || "—"}
-                        mono
-                        onCopy={
-                            pod.runpodPodId
-                                ? () => copy(pod.runpodPodId!, "RunPod ID")
-                                : undefined
-                        }
-                    />
-                    <Row
-                        label="Network volume"
-                        value={pod.networkVolumeId || "—"}
-                        mono
-                    />
-                    <Row
-                        label="Created"
-                        value={new Date(pod.createdAt).toLocaleString()}
-                    />
-                </div>
+function SectionHead({
+    index,
+    title,
+    accent,
+    meta,
+}: {
+    index: string;
+    title: string;
+    accent: string;
+    meta?: React.ReactNode;
+}) {
+    return (
+        <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
+            <div className="flex items-baseline gap-3">
+                <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>
+                    {index}
+                </span>
+                <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
+                    {title}{" "}
+                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                        {accent}
+                    </span>
+                    <span className="text-white/55 font-normal">.</span>
+                </h2>
             </div>
+            {meta && (
+                <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>{meta}</span>
+            )}
         </div>
     );
 }
@@ -480,12 +550,14 @@ function Row({
     onCopy?: () => void;
 }) {
     return (
-        <div className="flex items-center justify-between gap-4 px-6 py-3">
-            <span className="text-sm text-white/42">{label}</span>
+        <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 shrink-0`}>
+                {label}
+            </span>
             <div className="flex min-w-0 items-center gap-2">
                 <span
-                    className={`truncate text-sm text-white/85 ${
-                        mono ? "font-mono" : ""
+                    className={`truncate text-[12.5px] text-white/85 ${
+                        mono ? MONO : ""
                     }`}
                 >
                     {value}
@@ -494,9 +566,10 @@ function Row({
                     <button
                         type="button"
                         onClick={onCopy}
-                        className="shrink-0 text-white/20 transition-colors hover:text-white/60"
+                        className="shrink-0 text-white/25 transition-colors hover:text-[#0095FF]"
+                        title="Copy"
                     >
-                        <Copy className="h-3.5 w-3.5" />
+                        <Copy className="h-3 w-3" />
                     </button>
                 )}
             </div>

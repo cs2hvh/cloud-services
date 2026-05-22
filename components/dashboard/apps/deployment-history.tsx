@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Box,
   GitCommit,
   Layers,
   Loader2,
@@ -14,11 +13,12 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAppOperationLabel } from "@/lib/app-operations/core/presentation";
 import { getPlatformAppRetentionPolicy } from "@/lib/platform-apps/retention";
 import type { Deployment } from "@/hooks/use-realtime-deployments";
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,24 +44,14 @@ function getLabel(d: DeploymentEntry): string {
   });
 }
 
-function statusColor(status: string): string {
+function statusMeta(status: string): { color: string; label: string } {
   switch (status) {
-    case "SUCCESS":  return "bg-emerald-500/15 text-emerald-400 border-emerald-500/20";
-    case "FAILURE":  return "bg-red-500/15 text-red-400 border-red-500/20";
-    case "BUILDING": return "bg-blue-500/15 text-blue-400 border-blue-500/20";
-    case "ABORTED":  return "bg-white/8 text-white/40 border-white/10";
-    default:         return "bg-yellow-500/15 text-yellow-400 border-yellow-500/20";
-  }
-}
-
-function formatBuildStatus(status: string): string {
-  switch (status) {
-    case "SUCCESS":  return "Success";
-    case "FAILURE":  return "Failed";
-    case "BUILDING": return "Building";
-    case "ABORTED":  return "Cancelled";
-    case "UNSTABLE": return "Unstable";
-    default:         return status;
+    case "SUCCESS":  return { color: "#4ade80", label: "Success" };
+    case "FAILURE":  return { color: "#f87171", label: "Failed" };
+    case "BUILDING": return { color: ACCENT, label: "Building" };
+    case "ABORTED":  return { color: "rgba(255,255,255,0.45)", label: "Cancelled" };
+    case "UNSTABLE": return { color: "#fbbf24", label: "Unstable" };
+    default:         return { color: "rgba(255,255,255,0.45)", label: status };
   }
 }
 
@@ -91,19 +81,39 @@ function formatRelative(date: string): string {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+function StatusPill({ status }: { status: string }) {
+  const meta = statusMeta(status);
+  const isBuilding = status === "BUILDING";
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1.5 px-2 py-0.5 border text-[9.5px] uppercase tracking-[0.1em] font-semibold rounded-[20px]`}
+      style={{
+        borderColor: `${meta.color}33`,
+        color: meta.color,
+        background: `${meta.color}0d`,
+      }}
+    >
+      <span
+        className={`h-1 w-1 rounded-full ${isBuilding ? "animate-pulse" : ""}`}
+        style={{ background: meta.color, boxShadow: `0 0 4px ${meta.color}` }}
+      />
+      {meta.label}
+    </span>
+  );
+}
+
 function ViewLogsButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 border border-white/[0.10] bg-white/[0.03] px-2.5 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white/80"
+      className={`${MONO} inline-flex items-center gap-1 px-2 py-1 border border-white/[0.08] bg-[#0d0e11] text-[10px] uppercase tracking-[0.08em] text-white/55 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
     >
-      <Terminal className="w-3 h-3" />
+      <Terminal className="h-3 w-3" />
       Logs
     </button>
   );
 }
 
-/** Compact single-line row for resize / env_update */
 function OperationRow({
   deployment,
   onViewLogs,
@@ -112,22 +122,24 @@ function OperationRow({
   onViewLogs: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between border border-white/[0.05] bg-white/[0.015] px-4 py-2.5 transition-colors hover:bg-white/[0.03]">
+    <div className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
       <div className="flex items-center gap-2.5 min-w-0">
-        <Box className="w-3 h-3 text-white/25 flex-shrink-0" />
-        <span className="text-xs font-mono text-white/60 truncate">{getLabel(deployment)}</span>
-        <Badge className={`rounded-none text-[10px] px-1.5 py-0 border flex-shrink-0 ${statusColor(deployment.status)}`}>
-          {formatBuildStatus(deployment.status)}
-        </Badge>
+        <span className={`${MONO} text-[11.5px] text-white/70 truncate`}>
+          {getLabel(deployment)}
+        </span>
+        <StatusPill status={deployment.status} />
         {deployment.operation_details?.verification?.status === "degraded" && (
-          <span className="text-[10px] text-orange-300/80 truncate flex items-center gap-1">
-            <AlertTriangle className="w-2.5 h-2.5 flex-shrink-0" />
+          <span className={`${MONO} text-[10px] text-orange-300/80 truncate flex items-center gap-1`}>
+            <AlertTriangle className="h-2.5 w-2.5 flex-shrink-0" />
             {deployment.operation_details.verification.message ?? "Still converging"}
           </span>
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-xs text-white/30" title={new Date(deployment.started_at).toLocaleString()}>
+        <span
+          className={`${MONO} text-[10.5px] text-white/40 tabular-nums`}
+          title={new Date(deployment.started_at).toLocaleString()}
+        >
           {formatRelative(deployment.started_at)}
         </span>
         <ViewLogsButton onClick={onViewLogs} />
@@ -136,7 +148,6 @@ function OperationRow({
   );
 }
 
-/** Medium row for rollback operations */
 function RollbackRow({
   deployment,
   onViewLogs,
@@ -145,22 +156,27 @@ function RollbackRow({
   onViewLogs: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between border border-white/[0.06] bg-white/[0.02] px-4 py-3 transition-colors hover:bg-white/[0.035]">
+    <div className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors">
       <div className="flex items-center gap-2.5 min-w-0">
-        <RotateCcw className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-        <span className="text-sm font-mono text-white/65 truncate">{getLabel(deployment)}</span>
-        <Badge className={`rounded-none text-[10px] px-1.5 py-0 border flex-shrink-0 ${statusColor(deployment.status)}`}>
-          {formatBuildStatus(deployment.status)}
-        </Badge>
+        <div className="h-6 w-6 shrink-0 inline-flex items-center justify-center border border-white/[0.06] bg-[#0d0e11] rounded-[5px] text-white/45">
+          <RotateCcw className="h-3 w-3" />
+        </div>
+        <span className={`${MONO} text-[12px] text-white/75 truncate`}>
+          {getLabel(deployment)}
+        </span>
+        <StatusPill status={deployment.status} />
         {deployment.operation_details?.verification?.status === "degraded" && (
-          <span className="text-[10px] text-orange-300/80 truncate flex items-center gap-1">
-            <AlertTriangle className="w-2.5 h-2.5 flex-shrink-0" />
+          <span className={`${MONO} text-[10px] text-orange-300/80 truncate flex items-center gap-1`}>
+            <AlertTriangle className="h-2.5 w-2.5 flex-shrink-0" />
             {deployment.operation_details.verification.message ?? "Still converging"}
           </span>
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-        <span className="text-xs text-white/30" title={new Date(deployment.started_at).toLocaleString()}>
+        <span
+          className={`${MONO} text-[10.5px] text-white/40 tabular-nums`}
+          title={new Date(deployment.started_at).toLocaleString()}
+        >
           {formatRelative(deployment.started_at)}
         </span>
         <ViewLogsButton onClick={onViewLogs} />
@@ -169,7 +185,6 @@ function RollbackRow({
   );
 }
 
-/** Full card for release builds */
 function BuildRow({
   deployment,
   isCurrentlyServing,
@@ -182,70 +197,72 @@ function BuildRow({
   onSelectBuild: () => void;
 }) {
   const label = getLabel(deployment);
-  const isBuilding = deployment.status === "BUILDING";
 
   return (
     <div
-      className={`flex flex-col gap-2.5 border px-4 py-3.5 transition-colors ${
+      className={`flex flex-col gap-2.5 px-4 py-3.5 transition-colors ${
         isCurrentlyServing
-          ? "border-emerald-500/25 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.06]"
-          : "border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.04]"
+          ? "bg-emerald-500/[0.04] hover:bg-emerald-500/[0.06]"
+          : "hover:bg-white/[0.02]"
       }`}
+      style={
+        isCurrentlyServing
+          ? { boxShadow: "inset 2px 0 0 #4ade80" }
+          : undefined
+      }
     >
-      {/* Top row: label + badges + time + button */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <span className="text-sm font-mono text-white/90 truncate">{label}</span>
-
-          <Badge className={`rounded-none text-[10px] px-1.5 py-0 border ${statusColor(deployment.status)}`}>
-            {isBuilding && (
-              <span className="mr-1 h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
-            )}
-            {formatBuildStatus(deployment.status)}
-          </Badge>
-
+          <span className={`${MONO} text-[12.5px] text-white/90 truncate font-medium`}>
+            {label}
+          </span>
+          <StatusPill status={deployment.status} />
           {deployment.trigger && (
-            <Badge variant="outline" className="rounded-none text-[10px] px-1.5 py-0 text-white/35 border-white/[0.08]">
+            <span className={`${MONO} inline-flex items-center px-2 py-0.5 text-[9.5px] uppercase tracking-[0.08em] text-white/40 border border-white/[0.06] rounded-[20px]`}>
               {formatTrigger(deployment.trigger)}
-            </Badge>
+            </span>
           )}
-
           {isCurrentlyServing && (
-            <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/12 text-emerald-300 text-[10px] px-1.5 py-0">
-              <CheckCircle2 className="w-2.5 h-2.5 mr-1 inline" />
+            <span
+              className={`${MONO} inline-flex items-center gap-1 px-2 py-0.5 border border-emerald-400/25 bg-emerald-500/[0.08] text-[9.5px] uppercase tracking-[0.1em] text-emerald-300 rounded-[20px]`}
+            >
+              <CheckCircle2 className="h-2.5 w-2.5" />
               Serving
-            </Badge>
+            </span>
           )}
-
           {showDeployFailed && (
-            <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300/80 text-[10px] px-1.5 py-0">
+            <span className={`${MONO} inline-flex items-center px-2 py-0.5 border border-orange-400/25 bg-orange-500/[0.06] text-[9.5px] uppercase tracking-[0.1em] text-orange-300/80 rounded-[20px]`}>
               Deploy Failed
-            </Badge>
+            </span>
           )}
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="text-xs text-white/30" title={new Date(deployment.started_at).toLocaleString()}>
+          <span
+            className={`${MONO} text-[10.5px] text-white/40 tabular-nums`}
+            title={new Date(deployment.started_at).toLocaleString()}
+          >
             {formatRelative(deployment.started_at)}
           </span>
           <ViewLogsButton onClick={onSelectBuild} />
         </div>
       </div>
 
-      {/* Commit SHA */}
       {deployment.commit_sha && (
-        <div className="flex items-center gap-1.5 text-xs text-white/45 pl-0.5">
-          <GitCommit className="w-3 h-3 text-white/30 flex-shrink-0" />
-          <code className="border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-300/70 text-[11px]">
+        <div className="flex items-center gap-1.5 pl-0.5">
+          <GitCommit className="h-3 w-3 text-white/30 flex-shrink-0" />
+          <code
+            className={`${MONO} inline-flex items-center px-1.5 py-0.5 border border-white/[0.06] bg-[#0d0e11] text-[10.5px] rounded-[3px]`}
+            style={{ color: ACCENT }}
+          >
             {deployment.commit_sha.substring(0, 7)}
           </code>
         </div>
       )}
 
-      {/* Failure reason */}
       {deployment.status === "FAILURE" && deployment.failure_reason && (
-        <div className="flex items-start gap-2 border border-red-500/15 bg-red-500/[0.06] px-2.5 py-2 text-xs text-red-300/80">
-          <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5 text-red-400/60" />
+        <div className={`${MONO} flex items-start gap-2 border border-rose-500/20 bg-rose-500/[0.05] rounded-[5px] px-2.5 py-2 text-[11px] text-rose-300/80`}>
+          <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5 text-rose-400/60" />
           <span className="leading-relaxed">{deployment.failure_reason}</span>
         </div>
       )}
@@ -253,31 +270,39 @@ function BuildRow({
   );
 }
 
-// ─── Connection Badge ────────────────────────────────────────────────────────
-
 function ConnectionBadge({ status }: { status: string }) {
   if (status === "connected") {
     return (
-      <Badge className="rounded-none bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[10px] px-1.5 py-0">
-        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1.5 animate-pulse inline-block" />
+      <span className={`${MONO} inline-flex items-center gap-1.5 px-2 py-0.5 border border-emerald-500/25 bg-emerald-500/[0.06] text-[9.5px] uppercase tracking-[0.1em] text-emerald-300 rounded-[20px]`}>
+        <span
+          className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse"
+          style={{ boxShadow: "0 0 5px #4ade80" }}
+        />
         Live
-      </Badge>
+      </span>
     );
   }
   if (status === "connecting") {
     return (
-      <Badge className="rounded-none bg-blue-500/15 text-blue-400 border border-blue-500/20 text-[10px] px-1.5 py-0">
-        <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
+      <span
+        className={`${MONO} inline-flex items-center gap-1 px-2 py-0.5 border text-[9.5px] uppercase tracking-[0.1em] rounded-[20px]`}
+        style={{
+          borderColor: `${ACCENT}33`,
+          background: `${ACCENT}0d`,
+          color: ACCENT,
+        }}
+      >
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />
         Connecting
-      </Badge>
+      </span>
     );
   }
   if (status === "disconnected") {
     return (
-      <Badge className="rounded-none bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 text-[10px] px-1.5 py-0">
-        <XCircle className="w-2.5 h-2.5 mr-1" />
+      <span className={`${MONO} inline-flex items-center gap-1 px-2 py-0.5 border border-yellow-500/25 bg-yellow-500/[0.06] text-[9.5px] uppercase tracking-[0.1em] text-yellow-300 rounded-[20px]`}>
+        <XCircle className="h-2.5 w-2.5" />
         Offline
-      </Badge>
+      </span>
     );
   }
   return null;
@@ -319,71 +344,84 @@ export function DeploymentHistory({
 
   if (deploymentsLoading && deployments.length === 0) {
     return (
-      <Card className="glass-panel rounded-none border-white/[0.08]">
-        <CardContent className="pt-5">
-          <div className="flex flex-col items-center justify-center py-10 gap-3 text-white/40">
-            <Loader2 className="w-6 h-6 animate-spin opacity-50" />
-            <p className="text-sm">Loading deployments…</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-12">
+        <div className="flex flex-col items-center justify-center gap-3 text-white/40">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <p className={`${MONO} text-[11px] uppercase tracking-[0.14em]`}>
+            Loading deployments
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card className="glass-panel rounded-none border-white/[0.08]">
-      <CardHeader className="border-b border-white/[0.06] pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base flex items-center gap-2 text-white/90">
-            <Layers className="w-4 h-4 text-white/50" />
-            Deployment History
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <span className="hidden text-[10px] text-white/25 sm:inline" title="Log retention: success / failed / production">
-              logs {LOG_RETENTION_LABEL}
-            </span>
-            <ConnectionBadge status={connectionStatus} />
-          </div>
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+      <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Layers className="h-3.5 w-3.5 text-white/45" />
+          <h3 className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
+            Deployment history
+          </h3>
         </div>
-      </CardHeader>
+        <div className="flex items-center gap-2">
+          <span
+            className={`${MONO} hidden sm:inline text-[10px] text-white/30 tabular-nums`}
+            title="Log retention: success / failed / production"
+          >
+            logs {LOG_RETENTION_LABEL}
+          </span>
+          <ConnectionBadge status={connectionStatus} />
+        </div>
+      </div>
 
-      <CardContent className="pt-4 px-0">
+      <div>
         {deployments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-2 text-white/30">
-            <Clock className="w-6 h-6 opacity-40" />
-            <p className="text-sm">No deployment history yet</p>
+          <div className="flex flex-col items-center justify-center py-12 gap-2 text-white/30">
+            <Clock className="h-5 w-5" />
+            <p className={`${MONO} text-[11px] uppercase tracking-[0.14em]`}>
+              No deployment history yet
+            </p>
           </div>
         ) : (
           <>
-            {/* Tabs */}
-            <div className="flex items-center gap-0 border-b border-white/[0.06] px-4 mb-4">
+            <div className="flex items-center gap-0 border-b border-white/[0.06] px-4">
               {(["builds", "operations"] as HistoryTab[]).map((tab) => {
                 const count = tab === "builds" ? builds.length : operations.length;
                 const label = tab === "builds" ? "Releases" : "Operations";
+                const isActive = activeTab === tab;
                 return (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-3 py-2 text-xs font-medium transition-colors -mb-px border-b-2 ${
-                      activeTab === tab
-                        ? "text-white border-blue-500"
-                        : "text-white/40 border-transparent hover:text-white/60"
+                    className={`${MONO} relative inline-flex items-center gap-1.5 px-3 py-3 text-[11px] uppercase tracking-[0.14em] transition-colors ${
+                      isActive ? "text-white" : "text-white/40 hover:text-white/70"
                     }`}
                   >
                     {label}
-                    <span className={`ml-1.5 text-[10px] ${activeTab === tab ? "text-white/50" : "text-white/25"}`}>
+                    <span className={`tabular-nums ${isActive ? "text-white/55" : "text-white/25"}`}>
                       {count}
                     </span>
+                    {isActive && (
+                      <span
+                        className="absolute left-2 right-2 -bottom-px h-[2px]"
+                        style={{
+                          background: ACCENT,
+                          boxShadow: `0 0 8px ${ACCENT}`,
+                        }}
+                      />
+                    )}
                   </button>
                 );
               })}
             </div>
 
-            {/* Releases tab */}
             {activeTab === "builds" && (
-              <div className="flex flex-col gap-1.5 px-4">
+              <div className="divide-y divide-white/[0.04]">
                 {builds.length === 0 ? (
-                  <p className="text-center py-8 text-sm text-white/30">No release builds yet</p>
+                  <p className={`${MONO} text-center py-10 text-[11px] uppercase tracking-[0.14em] text-white/30`}>
+                    No release builds yet
+                  </p>
                 ) : (
                   builds.map((deployment) => {
                     const buildNumber = deployment.build_number;
@@ -415,11 +453,12 @@ export function DeploymentHistory({
               </div>
             )}
 
-            {/* Operations tab */}
             {activeTab === "operations" && (
-              <div className="flex flex-col gap-1.5 px-4">
+              <div className="divide-y divide-white/[0.04]">
                 {operations.length === 0 ? (
-                  <p className="text-center py-8 text-sm text-white/30">No operations yet</p>
+                  <p className={`${MONO} text-center py-10 text-[11px] uppercase tracking-[0.14em] text-white/30`}>
+                    No operations yet
+                  </p>
                 ) : (
                   operations.map((deployment) => {
                     if (deployment.trigger === "rollback") {
@@ -444,7 +483,7 @@ export function DeploymentHistory({
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

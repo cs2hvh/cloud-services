@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const TABS = [
   {
@@ -251,18 +252,30 @@ export function EverythingSection() {
                     </div>
 
                     <ul className="space-y-2 sm:space-y-2.5">
-                      {activeTab.bullets.map((item) => (
-                        <li key={item}>
-                          <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
-                              <CheckCircle2 className="h-3 w-3" />
-                            </span>
-                            <span className="text-xs sm:text-sm text-white/80">
-                              {item}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
+                      {activeTab.bullets.map((item) => {
+                        const showNvidia =
+                          activeTab.id === "gpu" && item.startsWith("NVIDIA");
+                        return (
+                          <li key={item}>
+                            <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
+                              {showNvidia ? (
+                                <NvidiaLogo
+                                  width={16}
+                                  height={11}
+                                  className="shrink-0 opacity-95"
+                                />
+                              ) : (
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                </span>
+                              )}
+                              <span className="text-xs sm:text-sm text-white/80">
+                                {item}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                      <button
                       onClick={() => router.push(`/services/${activeTab.id}`)}

@@ -1,713 +1,1273 @@
-'use client';
-import { useState, useEffect } from "react";
-import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, Loader2 } from "lucide-react";
-import Image from "next/image";
-import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import {
-  AppTypeStep,
-  DomainStep,
-  EdgePortStep,
-  OriginStep,
-  SettingsStep,
-  type SpectrumFormData,
-} from "./steps";
-// import api from "@/lib/axios/axios";
+"use client";
+
+// Spectrum / DDoS protection create — single-page editorial form
+// matching the database/VPS/apps new pages. Numbered sections on the
+// left, sticky summary with monthly price + gradient Create button on
+// the right. All form data + submission wiring preserved.
+
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {  Tables } from "@/lib/supabase/types";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+import {
+    AlertCircle,
+    ArrowRight,
+    Check,
+    ChevronLeft,
+    Loader2,
+    Search,
+} from "lucide-react";
 import axios from "axios";
+import { toast } from "sonner";
 
-function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="flex items-center gap-2">
-        {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
-        )}
-        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
-      </div>
-      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
-    </div>
-  );
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Tables } from "@/lib/supabase/types";
+
+// ─── Design tokens ─────────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+    fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
+
+interface SpectrumFormData {
+    selectedUser?: string;
+    appType: "tcp" | "udp" | "ssh" | "rdp" | "";
+    domain: string;
+    edgePort: number;
+    originType: "ip-dns" | "load-balancer" | "";
+    originIP: string;
+    originPort: number;
+    argoSmartRouting: boolean;
+    tls: "off" | "full";
+    ipAccessRule: boolean;
+    proxyProtocol: "off" | "v1" | "v2" | "simple";
+    edgeIpType: string;
+    edgeIpConnectivity: string;
+    trafficType: string;
+    project_id: string;
 }
 
 interface SpectrumAppCreateProps {
-  projects: Tables<"projects">[];
-  userId: string;
-  role?: "user" | "admin";
-  allUsers?: Array<{
-    id: string;
-    email: string;
-    username?: string;
-  }>;
-  spectrumApps?: string[];
+    projects: Tables<"projects">[];
+    userId: string;
+    role?: "user" | "admin";
+    allUsers?: Array<{
+        id: string;
+        email: string;
+        username?: string;
+    }>;
+    spectrumApps?: string[];
 }
 
-const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spectrumApps = [] }: SpectrumAppCreateProps) => {
- // console.log(spectrumApps,"........spectrumApps in spectrum create component........");
-  const [currentStep, setCurrentStep] = useState(role === "admin" ? 0 : 1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState("");
-  const [spectrumPrice, setSpectrumPrice] = useState<number>(0);
-  const [loadingPrice, setLoadingPrice] = useState(true);
+const APP_TYPES = [
+    {
+        value: "tcp",
+        label: "TCP",
+        desc: "Generic TCP listener — game servers, MQTT, custom services.",
+    },
+    {
+        value: "udp",
+        label: "UDP",
+        desc: "Connectionless UDP — DNS, QUIC, real-time game traffic.",
+    },
+    {
+        value: "ssh",
+        label: "SSH",
+        desc: "Shell access — port 22 locked end-to-end.",
+    },
+    {
+        value: "rdp",
+        label: "RDP",
+        desc: "Remote desktop — port 3389 locked end-to-end.",
+    },
+] as const;
 
-  const router = useRouter();
-  
-  // Form state
-  const [formData, setFormData] = useState<SpectrumFormData>({
-    selectedUser: role === "admin" ? "" : userId,
-    appType: '',
-    domain: '',
-    edgePort: 0,
-    originType: '',
-    originIP: '',
-    originPort: 0,
-    argoSmartRouting: false,
-    tls: 'off',
-    ipAccessRule: false,
-    proxyProtocol: 'off',
-    edgeIpType: 'dynamic',
-    edgeIpConnectivity: 'all',
-    trafficType: 'direct',
-    project_id: projects[0]?.id || '',
-  });
+const SpectrumAppCreate = ({
+    projects,
+    userId,
+    role = "user",
+    allUsers = [],
+    spectrumApps = [],
+}: SpectrumAppCreateProps) => {
+    const router = useRouter();
+    const isAdmin = role === "admin";
 
-  const [errors, setErrors] = useState({
-    user: "",
-    project: "",
-  });
+    const [isLoading, setIsLoading] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [spectrumPrice, setSpectrumPrice] = useState<number>(0);
+    const [loadingPrice, setLoadingPrice] = useState(true);
+    const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // Fetch DDoS protection pricing
-  useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        if (role === "admin") {
-          const response = await axios.get("/api/admin/products?type=network-ddos");
-          const products = response?.data?.products;
-          if (products && products.length > 0) {
-            setSpectrumPrice(parseFloat(products[0].price) || 0);
-          }
-        } else {
-          const response = await axios.get("/api/pricing?category=network-ddos");
-          const monthly =
-            response?.data?.category?.tiers?.[0]?.price?.monthly;
-          if (typeof monthly === "number" && Number.isFinite(monthly)) {
-            setSpectrumPrice(monthly);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching spectrum price:", error);
-        setSpectrumPrice(0);
-      } finally {
-        setLoadingPrice(false);
-      }
+    const [formData, setFormData] = useState<SpectrumFormData>({
+        selectedUser: isAdmin ? "" : userId,
+        appType: "",
+        domain: "",
+        edgePort: 0,
+        originType: "ip-dns",
+        originIP: "",
+        originPort: 0,
+        argoSmartRouting: false,
+        tls: "off",
+        ipAccessRule: false,
+        proxyProtocol: "off",
+        edgeIpType: "dynamic",
+        edgeIpConnectivity: "all",
+        trafficType: "direct",
+        project_id: projects[0]?.id || "",
+    });
+
+    const updateFormData = (data: Partial<SpectrumFormData>) =>
+        setFormData((prev) => ({ ...prev, ...data }));
+
+    const isSSHorRDP = formData.appType === "ssh" || formData.appType === "rdp";
+
+    // ── Fetch price ─────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                if (isAdmin) {
+                    const res = await axios.get(
+                        "/api/admin/products?type=network-ddos",
+                    );
+                    const products = res?.data?.products;
+                    if (products && products.length > 0) {
+                        setSpectrumPrice(parseFloat(products[0].price) || 0);
+                    }
+                } else {
+                    const res = await axios.get(
+                        "/api/pricing?category=network-ddos",
+                    );
+                    const monthly = res?.data?.category?.tiers?.[0]?.price?.monthly;
+                    if (typeof monthly === "number" && Number.isFinite(monthly)) {
+                        setSpectrumPrice(monthly);
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching spectrum price:", err);
+                setSpectrumPrice(0);
+            } finally {
+                setLoadingPrice(false);
+            }
+        })();
+    }, [isAdmin]);
+
+    // ── Filtered users (admin) ─────────────────────────────────
+    const filteredUsers = useMemo(() => {
+        const q = userSearchQuery.toLowerCase();
+        return allUsers.filter(
+            (u) =>
+                !q ||
+                u.email.toLowerCase().includes(q) ||
+                (u.username && u.username.toLowerCase().includes(q)) ||
+                u.id.toLowerCase().includes(q),
+        );
+    }, [allUsers, userSearchQuery]);
+
+    const handleUserSelect = (selectedUserId: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            selectedUser: selectedUserId,
+        }));
     };
 
-    fetchPrice();
-  }, [role]);
+    // ── Filtered projects (admin filters by selected user) ─────
+    const filteredProjects = useMemo(() => {
+        if (!isAdmin || !formData.selectedUser) return projects;
+        return projects.filter(
+            (project) =>
+                project.owner === formData.selectedUser ||
+                (project.users &&
+                    Array.isArray(project.users) &&
+                    (project.users as string[]).includes(
+                        formData.selectedUser!,
+                    )),
+        );
+    }, [isAdmin, formData.selectedUser, projects]);
 
-  // Filter users based on search query
-  const filteredUsers = allUsers.filter(
-    (user) =>
-      !userSearchQuery ||
-      user.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      (user.username &&
-        user.username.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      user.id.toLowerCase().includes(userSearchQuery.toLowerCase())
-  );
+    // ── Validation ──────────────────────────────────────────────
+    const ownerOk = !isAdmin || !!formData.selectedUser;
+    const appTypeOk = !!formData.appType;
+    const domainNameError = useMemo(() => {
+        const v = formData.domain;
+        if (!v) return "";
+        if (
+            !/^(?=.*[A-Za-z])[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*$/.test(v)
+        )
+            return "Must start with a letter, letters/numbers only";
+        if (spectrumApps.includes(v))
+            return "Domain name already in use";
+        return "";
+    }, [formData.domain, spectrumApps]);
+    const domainOk = !!formData.domain && !domainNameError;
+    const edgePortOk =
+        isSSHorRDP ||
+        (formData.edgePort >= 1 && formData.edgePort <= 65535);
+    const originOk =
+        !!formData.originIP &&
+        formData.originPort >= 1 &&
+        formData.originPort <= 65535;
+    const projectOk = !!formData.project_id;
+    const canSubmit =
+        ownerOk &&
+        appTypeOk &&
+        domainOk &&
+        edgePortOk &&
+        originOk &&
+        projectOk &&
+        termsAccepted &&
+        !isLoading;
 
-  // Handle user selection
-  const handleUserSelect = (selectedUserId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      selectedUser: selectedUserId,
-    }));
-    if (errors.user) {
-      setErrors({ ...errors, user: "" });
-    }
-  };
-
-  const validateUser = (selectedUser: string): string => {
-    if (role === "admin" && !selectedUser) {
-      return "User selection is required";
-    }
-    return "";
-  };
-
-  const updateFormData = (data: Partial<SpectrumFormData>) => {
-    setFormData(prev => ({ ...prev, ...data }));
-  };
-
-  // Check if the selected app type is SSH or RDP
-  const isSSHorRDP = formData.appType === 'ssh' || formData.appType === 'rdp';
-
-  const handleNextStep = () => {
-    // Validate user on step 0 (admin only)
-    if (currentStep === 0 && role === "admin") {
-      const userError = validateUser(formData.selectedUser || "");
-      if (userError) {
-        setErrors({ ...errors, user: userError });
-        toast.error(userError);
-        return;
-      } else {
-        setErrors({ ...errors, user: "" });
-      }
-    }
-
-    // For SSH/RDP: skip step 3 (Edge Port) and step 5 (Settings)
-    if (isSSHorRDP) {
-      if (currentStep === 2) {
-        // Skip step 3 (Edge Port) and go to step 4 (Origin)
-        setCurrentStep(4);
-        return;
-      } else if (currentStep === 4) {
-        // Skip step 5 (Settings) and go to step 6 (Project)
-        setCurrentStep(6);
-        return;
-      }
-    }
-
-    // Validate project on step 6
-    if (currentStep === 6) {
-      if (!formData.project_id) {
-        setErrors({ ...errors, project: "Project is required" });
-        toast.error("Please select a project");
-        return;
-      } else {
-        setErrors({ ...errors, project: "" });
-      }
-    }
-
-    if (currentStep < 6) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handlePrevStep = () => {
-    const minStep = role === "admin" ? 0 : 1;
-    
-    // For SSH/RDP: skip step 3 (Edge Port) and step 5 (Settings) when going back
-    if (isSSHorRDP) {
-      if (currentStep === 4) {
-        // Skip step 3 (Edge Port) and go to step 2 (Domain)
-        setCurrentStep(2);
-        return;
-      } else if (currentStep === 6) {
-        // Skip step 5 (Settings) and go to step 4 (Origin)
-        setCurrentStep(4);
-        return;
-      }
-    }
-    
-    if (currentStep > minStep) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const onSubmit = async () => {
-    //
-    if (!formData.project_id) {
-      toast.error("Please select a project");
-      return;
-    }
-
-    const targetUserId = role === "admin" ? formData.selectedUser : userId;
-    if (!targetUserId) {
-      toast.error("Invalid user selection");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // Log the form data
-      //console.log('Spectrum App Configuration:', formData);
-      //
-      const response = await fetch("/api/services/spectrum/apps/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dns: { name: formData.domain, type: "CNAME" , original_protocol: formData.appType},
-          protocol: `${
-            formData.appType === "rdp" || formData.appType === "ssh"
-              ? "tcp"
-              : formData.appType
-          }/${formData.edgePort}`,
-          argo_smart_routing: true,
-          proxy_protocol: formData.proxyProtocol,
-          tls: "off",
-          origin_direct: [
-            `${
-              formData.appType === "rdp" || formData.appType === "ssh"
-                ? "tcp"
-                : formData.appType
-            }://${formData.originIP}:${formData.originPort}`,
-          ],
-          project_id: formData.project_id,
-          owner_id: targetUserId,
-          role: role,
-        }),
-      });
-
-      if (response.status === 201) {
-       
-        if (role === "admin") {
-          router.push('/dashboard/admin/network-ddos');
-        } else {
-          router.push('/dashboard/services/network-ddos');
+    // ── Submit ─────────────────────────────────────────────────
+    const onSubmit = async () => {
+        if (!canSubmit) {
+            toast.error("Please complete every section");
+            return;
         }
-         toast.success('Spectrum application created successfully!');
-        router.refresh();
 
-      }
-      else if(response.status===402){
-          toast.error('Insufficient balance. Please top up your account to create a Spectrum application.');
-          router.push('/dashboard/nav/billing');
-          return;
-      }
-      else {
-         toast.error('Sorry , we are temporarily unable to process your request. Please try again later.');
-        return;
-      }
-       
-      }
-     catch (error) {
-      console.error('Failed to create Spectrum app:', error);
-      toast.error('Failed to create Spectrum application. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        const targetUserId = isAdmin ? formData.selectedUser : userId;
+        if (!targetUserId) {
+            toast.error("Invalid user selection");
+            return;
+        }
 
-  const steps = role === "admin"
-    ? (isSSHorRDP
-        ? [
-            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard-icons/users-and-dbs.png" },
-            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard-icons/apptype.png" },
-            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard-icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard-icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard-icons/project-1.png" }
-          ]
-        : [
-            { id: 0, name: "User",      iconSrc: "/dashboard-icons/users-and-dbs.png" },
-            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
-          ])
-    : (isSSHorRDP
-        ? [
-            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard-icons/apptype.png" },
-            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard-icons/domain.png" },
-            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard-icons/origin.png" },
-            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard-icons/project-1.png" }
-          ]
-        : [
-            { id: 1, name: "App Type",  iconSrc: "/dashboard-icons/apptype.png" },
-            { id: 2, name: "Domain",    iconSrc: "/dashboard-icons/domain.png" },
-            { id: 3, name: "Edge Port", iconSrc: "/dashboard-icons/edge-port.png" },
-            { id: 4, name: "Origin",    iconSrc: "/dashboard-icons/origin.png" },
-            { id: 5, name: "Settings",  iconSrc: "/dashboard-icons/advanced-settings.png" },
-            { id: 6, name: "Project",   iconSrc: "/dashboard-icons/project-1.png" }
-          ]);
+        setIsLoading(true);
+        try {
+            const protocol =
+                formData.appType === "rdp" || formData.appType === "ssh"
+                    ? "tcp"
+                    : formData.appType;
+            const res = await fetch("/api/services/spectrum/apps/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    dns: {
+                        name: formData.domain,
+                        type: "CNAME",
+                        original_protocol: formData.appType,
+                    },
+                    protocol: `${protocol}/${formData.edgePort}`,
+                    argo_smart_routing: true,
+                    proxy_protocol: formData.proxyProtocol,
+                    tls: "off",
+                    origin_direct: [
+                        `${protocol}://${formData.originIP}:${formData.originPort}`,
+                    ],
+                    project_id: formData.project_id,
+                    owner_id: targetUserId,
+                    role: role,
+                }),
+            });
 
-  // Filter projects based on selected user (admin mode) or current user
-  const filteredProjects = role === "admin" && formData.selectedUser
-    ? projects.filter(
-        (project) =>
-          project.owner === formData.selectedUser ||
-          (project.users &&
-            Array.isArray(project.users) &&
-            (project.users as string[]).includes(formData.selectedUser!))
-      )
-    : projects;
+            if (res.status === 201) {
+                toast.success("Spectrum application created.");
+                router.push(
+                    isAdmin
+                        ? "/dashboard/admin/network-ddos"
+                        : "/dashboard/services/network-ddos",
+                );
+                router.refresh();
+            } else if (res.status === 402) {
+                toast.error(
+                    "Insufficient balance. Please top up your account.",
+                );
+                router.push("/dashboard/nav/billing");
+            } else {
+                toast.error(
+                    "We are temporarily unable to process your request. Please try again later.",
+                );
+            }
+        } catch (err) {
+            console.error("Failed to create Spectrum app:", err);
+            toast.error("Failed to create Spectrum application.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
-  const panelClassName = "glass-panel overflow-hidden";
-  const wizardStartStep = role === "admin" ? 0 : 1;
-  const progressStep = currentStep - wizardStartStep + 1;
-  const progressPercentage = (progressStep / steps.length) * 100;
+    const selectedUserObj = allUsers.find(
+        (u) => u.id === formData.selectedUser,
+    );
+    const selectedProject = filteredProjects.find(
+        (p) => p.id === formData.project_id,
+    );
 
-  return (
-    <div className="space-y-5 px-2 pt-4 text-white sm:px-3 lg:px-4">
-      <div className={panelClassName}>
-        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <Link
-              href={role === "admin" ? "/dashboard/admin/network-ddos" : "/dashboard/services/network-ddos"}
-              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
-            >
-              <ArrowLeft size={16} className="mr-2" />
-              Back to protection inventory
-            </Link>
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-              Network Security
-            </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Configure Layer 4 DDoS protection with clearer operational choices.
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-              Move through app type, domain, routing, origin, and project assignment in a more compact enterprise flow.
-            </p>
-          </div>
-          <Image
-            src="/dashboard-services-icons/da ddos preotection.png"
-            alt=""
-            width={160}
-            height={160}
-            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
-            priority
-            unoptimized
-          />
-        </div>
+    // Default edge port for SSH/RDP
+    useEffect(() => {
+        if (formData.appType === "ssh") {
+            updateFormData({ edgePort: 22, originPort: 22 });
+        } else if (formData.appType === "rdp") {
+            updateFormData({ edgePort: 3389, originPort: 3389 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.appType]);
 
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
-              style={{ width: progressPercentage + "%" }}
-            />
-          </div>
-
-          <div className="grid gap-2.5 sm:grid-cols-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
-            {steps.map((step) => {
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
-              const stepNumber = "displayId" in step ? step.displayId : step.id;
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => {
-                    if (step.id < currentStep) {
-                      setCurrentStep(step.id);
-                    }
-                  }}
-                  className={
-                    (isActive
-                      ? "border border-blue-400/30 bg-blue-500/10 "
-                      : isCompleted
-                        ? "border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] "
-                        : "border border-white/[0.06] bg-transparent ") +
-                    (step.id < currentStep ? "cursor-pointer " : "cursor-default ") +
-                    "px-3 py-3 text-left transition-colors"
-                  }
-                >
-                  <div className="flex flex-col h-full">
-                    <span className="text-xs font-semibold text-white/32">
-                      {String(stepNumber).padStart(2, "0")}
-                    </span>
-                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
-                      <div className="text-sm font-semibold text-white">{step.name}</div>
-                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
-                        {isCompleted && (
-                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-        {/* Main Form */}
-        <div className="space-y-6">
-          {/* Step 0: User Selection (Admin Only) */}
-          {currentStep === 0 && role === "admin" && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Select User
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="user-search" className="mb-2 block text-white">
-                    Search User
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
-                    <Input
-                      id="user-search"
-                      type="text"
-                      placeholder="Search by email, username, or ID..."
-                      value={userSearchQuery}
-                      onChange={(e) => setUserSearchQuery(e.target.value)}
-                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white">Available Users</Label>
-                  <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
-                    {filteredUsers.length === 0 ? (
-                      <div className="p-4 text-center text-white/60">
-                        No users found
-                      </div>
-                    ) : (
-                      filteredUsers.map((user) => (
-                        <div
-                          key={user.id}
-                          onClick={() => handleUserSelect(user.id)}
-                          className={`p-4 cursor-pointer transition-colors border-b border-white/5 last:border-b-0 ${
-                            formData.selectedUser === user.id
-                              ? "bg-blue-500/20 border-l-4 border-l-blue-500"
-                              : "hover:bg-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-white font-medium">
-                                {user.email}
-                              </div>
-                              {user.username && (
-                                <div className="text-xs text-white/60">
-                                  @{user.username}
-                                </div>
-                              )}
-                            </div>
-                            {formData.selectedUser === user.id && (
-                              <CheckCircle2 className="h-5 w-5 text-blue-400" />
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {errors.user && (
-                  <div className="flex items-center gap-2 text-red-500 text-sm">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.user}</span>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button
-                  onClick={handleNextStep}
-                  disabled={!formData.selectedUser}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  Next
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {/* Step 1: App Type */}
-          {currentStep === 1 && (
-            <AppTypeStep
-              formData={formData}
-              onUpdate={updateFormData}
-              onNext={handleNextStep}
-              onBack={handlePrevStep}
-            />
-          )}
-
-          {/* Step 2: Domain */}
-          {currentStep === 2 && (
-            <DomainStep
-              spectrumApps={spectrumApps}
-              formData={formData}
-              onUpdate={updateFormData}
-              onNext={handleNextStep}
-              onBack={handlePrevStep}
-            />
-          )}
-
-          {/* Step 3: Edge Port */}
-          {currentStep === 3 && (
-            <EdgePortStep
-              formData={formData}
-              onUpdate={updateFormData}
-              onNext={handleNextStep}
-              onBack={handlePrevStep}
-            />
-          )}
-
-          {/* Step 4: Origin */}
-          {currentStep === 4 && (
-            <OriginStep
-              formData={formData}
-              onUpdate={updateFormData}
-              onNext={handleNextStep}
-              onBack={handlePrevStep}
-            />
-          )}
-
-          {/* Step 5: Settings */}
-          {currentStep === 5 && (
-            <SettingsStep
-              formData={formData}
-              onUpdate={updateFormData}
-              onNext={handleNextStep}
-              onBack={handlePrevStep}
-              onSubmit={onSubmit}
-              isLoading={isLoading}
-            />
-          )}
-
-          {/* Step 6: Project Selection */}
-          {currentStep === 6 && (
-            <Card className={panelClassName}>
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <FolderTree className="h-5 w-5" />
-                  Project
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="project" className="mb-2 block text-white">
-                    Select Project
-                  </Label>
-                  <Select
-                    value={formData.project_id}
-                    onValueChange={(value) => {
-                      updateFormData({ project_id: value });
-                      if (errors.project) {
-                        setErrors({ ...errors, project: "" });
-                      }
+    return (
+        <div className="relative min-h-full bg-[#08090b] text-white">
+            {/* Background layer */}
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+                <div
+                    className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
                     }}
-                  >
-                    <SelectTrigger
-                      id="project"
-                      className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
-                        errors.project ? "border-red-500" : ""
-                      }`}
-                    >
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-black border-white/20 text-white">
-                      {filteredProjects.length === 0 ? (
-                        <div className="px-2 py-6 text-center text-white/60">
-                          {role === "admin" && formData.selectedUser
-                            ? "No projects available for selected user"
-                            : "No projects available"}
-                        </div>
-                      ) : (
-                        filteredProjects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {errors.project && (
-                    <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{errors.project}</span>
-                    </div>
-                  )}
-                  <p className="text-xs text-white/50 mt-2">
-                    This Spectrum app will be associated with the selected project
-                  </p>
-                </div>
-              </CardContent>
-              <CardContent className="flex justify-between pt-0">
-                <button
-                  onClick={handlePrevStep}
-                  className="rounded-md border border-white/[0.14] bg-white/[0.03] px-4 py-2 text-white/82 transition-colors hover:bg-white/[0.07]"
-                >
-                  Back
-                </button>
-                <Button
-                  onClick={onSubmit}
-                  disabled={isLoading || !formData.project_id}
-                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
-                >
-                  {isLoading ? 
-                 <>Creating<Loader2 className="animate-spin h-4 w-4 mr-2" /></>: "Create"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Summary Sidebar */}
-        <div className={`${panelClassName} xl:sticky xl:top-8`}>
-          <div className="border-b border-white/[0.06] px-6 py-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-              Summary
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
-          </div>
-          <div className="px-6 py-4">
-            <div className="space-y-0.5">
-              <SummaryRow icon="/dashboard-icons/apptype.png" label="Application" value={formData.appType ? <span className="uppercase">{formData.appType}</span> : "—"} empty={!formData.appType} />
-              <SummaryRow icon="/dashboard-icons/domain.png" label="Domain" value={formData.domain || "—"} empty={!formData.domain} />
-              <SummaryRow icon="/dashboard-icons/edge-port.png" label="Edge Port" value={formData.edgePort > 0 ? formData.edgePort : "—"} empty={!(formData.edgePort > 0)} />
-              <SummaryRow icon="/dashboard-icons/origin.png" label="Origin" value={formData.originIP ? `${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}` : "—"} empty={!formData.originIP} />
-              {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
-                <SummaryRow
-                  icon="/dashboard-icons/ip-firewall.png"
-                  label="Protection"
-                  value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
                 />
-              )}
-              {selectedProject && (
-                <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProject.name} />
-              )}
+                <div
+                    className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+                    }}
+                />
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage:
+                            "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+                        backgroundSize: "28px 28px",
+                    }}
+                />
             </div>
-            <Separator className="my-4 bg-white/[0.08]" />
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  Estimated monthly cost
+
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+                {/* Back link */}
+                <div className="mb-6">
+                    <Link
+                        href={
+                            isAdmin
+                                ? "/dashboard/admin/network-ddos"
+                                : "/dashboard/services/network-ddos"
+                        }
+                        className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Back to protection
+                    </Link>
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "—"}
+
+                {/* Hero */}
+                <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+                    Protect{" "}
+                    <span
+                        style={SERIF_STYLE}
+                        className="text-white/55 font-normal"
+                    >
+                        an application
+                    </span>
+                    .
+                </h1>
+                <p
+                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                >
+                    Spectrum routes Layer-4 traffic through the Cloudflare
+                    anycast network. Configure the listener and origin below.
+                </p>
+
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+                    {/* ─── LEFT: Sections ──────────────────────── */}
+                    <div className="min-w-0">
+                        {/* Admin-only: 00 Owner */}
+                        {isAdmin && (
+                            <Section
+                                num="00"
+                                title="Application owner"
+                                desc="Assign this Spectrum application to a customer account."
+                                status={ownerOk ? "done" : "idle"}
+                                statusLabel={
+                                    selectedUserObj
+                                        ? selectedUserObj.email
+                                        : "Required"
+                                }
+                            >
+                                <div className="max-w-[640px]">
+                                    <div className="flex items-center gap-2.5 px-3 h-9 mb-3 border border-white/[0.08] bg-[#0d0e11] rounded-[5px] focus-within:border-white/25">
+                                        <Search className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search email, username, or user ID…"
+                                            value={userSearchQuery}
+                                            onChange={(e) =>
+                                                setUserSearchQuery(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            className={`${MONO} flex-1 bg-transparent text-[12px] text-white placeholder:text-white/30 outline-none`}
+                                        />
+                                    </div>
+                                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden max-h-72 overflow-y-auto">
+                                        {filteredUsers.length === 0 ? (
+                                            <div
+                                                className={`${MONO} text-[11px] text-white/45 p-6 text-center`}
+                                            >
+                                                No users found
+                                            </div>
+                                        ) : (
+                                            filteredUsers.map((u) => {
+                                                const sel =
+                                                    formData.selectedUser ===
+                                                    u.id;
+                                                return (
+                                                    <button
+                                                        key={u.id}
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleUserSelect(
+                                                                u.id,
+                                                            )
+                                                        }
+                                                        className="relative w-full flex items-center gap-3 px-4 py-2.5 text-left border-b border-white/[0.04] last:border-b-0 transition-colors"
+                                                        style={
+                                                            sel
+                                                                ? {
+                                                                      background:
+                                                                          ACCENT_DIM,
+                                                                  }
+                                                                : {
+                                                                      background:
+                                                                          "transparent",
+                                                                  }
+                                                        }
+                                                    >
+                                                        {sel && (
+                                                            <span
+                                                                className="absolute left-0 top-0 bottom-0 w-[2px]"
+                                                                style={{
+                                                                    background:
+                                                                        ACCENT,
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div
+                                                                className={`${MONO} text-[12px] text-white truncate`}
+                                                            >
+                                                                {u.email}
+                                                            </div>
+                                                            <div
+                                                                className={`${MONO} text-[10px] text-white/40 mt-0.5 truncate`}
+                                                            >
+                                                                {u.username
+                                                                    ? `@${u.username}`
+                                                                    : u.id.slice(
+                                                                          0,
+                                                                          8,
+                                                                      ) +
+                                                                      "…"}
+                                                            </div>
+                                                        </div>
+                                                        {sel && (
+                                                            <span
+                                                                className="h-4 w-4 rounded-full inline-flex items-center justify-center"
+                                                                style={{
+                                                                    background:
+                                                                        ACCENT,
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className="h-2.5 w-2.5 text-white"
+                                                                    strokeWidth={
+                                                                        3
+                                                                    }
+                                                                />
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </Section>
+                        )}
+
+                        {/* 01 App type */}
+                        <Section
+                            num="01"
+                            title="Application protocol"
+                            desc="Layer-4 protocol the Spectrum listener will serve."
+                            status={appTypeOk ? "done" : "idle"}
+                            statusLabel={
+                                formData.appType
+                                    ? formData.appType.toUpperCase()
+                                    : "Required"
+                            }
+                        >
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-[720px]">
+                                {APP_TYPES.map((t) => {
+                                    const sel = formData.appType === t.value;
+                                    return (
+                                        <button
+                                            key={t.value}
+                                            type="button"
+                                            onClick={() =>
+                                                updateFormData({
+                                                    appType: t.value,
+                                                })
+                                            }
+                                            className="text-left border rounded-[6px] p-4 flex flex-col gap-2 transition-all"
+                                            style={
+                                                sel
+                                                    ? {
+                                                          borderColor: ACCENT,
+                                                          background:
+                                                              "linear-gradient(135deg, #111216 0%, rgba(0,149,255,0.05) 100%)",
+                                                          boxShadow: `0 0 0 1px ${ACCENT}, 0 4px 14px rgba(0,149,255,0.08)`,
+                                                      }
+                                                    : {
+                                                          borderColor:
+                                                              "rgba(255,255,255,0.06)",
+                                                          background: "#111216",
+                                                      }
+                                            }
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span
+                                                    className="text-[20px] font-bold leading-none tracking-[-0.02em]"
+                                                    style={{
+                                                        ...SERIF_STYLE,
+                                                        color: sel
+                                                            ? ACCENT
+                                                            : "#ffffff",
+                                                    }}
+                                                >
+                                                    {t.label}
+                                                </span>
+                                                {sel && (
+                                                    <span
+                                                        className="h-4 w-4 rounded-full inline-flex items-center justify-center"
+                                                        style={{
+                                                            background: ACCENT,
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            className="h-2.5 w-2.5 text-white"
+                                                            strokeWidth={3}
+                                                        />
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p
+                                                className={`${MONO} text-[10.5px] text-white/45 leading-snug`}
+                                            >
+                                                {t.desc}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </Section>
+
+                        {/* 02 Domain */}
+                        <Section
+                            num="02"
+                            title="DNS name"
+                            desc="Hostname your service will be reachable under on the Cloudflare zone."
+                            status={
+                                domainOk
+                                    ? "done"
+                                    : formData.domain
+                                      ? "active"
+                                      : "idle"
+                            }
+                            statusLabel={
+                                domainOk
+                                    ? "Valid"
+                                    : formData.domain
+                                      ? domainNameError || "Check"
+                                      : "Required"
+                            }
+                        >
+                            <div className="max-w-[520px]">
+                                <FieldLabel hint="alphanumeric only">
+                                    Domain name
+                                </FieldLabel>
+                                <Input
+                                    value={formData.domain}
+                                    onChange={(e) =>
+                                        updateFormData({
+                                            domain: e.target.value.replace(
+                                                /[^a-zA-Z0-9]/g,
+                                                "",
+                                            ),
+                                        })
+                                    }
+                                    placeholder="myapp123"
+                                    mono
+                                />
+                                <div className="mt-2 flex items-center justify-between gap-2 min-h-[16px]">
+                                    <span
+                                        className={`${MONO} text-[10.5px] text-white/40`}
+                                    >
+                                        Letters and numbers only — must start
+                                        with a letter
+                                    </span>
+                                    {formData.domain && (
+                                        <span
+                                            className={`${MONO} text-[10.5px] inline-flex items-center gap-1`}
+                                            style={{
+                                                color: domainNameError
+                                                    ? "#f87171"
+                                                    : "#4ade80",
+                                            }}
+                                        >
+                                            {domainNameError ? (
+                                                <>
+                                                    <AlertCircle className="h-3 w-3" />
+                                                    {domainNameError}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Check className="h-3 w-3" />
+                                                    Available
+                                                </>
+                                            )}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 03 Edge port (skip for SSH/RDP) */}
+                        {!isSSHorRDP && (
+                            <Section
+                                num="03"
+                                title="Edge port"
+                                desc="Port Cloudflare anycast addresses will listen on for inbound connections."
+                                status={edgePortOk ? "done" : "idle"}
+                                statusLabel={
+                                    edgePortOk
+                                        ? String(formData.edgePort)
+                                        : "Required"
+                                }
+                            >
+                                <div className="max-w-[260px]">
+                                    <FieldLabel hint="1–65535">
+                                        Port number
+                                    </FieldLabel>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={65535}
+                                        value={formData.edgePort || ""}
+                                        onChange={(e) => {
+                                            const v = parseInt(
+                                                e.target.value,
+                                                10,
+                                            );
+                                            if (isNaN(v))
+                                                updateFormData({
+                                                    edgePort: 0,
+                                                });
+                                            else
+                                                updateFormData({
+                                                    edgePort: Math.min(
+                                                        Math.max(v, 1),
+                                                        65535,
+                                                    ),
+                                                });
+                                        }}
+                                        placeholder="8080"
+                                        mono
+                                    />
+                                </div>
+                            </Section>
+                        )}
+
+                        {/* 04 Origin */}
+                        <Section
+                            num={isSSHorRDP ? "03" : "04"}
+                            title="Origin"
+                            desc="Where edge traffic terminates — your protected service."
+                            status={originOk ? "done" : "idle"}
+                            statusLabel={
+                                originOk
+                                    ? `${formData.originIP}:${formData.originPort}`
+                                    : "Required"
+                            }
+                        >
+                            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_140px] gap-3 max-w-[640px]">
+                                <div>
+                                    <FieldLabel hint="IP or DNS">
+                                        Origin host
+                                    </FieldLabel>
+                                    <Input
+                                        value={formData.originIP}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                originIP: e.target.value,
+                                            })
+                                        }
+                                        placeholder="192.0.2.10 or origin.example.com"
+                                        mono
+                                    />
+                                </div>
+                                <div>
+                                    <FieldLabel hint="1–65535">
+                                        Origin port
+                                    </FieldLabel>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={65535}
+                                        value={formData.originPort || ""}
+                                        disabled={isSSHorRDP}
+                                        onChange={(e) => {
+                                            const v = parseInt(
+                                                e.target.value,
+                                                10,
+                                            );
+                                            if (isNaN(v))
+                                                updateFormData({
+                                                    originPort: 0,
+                                                });
+                                            else
+                                                updateFormData({
+                                                    originPort: Math.min(
+                                                        Math.max(v, 1),
+                                                        65535,
+                                                    ),
+                                                });
+                                        }}
+                                        placeholder="443"
+                                        mono
+                                    />
+                                </div>
+                            </div>
+                            {isSSHorRDP && (
+                                <p
+                                    className={`${MONO} mt-3 text-[10.5px] text-white/40 max-w-[640px]`}
+                                >
+                                    Origin port locked to {formData.originPort}{" "}
+                                    to match the{" "}
+                                    {formData.appType?.toUpperCase()} service
+                                    profile.
+                                </p>
+                            )}
+                        </Section>
+
+                        {/* 05 Advanced settings (skip for SSH/RDP) */}
+                        {!isSSHorRDP && (
+                            <Section
+                                num="05"
+                                title="Advanced settings"
+                                desc="Optional — proxy protocol, IP rules, and edge connectivity."
+                                status="done"
+                                statusLabel={
+                                    formData.proxyProtocol === "off" &&
+                                    !formData.ipAccessRule
+                                        ? "Defaults"
+                                        : "Custom"
+                                }
+                            >
+                                <div className="grid grid-cols-1 gap-3 max-w-[640px]">
+                                    <div>
+                                        <FieldLabel hint="preserve client IP">
+                                            Proxy protocol
+                                        </FieldLabel>
+                                        <Select
+                                            value={formData.proxyProtocol}
+                                            onValueChange={(
+                                                v:
+                                                    | "off"
+                                                    | "v1"
+                                                    | "v2"
+                                                    | "simple",
+                                            ) =>
+                                                updateFormData({
+                                                    proxyProtocol: v,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger
+                                                className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12px] rounded-[6px]`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
+                                                <SelectItem value="off">
+                                                    Off
+                                                </SelectItem>
+                                                {formData.appType === "udp" ? (
+                                                    <SelectItem value="simple">
+                                                        Simple
+                                                    </SelectItem>
+                                                ) : (
+                                                    <SelectItem value="v1">
+                                                        V1
+                                                    </SelectItem>
+                                                )}
+                                                <SelectItem value="v2">
+                                                    V2
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </Section>
+                        )}
+
+                        {/* 06 Project */}
+                        <Section
+                            num="06"
+                            title="Project"
+                            desc="Resource group for IAM, billing, and quotas."
+                            status={projectOk ? "done" : "idle"}
+                            statusLabel={
+                                selectedProject?.name ?? "Required"
+                            }
+                        >
+                            <div className="max-w-[520px]">
+                                <FieldLabel hint="required">
+                                    Project
+                                </FieldLabel>
+                                {filteredProjects.length === 0 ? (
+                                    <div
+                                        className={`${MONO} text-[11px] text-white/45 px-4 h-11 inline-flex items-center border border-dashed border-white/[0.08] rounded-[6px] w-full`}
+                                    >
+                                        {isAdmin && formData.selectedUser
+                                            ? "No projects for selected user"
+                                            : "No projects available"}
+                                    </div>
+                                ) : (
+                                    <Select
+                                        value={formData.project_id}
+                                        onValueChange={(v) =>
+                                            updateFormData({ project_id: v })
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12px] rounded-[6px]`}
+                                        >
+                                            <SelectValue placeholder="Select project" />
+                                        </SelectTrigger>
+                                        <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
+                                            {filteredProjects.map((p) => (
+                                                <SelectItem
+                                                    key={p.id}
+                                                    value={p.id}
+                                                >
+                                                    {p.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </div>
+                        </Section>
+
+                        {/* 07 Confirm */}
+                        <Section
+                            num="07"
+                            title="Review and confirm"
+                            desc="Provisioning begins immediately after confirmation."
+                            status={termsAccepted ? "done" : "idle"}
+                            statusLabel={
+                                termsAccepted ? "Accepted" : "Required"
+                            }
+                        >
+                            <label className="flex items-start gap-3 px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer max-w-[640px]">
+                                <input
+                                    type="checkbox"
+                                    checked={termsAccepted}
+                                    onChange={(e) =>
+                                        setTermsAccepted(e.target.checked)
+                                    }
+                                    className="mt-1 h-3.5 w-3.5 accent-[#0095FF]"
+                                />
+                                <span className="text-[12.5px] leading-snug text-white/75">
+                                    I accept the{" "}
+                                    <Link
+                                        href="/terms"
+                                        className="text-white underline underline-offset-4"
+                                    >
+                                        Terms of Service
+                                    </Link>{" "}
+                                    and{" "}
+                                    <Link
+                                        href="/privacy"
+                                        className="text-white underline underline-offset-4"
+                                    >
+                                        Privacy Policy
+                                    </Link>{" "}
+                                    for provisioning this Spectrum
+                                    application.
+                                </span>
+                            </label>
+                        </Section>
+                    </div>
+
+                    {/* ─── RIGHT: Sticky summary ───────────────── */}
+                    <aside className="lg:sticky lg:top-6 self-start">
+                        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                            <header className="border-b border-white/[0.06] px-5 py-4 flex items-start justify-between gap-2">
+                                <div>
+                                    <p
+                                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1`}
+                                    >
+                                        Configuration
+                                    </p>
+                                    <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+                                        Your application
+                                    </h3>
+                                </div>
+                                <span
+                                    className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold`}
+                                    style={{
+                                        color: canSubmit ? "#4ade80" : ACCENT,
+                                    }}
+                                >
+                                    <span
+                                        className="h-1.5 w-1.5 rounded-full"
+                                        style={{
+                                            background: canSubmit
+                                                ? "#4ade80"
+                                                : ACCENT,
+                                            boxShadow: `0 0 6px ${canSubmit ? "#4ade80" : ACCENT}`,
+                                        }}
+                                    />
+                                    {canSubmit ? "Ready" : "Pending"}
+                                </span>
+                            </header>
+
+                            <div className="px-5 py-3">
+                                {isAdmin && (
+                                    <SumRow
+                                        k="Owner"
+                                        v={selectedUserObj?.email || "—"}
+                                        empty={!selectedUserObj}
+                                    />
+                                )}
+                                <SumRow
+                                    k="Protocol"
+                                    v={
+                                        formData.appType
+                                            ? formData.appType.toUpperCase()
+                                            : "—"
+                                    }
+                                    empty={!formData.appType}
+                                />
+                                <SumRow
+                                    k="Domain"
+                                    v={formData.domain || "—"}
+                                    empty={!formData.domain}
+                                    mono
+                                />
+                                <SumRow
+                                    k="Edge"
+                                    v={
+                                        formData.edgePort
+                                            ? `:${formData.edgePort}`
+                                            : "—"
+                                    }
+                                    empty={!formData.edgePort}
+                                    mono
+                                />
+                                <SumRow
+                                    k="Origin"
+                                    v={
+                                        formData.originIP &&
+                                        formData.originPort
+                                            ? `${formData.originIP}:${formData.originPort}`
+                                            : "—"
+                                    }
+                                    empty={
+                                        !formData.originIP ||
+                                        !formData.originPort
+                                    }
+                                    mono
+                                />
+                                <SumRow
+                                    k="Proxy"
+                                    v={
+                                        formData.proxyProtocol === "off"
+                                            ? "Off"
+                                            : `PROXY ${formData.proxyProtocol.toUpperCase()}`
+                                    }
+                                />
+                                <SumRow
+                                    k="Project"
+                                    v={selectedProject?.name || "—"}
+                                    empty={!selectedProject}
+                                />
+                            </div>
+
+                            {/* Route preview */}
+                            {formData.domain && formData.originIP && (
+                                <div className="mx-5 mb-4 px-3 py-2.5 border border-white/[0.06] bg-[#08090b] rounded-[5px]">
+                                    <div
+                                        className={`${MONO} flex items-center justify-between mb-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold text-white/35`}
+                                    >
+                                        Route preview
+                                    </div>
+                                    <code
+                                        className={`${MONO} text-[10.5px] break-all leading-snug text-white/55`}
+                                    >
+                                        <span style={{ color: ACCENT }}>
+                                            {formData.appType?.toUpperCase() ||
+                                                "TCP"}
+                                            ://
+                                        </span>
+                                        <span className="text-emerald-400">
+                                            {formData.domain}
+                                        </span>
+                                        :{formData.edgePort || "?"}
+                                        <span className="text-white/30">
+                                            {" → "}
+                                        </span>
+                                        <span className="text-white/85">
+                                            {formData.originIP}
+                                        </span>
+                                        :{formData.originPort || "?"}
+                                    </code>
+                                </div>
+                            )}
+
+                            {/* Cost block */}
+                            <div className="px-5 py-4 bg-[#08090b] border-t border-white/[0.06]">
+                                <p
+                                    className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40 mb-2`}
+                                >
+                                    Monthly cost
+                                </p>
+                                <div className="flex items-baseline gap-1">
+                                    {loadingPrice ? (
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[28px] font-bold text-white/35 leading-none"
+                                        >
+                                            —
+                                        </span>
+                                    ) : spectrumPrice === 0 ? (
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[34px] font-bold text-emerald-300 leading-none"
+                                        >
+                                            Free
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span
+                                                style={SERIF_STYLE}
+                                                className="text-[18px] text-white/50 font-medium leading-none"
+                                            >
+                                                $
+                                            </span>
+                                            <span
+                                                style={SERIF_STYLE}
+                                                className="text-[38px] font-bold tracking-[-0.03em] tabular-nums text-white leading-none"
+                                            >
+                                                {spectrumPrice.toFixed(
+                                                    spectrumPrice < 10 ? 2 : 0,
+                                                )}
+                                            </span>
+                                            <span
+                                                className={`${MONO} text-[11px] text-white/40 ml-1`}
+                                            >
+                                                / mo
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                                <p
+                                    className={`${MONO} mt-2 text-[10.5px] text-white/40`}
+                                >
+                                    Per protected application · cancel anytime
+                                </p>
+
+                                <button
+                                    type="button"
+                                    disabled={!canSubmit}
+                                    onClick={onSubmit}
+                                    className={`${MONO} mt-4 w-full inline-flex items-center justify-center gap-2 h-11 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                                    style={{
+                                        background: canSubmit
+                                            ? `linear-gradient(135deg, ${ACCENT}, #0066B3)`
+                                            : "#1a1d24",
+                                        color: canSubmit
+                                            ? "#ffffff"
+                                            : "rgba(255,255,255,0.35)",
+                                        boxShadow: canSubmit
+                                            ? "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)"
+                                            : "none",
+                                        cursor: canSubmit
+                                            ? "pointer"
+                                            : "not-allowed",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!canSubmit) return;
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                                        e.currentTarget.style.transform =
+                                            "translateY(-1px)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!canSubmit) return;
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                                        e.currentTarget.style.transform =
+                                            "none";
+                                    }}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            Creating
+                                        </>
+                                    ) : (
+                                        <>
+                                            Protect application
+                                            <ArrowRight className="h-3.5 w-3.5" />
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
-              </div>
-              {!loadingPrice && spectrumPrice > 0 && (
-                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">
-                  per month
-                </Badge>
-              )}
             </div>
-          </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default SpectrumAppCreate;
 
+// ─── Subcomponents ────────────────────────────────────────────────
 
+type SectionStatus = "done" | "active" | "idle";
 
+function Section({
+    num,
+    title,
+    desc,
+    status,
+    statusLabel,
+    children,
+}: {
+    num: string;
+    title: string;
+    desc: string;
+    status: SectionStatus;
+    statusLabel: string;
+    children: React.ReactNode;
+}) {
+    const tone =
+        status === "done"
+            ? { dot: "#4ade80", text: "#4ade80" }
+            : status === "active"
+              ? { dot: ACCENT, text: ACCENT }
+              : {
+                    dot: "rgba(255,255,255,0.25)",
+                    text: "rgba(255,255,255,0.35)",
+                };
+    return (
+        <section className="border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0">
+            <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-4">
+                    <span
+                        className={`${MONO} text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30 mt-0.5`}
+                    >
+                        {num}
+                    </span>
+                    <div>
+                        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-white">
+                            {title}
+                        </h2>
+                        <p
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                        >
+                            {desc}
+                        </p>
+                    </div>
+                </div>
+                <span
+                    className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] font-semibold shrink-0 mt-1 truncate max-w-[220px]`}
+                    style={{ color: tone.text }}
+                    title={statusLabel}
+                >
+                    <span
+                        className="h-1.5 w-1.5 rounded-full shrink-0"
+                        style={{
+                            background: tone.dot,
+                            boxShadow:
+                                status !== "idle"
+                                    ? `0 0 6px ${tone.dot}`
+                                    : "none",
+                        }}
+                    />
+                    <span className="truncate">{statusLabel}</span>
+                </span>
+            </header>
+            {children}
+        </section>
+    );
+}
 
+function FieldLabel({
+    children,
+    hint,
+}: {
+    children: React.ReactNode;
+    hint?: string;
+}) {
+    return (
+        <label className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[12px] font-medium text-white/85">
+                {children}
+            </span>
+            {hint && (
+                <span className={`${MONO} text-[10px] text-white/35`}>
+                    {hint}
+                </span>
+            )}
+        </label>
+    );
+}
+
+function Input({
+    mono,
+    className,
+    ...rest
+}: React.InputHTMLAttributes<HTMLInputElement> & { mono?: boolean }) {
+    return (
+        <input
+            {...rest}
+            className={`${mono ? MONO : ""} w-full h-11 bg-[#0d0e11] border border-white/[0.08] text-white text-[12.5px] px-3 rounded-[6px] outline-none placeholder:text-white/25 hover:border-white/15 focus:border-[${ACCENT}] focus:shadow-[0_0_0_3px_rgba(0,149,255,0.09)] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${className ?? ""}`}
+        />
+    );
+}
+
+function SumRow({
+    k,
+    v,
+    empty,
+    mono,
+}: {
+    k: string;
+    v: string;
+    empty?: boolean;
+    mono?: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-b-0">
+            <span
+                className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-medium text-white/40`}
+            >
+                {k}
+            </span>
+            <span
+                className={`${mono ? MONO : ""} text-[12px] font-medium truncate max-w-[200px] ${
+                    empty ? "text-white/25" : "text-white/90"
+                }`}
+                title={v}
+            >
+                {v}
+            </span>
+        </div>
+    );
+}

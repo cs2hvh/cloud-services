@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { InventoryRowClient, StockStatus } from "./types";
 
 interface InventoryGridProps {
@@ -50,13 +51,16 @@ function GpuCard({ row }: { row: InventoryRowClient }) {
                 : "border-white/[0.08] hover:border-white/[0.14]"
         }`}>
             <div className="px-4 py-3 border-b border-white/[0.06] flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h3 className="text-[14px] font-semibold text-white truncate tracking-tight">
-                        {row.displayName}
-                    </h3>
-                    <p className="mt-0.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40">
-                        {row.memoryGb} GB · NVIDIA
-                    </p>
+                <div className="flex items-start gap-2.5 min-w-0">
+                    <NvidiaLogo width={20} height={14} className="mt-0.5 shrink-0 opacity-95" />
+                    <div className="min-w-0">
+                        <h3 className="text-[14px] font-semibold text-white truncate tracking-tight">
+                            {row.displayName}
+                        </h3>
+                        <p className="mt-0.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40">
+                            {row.memoryGb} GB
+                        </p>
+                    </div>
                 </div>
                 <div className="inline-flex items-center gap-1.5 text-[11px] text-white/65 shrink-0">
                     <span className={`h-1.5 w-1.5 rounded-full ${stock.dot}`} />

@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { motion } from "motion/react";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, Info, Settings } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
@@ -13,6 +12,12 @@ import { Tables } from "@/lib/supabase/types";
 
 import SpectrumAppInfo from "./spectrum-info";
 import SpectrumAppSettings from "./spectrum-settings";
+
+const SERIF_STYLE: CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
 
 interface SpectrumAppTabsProps {
   spectrumApp: Tables<"spectrum_apps">;
@@ -60,118 +65,162 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
   } | null;
 
   const dnsType = dns?.type || "Unknown";
-  const dnsName = (dns?.decrypted_name as string) || (dns?.name as string) || "Protected application";
-  const statusClassName =
+  const dnsName =
+    (dns?.decrypted_name as string) || (dns?.name as string) || "Protected application";
+
+  const statusMeta =
     spectrumApp.status === "created" || spectrumApp.status === "updated"
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      ? { color: "#4ade80", label: spectrumApp.status }
       : spectrumApp.status === "creating"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-        : "border-white/10 bg-white/[0.05] text-white/60";
+        ? { color: "#fbbf24", label: spectrumApp.status }
+        : { color: "rgba(255,255,255,0.55)", label: spectrumApp.status || "active" };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mx-auto w-full max-w-7xl px-2 sm:px-3 lg:px-4"
-    >
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <div className="glass-panel overflow-hidden">
-          <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <Link
-                href="/dashboard/services/network-ddos"
-                className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to protection inventory
-              </Link>
-              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-                Network Security
-              </p>
-              <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                Spectrum application operations and routing controls.
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                Review protocol mappings, DNS posture, and protection settings from a cleaner management surface.
-              </p>
-            </div>
+    <div className="mx-auto max-w-[1600px] text-white">
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
+        <div className="max-w-3xl min-w-0">
+          <Link
+            href="/dashboard/services/network-ddos"
+            className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to protection inventory
+          </Link>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:min-w-[420px]">
-              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  DNS
-                </div>
-                <div className="mt-2 truncate text-sm font-semibold text-white">
-                  {dnsName}
-                </div>
-              </div>
-              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  Protocol
-                </div>
-                <div className="mt-2 text-sm font-semibold text-white">
-                  {spectrumApp.protocol}
-                </div>
-              </div>
-              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  Status
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-blue-300" />
-                  <span className={"inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize " + statusClassName}>
-                    {spectrumApp.status || "active"}
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+            <span>Network DDoS</span>
+            <ChevronRight className="h-3 w-3 text-white/20" />
+            <span className="text-white/65 truncate">{dnsName}</span>
           </div>
 
-          <div className="border-t border-white/[0.06] px-5 py-3 sm:px-6">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 capitalize">
-                {dnsType} record
-              </span>
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                TLS {spectrumApp.tls}
-              </span>
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 font-mono text-white/60">
-                {spectrumApp.spectrum_id}
-              </span>
-            </div>
+          <h1 className="text-[32px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+            Spectrum{" "}
+            <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              application
+            </span>
+            <span className="text-white/55 font-normal">.</span>
+          </h1>
+          <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
+            Review protocol mappings, DNS posture, and protection settings from a cleaner management surface.
+          </p>
+
+          <div className="mt-5 flex flex-wrap gap-1.5">
+            <span className={`${MONO} inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] font-semibold rounded-[20px] border border-white/[0.08] bg-[#111216] text-white/65 capitalize`}>
+              {dnsType} record
+            </span>
+            <span className={`${MONO} inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] font-semibold rounded-[20px] border border-white/[0.08] bg-[#111216] text-white/65`}>
+              TLS {spectrumApp.tls}
+            </span>
+            <span className={`${MONO} inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] font-semibold rounded-[20px] border border-white/[0.08] bg-[#111216] text-white/55 tabular-nums`}>
+              {spectrumApp.spectrum_id}
+            </span>
           </div>
         </div>
-      </motion.div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`${MONO} inline-flex items-center gap-1.5 h-10 px-3.5 border bg-[#111216] text-[11px] uppercase tracking-[0.14em] rounded-[5px] capitalize`}
+            style={{ borderColor: `${statusMeta.color}33`, color: statusMeta.color }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: statusMeta.color, boxShadow: `0 0 6px ${statusMeta.color}` }}
+            />
+            {statusMeta.label}
+          </span>
+        </div>
+      </header>
+
+      {/* ── Stats strip ───────────────────────────────────── */}
+      <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-3 divide-x divide-white/[0.06]">
+        <div className="px-5 py-5 flex flex-col gap-2 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }}
+            />
+            <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+              DNS
+            </span>
+          </div>
+          <span className={`${MONO} text-[14px] text-white font-medium truncate`}>
+            {dnsName}
+          </span>
+        </div>
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+            Protocol
+          </span>
+          <span
+            style={SERIF_STYLE}
+            className="text-[28px] leading-none font-bold tracking-[-0.025em] text-white uppercase"
+          >
+            {spectrumApp.protocol}
+          </span>
+        </div>
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: statusMeta.color, boxShadow: `0 0 6px ${statusMeta.color}` }}
+            />
+            <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+              Status
+            </span>
+          </div>
+          <span
+            style={SERIF_STYLE}
+            className="text-[28px] leading-none font-bold tracking-[-0.025em] text-white capitalize"
+          >
+            {statusMeta.label}
+          </span>
+        </div>
+      </section>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
-          <TabsTrigger
-            value="info"
-            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all data-[state=active]:bg-blue-500/90 data-[state=active]:text-white text-white/60"
-          >
-            App Info
-          </TabsTrigger>
-          <TabsTrigger
-            value="settings"
-            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all data-[state=active]:bg-blue-500/90 data-[state=active]:text-white text-white/60"
-          >
-            Settings
-          </TabsTrigger>
-        </TabsList>
+        <div className="mb-10 border-b border-white/[0.06]">
+          <TabsList className="bg-transparent p-0 h-auto flex flex-wrap items-center gap-1 -mb-px">
+            {[
+              { value: "info", label: "App info", icon: Info },
+              { value: "settings", label: "Settings", icon: Settings },
+            ].map((t) => {
+              const Icon = t.icon;
+              const isActive = activeTab === t.value;
+              return (
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className={`${MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] rounded-none bg-transparent transition-colors data-[state=active]:bg-transparent data-[state=active]:shadow-none ${
+                    isActive ? "text-white" : "text-white/45 hover:text-white/75"
+                  }`}
+                >
+                  <Icon className="h-3 w-3" />
+                  {t.label}
+                  {isActive && (
+                    <span
+                      className="absolute left-2 right-2 -bottom-px h-[2px]"
+                      style={{
+                        background: ACCENT,
+                        boxShadow: `0 0 8px ${ACCENT}`,
+                      }}
+                    />
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
 
-        <TabsContent value="info" className="mt-4 sm:mt-6">
+        <TabsContent value="info" className="mt-0">
           <SpectrumAppInfo spectrumApp={spectrumApp} isRefreshing={isRefreshing} />
         </TabsContent>
 
-        <TabsContent value="settings" className="mt-4 sm:mt-6">
+        <TabsContent value="settings" className="mt-0">
           <SpectrumAppSettings spectrumApp={spectrumApp} onUpdate={refreshAppData} />
         </TabsContent>
       </Tabs>
-    </motion.div>
+    </div>
   );
 };
 

@@ -15,9 +15,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
 
 import { AddDomainDialog } from './add-domain-dialog';
 import { DomainCard } from './domain-card';
@@ -404,144 +405,162 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <Card className="glass-panel border-white/[0.08] rounded-none">
-        <CardContent className="flex items-center justify-center py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-white/50" />
-        </CardContent>
-      </Card>
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] flex items-center justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+      </div>
     );
   }
 
+  const statCells: Array<{ label: string; count: number; accent: string }> = [
+    { label: 'Active', count: domainCounts.active, accent: '#4ade80' },
+    { label: 'Pending Setup', count: domainCounts.pending, accent: '#fbbf24' },
+    { label: 'Needs Attention', count: domainCounts.failed, accent: '#f87171' },
+  ];
+
   return (
-    <Card className="glass-panel border-white/[0.06] rounded-none">
-      <CardHeader className="border-b border-white/[0.06] px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+      <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Globe className="h-3.5 w-3.5 text-white/45" />
           <div>
-            <CardTitle className="flex items-center gap-3 text-2xl font-semibold text-white">
-              <Globe className="h-6 w-6" />
-              App Domains
-            </CardTitle>
-            <CardDescription className="mt-1 text-sm text-white/60">
+            <h3 className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
+              App domains
+            </h3>
+            <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>
               Connect a domain to this app. Purchase domains globally from the Marketplace.
-            </CardDescription>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard/domains/marketplace">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-white/20 text-white hover:bg-white/8 rounded-md px-3"
-              >
-                Open Marketplace
-              </Button>
-            </Link>
-            <Link href="/dashboard/domains">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-white/20 text-white hover:bg-white/8 rounded-md px-3"
-              >
-                Domains Dashboard
-              </Button>
-            </Link>
-            <AddDomainDialog
-              open={addDialogOpen}
-              onOpenChange={setAddDialogOpen}
-              addMode={addMode}
-              setAddMode={setAddMode}
-              selectedExistingDomain={selectedExistingDomain}
-              setSelectedExistingDomain={setSelectedExistingDomain}
-              subdomainLabel={subdomainLabel}
-              setSubdomainLabel={setSubdomainLabel}
-              externalDomain={externalDomain}
-              setExternalDomain={setExternalDomain}
-              adding={adding}
-              verificationInstructions={verificationInstructions}
-              inventoryLoading={inventoryLoading}
-              existingDomainOptions={existingDomainOptions}
-              selectedTargetDomain={selectedTargetDomain}
-              copiedField={copiedField}
-              onCopy={copyToClipboard}
-              onSubmit={() => void submitAddDomain()}
-              onClose={closeAddDialog}
-              disabled={anyOperationRunning}
-            />
+            </p>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="space-y-4 pt-5">
-        {/* Stats */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[
-            { label: 'Active', count: domainCounts.active },
-            { label: 'Pending Setup', count: domainCounts.pending },
-            { label: 'Needs Attention', count: domainCounts.failed },
-          ].map(({ label, count }) => (
-            <div
-              key={label}
-              className="rounded-lg border border-white/[0.06] bg-gradient-to-b from-white/[0.01] to-transparent p-4 flex flex-col items-center justify-center min-h-[88px]"
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/dashboard/domains/marketplace"
+            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+          >
+            Marketplace
+          </Link>
+          <Link
+            href="/dashboard/domains"
+            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+          >
+            Domains
+          </Link>
+          <AddDomainDialog
+            open={addDialogOpen}
+            onOpenChange={setAddDialogOpen}
+            addMode={addMode}
+            setAddMode={setAddMode}
+            selectedExistingDomain={selectedExistingDomain}
+            setSelectedExistingDomain={setSelectedExistingDomain}
+            subdomainLabel={subdomainLabel}
+            setSubdomainLabel={setSubdomainLabel}
+            externalDomain={externalDomain}
+            setExternalDomain={setExternalDomain}
+            adding={adding}
+            verificationInstructions={verificationInstructions}
+            inventoryLoading={inventoryLoading}
+            existingDomainOptions={existingDomainOptions}
+            selectedTargetDomain={selectedTargetDomain}
+            copiedField={copiedField}
+            onCopy={copyToClipboard}
+            onSubmit={() => void submitAddDomain()}
+            onClose={closeAddDialog}
+            disabled={anyOperationRunning}
+          />
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="border-b border-white/[0.06] grid grid-cols-3 divide-x divide-white/[0.06]">
+        {statCells.map((s) => (
+          <div key={s.label} className="px-5 py-4 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: s.accent, boxShadow: `0 0 6px ${s.accent}` }}
+              />
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                {s.label}
+              </span>
+            </div>
+            <span
+              style={SERIF_STYLE}
+              className="text-[26px] leading-none font-bold tabular-nums tracking-[-0.025em] text-white"
             >
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/50">{label}</p>
-              <p className="mt-1 text-2xl font-bold text-white">{count}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Platform domain */}
-        <div className="rounded-md border border-white/10 bg-black/20 p-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-white">Platform Domain</p>
-            <p className="text-xs text-white/55">Default domain, always active.</p>
+              {s.count}
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="rounded-md bg-white/5 px-3 py-1 font-mono text-sm text-white">
+        ))}
+      </div>
+
+      <div className="px-5 py-5 space-y-4">
+        {/* Platform domain */}
+        <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className={`${MONO} text-[11px] uppercase tracking-[0.12em] text-white/75 font-semibold`}>
+              Platform domain
+            </p>
+            <p className={`${MONO} mt-0.5 text-[10.5px] text-white/40`}>
+              Default domain, always active.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`${MONO} inline-flex items-center px-2.5 py-1 border border-white/[0.06] bg-[#111216] text-[11.5px] text-white rounded-[5px]`}>
               {platformDomain}
-            </div>
-            <Badge className="border-green-500/30 bg-green-500/20 text-green-300">Active</Badge>
+            </span>
+            <span className={`${MONO} inline-flex items-center gap-1.5 px-2.5 py-1 border border-emerald-500/25 bg-emerald-500/[0.08] text-[10px] uppercase tracking-[0.12em] text-emerald-300 rounded-[20px]`}>
+              <span
+                className="h-1 w-1 rounded-full bg-emerald-400"
+                style={{ boxShadow: "0 0 5px #4ade80" }}
+              />
+              Active
+            </span>
             <a
               href={`https://${platformDomain}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center text-cyan-200 hover:text-cyan-100"
+              className="text-white/35 hover:text-[#0095FF] transition-colors"
+              title="Open"
             >
-              <ExternalLink className="h-4 w-4" />
+              <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
         </div>
 
         {/* Domain list */}
         {domains.length === 0 ? (
-          <div className="border border-dashed border-white/15 p-6 text-center text-white/60">
-            <Globe className="mx-auto mb-2 h-8 w-8 opacity-60" />
-            <p className="font-medium text-white/70">No custom domains yet</p>
-            <p className="mt-1 text-xs">
-              Click <strong>Add Domain</strong> to connect a domain you own, or visit the
-              Marketplace to purchase one.
+          <div className="border border-dashed border-white/[0.12] rounded-[5px] px-6 py-10 text-center">
+            <Globe className="mx-auto mb-3 h-7 w-7 text-white/25" />
+            <p className={`${MONO} text-[12px] uppercase tracking-[0.12em] text-white/65 font-semibold`}>
+              No custom domains yet
+            </p>
+            <p className={`${MONO} mt-2 text-[11px] text-white/40 max-w-md mx-auto leading-relaxed`}>
+              Click Add Domain to connect a domain you own, or visit the Marketplace to purchase one.
             </p>
           </div>
         ) : (
-          domains.map((domain) => (
-            <DomainCard
-              key={domain.id}
-              domain={domain}
-              appStatus={appStatus}
-              verifyingId={verifyingId}
-              activatingId={activatingId}
-              settingPrimaryId={settingPrimaryId}
-              removingId={removingId}
-              copiedField={copiedField}
-              checkingSslId={checkingSslId}
-              anyOperationRunning={anyOperationRunning}
-              onVerify={(id) => void handleVerifyDomain(id)}
-              onActivate={(id) => void handleActivateDomain(id)}
-              onSetPrimary={(id) => void handleSetPrimary(id)}
-              onRemoveConfirm={setRemoveConfirmId}
-              onCopy={copyToClipboard}
-              onCheckSsl={(id) => void handleCheckSsl(id)}
-            />
-          ))
+          <div className="space-y-2">
+            {domains.map((domain) => (
+              <DomainCard
+                key={domain.id}
+                domain={domain}
+                appStatus={appStatus}
+                verifyingId={verifyingId}
+                activatingId={activatingId}
+                settingPrimaryId={settingPrimaryId}
+                removingId={removingId}
+                copiedField={copiedField}
+                checkingSslId={checkingSslId}
+                anyOperationRunning={anyOperationRunning}
+                onVerify={(id) => void handleVerifyDomain(id)}
+                onActivate={(id) => void handleActivateDomain(id)}
+                onSetPrimary={(id) => void handleSetPrimary(id)}
+                onRemoveConfirm={setRemoveConfirmId}
+                onCopy={copyToClipboard}
+                onCheckSsl={(id) => void handleCheckSsl(id)}
+              />
+            ))}
+          </div>
         )}
 
         {/* Remove confirmation dialog */}
@@ -551,11 +570,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             if (!open && !removingId) setRemoveConfirmId(null);
           }}
         >
-          <AlertDialogContent className="border-white/10 bg-zinc-900 text-white">
+          <AlertDialogContent className="bg-[#0d0e11] border border-white/[0.08] rounded-[6px] text-white">
             <AlertDialogHeader>
-              <AlertDialogTitle>Remove domain?</AlertDialogTitle>
-              <AlertDialogDescription className="text-white/60">
-                <strong className="text-white">
+              <AlertDialogTitle className="text-[16px] font-semibold">
+                Remove domain?
+              </AlertDialogTitle>
+              <AlertDialogDescription className={`${MONO} text-[11.5px] text-white/55 leading-relaxed`}>
+                <strong className="text-white font-semibold">
                   {domains.find((d) => d.id === removeConfirmId)?.domain}
                 </strong>{' '}
                 will be disconnected from this app. It will remain in your domain inventory and can
@@ -564,20 +585,20 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel
-                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}
                 disabled={removingId !== null}
               >
                 Keep it
               </AlertDialogCancel>
               <AlertDialogAction
-                className="bg-red-600 text-white hover:bg-red-700"
+                className={`${MONO} h-10 px-3.5 border border-rose-500/25 bg-rose-500/[0.08] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.15] rounded-[5px]`}
                 disabled={removingId !== null}
                 onClick={() => {
                   if (removeConfirmId) void handleRemoveDomain(removeConfirmId);
                 }}
               >
                 {removingId !== null ? (
-                  <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Removing…</>
+                  <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Removing</>
                 ) : (
                   'Remove domain'
                 )}
@@ -585,7 +606,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

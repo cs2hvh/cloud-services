@@ -37,22 +37,19 @@ export function SummarySidebar({
   const isDraft = !selectedRepoData || !appName || !framework;
 
   return (
-    <aside className="border border-white/[0.06] bg-[#0d0e11] xl:sticky xl:top-6 xl:self-start">
+    <aside className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
         <div className="min-w-0">
-          <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35`}>
+          <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1`}>
             Configuration
           </p>
-          <h3 className="mt-1 text-[15px] font-semibold tracking-[-0.01em] text-white">
-            Your{" "}
-            <span style={SERIF_STYLE} className="text-white/55 font-normal">
-              deployment
-            </span>
+          <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+            Your deployment
           </h3>
         </div>
         <span
-          className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold`}
+          className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold`}
           style={{ color: isDraft ? ACCENT : "#34d399" }}
         >
           <span
@@ -94,7 +91,7 @@ export function SummarySidebar({
 
       {/* Cost block */}
       <div className="border-t border-white/[0.06] bg-[#08090b] px-5 py-4">
-        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35 mb-2`}>
+        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40 mb-2`}>
           Estimated cost
         </p>
         {sizePrice?.price && sizePrice.price > 0 ? (
@@ -145,14 +142,15 @@ function SumRow({
 }) {
   const empty = !value;
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-dashed border-white/[0.06] last:border-b-0">
-      <span className={`${MONO} text-[10.5px] uppercase tracking-[0.04em] text-white/40`}>
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-b-0">
+      <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-medium text-white/40`}>
         {label}
       </span>
       <span
-        className={`text-[11.5px] text-right truncate max-w-[180px] ${mono ? MONO : ""} ${
-          empty ? "text-white/25 italic" : "text-white/85"
+        className={`text-[12px] font-medium text-right truncate max-w-[200px] ${mono ? MONO : ""} ${
+          empty ? "text-white/25" : "text-white/90"
         }`}
+        title={value || undefined}
       >
         {empty ? "—" : value}
       </span>

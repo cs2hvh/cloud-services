@@ -10,6 +10,7 @@ import { motion } from "motion/react";
 import { ArrowRight, Check } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const BRAND = "#0095FF";
 
@@ -90,7 +91,8 @@ function ClusterConfigCard() {
 
             {/* Title row */}
             <div className="px-6 pt-5">
-                <h3 className="text-[22px] font-semibold tracking-tight text-white">
+                <h3 className="flex items-center gap-2 text-[22px] font-semibold tracking-tight text-white">
+                    <NvidiaLogo width={20} height={14} className="opacity-95" />
                     H200 SXM · 8-node cluster
                 </h3>
                 <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-white/40">

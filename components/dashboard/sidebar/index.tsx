@@ -264,7 +264,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     // ─── Navigation tree (single source of truth) ─────────────
     const primary: NavItem[] = [
         { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-        { label: "Activity", href: "/dashboard/activity", icon: Activity },
     ];
 
     const computeGroup: NavGroup = {
@@ -459,7 +458,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                         {standaloneServices.map((it) => (
                             <NavRow key={it.href} item={it} pathname={pathname} />
                         ))}
-                        <GroupRow group={aiAgentsGroup} pathname={pathname} expanded={aiAgentsExpanded} onToggle={() => setAiAgentsExpanded((p) => !p)} />
                     </div>
                 </div>
 

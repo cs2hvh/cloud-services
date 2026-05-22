@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { ReadyToBuild } from "@/components/solutions/sections/ready-to-build";
 import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const heroTags = ["Premium GPU Cloud", "Model Training", "Fine-tuning", "Inference APIs"];
 
@@ -509,7 +510,10 @@ export function AiMlLanding() {
                 <article key={gpu.model} className="group relative border-t border-white/10 pt-6 sm:pt-7">
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <div className="text-[11px] uppercase tracking-[0.24em] text-white/34">GPU Tier</div>
+                      <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.24em] text-white/34">
+                        <NvidiaLogo width={16} height={11} className="opacity-90" />
+                        GPU Tier
+                      </div>
                       <h3 className="mt-3 text-4xl font-semibold tracking-[-0.06em] text-white">
                         {gpu.model}
                       </h3>

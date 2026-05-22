@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
 import type { Tables } from "@/lib/supabase/types";
 
@@ -538,12 +539,18 @@ export function GpuServicePage({ featuredProducts }: { featuredProducts: Product
               />
 
               <div className="mt-8 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.2em] text-white/38">
-                {["H100", "H200", "B200-class planning", "AMD-ready fleet"].map((item, index) => (
-                  <span key={item} className="inline-flex items-center gap-3">
-                    {item}
-                    {index !== 3 ? <span className="h-px w-5 bg-white/12" /> : null}
-                  </span>
-                ))}
+                {["H100", "H200", "B200-class planning", "AMD-ready fleet"].map((item, index) => {
+                  const isNvidia = index < 3;
+                  return (
+                    <span key={item} className="inline-flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1.5">
+                        {isNvidia && <NvidiaLogo width={14} height={10} className="opacity-90" />}
+                        {item}
+                      </span>
+                      {index !== 3 ? <span className="h-px w-5 bg-white/12" /> : null}
+                    </span>
+                  );
+                })}
               </div>
             </div>
 
@@ -588,7 +595,10 @@ export function GpuServicePage({ featuredProducts }: { featuredProducts: Product
                 >
                   <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto] xl:items-start">
                     <div>
-                      <div className="text-[11px] uppercase tracking-[0.24em] text-white/34">{tier.machineType}</div>
+                      <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.24em] text-white/34">
+                        <NvidiaLogo width={16} height={11} className="opacity-90" />
+                        {tier.machineType}
+                      </div>
                       <h3 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-white">{tier.name}</h3>
                       <p className="mt-4 max-w-md text-sm leading-7 text-white/62">{tier.shortDescription}</p>
                     </div>
