@@ -22,6 +22,7 @@ import {
   HelpCircle,
   Key,
   LayoutDashboard,
+  Layers,
   Lock,
   LogOut,
   Menu,
@@ -211,6 +212,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard",
       current: pathname === "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      name: "Projects",
+      href: "/dashboard/projects",
+      current: pathname === "/dashboard/projects",
+      icon: Rocket,
+    },
+    {
+      name: "Templates",
+      href: "/dashboard/templates",
+      current: pathname.startsWith("/dashboard/templates"),
+      icon: Layers,
     },
     {
       name: "Activity",
@@ -445,9 +458,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               <ChevronDown className={`ml-1 h-3 w-3 transition-transform duration-200 ${projectsExpanded ? "" : "-rotate-90"}`} />
             </button>
             <Link
-              href="/dashboard/projects/new"
+              href="/dashboard/templates"
               className="flex h-6 w-6 items-center justify-center text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/75"
-              title="New Project"
+              title="Deploy from template"
             >
               <Plus className="h-3.5 w-3.5" />
             </Link>

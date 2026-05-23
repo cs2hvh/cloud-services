@@ -1,95 +1,172 @@
 'use client';
 
-import { motion } from "motion/react";
-import { Folder, Plus, Search } from "lucide-react";
-import Link from "next/link";
-import { Tables } from "@/lib/supabase/types";
+import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import Link from 'next/link';
+import { Plus, Database, Zap, Globe, Settings, CheckCircle2, XCircle, Loader2, Clock, Layers, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { getServiceDefinition } from '@/lib/services/registry';
 
-const ProjectsPage = () => {
-  // Dummy data for now, replace with actual data from your backend
-  const projects: Tables<"projects">[] = [];
+type ServiceSummary = { service_name: string; service_type: string; engine: string; status: string; public_domain: string | null };
+type Instance = {
+  id: string;
+  project_name: string;
+  namespace: string;
+  status: string;
+  created_at: string;
+  hasTemplateUpdate?: boolean;
+  template_instance_services: ServiceSummary[];
+};
+
+function serviceIcon(engine: string) {
+  const icon = getServiceDefinition(engine).icon;
+  if (icon === 'Database') return <Database className="w-3 h-3" />;
+  if (icon === 'Zap') return <Zap className="w-3 h-3" />;
+  if (icon === 'Layers') return <Layers className="w-3 h-3" />;
+  if (icon === 'Settings') return <Settings className="w-3 h-3" />;
+  return <Globe className="w-3 h-3" />;
+}
+
+const INSTANCE_STATUS: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
+  ready:     { cls: 'text-green-400 bg-green-500/15 border-green-500/30',    icon: <CheckCircle2 className="w-3 h-3" />,             label: 'Ready'    },
+  failed:    { cls: 'text-red-400 bg-red-500/15 border-red-500/30',          icon: <XCircle className="w-3 h-3" />,                  label: 'Failed'   },
+  deploying: { cls: 'text-blue-400 bg-blue-500/15 border-blue-500/30',       icon: <Loader2 className="w-3 h-3 animate-spin" />,     label: 'Deploying'},
+  creating:  { cls: 'text-blue-400 bg-blue-500/15 border-blue-500/30',       icon: <Loader2 className="w-3 h-3 animate-spin" />,     label: 'Creating' },
+  degraded:  { cls: 'text-amber-400 bg-amber-500/15 border-amber-500/30',    icon: <XCircle className="w-3 h-3" />,                  label: 'Degraded' },
+  deleting:  { cls: 'text-red-300 bg-red-500/10 border-red-500/20',          icon: <Loader2 className="w-3 h-3 animate-spin" />,     label: 'Deleting' },
+  pending:   { cls: 'text-white/40 bg-white/5 border-white/20',              icon: <Clock className="w-3 h-3" />,                    label: 'Pending'  },
+};
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+export default function ProjectsPage() {
+  const [instances, setInstances] = useState<Instance[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/instances')
+      .then(r => r.json())
+      .then(d => setInstances(d.instances ?? []))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="flex-1 bg-black min-h-screen p-4 sm:p-6 lg:p-8 text-white">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8"
+        className="flex items-center justify-between mb-8"
       >
-        <div className="flex-1">
+        <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Projects</h1>
-          <p className="text-white/60 text-sm sm:text-base">Organize your services and resources.</p>
+          <p className="text-white/40 text-sm mt-0.5">Deployed multi-service stacks</p>
         </div>
-        <Link
-          href="/dashboard/projects/new"
-          className="group relative inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 sm:px-6 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200 text-sm sm:text-base"
-        >
-          <Plus className="-ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          New Project
-        </Link>
+        <Button asChild className="bg-white text-black hover:bg-white/90">
+          <Link href="/dashboard/templates">
+            <Plus className="w-4 h-4 mr-1.5" /> New Project
+          </Link>
+        </Button>
       </motion.div>
 
-      {projects.length > 0 ? (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ delay: 0.2 }}
-        >
-          <div className="bg-white/5 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 flex items-center justify-between">
-            <div className="flex items-center w-full max-w-md">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white/50 mr-2 sm:mr-3"/>
-              <input 
-                type="text" 
-                placeholder="Search projects..." 
-                className="w-full bg-transparent focus:outline-none text-sm sm:text-base"
-              />
-            </div>
-            {/* Add filter button if needed */}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {/* This is where you would map through your projects */}
-            {/* Example card:
-            <Link href={`/dashboard/projects/ID_HERE`}>
-              <div className="bg-white/5 p-4 sm:p-6 rounded-lg hover:bg-white/10 transition-colors">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-base sm:text-lg truncate">My Awesome Project</h3>
-                    <p className="text-sm text-white/60 truncate">A short description of the project.</p>
-                  </div>
-                  <Folder className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400 flex-shrink-0 ml-2" />
-                </div>
-                <div className="mt-3 sm:mt-4 flex items-center justify-between">
-                  <span className="text-xs sm:text-sm text-white/60">3 Services</span>
-                  <p className="text-xs sm:text-sm text-white/60">2 hours ago</p>
-                </div>
-              </div>
-            </Link>
-            */}
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div 
+      {loading && (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
+        </div>
+      )}
+
+      {!loading && instances.length === 0 && (
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-center py-12 sm:py-20 border-2 border-dashed border-white/10 rounded-lg mx-2 sm:mx-0"
+          className="flex flex-col items-center justify-center py-24 gap-4"
         >
-          <Folder className="mx-auto h-12 w-12 sm:h-16 sm:w-16 text-white/20" />
-          <h3 className="mt-3 sm:mt-4 text-lg sm:text-xl font-semibold">No Projects Found</h3>
-          <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-white/50 px-4">Get started by creating a new project.</p>
-          <div className="mt-4 sm:mt-6">
-            <Link 
-              href="/dashboard/projects/new"
-              className="group relative inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 sm:px-5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200 text-sm sm:text-base"
-            >
-              <Plus className="-ml-1 mr-2 h-4 w-4" />
-              Create Project
-            </Link>
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <Layers className="w-6 h-6 text-white/30" />
           </div>
+          <div className="text-center">
+            <p className="text-white/60 font-medium mb-1">No projects yet</p>
+            <p className="text-white/30 text-sm">Deploy a template to create your first project.</p>
+          </div>
+          <Button asChild className="bg-white text-black hover:bg-white/90 mt-2">
+            <Link href="/dashboard/templates">Browse Templates</Link>
+          </Button>
         </motion.div>
+      )}
+
+      {/* Project grid */}
+      {!loading && instances.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {instances.map((inst, i) => {
+            const st = INSTANCE_STATUS[inst.status] ?? INSTANCE_STATUS.pending;
+            const services = inst.template_instance_services ?? [];
+            const webSvc = services.find(s => s.service_type === 'web' && s.public_domain);
+
+            return (
+              <motion.div
+                key={inst.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <Link href={`/dashboard/projects/${inst.id}`} className="block">
+                  <div className="bg-white/[0.04] border border-white/10 rounded-xl p-5 hover:bg-white/[0.07] hover:border-white/20 transition-all duration-150 group">
+                    {/* Title row */}
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm truncate group-hover:text-white transition-colors">
+                          {inst.project_name}
+                        </h3>
+                        <p className="text-[11px] text-white/30 font-mono mt-0.5">{inst.namespace}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {inst.hasTemplateUpdate && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border text-amber-300 bg-amber-500/10 border-amber-500/20">
+                            <RefreshCw className="w-2.5 h-2.5" /> Update
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${st.cls}`}>
+                          {st.icon} {st.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Service pills */}
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {services.map(svc => (
+                        <div
+                          key={svc.service_name}
+                          className="flex items-center gap-1 bg-white/5 border border-white/8 rounded-md px-2 py-1 text-[11px] text-white/50"
+                        >
+                          {serviceIcon(svc.engine)}
+                          <span>{svc.service_name}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/25">{timeAgo(inst.created_at)}</span>
+                      {webSvc?.public_domain && (
+                        <span className="text-[11px] text-white/30 truncate max-w-[140px]">
+                          {webSvc.public_domain.replace('https://', '')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
-};
-
-export default ProjectsPage;
+}

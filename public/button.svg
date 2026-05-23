@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="40" viewBox="0 0 180 40" role="img" aria-label="Deploy">
+  <rect width="180" height="40" rx="8" fill="#0A0A0A"/>
+  <rect x="0.5" y="0.5" width="179" height="39" rx="7.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.16"/>
+  <circle cx="22" cy="20" r="9" fill="#FFFFFF"/>
+  <path d="M17 20h10M22 15v10" stroke="#0A0A0A" stroke-width="2" stroke-linecap="round"/>
+  <text x="42" y="25" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600">Deploy Template</text>
+</svg>

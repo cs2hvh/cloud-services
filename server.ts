@@ -14,6 +14,8 @@ import { parse } from 'url';
 import next from 'next';
 import { WebSocketServer, WebSocket } from 'ws';
 import { validateVncToken } from './lib/vnc-token';
+import { startBuildWorkers } from './lib/workers/build-worker';
+import { startProjectDeployWorker } from './lib/workers/project-deploy-worker';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
@@ -177,5 +179,17 @@ app.prepare().then(() => {
   server.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> VNC WebSocket proxy active on /ws/vnc`);
+
+    const buildWorkers = startBuildWorkers();
+    const deployWorker = startProjectDeployWorker();
+
+    async function shutdown(signal: string) {
+      console.log(`\n> ${signal} received — shutting down workers`);
+      await Promise.all([buildWorkers.close(), deployWorker.close()]);
+      server.close(() => process.exit(0));
+    }
+
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT',  () => shutdown('SIGINT'));
   });
 });
