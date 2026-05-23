@@ -2,31 +2,41 @@ import DatabaseHeroSection from "@/components/services/database-hero-section";
 import DatabaseControlPlaneSection from "@/components/services/database-control-plane-section";
 import DatabaseEnginesSection from "@/components/services/database-engines-section";
 import DatabasePricingSection from "@/components/services/database-pricing-section";
-import DatabaseCtaSection from "@/components/services/database-cta-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
-import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import ServicesHomeSectionSix, {
+  type UseCase,
+} from "@/components/serviceshome/section-6";
 import { getDatabasePlans } from "@/lib/helpers/database-plans";
+import { Database, ShoppingBag, FileJson, Gauge } from "lucide-react";
 
-const cases = [
+const cases: UseCase[] = [
   {
-    title: "PostgreSQL for SaaS Platforms",
+    icon: Database,
+    metric: "SaaS",
+    title: "PostgreSQL for tenant-aware platforms",
     description:
-      "Run account systems, APIs, billing data, and tenant-aware product tables on a managed PostgreSQL cluster with replicas, backups, and private networking built in.",
+      "Account systems, billing tables, and multi-tenant APIs on Postgres clusters with synchronous replicas, point-in-time recovery, and private networking out of the box.",
   },
   {
-    title: "MySQL for Transactional Commerce",
+    icon: ShoppingBag,
+    metric: "Commerce",
+    title: "MySQL for transactional storefronts",
     description:
-      "Support storefront traffic, checkout flows, catalog reads, and customer portals with familiar MySQL operations, managed failover, and production-ready backup paths.",
+      "Checkout flows, catalog reads, customer portals, and order pipelines on MySQL with managed failover, automated backups, and read-replica fan-out.",
   },
   {
-    title: "MongoDB for Flexible Product Data",
+    icon: FileJson,
+    metric: "Content",
+    title: "MongoDB for evolving product data",
     description:
-      "Ship faster when schemas evolve often. Use MongoDB for catalogs, content models, user profiles, and internal tools that need flexibility without database babysitting.",
+      "Catalogs, content models, user profiles, and internal tools that need schema flexibility — managed replica sets with snapshot recovery and zero ops overhead.",
   },
   {
-    title: "Redis for Cache and Session Layers",
+    icon: Gauge,
+    metric: "Cache",
+    title: "Redis for sessions and low-latency reads",
     description:
-      "Keep hot data close to the app for sessions, queues, counters, rate limits, and response caching with low-latency Redis clusters that stay operational under load.",
+      "Hot data next to the app — sessions, queues, counters, rate limits, and response caching. Sub-millisecond reads with AOF persistence and HA failover.",
   },
 ];
 
@@ -83,8 +93,12 @@ const DatabaseHome = async () => {
           },
         ]}
       />
-      <ServicesHomeSectionSix cases={cases} />
-      <DatabaseCtaSection />
+      <ServicesHomeSectionSix
+        cases={cases}
+        eyebrow="Use cases"
+        heading="Built for the data layer you actually run"
+        subtitle="Four engines, one managed control plane. Pick the database that fits the workload — replication, backups, and private networking come standard."
+      />
     </main>
   );
 };

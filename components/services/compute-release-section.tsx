@@ -1,204 +1,294 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Cpu, HardDrive, Network, MemoryStick } from "lucide-react";
+import {
+    ArrowRight,
+    Cpu,
+    HardDrive,
+    MemoryStick,
+    Network,
+    Shield,
+    Zap,
+    type LucideIcon,
+} from "lucide-react";
+
 import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
-const bareMetalServers = [
-  {
-    id: "01",
-    badge: "Best Value",
-    title: "Intel Xeon E-2388G",
-    subtitle: "Entry Bare Metal",
-    processor: "Intel",
-    specs: [
-      { icon: Cpu, label: "8 Cores / 16 Threads", detail: "Up to 5.1 GHz" },
-      { icon: MemoryStick, label: "32 GB DDR4 ECC" },
-      { icon: HardDrive, label: "2x 512 GB NVMe SSD" },
-      { icon: Network, label: "1 Gbit/s Uplink", detail: "10 TB Transfer" },
-    ],
-    price: 99,
-    useCase: "Web hosting, small databases, CI/CD runners",
-  },
-  {
-    id: "02",
-    badge: "Most Popular",
-    featured: true,
-    title: "AMD Ryzen 9 7950X",
-    subtitle: "High-Performance Workstation",
-    processor: "AMD",
-    specs: [
-      { icon: Cpu, label: "16 Cores / 32 Threads", detail: "Up to 5.7 GHz" },
-      { icon: MemoryStick, label: "64 GB DDR5" },
-      { icon: HardDrive, label: "2x 1 TB NVMe SSD" },
-      { icon: Network, label: "1 Gbit/s Uplink", detail: "20 TB Transfer" },
-    ],
-    price: 179,
-    useCase: "Game servers, SaaS backends, build pipelines",
-  },
-  {
-    id: "03",
-    badge: "Enterprise",
-    title: "AMD EPYC 9354P",
-    subtitle: "Data Center Grade",
-    processor: "AMD",
-    specs: [
-      { icon: Cpu, label: "32 Cores / 64 Threads", detail: "Up to 3.8 GHz" },
-      { icon: MemoryStick, label: "256 GB DDR5 ECC" },
-      { icon: HardDrive, label: "2x 3.84 TB NVMe SSD" },
-      { icon: Network, label: "10 Gbit/s Uplink", detail: "50 TB Transfer" },
-    ],
-    price: 549,
-    useCase: "Large APIs, multiplayer backends, analytics clusters",
-  },
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+type Spec = {
+    icon: LucideIcon;
+    label: string;
+    detail?: string;
+};
+
+type Server = {
+    id: string;
+    badge: string;
+    title: string;
+    subtitle: string;
+    processor: "Intel" | "AMD";
+    specs: Spec[];
+    price: number;
+    useCase: string;
+    featured?: boolean;
+};
+
+const SERVERS: Server[] = [
+    {
+        id: "01",
+        badge: "Starter",
+        title: "Intel Xeon E-2388G",
+        subtitle: "Entry-tier production",
+        processor: "Intel",
+        specs: [
+            { icon: Cpu, label: "8 cores / 16 threads", detail: "Boost 5.1 GHz" },
+            { icon: MemoryStick, label: "32 GB DDR4 ECC" },
+            { icon: HardDrive, label: "2× 512 GB NVMe", detail: "Hardware RAID 1" },
+            { icon: Network, label: "1 Gbps uplink", detail: "10 TB egress / mo" },
+        ],
+        price: 99,
+        useCase:
+            "Web and app tiers, single-instance Postgres or MySQL, CI runners, and lightweight Kubernetes nodes.",
+    },
+    {
+        id: "02",
+        badge: "Most popular",
+        featured: true,
+        title: "AMD Ryzen 9 7950X",
+        subtitle: "High-clock production",
+        processor: "AMD",
+        specs: [
+            { icon: Cpu, label: "16 cores / 32 threads", detail: "Boost 5.7 GHz" },
+            { icon: MemoryStick, label: "64 GB DDR5" },
+            { icon: HardDrive, label: "2× 1 TB NVMe Gen4", detail: "Software RAID" },
+            { icon: Network, label: "1 Gbps uplink", detail: "20 TB egress / mo" },
+        ],
+        price: 179,
+        useCase:
+            "Real-time SaaS backends, multiplayer game servers, parallel build farms, and video transcoding pipelines.",
+    },
+    {
+        id: "03",
+        badge: "Enterprise",
+        title: "AMD EPYC 9354P",
+        subtitle: "Scale-out enterprise",
+        processor: "AMD",
+        specs: [
+            { icon: Cpu, label: "32 cores / 64 threads", detail: "Boost 3.8 GHz" },
+            { icon: MemoryStick, label: "256 GB DDR5 ECC" },
+            { icon: HardDrive, label: "2× 3.84 TB NVMe", detail: "Hardware RAID 10" },
+            { icon: Network, label: "10 Gbps uplink", detail: "50 TB egress / mo" },
+        ],
+        price: 549,
+        useCase:
+            "Multi-tenant SaaS platforms, OLAP and analytics clusters, in-house ML inference, and large multiplayer fleets.",
+    },
 ];
 
-const ComputeReleaseSection = () => {
-  return (
-    <section className="relative w-full overflow-hidden bg-black py-16 lg:py-24">
-      {/* Background */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <Image
-          src="/images/main-page/service-home-section-2-bg.svg"
-          alt=""
-          fill
-          className="object-cover opacity-50"
-          priority={false}
-        />
-      </div>
+const PLATFORM_HIGHLIGHTS: Array<{ icon: LucideIcon; text: string }> = [
+    { icon: Zap, text: "Provisioned in 30 minutes" },
+    { icon: Shield, text: "IPMI + BMC out-of-band" },
+    { icon: HardDrive, text: "Hardware RAID + custom OS" },
+];
 
-      <Container>
-        <div className="relative z-10">
-          {/* Header row */}
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12">
-            <div className="max-w-[520px]">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight leading-[1.15] text-white">
-                Dedicated{" "}
-                <span className="text-[#0095FF]">Bare Metal</span>{" "}
-                Servers
-              </h2>
-              <p className="mt-3 text-sm leading-[1.7] text-white/40">
-                No hypervisor. No noisy neighbors. Full hardware access with IPMI remote management, hardware RAID, and custom OS support.
-              </p>
-            </div>
+function ServerCard({ server, index }: { server: Server; index: number }) {
+    const isFeatured = !!server.featured;
+    return (
+        <article
+            className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
+                isFeatured
+                    ? "border-white/[0.18] bg-[#13161B]"
+                    : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
+            }`}
+            style={{
+                boxShadow: isFeatured
+                    ? "inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 32px -12px rgba(0,0,0,0.75)"
+                    : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
+            }}
+        >
+            {/* Subtle left accent stripe on featured */}
+            {isFeatured && (
+                <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
+                    style={{ background: "#0095FF", opacity: 0.55 }}
+                />
+            )}
 
-            <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-end">
-              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 sm:px-3.5 sm:py-2">
-                <Image src="/images/compute-page/intel.png" alt="Intel" width={44} height={18} className="w-9 sm:w-11 h-auto object-contain brightness-0 invert opacity-40" />
-                <span className="text-[9px] text-white/20 uppercase tracking-wider">Xeon</span>
-              </div>
-              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 sm:px-3.5 sm:py-2">
-                <Image src="/images/compute-page/amd.png" alt="AMD" width={44} height={18} className="w-9 sm:w-11 h-auto object-contain brightness-0 invert opacity-40" />
-                <span className="text-[9px] text-white/20 uppercase tracking-wider">EPYC &bull; Ryzen</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Server Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {bareMetalServers.map((server) => {
-              const isFeatured = !!(server).featured;
-              return (
-                <div
-                  key={server.id}
-                  className={`relative p-6 lg:p-7 flex flex-col transition-colors duration-300 border ${
-                    isFeatured
-                      ? "border-[#0095FF]/30 bg-[#0095FF]/[0.03]"
-                      : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.14]"
-                  }`}
-                >
-                  {isFeatured && (
-                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#0095FF]" />
-                  )}
-
-                  {/* Badge + Processor icon */}
-                  <div className="flex items-center justify-between mb-5">
-                    <span className={`text-[10px] font-medium uppercase tracking-widest px-2.5 py-1 ${
-                      isFeatured
-                        ? "bg-[#0095FF]/10 text-[#0095FF] border border-[#0095FF]/20"
-                        : "bg-white/[0.04] text-white/30 border border-white/[0.06]"
-                    }`}>
-                      {server.badge}
+            {/* Header — index + badge + processor mark */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
+                        {String(index + 1).padStart(2, "0")}
                     </span>
-                    <Image
-                      src={server.processor === "Intel" ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
-                      alt={server.processor}
-                      width={34}
-                      height={14}
-                      className="object-contain brightness-0 invert opacity-25"
-                    />
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="text-[18px] lg:text-[20px] font-[600] text-white tracking-tight leading-tight">
-                    {server.title}
-                  </h3>
-                  <p className="text-[11px] text-white/25 mt-0.5 mb-6">
-                    {server.subtitle}
-                  </p>
-
-                  {/* Specs — vertical with icon boxes */}
-                  <div className="space-y-3 flex-1">
-                    {server.specs.map((spec) => (
-                      <div key={spec.label} className="flex items-center gap-3">
-                        <div className={`flex h-7 w-7 items-center justify-center shrink-0 ${
-                          isFeatured
-                            ? "bg-[#0095FF]/[0.08] border border-[#0095FF]/15"
-                            : "bg-white/[0.03] border border-white/[0.06]"
-                        }`}>
-                          <spec.icon className={`w-3.5 h-3.5 ${isFeatured ? "text-[#0095FF]" : "text-[#0095FF]/60"}`} />
-                        </div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-[13px] text-white/60">{spec.label}</span>
-                          {spec.detail && (
-                            <span className="text-[11px] text-white/20">{spec.detail}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Use case */}
-                  <p className="mt-5 text-[11px] text-white/15 leading-relaxed">{server.useCase}</p>
-
-                  {/* Price + CTA: stacked on mobile, side-by-side on sm+ */}
-                  <div className="mt-4 pt-5 border-t border-white/[0.06] flex flex-col items-center sm:flex-row sm:items-end sm:justify-between gap-3">
-                    <div className="text-center sm:text-left">
-                      <span className="text-[26px] font-[600] text-white tabular-nums tracking-tight">${server.price}</span>
-                      <span className="text-[11px] text-white/20 ml-0.5">/mo</span>
-                    </div>
-                    <AuthAwareServiceCta
-                      service="compute"
-                      intent="new"
-                      className={`cursor-pointer inline-flex items-center justify-center w-full sm:w-auto gap-1.5 px-4 py-2 text-[12px] font-medium transition-colors ${
-                        isFeatured
-                          ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
-                          : "bg-white text-black hover:bg-white/90"
-                      }`}
+                    <span
+                        className={`${MONO} inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[9.5px] uppercase tracking-[0.14em] ${
+                            isFeatured
+                                ? "border-white/[0.18] bg-white/[0.05] text-white/80"
+                                : "border-white/[0.10] bg-white/[0.03] text-white/55"
+                        }`}
                     >
-                      Configure
-                      <ArrowRight className="w-3 h-3" />
-                    </AuthAwareServiceCta>
-                  </div>
+                        {server.badge}
+                    </span>
                 </div>
-              );
-            })}
-          </div>
+                <Image
+                    src={
+                        server.processor === "Intel"
+                            ? "/images/compute-page/intel.png"
+                            : "/images/compute-page/amd.png"
+                    }
+                    alt={server.processor}
+                    width={40}
+                    height={16}
+                    className="h-4 w-auto object-contain opacity-70 brightness-0 invert"
+                />
+            </div>
 
-          {/* Bottom link */}
-          <div className="mt-6 flex justify-center">
-            <Link
-              href="/services/compute"
-              className="cursor-pointer inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/55 transition-colors"
-            >
-              View all configurations
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-      </Container>
-    </section>
-  );
+            {/* Title */}
+            <div className="mt-6">
+                <h3 className="text-[19px] font-semibold leading-tight tracking-[-0.005em] text-white">
+                    {server.title}
+                </h3>
+                <p
+                    className={`${MONO} mt-1.5 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}
+                >
+                    {server.subtitle}
+                </p>
+            </div>
+
+            {/* Specs */}
+            <ul className="mt-6 space-y-3 flex-1">
+                {server.specs.map((spec) => {
+                    const Icon = spec.icon;
+                    return (
+                        <li key={spec.label} className="flex items-center gap-3">
+                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-white/[0.08] bg-white/[0.03] text-white/75">
+                                <Icon className="h-3.5 w-3.5" strokeWidth={1.7} />
+                            </span>
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                <span className="text-[13px] font-medium text-white/85">
+                                    {spec.label}
+                                </span>
+                                {spec.detail && (
+                                    <span
+                                        className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/40`}
+                                    >
+                                        {spec.detail}
+                                    </span>
+                                )}
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+
+            {/* Use case */}
+            <p className="mt-6 border-t border-white/[0.06] pt-4 text-[12.5px] leading-[1.6] text-white/55">
+                {server.useCase}
+            </p>
+
+            {/* Price + CTA */}
+            <div className="mt-5 flex flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <p
+                        className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/45`}
+                    >
+                        From
+                    </p>
+                    <p className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}>
+                        ${server.price}
+                        <span className="ml-1 text-[11px] font-normal text-white/55">
+                            /mo
+                        </span>
+                    </p>
+                </div>
+                <AuthAwareServiceCta
+                    service="compute"
+                    intent="new"
+                    className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
+                        isFeatured
+                            ? "border border-white bg-white text-black hover:bg-white/90"
+                            : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white/[0.04]"
+                    }`}
+                >
+                    Configure
+                    <ArrowRight className="h-3.5 w-3.5" />
+                </AuthAwareServiceCta>
+            </div>
+        </article>
+    );
+}
+
+const ComputeReleaseSection = () => {
+    return (
+        <section className="relative w-full overflow-hidden bg-[#0D0D0F] py-16 lg:py-24">
+            {/* Top hairline */}
+            <div
+                aria-hidden="true"
+                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            />
+
+            <Container className="relative z-10">
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p
+                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                    >
+                        Bare metal
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                        Dedicated hardware, on tap
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                        Whole-machine performance without the hypervisor tax.
+                        Out-of-band management, hardware RAID, and custom OS
+                        images on every node — billed monthly, racked in
+                        minutes, not weeks.
+                    </p>
+
+                    {/* Platform highlight chips */}
+                    <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2.5">
+                        {PLATFORM_HIGHLIGHTS.map(({ icon: Icon, text }) => (
+                            <span
+                                key={text}
+                                className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.18em] text-white/65`}
+                            >
+                                <Icon
+                                    className="h-3.5 w-3.5 text-white/50"
+                                    strokeWidth={1.7}
+                                />
+                                {text}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Server Cards */}
+                <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5">
+                    {SERVERS.map((server, i) => (
+                        <ServerCard key={server.id} server={server} index={i} />
+                    ))}
+                </div>
+
+                {/* Footer — view all + needs-help line */}
+                <div className="mt-12 flex flex-col items-center justify-center gap-3 border-t border-white/[0.08] pt-8 sm:flex-row sm:gap-5">
+                    <p
+                        className={`${MONO} text-[10.5px] uppercase tracking-[0.18em] text-white/45`}
+                    >
+                        Need a custom configuration?
+                    </p>
+                    <Link
+                        href="/services/compute#pricing"
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                    >
+                        Browse all server SKUs
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                </div>
+            </Container>
+        </section>
+    );
 };
 
 export default ComputeReleaseSection;

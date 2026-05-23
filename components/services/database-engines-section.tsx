@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowUpRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
@@ -121,11 +121,7 @@ export default function DatabaseEnginesSection() {
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#8ecaff]" />
-                Engine Selection
-              </span>
-              <h2 className="mt-5 text-3xl font-[400] leading-[1.02] tracking-tight text-white sm:text-4xl lg:text-[4rem]">
+              <h2 className="text-3xl font-[400] leading-[1.02] tracking-tight text-white sm:text-4xl lg:text-[4rem]">
                 Pick a database by
                 <span className="block text-[#8ecaff]">workload, not branding</span>
               </h2>

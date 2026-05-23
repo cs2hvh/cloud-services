@@ -1,34 +1,43 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ComputeReleaseSection from "@/components/services/compute-release-section";
 import ComputePricingSection from "@/components/services/compute-pricing-section";
-import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import ServicesHomeSectionSix, {
+  type UseCase,
+} from "@/components/serviceshome/section-6";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import { getComputeCategories } from "@/lib/helpers/compute-categories";
+import { Database, GitBranch, Globe, Radio } from "lucide-react";
 
 const ComputeHome = async () => {
-  // Fetch dynamic compute categories from database
   const categories = await getComputeCategories();
-  console.log("Fetched compute categories:", categories);
-  const cases = [
+  const cases: UseCase[] = [
     {
-      title: "Web & Application Hosting",
+      icon: Globe,
+      metric: "Web & SaaS",
+      title: "Production web apps and APIs",
       description:
-        "Host websites, APIs, and web applications on dedicated virtual machines with guaranteed uptime, auto-scaling, and global load balancing.",
+        "Host high-traffic sites, REST/gRPC APIs, and SaaS backends on dedicated cores with sub-20 ms regional latency, managed TLS, and instant blue-green deploys.",
     },
     {
-      title: "Database Servers",
+      icon: Database,
+      metric: "Data tier",
+      title: "Self-managed database servers",
       description:
-        "Run self-managed PostgreSQL, MySQL, or Redis instances on high-IOPS NVMe storage with automated backups and point-in-time recovery.",
+        "Run PostgreSQL, MySQL, Redis, or MongoDB on NVMe-backed instances with snapshot scheduling, point-in-time recovery, and replicated block volumes.",
     },
     {
-      title: "CI/CD & Build Pipelines",
+      icon: GitBranch,
+      metric: "CI/CD",
+      title: "Build farms and CI runners",
       description:
-        "Accelerate your development workflow with dedicated build servers. Run parallel test suites, container builds, and deployments at scale.",
+        "Parallel build pipelines and self-hosted runners on dedicated CPUs — persistent cache volumes, ephemeral worker pools, and BYO container registry.",
     },
     {
-      title: "Game & Streaming Servers",
+      icon: Radio,
+      metric: "Real-time",
+      title: "Game, media, and streaming servers",
       description:
-        "Deploy low-latency game servers and media streaming backends across 12 global regions with DDoS protection included.",
+        "Low-latency multiplayer backends and live media origins across 12 regions, with always-on L3/L4 DDoS mitigation and 25 Gbps networking.",
     },
   ];
 
@@ -95,7 +104,12 @@ const ComputeHome = async () => {
           },
         ]}
       />
-      <ServicesHomeSectionSix cases={cases} />
+      <ServicesHomeSectionSix
+        cases={cases}
+        eyebrow="Use cases"
+        heading="Compute that fits the workload"
+        subtitle="Four workloads our customers ship into production every day — backed by the same NVMe-backed instances, 12-region footprint, and 24/7 support."
+      />
     </main>
   );
 };

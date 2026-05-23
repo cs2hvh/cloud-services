@@ -37,6 +37,7 @@ import {
     Network,
     Plus,
     Rocket,
+    Search,
     Server,
     Settings,
     Shield,
@@ -49,6 +50,7 @@ import {
 } from "lucide-react";
 
 import { Tables } from "@/lib/supabase/types";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { AppDeployIcon, GpuIcon, K8sIcon } from "./custom-icons";
 
 // Cast custom SVG components to LucideIcon shape so they slot
@@ -91,10 +93,30 @@ function isActive(pathname: string, item: { href: string; matchPrefix?: boolean 
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
-        <p className="px-2.5 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
-            {children}
-        </p>
+        <div className="px-2.5 mb-2 flex items-center gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                {children}
+            </p>
+            <span className="flex-1 h-px bg-white/[0.05]" aria-hidden />
+        </div>
     );
+}
+
+// Stable color picked from id, used for project avatars
+const PROJECT_PALETTE = [
+    "from-[#0095FF] to-[#0066B3]",
+    "from-[#a78bfa] to-[#7c3aed]",
+    "from-[#22d3ee] to-[#0891b2]",
+    "from-[#4ade80] to-[#16a34a]",
+    "from-[#fbbf24] to-[#d97706]",
+    "from-[#f472b6] to-[#db2777]",
+    "from-[#fb7185] to-[#e11d48]",
+];
+
+function projectGradient(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return PROJECT_PALETTE[Math.abs(h) % PROJECT_PALETTE.length];
 }
 
 function NavRow({
@@ -141,14 +163,17 @@ function NavRow({
         <Link
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`group relative flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] transition-colors ${
+            className={`group relative flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[4px] transition-colors ${
                 active
                     ? "bg-white/[0.05] text-white"
                     : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
             }`}
         >
             {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#0095FF]" />
+                <span
+                    className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#0095FF] rounded-r"
+                    style={{ boxShadow: "0 0 8px rgba(0,149,255,0.65)" }}
+                />
             )}
             <Icon
                 className={`h-3.5 w-3.5 shrink-0 ${
@@ -166,11 +191,13 @@ function GroupRow({
     pathname,
     expanded,
     onToggle,
+    badge,
 }: {
     group: NavGroup;
     pathname: string;
     expanded: boolean;
     onToggle: () => void;
+    badge?: React.ReactNode;
 }) {
     const Icon = group.icon;
     const active = pathname.startsWith(group.href);
@@ -179,14 +206,17 @@ function GroupRow({
             <button
                 type="button"
                 onClick={onToggle}
-                className={`group relative flex w-full items-center gap-2.5 px-2.5 py-1.5 text-[13px]  transition-colors ${
+                className={`group relative flex w-full items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[4px] transition-colors ${
                     active
                         ? "bg-white/[0.05] text-white"
                         : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
                 }`}
             >
                 {active && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px]  bg-[#0095FF]" />
+                    <span
+                        className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#0095FF] rounded-r"
+                        style={{ boxShadow: "0 0 8px rgba(0,149,255,0.65)" }}
+                    />
                 )}
                 <Icon
                     className={`h-3.5 w-3.5 shrink-0 ${
@@ -195,6 +225,7 @@ function GroupRow({
                     strokeWidth={1.75}
                 />
                 <span className="truncate flex-1 text-left">{group.label}</span>
+                {badge}
                 <ChevronDown
                     className={`h-3 w-3 text-white/30 transition-transform duration-200 ${
                         expanded ? "" : "-rotate-90"
@@ -360,8 +391,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             <div className="flex h-14 items-center justify-between px-4 border-b border-white/[0.06]">
                 <Link
                     href="/dashboard"
-                    className="text-[20px] font-normal text-white leading-none tracking-tight font-[family-name:var(--font-nunito)]"
+                    className="inline-flex items-center gap-2 text-[20px] font-normal text-white leading-none tracking-tight font-[family-name:var(--font-nunito)]"
                 >
+                    <span className="relative inline-flex h-1.5 w-1.5">
+                        <span
+                            className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+                            style={{ background: "#0095FF" }}
+                        />
+                        <span
+                            className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                            style={{ background: "#0095FF", boxShadow: "0 0 6px #0095FF" }}
+                        />
+                    </span>
                     ahura<span className="text-[#0095FF]">sense</span>
                 </Link>
                 {isMobile && (
@@ -376,6 +417,21 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 )}
             </div>
 
+            {/* Search */}
+            <div className="px-3 pt-3 pb-1">
+                <div className="relative group">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 group-focus-within:text-white/55 transition-colors" />
+                    <input
+                        type="text"
+                        placeholder="Search resources"
+                        className="w-full h-8 pl-8 pr-12 text-[12.5px] text-white placeholder:text-white/30 bg-white/[0.025] border border-white/[0.06] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 focus:bg-white/[0.04] transition-colors"
+                    />
+                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9.5px] font-medium text-white/40 bg-white/[0.04] border border-white/[0.08] rounded font-[var(--font-geist-mono),ui-monospace,monospace] tabular-nums">
+                        ⌘K
+                    </kbd>
+                </div>
+            </div>
+
             {/* Nav */}
             <nav className="custom-scrollbar flex-1 overflow-y-auto px-2 py-3">
                 {/* Primary */}
@@ -387,14 +443,15 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
                 {/* Projects */}
                 <div className="mb-5">
-                    <div className="flex items-center justify-between mb-1 px-2.5">
+                    <div className="flex items-center justify-between mb-2 px-2.5">
                         <button
                             type="button"
                             onClick={() => setProjectsExpanded((p) => !p)}
                             className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 hover:text-white/60 transition-colors"
                         >
                             Projects
-                            <ChevronDown className={`h-2.5 w-2.5 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`} />
+                            <span className="ml-1 text-white/25 tabular-nums">{projects.length}</span>
+                            <ChevronDown className={`h-2.5 w-2.5 ml-0.5 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`} />
                         </button>
                         <Link
                             href="/dashboard/projects/new"
@@ -410,24 +467,31 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                                 <>
                                     {projectPreview.map((p) => {
                                         const active = pathname.includes(`/projects/${p.id}`);
+                                        const initial = (p.name || "?").charAt(0).toUpperCase();
                                         return (
                                             <Link
                                                 key={p.id}
                                                 href={`/dashboard/projects/${p.id}`}
-                                                className={`group relative flex items-center gap-2.5 pl-2.5 pr-2.5 py-1.5 text-[12.5px]  transition-colors ${
+                                                className={`group relative flex items-center gap-2.5 pl-2.5 pr-2.5 py-1.5 text-[12.5px] rounded-[4px] transition-colors ${
                                                     active
                                                         ? "bg-white/[0.05] text-white"
-                                                        : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
+                                                        : "text-white/65 hover:bg-white/[0.03] hover:text-white"
                                                 }`}
                                             >
                                                 {active && (
-                                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-[2px]  bg-[#0095FF]" />
+                                                    <span
+                                                        className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-[2px] bg-[#0095FF] rounded-r"
+                                                        style={{ boxShadow: "0 0 8px rgba(0,149,255,0.65)" }}
+                                                    />
                                                 )}
                                                 <span
-                                                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                                        active ? "bg-[#0095FF]" : "bg-white/30 group-hover:bg-white/55"
-                                                    }`}
-                                                />
+                                                    className={`h-5 w-5 shrink-0 inline-flex items-center justify-center text-[9.5px] font-semibold text-white/95 rounded-[4px] bg-gradient-to-br ${projectGradient(p.id)} ${active ? "ring-1 ring-white/15" : ""}`}
+                                                    style={{
+                                                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                                                    }}
+                                                >
+                                                    {initial}
+                                                </span>
                                                 <span className="truncate">{p.name}</span>
                                             </Link>
                                         );
@@ -442,7 +506,13 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                                     )}
                                 </>
                             ) : (
-                                <div className="pl-2.5 py-1 text-[11.5px] text-white/30">No projects yet</div>
+                                <Link
+                                    href="/dashboard/projects/new"
+                                    className="flex items-center gap-2 mx-2 px-3 py-2 text-[11.5px] text-white/45 hover:text-white border border-dashed border-white/[0.1] hover:border-white/20 rounded-[4px] transition-colors"
+                                >
+                                    <Plus className="h-3 w-3" />
+                                    Create a project
+                                </Link>
                             )}
                         </div>
                     )}
@@ -453,7 +523,19 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     <SectionLabel>Services</SectionLabel>
                     <div className="space-y-0.5">
                         <GroupRow group={computeGroup} pathname={pathname} expanded={computeExpanded} onToggle={() => setComputeExpanded((p) => !p)} />
-                        <GroupRow group={gpuGroup} pathname={pathname} expanded={gpuExpanded} onToggle={() => setGpuExpanded((p) => !p)} />
+                        <GroupRow
+                            group={gpuGroup}
+                            pathname={pathname}
+                            expanded={gpuExpanded}
+                            onToggle={() => setGpuExpanded((p) => !p)}
+                            badge={
+                                <NvidiaLogo
+                                    width={14}
+                                    height={10}
+                                    className="opacity-90"
+                                />
+                            }
+                        />
                         <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
                         {standaloneServices.map((it) => (
                             <NavRow key={it.href} item={it} pathname={pathname} />
@@ -482,14 +564,43 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 </div>
             </nav>
 
+            {/* System status pill */}
+            <a
+                href="https://status.ahuracloud.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mx-2 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-[5px] hover:bg-white/[0.03] transition-colors group"
+                title="System status"
+            >
+                <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
+                    <span
+                        className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+                        style={{ background: "#4ade80" }}
+                    />
+                    <span
+                        className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                        style={{ background: "#4ade80", boxShadow: "0 0 5px #4ade80" }}
+                    />
+                </span>
+                <span className="text-[11px] text-white/55 group-hover:text-white/85 transition-colors flex-1 truncate">
+                    All systems operational
+                </span>
+                <span className="text-[10px] text-white/30 font-[var(--font-geist-mono),ui-monospace,monospace] tabular-nums">
+                    99.9%
+                </span>
+            </a>
+
             {/* User block */}
             <div className="border-t border-white/[0.06] p-2">
                 <div className="flex items-center gap-2">
                     <Link
                         href="/dashboard/nav/profile"
-                        className="flex-1 min-w-0 flex items-center gap-2.5  px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
+                        className="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-[5px] hover:bg-white/[0.03] transition-colors"
                     >
-                        <div className="h-7 w-7 rounded-full bg-gradient-to-br from-white/15 to-white/5 border border-white/10 flex items-center justify-center text-[12px] font-semibold text-white/80 shrink-0">
+                        <div
+                            className="h-8 w-8 rounded-full bg-gradient-to-br from-[#0095FF]/40 to-[#0095FF]/10 border border-white/10 flex items-center justify-center text-[12.5px] font-semibold text-white shrink-0"
+                            style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)" }}
+                        >
                             {user?.email?.charAt(0).toUpperCase() ?? "U"}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -503,7 +614,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             await fetch("/api/auth/signout", { method: "POST", headers: { "Content-Type": "application/json" } });
                             router.push("/signin");
                         }}
-                        className="h-7 w-7  text-white/45 hover:bg-white/[0.05] hover:text-white/85 flex items-center justify-center transition-colors shrink-0"
+                        className="h-8 w-8 rounded-[5px] text-white/45 hover:bg-white/[0.05] hover:text-white/85 flex items-center justify-center transition-colors shrink-0"
                         title="Sign out"
                     >
                         <LogOut className="h-3.5 w-3.5" />

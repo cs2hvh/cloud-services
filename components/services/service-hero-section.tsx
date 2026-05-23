@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
 import { createClient } from "@/lib/supabase/client";
+import PixelBlast from "@/components/hero/pixel-blast";
 
 type HeroAction = {
   label: string;
@@ -27,7 +28,12 @@ type ServiceHeroSectionProps = {
   description: string;
   primaryAction?: HeroAction;
   secondaryAction?: HeroAction;
-  backgroundImage: HeroImage;
+  /**
+   * @deprecated Kept for backwards-compat with existing service pages.
+   * The hero now uses the same PixelBlast ambient backdrop as the homepage
+   * regardless of this value.
+   */
+  backgroundImage?: HeroImage;
   illustration: HeroImage;
   align?: "left" | "right";
   className?: string;
@@ -44,7 +50,6 @@ export function ServiceHeroSection({
   description,
   primaryAction,
   secondaryAction,
-  backgroundImage,
   illustration,
   align = "right",
   className,
@@ -134,25 +139,32 @@ export function ServiceHeroSection({
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden ",
+        "relative w-full overflow-x-hidden bg-[#04060a]",
         "min-h-screen flex flex-col",
         className,
       )}
     >
-     
-        <Image
-          src={backgroundImage.src}
-          alt={backgroundImage.alt ?? ""}
-          fill
-          priority={backgroundImage.priority}
-          className="object-cover blur-[3px] object-right-top scale-100"
-          style={{ objectPosition: "right top" }}
+      {/* PixelBlast brand-blue ambient backdrop — matches the homepage hero */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 opacity-[0.55]"
+      >
+        <PixelBlast
+          variant="circle"
+          color="#0095FF"
+          pixelSize={5}
+          patternScale={3}
+          patternDensity={0.7}
+          pixelSizeJitter={0.4}
+          enableRipples={false}
+          speed={0.3}
+          edgeFade={0.4}
+          transparent
         />
-      
-     
+      </div>
 
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 md:h-48 bg-gradient-to-t from-black to-transparent z-[5]" />
+      {/* Bottom fade — smooth transition into the next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 md:h-48 bg-gradient-to-t from-[#04060a] to-transparent z-[5]" />
 
       <div className="relative z-10 flex-1 flex items-center w-full pt-20 pb-12 sm:pt-24 sm:pb-16 md:pt-28 md:pb-20">
         <Container>

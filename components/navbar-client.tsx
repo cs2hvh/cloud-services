@@ -100,12 +100,6 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["S3 API", "CDN", "Versioning", "Lifecycle"],
   },
   {
-    label: "Security Suite",
-    desc: "DDoS protection, WAF, and firewall",
-    href: "/services/security",
-    tags: ["DDoS", "WAF", "SSL", "Monitoring"],
-  },
-  {
     label: "Application Deployment",
     desc: "CI/CD pipelines and container deployment",
     href: "/services/app-deployment",
@@ -388,12 +382,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       </div>
                     </div>
                   </div>
-                  <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
-                    <Link href="/solutions" onClick={() => setSolutionsOpen(false)} className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200">
-                      View all solutions
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
-                    </Link>
-                  </div>
                 </div>
               </motion.div>
             )}
@@ -445,12 +433,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                         <Image src="/images/main-page/solutions-navbar-1.png" alt="Products" fill className="object-contain object-right" />
                       </div>
                     </div>
-                  </div>
-                  <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
-                    <Link href="/products" onClick={() => setProductsOpen(false)} className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200">
-                      View all products
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
-                    </Link>
                   </div>
                 </div>
               </motion.div>

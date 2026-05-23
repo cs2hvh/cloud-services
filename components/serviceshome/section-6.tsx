@@ -1,70 +1,133 @@
-import React from "react";
+import Link from "next/link";
+import { ArrowRight, type LucideIcon } from "lucide-react";
 
-const ServicesHomeSectionSix = ({cases, hideTopDivider = false}:{cases:{title: string; description: string}[]; hideTopDivider?: boolean}) => {
- 
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
-  return (
-    <section className="relative overflow-hidden bg-[#C1C1C1] py-16 md:py-24 min-[1920px]:py-28">
-      {/* Top triangular black div - edge at top */}
-      {!hideTopDivider && (
-      <div
-        className="absolute top-0 left-0 w-full h-[clamp(48px,6vw,140px)] bg-black
-  [clip-path:polygon(0_0,_100%_0,_100%_100%)]"
-      ></div>
-      )}
+export type UseCase = {
+    title: string;
+    description: string;
+    /** Optional lucide icon — falls back to no icon if omitted */
+    icon?: LucideIcon;
+    /** Optional small metric / tag shown above the title */
+    metric?: string;
+};
 
-      {/* Bottom triangular black div - edge at bottom */}
-      <div
-        className="absolute inset-x-0 -bottom-8 h-[clamp(48px,6vw,140px)] bg-black [clip-path:polygon(0_100%,_100%_100%,_0_0)]"
-        // style={{ clipPath: 'polygon(0 100%, 100% 0, 100% 100%)' }}
-        aria-hidden="true"
-      />
-      <div className="relative mx-auto flex w-full max-w-[1320px] flex-col px-6 lg:max-w-[1440px] lg:px-12 min-[1920px]:max-w-[1800px] min-[1920px]:px-16 min-[2560px]:max-w-[2600px] min-[2560px]:px-12">
-        {/* Heading with 30% left margin */}
-        <div className="ml-0 sm:ml-[10%] lg:ml-[26%] min-[1920px]:ml-[20%]">
-          <p className="text-[clamp(12px,0.9vw,18px)] font-semibold uppercase tracking-[0.3em] text-neutral-700">
-            Use Cases
-          </p>
-          <h2 className="mt-4 text-[clamp(28px,2.6vw,52px)] font-semibold text-neutral-900">
-            Built For Your <span className="text-sky-500">Needs</span>
-          </h2>
-        </div>
+type SectionProps = {
+    cases: UseCase[];
+    /** Override the eyebrow label (default: "Use cases") */
+    eyebrow?: string;
+    /** Override the heading (default: "Built for your needs") */
+    heading?: string;
+    /** Override the subtitle (default: short copy) */
+    subtitle?: string;
+    /** Hide the thin top divider line */
+    hideTopDivider?: boolean;
+};
 
-        {/* Grid with custom positioning */}
-        <div className="mt-12 flex flex-col gap-8">
-          {/* Top 2 articles towards left 20% */}
-          <div className="grid w-full gap-8 md:grid-cols-2 md:pr-[20%] min-[1920px]:gap-10">
-            {cases.slice(0, 2).map((item) => (
-              <article
-                key={item.title}
-                className=" bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)] min-[1920px]:px-10 min-[1920px]:py-10"
-              >
-                <h3 className="text-[clamp(20px,1.6vw,32px)] font-semibold">{item.title}</h3>
-                <p className="mt-3 text-[clamp(13px,1.05vw,18px)] leading-relaxed text-neutral-200">
-                  {item.description}
+function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
+    const Icon = item.icon;
+    return (
+        <article
+            className="group relative flex flex-col gap-5 rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#161A1F]"
+            style={{
+                boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.7)",
+            }}
+        >
+            {/* Top — icon + index */}
+            <div className="flex items-start justify-between">
+                {Icon ? (
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/80">
+                        <Icon className="h-5 w-5" strokeWidth={1.6} />
+                    </div>
+                ) : (
+                    <div className="h-11 w-11" aria-hidden="true" />
+                )}
+                <span
+                    className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+                >
+                    {String(index + 1).padStart(2, "0")}
+                </span>
+            </div>
+
+            {/* Body */}
+            <div>
+                {item.metric && (
+                    <p
+                        className={`${MONO} mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}
+                    >
+                        {item.metric}
+                    </p>
+                )}
+                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white">
+                    {item.title}
+                </h3>
+                <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
+                    {item.description}
                 </p>
-              </article>
-            ))}
-          </div>
+            </div>
+        </article>
+    );
+}
 
-          {/* Bottom 2 articles towards right 20% */}
-          <div className="grid w-full gap-8 md:grid-cols-2 md:pl-[20%] min-[1920px]:gap-10">
-            {cases.slice(2, 4).map((item) => (
-              <article
-                key={item.title}
-                className=" bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)] min-[1920px]:px-10 min-[1920px]:py-10"
-              >
-                <h3 className="text-[clamp(20px,1.6vw,32px)] font-semibold">{item.title}</h3>
-                <p className="mt-3 text-[clamp(13px,1.05vw,18px)] leading-relaxed text-neutral-200">
-                  {item.description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+const ServicesHomeSectionSix = ({
+    cases,
+    eyebrow = "Use cases",
+    heading = "Built for your needs",
+    subtitle = "Four common workloads our customers ship into production every day — backed by the same primitives, SLAs, and support.",
+    hideTopDivider = false,
+}: SectionProps) => {
+    return (
+        <section className="relative overflow-hidden bg-[#0D0D0F] py-16 sm:py-20 lg:py-24">
+            {/* Thin top hairline divider — replaces the cheap triangular clip-path dividers */}
+            {!hideTopDivider && (
+                <div
+                    aria-hidden="true"
+                    className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                />
+            )}
+
+            <div className="relative mx-auto w-full max-w-[1280px] px-6 lg:px-12">
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p
+                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                    >
+                        {eyebrow}
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                        {heading}
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                        {subtitle}
+                    </p>
+                </div>
+
+                {/* 2x2 symmetric grid */}
+                <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
+                    {cases.map((item, i) => (
+                        <UseCaseCard key={item.title} item={item} index={i} />
+                    ))}
+                </div>
+
+                {/* Footer CTA */}
+                <div className="mt-12 flex flex-col items-center justify-center gap-3 border-t border-white/[0.08] pt-8 sm:flex-row sm:gap-5">
+                    <p
+                        className={`${MONO} text-[10.5px] uppercase tracking-[0.18em] text-white/45`}
+                    >
+                        Building something else?
+                    </p>
+                    <Link
+                        href="/contact"
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                    >
+                        Talk to our solutions team
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                </div>
+            </div>
+        </section>
+    );
 };
 
 export default ServicesHomeSectionSix;

@@ -7,6 +7,7 @@ import { DomainSearchSection } from "@/components/domain-search-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { EverythingSection } from "@/components/everything-section";
 import { ClustersSection } from "@/components/clusters-section";
+import { ComputeSection } from "@/components/compute-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 // import FeatureSection from "@/components/feature-section";
 
@@ -135,6 +136,9 @@ export default function Home() {
 
         {/* Reserved & Cluster GPUs — talk to sales */}
         <ClustersSection />
+
+        {/* Compute lineup — VPS / Dedicated / Bare Metal */}
+        <ComputeSection />
 
         {/* Domain Search */}
         <DomainSearchSection />

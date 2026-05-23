@@ -1,126 +1,190 @@
 "use client";
 
-import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
 
-const workloadCards = [
-  {
-    title: "AI & Machine Learning",
-    description:
-      "Deploy ML models and inference APIs with GPU-optimized containers.",
-  },
-  {
-    title: "Web Hosting & SaaS",
-    description:
-      "Ship SaaS products with CI/CD, previews, and global edge delivery.",
-  },
-  {
-    title: "Ecommerce Infrastructure",
-    description:
-      "High-availability storefronts with autoscaling for peak traffic.",
-  },
-  {
-    title: "Database-Driven Apps",
-    description:
-      "Pair with managed databases for full-stack data applications.",
-  },
-  {
-    title: "Game Development",
-    description:
-      "Low-latency game servers with real-time scaling across regions.",
-  },
-  {
-    title: "Secure Enterprise Cloud",
-    description:
-      "SOC 2 compliant deployments with VPC isolation and encryption.",
-  },
-  {
-    title: "Cloud-Native K8s",
-    description:
-      "Kubernetes-ready workloads with managed orchestration.",
-  },
-  {
-    title: "Storage & Backup",
-    description:
-      "Persistent volumes and S3-compatible object storage for any workload.",
-  },
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+/* ─── Custom stroke-based glyphs (24x24) ───----------------- */
+
+function SaasGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
+            <rect x="3" y="4" width="18" height="16" rx="1.5" />
+            <path d="M3 8h18" />
+            <circle cx="5.5" cy="6" r="0.5" fill="currentColor" />
+            <circle cx="7.5" cy="6" r="0.5" fill="currentColor" />
+            <circle cx="9.5" cy="6" r="0.5" fill="currentColor" />
+            <path d="M6 12h6M6 15h9M6 18h4" />
+            <path d="M17 14l2 2-2 2" />
+        </svg>
+    );
+}
+
+function AIGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
+            {/* neural network */}
+            <circle cx="5" cy="6" r="1.4" />
+            <circle cx="5" cy="12" r="1.4" />
+            <circle cx="5" cy="18" r="1.4" />
+            <circle cx="12" cy="9" r="1.4" />
+            <circle cx="12" cy="15" r="1.4" />
+            <circle cx="19" cy="12" r="1.4" fill="currentColor" fillOpacity="0.25" />
+            <path d="M6.3 6.6L10.7 8.4M6.3 11.5L10.7 9.4M6.3 12.6L10.7 14.4M6.3 17.4L10.7 15.6M13.3 9.6L17.7 11.4M13.3 14.4L17.7 12.6" />
+        </svg>
+    );
+}
+
+function CommerceGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
+            <path d="M3 5h2.5l1.7 10.4a1 1 0 001 .85h9.4a1 1 0 001-.78L20.5 8H7" />
+            <circle cx="9" cy="20" r="1.4" />
+            <circle cx="17" cy="20" r="1.4" />
+            <path d="M10.5 11.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function ApiGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
+            {/* cube with sockets */}
+            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
+            <path d="M12 3v9m0 0L4 7.5m8 4.5l8-4.5M12 12v9" />
+            <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+        </svg>
+    );
+}
+
+function RealtimeGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            {/* waveform pulse */}
+            <path d="M2 12h3l2-6 3 12 3-9 2 6 2-3h5" />
+            <circle cx="20" cy="9" r="0.8" fill="currentColor" />
+        </svg>
+    );
+}
+
+function RegulatedGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3l8 3v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-3z" />
+            <path d="M9 12l2.2 2.2L15.5 10" />
+        </svg>
+    );
+}
+
+type Workload = {
+    glyph: React.ReactNode;
+    metric: string;
+    title: string;
+    description: string;
+};
+
+const WORKLOADS: Workload[] = [
+    {
+        glyph: <SaasGlyph />,
+        metric: "Web & SaaS",
+        title: "Customer-facing web applications",
+        description:
+            "Server-rendered and static frameworks deployed to the edge, with preview environments for every pull request and zero-downtime releases.",
+    },
+    {
+        glyph: <AIGlyph />,
+        metric: "AI / ML",
+        title: "Model inference services",
+        description:
+            "GPU-backed runtimes with request-rate autoscaling and warm pools to keep cold-start and first-token latency within target.",
+    },
+    {
+        glyph: <CommerceGlyph />,
+        metric: "Commerce",
+        title: "High-traffic storefronts",
+        description:
+            "Burst capacity for promotional events, integrated CDN, and signed checkout sessions — engineered for peak retail throughput.",
+    },
+    {
+        glyph: <ApiGlyph />,
+        metric: "APIs",
+        title: "Backends and microservices",
+        description:
+            "REST and gRPC services with health checks, structured logging, and managed connections to Postgres, Redis, and Mongo.",
+    },
+    {
+        glyph: <RealtimeGlyph />,
+        metric: "Realtime",
+        title: "Realtime and WebSocket services",
+        description:
+            "Long-lived connections with sticky routing across regional pools, deployed through the same release pipeline as the rest of the stack.",
+    },
+    {
+        glyph: <RegulatedGlyph />,
+        metric: "Regulated",
+        title: "Compliance-bound workloads",
+        description:
+            "Private networking, SOC 2 controls, and bring-your-own-key encryption for environments requiring an end-to-end audit trail.",
+    },
 ];
 
 export default function AppDeployWorkloadsSection() {
-  return (
-    <section className="relative overflow-hidden bg-black py-16 lg:py-24">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, #fff 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-        <div className="absolute left-1/2 top-[12%] h-[380px] w-[900px] -translate-x-1/2 bg-white/[0.02] blur-[120px]" />
-      </div>
+    return (
+        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
+            <Container>
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p
+                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
+                    >
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                        Use cases
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
+                        Built for the workloads you ship to production.
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-black/60 sm:text-[16.5px]">
+                        A single deployment pipeline, dashboard, and SLA — from
+                        early-stage products through regulated enterprise services.
+                    </p>
+                </div>
 
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.55 }}
-          className="mx-auto max-w-2xl text-center"
-        >
-          <h2 className="text-3xl font-[500] tracking-tight text-white sm:text-4xl">
-            Built for every workload
-          </h2>
-          <p className="mt-3 text-sm leading-7 text-white/55">
-            From AI inference to enterprise SaaS, deploy with confidence.
-          </p>
-        </motion.div>
+                {/* 3x2 grid */}
+                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
+                    {WORKLOADS.map((w, i) => (
+                        <article
+                            key={w.title}
+                            className="group relative flex flex-col gap-4 bg-[#EEECE4] p-7 transition-colors hover:bg-[#F2EDDD]"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-black/[0.12] bg-[#1A1814] text-[#EEECE4]/95">
+                                    <div className="h-[22px] w-[22px]">{w.glyph}</div>
+                                </div>
+                                <span
+                                    className={`${MONO} text-[10.5px] tabular-nums text-black/30`}
+                                >
+                                    {String(i + 1).padStart(2, "0")}
+                                </span>
+                            </div>
 
-        <motion.div
-          className="mt-12 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-6"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: 0.07 } },
-          }}
-        >
-          {workloadCards.map((card, idx) => {
-            const isLastRow = idx >= 6;
-            const placementClass =
-              idx === 6
-                ? "lg:col-start-2"
-                : idx === 7
-                  ? "lg:col-start-4"
-                  : "";
-
-            return (
-              <motion.article
-                key={card.title}
-                variants={{
-                  hidden: { opacity: 0, y: 16 },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    transition: {
-                      duration: 0.45,
-                      ease: [0.25, 0.46, 0.45, 0.94],
-                    },
-                  },
-                }}
-                className={`group relative overflow-hidden rounded-[2px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_42%,rgba(255,255,255,0.08)_100%)] p-6 sm:p-7 lg:col-span-2 ${placementClass} ${
-                  isLastRow ? "sm:col-span-1" : ""
-                }`}
-              >
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(46,167,255,0.18),transparent_48%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                <h3 className="relative text-xl font-[500] text-white">
-                  {card.title}
-                </h3>
-                <p className="relative mt-3 text-sm leading-7 text-white/65">
-                  {card.description}
-                </p>
-              </motion.article>
-            );
-          })}
-        </motion.div>
-      </Container>
-    </section>
-  );
+                            <div>
+                                <p
+                                    className={`${MONO} mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50`}
+                                >
+                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                    {w.metric}
+                                </p>
+                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814]">
+                                    {w.title}
+                                </h3>
+                                <p className="mt-2 text-[13.5px] leading-[1.6] text-black/60">
+                                    {w.description}
+                                </p>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </Container>
+        </section>
+    );
 }
-

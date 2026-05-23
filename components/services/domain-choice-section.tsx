@@ -1,190 +1,171 @@
-import { ArrowRight } from "lucide-react";
+import Link from "next/link";
+import {
+    ArrowRight,
+    ArrowRightLeft,
+    Globe2,
+    Layers,
+    Lock,
+    RefreshCcw,
+    ShieldCheck,
+    type LucideIcon,
+} from "lucide-react";
 
-import { WideContainer } from "@/components/ui/container";
+import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
-const mobileCards = [
-  {
-    title: "Keep it short",
-    description:
-      "Short domain names are easier to type, remember, and share.",
-    number: "1",
-    cardColor: "bg-[#139FD3]",
-    numberColor: "text-[#DDE6CA]",
-  },
-  {
-    title: "Check availability early",
-    description:
-      "Check quickly and secure it before someone else does.",
-    number: "2",
-    cardColor: "bg-[#078EAE]",
-    numberColor: "text-[#6EAEF7]",
-  },
-  {
-    title: "Make it clear",
-    description:
-      "Choose names that are easy to type and easy to remember.",
-    number: "3",
-    cardColor: "bg-[#767874]",
-    numberColor: "text-[#E2E8C4]",
-  },
-  {
-    title: "Act fast",
-    description:
-      "If you find the right fit, register before it's gone.",
-    number: "4",
-    cardColor: "bg-[#0656AA]",
-    numberColor: "text-[#041B22]",
-  },
-  {
-    title: "Think global",
-    description:
-      "Pick a name that works across languages and cultures.",
-    number: "5",
-    cardColor: "bg-[#84AAB0]",
-    numberColor: "text-[#0F8AA7]",
-  },
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+type Feature = {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+};
+
+const FEATURES: Feature[] = [
+    {
+        icon: ShieldCheck,
+        title: "WHOIS privacy, free forever",
+        description:
+            "Your real contact details stay out of public WHOIS records — on every supported TLD, on every domain, without an upcharge.",
+    },
+    {
+        icon: Globe2,
+        title: "Anycast DNS, 200+ edge locations",
+        description:
+            "Sub-30ms authoritative resolution worldwide, with templated records for AhuraCloud apps, compute, and storage.",
+    },
+    {
+        icon: ArrowRightLeft,
+        title: "Lossless transfers in under an hour",
+        description:
+            "Inbound transfers from any ICANN-accredited registrar with pre-flight validation, DNS pre-staging, and zero downtime.",
+    },
+    {
+        icon: Layers,
+        title: "200+ TLDs under one invoice",
+        description:
+            "Generic, premium, and country-code extensions — register, renew, and transfer across your portfolio from one billing relationship.",
+    },
+    {
+        icon: Lock,
+        title: "Registrar lock and auto-renew",
+        description:
+            "Block unauthorized transfers by default and never lose a domain to a missed renewal — with reminders 90, 30, and 7 days out.",
+    },
+    {
+        icon: RefreshCcw,
+        title: "Portfolio-grade operations",
+        description:
+            "Bulk DNS edits, batch renewals, CSV import/export, and a typed REST API for everything you can do in the dashboard.",
+    },
 ];
 
-export default function DomainChoiceSection() {
-  return (
-    <section className="relative overflow-hidden font-sansation bg-[#171717] py-10 sm:py-14 lg:py-16">
-      <WideContainer>
-        <div className="mx-auto w-full max-w-[1080px]">
-          <div className="lg:hidden">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {mobileCards.map((card) => (
-                <article
-                  key={card.number}
-                  className={`relative overflow-hidden rounded-md border border-white/10 p-3.5 sm:p-4 ${
-                    card.number === "5" ? "sm:col-span-2" : ""
-                  } ${card.cardColor}`}
+function FeatureCard({ f, index }: { f: Feature; index: number }) {
+    const Icon = f.icon;
+    return (
+        <article
+            className="relative flex flex-col gap-5 rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#161A1F]"
+            style={{
+                boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.7)",
+            }}
+        >
+            <div className="flex items-start justify-between">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/80">
+                    <Icon className="h-5 w-5" strokeWidth={1.6} />
+                </div>
+                <span
+                    className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
                 >
-                  <span className={`absolute left-3 top-0 text-5xl sm:text-6xl font-semibold leading-none ${card.numberColor}`}>
-                    {card.number}
-                  </span>
-                  <div className="ml-12 sm:ml-14">
-                    <h3 className="text-lg sm:text-xl font-medium leading-tight text-white">{card.title}</h3>
-                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-white/85">{card.description}</p>
-                  </div>
-                </article>
-              ))}
+                    {String(index + 1).padStart(2, "0")}
+                </span>
             </div>
-
-            <h2 className="mt-7 max-w-[560px] text-[30px] font-medium leading-[0.96] tracking-tight text-white sm:mt-8 sm:text-4xl">
-              Choose a Domain That Works for You
-            </h2>
-            <AuthAwareServiceCta
-              service="domain"
-              intent="main"
-              className="mt-4 inline-flex items-center gap-2 text-base sm:text-lg font-medium text-white/90 transition-opacity hover:opacity-80"
-            >
-              Get Started
-              <ArrowRight className="h-5 w-5" />
-            </AuthAwareServiceCta>
-          </div>
-
-          <div className="hidden lg:flex justify-center">
-            <div className="relative h-[560px] w-[972px] xl:h-[620px] xl:w-[1080px]">
-              <div className="absolute left-0 top-0 h-[620px] w-[1080px] origin-top-left scale-[0.9] xl:scale-100">
-            <div className="absolute left-0 top-6 flex">
-              <div className="flex h-[188px] w-[110px] items-start justify-center bg-[#9FBDD0] pt-2">
-                <span className="text-[100px] font-semibold leading-none text-[#DDE6CA]">1</span>
-              </div>
-              <div className="h-[136px] w-[300px] bg-[#139FD3] px-6 py-3 text-center">
-                <h3 className="text-[31px] font-medium leading-none text-white">Keep it short</h3>
-                <p className="mx-auto mt-3 max-w-[225px] text-xs leading-relaxed text-white/90">
-                  Short domain names are easier to type, remember, and share. Long or complicated
-                  names increase the chances of users making mistakes or forgetting your site.
+            <div>
+                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white">
+                    {f.title}
+                </h3>
+                <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
+                    {f.description}
                 </p>
-              </div>
             </div>
+        </article>
+    );
+}
 
-            <div className="absolute left-[92px] top-[205px] flex">
-              <div className="flex h-[122px] w-[82px] items-start justify-center bg-[#A5C5DA] pt-4">
-                <span className="text-[86px] font-semibold leading-none text-[#6EAEF7]">2</span>
-              </div>
-              <div className="h-[148px] w-[350px] bg-[#078EAE] px-7 py-3 text-center">
-                <h3 className="text-[30px] font-medium leading-none text-white">Check availability early</h3>
-                <p className="mx-auto mt-3 max-w-[236px] text-xs leading-relaxed text-white/90">
-                  Domain names get taken quickly. Once you have an idea, check availability and
-                  secure it as soon as possible to avoid losing it to someone else.
-                </p>
-              </div>
-            </div>
+export default function DomainChoiceSection() {
+    return (
+        <section className="relative overflow-hidden bg-[#0D0D0F] py-16 sm:py-20 lg:py-24">
+            {/* Top hairline */}
+            <div
+                aria-hidden="true"
+                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            />
 
-            <div className="absolute left-[406px] top-6 flex">
-              <div className="flex h-[102px] w-[86px] items-start justify-center bg-[#A0B7CF] pt-1">
-                <span className="text-[88px] font-semibold leading-none text-[#E2E8C4]">3</span>
-              </div>
-              <div className="h-[162px] w-[324px] bg-[#767874] px-7 py-4 text-center">
-                <h3 className="text-[30px] font-medium leading-none text-white">Make it clear</h3>
-                <p className="mx-auto mt-3 max-w-[230px] text-xs leading-relaxed text-white/90">
-                  Short domain names are easier to type, remember, and share. Long or complicated
-                  names increase the chances of users making mistakes or forgetting your site.
-                </p>
-              </div>
-            </div>
-
-            <div className="absolute right-[18px] top-[118px]">
-              <div className="relative h-[206px] w-[344px]">
-                <div className="absolute left-0 top-[52px] flex h-[150px] w-[90px] items-start justify-center bg-[#78CDD7] pt-3">
-                  <span className="text-[86px] font-semibold leading-none text-[#03191F]">4</span>
-                </div>
-                <div className="absolute right-0 top-0 h-[196px] w-[254px] bg-[#0656AA] px-6 py-4 text-center">
-                  <h3 className="text-[36px] font-medium leading-none tracking-tight text-white">
-                    Act fast
-                  </h3>
-                  <p className="mx-auto mt-4 max-w-[138px] text-xs leading-[1.55] text-white/90">
-                    Good domain names are limited and in high demand. If you find one that fits
-                    your brand well, don&apos;t delay-register it before it&apos;s gone.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute right-[10px] top-[304px]">
-              <div className="ml-auto flex h-[120px] w-[176px] items-center justify-center bg-[#D7D8DA]">
-                <span className="rotate-90 text-[102px] font-semibold leading-none text-[#0F8AA7]">5</span>
-              </div>
-              <div className="mt-0 h-[205px] w-[460px] bg-[#84AAB0] px-8 py-4">
-                <div className="flex h-full items-start justify-end gap-5">
+            <Container className="relative z-10">
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
                     <p
-                    className="max-h-full text-[11px] leading-relaxed text-white/90"
-                    style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-                  >
-                    Avoid region-specific spelling or slang when possible. A name that is easy to
-                    pronounce and understand across different languages and cultures.
-                  </p>
-                  <p
-                    className="text-sm leading-relaxed text-white/95"
-                    style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-                  >
-                    Think global
-                  </p>
-                
+                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                    >
+                        The platform
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                        Everything domain teams need
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                        Six essentials that ship with every domain on AhuraCloud —
+                        from privacy and DNS to lossless transfers and portfolio
+                        operations at scale.
+                    </p>
                 </div>
-              </div>
-            </div>
 
-            <div className="absolute bottom-0 left-3">
-              <h2 className="max-w-[520px] text-[60px] font-semibold leading-[0.93] tracking-tight text-white">
-                Choose a Domain That Works for You
-              </h2>
-              <AuthAwareServiceCta
-                service="domain"
-                intent="main"
-                className="mt-5 inline-flex items-center gap-2 text-4xl font-medium text-white transition-opacity hover:opacity-80"
-              >
-                Get Started
-                <ArrowRight className="h-9 w-9" />
-              </AuthAwareServiceCta>
-            </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </WideContainer>
-    </section>
-  );
+                {/* Feature grid */}
+                <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+                    {FEATURES.map((f, i) => (
+                        <FeatureCard key={f.title} f={f} index={i} />
+                    ))}
+                </div>
+
+                {/* Trust strip + CTA */}
+                <div className="mt-14 flex flex-col items-center gap-6 border-t border-white/[0.08] pt-9 sm:flex-row sm:justify-between">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:justify-start">
+                        <span
+                            className={`${MONO} text-[11px] font-medium uppercase tracking-[0.18em] text-white/65`}
+                        >
+                            ICANN accredited
+                        </span>
+                        <span className="hidden h-3 w-px bg-white/20 sm:inline" />
+                        <span
+                            className={`${MONO} text-[11px] font-medium uppercase tracking-[0.18em] text-white/65`}
+                        >
+                            99.99% DNS uptime SLA
+                        </span>
+                        <span className="hidden h-3 w-px bg-white/20 sm:inline" />
+                        <span
+                            className={`${MONO} text-[11px] font-medium uppercase tracking-[0.18em] text-white/65`}
+                        >
+                            24/7 support
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/services/domain#search"
+                            className={`${MONO} inline-flex h-11 items-center justify-center border border-white/20 bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.05]`}
+                        >
+                            Search a domain
+                        </Link>
+                        <AuthAwareServiceCta
+                            service="domain"
+                            intent="main"
+                            className={`${MONO} inline-flex h-11 items-center justify-center gap-1.5 border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                        >
+                            Open dashboard
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </AuthAwareServiceCta>
+                    </div>
+                </div>
+            </Container>
+        </section>
+    );
 }

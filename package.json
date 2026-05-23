@@ -79,6 +79,7 @@
     "motion": "^12.23.12",
     "next": "15.5.15",
     "pdfjs-dist": "^5.4.624",
+    "postprocessing": "^6.39.1",
     "proxmox-api": "^1.1.1",
     "qrcode.react": "^4.2.0",
     "radix-ui": "^1.4.3",
