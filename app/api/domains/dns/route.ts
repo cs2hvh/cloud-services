@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { logError } from "@/lib/api/error-sanitizer";
+import { DomainServiceError, mapDomainErrorToHttp } from "@/lib/domain-service/core/errors";
 import {
   NameComRegistrarAdapter,
   type NameComRecordType,
@@ -142,6 +143,25 @@ async function ensureOwnedDomain(input: { userId: string; domain: string }): Pro
       ),
     };
   }
+}
+
+function toDnsErrorResponse(error: unknown, fallbackMessage: string): NextResponse {
+  if (error instanceof DomainServiceError) {
+    if (error.message.toLowerCase().includes("contact verification hold")) {
+      return NextResponse.json(
+        {
+          error: "CONTACT_VERIFICATION_HOLD",
+          message:
+            "DNS changes are blocked: the domain's registrant contact email has not been verified. " +
+            "Check your registrant email inbox for a verification email from name.com and click the link to unblock DNS management.",
+        },
+        { status: 400 }
+      );
+    }
+    const http = mapDomainErrorToHttp(error);
+    return NextResponse.json({ error: http.code, message: http.message }, { status: http.status });
+  }
+  return NextResponse.json({ error: "INTERNAL_ERROR", message: fallbackMessage }, { status: 500 });
 }
 
 export async function GET(req: NextRequest) {
@@ -335,13 +355,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/POST", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to create DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to create DNS record");
   }
 }
 
@@ -434,13 +448,7 @@ export async function PATCH(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/PATCH", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to update DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to update DNS record");
   }
 }
 
@@ -505,12 +513,6 @@ export async function DELETE(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/DELETE", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to delete DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to delete DNS record");
   }
 }

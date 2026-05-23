@@ -797,7 +797,11 @@ export class DomainTransferService {
             severity: "info",
             alertTitle: "Domain transfer completed",
             serviceName: transfer.domain,
-            summary: `Your domain transfer for ${transfer.domain} has completed successfully! The domain is now managed by AhuraCloud.`,
+            summary: `Your domain transfer for ${transfer.domain} has completed successfully! The domain is now managed by AhuraCloud.${
+              contactEmail
+                ? ` A registrant contact verification email has been sent to ${contactEmail} — please click the link in that email to enable DNS management for your domain.`
+                : ""
+            }`,
             metadata: {
               event: "domain_transfer_completed",
             },
