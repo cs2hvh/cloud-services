@@ -52,11 +52,6 @@ const SOLUTIONS: SolutionItem[] = [
     href: "/solutions/database",
   },
   {
-    label: "Secure Enterprise Cloud",
-    desc: "Enterprise-grade protection and compliance",
-    href: "/solutions/security",
-  },
-  {
     label: "Cloud-Native Kubernetes Platforms",
     desc: "Modern container orchestration",
     href: "/solutions/kubernetes",

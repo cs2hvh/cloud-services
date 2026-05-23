@@ -11,6 +11,7 @@ import { BillingCredits } from "@/lib/billing/credits";
 import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
 import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
+import { computeHostAvailability } from "@/lib/pricing/instance-plans";
 
 export const dynamic = "force-dynamic";
 
@@ -331,11 +332,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
   }
 
-  // Rate limit: max 5 VM creations per hour per user
+  // Rate limit: max 5 VM creations per 5 minutes per user
   const rl = await limitByUser(user.id, {
     prefix: "rl:vm-create",
     limit: 5,
-    windowMs: 3600_000,
+    windowMs: 300_000,
   });
   if (!rl.allowed) {
     return Response.json(
@@ -394,7 +395,7 @@ export async function POST(req: NextRequest) {
   // 1. Find all active hosts in the requested region
   const { data: regionHosts, error: regionErr } = await supabase
     .from("proxmox_hosts")
-    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb, shared_oversubscription_ratio, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
     .eq("region", region)
     .eq("is_active", true);
 
@@ -510,18 +511,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Get used resources per host
+  // Get used resources per host, split by tier so we can apply CPU
+  // overcommit only to shared placements (dedicated keeps 1:1).
   const { data: serverUsage } = await supabase
     .from("servers")
-    .select("location, cpu_cores, memory_mb, disk_gb")
+    .select("location, cpu_cores, memory_mb, disk_gb, tier")
     .in("location", regionHostIds)
     .in("status", ["provisioning", "running", "stopped", "suspended"]);
 
-  const usedByHost = new Map<string, { cpu: number; mem: number; disk: number }>();
+  type HostUsage = {
+    sharedCpu: number;
+    dedicatedCpu: number;
+    mem: number;
+    disk: number;
+  };
+  const usedByHost = new Map<string, HostUsage>();
   for (const s of serverUsage || []) {
     const loc = String(s.location);
-    const prev = usedByHost.get(loc) || { cpu: 0, mem: 0, disk: 0 };
-    prev.cpu += Number(s.cpu_cores || 0);
+    const prev = usedByHost.get(loc) || { sharedCpu: 0, dedicatedCpu: 0, mem: 0, disk: 0 };
+    const tier = String((s as Record<string, unknown>).tier || "shared");
+    const cpu = Number(s.cpu_cores || 0);
+    if (tier === "dedicated") prev.dedicatedCpu += cpu;
+    else prev.sharedCpu += cpu;
     prev.mem += Number(s.memory_mb || 0);
     prev.disk += Number(s.disk_gb || 0);
     usedByHost.set(loc, prev);
@@ -609,6 +620,11 @@ export async function POST(req: NextRequest) {
   const candidates: HostCandidate[] = [];
   const requestedDisk = diskGB || 20;
 
+  // Tier-aware capacity: shared placements use the oversubscribed pool
+  // (physical × ratio), dedicated reserves real cores 1:1. See
+  // computeHostAvailability for the full model.
+  const effectiveTier: "shared" | "dedicated" = planTier === "dedicated" ? "dedicated" : "shared";
+
   for (const h of regionHosts) {
     // Honor plan's host whitelist (if any)
     if (planAllowedHostIds && !planAllowedHostIds.includes(h.id)) continue;
@@ -621,11 +637,27 @@ export async function POST(req: NextRequest) {
     const ips = ipCandidatesByHost.get(h.id);
     if (!ips || ips.length === 0) continue;
 
-    // Must have enough capacity
-    const used = usedByHost.get(h.id) || { cpu: 0, mem: 0, disk: 0 };
-    const freeCpu = (h.total_cpu_cores || 0) - used.cpu;
-    const freeMem = (h.total_memory_mb || 0) - used.mem;
-    const freeDisk = (h.total_disk_gb || 0) - used.disk;
+    const used = usedByHost.get(h.id) || { sharedCpu: 0, dedicatedCpu: 0, mem: 0, disk: 0 };
+    const ratio = (h as Record<string, unknown>).shared_oversubscription_ratio
+      ? Number((h as Record<string, unknown>).shared_oversubscription_ratio)
+      : undefined;
+
+    const avail = computeHostAvailability({
+      totalCpuCores: h.total_cpu_cores || 0,
+      totalMemoryMB: h.total_memory_mb || 0,
+      totalDiskGB: h.total_disk_gb || 0,
+      sharedRatio: ratio,
+      usage: {
+        dedicatedVcpuUsed: used.dedicatedCpu,
+        sharedVcpuUsed: used.sharedCpu,
+        memoryMBUsed: used.mem,
+        diskGBUsed: used.disk,
+      },
+    });
+
+    const freeCpu = effectiveTier === "dedicated" ? avail.dedicatedVcpu : avail.sharedVcpu;
+    const freeMem = avail.memoryMB;
+    const freeDisk = avail.diskGB;
 
     if (freeCpu < cpuCores) continue;
     if (freeMem < memoryMB) continue;

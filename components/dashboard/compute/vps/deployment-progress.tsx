@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  CheckCircle, Copy, Loader2, XCircle,
-  Database, HardDrive, Settings, Globe, Power, ShieldCheck, ArrowRight
-} from "lucide-react";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { ArrowRight, Check, Copy, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -44,21 +40,24 @@ interface DeploymentProgressProps {
   onCreateAnother: () => void;
 }
 
-// ─── Stage Definitions ──────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
 
 const STAGES = [
-  { id: "allocating",  label: "Reserving Resources",      icon: Database },
-  { id: "cloning",     label: "Creating Disk Image",      icon: HardDrive },
-  { id: "configuring", label: "Configuring Hardware",      icon: Settings },
-  { id: "networking",  label: "Setting Up Network",        icon: Globe },
-  { id: "booting",     label: "Starting Server",           icon: Power },
-  { id: "verifying",   label: "Verifying Connectivity",    icon: ShieldCheck },
+  { id: "allocating",  label: "Reserving resources" },
+  { id: "cloning",     label: "Creating disk image" },
+  { id: "configuring", label: "Configuring hardware" },
+  { id: "networking",  label: "Setting up network" },
+  { id: "booting",     label: "Starting server" },
+  { id: "verifying",   label: "Verifying connectivity" },
 ] as const;
 
 type StageId = typeof STAGES[number]["id"];
 
 function stageIndex(stageId: string): number {
-  const idx = STAGES.findIndex(s => s.id === stageId);
+  const idx = STAGES.findIndex((s) => s.id === stageId);
   return idx >= 0 ? idx : -1;
 }
 
@@ -80,11 +79,9 @@ export default function DeploymentProgress({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(Date.now());
 
-  // Subscribe to realtime + poll as fallback
   useEffect(() => {
     const supabase = createClient();
 
-    // Initial fetch
     const fetchServer = async () => {
       const { data } = await supabase
         .from("servers")
@@ -95,7 +92,6 @@ export default function DeploymentProgress({
     };
     fetchServer();
 
-    // Realtime subscription
     const channel = supabase
       .channel(`deployment-${serverId}`)
       .on(
@@ -104,15 +100,13 @@ export default function DeploymentProgress({
         (payload) => {
           const newRecord = payload.new as ServerRecord;
           if (newRecord) setServer(newRecord);
-        }
+        },
       )
       .subscribe();
     channelRef.current = channel;
 
-    // Polling fallback (every 3s) in case realtime isn't enabled
     pollRef.current = setInterval(fetchServer, 3000);
 
-    // Elapsed timer
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -125,7 +119,6 @@ export default function DeploymentProgress({
     };
   }, [serverId]);
 
-  // Stop polling once terminal state reached
   const serverStatus = server?.status;
   useEffect(() => {
     if (serverStatus === "running" || serverStatus === "failed" || serverStatus === "error") {
@@ -159,35 +152,49 @@ export default function DeploymentProgress({
   // ─── Failed State ─────────────────────────────────────────────
   if (isFailed) {
     return (
-      <Card className="bg-slate-950 border-red-500/30">
-        <CardHeader className="text-center pb-4">
-          <div className="mx-auto h-14 w-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-3">
-            <XCircle className="h-7 w-7 text-red-400" />
+      <article
+        className="relative overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#111316] p-8 sm:p-10"
+        style={{
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)",
+        }}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border border-rose-400/30 bg-rose-400/[0.08] text-rose-300">
+            <XCircle className="h-5 w-5" strokeWidth={1.6} />
           </div>
-          <CardTitle className="text-white text-xl">Deployment Failed</CardTitle>
-          <CardDescription className="text-red-400/80">
-            {provisioning?.message || "An error occurred during deployment."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4 text-sm">
-            <div className="text-slate-400">
-              Server: <span className="text-white">{serverName}</span>
-            </div>
-            <div className="text-slate-400 mt-1">
-              Our team has been notified and is investigating the issue.
-            </div>
+          <div className="flex-1">
+            <p
+              className={`${MONO} mb-2 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-rose-300/85`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+              Deployment failed
+            </p>
+            <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.01em] text-white sm:text-[26px]">
+              {serverName} could not be provisioned.
+            </h2>
+            <p className="mt-2 max-w-[520px] text-[13.5px] leading-[1.6] text-white/60">
+              {provisioning?.message || "An error occurred during deployment. Our team has been notified."}
+            </p>
           </div>
-          <div className="flex items-center justify-center gap-3">
-            <Button onClick={onCreateAnother} className="bg-white/10 hover:bg-white/20 text-white border border-white/10">
-              Try Again
-            </Button>
-            <Button variant="outline" className="border-slate-700 text-slate-300" asChild>
-              <a href="mailto:support@ahurasense.com">Contact Support</a>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <a
+            href="mailto:support@ahurasense.com"
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-white/[0.14] bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/35 hover:bg-white/[0.04] hover:text-white`}
+          >
+            Contact support
+          </a>
+          <button
+            type="button"
+            onClick={onCreateAnother}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:bg-white/90`}
+          >
+            Try again
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </article>
     );
   }
 
@@ -196,156 +203,281 @@ export default function DeploymentProgress({
     const isRDP = connectionType === "rdp";
     const connCmd = isRDP ? `${serverIp}:3389` : `ssh ${username}@${serverIp}`;
     const durationText = provisioning?.started_at && provisioning?.completed_at
-      ? formatTime(Math.floor((new Date(provisioning.completed_at).getTime() - new Date(provisioning.started_at).getTime()) / 1000))
+      ? formatTime(
+          Math.floor(
+            (new Date(provisioning.completed_at).getTime() -
+              new Date(provisioning.started_at).getTime()) /
+              1000,
+          ),
+        )
       : null;
 
     return (
-      <Card className="bg-slate-950 border-emerald-500/30">
-        <CardHeader className="text-center pb-4">
-          <div className="mx-auto h-14 w-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
-            <CheckCircle className="h-7 w-7 text-emerald-400" />
+      <article
+        className="relative overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#111316] p-8 sm:p-10"
+        style={{
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)",
+        }}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-300">
+            <Check className="h-5 w-5" strokeWidth={2.2} />
           </div>
-          <CardTitle className="text-white text-xl">Server Ready</CardTitle>
-          <CardDescription className="text-emerald-400/80">
-            {serverName} is now running{durationText ? ` — deployed in ${durationText}` : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Connection Details */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-slate-800 text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Connection Details
-            </div>
-            <div className="divide-y divide-slate-800/50">
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-slate-400 text-sm">IP Address</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-mono text-sm">{serverIp}</span>
-                  <button onClick={() => copyToClipboard(serverIp, "IP")} className="text-slate-500 hover:text-white transition">
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-slate-400 text-sm">Username</span>
-                <span className="text-white font-mono text-sm">{username}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-slate-400 text-sm">{isRDP ? "RDP Address" : "SSH Command"}</span>
-                <div className="flex items-center gap-2">
-                  <code className="text-blue-400 text-sm bg-blue-500/5 px-2 py-0.5 rounded">{connCmd}</code>
-                  <button onClick={() => copyToClipboard(connCmd, isRDP ? "RDP address" : "SSH command")} className="text-slate-500 hover:text-white transition">
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-slate-400 text-sm">OS</span>
-                <span className="text-white text-sm">{serverOs}</span>
-              </div>
-            </div>
+          <div className="flex-1">
+            <p
+              className={`${MONO} mb-2 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-emerald-300/85`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Server ready
+            </p>
+            <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.01em] text-white sm:text-[26px]">
+              {serverName} is running.
+            </h2>
+            <p className="mt-2 text-[13.5px] leading-[1.6] text-white/60">
+              {durationText ? `Provisioned in ${durationText}.` : "Provisioned successfully."}{" "}
+              Connection details below.
+            </p>
           </div>
+        </div>
 
-          <div className="flex items-center justify-center gap-3">
-            <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Link href="/dashboard/services/compute/vps">
-                Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button onClick={onCreateAnother} variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              Create Another
-            </Button>
+        {/* Connection details */}
+        <div className="mt-7 overflow-hidden rounded-[8px] border border-white/[0.08]">
+          <div
+            className={`${MONO} flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55`}
+          >
+            <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+            Connection details
           </div>
-        </CardContent>
-      </Card>
+          <div className="divide-y divide-white/[0.05]">
+            <DetailRow
+              label="IP address"
+              value={serverIp}
+              copyValue={serverIp}
+              copyLabel="IP"
+              onCopy={copyToClipboard}
+            />
+            <DetailRow label="Username" value={username} />
+            <DetailRow
+              label={isRDP ? "RDP address" : "SSH command"}
+              value={connCmd}
+              copyValue={connCmd}
+              copyLabel={isRDP ? "RDP address" : "SSH command"}
+              onCopy={copyToClipboard}
+              highlight
+            />
+            <DetailRow label="OS" value={serverOs} />
+          </div>
+        </div>
+
+        <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <button
+            type="button"
+            onClick={onCreateAnother}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-white/[0.14] bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/35 hover:bg-white/[0.04] hover:text-white`}
+          >
+            Create another
+          </button>
+          <Link
+            href="/dashboard/services/compute/vps"
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:bg-white/90`}
+          >
+            Go to dashboard
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </article>
     );
   }
 
   // ─── Provisioning State ───────────────────────────────────────
   return (
-    <Card className="bg-slate-950 border-blue-500/20">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-white text-lg">Deploying {serverName}</CardTitle>
-            <CardDescription className="text-slate-400">
-              {provisioning?.message || "Provisioning your server..."}
-            </CardDescription>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-blue-400">{progress}%</div>
-            <div className="text-xs text-slate-500">{formatTime(elapsedSeconds)}</div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Progress Bar */}
-        <div className="relative">
-          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-700 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+    <article
+      className="relative overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#111316] p-8 sm:p-10"
+      style={{
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0 flex-1">
+          <p
+            className={`${MONO} mb-3 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/55`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+            Deploying
+          </p>
+          <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.01em] text-white sm:text-[26px]">
+            {serverName}
+          </h2>
+          <p className="mt-2 text-[13.5px] leading-[1.6] text-white/60">
+            {provisioning?.message || "Provisioning your server…"}
+          </p>
         </div>
 
-        {/* Stages */}
-        <div className="space-y-1">
-          {STAGES.map((stage, i) => {
-            const isDone = currentStageIdx > i;
-            const isCurrent = currentStageIdx === i;
-            const Icon = stage.icon;
+        <div className="shrink-0 text-right">
+          <div
+            className={`${MONO} text-[28px] font-bold leading-none tabular-nums text-white sm:text-[34px]`}
+          >
+            {progress}%
+          </div>
+          <div
+            className={`${MONO} mt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40`}
+          >
+            {formatTime(elapsedSeconds)} elapsed
+          </div>
+        </div>
+      </div>
 
-            return (
-              <div key={stage.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                isCurrent ? "bg-blue-500/5 border border-blue-500/20" :
-                isDone ? "opacity-60" : "opacity-30"
-              }`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                  isDone ? "bg-emerald-500/20 text-emerald-400" :
-                  isCurrent ? "bg-blue-500/20 text-blue-400" :
-                  "bg-slate-800 text-slate-600"
-                }`}>
-                  {isDone ? (
-                    <CheckCircle className="h-4 w-4" />
-                  ) : isCurrent ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Icon className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium ${
-                    isDone ? "text-emerald-400/80" :
-                    isCurrent ? "text-white" :
-                    "text-slate-600"
-                  }`}>
-                    {stage.label}
-                  </div>
-                </div>
-                {isDone && (
-                  <span className="text-xs text-emerald-400/60">Done</span>
-                )}
-                {isCurrent && (
-                  <span className="text-xs text-blue-400 animate-pulse">In progress</span>
+      {/* Progress bar */}
+      <div className="mt-6 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.08]">
+        <div
+          className="h-full rounded-full transition-all duration-700 ease-out"
+          style={{
+            width: `${progress}%`,
+            background: ACCENT,
+            boxShadow: `0 0 12px ${ACCENT}80`,
+          }}
+        />
+      </div>
+
+      {/* Stages */}
+      <ol className="mt-7 flex flex-col">
+        {STAGES.map((stage, i) => {
+          const isDone = currentStageIdx > i;
+          const isCurrent = currentStageIdx === i;
+          const isPending = !isDone && !isCurrent;
+
+          return (
+            <li
+              key={stage.id}
+              className="relative flex items-center gap-4 border-t border-white/[0.05] py-3 first:border-t-0"
+            >
+              {/* Status indicator */}
+              <div
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] border ${
+                  isDone
+                    ? "border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-300"
+                    : isCurrent
+                      ? "border-[#0095FF]/40 bg-[#0095FF]/[0.10] text-[#0095FF]"
+                      : "border-white/[0.08] bg-white/[0.02] text-white/25"
+                }`}
+              >
+                {isDone ? (
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.4} />
+                ) : isCurrent ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.2} />
+                ) : (
+                  <span
+                    className={`${MONO} text-[10px] font-semibold tabular-nums`}
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </div>
 
-        {/* Info Bar */}
-        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-800/50">
-          <span>Server: {serverName}</span>
-          <span>{serverOs} • {serverIp}</span>
-        </div>
+              {/* Label */}
+              <div className="flex-1 min-w-0">
+                <span
+                  className={`text-[13.5px] font-medium leading-tight ${
+                    isCurrent
+                      ? "text-white"
+                      : isDone
+                        ? "text-white/70"
+                        : "text-white/35"
+                  }`}
+                >
+                  {stage.label}
+                </span>
+              </div>
 
-        {elapsedSeconds > 300 && (
-          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg px-4 py-3 text-sm text-yellow-400/80">
-            Deployment is taking longer than expected. Please wait — we&apos;ll notify you when it&apos;s ready.
-          </div>
+              {/* Status label */}
+              {isDone && (
+                <span
+                  className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300/75`}
+                >
+                  Done
+                </span>
+              )}
+              {isCurrent && (
+                <span
+                  className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.16em] text-[#0095FF]`}
+                >
+                  In progress
+                </span>
+              )}
+              {isPending && (
+                <span
+                  className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.16em] text-white/25`}
+                >
+                  Pending
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Footer info */}
+      <div
+        className={`${MONO} mt-7 flex items-center justify-between border-t border-white/[0.06] pt-4 text-[10.5px] uppercase tracking-[0.14em] text-white/40`}
+      >
+        <span>Server · {serverName}</span>
+        <span>{serverOs} · {serverIp}</span>
+      </div>
+
+      {elapsedSeconds > 300 && (
+        <div
+          className={`${MONO} mt-5 flex items-center gap-2 rounded-[6px] border border-amber-400/25 bg-amber-400/[0.05] px-4 py-3 text-[11.5px] uppercase tracking-[0.12em] text-amber-300/85`}
+        >
+          <span className="h-1 w-1 rounded-full bg-amber-300" />
+          Deployment is taking longer than expected — we&apos;ll notify you when ready.
+        </div>
+      )}
+    </article>
+  );
+}
+
+// ─── Detail row helper ──────────────────────────────────────────
+
+function DetailRow({
+  label,
+  value,
+  copyValue,
+  copyLabel,
+  onCopy,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  copyValue?: string;
+  copyLabel?: string;
+  onCopy?: (text: string, label: string) => void;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="text-[12.5px] text-white/55">{label}</span>
+      <div className="flex items-center gap-2">
+        <span
+          className={`${MONO} text-[12.5px] tabular-nums ${
+            highlight
+              ? "rounded-[3px] border border-[#0095FF]/25 bg-[#0095FF]/[0.08] px-2 py-0.5 text-[#9fcbff]"
+              : "text-white"
+          }`}
+        >
+          {value}
+        </span>
+        {copyValue && onCopy && (
+          <button
+            type="button"
+            onClick={() => onCopy(copyValue, copyLabel || label)}
+            className="text-white/35 transition-colors hover:text-white"
+            aria-label={`Copy ${copyLabel || label}`}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Globe,
   Loader2,
   ShoppingCart,
   Sparkles,
@@ -249,18 +248,7 @@ export function SearchResults({
   }
 
   if (results.length === 0) {
-    return (
-      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
-        <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/30 via-[#0095FF]/5 to-transparent" />
-        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-          <Globe className="mb-3 h-7 w-7 text-[#0095FF]/50" />
-          <p className="text-sm font-medium text-white/72">Search for a domain</p>
-          <p className="mt-1 max-w-sm text-sm leading-6 text-white/38">
-            Start with a keyword or full domain to compare domain groups, pricing, and best matches.
-          </p>
-        </div>
-      </div>
-    );
+    return <EmptySearchState />;
   }
 
   return (
@@ -365,4 +353,144 @@ export function SearchResults({
       )}
     </div>
   );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Empty state — premium editorial card with custom illustration
+   ────────────────────────────────────────────────────────────── */
+
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+
+function EmptySearchState() {
+    const popularTlds = ['.com', '.ai', '.io', '.dev', '.app', '.co', '.xyz', '.cloud'];
+    return (
+        <div
+            className="relative overflow-hidden rounded-[12px] border border-white/[0.10] bg-[#0F1114]"
+            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 60px -32px rgba(0,0,0,0.7)' }}
+        >
+            {/* Decoration layers */}
+            <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-72 w-72 rounded-full bg-[#0095FF]/[0.08] blur-3xl" />
+            <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-[0.05]"
+                style={{
+                    backgroundImage:
+                        'radial-gradient(circle at 1px 1px, rgba(255,255,255,1) 1px, transparent 0)',
+                    backgroundSize: '20px 20px',
+                }}
+            />
+            <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#0095FF]/40 to-transparent" />
+
+            <div className="relative grid grid-cols-1 gap-10 px-6 py-12 sm:px-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-16 lg:px-14 lg:py-20">
+                {/* Left — title + chips */}
+                <div>
+                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/55`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                        Start a search
+                    </p>
+                    <h3 className="text-[28px] font-semibold leading-[1.1] tracking-[-0.015em] text-white sm:text-[34px]">
+                        Type a keyword,
+                        <br />
+                        see every match.
+                    </h3>
+                    <p className="mt-4 max-w-[440px] text-[13.5px] leading-[1.65] text-white/55">
+                        Drop in a keyword (<span className="text-white/80">brandname</span>) or a
+                        full domain (<span className="text-white/80">brand.dev</span>) — we look up
+                        availability across 500+ TLDs, with pricing, premium status, and renewal
+                        cost surfaced upfront.
+                    </p>
+
+                    <div className="mt-7">
+                        <p className={`${MONO} mb-3 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/40`}>
+                            Popular extensions
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {popularTlds.map((tld) => (
+                                <span
+                                    key={tld}
+                                    className={`${MONO} inline-flex items-center rounded-[4px] border border-white/[0.10] bg-white/[0.03] px-2.5 py-1 text-[11px] tabular-nums text-white/70`}
+                                >
+                                    {tld}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right — illustration */}
+                <div className="relative mx-auto w-full max-w-[420px] lg:mx-0">
+                    {/* Mock search input + popping result cards */}
+                    <div
+                        className="relative rounded-[10px] border border-white/[0.10] bg-[#0B0D10] p-5"
+                        style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 40px -20px rgba(0,0,0,0.6)' }}
+                    >
+                        {/* Mock search bar */}
+                        <div className="flex items-center gap-2.5 rounded-[6px] border border-white/[0.10] bg-white/[0.02] px-3 py-2.5">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#0095FF" strokeWidth={1.8} className="h-4 w-4">
+                                <circle cx="10.5" cy="10.5" r="6.5" />
+                                <path d="M15.5 15.5L20 20" strokeLinecap="round" />
+                            </svg>
+                            <span className={`${MONO} text-[12.5px] text-white/85`}>brand</span>
+                            <span
+                                className="ml-0.5 inline-block h-3 w-[1.5px] animate-pulse bg-[#0095FF]"
+                                aria-hidden
+                            />
+                            <span className={`${MONO} ml-auto text-[10px] uppercase tracking-[0.14em] text-white/30`}>
+                                ↵
+                            </span>
+                        </div>
+
+                        {/* Mock result rows */}
+                        <div className="mt-3 flex flex-col gap-1.5">
+                            {[
+                                { name: 'brand.com', tag: 'Premium', price: '$2,490', highlight: false, available: true },
+                                { name: 'brand.ai', tag: 'Available', price: '$89/yr', highlight: true, available: true },
+                                { name: 'brand.io', tag: 'Available', price: '$42/yr', highlight: false, available: true },
+                                { name: 'brand.dev', tag: 'Available', price: '$15/yr', highlight: false, available: true },
+                                { name: 'brand.app', tag: 'Taken', price: '—', highlight: false, available: false },
+                            ].map((r) => (
+                                <div
+                                    key={r.name}
+                                    className={`flex items-center justify-between gap-3 rounded-[6px] px-3 py-2.5 ${
+                                        r.highlight
+                                            ? 'border border-[#0095FF]/30 bg-[#0095FF]/[0.08]'
+                                            : 'border border-white/[0.06] bg-white/[0.02]'
+                                    }`}
+                                >
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        {r.available ? (
+                                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                                        ) : (
+                                            <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+                                        )}
+                                        <span className={`${MONO} truncate text-[12px] ${r.available ? 'text-white/90' : 'text-white/35 line-through'}`}>
+                                            {r.name}
+                                        </span>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2.5">
+                                        <span className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] ${
+                                            r.highlight ? 'text-[#0095FF]' : r.available ? 'text-white/45' : 'text-white/30'
+                                        }`}>
+                                            {r.tag}
+                                        </span>
+                                        <span className={`${MONO} text-[11.5px] tabular-nums ${r.available ? 'text-white/85' : 'text-white/30'}`}>
+                                            {r.price}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Floating result chip */}
+                    <div
+                        className={`${MONO} absolute -right-2 -top-2 inline-flex items-center gap-1.5 rounded-full bg-[#0095FF] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-white shadow-[0_8px_20px_-6px_rgba(0,149,255,0.5)]`}
+                    >
+                        <span className="h-1 w-1 rounded-full bg-white" />
+                        Live preview
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }

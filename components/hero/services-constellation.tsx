@@ -1,9 +1,12 @@
 "use client";
 
 // ServicesConstellation — central Compute hub with 4 service satellites.
-// Connections rendered as gently curved energy beams (SVG bezier paths)
-// with a bright accent segment travelling from the hub out to each
-// satellite — represents the hub dispatching work into the mesh.
+// Connections rendered as clean straight beams with a bright accent
+// segment travelling from the hub out to each satellite — represents
+// the hub dispatching work into the mesh. Short gaps at each end keep
+// the lines from piercing the icons; a small perpendicular tick at the
+// satellite end gives the beams a "wired plug" feel rather than a flat
+// radial line.
 //
 // Per-satellite status LEDs + breathing radar ripples from the hub
 // complete the "live infrastructure" picture.
@@ -72,20 +75,46 @@ const SATELLITES: Satellite[] = [
     },
 ];
 
-// Compose a subtly curved quadratic bezier from the hub to a satellite.
-// The control point sits on the CCW-perpendicular of the straight line,
-// so all beams bow consistently — gives the mesh a "rotational" feel
-// rather than a flat star.
-function curvedPath(sx: number, sy: number): string {
-    const cx = (HERO_X + sx) / 2;
-    const cy = (HERO_Y + sy) / 2;
+// Straight beam from the hub to a satellite. We carve a short gap at
+// each end (so the line doesn't visually fight the icons / hub halo)
+// and emit a small perpendicular "tick" at the satellite end — reads
+// as a wired connection plug rather than a flat radial line.
+const HUB_GAP = 6.5;   // skip this many units near the hub center
+const SAT_GAP = 4.5;   // and this many before reaching the satellite
+const TICK_LEN = 2.4;  // perpendicular tick at satellite endpoint
+
+interface BeamGeometry {
+    line: string;       // main straight path
+    tick: string;       // perpendicular tick at the satellite end
+    plugX: number;      // satellite-end point (after SAT_GAP)
+    plugY: number;
+}
+
+function beamGeometry(sx: number, sy: number): BeamGeometry {
     const dx = sx - HERO_X;
     const dy = sy - HERO_Y;
-    // CCW perpendicular: (-dy, dx)
-    const offset = 0.16;
-    const px = -dy * offset;
-    const py = dx * offset;
-    return `M ${HERO_X} ${HERO_Y} Q ${(cx + px).toFixed(2)} ${(cy + py).toFixed(2)} ${sx} ${sy}`;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // Main line endpoints with gaps so the stroke doesn't pierce the icons
+    const x1 = HERO_X + ux * HUB_GAP;
+    const y1 = HERO_Y + uy * HUB_GAP;
+    const x2 = sx - ux * SAT_GAP;
+    const y2 = sy - uy * SAT_GAP;
+
+    // Perpendicular (-uy, ux) for the satellite-end tick
+    const tx1 = x2 + -uy * TICK_LEN;
+    const ty1 = y2 + ux * TICK_LEN;
+    const tx2 = x2 - -uy * TICK_LEN;
+    const ty2 = y2 - ux * TICK_LEN;
+
+    return {
+        line: `M ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+        tick: `M ${tx1.toFixed(2)} ${ty1.toFixed(2)} L ${tx2.toFixed(2)} ${ty2.toFixed(2)}`,
+        plugX: x2,
+        plugY: y2,
+    };
 }
 
 // ─── Satellite icon ────────────────────────────────────────────
@@ -170,7 +199,7 @@ function HeroIcon() {
 }
 
 
-// ─── Connection beams (curved energy paths) ────────────────────
+// ─── Connection beams (straight architectural lines) ───────────
 function ConnectionBeams() {
     return (
         <svg
@@ -188,25 +217,35 @@ function ConnectionBeams() {
             </defs>
 
             {SATELLITES.map((s, i) => {
-                const path = curvedPath(s.x, s.y);
+                const g = beamGeometry(s.x, s.y);
                 const beamDelay = (i * 0.9).toFixed(2);
                 return (
                     <g key={s.id}>
                         {/* Wide soft halo (very dim) */}
                         <path
-                            d={path}
-                            stroke="rgba(0,149,255,0.06)"
-                            strokeWidth={2.5}
+                            d={g.line}
+                            stroke="rgba(0,149,255,0.10)"
+                            strokeWidth={2.4}
                             fill="none"
                             strokeLinecap="round"
                             vectorEffect="non-scaling-stroke"
                             filter="url(#sc-beam-glow)"
                         />
-                        {/* Base hairline */}
+                        {/* Base hairline — slightly brighter so the straight
+                            geometry reads as intentional architecture */}
                         <path
-                            d={path}
-                            stroke="rgba(255,255,255,0.10)"
-                            strokeWidth={0.4}
+                            d={g.line}
+                            stroke="rgba(255,255,255,0.18)"
+                            strokeWidth={0.5}
+                            fill="none"
+                            strokeLinecap="round"
+                            vectorEffect="non-scaling-stroke"
+                        />
+                        {/* Perpendicular "plug" tick at the satellite end */}
+                        <path
+                            d={g.tick}
+                            stroke="rgba(255,255,255,0.30)"
+                            strokeWidth={0.6}
                             fill="none"
                             strokeLinecap="round"
                             vectorEffect="non-scaling-stroke"
@@ -214,23 +253,23 @@ function ConnectionBeams() {
                         {/* Travelling glow halo (wider, dimmer) */}
                         <path
                             className="sc-beam-halo"
-                            d={path}
+                            d={g.line}
                             stroke={ACCENT}
-                            strokeWidth={1.2}
+                            strokeWidth={1.4}
                             fill="none"
                             strokeLinecap="round"
                             pathLength={100}
                             strokeDasharray="14 260"
                             vectorEffect="non-scaling-stroke"
-                            opacity={0.35}
+                            opacity={0.45}
                             style={{ animationDelay: `${beamDelay}s` }}
                         />
                         {/* Bright travelling segment */}
                         <path
                             className="sc-beam"
-                            d={path}
+                            d={g.line}
                             stroke="#ffffff"
-                            strokeWidth={0.7}
+                            strokeWidth={0.85}
                             fill="none"
                             strokeLinecap="round"
                             pathLength={100}

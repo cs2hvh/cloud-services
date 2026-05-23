@@ -86,8 +86,9 @@ const GpuHome = async () => {
       <ServicesHomeSectionSix
         cases={cases}
         eyebrow="Use cases"
-        heading="Built for the data you actually store"
-        subtitle="One S3-compatible object store, four workloads that ship to production every day — backed by 99.999% durability, lifecycle automation, and free CDN cache egress."
+        heading="Built for the data you"
+        headingAccent="actually store."
+        subtitle="One S3-compatible store, four workloads — 99.999% durability, lifecycle automation, free CDN cache egress."
       />
       <ObjectStorageCtaSection />
     </main>

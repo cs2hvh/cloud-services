@@ -96,8 +96,9 @@ const DatabaseHome = async () => {
       <ServicesHomeSectionSix
         cases={cases}
         eyebrow="Use cases"
-        heading="Built for the data layer you actually run"
-        subtitle="Four engines, one managed control plane. Pick the database that fits the workload — replication, backups, and private networking come standard."
+        heading="Built for the data layer you"
+        headingAccent="actually run."
+        subtitle="Four engines, one managed control plane — replication, backups, and private networking come standard."
       />
     </main>
   );

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, type LucideIcon } from "lucide-react";
 
+import { ACCENT_FONT, Aurora } from "@/components/brand/atmosphere";
+
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 export type UseCase = {
@@ -18,6 +20,8 @@ type SectionProps = {
     eyebrow?: string;
     /** Override the heading (default: "Built for your needs") */
     heading?: string;
+    /** Last 2-3 words rendered in Nunito display + brand-blue accent. */
+    headingAccent?: string;
     /** Override the subtitle (default: short copy) */
     subtitle?: string;
     /** Hide the thin top divider line */
@@ -74,12 +78,12 @@ const ServicesHomeSectionSix = ({
     cases,
     eyebrow = "Use cases",
     heading = "Built for your needs",
+    headingAccent,
     subtitle = "Four common workloads our customers ship into production every day — backed by the same primitives, SLAs, and support.",
     hideTopDivider = false,
 }: SectionProps) => {
     return (
         <section className="relative overflow-hidden bg-[#0D0D0F] py-16 sm:py-20 lg:py-24">
-            {/* Thin top hairline divider — replaces the cheap triangular clip-path dividers */}
             {!hideTopDivider && (
                 <div
                     aria-hidden="true"
@@ -87,16 +91,26 @@ const ServicesHomeSectionSix = ({
                 />
             )}
 
-            <div className="relative mx-auto w-full max-w-[1280px] px-6 lg:px-12">
-                {/* Header */}
+            <Aurora intensity="soft" />
+
+            <div className="relative z-10 mx-auto w-full max-w-[1280px] px-6 lg:px-12">
                 <div className="mx-auto max-w-[760px] text-center">
                     <p
-                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
                     >
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
                         {eyebrow}
                     </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
                         {heading}
+                        {headingAccent && (
+                            <>
+                                {" "}
+                                <span style={ACCENT_FONT} className="text-[#82adfb]">
+                                    {headingAccent}
+                                </span>
+                            </>
+                        )}
                     </h2>
                     <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
                         {subtitle}

@@ -44,9 +44,9 @@ const ComputeHome = async () => {
   return (
     <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
-        badge="Cloud Compute"
-        title="Compute"
-        description="Deploy virtual machines, VDS, and dedicated servers across 12 global regions. Full root access, NVMe storage, and sub-20ms latency — scale from a single core to 64 vCPUs in seconds."
+        badge="Compute"
+        title="Compute, ready in seconds."
+        description="Virtual machines, VDS, and dedicated servers across 12 regions. Full root access, NVMe storage, sub-20 ms latency."
         primaryAction={{ label: "Deploy a Server", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{
@@ -107,8 +107,9 @@ const ComputeHome = async () => {
       <ServicesHomeSectionSix
         cases={cases}
         eyebrow="Use cases"
-        heading="Compute that fits the workload"
-        subtitle="Four workloads our customers ship into production every day — backed by the same NVMe-backed instances, 12-region footprint, and 24/7 support."
+        heading="Compute that fits"
+        headingAccent="the workload."
+        subtitle="Four workloads our customers ship every day — same NVMe instances, 12-region footprint, 24/7 support."
       />
     </main>
   );

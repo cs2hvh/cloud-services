@@ -16,48 +16,79 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-    Activity,
-    Archive,
-    ArrowRightLeft,
-    BadgeDollarSign,
-    BookOpen,
-    Bot,
     ChevronDown,
-    Cpu,
-    Database,
-    FileText,
-    Globe,
-    HardDrive,
-    HelpCircle,
-    Key,
-    LayoutDashboard,
-    Lock,
     LogOut,
     Menu,
-    Network,
-    Plus,
-    Rocket,
     Search,
-    Server,
-    Settings,
-    Shield,
-    ShieldCheck,
-    ShoppingCart,
-    Ticket,
-    Users,
     X,
     type LucideIcon,
 } from "lucide-react";
 
 import { Tables } from "@/lib/supabase/types";
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
-import { AppDeployIcon, GpuIcon, K8sIcon } from "./custom-icons";
+import {
+    ActivityIcon,
+    AppDeployIcon,
+    BillingIcon,
+    BookIcon,
+    BotIcon,
+    BucketIcon,
+    CartIcon,
+    ComputeIcon,
+    DatabaseIcon,
+    DocsIcon,
+    GlobeIcon,
+    GpuIcon,
+    HardDriveIcon,
+    HelpIcon,
+    K8sIcon,
+    KeyIcon,
+    LockIcon,
+    NetworkIcon,
+    OverviewIcon,
+    PlusIcon,
+    RocketIcon,
+    ServerIcon,
+    SettingsIcon,
+    ShieldCheckIcon,
+    ShieldIcon,
+    TicketIcon,
+    TransferIcon,
+    UsersIcon,
+} from "./custom-icons";
 
 // Cast custom SVG components to LucideIcon shape so they slot
 // into the existing NavItem.icon typing without a refactor.
-const GpuCloudIcon = GpuIcon as unknown as LucideIcon;
-const AppDeployLucide = AppDeployIcon as unknown as LucideIcon;
-const KubernetesIcon = K8sIcon as unknown as LucideIcon;
+const CastIcon = <T,>(c: T) => c as unknown as LucideIcon;
+
+const GpuCloudIcon = CastIcon(GpuIcon);
+const AppDeployLucide = CastIcon(AppDeployIcon);
+const KubernetesIcon = CastIcon(K8sIcon);
+const Overview = CastIcon(OverviewIcon);
+const Cpu = CastIcon(ComputeIcon);
+const Server = CastIcon(ServerIcon);
+const HardDrive = CastIcon(HardDriveIcon);
+const Database = CastIcon(DatabaseIcon);
+const Archive = CastIcon(BucketIcon);
+const Globe = CastIcon(GlobeIcon);
+const ShoppingCart = CastIcon(CartIcon);
+const ArrowRightLeft = CastIcon(TransferIcon);
+const Network = CastIcon(NetworkIcon);
+const Shield = CastIcon(ShieldIcon);
+const ShieldCheck = CastIcon(ShieldCheckIcon);
+const Lock = CastIcon(LockIcon);
+const Settings = CastIcon(SettingsIcon);
+const Users = CastIcon(UsersIcon);
+const HelpCircle = CastIcon(HelpIcon);
+const Activity = CastIcon(ActivityIcon);
+const BadgeDollarSign = CastIcon(BillingIcon);
+const Ticket = CastIcon(TicketIcon);
+const Bot = CastIcon(BotIcon);
+const FileText = CastIcon(DocsIcon);
+const BookOpen = CastIcon(BookIcon);
+const Key = CastIcon(KeyIcon);
+const Rocket = CastIcon(RocketIcon);
+const Plus = CastIcon(PlusIcon);
+const LayoutDashboard = Overview;
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -528,13 +559,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             pathname={pathname}
                             expanded={gpuExpanded}
                             onToggle={() => setGpuExpanded((p) => !p)}
-                            badge={
-                                <NvidiaLogo
-                                    width={14}
-                                    height={10}
-                                    className="opacity-90"
-                                />
-                            }
                         />
                         <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
                         {standaloneServices.map((it) => (

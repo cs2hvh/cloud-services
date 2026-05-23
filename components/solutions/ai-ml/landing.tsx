@@ -4,303 +4,256 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
-import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
+import { HeroStats } from "@/components/solutions/shared/hero-stats";
+import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 /* ──────────────────────────────────────────────────────────────
-   Custom inline glyphs (24×24 viewBox, stroke-based)
+   Stack glyphs (32×32, layered + blue accent)
    ────────────────────────────────────────────────────────────── */
 
-function TrainGlyph() {
-    // Concentric ring of nodes — distributed training
+function GpuIcon() {
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <circle cx="12" cy="12" r="2" fill="currentColor" />
-            {[0, 60, 120, 180, 240, 300].map((deg) => {
-                const r = 8.5;
-                const x = 12 + r * Math.cos((deg * Math.PI) / 180);
-                const y = 12 + r * Math.sin((deg * Math.PI) / 180);
-                return (
-                    <g key={deg}>
-                        <line x1="12" y1="12" x2={x} y2={y} strokeOpacity="0.45" />
-                        <circle cx={x} cy={y} r="1.6" />
-                    </g>
-                );
-            })}
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <rect x="3" y="9" width="13" height="14" rx="1.2" fill="#0095FF" fillOpacity="0.20" stroke="#0095FF" />
+            <rect x="16" y="9" width="13" height="14" rx="1.2" fill="currentColor" fillOpacity="0.15" />
+            <circle cx="6.5" cy="13" r="0.7" fill="#0095FF" />
+            <circle cx="6.5" cy="16" r="0.7" fill="#0095FF" />
+            <circle cx="6.5" cy="19" r="0.7" fill="#0095FF" />
+            <circle cx="19.5" cy="13" r="0.7" fill="currentColor" />
+            <circle cx="19.5" cy="16" r="0.7" fill="currentColor" />
+            <circle cx="19.5" cy="19" r="0.7" fill="currentColor" />
+            <path d="M16 16h0" strokeDasharray="1 1" strokeOpacity="0.7" />
+            <path d="M9 9V6M22 9V6M9 23v3M22 23v3" strokeOpacity="0.4" />
         </svg>
     );
 }
 
-function FinetuneGlyph() {
-    // Base model + delta adapter overlay
+function TrainingIcon() {
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <rect x="3" y="6" width="13" height="13" rx="1.5" />
-            <path d="M5 10h9M5 13h7M5 16h9" strokeOpacity="0.55" />
-            <rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor" fillOpacity="0.18" />
-            <path d="M15 5l4 4M15 9l4-4" strokeLinecap="round" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <rect x="4" y="5" width="24" height="8" rx="1.5" fill="currentColor" fillOpacity="0.08" />
+            <rect x="4" y="19" width="24" height="8" rx="1.5" fill="#0095FF" fillOpacity="0.18" stroke="#0095FF" />
+            <circle cx="7" cy="9" r="0.9" fill="currentColor" />
+            <circle cx="7" cy="23" r="0.9" fill="#0095FF" />
+            <path d="M11 9h14M11 23h14" strokeOpacity="0.5" />
+            <path d="M9 13l1 6M14 13l1 6M19 13l1 6M24 13l1 6" strokeOpacity="0.35" strokeDasharray="1.5 1.5" />
         </svg>
     );
 }
 
-function InferenceGlyph() {
-    // Request → router → fanout to workers
+function InferenceIcon() {
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <path d="M2 12h4" strokeLinecap="round" />
-            <rect x="6" y="9" width="5" height="6" rx="1" fill="currentColor" fillOpacity="0.18" />
-            <path d="M11 12h3M14 8.5l3-2M14 12h3M14 15.5l3 2" strokeLinecap="round" strokeOpacity="0.6" />
-            <rect x="17" y="4.5" width="4" height="4" rx="0.8" />
-            <rect x="17" y="10" width="4" height="4" rx="0.8" />
-            <rect x="17" y="15.5" width="4" height="4" rx="0.8" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <path d="M3 16h4" strokeLinecap="round" />
+            <rect x="7" y="12" width="6" height="8" rx="1" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
+            <path d="M13 16h3M14 11.5l3-1.5M14 16h3M14 20.5l3 1.5" strokeOpacity="0.6" strokeLinecap="round" />
+            <rect x="17" y="8" width="6" height="4" rx="0.6" fill="currentColor" fillOpacity="0.15" />
+            <rect x="17" y="14" width="6" height="4" rx="0.6" fill="currentColor" fillOpacity="0.15" />
+            <rect x="17" y="20" width="6" height="4" rx="0.6" fill="currentColor" fillOpacity="0.15" />
+            <path d="M23 10h3M23 16h3M23 22h3" strokeLinecap="round" strokeOpacity="0.4" />
         </svg>
     );
 }
 
-function RagGlyph() {
-    // Q → embedding → vector store → context → answer
+function DataPlaneIcon() {
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="4" cy="12" r="1.6" />
-            <path d="M5.5 12h2.5" />
-            <rect x="8" y="9" width="4" height="6" rx="0.6" />
-            <circle cx="10" cy="11" r="0.4" fill="currentColor" />
-            <circle cx="10" cy="13" r="0.4" fill="currentColor" />
-            <path d="M12 12h2" />
-            <rect x="14" y="7" width="5" height="10" rx="0.6" fill="currentColor" fillOpacity="0.18" />
-            <path d="M16 10h1.5M16 12h1.5M16 14h1.5" strokeOpacity="0.7" />
-            <path d="M19 12h2.5" />
-            <circle cx="22" cy="12" r="1.2" fill="currentColor" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <ellipse cx="9" cy="8" rx="5" ry="2" fill="#0095FF" fillOpacity="0.20" stroke="#0095FF" />
+            <path d="M4 8v8c0 1.1 2.2 2 5 2s5-0.9 5-2V8" stroke="#0095FF" />
+            <path d="M4 16v8c0 1.1 2.2 2 5 2s5-0.9 5-2v-8" stroke="#0095FF" />
+            <ellipse cx="23" cy="8" rx="5" ry="2" fill="currentColor" fillOpacity="0.10" />
+            <path d="M18 8v8c0 1.1 2.2 2 5 2s5-0.9 5-2V8" />
+            <path d="M18 16v8c0 1.1 2.2 2 5 2s5-0.9 5-2v-8" />
+            <path d="M14 14h4M14 21h4" strokeOpacity="0.55" strokeDasharray="1.5 1.5" />
         </svg>
     );
 }
+
+function K8sIcon() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+            <path d="M16 3l11 5.5v13L16 28.5 5 21.5v-13L16 3z" fill="currentColor" fillOpacity="0.08" />
+            <path d="M16 10v12M10 13l12 6M22 13l-12 6" strokeOpacity="0.55" strokeLinecap="round" />
+            <circle cx="16" cy="16" r="2.2" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
+        </svg>
+    );
+}
+
+function NetworkIcon() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+            <path d="M16 3l11 4v8c0 6.5-4.5 11.5-11 13.5C9.5 26.5 5 21.5 5 15V7l11-4z" fill="currentColor" fillOpacity="0.08" />
+            <circle cx="16" cy="15" r="3" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
+            <path d="M16 9v3M16 18v3M10 15h3M19 15h3" strokeOpacity="0.6" />
+            <circle cx="10" cy="9" r="0.8" fill="currentColor" />
+            <circle cx="22" cy="9" r="0.8" fill="currentColor" />
+            <circle cx="10" cy="21" r="0.8" fill="currentColor" />
+            <circle cx="22" cy="21" r="0.8" fill="currentColor" />
+        </svg>
+    );
+}
+
+function ObjectStorageIcon() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+            <path d="M5 9h22l-2 18a1.3 1.3 0 0 1-1.3 1.2H8.3A1.3 1.3 0 0 1 7 27L5 9z" fill="currentColor" fillOpacity="0.08" />
+            <path d="M5 9h22" />
+            <path d="M11 9V6.5a5 5 0 0 1 10 0V9" />
+            <circle cx="12" cy="17" r="1.5" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
+            <circle cx="18" cy="22" r="1.3" fill="currentColor" fillOpacity="0.3" />
+            <circle cx="22" cy="15" r="1.3" fill="currentColor" fillOpacity="0.3" />
+        </svg>
+    );
+}
+
+/* ──────── Workload glyphs (cream section) ──────── */
 
 function LLMGlyph() {
-    // Token stream → layers
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            {[7, 10, 13, 16].map((y) => (
-                <line key={y} x1="3" y1={y} x2="21" y2={y} strokeOpacity="0.55" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            {[8, 12, 16, 20, 24].map((y, i) => (
+                <line key={y} x1="3" y1={y} x2="29" y2={y} strokeOpacity={0.30 + i * 0.06} />
             ))}
-            <circle cx="6" cy="7" r="1" fill="currentColor" />
-            <circle cx="11" cy="10" r="1" fill="currentColor" />
-            <circle cx="14" cy="13" r="1" fill="currentColor" />
-            <circle cx="18" cy="16" r="1" fill="currentColor" />
+            <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+            <circle cx="14" cy="12" r="1.3" fill="#0095FF" />
+            <circle cx="19" cy="16" r="1.3" fill="currentColor" />
+            <circle cx="24" cy="20" r="1.3" fill="#0095FF" />
+            <circle cx="27" cy="24" r="1.3" fill="currentColor" />
         </svg>
     );
 }
 
 function VisionGlyph() {
-    // Frame with focal grid
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <rect x="3" y="5" width="18" height="14" rx="1.5" />
-            <path d="M3 9h18M3 15h18M9 5v14M15 5v14" strokeOpacity="0.3" />
-            <circle cx="12" cy="12" r="2.4" fill="currentColor" fillOpacity="0.2" />
-            <circle cx="12" cy="12" r="2.4" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <rect x="3" y="6" width="26" height="20" rx="1.5" fill="currentColor" fillOpacity="0.08" />
+            <path d="M3 11h26M3 22h26M11 6v20M22 6v20" strokeOpacity="0.3" />
+            <circle cx="16" cy="16" r="4" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
+            <circle cx="16" cy="16" r="1.4" fill="#0095FF" />
         </svg>
     );
 }
 
 function AudioGlyph() {
-    // Waveform with cursor
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
-            <path d="M3 12h2l1.5-5 3 10 2.5-7 2 5 2-3h5" />
-            <circle cx="20" cy="9" r="0.8" fill="currentColor" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 16h2l1.5-7 3 14 3-10 2 6 2-4 2 2 3 0" />
+            <circle cx="3" cy="16" r="0.9" fill="currentColor" />
+            <circle cx="22" cy="17" r="1.2" fill="#0095FF" />
+            <circle cx="27" cy="13" r="0.9" fill="currentColor" />
         </svg>
     );
 }
 
-function RagWorkloadGlyph() {
-    // Knowledge graph
+function RagGlyph() {
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <circle cx="6" cy="6" r="1.8" />
-            <circle cx="18" cy="6" r="1.8" />
-            <circle cx="12" cy="13" r="2.2" fill="currentColor" fillOpacity="0.2" />
-            <circle cx="6" cy="19" r="1.8" />
-            <circle cx="18" cy="19" r="1.8" />
-            <path d="M7.5 7.2L10.5 11.5M16.5 7.2L13.5 11.5M7.5 17.5L10.5 14.5M16.5 17.5L13.5 14.5" strokeOpacity="0.5" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <circle cx="16" cy="16" r="11" strokeOpacity="0.4" />
+            <circle cx="7" cy="13" r="1.4" fill="currentColor" />
+            <circle cx="13" cy="6" r="1.4" fill="currentColor" />
+            <circle cx="22" cy="9" r="1.4" fill="currentColor" />
+            <circle cx="25" cy="17" r="1.4" fill="currentColor" />
+            <circle cx="21" cy="24" r="1.4" fill="currentColor" />
+            <circle cx="11" cy="22" r="1.4" fill="currentColor" />
+            <circle cx="16" cy="16" r="2.5" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
+            <path d="M16 16l-3-9M16 16l9-1M16 16l-5 6M16 16l6 6" strokeOpacity="0.3" />
         </svg>
     );
 }
 
 function AgentGlyph() {
-    // Looped tool-use
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="2.2" fill="currentColor" fillOpacity="0.2" />
-            <path d="M12 4v3M12 17v3M4 12h3M17 12h3M6.4 6.4l2.1 2.1M15.5 15.5l2.1 2.1M6.4 17.6l2.1-2.1M15.5 8.5l2.1-2.1" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round">
+            <circle cx="16" cy="16" r="3" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
+            <path d="M16 5v4M16 23v4M5 16h4M23 16h4M8.5 8.5l3 3M20.5 20.5l3 3M8.5 23.5l3-3M20.5 11.5l3-3" />
         </svg>
     );
 }
 
 function RankingGlyph() {
-    // Sorted bars descending
     return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
-            <rect x="3" y="4" width="18" height="2.4" rx="0.5" fill="currentColor" />
-            <rect x="3" y="9" width="14" height="2.4" rx="0.5" fill="currentColor" fillOpacity="0.7" />
-            <rect x="3" y="14" width="10" height="2.4" rx="0.5" fill="currentColor" fillOpacity="0.45" />
-            <rect x="3" y="19" width="6" height="2.4" rx="0.5" fill="currentColor" fillOpacity="0.3" />
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
+            <rect x="3" y="5" width="26" height="3.5" rx="0.6" fill="currentColor" />
+            <rect x="3" y="11" width="20" height="3.5" rx="0.6" fill="#0095FF" />
+            <rect x="3" y="17" width="14" height="3.5" rx="0.6" fill="currentColor" fillOpacity="0.55" />
+            <rect x="3" y="23" width="8" height="3.5" rx="0.6" fill="currentColor" fillOpacity="0.35" />
         </svg>
     );
 }
 
-/* ──────────────────────────────────────────────────────────────
-   Hero visualization — 8-GPU NVLink island
-   ────────────────────────────────────────────────────────────── */
+/* ──────── Lifecycle flow nodes ──────── */
 
-function GpuIslandVisual() {
-    // 8 GPUs in two rows of 4, full mesh NVLink lines
-    const positions: { x: number; y: number; label: string }[] = [
-        { x: 60, y: 60, label: "G0" },
-        { x: 140, y: 60, label: "G1" },
-        { x: 220, y: 60, label: "G2" },
-        { x: 300, y: 60, label: "G3" },
-        { x: 60, y: 180, label: "G4" },
-        { x: 140, y: 180, label: "G5" },
-        { x: 220, y: 180, label: "G6" },
-        { x: 300, y: 180, label: "G7" },
-    ];
-
+function NodeData() {
     return (
-        <svg viewBox="0 0 360 240" className="h-full w-full" aria-hidden="true">
-            <defs>
-                <linearGradient id="link" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.06)" />
-                    <stop offset="50%" stopColor="rgba(0,149,255,0.35)" />
-                    <stop offset="100%" stopColor="rgba(255,255,255,0.06)" />
-                </linearGradient>
-            </defs>
-
-            {/* NVLink full mesh — connect every pair */}
-            {positions.map((a, i) =>
-                positions.slice(i + 1).map((b, j) => (
-                    <line
-                        key={`${i}-${j}`}
-                        x1={a.x}
-                        y1={a.y}
-                        x2={b.x}
-                        y2={b.y}
-                        stroke="url(#link)"
-                        strokeWidth="0.7"
-                        strokeOpacity="0.6"
-                    />
-                )),
-            )}
-
-            {/* GPU nodes */}
-            {positions.map((p) => (
-                <g key={p.label}>
-                    <rect
-                        x={p.x - 26}
-                        y={p.y - 18}
-                        width="52"
-                        height="36"
-                        rx="3"
-                        fill="rgba(17,19,22,0.95)"
-                        stroke="rgba(255,255,255,0.22)"
-                        strokeWidth="1"
-                    />
-                    <text
-                        x={p.x}
-                        y={p.y - 2}
-                        textAnchor="middle"
-                        className={MONO}
-                        fontSize="9"
-                        fontWeight="700"
-                        fill="rgba(255,255,255,0.92)"
-                    >
-                        H100
-                    </text>
-                    <text
-                        x={p.x}
-                        y={p.y + 10}
-                        textAnchor="middle"
-                        className={MONO}
-                        fontSize="7"
-                        fill="rgba(255,255,255,0.45)"
-                    >
-                        {p.label}
-                    </text>
-                </g>
-            ))}
-
-            {/* Caption */}
-            <text x="180" y="225" textAnchor="middle" className={MONO} fontSize="8" fontWeight="600" fill="rgba(255,255,255,0.45)" letterSpacing="2">
-                NVLINK · 900 GB/s · 8× H100 · ONE NODE
-            </text>
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <rect x="5" y="6" width="22" height="20" rx="1.5" />
+            <path d="M5 11h22M5 17h22M5 23h22" strokeOpacity="0.45" />
+            <circle cx="9" cy="8.5" r="0.6" fill="currentColor" />
         </svg>
     );
 }
-
-/* Stack architecture diagram — layered */
-function StackDiagram() {
-    const layers = [
-        { key: "control", label: "Control planes", sub: "MLflow · Dashboards · Eval UIs", role: "App platform" },
-        { key: "orch", label: "Orchestration", sub: "Training jobs · Inference pools · Batch evals", role: "Kubernetes" },
-        { key: "compute", label: "GPU compute", sub: "B200 · H200 · H100 · A100 · L40S · A10", role: "Bare-metal GPU" },
-        { key: "data", label: "Data plane", sub: "Postgres · Redis · pgvector · Queues", role: "Managed databases" },
-        { key: "storage", label: "Storage & artifacts", sub: "Datasets · Checkpoints · Model registry", role: "Object storage" },
-    ];
-
+function NodePretrain() {
     return (
-        <div className="relative mx-auto max-w-[920px]">
-            {/* Private network spine (right side) */}
-            <div className="pointer-events-none absolute right-0 top-6 hidden h-[calc(100%-3rem)] w-[180px] rounded-[6px] border border-dashed border-[#0095FF]/30 bg-[#0095FF]/[0.03] lg:block">
-                <div className={`${MONO} absolute inset-x-0 top-3 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-white/55`}>
-                    <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Private network
-                    </span>
-                </div>
-                <div className={`${MONO} absolute inset-x-0 bottom-3 text-center text-[9px] uppercase tracking-[0.16em] text-white/40`}>
-                    0 egress · sub-ms hop
-                </div>
-            </div>
-
-            <div className="flex flex-col gap-2 lg:pr-[200px]">
-                {layers.map((l, i) => (
-                    <div
-                        key={l.key}
-                        className="group relative flex items-center gap-4 rounded-[6px] border border-white/[0.10] bg-[#111316] px-5 py-4 transition-colors hover:border-white/[0.20]"
-                    >
-                        {/* Layer index */}
-                        <span
-                            className={`${MONO} flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] border border-white/[0.10] bg-white/[0.03] text-[10.5px] font-semibold tabular-nums text-white/55`}
-                        >
-                            L{i + 1}
-                        </span>
-
-                        {/* Layer body */}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline justify-between gap-3">
-                                <h4 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
-                                    {l.label}
-                                </h4>
-                                <span
-                                    className={`${MONO} hidden text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/40 sm:inline`}
-                                >
-                                    {l.role}
-                                </span>
-                            </div>
-                            <p
-                                className={`${MONO} mt-1 truncate text-[11.5px] uppercase tracking-[0.10em] text-white/45`}
-                            >
-                                {l.sub}
-                            </p>
-                        </div>
-
-                        {/* Right tick into network */}
-                        <span className="hidden h-px w-6 bg-[#0095FF]/45 lg:block" />
-                    </div>
-                ))}
-            </div>
-        </div>
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <rect x="5" y="6" width="22" height="8" rx="1.5" />
+            <rect x="5" y="18" width="22" height="8" rx="1.5" />
+            <circle cx="9" cy="10" r="0.7" fill="currentColor" />
+            <circle cx="9" cy="22" r="0.7" fill="currentColor" />
+            <path d="M13 10h12M13 22h12" strokeOpacity="0.5" />
+        </svg>
+    );
+}
+function NodeFinetune() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+            <rect x="4" y="9" width="14" height="14" rx="1.5" />
+            <path d="M7 14h8M7 17h6M7 20h8" strokeOpacity="0.55" />
+            <rect x="17" y="4" width="11" height="11" rx="1.5" fill="currentColor" fillOpacity="0.25" />
+            <path d="M19 8l7 7M19 13l7-5" strokeLinecap="round" />
+        </svg>
+    );
+}
+function NodeCheckpoint() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+            <path d="M5 10h22l-2 16a1.2 1.2 0 0 1-1.2 1H8.2A1.2 1.2 0 0 1 7 26L5 10z" />
+            <path d="M11 10V7a5 5 0 0 1 10 0v3" />
+        </svg>
+    );
+}
+function NodeEval() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="6" width="22" height="20" rx="1.5" />
+            <path d="M9 12l3 3 5-7" />
+            <path d="M9 19l3 3 5-7" strokeOpacity="0.5" />
+            <path d="M21 14h4M21 21h4" strokeOpacity="0.45" />
+        </svg>
+    );
+}
+function NodeOptimize() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <circle cx="16" cy="16" r="4" />
+            <path d="M16 5v3M16 24v3M5 16h3M24 16h3M8.5 8.5l2 2M21.5 21.5l2 2M8.5 23.5l2-2M21.5 10.5l2-2" strokeLinecap="round" />
+        </svg>
+    );
+}
+function NodeServe() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <path d="M3 16h4" strokeLinecap="round" />
+            <rect x="7" y="12" width="6" height="8" rx="1" />
+            <path d="M13 16h4M14 12l3-2M14 20l3 2" strokeLinecap="round" strokeOpacity="0.6" />
+            <rect x="17" y="7" width="5" height="5" rx="0.6" />
+            <rect x="17" y="13.5" width="5" height="5" rx="0.6" />
+            <rect x="17" y="20" width="5" height="5" rx="0.6" />
+        </svg>
     );
 }
 
@@ -315,622 +268,215 @@ const HERO_STATS = [
     { value: "99.9%", label: "GPU availability" },
 ];
 
-type Workflow = {
-    glyph: React.ReactNode;
-    title: string;
+type Scenario = {
+    name: string;
+    persona: string;
     description: string;
-    tags: string[];
+    monthly: string;
+    suffix?: string;
+    services: { glyph: React.ReactNode; label: string }[];
+    specs: { label: string; value: string }[];
+    cta: { label: string; href: string };
+    featured?: boolean;
 };
 
-const FINETUNE: Workflow = {
-    glyph: <FinetuneGlyph />,
-    title: "Fine-tune open models",
-    description:
-        "LoRA, QLoRA, DPO, and full fine-tunes on Llama, Mistral, Qwen, and SDXL. High-memory GPUs sized for context up to 128k tokens.",
-    tags: ["LoRA", "QLoRA", "Axolotl", "Unsloth"],
-};
+const SCENARIOS: Scenario[] = [
+    {
+        name: "On-demand inference pod",
+        persona: "Demos, prototypes, hobby",
+        description: "Spin a single GPU in under two minutes. Use what you need; shut it down when you're done.",
+        monthly: "$0.65",
+        suffix: "/hr",
+        services: [
+            { glyph: <GpuIcon />, label: "1× A10 or L40S" },
+            { glyph: <InferenceIcon />, label: "Inference runtime" },
+            { glyph: <ObjectStorageIcon />, label: "Weight cache" },
+        ],
+        specs: [
+            { label: "GPU", value: "1 × A10 (24 GB) or L40S (48 GB)" },
+            { label: "Runtime", value: "vLLM · TGI · custom OCI" },
+            { label: "Storage", value: "Object cache for weights" },
+        ],
+        cta: { label: "Try a pod", href: "/services/gpu" },
+    },
+    {
+        name: "Fine-tune an open model",
+        persona: "Specialize Llama · Mistral · SDXL",
+        description: "Single 8-GPU H100 or H200 node with NVLink. LoRA, QLoRA, DPO, full fine-tunes — all with checkpoint streaming to object storage.",
+        monthly: "$2.49",
+        suffix: "/hr / GPU",
+        services: [
+            { glyph: <GpuIcon />, label: "8× H100 NVLink" },
+            { glyph: <TrainingIcon />, label: "Distributed training" },
+            { glyph: <ObjectStorageIcon />, label: "Checkpoints" },
+            { glyph: <DataPlaneIcon />, label: "Postgres + Redis" },
+            { glyph: <K8sIcon />, label: "Kubernetes" },
+        ],
+        specs: [
+            { label: "GPUs", value: "8 × H100 (80 GB) · NVLink island" },
+            { label: "Frameworks", value: "Axolotl · Unsloth · DeepSpeed" },
+            { label: "Checkpoints", value: "Streamed to object store" },
+        ],
+        cta: { label: "Recommended", href: "/services/gpu" },
+        featured: true,
+    },
+    {
+        name: "Pretrain at scale",
+        persona: "Foundation models, 7B–400B+",
+        description: "Multi-node H200 or B200 clusters with 3.2 Tbps InfiniBand, NCCL-tuned topo, resume across regions.",
+        monthly: "$3.40",
+        suffix: "+/hr / GPU",
+        services: [
+            { glyph: <GpuIcon />, label: "Multi-node H200/B200" },
+            { glyph: <NetworkIcon />, label: "InfiniBand 3.2 Tbps" },
+            { glyph: <ObjectStorageIcon />, label: "Dataset + ckpt" },
+            { glyph: <K8sIcon />, label: "Job scheduler" },
+            { glyph: <TrainingIcon />, label: "FSDP · Megatron" },
+        ],
+        specs: [
+            { label: "Topology", value: "32–256 GPUs · NCCL-tuned" },
+            { label: "Interconnect", value: "InfiniBand 3.2 Tbps" },
+            { label: "Frameworks", value: "FSDP · Megatron · DeepSpeed" },
+        ],
+        cta: { label: "Compose cluster", href: "/contact" },
+    },
+    {
+        name: "Reserved enterprise cluster",
+        persona: "Production AI platforms",
+        description: "Dedicated capacity, multi-region, SOC 2, audit, SSO. Reserved 3-, 6-, or 12-month terms with up to 50% off.",
+        monthly: "Custom",
+        services: [
+            { glyph: <GpuIcon />, label: "Dedicated GPU" },
+            { glyph: <K8sIcon />, label: "Multi-region K8s" },
+            { glyph: <NetworkIcon />, label: "Private peering" },
+            { glyph: <ObjectStorageIcon />, label: "Replicated store" },
+            { glyph: <DataPlaneIcon />, label: "Sharded DB" },
+            { glyph: <InferenceIcon />, label: "Edge inference" },
+        ],
+        specs: [
+            { label: "Capacity", value: "Dedicated · reserved terms" },
+            { label: "Compliance", value: "SOC 2 · audit · SSO · RBAC" },
+            { label: "Support", value: "Dedicated AI SRE · 24×7" },
+        ],
+        cta: { label: "Talk to sales", href: "/contact" },
+    },
+];
 
-const INFERENCE: Workflow = {
-    glyph: <InferenceGlyph />,
-    title: "Serve inference at scale",
-    description:
-        "Autoscaling endpoints behind a global edge. Warm pools keep first-token latency stable; quantization and tensor parallelism land out of the box.",
-    tags: ["vLLM", "TGI", "Triton"],
-};
+type FlowNode = { icon: React.ReactNode; label: string; sub: string };
 
-const RAG: Workflow = {
-    glyph: <RagGlyph />,
-    title: "Build RAG and agents",
-    description:
-        "Vector storage, managed Postgres, GPU inference, and tool orchestration on one private network. Sub-millisecond hop between every component.",
-    tags: ["pgvector", "Qdrant", "Ray"],
-};
+const FLOW: FlowNode[] = [
+    { icon: <NodeData />, label: "Dataset", sub: "Object storage" },
+    { icon: <NodePretrain />, label: "Pretrain", sub: "Multi-node GPUs" },
+    { icon: <NodeFinetune />, label: "Fine-tune", sub: "LoRA · QLoRA · DPO" },
+    { icon: <NodeCheckpoint />, label: "Checkpoint", sub: "Streamed · resumable" },
+    { icon: <NodeEval />, label: "Eval", sub: "Harness · golden sets" },
+    { icon: <NodeOptimize />, label: "Optimize", sub: "Quantize · distill" },
+    { icon: <NodeServe />, label: "Serve", sub: "vLLM · TGI · Triton" },
+];
 
-const GPU_LINEUP: {
+type GpuRow = {
     model: string;
     vram: string;
     vramBar: number;
     flops: string;
     flopsBar: number;
-    interconnect: string;
     from: string;
-    best: string;
-}[] = [
-    { model: "B200", vram: "192 GB", vramBar: 1.0, flops: "2.25 PF", flopsBar: 1.0, interconnect: "NVLink 5 · 1.8 TB/s", from: "$5.90", best: "Frontier training" },
-    { model: "H200", vram: "141 GB", vramBar: 0.73, flops: "989 TF", flopsBar: 0.44, interconnect: "NVLink · 900 GB/s", from: "$3.40", best: "Long-context serving" },
-    { model: "H100", vram: "80 GB", vramBar: 0.42, flops: "989 TF", flopsBar: 0.44, interconnect: "NVLink · 900 GB/s", from: "$2.49", best: "Balanced workhorse" },
-    { model: "A100", vram: "80 GB", vramBar: 0.42, flops: "312 TF", flopsBar: 0.14, interconnect: "NVLink · 600 GB/s", from: "$1.49", best: "Cost-efficient training" },
-    { model: "L40S", vram: "48 GB", vramBar: 0.25, flops: "362 TF", flopsBar: 0.16, interconnect: "PCIe Gen4", from: "$1.15", best: "Vision & multimodal" },
-    { model: "A10", vram: "24 GB", vramBar: 0.13, flops: "125 TF", flopsBar: 0.06, interconnect: "PCIe Gen4", from: "$0.65", best: "Small-model inference" },
+    badge?: string;
+};
+
+const GPU_LINEUP: GpuRow[] = [
+    { model: "B200", vram: "192 GB", vramBar: 1.0, flops: "2.25 PF", flopsBar: 1.0, from: "$5.90", badge: "Frontier" },
+    { model: "H200", vram: "141 GB", vramBar: 0.73, flops: "989 TF", flopsBar: 0.44, from: "$3.40" },
+    { model: "H100", vram: "80 GB", vramBar: 0.42, flops: "989 TF", flopsBar: 0.44, from: "$2.49", badge: "Workhorse" },
+    { model: "A100", vram: "80 GB", vramBar: 0.42, flops: "312 TF", flopsBar: 0.14, from: "$1.49" },
+    { model: "L40S", vram: "48 GB", vramBar: 0.25, flops: "362 TF", flopsBar: 0.16, from: "$1.15" },
+    { model: "A10", vram: "24 GB", vramBar: 0.13, flops: "125 TF", flopsBar: 0.06, from: "$0.65" },
 ];
 
-type Workload = {
-    glyph: React.ReactNode;
-    metric: string;
+type StackPiece = {
+    icon: React.ReactNode;
     title: string;
     description: string;
+    role: string;
+    capabilities: string[];
 };
+
+const STACK_TRAIN: StackPiece = {
+    icon: <TrainingIcon />,
+    title: "Distributed training",
+    description: "Multi-node jobs with InfiniBand and NCCL-tuned topology. DeepSpeed, FSDP, Megatron-LM as supported reference stacks. Resume across regions.",
+    role: "Training",
+    capabilities: ["NCCL-tuned", "InfiniBand 3.2 Tbps", "FSDP · DeepSpeed", "Megatron-LM"],
+};
+const STACK_INFER: StackPiece = {
+    icon: <InferenceIcon />,
+    title: "Inference serving",
+    description: "Autoscaling endpoints behind a global edge. Warm pools keep first-token latency stable; quantization and tensor parallelism land out of the box.",
+    role: "Serving",
+    capabilities: ["vLLM · TGI · Triton", "Warm pools", "Tensor parallel", "Edge cache"],
+};
+const STACK_DATA: StackPiece = {
+    icon: <DataPlaneIcon />,
+    title: "Data plane",
+    description: "Object storage for datasets, weights, checkpoints. Managed Postgres + Redis for metadata, eval results, queues, pgvector for retrieval.",
+    role: "Data",
+    capabilities: ["S3-compatible", "Postgres + Redis", "pgvector + HNSW", "Cross-region copy"],
+};
+const STACK_K8S: StackPiece = {
+    icon: <K8sIcon />,
+    title: "Orchestration on Kubernetes",
+    description: "Run distributed training jobs, autoscaling inference pools, and batch evals on the same cluster — GPU-aware scheduler, MIG slicing, preemption-safe.",
+    role: "Orchestration",
+    capabilities: ["GPU-aware scheduler", "MIG slicing", "Spot + reserved", "Preemption-safe"],
+};
+const STACK_NET: StackPiece = {
+    icon: <NetworkIcon />,
+    title: "Private network & VPC",
+    description: "Every component on the same VPC with sub-ms latency. Traffic between training, eval, and serving services never leaves the private network.",
+    role: "Network",
+    capabilities: ["Private VPC", "Zero in-region egress", "Sub-ms hops", "VPC peering"],
+};
+
+type Workload = { glyph: React.ReactNode; metric: string; title: string; description: string };
 
 const WORKLOADS: Workload[] = [
     {
         glyph: <LLMGlyph />,
         metric: "Foundation",
         title: "LLM training and fine-tuning",
-        description:
-            "Pretrain or specialize models from 7B to 400B+. NVLink islands, optimized data loaders, and checkpoint-resume across regions.",
+        description: "Pretrain or specialize models from 7B to 400B+. NVLink islands, optimized data loaders, and checkpoint-resume across regions.",
     },
     {
         glyph: <VisionGlyph />,
         metric: "Vision",
         title: "Computer vision and multimodal",
-        description:
-            "Detection, segmentation, video understanding, and image generation on memory-rich GPUs sized for high-resolution input.",
+        description: "Detection, segmentation, video understanding, and image generation on memory-rich GPUs sized for high-resolution input.",
     },
     {
         glyph: <AudioGlyph />,
         metric: "Audio",
         title: "Speech, audio, and voice agents",
-        description:
-            "Low-latency TTS and STT, voice cloning, and real-time conversational pipelines with sub-100ms inference loops.",
+        description: "Low-latency TTS and STT, voice cloning, and real-time conversational pipelines with sub-100ms inference loops.",
     },
     {
-        glyph: <RagWorkloadGlyph />,
+        glyph: <RagGlyph />,
         metric: "Retrieval",
         title: "Retrieval-augmented generation",
-        description:
-            "pgvector, Qdrant, or your embedding store of choice — collocated with GPU inference and the rest of your stack.",
+        description: "pgvector, Qdrant, or your embedding store of choice — collocated with GPU inference and the rest of your stack.",
     },
     {
         glyph: <AgentGlyph />,
         metric: "Agents",
         title: "Agent and tool-use systems",
-        description:
-            "Long-running agents with tool calling, state management, and scheduled execution — wired into managed databases.",
+        description: "Long-running agents with tool calling, state management, and scheduled execution — wired into managed databases.",
     },
     {
         glyph: <RankingGlyph />,
         metric: "Ranking",
         title: "Recommendation and ranking",
-        description:
-            "Two-tower models, deep learning rankers, and feature stores backed by Postgres and Redis on the same private network.",
+        description: "Two-tower models, deep learning rankers, and feature stores backed by Postgres and Redis on the same private network.",
     },
 ];
-
-/* ──────────────────────────────────────────────────────────────
-   Sections
-   ────────────────────────────────────────────────────────────── */
-
-function Hero() {
-    return (
-        <section className="relative isolate flex min-h-[760px] flex-col justify-center overflow-hidden bg-[#04060a] pb-20 pt-32 sm:pb-24 sm:pt-36 lg:min-h-[860px] lg:pb-28 lg:pt-40">
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-0 opacity-[0.04]"
-                style={{
-                    backgroundImage:
-                        "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-                    backgroundSize: "120px 120px",
-                }}
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-[55%] bg-[radial-gradient(ellipse_at_top,rgba(0,149,255,0.10),transparent_60%)]"
-            />
-
-            <Container className="relative z-10">
-                <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-16">
-                    {/* Left: copy */}
-                    <div>
-                        <p
-                            className={`${MONO} mb-6 inline-flex items-center gap-2 rounded-[4px] border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/65`}
-                        >
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                            AI / ML Solutions
-                        </p>
-
-                        <h1 className="text-4xl font-semibold leading-[1.02] tracking-[-0.02em] text-white sm:text-5xl lg:text-[68px]">
-                            Infrastructure for the
-                            <span className="block text-white/70">AI lifecycle.</span>
-                        </h1>
-
-                        <p className="mt-6 max-w-[520px] text-[15px] leading-[1.65] text-white/60 sm:text-[17px]">
-                            One platform for training, fine-tuning, inference, and the
-                            data layer around them — wired in from the first pod.
-                        </p>
-
-                        <div className="mt-9 flex flex-wrap items-center gap-3">
-                            <AuthAwareServiceCta
-                                service="ai-agents"
-                                intent="main"
-                                className={`${MONO} inline-flex h-11 items-center gap-2 rounded-[5px] border border-white bg-white px-6 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:bg-white/90`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    Talk to AI engineering
-                                    <ArrowRight className="h-3.5 w-3.5" />
-                                </span>
-                            </AuthAwareServiceCta>
-                            <Link
-                                href="/services/gpu"
-                                className={`${MONO} inline-flex h-11 items-center gap-2 rounded-[5px] border border-white/[0.18] bg-white/[0.04] px-6 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-white/85 transition-colors hover:border-white/40 hover:bg-white/[0.09] hover:text-white`}
-                            >
-                                Browse GPU lineup
-                                <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
-                        </div>
-
-                        {/* Stat strip */}
-                        <div className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-4">
-                            {HERO_STATS.map((s) => (
-                                <div
-                                    key={s.label}
-                                    className="flex flex-col items-start gap-1.5 bg-[#04060a] px-4 py-4"
-                                >
-                                    <span
-                                        className={`${MONO} text-[20px] font-bold leading-none tabular-nums text-white`}
-                                    >
-                                        {s.value}
-                                    </span>
-                                    <span
-                                        className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/50`}
-                                    >
-                                        {s.label}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right: GPU island visual */}
-                    <div className="relative">
-                        <div className="relative rounded-[10px] border border-white/[0.10] bg-[#0A0B0D] p-5 sm:p-6">
-                            {/* Top label */}
-                            <div className="mb-4 flex items-center justify-between">
-                                <span
-                                    className={`${MONO} inline-flex items-center gap-2 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/50`}
-                                >
-                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
-                                    cluster.h100-8x.us-east-1
-                                </span>
-                                <span
-                                    className={`${MONO} inline-flex items-center gap-1.5 rounded-[3px] border border-emerald-400/30 bg-emerald-400/[0.08] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-300/85`}
-                                >
-                                    <span className="h-1 w-1 rounded-full bg-emerald-300" />
-                                    healthy
-                                </span>
-                            </div>
-
-                            <GpuIslandVisual />
-
-                            {/* Bottom metric chips */}
-                            <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-[5px] border border-white/[0.08] bg-white/[0.08]">
-                                {[
-                                    { v: "640 GB", l: "VRAM" },
-                                    { v: "3.2 Tb/s", l: "Interconnect" },
-                                    { v: "7912 TF", l: "FP16" },
-                                ].map((c) => (
-                                    <div
-                                        key={c.l}
-                                        className="flex flex-col items-center gap-1 bg-[#0A0B0D] px-2 py-2.5"
-                                    >
-                                        <span
-                                            className={`${MONO} text-[12px] font-bold tabular-nums text-white`}
-                                        >
-                                            {c.v}
-                                        </span>
-                                        <span
-                                            className={`${MONO} text-[8.5px] font-semibold uppercase tracking-[0.14em] text-white/45`}
-                                        >
-                                            {c.l}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Floating annotation */}
-                        <div
-                            className={`${MONO} pointer-events-none absolute -bottom-3 -right-3 hidden rounded-[4px] border border-[#0095FF]/40 bg-[#0095FF]/[0.10] px-2.5 py-1.5 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[#9fcbff] backdrop-blur-sm sm:block`}
-                        >
-                            NVLink full mesh
-                        </div>
-                    </div>
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-function Workflows() {
-    return (
-        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
-            <div
-                aria-hidden="true"
-                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-            />
-
-            <Container className="relative z-10">
-                <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        What you can do
-                    </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        Four motions. One platform.
-                    </h2>
-                </div>
-
-                {/* Bento: big train card + 3 smaller stacked */}
-                <div className="mt-14 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-                    {/* Large train card */}
-                    <article
-                        className="relative flex flex-col overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#111316] p-8 lg:row-span-3 lg:p-10"
-                        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)" }}
-                    >
-                        <div className="flex items-start justify-between">
-                            <span
-                                className={`${MONO} inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50`}
-                            >
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                                Training motion
-                            </span>
-                            <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
-                                01
-                            </span>
-                        </div>
-
-                        {/* Custom training topology visual */}
-                        <div className="relative mt-7 aspect-[5/3] overflow-hidden rounded-[6px] border border-white/[0.08] bg-[#0A0B0D]">
-                            <div className="absolute inset-0 flex items-center justify-center p-4">
-                                <div className="h-full w-full text-white/85">
-                                    <TrainGlyph />
-                                </div>
-                            </div>
-                            <span
-                                className={`${MONO} absolute bottom-2 left-3 text-[8.5px] font-semibold uppercase tracking-[0.16em] text-white/35`}
-                            >
-                                NCCL ring · 32 GPUs · 1 region
-                            </span>
-                        </div>
-
-                        <h3 className="mt-7 text-[22px] font-semibold leading-[1.2] tracking-[-0.01em] text-white sm:text-[26px]">
-                            Train models from scratch.
-                        </h3>
-                        <p className="mt-3 max-w-[440px] text-[14px] leading-[1.6] text-white/65">
-                            Multi-node training jobs with InfiniBand interconnect and
-                            NCCL-tuned topologies. Checkpoints stream to object storage
-                            automatically — resume on any cluster, any region.
-                        </p>
-
-                        <div className="mt-auto flex flex-wrap gap-1.5 pt-7">
-                            {["NCCL", "InfiniBand", "DeepSpeed", "Megatron-LM", "FSDP"].map((t) => (
-                                <span
-                                    key={t}
-                                    className={`${MONO} inline-flex items-center rounded-[3px] border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.10em] text-white/65`}
-                                >
-                                    {t}
-                                </span>
-                            ))}
-                        </div>
-                    </article>
-
-                    {/* Three smaller cards */}
-                    {[FINETUNE, INFERENCE, RAG].map((w, idx) => (
-                        <article
-                            key={w.title}
-                            className="relative flex flex-col gap-4 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-6 transition-colors hover:border-white/[0.22]"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/85">
-                                    <div className="h-[22px] w-[22px]">{w.glyph}</div>
-                                    <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                                </div>
-                                <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
-                                    0{idx + 2}
-                                </span>
-                            </div>
-
-                            <div>
-                                <h3 className="text-[17px] font-semibold leading-[1.25] tracking-[-0.01em] text-white">
-                                    {w.title}
-                                </h3>
-                                <p className="mt-2 text-[13px] leading-[1.55] text-white/60">
-                                    {w.description}
-                                </p>
-                            </div>
-
-                            <div className="mt-auto flex flex-wrap gap-1.5 border-t border-white/[0.06] pt-3">
-                                {w.tags.map((t) => (
-                                    <span
-                                        key={t}
-                                        className={`${MONO} inline-flex items-center rounded-[3px] border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[9.5px] uppercase tracking-[0.10em] text-white/65`}
-                                    >
-                                        {t}
-                                    </span>
-                                ))}
-                            </div>
-                        </article>
-                    ))}
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-function GpuLineup() {
-    return (
-        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
-            <Container>
-                <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        GPU lineup
-                    </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-                        Pick the GPU that fits the job.
-                    </h2>
-                </div>
-
-                {/* Card with visual table */}
-                <article className="mx-auto mt-12 max-w-[1080px] overflow-hidden rounded-[10px] border border-black/10 bg-[#EEECE4]">
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[860px]">
-                            <thead>
-                                <tr className="bg-[#E6E4DC]">
-                                    {["GPU", "VRAM", "FP16 throughput", "Interconnect", "From $/hr", "Best for"].map((h) => (
-                                        <th
-                                            key={h}
-                                            className={`${MONO} border-b border-black/10 px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50`}
-                                        >
-                                            {h}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {GPU_LINEUP.map((g, i) => (
-                                    <tr
-                                        key={g.model}
-                                        className={i < GPU_LINEUP.length - 1 ? "border-b border-black/[0.06]" : ""}
-                                    >
-                                        <td className="px-5 py-4">
-                                            <span className={`${MONO} text-[15px] font-bold tabular-nums text-[#1A1814]`}>
-                                                {g.model}
-                                            </span>
-                                        </td>
-                                        {/* VRAM with bar */}
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-2.5">
-                                                <span className={`${MONO} w-[58px] text-[12.5px] tabular-nums text-black/70`}>
-                                                    {g.vram}
-                                                </span>
-                                                <span className="relative h-1 w-20 overflow-hidden rounded-full bg-black/10">
-                                                    <span
-                                                        className="absolute inset-y-0 left-0 rounded-full bg-[#1A1814]"
-                                                        style={{ width: `${g.vramBar * 100}%` }}
-                                                    />
-                                                </span>
-                                            </div>
-                                        </td>
-                                        {/* FP16 with bar */}
-                                        <td className="px-5 py-4">
-                                            <div className="flex items-center gap-2.5">
-                                                <span className={`${MONO} w-[60px] text-[12.5px] tabular-nums text-black/70`}>
-                                                    {g.flops}
-                                                </span>
-                                                <span className="relative h-1 w-20 overflow-hidden rounded-full bg-black/10">
-                                                    <span
-                                                        className="absolute inset-y-0 left-0 rounded-full bg-[#1A1814]"
-                                                        style={{ width: `${g.flopsBar * 100}%` }}
-                                                    />
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className={`${MONO} px-5 py-4 text-[12px] tabular-nums text-black/65`}>
-                                            {g.interconnect}
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <span className={`${MONO} text-[14px] font-bold tabular-nums text-[#1A1814]`}>
-                                                {g.from}
-                                            </span>
-                                            <span className="ml-0.5 text-[10.5px] text-black/45">/hr</span>
-                                        </td>
-                                        <td className="px-5 py-4 text-[13px] text-black/70">
-                                            {g.best}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-
-                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                    <Link
-                        href="/services/gpu"
-                        className={`${MONO} inline-flex h-10 items-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-[#1A1814] px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#EEECE4] transition-colors hover:bg-black`}
-                    >
-                        See full GPU pricing
-                        <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                    <Link
-                        href="/contact"
-                        className={`${MONO} inline-flex h-10 items-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-[#1A1814]`}
-                    >
-                        Reserved capacity
-                        <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-function Stack() {
-    return (
-        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
-            <div
-                aria-hidden="true"
-                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-            />
-
-            <Container className="relative z-10">
-                <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        The stack
-                    </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        Every layer in one network.
-                    </h2>
-                    <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
-                        GPUs alone do not ship an AI product. Datasets, metadata,
-                        orchestration, and control planes all live on the same private
-                        network — no egress between them.
-                    </p>
-                </div>
-
-                <div className="mt-14">
-                    <StackDiagram />
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-function Workloads() {
-    return (
-        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
-            <Container>
-                <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Workloads
-                    </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-                        Sized to what AI teams actually run.
-                    </h2>
-                </div>
-
-                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
-                    {WORKLOADS.map((w, i) => (
-                        <article
-                            key={w.title}
-                            className="flex flex-col gap-4 bg-[#EEECE4] p-7"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-black/[0.12] bg-[#1A1814] text-[#EEECE4]">
-                                    <div className="h-[22px] w-[22px]">{w.glyph}</div>
-                                </div>
-                                <span
-                                    className={`${MONO} text-[10.5px] tabular-nums text-black/30`}
-                                >
-                                    {String(i + 1).padStart(2, "0")}
-                                </span>
-                            </div>
-                            <div>
-                                <p
-                                    className={`${MONO} mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50`}
-                                >
-                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
-                                    {w.metric}
-                                </p>
-                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814]">
-                                    {w.title}
-                                </h3>
-                                <p className="mt-2 text-[13.5px] leading-[1.6] text-black/60">
-                                    {w.description}
-                                </p>
-                            </div>
-                        </article>
-                    ))}
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-function FinalCta() {
-    return (
-        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
-            <div
-                aria-hidden="true"
-                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/12 to-transparent"
-            />
-
-            <Container className="relative z-10">
-                <div className="mx-auto max-w-[920px] rounded-[12px] border border-white/[0.10] bg-[#111316] p-10 sm:p-12 lg:p-14">
-                    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center lg:gap-14">
-                        <div>
-                            <p
-                                className={`${MONO} mb-4 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                            >
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                                Build your AI platform
-                            </p>
-                            <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[42px]">
-                                A blueprint review with the team that runs it.
-                            </h2>
-                            <p className="mt-4 max-w-[440px] text-[14.5px] leading-[1.6] text-white/60">
-                                Send the workload shape, target GPU class, and rollout
-                                window. We come back with a sized cluster and a path to
-                                production.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            <Link
-                                href="/contact"
-                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:bg-white/90`}
-                            >
-                                Talk to AI engineering
-                                <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
-                            <Link
-                                href="/services/gpu"
-                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white/[0.14] bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/35 hover:bg-white/[0.04] hover:text-white`}
-                            >
-                                View GPU pricing
-                                <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </Container>
-        </section>
-    );
-}
-
-/* ──────────────────────────────────────────────────────────────
-   Page
-   ────────────────────────────────────────────────────────────── */
 
 const FAQS = [
     {
@@ -965,19 +511,512 @@ const FAQS = [
     },
 ];
 
+/* ──────────────────────────────────────────────────────────────
+   Sections
+   ────────────────────────────────────────────────────────────── */
+
+function ModelLifecycle() {
+    return (
+        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
+            <div aria-hidden className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+            {/* ─── Atmospheric backdrop ─── */}
+            <Aurora intensity="medium" />
+            <Eclipse position="top" size={780} intensity={0.10} blur={90} />
+
+            <Container className="relative z-10">
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                        Model lifecycle
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[52px]">
+                        From raw data to a{" "}
+                        <span style={ACCENT_FONT} className="text-[#82adfb]">
+                            served token.
+                        </span>
+                    </h2>
+                </div>
+
+                <div className="relative mx-auto mt-14 max-w-[1180px] overflow-x-auto">
+                    <div className="relative flex min-w-[860px] items-stretch justify-between gap-4 px-2">
+                        <div aria-hidden className="pointer-events-none absolute left-[4%] right-[4%] top-[44px] h-px bg-gradient-to-r from-white/0 via-white/20 to-white/0" />
+                        <div aria-hidden className="pointer-events-none absolute left-[4%] right-[4%] top-[44px] h-px overflow-hidden">
+                            <span className="absolute -left-10 top-0 h-px w-24 bg-gradient-to-r from-transparent via-[#0095FF] to-transparent animate-[flowdash_3.6s_linear_infinite]" />
+                        </div>
+
+                        {FLOW.map((n, i) => (
+                            <div key={n.label} className="relative z-10 flex flex-1 flex-col items-center gap-3">
+                                <div className="relative flex h-[88px] w-[88px] items-center justify-center rounded-full border border-white/[0.12] bg-[#111316] text-white/85"
+                                    style={{ boxShadow: "0 12px 30px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05)" }}>
+                                    <div className="h-[42px] w-[42px]">{n.icon}</div>
+                                    <span className="absolute -bottom-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.12] bg-[#0D0D0F] text-[9px] font-bold text-white/55"
+                                        style={{ fontFamily: "var(--font-geist-mono),ui-monospace,monospace" }}>
+                                        {String(i + 1).padStart(2, "0")}
+                                    </span>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-[12.5px] font-semibold tracking-[-0.005em] text-white">{n.label}</p>
+                                    <p className={`${MONO} mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/45`}>{n.sub}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="mx-auto mt-12 grid max-w-[1080px] grid-cols-1 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-3">
+                    {[
+                        { v: "<2min", l: "To first pod" },
+                        { v: "256", l: "GPUs · single job" },
+                        { v: "Zero", l: "In-region egress" },
+                    ].map((m) => (
+                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                            <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
+                            <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                        </div>
+                    ))}
+                </div>
+            </Container>
+
+            <style jsx>{`
+                @keyframes flowdash {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(1200px); }
+                }
+            `}</style>
+        </section>
+    );
+}
+
+function Scenarios() {
+    const featured = SCENARIOS.find((s) => s.featured)!;
+    const others = SCENARIOS.filter((s) => !s.featured);
+
+    return (
+        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
+            {/* ─── Warm paper grain — texture only, no ornament ─── */}
+            <PaperGrain opacity={0.07} />
+
+            <Container className="relative z-10">
+                <div className="mx-auto flex max-w-[1180px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-[680px]">
+                        <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                            Composed AI stacks
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
+                            One recommended stack.{" "}
+                            <span style={ACCENT_FONT} className="text-[#0066B3]">
+                                Three alternatives.
+                            </span>
+                        </h2>
+                    </div>
+                    <p className="max-w-[360px] text-[14.5px] leading-[1.65] text-black/60">
+                        Real cluster shapes — pick the one that matches your workload.
+                    </p>
+                </div>
+
+                <article className="relative mx-auto mt-12 max-w-[1180px] overflow-hidden rounded-[12px] border-2 border-[#1A1814] bg-[#1A1814] text-[#EEECE4]">
+                    {/* Eclipse — soft halo behind the featured card */}
+                    <Eclipse position="top-right" size={520} intensity={0.18} color="#0095FF" />
+                    <Eclipse position="bottom-left" size={420} intensity={0.10} color="#0095FF" blur={80} />
+
+                    <div className="absolute right-5 top-5 z-10">
+                        <div className={`${MONO} inline-flex items-center gap-1.5 rounded-full bg-[#0095FF] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-white`}>
+                            <span className="h-1 w-1 rounded-full bg-white" />
+                            Recommended
+                        </div>
+                    </div>
+
+                    <div className="relative grid gap-10 p-8 sm:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-14 lg:p-12">
+                        <div>
+                            <p className={`${MONO} mb-3 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55`}>
+                                <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                {featured.persona}
+                            </p>
+                            <h3 className="text-[24px] font-semibold leading-[1.15] tracking-[-0.01em] text-white sm:text-[28px]">
+                                {featured.name}
+                            </h3>
+                            <p className="mt-3 max-w-[440px] text-[13.5px] leading-[1.6] text-white/65">
+                                {featured.description}
+                            </p>
+                            <div className="mt-6 flex items-baseline gap-2">
+                                <span className={`${MONO} text-[40px] font-bold tabular-nums leading-none text-white`}>
+                                    {featured.monthly}
+                                </span>
+                                {featured.suffix && (
+                                    <span className={`${MONO} text-[12px] text-white/55`}>{featured.suffix}</span>
+                                )}
+                            </div>
+                            <Link
+                                href={featured.cta.href}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                            >
+                                {featured.cta.label}
+                                <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                        </div>
+
+                        <div className="flex flex-col gap-6">
+                            <div>
+                                <p className={`${MONO} mb-3 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/45`}>
+                                    Composed of
+                                </p>
+                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                    {featured.services.map((svc) => (
+                                        <div
+                                            key={svc.label}
+                                            className="flex items-center gap-2.5 rounded-[6px] border border-white/[0.10] bg-white/[0.04] px-3 py-2.5"
+                                        >
+                                            <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-white/85">
+                                                <div className="h-[16px] w-[16px]">{svc.glyph}</div>
+                                            </div>
+                                            <span className="truncate text-[11px] text-white/80">{svc.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08]">
+                                {featured.specs.map((sp) => (
+                                    <div key={sp.label} className="flex items-baseline justify-between gap-4 bg-[#1A1814] px-4 py-3">
+                                        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                                            {sp.label}
+                                        </span>
+                                        <span className="text-right text-[12.5px] text-white/85">{sp.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <div className="mx-auto mt-5 grid max-w-[1180px] grid-cols-1 gap-5 sm:grid-cols-3">
+                    {others.map((s) => (
+                        <article
+                            key={s.name}
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                        >
+                            <div className="border-b border-black/[0.08] p-6">
+                                <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
+                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                    {s.persona}
+                                </p>
+                                <h3 className="text-[16px] font-semibold leading-[1.2] tracking-[-0.01em] text-[#1A1814]">
+                                    {s.name}
+                                </h3>
+                                <p className="mt-2 text-[12px] leading-[1.55] text-black/60">{s.description}</p>
+                                <div className="mt-4 flex items-baseline gap-1.5">
+                                    <span className={`${MONO} text-[24px] font-bold tabular-nums text-[#1A1814]`}>
+                                        {s.monthly}
+                                    </span>
+                                    {s.suffix && (
+                                        <span className={`${MONO} text-[11px] text-black/45`}>{s.suffix}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-1 flex-col gap-4 p-6">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {s.services.map((svc) => (
+                                        <div
+                                            key={svc.label}
+                                            title={svc.label}
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-[5px] border border-black/[0.10] bg-white/60 text-[#1A1814]"
+                                        >
+                                            <div className="h-[14px] w-[14px]">{svc.glyph}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex flex-col gap-1.5 border-t border-black/[0.06] pt-4">
+                                    {s.specs.slice(0, 2).map((sp) => (
+                                        <div key={sp.label} className="flex items-baseline justify-between gap-2">
+                                            <span className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-black/45`}>
+                                                {sp.label}
+                                            </span>
+                                            <span className="text-right text-[11.5px] text-black/75">{sp.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <Link
+                                    href={s.cta.href}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                >
+                                    {s.cta.label}
+                                    <ArrowRight className="h-3 w-3" />
+                                </Link>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+
+                <p className={`${MONO} mx-auto mt-10 text-center text-[10.5px] uppercase tracking-[0.18em] text-black/40`}>
+                    Hourly · reserved &amp; spot available
+                </p>
+            </Container>
+        </section>
+    );
+}
+
+/* ───────── Stack section: GPU featured card (with embedded NVIDIA lineup)
+   followed by 5 layer cards in a varied grid. Different from kubernetes bento
+   — single hero across the top, varied 3+2 below. ───────── */
+
+function StackLayerCard({ piece, index }: { piece: StackPiece; index: number }) {
+    return (
+        <article className="group relative flex flex-col gap-4 rounded-[10px] border border-white/[0.10] bg-[#0F1114] p-6 transition-colors hover:border-white/[0.22] sm:p-7">
+            <div className="relative flex items-start justify-between">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/[0.12] bg-white/[0.03] text-white/85">
+                    <div className="h-[26px] w-[26px]">{piece.icon}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`${MONO} inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-white/55`}>
+                        <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                        {piece.role}
+                    </span>
+                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
+                        {String(index + 1).padStart(2, "0")}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <h3 className="text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-white">{piece.title}</h3>
+                <p className="mt-2.5 text-[12.5px] leading-[1.6] text-white/60">{piece.description}</p>
+            </div>
+
+            <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
+                {piece.capabilities.map((c) => (
+                    <span key={c} className={`${MONO} inline-flex items-center rounded-[3px] border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.10em] text-white/70`}>
+                        {c}
+                    </span>
+                ))}
+            </div>
+        </article>
+    );
+}
+
+function Stack() {
+    return (
+        <section id="stack" className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
+            <div aria-hidden className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+            <Container className="relative z-10">
+                <div className="mx-auto flex max-w-[1180px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-[640px]">
+                        <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                            Platform anatomy
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                            GPUs plus everything around them.
+                        </h2>
+                    </div>
+                    <p className="max-w-[380px] text-[14px] leading-[1.6] text-white/55">
+                        GPUs alone don&apos;t ship an AI product. Storage, data, orchestration,
+                        and network sit on the same private VPC — no egress between
+                        them.
+                    </p>
+                </div>
+
+                {/* Featured GPU hero card — full-width, contains inline NVIDIA lineup */}
+                <article className="relative mx-auto mt-14 max-w-[1180px] overflow-hidden rounded-[12px] border border-[#0095FF]/40 bg-[linear-gradient(180deg,#13161B_0%,#0F1114_100%)] p-7 sm:p-9 lg:p-10"
+                    style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 32px 80px -40px rgba(0,149,255,0.30)" }}
+                >
+                    <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[#0095FF]/[0.10] blur-3xl" />
+                    <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{
+                        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,1) 1px, transparent 0)",
+                        backgroundSize: "20px 20px",
+                    }} />
+
+                    <div className="relative grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.3fr)] lg:items-start lg:gap-12">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <div className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/[0.12] bg-white/[0.03] text-white/85">
+                                    <div className="h-[26px] w-[26px]"><GpuIcon /></div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`${MONO} inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-white/55`}>
+                                        <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                        Compute
+                                    </span>
+                                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>01</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-5 flex items-center gap-3">
+                                <h3 className="text-[22px] font-semibold leading-[1.15] tracking-[-0.01em] text-white sm:text-[26px]">
+                                    GPU compute
+                                </h3>
+                                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-white/85">
+                                    <span className={`${MONO} text-[8.5px] font-semibold uppercase tracking-[0.16em] text-white/55`}>
+                                        Powered by
+                                    </span>
+                                    <NvidiaLogo width={42} height={11} />
+                                </div>
+                            </div>
+
+                            <p className="mt-3 max-w-[440px] text-[13.5px] leading-[1.6] text-white/60">
+                                Six NVIDIA GPU classes from B200 down to A10, available
+                                on-demand, reserved, and (for select classes) spot.
+                                Drivers, CUDA, NCCL, and DCGM exporters pre-baked into
+                                every image.
+                            </p>
+
+                            <div className="mt-5 flex flex-wrap gap-1.5">
+                                {["B200 · H200 · H100", "A100 · L40S · A10", "NVLink islands", "MIG slicing"].map((c) => (
+                                    <span key={c} className={`${MONO} inline-flex items-center rounded-[3px] border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.10em] text-white/70`}>
+                                        {c}
+                                    </span>
+                                ))}
+                            </div>
+
+                            <Link
+                                href="/services/gpu"
+                                className={`${MONO} mt-6 inline-flex h-10 items-center gap-1.5 rounded-[5px] bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                            >
+                                See full GPU pricing
+                                <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                        </div>
+
+                        {/* GPU lineup grid */}
+                        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-2 lg:grid-cols-3">
+                            {GPU_LINEUP.map((g) => (
+                                <div
+                                    key={g.model}
+                                    className="relative flex flex-col gap-3 bg-[#0F1114] p-4"
+                                >
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <span className={`${MONO} text-[15px] font-bold tabular-nums text-white`}>
+                                            {g.model}
+                                        </span>
+                                        {g.badge && (
+                                            <span className={`${MONO} inline-flex items-center rounded-[3px] bg-[#0095FF]/[0.18] px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-[0.12em] text-[#0095FF]`}>
+                                                {g.badge}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`${MONO} w-9 text-[9px] uppercase tracking-[0.14em] text-white/40`}>VRAM</span>
+                                            <span className={`${MONO} w-[52px] text-[11px] tabular-nums text-white/75`}>{g.vram}</span>
+                                            <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                                                <span className="absolute inset-y-0 left-0 rounded-full bg-white/70" style={{ width: `${g.vramBar * 100}%` }} />
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`${MONO} w-9 text-[9px] uppercase tracking-[0.14em] text-white/40`}>FP16</span>
+                                            <span className={`${MONO} w-[52px] text-[11px] tabular-nums text-white/75`}>{g.flops}</span>
+                                            <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                                                <span className="absolute inset-y-0 left-0 rounded-full bg-[#0095FF]" style={{ width: `${g.flopsBar * 100}%` }} />
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-baseline justify-between border-t border-white/[0.06] pt-2.5">
+                                        <span className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/40`}>From</span>
+                                        <div>
+                                            <span className={`${MONO} text-[14px] font-bold tabular-nums text-white`}>{g.from}</span>
+                                            <span className="ml-0.5 text-[10px] text-white/40">/hr</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </article>
+
+                {/* 5 layer cards in 3+2 grid */}
+                <div className="mx-auto mt-5 grid max-w-[1180px] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="lg:col-span-1"><StackLayerCard piece={STACK_TRAIN} index={1} /></div>
+                    <div className="lg:col-span-1"><StackLayerCard piece={STACK_INFER} index={2} /></div>
+                    <div className="lg:col-span-1"><StackLayerCard piece={STACK_DATA} index={3} /></div>
+                </div>
+                <div className="mx-auto mt-5 grid max-w-[1180px] grid-cols-1 gap-5 lg:grid-cols-2">
+                    <StackLayerCard piece={STACK_K8S} index={4} />
+                    <StackLayerCard piece={STACK_NET} index={5} />
+                </div>
+            </Container>
+        </section>
+    );
+}
+
+function Workloads() {
+    return (
+        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
+            {/* ─── Warm paper grain ─── */}
+            <PaperGrain opacity={0.07} />
+
+            <Container className="relative z-10">
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                        Workloads
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
+                        Sized to what AI teams{" "}
+                        <span style={ACCENT_FONT} className="text-[#0066B3]">
+                            actually run.
+                        </span>
+                    </h2>
+                </div>
+
+                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
+                    {WORKLOADS.map((w, i) => (
+                        <article key={w.title} className="flex flex-col gap-4 bg-[#EEECE4] p-7">
+                            <div className="flex items-start justify-between">
+                                <div className="inline-flex h-12 w-12 items-center justify-center rounded-[7px] border border-black/[0.12] bg-[#1A1814] text-[#EEECE4]">
+                                    <div className="h-[26px] w-[26px]">{w.glyph}</div>
+                                </div>
+                                <span className={`${MONO} text-[10.5px] tabular-nums text-black/30`}>
+                                    {String(i + 1).padStart(2, "0")}
+                                </span>
+                            </div>
+                            <div>
+                                <p className={`${MONO} mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50`}>
+                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                    {w.metric}
+                                </p>
+                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814]">{w.title}</h3>
+                                <p className="mt-2 text-[13.5px] leading-[1.6] text-black/60">{w.description}</p>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </Container>
+        </section>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Page
+   ────────────────────────────────────────────────────────────── */
+
 export function AiMlLanding() {
     return (
         <main className="bg-[#0D0D0F]">
-            <Hero />
-            <Workflows />
-            <GpuLineup />
-            <Stack />
-            <Workloads />
-            <ServicesHomeSectionFive
-                title="Frequently asked questions"
-                faqs={FAQS}
+            <ServiceHeroSection
+                badge="AI / ML"
+                title="Infrastructure for the full AI lifecycle."
+                description="Training, fine-tuning, and inference on NVIDIA GPUs — with the data layer wired in."
+                primaryAction={{ label: "Talk to AI engineering", href: "/contact" }}
+                secondaryAction={{ label: "Browse GPU lineup", href: "/services/gpu" }}
+                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                illustration={{
+                    src: "/images/main-page/gpu aniamtion resized.png",
+                    alt: "GPU cluster",
+                    priority: true,
+                }}
             />
-            <FinalCta />
+            <HeroStats metrics={HERO_STATS} eyebrow="GPU platform" />
+            <ModelLifecycle />
+            <Scenarios />
+            <Workloads />
+            <ServicesHomeSectionFive title="Frequently asked questions" faqs={FAQS} />
         </main>
     );
 }

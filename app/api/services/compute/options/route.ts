@@ -175,12 +175,25 @@ export async function GET() {
       const used = usedByHost.get(h.id) || {
         cpu: 0, mem: 0, disk: 0, dedicatedVcpu: 0, sharedVcpu: 0,
       };
-      const freeCpu = (h.total_cpu_cores || 0) - used.cpu;
-      const freeMem = (h.total_memory_mb || 0) - used.mem;
-      const freeDisk = (h.total_disk_gb || 0) - used.disk;
+      // Tier-aware: a region is "available" if EITHER the dedicated pool
+      // OR the shared (oversubscribed) pool can fit any reasonable VM. The
+      // old 1:1 `total - cpu` check made shared-only hosts look full as
+      // soon as physical_threads worth of shared VMs were placed.
+      const avail = computeHostAvailability({
+        totalCpuCores: h.total_cpu_cores || 0,
+        totalMemoryMB: h.total_memory_mb || 0,
+        totalDiskGB: h.total_disk_gb || 0,
+        sharedRatio: h.shared_oversubscription_ratio || undefined,
+        usage: {
+          dedicatedVcpuUsed: used.dedicatedVcpu,
+          sharedVcpuUsed: used.sharedVcpu,
+          memoryMBUsed: used.mem,
+          diskGBUsed: used.disk,
+        },
+      });
       const freeIps = availableIpsByHost.get(h.id) || 0;
-      // A host contributes availability if it has resources + IPs
-      const hostAvailable = freeCpu > 0 && freeMem >= 512 && freeDisk >= 10 && freeIps > 0;
+      const hasAnyVcpu = avail.sharedVcpu > 0 || avail.dedicatedVcpu > 0;
+      const hostAvailable = hasAnyVcpu && avail.memoryMB >= 512 && avail.diskGB >= 10 && freeIps > 0;
 
       const existing = regionMap.get(regionSlug);
       if (existing) {

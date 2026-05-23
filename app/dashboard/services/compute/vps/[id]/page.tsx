@@ -294,8 +294,8 @@ export default function VMDetailPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
         {/* Horizontal pill-tab nav (replaces sidebar tab list) */}
-        <div className="border-b border-white/[0.06] mb-5">
-          <div className="flex items-center gap-1 -mb-px overflow-x-auto no-scrollbar">
+        <div className="mb-5 rounded-[8px] border border-white/[0.10] bg-white/[0.03] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {TABS.map((tab) => {
               const isActive = activeTab === tab.value;
               return (
@@ -303,24 +303,35 @@ export default function VMDetailPage() {
                   key={tab.value}
                   type="button"
                   onClick={() => setActiveTab(tab.value)}
-                  className={`${MONO} relative px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
+                  className={`${MONO} relative my-1.5 inline-flex items-center gap-2 rounded-[6px] px-4 py-2.5 text-[12.5px] font-semibold uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
                   style={{
-                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.62)',
+                    background: isActive ? 'rgba(0,149,255,0.10)' : 'transparent',
+                    boxShadow: isActive
+                      ? 'inset 0 0 0 1px rgba(0,149,255,0.35)'
+                      : 'inset 0 0 0 1px rgba(255,255,255,0)',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = 'rgba(255,255,255,0.75)';
+                    if (!isActive) {
+                      e.currentTarget.style.color = '#ffffff';
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                    }
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = 'rgba(255,255,255,0.45)';
+                    if (!isActive) {
+                      e.currentTarget.style.color = 'rgba(255,255,255,0.62)';
+                      e.currentTarget.style.background = 'transparent';
+                    }
                   }}
                 >
-                  {tab.label}
                   {isActive && (
                     <span
-                      className="absolute left-2 right-2 bottom-0 h-[2px]"
-                      style={{ background: ACCENT, boxShadow: `0 0 8px rgba(0,149,255,0.5)` }}
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }}
                     />
                   )}
+                  {tab.label}
                 </button>
               );
             })}

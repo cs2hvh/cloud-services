@@ -5,23 +5,7 @@
 // 2-col layout, and a discover banner. Matches the rest of the
 // dashboard's design language.
 
-import {
-    Archive,
-    ArrowUpRight,
-    Box,
-    Clock,
-    Cpu,
-    Database,
-    GitBranch,
-    Globe,
-    MoreVertical,
-    Plus,
-    Rocket,
-    Server,
-    Shield,
-    Terminal,
-    Zap,
-} from "lucide-react";
+import { ArrowUpRight, MoreVertical, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { ObjectSpaceBucket, PlatformApp, Tables } from "@/lib/supabase/types";
@@ -37,6 +21,132 @@ const SERIF_STYLE: React.CSSProperties = {
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
+
+// ─── Custom stroke glyphs (24×24) ──────────────────────────────────
+// Premium hand-tuned glyphs in the editorial style — never lucide.
+
+function ServerGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <rect x="3" y="4" width="18" height="6" rx="1.2" />
+            <rect x="3" y="14" width="18" height="6" rx="1.2" />
+            <circle cx="6" cy="7" r="0.7" fill="currentColor" />
+            <circle cx="6" cy="17" r="0.7" fill="currentColor" />
+            <line x1="9" y1="7" x2="18" y2="7" strokeOpacity="0.5" />
+            <line x1="9" y1="17" x2="18" y2="17" strokeOpacity="0.5" />
+        </svg>
+    );
+}
+
+function GpuGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <rect x="2.5" y="7" width="17" height="10" rx="1.2" />
+            <rect x="5.5" y="9.5" width="11" height="5" rx="0.6" fill="currentColor" fillOpacity="0.18" />
+            <path d="M19.5 10h2M19.5 14h2M2.5 17l1.5 2M16 17l1.5 2" strokeLinecap="round" />
+            <circle cx="7.5" cy="12" r="0.6" fill="currentColor" />
+            <circle cx="14.5" cy="12" r="0.6" fill="currentColor" />
+        </svg>
+    );
+}
+
+function DatabaseGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <ellipse cx="12" cy="5.5" rx="7" ry="2.2" />
+            <path d="M5 5.5v6c0 1.2 3.1 2.2 7 2.2s7-1 7-2.2v-6" />
+            <path d="M5 11.5v6c0 1.2 3.1 2.2 7 2.2s7-1 7-2.2v-6" />
+        </svg>
+    );
+}
+
+function K8sGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+            <path d="M12 2.5l8 4v9.5l-8 5.5-8-5.5V6.5l8-4z" />
+            <path d="M12 8v8M8 10l8 4M16 10l-8 4" strokeOpacity="0.55" strokeLinecap="round" />
+            <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+        </svg>
+    );
+}
+
+function ShieldGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round">
+            <path d="M12 3l8 3v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-3z" />
+            <path d="M9.5 12.5l2 2 3.5-4" />
+        </svg>
+    );
+}
+
+function BucketGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+            <path d="M3.5 6.5h17l-1.5 13a2 2 0 01-2 1.8H7a2 2 0 01-2-1.8L3.5 6.5z" />
+            <path d="M3 6.5l1.5-2.5h15L21 6.5" />
+            <path d="M9.5 11l1 6M14.5 11l-1 6" strokeOpacity="0.5" />
+        </svg>
+    );
+}
+
+function AppGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+            <path d="M12 2.5l8 4v9l-8 5-8-5v-9l8-4z" />
+            <path d="M4 6.5l8 4 8-4M12 10.5v10" strokeOpacity="0.55" />
+            <circle cx="12" cy="2.5" r="1" fill="currentColor" />
+        </svg>
+    );
+}
+
+function GitFlowGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="6" cy="6" r="2" />
+            <circle cx="6" cy="18" r="2" />
+            <circle cx="18" cy="12" r="2" />
+            <path d="M6 8v8" />
+            <path d="M6 11c0 3 2 5 5 5h5" />
+        </svg>
+    );
+}
+
+function GlobeGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4}>
+            <circle cx="12" cy="12" r="9" />
+            <ellipse cx="12" cy="12" rx="4" ry="9" strokeOpacity="0.55" />
+            <line x1="3" y1="12" x2="21" y2="12" strokeOpacity="0.55" />
+        </svg>
+    );
+}
+
+function PulseGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" strokeOpacity="0.35" />
+            <path d="M4 12h3l2-5 3 10 2-5h6" />
+        </svg>
+    );
+}
+
+function ClockGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7.5V12l3 2" />
+        </svg>
+    );
+}
+
+function EmptyStateGlyph() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round">
+            <rect x="3" y="4.5" width="18" height="15" rx="1.5" />
+            <path d="M7 9.5l2 2-2 2M11 13.5h5" />
+        </svg>
+    );
+}
 
 interface PageProps {
     game_servers: Tables<"game_servers">[];
@@ -140,44 +250,44 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                 <StatLink
                     label="Servers"
                     value={data.game_servers.length}
-                    icon={Server}
+                    glyph={<ServerGlyph />}
                     href="/dashboard/services/compute/vps"
                 />
                 <StatLink
                     label="GPU pods"
                     value={data.gpu_pods.length}
-                    icon={Zap}
+                    glyph={<GpuGlyph />}
                     href="/dashboard/services/gpu"
                     sub={totalGpus > 0 ? `${totalGpus} GPUs` : undefined}
                 />
                 <StatLink
                     label="Databases"
                     value={data.database_clusters.length}
-                    icon={Database}
+                    glyph={<DatabaseGlyph />}
                     href="/dashboard/services/database"
                 />
                 <StatLink
                     label="K8s"
                     value={data.kubernetes_clusters.length}
-                    icon={Box}
+                    glyph={<K8sGlyph />}
                     href="/dashboard/services/kubernetes"
                 />
                 <StatLink
                     label="DDoS"
                     value={activeSpectrum}
-                    icon={Shield}
+                    glyph={<ShieldGlyph />}
                     href="/dashboard/services/network-ddos"
                 />
                 <StatLink
                     label="Buckets"
                     value={activeStorage}
-                    icon={Archive}
+                    glyph={<BucketGlyph />}
                     href="/dashboard/services/object-storage"
                 />
                 <StatLink
                     label="Apps"
                     value={data.platform_apps.length}
-                    icon={Rocket}
+                    glyph={<AppGlyph />}
                     href="/dashboard/services/apps"
                 />
             </section>
@@ -191,7 +301,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-12">
                 <SpotlightCard
                     eyebrow="App Platform"
-                    icon={<GitBranch className="h-3.5 w-3.5" />}
+                    icon={<div className="h-3.5 w-3.5"><GitFlowGlyph /></div>}
                     title="Deploy from Git"
                     desc="Push to deploy. Connect GitHub, GitLab, or Bitbucket and ship with zero config."
                     cta="Get started"
@@ -199,7 +309,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                 />
                 <SpotlightCard
                     eyebrow="GPU Cloud"
-                    icon={<Zap className="h-3.5 w-3.5" />}
+                    icon={<div className="h-3.5 w-3.5"><GpuGlyph /></div>}
                     title="GPU instances"
                     desc="B200, H200, H100, and L40S on demand. Pay by the second."
                     cta="View GPUs"
@@ -207,7 +317,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                 />
                 <SpotlightCard
                     eyebrow="Domains"
-                    icon={<Globe className="h-3.5 w-3.5" />}
+                    icon={<div className="h-3.5 w-3.5"><GlobeGlyph /></div>}
                     title="Domain marketplace"
                     desc="Search availability, submit managed purchase requests, and connect to apps."
                     cta="Open marketplace"
@@ -237,7 +347,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                             {data.game_servers.map((server) => (
                                 <ResourceRow
                                     key={`gs-${server.id}`}
-                                    icon={<Cpu className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><ServerGlyph /></div>}
                                     title={server.name}
                                     sub={server.game_type ?? "—"}
                                 >
@@ -254,7 +364,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 <ResourceRow
                                     key={`gpu-${pod.id}`}
                                     href={`/dashboard/services/gpu/${pod.id}`}
-                                    icon={<Zap className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><GpuGlyph /></div>}
                                     title={pod.name}
                                     sub={
                                         <span className="inline-flex items-center gap-1.5 align-middle">
@@ -275,7 +385,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 <ResourceRow
                                     key={`db-${db.id}`}
                                     href={`/dashboard/services/database/clusters/${db.cluster_id}`}
-                                    icon={<Database className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><DatabaseGlyph /></div>}
                                     title={db.name}
                                     sub={`${dbLocations.find((l) => l.short === db.region)?.city || db.region} · v${db.version}`}
                                 >
@@ -288,7 +398,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                             {data.kubernetes_clusters.map((k8s) => (
                                 <ResourceRow
                                     key={`k8s-${k8s.cluster_id}`}
-                                    icon={<Box className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><K8sGlyph /></div>}
                                     title={k8s.cluster_name}
                                     sub={`${k8s.cni_plugin} · ${k8s.k8s_version} · ${k8s.workers?.length} nodes`}
                                 >
@@ -302,7 +412,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 <ResourceRow
                                     key={`sp-${app.id}`}
                                     href={`/dashboard/services/network-ddos/${app.spectrum_id}`}
-                                    icon={<Shield className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><ShieldGlyph /></div>}
                                     title={app.dns?.original_name ?? "—"}
                                     sub={`${app.protocol} · ${app.traffic_type || "direct"}`}
                                 >
@@ -319,7 +429,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 <ResourceRow
                                     key={`os-${bucket.id}`}
                                     href={`/dashboard/services/object-storage/${bucket.id}`}
-                                    icon={<Archive className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><BucketGlyph /></div>}
                                     title={bucket.name}
                                     sub={bucket.id ?? "—"}
                                 >
@@ -333,7 +443,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 <ResourceRow
                                     key={`pa-${app.id}`}
                                     href={`/dashboard/services/apps/${app.id}`}
-                                    icon={<Rocket className="h-3.5 w-3.5" />}
+                                    icon={<div className="h-3.5 w-3.5"><AppGlyph /></div>}
                                     title={app.name}
                                     sub={`${app.repository_name} · ${app.git_provider || "github"}`}
                                 >
@@ -350,7 +460,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 className="h-12 w-12 mb-4 mx-auto inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
                                 style={{ color: ACCENT }}
                             >
-                                <Terminal className="h-5 w-5" />
+                                <div className="h-5 w-5"><EmptyStateGlyph /></div>
                             </div>
                             <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-white">
                                 No resources yet
@@ -400,7 +510,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                                 className="flex items-start gap-3 px-5 py-3 border-b border-white/[0.04] last:border-b-0"
                             >
                                 <div className="h-6 w-6 shrink-0 inline-flex items-center justify-center border border-white/[0.06] bg-[#0d0e11] rounded-[4px] text-white/45 mt-0.5">
-                                    <Clock className="h-3 w-3" />
+                                    <div className="h-3 w-3"><ClockGlyph /></div>
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[12.5px] text-white/85 font-medium truncate">
@@ -448,19 +558,19 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <DiscoverCard
                     href="/dashboard/services/network-ddos"
-                    icon={<Shield className="h-4 w-4" />}
+                    icon={<div className="h-4 w-4"><ShieldGlyph /></div>}
                     title="DDoS protection"
                     desc="Layer-4 mitigation at the Cloudflare edge."
                 />
                 <DiscoverCard
                     href="/dashboard/services/database"
-                    icon={<Database className="h-4 w-4" />}
+                    icon={<div className="h-4 w-4"><DatabaseGlyph /></div>}
                     title="Managed databases"
                     desc="Postgres, MySQL, MongoDB with backups."
                 />
                 <DiscoverCard
                     href="/dashboard/services/kubernetes"
-                    icon={<Box className="h-4 w-4" />}
+                    icon={<div className="h-4 w-4"><K8sGlyph /></div>}
                     title="Kubernetes"
                     desc="Fully managed clusters with autoscaling."
                 />
@@ -476,13 +586,13 @@ export default Dashboard;
 function StatLink({
     label,
     value,
-    icon: Icon,
+    glyph,
     href,
     sub,
 }: {
     label: string;
     value: number;
-    icon: React.ElementType;
+    glyph: React.ReactNode;
     href: string;
     sub?: string;
 }) {
@@ -492,7 +602,9 @@ function StatLink({
             className="px-5 py-5 flex flex-col gap-2 hover:bg-white/[0.015] transition-colors group"
         >
             <div className="flex items-center gap-2">
-                <Icon className="h-3 w-3 text-white/45 group-hover:text-[#0095FF] transition-colors" />
+                <div className="h-3.5 w-3.5 text-white/55 group-hover:text-[#0095FF] transition-colors">
+                    {glyph}
+                </div>
                 <span
                     className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}
                 >
