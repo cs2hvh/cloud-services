@@ -566,7 +566,7 @@ export function AutoSetupPanel({ onCreated }: Props) {
                                 address, but its <strong>gateway</strong> is a private IP that lives on{" "}
                                 <code className="text-white/70">vmbr1</code> (the vRack bridge). The host then forwards
                                 BYOIP traffic to the VM via proxy_arp + a per-VM /32 route. Pick any RFC1918 subnet that
-                                isn't used elsewhere on this host.
+                                isn&apos;t used elsewhere on this host.
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
@@ -619,7 +619,7 @@ export function AutoSetupPanel({ onCreated }: Props) {
                     <div className="border-t border-white/10 pt-4">
                         <h3 className="text-white font-semibold mb-3">Node capacity (optional)</h3>
                         <p className="text-xs text-white/40 mb-3">
-                            Leave blank — we'll query the Proxmox API and auto-fill from{" "}
+                            Leave blank — we&apos;ll query the Proxmox API and auto-fill from{" "}
                             <code className="text-white/60">/nodes/&lt;node&gt;/status</code> and the chosen storage.
                             Override only if you want to reserve capacity (e.g. leave 10% headroom).
                         </p>

@@ -255,7 +255,7 @@ export function VmacSyncPanel({ hostId, hostUrl, onPoolsChanged }: Props) {
                         {capReached && (
                             <p className="text-xs text-white/55">
                                 Cap reached — {status.unboundIpsCount} IP
-                                {(status.unboundIpsCount ?? 0) === 1 ? "" : "s"} can't get vMACs.
+                                {(status.unboundIpsCount ?? 0) === 1 ? "" : "s"} can&apos;t get vMACs.
                                 Add another host to grow.
                             </p>
                         )}

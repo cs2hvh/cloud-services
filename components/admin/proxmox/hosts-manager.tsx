@@ -450,7 +450,7 @@ export function ProxmoxHostsManager() {
             <div className="border border-dashed border-white/15 rounded-md py-10 text-center">
               <Server className="h-8 w-8 mx-auto text-white/30 mb-2" />
               <p className="text-white/60 text-sm">No hosts configured yet.</p>
-              <p className="text-white/40 text-xs mt-1">Click "Add host" to register your first Proxmox host.</p>
+              <p className="text-white/40 text-xs mt-1">Click &quot;Add host&quot; to register your first Proxmox host.</p>
             </div>
           ) : (
             <div className="space-y-2">

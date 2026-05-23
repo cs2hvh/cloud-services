@@ -188,7 +188,7 @@ async function upsertVmacPoolRow(
 ): Promise<void> {
     // Idempotent: try insert, swallow unique violations (mac UNIQUE
     // per host). If the pool already exists, reuse its id.
-    let { data: pool, error: poolErr } = await supabase
+    const insertResult = await supabase
         .from("public_ip_pools")
         .insert({
             host_id: hostId,
@@ -198,6 +198,8 @@ async function upsertVmacPoolRow(
         })
         .select("id")
         .single();
+    let pool = insertResult.data;
+    const poolErr = insertResult.error;
 
     if (poolErr) {
         if (!/duplicate|unique/i.test(poolErr.message)) {
