@@ -387,6 +387,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Presets", href: "/dashboard/services/inference/presets", icon: Rocket, matchPrefix: true },
             { label: "Vectors", href: "/dashboard/services/inference/vectors", icon: Database, matchPrefix: true },
             { label: "Fine-Tuning", href: "/dashboard/services/inference/fine-tuning", icon: GpuCloudIcon, matchPrefix: true },
+            { label: "Deployments", href: "/dashboard/services/inference/deployments", icon: AppDeployLucide, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
             { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
