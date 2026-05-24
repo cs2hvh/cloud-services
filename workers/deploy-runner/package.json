@@ -1,0 +1,28 @@
+{
+  "name": "ahura-deploy-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AhuraCloud BYO Model Deploy orchestrator. Claims inference.deployments rows queued for create/scale/delete, calls RunPod Serverless API, registers/unregisters the resulting model in inference.models. Runs as a single-replica k8s Deployment.",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "axios": "^1.7.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

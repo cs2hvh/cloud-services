@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ahura-deploy-runner
+  namespace: ahura
+  labels:
+    app: ahura-deploy-runner
+    tier: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ahura-deploy-runner
+  template:
+    metadata:
+      labels:
+        app: ahura-deploy-runner
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: runner
+          image: ghcr.io/hav0ky/ahura-deploy-runner:latest
+          imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: ahura-deploy-runner-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+      imagePullSecrets:
+        - name: ghcr-pull
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahura-deploy-runner-health
+  namespace: ahura
+spec:
+  type: ClusterIP
+  selector:
+    app: ahura-deploy-runner
+  ports:
+    - port: 8080
+      targetPort: health
+      protocol: TCP
+      name: health
