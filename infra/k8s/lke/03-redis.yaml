@@ -1,0 +1,94 @@
+# In-cluster Redis for BullMQ. 10GB PVC so jobs survive pod restarts.
+#
+# NOT for Upstash REST (heartbeat reads still use that — different protocol).
+# This Redis ONLY services BullMQ queues from ft-runner + deploy-runner.
+#
+# Sized for v1: ~1k queued jobs / hour, mostly tiny payloads. Bump memory
+# and disk before you scale past that.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: ahura
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: linode-block-storage-retain
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ahura
+  labels:
+    app: redis
+    tier: queue
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # single PVC, can't run two replicas reading it concurrently
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          args:
+            - "redis-server"
+            - "--appendonly"
+            - "yes"
+            - "--maxmemory"
+            - "512mb"
+            - "--maxmemory-policy"
+            - "noeviction"   # BullMQ requires this — never evict in-flight jobs
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ahura
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: redis
+      protocol: TCP
+      name: redis

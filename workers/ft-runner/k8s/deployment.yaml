@@ -76,8 +76,10 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
-      imagePullSecrets:
-        - name: ghcr-pull
+      # imagePullSecrets removed — ghcr.io/hav0ky/ahura-ft-runner is a public package.
+      # If you make the package private later, add back:
+      #   imagePullSecrets:
+      #     - name: ghcr-pull
 ---
 apiVersion: v1
 kind: Service

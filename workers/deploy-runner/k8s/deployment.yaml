@@ -21,7 +21,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: runner
-          image: ghcr.io/hav0ky/ahura-deploy-runner:latest
+          image: ghcr.io/cs2hvh/ahura-deploy-runner:latest
           imagePullPolicy: Always
           ports:
             - name: health
@@ -62,8 +62,10 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
-      imagePullSecrets:
-        - name: ghcr-pull
+      # imagePullSecrets removed — ghcr.io/cs2hvh/ahura-deploy-runner is a public package.
+      # If you make the package private later, add back:
+      #   imagePullSecrets:
+      #     - name: ghcr-pull
 ---
 apiVersion: v1
 kind: Service
