@@ -255,12 +255,12 @@ export function ComputeSection() {
                                     sizes="48px"
                                 />
                             </div>
-                            <div className="relative h-5 w-12 shrink-0">
+                            <div className="relative h-5 w-12 shrink-0 bg-white border border-white/10 rounded-[4px] px-0.5">
                                 <Image
                                     src="/images/compute-page/amd.png"
                                     alt="AMD Ryzen"
                                     fill
-                                    className="object-contain opacity-80"
+                                    className="object-contain opacity-80 "
                                     sizes="48px"
                                 />
                             </div>

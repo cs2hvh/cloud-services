@@ -75,22 +75,22 @@ const TABS = [
     imageSrc: "/images/Features/protection.png",
     imageAlt: "Security shield illustration",
   },
-  {
-    id: "ai-agent",
-    label: "AI Agent",
-    title: "AI Agents",
-    heading: "Ship AI-native products faster",
-    description:
-      "Build autonomous agents that monitor, optimize, and act on your infrastructure. First-class tooling for vector search, model gateways, and agent observability.",
-    bullets: [
-      "Managed vector databases and embedding pipelines",
-      "Secure model gateways with rate limiting",
-      "Real-time event streams and agent observability",
-      "Production-ready orchestration and workflows",
-    ],
-    imageSrc: "/images/Features/ai-agent.png",
-    imageAlt: "AI agent illustration",
-  },
+  // {
+  //   id: "ai-agent",
+  //   label: "AI Agent",
+  //   title: "AI Agents",
+  //   heading: "Ship AI-native products faster",
+  //   description:
+  //     "Build autonomous agents that monitor, optimize, and act on your infrastructure. First-class tooling for vector search, model gateways, and agent observability.",
+  //   bullets: [
+  //     "Managed vector databases and embedding pipelines",
+  //     "Secure model gateways with rate limiting",
+  //     "Real-time event streams and agent observability",
+  //     "Production-ready orchestration and workflows",
+  //   ],
+  //   imageSrc: "/images/Features/ai-agent.png",
+  //   imageAlt: "AI agent illustration",
+  // },
   {
     id: "kubernetes",
     label: "Kubernetes",

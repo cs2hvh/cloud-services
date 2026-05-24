@@ -188,25 +188,47 @@ const GPU_PRICING: GpuRow[] = [
         tone: "#4ade80",
         tier: "Hopper",
     },
-    {
-        id: "h100-nvl",
-        name: "H100 NVL",
-        memory: 94,
-        gen: "HBM3",
-        price: 2.59,
+    // {
+    //     id: "h100-nvl",
+    //     name: "H100 NVL",
+    //     memory: 94,
+    //     gen: "HBM3",
+    //     price: 2.59,
+    //     stock: "high",
+    //     href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
+    //     tone: "#a78bfa",
+    //     tier: "Hopper",
+    // },
+    // {
+    //     id: "h100-sxm",
+    //     name: "H100 SXM",
+    //     memory: 80,
+    //     gen: "HBM3",
+    //     price: 2.99,
+    //     stock: "high",
+    //     href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
+    //     tone: "#22d3ee",
+    //     tier: "Hopper",
+    // },
+     {
+        id: "h200-x4",
+        name: "H200 X4",
+        memory: 141,
+        gen: "HBM3e",
+        price: 3.99,
         stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
-        tone: "#a78bfa",
+        href: "/dashboard/services/gpu/deploy?gpu=h200-x4-141",
+        tone: "#22d3ee",
         tier: "Hopper",
     },
-    {
-        id: "h100-sxm",
-        name: "H100 SXM",
-        memory: 80,
-        gen: "HBM3",
-        price: 2.99,
+     {
+        id: "h200-x8",
+        name: "H200 X8",
+        memory: 141,
+        gen: "HBM3e",
+        price: 3.99,
         stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
+        href: "/dashboard/services/gpu/deploy?gpu=h200-x8-141",
         tone: "#22d3ee",
         tier: "Hopper",
     },
@@ -250,8 +272,8 @@ function GpuPricingRail() {
                                     <div className="relative">
                                         <div className="flex items-center gap-2.5">
                                             <NvidiaLogo
-                                                width={24}
-                                                height={17}
+                                                width={42}
+                                                height={11}
                                                 className="shrink-0 opacity-95"
                                             />
                                             <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-white">
@@ -361,7 +383,7 @@ export default function HeroClient() {
                         <h1 className="mt-6 max-w-[680px] text-[44px] font-semibold leading-[0.95] tracking-[-0.045em] text-white sm:text-6xl lg:text-[80px]">
                             Your cloud,
                             <br />
-                            on demand.
+                             <span className="text-blue-500">on demand.</span>
                         </h1>
 
                         <p className="mt-3 max-w-[560px] text-[15px] font-medium tracking-tight text-white/60 sm:text-[16.5px]">

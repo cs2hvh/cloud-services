@@ -99,7 +99,7 @@ function ClusterConfigCard() {
                         {/* Title */}
                         <div className="mt-7">
                             <h3 className="flex items-center gap-2.5 text-[26px] font-semibold tracking-[-0.02em] text-white leading-tight">
-                                <NvidiaLogo width={22} height={16} className="opacity-95" />
+                                <NvidiaLogo width={42} height={17} className="opacity-95" />
                                 H200 SXM · 8-node cluster
                             </h3>
                             <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.18em] text-white/40`}>
