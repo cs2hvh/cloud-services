@@ -15,6 +15,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { preflightDataset } from "@/lib/inference/finetune-validate";
 
 const createSchema = z.object({
   name: z
@@ -182,7 +183,28 @@ export async function POST(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
-  const mergedHyperparams = { ...DEFAULT_HYPERPARAMS, ...parsed.data.hyperparams };
+  const mergedHyperparams: Record<string, unknown> = {
+    ...DEFAULT_HYPERPARAMS,
+    ...parsed.data.hyperparams,
+  };
+
+  // ── Pre-flight validation ─────────────────────────────────────────
+  // Catches ~80% of failure modes (bad URL, malformed JSONL, oversized
+  // examples, too few examples) without burning a GPU-second. Errors
+  // block the create; warnings flow back in the response for the UI.
+  const preflight = await preflightDataset({
+    datasetUrl: parsed.data.dataset_url,
+    baseModelId: parsed.data.base_model_id,
+    sequenceLen: (mergedHyperparams.max_seq_length as number) ?? 4096,
+    epochs: (mergedHyperparams.epochs as number) ?? 3,
+  });
+
+  if (!preflight.ok) {
+    return NextResponse.json(
+      { error: "Dataset failed pre-flight checks", preflight },
+      { status: 400 }
+    );
+  }
 
   const { data, error } = await supabase
     .schema("inference")
@@ -227,9 +249,12 @@ export async function POST(request: NextRequest) {
     userAgent: ctx.userAgent,
   });
 
-  // TODO (Phase 5.B): enqueue to BullMQ ft-runner queue here. For now the row
-  // sits in status='queued' until the operator-provided runner picks it up.
-  // See docs/inference/fine-tuning-runner.md for the runner contract.
+  // TODO (Phase 5.B step 5): enqueue to BullMQ ft-runner queue here.
+  // For now the row sits in status='queued' until the operator-provided
+  // runner picks it up. See docs/inference/phase-5b-build-guide.md.
 
-  return NextResponse.json({ success: true, data }, { status: 201 });
+  return NextResponse.json(
+    { success: true, data, preflight },
+    { status: 201 }
+  );
 }
