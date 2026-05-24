@@ -1,0 +1,88 @@
+# Build and push the Axolotl fine-tuning training image to GHCR.
+#
+# Triggers:
+#   - push to ai/master branches when infra/runpod/training-images/axolotl/** changes
+#   - manual workflow_dispatch with tag override
+#
+# Builds on GitHub-hosted ubuntu-latest runners (free for public repos, included
+# minutes for private). The image is ~22 GB — first build ~35 min, cached
+# rebuilds ~10 min.
+#
+# After push, ft-runner pulls via:
+#   docker pull ghcr.io/<owner>/ahura-ft-axolotl:<tag>
+
+name: Build Axolotl FT Image
+
+on:
+  push:
+    branches: [ai, master, dev]
+    paths:
+      - "infra/runpod/training-images/axolotl/**"
+      - ".github/workflows/ft-axolotl-image.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (defaults to axolotl version + sha)"
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ahura-ft-axolotl
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=axolotl-0.29.0
+            type=sha,prefix=sha-,format=short
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./infra/runpod/training-images/axolotl
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions cache — speeds up subsequent builds 4-5×
+          cache-from: type=gha,scope=ft-axolotl
+          cache-to: type=gha,scope=ft-axolotl,mode=max
+          # Multi-platform not needed — RunPod runs amd64 only
+          platforms: linux/amd64
+
+      - name: Summary
+        run: |
+          echo "## Image pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tags:" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.meta.outputs.tags }}' | tr ',' '\n' | sed 's/^/  - `/' | sed 's/$/`/' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pull command:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:axolotl-0.29.0" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,74 @@
+# AhuraCloud Fine-Tuning — Axolotl YAML template
+#
+# Variables ($NAME) substituted by train.sh via Python's string.Template.
+# See https://docs.axolotl.ai for full schema reference.
+
+base_model: $BASE_MODEL
+load_in_8bit: false
+load_in_4bit: $LOAD_4BIT
+strict: false
+
+# ─── Dataset ───────────────────────────────────────────────────────────
+datasets:
+  - path: $DATASET_PATH
+    type: chat_template
+    chat_template: $CHAT_TEMPLATE
+
+dataset_prepared_path: /workspace/data/prepared
+output_dir: $OUTPUT_DIR
+sequence_len: $SEQ_LEN
+
+# Sample packing concatenates short examples into a single sequence —
+# ~10% throughput on SFT, more on conversation data. Required for our
+# economics on small-example datasets.
+sample_packing: true
+pad_to_sequence_len: true
+
+# ─── Adapter ───────────────────────────────────────────────────────────
+adapter: $ADAPTER
+lora_r: $LORA_R
+lora_alpha: $LORA_ALPHA
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# ─── Training schedule ─────────────────────────────────────────────────
+gradient_accumulation_steps: $GRAD_ACCUM
+micro_batch_size: $BATCH_SIZE
+num_epochs: $EPOCHS
+optimizer: adamw_torch_fused
+lr_scheduler: cosine
+learning_rate: $LR
+warmup_steps: $WARMUP
+
+# ─── Memory / numerics ─────────────────────────────────────────────────
+bf16: auto
+gradient_checkpointing: true
+flash_attention: true
+
+# ─── Liger Kernel — free 20-60% throughput improvement ─────────────────
+plugins:
+  - axolotl.integrations.liger.LigerPlugin
+liger_rope: true
+liger_rms_norm: true
+liger_glu_activation: true
+liger_layer_norm: true
+liger_fused_linear_cross_entropy: true
+
+# ─── Checkpointing — survives hardware faults ──────────────────────────
+save_steps: 200
+save_total_limit: 3
+logging_steps: 10
+save_safetensors: true
+
+# ─── Eval ──────────────────────────────────────────────────────────────
+# (No validation_dataset_url path wired in v1 — Phase 5.B step 6 adds
+# proper eval gate with held-out 10-example slice.)
+val_set_size: 0.05
+eval_steps: 200

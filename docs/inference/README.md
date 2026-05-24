@@ -17,6 +17,8 @@ The AhuraCloud Inference platform is a four-product AI services suite added in t
 | [phases.md](./phases.md) | 8-phase delivery roadmap with scope, durations, ship signals (planning view) |
 | [migration-ahurasense.md](./migration-ahurasense.md) | How to switch the gateway domain from `cs2hvh.com` (current) to `ahurasense.com` once permissions land |
 | [load-testing.md](./load-testing.md) | How to run the k6 load test and interpret results — Phase 1 ship signal |
+| [fine-tuning-runner.md](./fine-tuning-runner.md) | Phase 5.B operator contract: what the BullMQ FT runner reads/writes and how to wire RunPod orchestration |
+| **[phase-5b-build-guide.md](./phase-5b-build-guide.md)** | **Phase 5.B canonical implementation guide** — validated against Together AI, Fireworks, OpenAI, Baseten, Modal, RunPod 2026 architectures. Includes Dockerfiles, BullMQ runner code, webhook + eval gate, k8s deployment YAML, pricing model. |
 
 ## Code locations
 
