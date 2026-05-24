@@ -77,6 +77,30 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["NVIDIA", "A100", "H100", "Training", "Inference"],
   },
   {
+    label: "Inference",
+    desc: "OpenAI-compatible API for 400+ frontier and open-source models",
+    href: "/services/inference",
+    tags: ["OpenAI compat", "Streaming", "BYOK", "All models"],
+  },
+  {
+    label: "Fine-Tuning",
+    desc: "Train LoRA adapters on Llama, DeepSeek, Qwen, Mistral",
+    href: "/services/fine-tuning",
+    tags: ["LoRA", "qLoRA", "Auto-deploy", "Open weights"],
+  },
+  {
+    label: "Embeddings & Vector",
+    desc: "Hosted embedding models with managed pgvector collections",
+    href: "/services/embeddings",
+    tags: ["BGE", "Voyage", "pgvector", "RAG"],
+  },
+  {
+    label: "Model Hosting",
+    desc: "Deploy any container or Truss to autoscaling GPU workers",
+    href: "/services/model-hosting",
+    tags: ["BYO weights", "Truss", "Docker", "Autoscale"],
+  },
+  {
     label: "Managed Database",
     desc: "Fully managed databases with auto-scaling",
     href: "/services/database",

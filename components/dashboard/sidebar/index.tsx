@@ -20,6 +20,7 @@ import {
     LogOut,
     Menu,
     Search,
+    Sparkles,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -290,6 +291,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     const [computeExpanded, setComputeExpanded] = useState(pathname.startsWith("/dashboard/services/compute"));
     const [gpuExpanded, setGpuExpanded] = useState(pathname.startsWith("/dashboard/services/gpu"));
     const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.startsWith("/dashboard/services/ai-agents"));
+    const [inferenceExpanded, setInferenceExpanded] = useState(pathname.startsWith("/dashboard/services/inference"));
     const [domainsExpanded, setDomainsExpanded] = useState(pathname.startsWith("/dashboard/domains"));
     const [adminExpanded, setAdminExpanded] = useState(pathname.startsWith("/dashboard/admin"));
     const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -302,6 +304,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         if (pathname.startsWith("/dashboard/services/compute")) setComputeExpanded(true);
         if (pathname.startsWith("/dashboard/services/gpu")) setGpuExpanded(true);
         if (pathname.startsWith("/dashboard/services/ai-agents")) setAiAgentsExpanded(true);
+        if (pathname.startsWith("/dashboard/services/inference")) setInferenceExpanded(true);
         if (pathname.startsWith("/dashboard/domains")) setDomainsExpanded(true);
         if (pathname.startsWith("/dashboard/admin")) setAdminExpanded(true);
     }, [pathname]);
@@ -370,6 +373,21 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "New Agent", href: "/dashboard/services/ai-agents/new", icon: Plus },
             { label: "Knowledge", href: "/dashboard/services/ai-agents/knowledge-bases", icon: BookOpen, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/ai-agents/settings", icon: Key, matchPrefix: true },
+        ],
+    };
+
+    const inferenceGroup: NavGroup = {
+        label: "Inference",
+        icon: Sparkles,
+        href: "/dashboard/services/inference",
+        children: [
+            { label: "Overview", href: "/dashboard/services/inference", icon: LayoutDashboard },
+            { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
+            { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
+            { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
+            { label: "Members", href: "/dashboard/services/inference/members", icon: Users, matchPrefix: true },
+            { label: "Audit Log", href: "/dashboard/services/inference/audit", icon: ShieldCheck, matchPrefix: true },
+            { label: "Settings", href: "/dashboard/services/inference/settings", icon: Settings, matchPrefix: true },
         ],
     };
 
@@ -561,6 +579,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             onToggle={() => setGpuExpanded((p) => !p)}
                         />
                         <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
+                        <GroupRow group={inferenceGroup} pathname={pathname} expanded={inferenceExpanded} onToggle={() => setInferenceExpanded((p) => !p)} />
                         {standaloneServices.map((it) => (
                             <NavRow key={it.href} item={it} pathname={pathname} />
                         ))}

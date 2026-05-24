@@ -1,0 +1,26 @@
+{
+  "name": "ahura-inference-edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AhuraCloud Inference edge gateway — Cloudflare Workers (api.cs2hvh.com/v1; migrating to api.ahurasense.com)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:preview": "wrangler deploy --env preview",
+    "tail": "wrangler tail",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "@supabase/supabase-js": "^2.55.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260501.0",
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "typescript": "^5",
+    "vitest": "^4.0.5",
+    "wrangler": "^3.95.0"
+  }
+}
