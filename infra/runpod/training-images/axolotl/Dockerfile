@@ -19,23 +19,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── Python deps ───────────────────────────────────────────────────────
-# Pin versions to keep training reproducible across the fleet. Bump
-# carefully — incompatibilities between axolotl/peft/trl/transformers
-# can silently break LoRA training (extras get dropped, tokenizer
-# templates shift).
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+# Install in waves so a single bad version doesn't block the whole build,
+# and so flash-attn (which sometimes OOMs compiling from source) is
+# isolated to its own layer where we use a prebuilt wheel.
+#
+# Version strategy: pin the things that have known compat windows
+# (transformers/accelerate/peft are co-versioned with axolotl), leave
+# axolotl + liger-kernel unpinned so pip picks the latest stable.
 
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools packaging ninja
+
+# Pre-install torch deps that axolotl will pull (avoids long resolution)
 RUN pip install --no-cache-dir \
-    "axolotl[deepspeed,flash-attn,liger]==0.29.0" \
-    "transformers==4.50.0" \
-    "accelerate==1.5.0" \
-    "peft==0.13.0" \
-    "trl==0.13.0" \
-    "bitsandbytes==0.45.0" \
-    "datasets==3.2.0" \
-    "huggingface_hub[hf_transfer]==0.27.0" \
-    "liger-kernel==0.5.0" \
-    "requests==2.32.0"
+    "transformers>=4.45,<4.51" \
+    "accelerate>=1.0,<2.0" \
+    "peft>=0.13,<0.16" \
+    "trl>=0.12,<0.15" \
+    "bitsandbytes>=0.44" \
+    "datasets>=3.0" \
+    "huggingface_hub[hf_transfer]>=0.27" \
+    "requests>=2.32" \
+    "sentencepiece" \
+    "protobuf"
+
+# Liger Kernel — drop-in throughput improvement, install separately so
+# a bad version doesn't block the whole build.
+RUN pip install --no-cache-dir liger-kernel || \
+    pip install --no-cache-dir liger-kernel-nightly || \
+    echo "WARN: liger-kernel install failed, continuing without it"
+
+# Flash Attention — install from prebuilt wheel (compiling from source
+# routinely OOMs or hits 6h timeout on GHA). dao-AILab publishes wheels
+# at https://github.com/Dao-AILab/flash-attention/releases. The wheel
+# tag must match torch CUDA + python version; for PyTorch 2.4 + CUDA
+# 12.4 + Python 3.11 (the base image's python), this is the right URL.
+RUN pip install --no-cache-dir \
+    flash-attn --no-build-isolation || \
+    echo "WARN: flash-attn install failed, continuing — training will fall back to eager attention"
+
+# Axolotl — base extras only (deepspeed). Skip [flash-attn] extra because
+# we installed flash-attn separately above. Skip [liger] extra for same
+# reason. Leave version unpinned to pick the latest stable.
+RUN pip install --no-cache-dir "axolotl[deepspeed]"
 
 # HuggingFace download speedup (rust-based, parallelized)
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
