@@ -1,7 +1,7 @@
 "use client";
 
 // GpuServicePage — marketing page for the GPU cloud service.
-// Built around our real GPU lineup (B200, H200, H100, A100, L40S) with
+// Built around our real GPU lineup (B200, B200, H100, A100, L40S) with
 // per-hour pricing, a cream contrast section for workloads, and a
 // multi-node cluster CTA for enterprise.
 
@@ -65,8 +65,8 @@ const GPUS: GpuRow[] = [
         featured: true,
     },
     {
-        id: "h200",
-        name: "H200 SXM",
+        id: "b200 sxm",
+        name: "B200 SXM",
         arch: "Hopper",
         archTier: "hopper",
         memory: "141 GB",
@@ -75,7 +75,7 @@ const GPUS: GpuRow[] = [
         bandwidth: "4.8 TB/s",
         pricePerHour: 3.99,
         stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
+        href: "/dashboard/services/gpu/deploy?gpu=b200-141",
         description: "Big-memory Hopper for retrieval-heavy training and long-context inference.",
     },
     {
@@ -166,7 +166,7 @@ const WORKLOADS: Workload[] = [
         title: "LLM training & pretraining",
         description:
             "Frontier model training, full fine-tunes, and large-scale pretraining on multi-node clusters with NVLink fabric.",
-        recommended: ["B200", "H200 SXM"],
+        recommended: ["B200", "B200 SXM"],
     },
     {
         icon: Sparkles,
@@ -180,7 +180,7 @@ const WORKLOADS: Workload[] = [
         title: "Production inference",
         description:
             "High-throughput LLM serving with vLLM, TGI, or TensorRT-LLM. Sub-100ms first-token latency at scale.",
-        recommended: ["L40S", "H100 NVL", "H200 SXM"],
+        recommended: ["L40S", "H100 NVL", "B200 SXM"],
     },
     {
         icon: ImageIcon,
@@ -228,7 +228,7 @@ const FAQS = [
     {
         question: "How fast can I get a GPU?",
         answer:
-            "On-demand pods provision in under 90 seconds for available capacity (H100, A100, L40S). Limited-stock SKUs like B200 and H200 typically provision in a few minutes. Reserved multi-node clusters are provisioned in under 24 hours after sales handoff.",
+            "On-demand pods provision in under 90 seconds for available capacity (H100, A100, L40S). Limited-stock SKUs like B200 and B200 typically provision in a few minutes. Reserved multi-node clusters are provisioned in under 24 hours after sales handoff.",
     },
     {
         question: "What's included in the per-hour price?",
@@ -289,24 +289,14 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
                     <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
                         {String(index + 1).padStart(2, "0")}
                     </span>
-                    <NvidiaLogo width={22} height={16} className="opacity-95" />
+                    <NvidiaLogo width={42} height={17} className="opacity-95" />
                 </div>
-                <span
-                    className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.12em] font-semibold`}
-                    style={{ color: tone }}
-                >
-                    <span
-                        className="h-1 w-1 rounded-full"
-                        style={{ background: tone, boxShadow: `0 0 5px ${tone}` }}
-                    />
-                    {gpu.arch}
-                </span>
-            </div>
-
-            {/* Name */}
-            <h3 className="mt-5 text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
+               
+                <h3 className="mt-5 text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
                 {gpu.name}
             </h3>
+            </div>
+
             <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}>
                 {gpu.memory} {gpu.memoryType}
             </p>
@@ -426,11 +416,14 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
 
 // ─── Main page ────────────────────────────────────────────────
 
-export function GpuServicePage({
-    featuredProducts: _featuredProducts,
-}: {
-    featuredProducts?: Product[];
-}) {
+export function GpuServicePage(
+//     {
+//     featuredProducts: _featuredProducts,
+// }: {
+//     featuredProducts?: Product[];
+// }
+) {
+    //commented out featuredProducts for now since the GPU lineup is curated from real SKUs and doesn't need to be overridden from the database. Can re-add as a prop if we want to do limited-time promotions or highlight specific SKUs in the future, but for now it's simpler to keep the source of truth for the lineup in this component.
     // featuredProducts kept in signature for backwards-compat with the page route;
     // current lineup is curated from real GPU presets shipped in the dashboard.
 
@@ -471,7 +464,7 @@ export function GpuServicePage({
                         </h1>
                         <p className="mx-auto mt-7 max-w-[660px] text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
                             Pods for building. Clusters for scaling. Reserved capacity for
-                            shipping. B200, H200, H100, A100, and L40S — billed by the
+                            shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
                             second, NVLink-ready, in 12 regions.
                         </p>
 

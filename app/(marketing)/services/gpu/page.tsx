@@ -12,7 +12,15 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function GpuHome() {
-  const featuredProducts = await Products.get_featured_by_service_type("gpu");
+  //let featuredProducts = [];
 
-  return <GpuServicePage featuredProducts={featuredProducts} />;
+  try {
+    //featuredProducts = await Products.get_featured_by_service_type("gpu");
+  } catch (error) {
+    console.error("Error fetching GPU featured products:", error);
+    // Component has curated GPU lineup, featured products are optional
+  }
+
+  return <GpuServicePage 
+   />;
 }

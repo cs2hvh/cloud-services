@@ -49,8 +49,8 @@ const SAMPLE_CONFIG: Array<{ label: string; value: React.ReactNode }> = [
         value: (
             <span className="inline-flex items-center gap-1.5">
                 64×
-                <NvidiaLogo width={14} height={10} className="opacity-95" />
-                H200
+                <NvidiaLogo width={42} height={17} className="opacity-95" />
+                B200
             </span>
         ),
     },
@@ -100,7 +100,7 @@ function ClusterConfigCard() {
                         <div className="mt-7">
                             <h3 className="flex items-center gap-2.5 text-[26px] font-semibold tracking-[-0.02em] text-white leading-tight">
                                 <NvidiaLogo width={42} height={17} className="opacity-95" />
-                                H200 SXM · 8-node cluster
+                                B200 SXM · 8-node cluster
                             </h3>
                             <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.18em] text-white/40`}>
                                 NVLink fabric · Redundant power · PCIe 5.0
