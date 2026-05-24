@@ -74,6 +74,12 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
+            # k8s requires a numeric UID to verify runAsNonRoot. Our
+            # Dockerfile sets USER 'app' (named) so we override here.
+            # 1000 is just a conventional non-system UID; /app files are
+            # world-readable so it works.
+            runAsUser: 1000
+            runAsGroup: 1000
             capabilities:
               drop: ["ALL"]
       # imagePullSecrets removed — ghcr.io/hav0ky/ahura-ft-runner is a public package.

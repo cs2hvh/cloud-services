@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 #
 # Multi-stage build for the ft-runner.
-# Final image: ~150 MB (node:20-alpine + compiled JS + prod deps only).
+# Final image: ~150 MB (node:22-alpine + compiled JS + prod deps only).
 #
 # Build:  docker build -t ahura-ft-runner:dev .
 # Run:    docker run --rm --env-file .env.local ahura-ft-runner:dev
 
 # ── Stage 1: build ──────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ── Stage 2: runtime ────────────────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # Run as non-root. tini reaps zombie children (Node's signal handling alone
 # doesn't always cut it for SIGTERM under k8s).

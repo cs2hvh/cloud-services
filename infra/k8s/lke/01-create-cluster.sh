@@ -165,11 +165,23 @@ while true; do
 done
 
 # ── Fetch kubeconfig ─────────────────────────────────────────────────
+# Linode sometimes takes 30-90s AFTER nodes go Ready before the kubeconfig
+# endpoint returns the cert. Retry with backoff so we don't bail prematurely.
 echo "→ Fetching kubeconfig..."
 mkdir -p "$(dirname "$KUBECONFIG_OUT")"
-kc_b64=$(api GET "/lke/clusters/$cluster_id/kubeconfig" | nj "d.kubeconfig")
+kc_b64=""
+for attempt in 1 2 3 4 5 6 7 8; do
+  kc_b64=$(api GET "/lke/clusters/$cluster_id/kubeconfig" | nj "d.kubeconfig")
+  if [[ -n "$kc_b64" ]]; then
+    break
+  fi
+  echo "  not ready yet (attempt $attempt/8) — waiting 15s..."
+  sleep 15
+done
 if [[ -z "$kc_b64" ]]; then
-  echo "ERROR: kubeconfig fetch returned empty — cluster may still be provisioning" >&2
+  echo "ERROR: kubeconfig still empty after 2 min." >&2
+  echo "Download manually from https://cloud.linode.com/kubernetes/clusters/$cluster_id" >&2
+  echo "and save to: $KUBECONFIG_OUT" >&2
   exit 1
 fi
 echo "$kc_b64" | base64 -d > "$KUBECONFIG_OUT"

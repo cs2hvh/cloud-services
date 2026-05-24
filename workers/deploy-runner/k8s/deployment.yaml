@@ -60,6 +60,10 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
+            # k8s requires a numeric UID to verify runAsNonRoot. Our
+            # Dockerfile sets USER 'app' (named) so we override here.
+            runAsUser: 1000
+            runAsGroup: 1000
             capabilities:
               drop: ["ALL"]
       # imagePullSecrets removed — ghcr.io/cs2hvh/ahura-deploy-runner is a public package.

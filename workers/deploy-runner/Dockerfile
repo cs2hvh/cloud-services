@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 COPY package.json ./
@@ -8,7 +8,7 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build && npm prune --omit=dev
 
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 RUN apk add --no-cache tini \
     && addgroup -S app && adduser -S app -G app
 WORKDIR /app
