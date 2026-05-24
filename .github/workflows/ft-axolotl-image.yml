@@ -38,6 +38,24 @@ jobs:
       packages: write   # required to push to GHCR
 
     steps:
+      # ─── Free up disk space ──────────────────────────────────────────
+      # GHA ubuntu-latest comes with ~14 GB free. PyTorch CUDA + Axolotl
+      # build needs ~30 GB during the build (image is ~22 GB final, but
+      # intermediate layers + cache + extracted base double that). Without
+      # this step the build dies with "No space left on device".
+      # jlumbroso/free-disk-space reclaims ~25-30 GB by removing Android
+      # SDK, .NET, GHC, large preinstalled tools we don't need.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false   # don't touch — Buildx needs cached layers
+          swap-storage: true
+
       - name: Checkout
         uses: actions/checkout@v4
 
