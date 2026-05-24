@@ -30,6 +30,11 @@ if [[ -z "${LINODE_PAT:-}" ]]; then
   exit 1
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: 'node' is required for JSON parsing in this script — install Node.js first" >&2
+  exit 1
+fi
+
 api() {
   local method="$1" path="$2"
   shift 2
@@ -41,10 +46,32 @@ api() {
     "$@"
 }
 
+# Eval a JS expression against stdin JSON. The expression sees `d` as the
+# parsed root. Prints the value (or empty if undefined/null/error).
+#   echo "$resp" | nj "d.username"
+#   echo "$resp" | nj "(d.data || []).find(c => c.label === 'ahura-prod')?.id"
+nj() {
+  node -e "
+let buf = '';
+process.stdin.on('data', c => buf += c);
+process.stdin.on('end', () => {
+  try {
+    const d = JSON.parse(buf);
+    const v = ($1);
+    if (v !== undefined && v !== null) {
+      console.log(typeof v === 'object' ? JSON.stringify(v) : String(v));
+    }
+  } catch (e) {
+    // swallow — caller treats empty stdout as 'not found'
+  }
+});
+"
+}
+
 # ── Verify PAT + scopes ──────────────────────────────────────────────
 echo "→ Verifying PAT..."
 me=$(api GET /profile)
-username=$(echo "$me" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')
+username=$(echo "$me" | nj "d.username")
 if [[ -z "$username" ]]; then
   echo "ERROR: PAT didn't return a profile. Check the token's scopes." >&2
   echo "Response was: $me" >&2
@@ -54,21 +81,27 @@ echo "  authenticated as: $username"
 
 # ── Pick a k8s version if not provided ───────────────────────────────
 if [[ -z "$K8S_VERSION" ]]; then
-  K8S_VERSION=$(api GET /lke/versions | \
-    sed -n 's/.*"id":"\([0-9.]*\)".*/\1/p' | sort -rV | head -1)
+  K8S_VERSION=$(api GET /lke/versions | nj "
+    (d.data || [])
+      .map(v => v.id)
+      .sort((a, b) => {
+        const pa = a.split('.').map(Number);
+        const pb = b.split('.').map(Number);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+          if ((pb[i] || 0) !== (pa[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
+        }
+        return 0;
+      })[0]
+  ")
+  if [[ -z "$K8S_VERSION" ]]; then
+    echo "ERROR: couldn't fetch LKE versions" >&2
+    exit 1
+  fi
   echo "→ Using latest LKE version: $K8S_VERSION"
 fi
 
 # ── Idempotency: skip create if cluster with this label exists ───────
-existing_id=$(api GET "/lke/clusters" | \
-  python -c "
-import json,sys
-data=json.load(sys.stdin)
-for c in data.get('data', []):
-  if c.get('label')=='$LABEL':
-    print(c.get('id'))
-    break
-" 2>/dev/null || true)
+existing_id=$(api GET "/lke/clusters" | nj "(d.data || []).find(c => c.label === '$LABEL')?.id")
 
 if [[ -n "$existing_id" ]]; then
   echo "→ Cluster '$LABEL' already exists (id=$existing_id) — reusing"
@@ -93,7 +126,7 @@ else
 EOF
   )
   resp=$(api POST /lke/clusters -d "$body")
-  cluster_id=$(echo "$resp" | sed -n 's/.*"id":\([0-9]*\).*/\1/p' | head -1)
+  cluster_id=$(echo "$resp" | nj "d.id")
   if [[ -z "$cluster_id" ]]; then
     echo "ERROR: cluster creation failed. Response:" >&2
     echo "$resp" >&2
@@ -111,8 +144,19 @@ while true; do
     exit 1
   fi
   pools=$(api GET "/lke/clusters/$cluster_id/pools")
-  ready=$(echo "$pools" | grep -o '"status":"ready"' | wc -l | tr -d ' ')
-  total=$(echo "$pools" | grep -o '"status":"[a-z]*"' | wc -l | tr -d ' ')
+  counts=$(echo "$pools" | nj "
+    (() => {
+      let total = 0, ready = 0;
+      for (const p of (d.data || [])) {
+        for (const n of (p.nodes || [])) {
+          total++;
+          if (n.status === 'ready') ready++;
+        }
+      }
+      return ready + ' ' + total;
+    })()
+  ")
+  read -r ready total <<<"$counts"
   echo "  nodes: $ready/$total ready"
   if [[ "$ready" == "$total" && "$total" -gt 0 ]]; then
     break
@@ -123,8 +167,7 @@ done
 # ── Fetch kubeconfig ─────────────────────────────────────────────────
 echo "→ Fetching kubeconfig..."
 mkdir -p "$(dirname "$KUBECONFIG_OUT")"
-kc_b64=$(api GET "/lke/clusters/$cluster_id/kubeconfig" | \
-  sed -n 's/.*"kubeconfig":"\([^"]*\)".*/\1/p')
+kc_b64=$(api GET "/lke/clusters/$cluster_id/kubeconfig" | nj "d.kubeconfig")
 if [[ -z "$kc_b64" ]]; then
   echo "ERROR: kubeconfig fetch returned empty — cluster may still be provisioning" >&2
   exit 1
