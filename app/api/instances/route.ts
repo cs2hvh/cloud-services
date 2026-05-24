@@ -8,7 +8,7 @@ export async function GET() {
 
   const db = await createServiceClient();
   const { data, error } = await db
-    .from('projects')
+    .from('stacks')
     .select(`
       id, name, namespace, status, created_at, ready_at,
       template_id, template_version_id,

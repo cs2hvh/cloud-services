@@ -483,7 +483,8 @@ export const Projects = {
     }
   },
 
-  create: async (props: TablesInsert<"projects">): Promise<string | null> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  create: async (props: Record<string, any>): Promise<string | null> => {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase
@@ -506,10 +507,8 @@ export const Projects = {
   },
 
   // Update an existing project
-  update: async (
-    id: string,
-    props: TablesUpdate<"projects">,
-  ): Promise<boolean> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  update: async (id: string, props: Record<string, any>): Promise<boolean> => {
     try {
       const supabase = await createClient();
       const { error } = await supabase

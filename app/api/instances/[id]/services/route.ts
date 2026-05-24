@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, services(id, name, type, engine, status, source, runtime, networking, health, dependencies)')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: RouteCtx) {
   // ── Ownership + namespace ─────────────────────────────────────────────────
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace, status')
     .eq('id', id)
     .eq('user_id', auth.user!.id)

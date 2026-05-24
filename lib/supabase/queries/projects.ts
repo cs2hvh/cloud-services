@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from "../server";
 import { handleQueryError } from "@/lib/utils/error-handler";
-import { Tables, TablesInsert, TablesUpdate } from "../types";
+import { Tables, TablesInsert } from "../types";
 
 type Project = Tables<"projects">;
 type ProjectLog = Tables<"project_logs">;
@@ -137,10 +137,7 @@ export const Projects = {
   },
 
   // Update an existing project
-  update: async (
-    id: string,
-    props: TablesUpdate<"projects">
-  ): Promise<boolean> => {
+  update: async (id: string, props: TablesInsert<"projects"> | Record<string, unknown>): Promise<boolean> => {
     try {
       const supabase = await createClient();
       const { error } = await supabase

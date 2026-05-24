@@ -80,7 +80,7 @@ export async function PUT(req: NextRequest, { params }: RouteCtx) {
   if (parsed.data.demoProjectId !== undefined) {
     if (parsed.data.demoProjectId !== null) {
       const { data: demoProject } = await db
-        .from('projects')
+        .from('stacks')
         .select('id')
         .eq('id', parsed.data.demoProjectId)
         .eq('user_id', auth.user!.id)

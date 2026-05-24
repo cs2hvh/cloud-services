@@ -76,8 +76,8 @@ export function startProjectDeployWorker(): { close: () => Promise<void> } {
           last_heartbeat_at: new Date().toISOString(),
         }).eq('id', job.data.operationId).in('status', ['queued', 'running', 'waiting']);
 
-        await db.from('projects').update({ status: 'failed' }).eq('id', job.data.projectId).in('status', ['creating', 'deploying']);
-        await db.from('projects').update({ status: 'degraded' }).eq('id', job.data.projectId).eq('status', 'deleting');
+        await db.from('stacks').update({ status: 'failed' }).eq('id', job.data.projectId).in('status', ['creating', 'deploying']);
+        await db.from('stacks').update({ status: 'degraded' }).eq('id', job.data.projectId).eq('status', 'deleting');
         await db.from('services').update({ status: 'failed' }).eq('project_id', job.data.projectId).in('status', ['pending', 'building', 'deploying', 'starting']);
       } catch (dbErr) {
         console.error('[ProjectDeployWorker] failed to record terminal failure in DB:', dbErr);

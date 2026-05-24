@@ -77,7 +77,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
   const namespace = `proj-${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
   const { data: project, error: projectError } = await db
-    .from('projects')
+    .from('stacks')
     .insert({
       template_id: loaded.templateId,
       template_version_id: loaded.templateVersionId,
@@ -165,7 +165,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
     return { deploymentId: project.id, operationId: operation.id, namespace };
   } catch (err) {
     // Roll back the project row so the user can try again cleanly
-    await db.from('projects').delete().eq('id', project.id);
+    await db.from('stacks').delete().eq('id', project.id);
     throw err;
   }
 }

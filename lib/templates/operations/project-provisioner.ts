@@ -132,7 +132,7 @@ export async function provisionProject(data: ProvisionJobData): Promise<void> {
       started_at: new Date().toISOString(),
       last_heartbeat_at: new Date().toISOString(),
     }).eq('id', operationId);
-    await db.from('projects').update({ status: 'deploying' }).eq('id', projectId);
+    await db.from('stacks').update({ status: 'deploying' }).eq('id', projectId);
 
     const { spec, services, inputsBySpecId, secretsBySpecId } = await loadProject(projectId, db);
 
@@ -242,7 +242,7 @@ export async function provisionProject(data: ProvisionJobData): Promise<void> {
     }
 
     // ── Complete ───────────────────────────────────────────────────────────
-    await db.from('projects').update({ status: 'ready', ready_at: new Date().toISOString() }).eq('id', projectId);
+    await db.from('stacks').update({ status: 'ready', ready_at: new Date().toISOString() }).eq('id', projectId);
     await db.from('operations').update({
       status: 'succeeded',
       progress_pct: 100,
@@ -269,7 +269,7 @@ export async function provisionProject(data: ProvisionJobData): Promise<void> {
         last_heartbeat_at: new Date().toISOString(),
       }).eq('id', operationId);
       if (!operationType || operationType === 'create_project') {
-        await db.from('projects').update({ status: 'failed' }).eq('id', projectId);
+        await db.from('stacks').update({ status: 'failed' }).eq('id', projectId);
         // Only mark services that are still in-progress as failed.
         // Services that already reached 'healthy' keep their healthy status —
         // a partial deployment failure should not retroactively mark good services.
@@ -282,7 +282,7 @@ export async function provisionProject(data: ProvisionJobData): Promise<void> {
           .eq('project_id', projectId)
           .in('status', ['planned', 'provisioning']);
       } else if (operationType === 'delete_project') {
-        await db.from('projects').update({ status: 'degraded' }).eq('id', projectId).eq('status', 'deleting');
+        await db.from('stacks').update({ status: 'degraded' }).eq('id', projectId).eq('status', 'deleting');
       }
     } catch (secondaryErr) {
       console.error(`[Provisioner] Secondary failure while recording op=${operationId} failure:`, secondaryErr);
@@ -314,7 +314,7 @@ async function handleDeleteProject(
   await db.from('services').update({ status: 'deleted' }).eq('project_id', data.projectId);
   await db.from('service_endpoints').update({ status: 'deleted' }).eq('project_id', data.projectId);
   await db.from('infra_resources').update({ status: 'deleted' }).eq('project_id', data.projectId);
-  await db.from('projects').update({ status: 'deleted' }).eq('id', data.projectId);
+  await db.from('stacks').update({ status: 'deleted' }).eq('id', data.projectId);
   await db.from('operations').update({
     status: 'succeeded', current_stage: 'complete', progress_pct: 100,
     finished_at: new Date().toISOString(), last_heartbeat_at: new Date().toISOString(),
@@ -653,7 +653,7 @@ async function handleCreateService(
 
 async function loadProject(projectId: string, db: Awaited<ReturnType<typeof createWorkerClient>>) {
   const [projectRes, servicesRes, envVarsRes] = await Promise.all([
-    db.from('projects').select('id, desired_spec').eq('id', projectId).single(),
+    db.from('stacks').select('id, desired_spec').eq('id', projectId).single(),
     db.from('services').select('id, spec_service_id, name').eq('project_id', projectId),
     db.from('service_env_vars').select('service_id, key, value, value_type').eq('project_id', projectId).eq('value_type', 'input'),
   ]);

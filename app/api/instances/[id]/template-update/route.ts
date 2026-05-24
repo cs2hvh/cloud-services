@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, template_id, template_version_id')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
@@ -57,7 +57,7 @@ export async function POST(_req: Request, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, status, template_id, template_version_id, desired_spec, namespace')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
@@ -101,7 +101,7 @@ export async function POST(_req: Request, { params }: RouteCtx) {
   const mergedSpec = mergeSpecPreservingNames(validation.spec, project.desired_spec as TemplateSpec | null);
 
   const { error: projectUpdateError } = await db
-    .from('projects')
+    .from('stacks')
     .update({
       template_version_id: template.latest_published_version_id,
       desired_spec: mergedSpec,
@@ -129,7 +129,7 @@ export async function POST(_req: Request, { params }: RouteCtx) {
 
   if (opError || !operation) {
     // Best-effort rollback
-    await db.from('projects').update({
+    await db.from('stacks').update({
       status: project.status,
       template_version_id: project.template_version_id,
       desired_spec: project.desired_spec,

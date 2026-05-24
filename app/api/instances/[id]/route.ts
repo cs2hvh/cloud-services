@@ -12,7 +12,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const db = await createServiceClient();
 
   const { data, error } = await db
-    .from('projects')
+    .from('stacks')
     .select(`
       id, name, namespace, status, created_at, ready_at, template_id, template_version_id, desired_spec,
       services (
@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const db = await createServiceClient();
 
   const { data: deployment } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, user_id, namespace')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
@@ -82,7 +82,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     projectId: id,
     namespace: deployment.namespace,
   });
-  await db.from('projects').update({ status: 'deleting' }).eq('id', id);
+  await db.from('stacks').update({ status: 'deleting' }).eq('id', id);
 
   return NextResponse.json({ deleted: false, queued: true, operationId: operation.id }, { status: 202 });
 }

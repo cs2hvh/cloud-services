@@ -35,7 +35,7 @@ export async function GET(_req: Request, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace, services(id, spec_service_id, name, status)')
     .eq('id', id)
     .eq('user_id', auth.user!.id)

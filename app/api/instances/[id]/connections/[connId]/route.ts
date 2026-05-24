@@ -18,7 +18,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteCtx) {
   // ── Ownership + load connection ───────────────────────────────────────────
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace')
     .eq('id', id)
     .eq('user_id', auth.user!.id)

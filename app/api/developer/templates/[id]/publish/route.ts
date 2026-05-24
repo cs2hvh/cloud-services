@@ -48,7 +48,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
 
   if (parsed.data.demoProjectId) {
     const { data: demoProject } = await db
-      .from('projects')
+      .from('stacks')
       .select('id')
       .eq('id', parsed.data.demoProjectId)
       .eq('user_id', auth.user!.id)

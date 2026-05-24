@@ -15,7 +15,7 @@ export async function POST(_req: NextRequest, { params }: RouteCtx) {
 
   // Verify ownership and get service info
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace, services(id, name, spec_service_id, type)')
     .eq('id', projectId)
     .eq('user_id', auth.user!.id)

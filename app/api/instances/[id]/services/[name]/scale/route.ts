@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace, services(id, spec_service_id, name, runtime, health)')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest, { params }: RouteCtx) {
   const db = await createServiceClient();
 
   const { data: project } = await db
-    .from('projects')
+    .from('stacks')
     .select('id, namespace, services(id, spec_service_id, name, runtime)')
     .eq('id', id)
     .eq('user_id', auth.user!.id)
