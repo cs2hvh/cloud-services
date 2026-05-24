@@ -385,6 +385,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Models", href: "/dashboard/services/inference/models", icon: BookOpen, matchPrefix: true },
             { label: "Playground", href: "/dashboard/services/inference/playground", icon: Bot, matchPrefix: true },
             { label: "Presets", href: "/dashboard/services/inference/presets", icon: Rocket, matchPrefix: true },
+            { label: "Vectors", href: "/dashboard/services/inference/vectors", icon: Database, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
             { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
