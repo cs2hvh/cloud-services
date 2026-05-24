@@ -16,6 +16,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDataset } from "@/lib/inference/finetune-validate";
+import { enqueueFinetuneJob } from "@/lib/inference/finetune-queue";
 
 const createSchema = z.object({
   name: z
@@ -249,9 +250,10 @@ export async function POST(request: NextRequest) {
     userAgent: ctx.userAgent,
   });
 
-  // TODO (Phase 5.B step 5): enqueue to BullMQ ft-runner queue here.
-  // For now the row sits in status='queued' until the operator-provided
-  // runner picks it up. See docs/inference/phase-5b-build-guide.md.
+  // Push to the BullMQ queue so the ft-runner claims it immediately. If
+  // REDIS_URL isn't configured or Redis is down this no-ops — the runner's
+  // 5s Postgres claimer poll picks it up either way.
+  void enqueueFinetuneJob(data.id);
 
   return NextResponse.json(
     { success: true, data, preflight },

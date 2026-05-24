@@ -1,0 +1,68 @@
+name: ft-runner image
+
+# Builds and pushes the ahura-ft-runner Node image to GHCR on every
+# push to a tracked branch. The image is small (~150 MB) so there's no
+# disk-space gymnastics needed — unlike the axolotl image build, which
+# has its own jlumbroso/free-disk-space step.
+on:
+  push:
+    branches: [ai, master, dev]
+    paths:
+      - "workers/ft-runner/**"
+      - ".github/workflows/ft-runner-image.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ahura-ft-runner
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/ai' }}
+
+      - name: Build + push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./workers/ft-runner
+          file: ./workers/ft-runner/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=ft-runner
+          cache-to: type=gha,mode=max,scope=ft-runner
+
+      - name: Summary
+        run: |
+          echo "### Pushed image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
