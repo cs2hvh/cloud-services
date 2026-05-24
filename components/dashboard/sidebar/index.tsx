@@ -382,6 +382,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         href: "/dashboard/services/inference",
         children: [
             { label: "Overview", href: "/dashboard/services/inference", icon: LayoutDashboard },
+            { label: "Models", href: "/dashboard/services/inference/models", icon: BookOpen, matchPrefix: true },
+            { label: "Presets", href: "/dashboard/services/inference/presets", icon: Rocket, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
             { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },

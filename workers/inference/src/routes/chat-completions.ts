@@ -17,6 +17,8 @@ import {
   resolveUpstreamKey,
   streamPassthrough,
 } from "../lib/openrouter.ts";
+import { applyPreset, resolvePreset } from "../lib/presets.ts";
+import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Request schema — permissive on tool/content shape since OpenAI
@@ -36,7 +38,9 @@ const messageSchema = z
 
 const chatRequestSchema = z
   .object({
-    model: z.string().min(1),
+    // Optional in the schema — required at runtime UNLESS a preset is in play
+    // (preset's first model becomes the default). The handler enforces this.
+    model: z.string().min(1).optional(),
     messages: z.array(messageSchema).min(1),
     stream: z.boolean().optional(),
     temperature: z.number().min(0).max(2).optional(),
@@ -101,15 +105,48 @@ export const chatCompletions: Handler<{
   }
   const req = parsed.data;
 
-  // 2. Scope check — does this key allow this model?
+  // 2. Resolve effective model — caller's body OR preset's first model
+  //    (preset resolution happens further down, but we need to know the
+  //    effective model NOW for scope checking and headers).
+  const presetName = c.req.header("X-Ahura-Preset");
+  let presetConfig: Awaited<ReturnType<typeof resolvePreset>> = null;
+  if (presetName) {
+    presetConfig = await resolvePreset(c.env, auth.orgId, presetName);
+    if (!presetConfig) {
+      return c.json(
+        errorBody(
+          `Preset "${presetName}" not found in this org`,
+          "invalid_request_error",
+          "preset_not_found",
+          requestId
+        ),
+        400
+      );
+    }
+  }
+
+  const effectiveModel = req.model ?? presetConfig?.models[0];
+  if (!effectiveModel) {
+    return c.json(
+      errorBody(
+        "Request must specify `model` (or use X-Ahura-Preset with a preset that defines models)",
+        "invalid_request_error",
+        "model_required",
+        requestId
+      ),
+      400
+    );
+  }
+
+  // 3. Scope check — does this key allow this model?
   if (
     auth.allowedModels &&
     auth.allowedModels.length > 0 &&
-    !auth.allowedModels.includes(req.model)
+    !auth.allowedModels.includes(effectiveModel)
   ) {
     return c.json(
       errorBody(
-        `Model "${req.model}" is not allowed for this API key`,
+        `Model "${effectiveModel}" is not allowed for this API key`,
         "invalid_request_error",
         "model_not_allowed",
         requestId
@@ -118,7 +155,7 @@ export const chatCompletions: Handler<{
     );
   }
 
-  // 3. Resolve upstream key (platform OPENROUTER_PLATFORM_KEY or decrypt BYOK)
+  // 4. Resolve upstream key (platform OPENROUTER_PLATFORM_KEY or decrypt BYOK)
   let upstreamKey: string;
   try {
     upstreamKey = await resolveUpstreamKey(
@@ -139,13 +176,62 @@ export const chatCompletions: Handler<{
     );
   }
 
-  c.header("X-Ahura-Model", req.model);
+  c.header("X-Ahura-Model", effectiveModel);
   c.header("X-Ahura-Billing", auth.billing);
 
-  // 4. Forward to OpenRouter
+  // 5. Apply routing preset (already resolved above for the model check)
+  let outgoingBody: Record<string, unknown> = {
+    ...(req as unknown as Record<string, unknown>),
+    model: effectiveModel,
+  };
+  if (presetConfig) {
+    outgoingBody = applyPreset(outgoingBody, presetConfig);
+    c.header("X-Ahura-Preset", presetName!);
+  }
+
+  // 5. L1 cache check — only non-streaming deterministic requests, scoped per org
+  const cacheDecision = await shouldCache(c.req.raw, outgoingBody, auth.orgId);
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    const cached = await lookupCache(c.env, cacheDecision.key);
+    if (cached) {
+      c.executionCtx.waitUntil(
+        sendUsage(c.env, {
+          ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+          inputTokens: cached.usage?.prompt_tokens ?? null,
+          outputTokens: cached.usage?.completion_tokens ?? null,
+          // Account cache hits at the cached_tokens rate (consumer applies this)
+          cachedTokens: cached.usage?.prompt_tokens ?? null,
+          status: "success",
+        })
+      );
+      return new Response(cached.body, {
+        status: 200,
+        headers: {
+          "content-type": cached.contentType,
+          "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Model": effectiveModel,
+          "X-Ahura-Billing": auth.billing,
+          "X-Ahura-Cache": "hit",
+          "X-Ahura-Cache-Age": String(Math.floor((Date.now() - cached.cachedAt) / 1000)),
+        },
+      });
+    }
+  }
+  c.header(
+    "X-Ahura-Cache",
+    cacheDecision.bypass
+      ? "bypass"
+      : cacheDecision.reason === "streaming"
+        ? "streaming-skipped"
+        : cacheDecision.reason === "non-deterministic"
+          ? "non-deterministic"
+          : "miss"
+  );
+
+  // 6. Forward to OpenRouter
   const upstream = await forwardJson({
     env: c.env,
-    body: req,
+    body: outgoingBody,
     upstreamKey,
     path: "/chat/completions",
     signal: c.req.raw.signal,
@@ -159,7 +245,7 @@ export const chatCompletions: Handler<{
     const text = await upstream.text();
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
-        ...baseUsageEvent(auth, req.model, requestId, startedAt),
+        ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
         status: mapUpstreamStatus(upstream.status),
         errorCode: `upstream_${upstream.status}`,
       })
@@ -170,7 +256,7 @@ export const chatCompletions: Handler<{
         "content-type":
           upstream.headers.get("content-type") ?? "application/json",
         "X-Ahura-Request-Id": requestId,
-        "X-Ahura-Model": req.model,
+        "X-Ahura-Model": effectiveModel,
       },
     });
   }
@@ -181,7 +267,7 @@ export const chatCompletions: Handler<{
       const usage = extractUsageFromSse(rawText);
       c.executionCtx.waitUntil(
         sendUsage(c.env, {
-          ...baseUsageEvent(auth, req.model, requestId, startedAt),
+          ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
           inputTokens: usage?.prompt_tokens ?? null,
           outputTokens: usage?.completion_tokens ?? null,
           cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
@@ -191,13 +277,15 @@ export const chatCompletions: Handler<{
     });
   }
 
-  // 6b. Non-streaming — buffer, parse for usage, return
+  // 6b. Non-streaming — buffer, parse for usage, return + cache write-through
   const text = await upstream.text();
+  let parsedUsage: OpenAIChatResponse["usage"] | undefined;
   try {
     const data = JSON.parse(text) as OpenAIChatResponse;
+    parsedUsage = data.usage;
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
-        ...baseUsageEvent(auth, req.model, requestId, startedAt),
+        ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
         inputTokens: data.usage?.prompt_tokens ?? null,
         outputTokens: data.usage?.completion_tokens ?? null,
         cachedTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? null,
@@ -215,13 +303,33 @@ export const chatCompletions: Handler<{
     );
   }
 
+  // Cache write-through (best effort, doesn't block response)
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    c.executionCtx.waitUntil(
+      writeCache(
+        c.env,
+        cacheDecision.key,
+        text,
+        "application/json",
+        cacheDecision.ttlSeconds,
+        parsedUsage
+          ? {
+              prompt_tokens: parsedUsage.prompt_tokens,
+              completion_tokens: parsedUsage.completion_tokens,
+            }
+          : undefined
+      )
+    );
+  }
+
   return new Response(text, {
     status: 200,
     headers: {
       "content-type": "application/json",
       "X-Ahura-Request-Id": requestId,
-      "X-Ahura-Model": req.model,
+      "X-Ahura-Model": effectiveModel,
       "X-Ahura-Billing": auth.billing,
+      "X-Ahura-Cache": cacheDecision.cacheable ? "miss" : "skipped",
     },
   });
 };
