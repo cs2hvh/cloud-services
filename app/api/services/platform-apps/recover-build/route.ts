@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     appName: app.name,
     buildNumber,
     trigger: inProgress.data.trigger,
-    desiredSize: (app.size as "small" | "medium" | "large" | null | undefined) ?? null,
+    desiredSize: (app.size as "small" | "medium" | "large" | "xlarge" | "xxlarge" | null | undefined) ?? null,
     userId: auth.user!.id, // Pass user ID for audit trail on resize recovery
     operationId: isResize ? inProgress.data.id : undefined,
   });

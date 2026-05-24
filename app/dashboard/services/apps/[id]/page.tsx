@@ -106,7 +106,7 @@ interface AppDetail {
   last_failure_reason?: string | null;
 }
 
-type PlatformAppSize = 'small' | 'medium' | 'large';
+type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 type SizeKey = PlatformAppSize;
 
 type PlatformAppRates = {
@@ -115,15 +115,17 @@ type PlatformAppRates = {
   price: number;
 };
 
-const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large'];
+const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
 
 const PLATFORM_APP_SIZE_SPECS: Record<
   SizeKey,
   { cpu: string; memory: string; replicas: number }
 > = {
-  small: { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
-  medium: { cpu: '0.5 CPU', memory: '512 MB', replicas: 2 },
-  large: { cpu: '1 CPU', memory: '1 GB', replicas: 3 },
+  small:     { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
+  medium:    { cpu: '0.5 CPU',  memory: '512 MB', replicas: 2 },
+  large:     { cpu: '1 CPU',    memory: '1 GB',   replicas: 3 },
+  xlarge:    { cpu: '2 CPU',    memory: '2 GB',   replicas: 4 },
+  'xxlarge': { cpu: '4 CPU',    memory: '4 GB',   replicas: 6 },
 };
 
 const SECTION_META: Array<{

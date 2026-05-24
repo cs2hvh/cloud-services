@@ -24,8 +24,8 @@ export interface BuildPollConfig {
   operationId?: string; // required for resize: the DB record ID to update by
   trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
   resizeContext?: {
-    previousSize: 'small' | 'medium' | 'large';
-    targetSize: 'small' | 'medium' | 'large';
+    previousSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+    targetSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   };
   maxPolls?: number;
   pollInterval?: number;
@@ -40,7 +40,7 @@ export interface BuildPollResult {
   pollCount: number;
 }
 
-type PlatformAppSize = 'small' | 'medium' | 'large';
+type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 
 export class BuildPollingService {
   private static readonly DEFAULT_MAX_POLLS = 180; // 30 minutes
@@ -63,7 +63,9 @@ export class BuildPollingService {
   private static getSizeFromReplicaCount(replicas?: number | null): PlatformAppSize | null {
     if (!replicas || replicas <= 1) return 'small';
     if (replicas === 2) return 'medium';
-    if (replicas >= 3) return 'large';
+    if (replicas === 3) return 'large';
+    if (replicas === 4) return 'xlarge';
+    if (replicas >= 6) return 'xxlarge';
     return null;
   }
 

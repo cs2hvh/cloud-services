@@ -9,10 +9,10 @@ import type {
   AppOperationDetails,
 } from "@/lib/app-operations/core/types";
 
-type PlatformAppSize = "small" | "medium" | "large";
+type PlatformAppSize = "small" | "medium" | "large" | "xlarge" | "xxlarge";
 
 function isPlatformAppSize(value: string | undefined): value is PlatformAppSize {
-  return value === "small" || value === "medium" || value === "large";
+  return value === "small" || value === "medium" || value === "large" || value === "xlarge" || value === "xxlarge";
 }
 
 export class AppBuildSideEffectsService {

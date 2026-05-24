@@ -1,17 +1,50 @@
 /**
  * Shared utilities for pipeline generation
- * 
+ *
  * PLATFORM DEPLOYMENT CONTRACT:
  * 1. Build stage - builds the container image
  * 2. Runtime secret sync is handled by backend API/Kubernetes service (NOT Jenkins templates)
  * 3. Deploy to Kubernetes stage - deploys the application
- * 
+ *
  * All pipelines MUST follow this order. No exceptions.
  */
 
 export interface EnvVar {
   key: string;
   value: string;
+}
+
+export interface AppSizeSpec {
+  cpuRequest: string;
+  cpuLimit: string;
+  memoryRequest: string;
+  memoryLimit: string;
+  replicas: number;
+}
+
+const SIZE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge'] as const;
+
+const APP_SIZE_SPECS: Record<string, AppSizeSpec> = {
+  small:   { cpuRequest: '250m', cpuLimit: '500m', memoryRequest: '256Mi', memoryLimit: '512Mi', replicas: 1 },
+  medium:  { cpuRequest: '500m', cpuLimit: '1',    memoryRequest: '512Mi', memoryLimit: '1Gi',   replicas: 2 },
+  large:   { cpuRequest: '1',    cpuLimit: '2',    memoryRequest: '1Gi',   memoryLimit: '2Gi',   replicas: 3 },
+  xlarge:  { cpuRequest: '2',    cpuLimit: '4',    memoryRequest: '2Gi',   memoryLimit: '4Gi',   replicas: 4 },
+  'xxlarge': { cpuRequest: '4', cpuLimit: '8',    memoryRequest: '4Gi',   memoryLimit: '8Gi',   replicas: 6 },
+};
+
+/**
+ * Resolve K8s resource spec for a given app size key.
+ * @param sizeKey - Requested size ('small' | 'medium' | 'large' | 'xlarge' | 'xxlarge')
+ * @param minSize - Floor size — when the requested size ranks below this, the floor is used.
+ *                  Use 'medium' for runtimes that need more base resources (JVM, SSR).
+ */
+export function resolveAppSize(sizeKey: string, minSize: string = 'small'): AppSizeSpec {
+  const key = (sizeKey || 'small').toLowerCase();
+  const min = (minSize || 'small').toLowerCase();
+  const keyIdx = SIZE_ORDER.indexOf(key as typeof SIZE_ORDER[number]);
+  const minIdx = SIZE_ORDER.indexOf(min as typeof SIZE_ORDER[number]);
+  const effectiveKey = keyIdx >= minIdx ? key : min;
+  return APP_SIZE_SPECS[effectiveKey] ?? APP_SIZE_SPECS.small;
 }
 
 /**

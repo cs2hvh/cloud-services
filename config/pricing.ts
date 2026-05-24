@@ -80,7 +80,7 @@ export async function getRatesForSpectrum(): Promise<Rates> {
   return ratesFromProduct(pick as any);
 }
 
-export async function getRatesForPlatformApp(size: "small" | "medium" | "large"): Promise<Rates> {
+export async function getRatesForPlatformApp(size: "small" | "medium" | "large" | "xlarge" | "xxlarge"): Promise<Rates> {
   // Platform apps pricing stored under product type 'platform-apps' with sub = size
   const products = await Products.get_by_type_and_subtype("platform-apps", size);
   const pick = products[0] ?? null;
@@ -92,7 +92,7 @@ export async function getAllPlatformAppRates(): Promise<Record<string, Rates & {
   const products = await Products.get_by_type("platform-apps");
   const rates: Record<string, Rates & { price: number }> = {};
   
-  for (const size of ["small", "medium", "large"]) {
+  for (const size of ["small", "medium", "large", "xlarge", "xxlarge"]) {
     const product = products.find((p: any) => p.sub === size);
     const { initialCost, hourlyRate } = ratesFromProduct(product as any);
     rates[size] = {

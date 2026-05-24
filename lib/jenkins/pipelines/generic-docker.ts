@@ -9,7 +9,7 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -36,26 +36,8 @@ export function createDockerfilePipeline(
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
   
-  const sizeKey = (size || 'small').toLowerCase();
-  let cpuRequest = '500m';
-  let cpuLimit = '1';
-  let memoryRequest = '512Mi';
-  let memoryLimit = '1Gi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  // Dockerfile apps are unknown runtimes — floor at medium to be safe
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
 
   // Normalize port — handles null/undefined passed from callers even though signature has = 3000
   const port = containerPort ?? 3000;
