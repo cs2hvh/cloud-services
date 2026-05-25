@@ -21,7 +21,10 @@
 # Use the latest main-YYYYMMDD-py3.11-cu128-2.9.1; do NOT use :main-latest
 # (that tag stopped updating 2026-05-21).
 
-FROM axolotlai/axolotl-cloud-uv:main-20260525-py3.11-cu128-2.9.1
+# Note: axolotl-cloud-uv has NO dated tags published; only main-latest and
+# unversioned py-cuda-torch combos. Last rebuild was 2026-05-22. We use the
+# specific py3.11/cu128/2.9.1 combo (matches our RunPod GPU compatibility).
+FROM axolotlai/axolotl-cloud-uv:main-py3.11-cu128-2.9.1
 
 # ─── System tools for train.sh + download-dataset.sh ─────────────────
 # rclone (R2/S3 dataset pulls), jq (webhook payloads), curl/openssl/wget
