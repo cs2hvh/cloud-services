@@ -180,7 +180,13 @@ if ! accelerate launch \
     -m axolotl.cli.train /workspace/config.yaml 2>&1 | tee /workspace/training.log; then
     ELAPSED=$(($(date +%s) - START_TS))
     log "Training process exited non-zero after ${ELAPSED}s"
-    post_failure "training_crashed" "$ELAPSED"
+    # Capture the tail of accelerate's output so the operator sees the real
+    # error in the dashboard instead of a useless "training_crashed" string.
+    # 2000 chars covers most Python tracebacks; the DB column truncates to
+    # 500 in markFailedIfStillRunning but the webhook receiver gets the full
+    # text (Phase 7: also upload training.log to R2 for full inspection).
+    LOG_TAIL=$(tail -n 60 /workspace/training.log 2>/dev/null | tail -c 2000)
+    post_failure "training_crashed: ${LOG_TAIL}" "$ELAPSED"
 fi
 
 ELAPSED=$(($(date +%s) - START_TS))
