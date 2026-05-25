@@ -202,8 +202,8 @@ function computeCost(
         Number.isFinite(sh) && Number.isFinite(sm) &&
         Number.isFinite(eh) && Number.isFinite(em)
       ) {
-        const startMins = sh * 60 + sm;
-        const endMins = eh * 60 + em;
+        const startMins = (sh ?? 0) * 60 + (sm ?? 0);
+        const endMins = (eh ?? 0) * 60 + (em ?? 0);
         // Window may wrap midnight (start > end) — handle both
         const inWindow =
           startMins <= endMins

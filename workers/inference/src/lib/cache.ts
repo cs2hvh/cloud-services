@@ -180,3 +180,126 @@ export async function writeCache(
     );
   }
 }
+
+// ─── /v1/messages (Anthropic) variant ────────────────────────────
+// Same rules as chat-completions but the request shape includes
+// `system` + `max_tokens` required + `top_k` + `stop_sequences`.
+// The cached body is the Anthropic-shaped response (post-translation),
+// so a hit can skip both the upstream call AND the translation step.
+
+interface CacheableMessagesRequest {
+  model?: string;
+  messages?: unknown;
+  system?: unknown;
+  tools?: unknown;
+  tool_choice?: unknown;
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  stop_sequences?: unknown;
+}
+
+export async function shouldCacheMessages(
+  request: Request,
+  body: CacheableMessagesRequest,
+  orgId: string
+): Promise<CacheDecision> {
+  const cacheControl = request.headers.get("cache-control") ?? "";
+  const ahuraCache = request.headers.get("x-ahura-cache")?.toLowerCase() ?? "";
+  if (cacheControl.includes("no-cache") || ahuraCache === "off") {
+    return { cacheable: false, bypass: true, reason: "bypass", key: null, ttlSeconds: 0 };
+  }
+
+  if (typeof (body as { stream?: boolean }).stream === "boolean" && (body as { stream: boolean }).stream) {
+    return { cacheable: false, bypass: false, reason: "streaming", key: null, ttlSeconds: 0 };
+  }
+
+  const aggressive = ahuraCache === "aggressive";
+  const temp = body.temperature;
+  const isDeterministic = temp === 0 || (typeof temp === "number" && temp <= 0.001);
+  if (!aggressive && !isDeterministic) {
+    return { cacheable: false, bypass: false, reason: "non-deterministic", key: null, ttlSeconds: 0 };
+  }
+
+  if (!body.model || !body.messages) {
+    return { cacheable: false, bypass: false, reason: "non-cacheable-body", key: null, ttlSeconds: 0 };
+  }
+
+  const ttl = resolveTtl(request);
+  const normalized = {
+    model: body.model,
+    messages: body.messages,
+    system: body.system,
+    tools: body.tools,
+    tool_choice: body.tool_choice,
+    max_tokens: body.max_tokens,
+    temperature: body.temperature,
+    top_p: body.top_p,
+    top_k: body.top_k,
+    stop_sequences: body.stop_sequences,
+  };
+  const key = await hashKey("l1m", orgId, normalized);
+  return { cacheable: true, bypass: false, reason: "ok", key, ttlSeconds: ttl };
+}
+
+// ─── /v1/embeddings variant ──────────────────────────────────────
+// Embeddings have no temperature — they're inherently deterministic.
+// We cache unconditionally unless the caller opts out. Key includes
+// model, input, dimensions, encoding_format.
+
+interface CacheableEmbeddingsRequest {
+  model?: string;
+  input?: unknown;
+  dimensions?: number;
+  encoding_format?: string;
+}
+
+export async function shouldCacheEmbeddings(
+  request: Request,
+  body: CacheableEmbeddingsRequest,
+  orgId: string
+): Promise<CacheDecision> {
+  const cacheControl = request.headers.get("cache-control") ?? "";
+  const ahuraCache = request.headers.get("x-ahura-cache")?.toLowerCase() ?? "";
+  if (cacheControl.includes("no-cache") || ahuraCache === "off") {
+    return { cacheable: false, bypass: true, reason: "bypass", key: null, ttlSeconds: 0 };
+  }
+  if (!body.model || body.input == null) {
+    return { cacheable: false, bypass: false, reason: "non-cacheable-body", key: null, ttlSeconds: 0 };
+  }
+  const ttl = resolveTtl(request);
+  const normalized = {
+    model: body.model,
+    input: body.input,
+    dimensions: body.dimensions,
+    encoding_format: body.encoding_format,
+  };
+  const key = await hashKey("l1e", orgId, normalized);
+  return { cacheable: true, bypass: false, reason: "ok", key, ttlSeconds: ttl };
+}
+
+// ─── Shared helpers ──────────────────────────────────────────────
+
+function resolveTtl(request: Request): number {
+  const ttlHeader = request.headers.get("x-ahura-cache-ttl");
+  if (!ttlHeader) return DEFAULT_TTL_S;
+  const parsed = Number.parseInt(ttlHeader, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_TTL_S;
+  return Math.min(Math.max(parsed, MIN_TTL_S), MAX_TTL_S);
+}
+
+async function hashKey(prefix: string, orgId: string, payload: unknown): Promise<string> {
+  // Stable JSON via sorted keys (top level only; nested arrays/objects keep insertion order,
+  // which is what callers actually send — sorting deeper would silently merge requests that
+  // differ only in message ordering, which would be wrong).
+  const sortedTop =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? Object.keys(payload as Record<string, unknown>).sort()
+      : undefined;
+  const json = JSON.stringify(payload, sortedTop);
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${orgId}::${json}`));
+  return prefix + ":" + Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

@@ -25,6 +25,7 @@ import {
   resolveUpstreamKey,
   streamPassthrough,
 } from "../lib/openrouter.ts";
+import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Anthropic request schema (subset — passthrough additional fields)
@@ -168,6 +169,37 @@ export const messagesShim: Handler<{
   c.header("X-Ahura-Billing", auth.billing);
   c.header("anthropic-version", c.req.header("anthropic-version") ?? "2023-06-01");
 
+  // 5b. L1 cache lookup — Anthropic non-streaming, deterministic (or aggressive)
+  //     requests. The cached body is the Anthropic-shaped response so a hit
+  //     skips upstream call AND the response translation step.
+  const cacheDecision = await shouldCacheMessages(c.req.raw, req, auth.orgId);
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    const hit = await lookupCache(c.env, cacheDecision.key);
+    if (hit) {
+      c.header("X-Ahura-Cache", "hit");
+      c.header("X-Ahura-Cache-Age", String(Math.round((Date.now() - hit.cachedAt) / 1000)));
+      return new Response(hit.body, {
+        status: 200,
+        headers: {
+          "content-type": hit.contentType,
+          "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Model": normalizedModel,
+          "X-Ahura-Billing": auth.billing,
+          "X-Ahura-Cache": "hit",
+          "X-Ahura-Cache-Age": String(Math.round((Date.now() - hit.cachedAt) / 1000)),
+          "anthropic-version": c.req.header("anthropic-version") ?? "2023-06-01",
+        },
+      });
+    }
+    c.header("X-Ahura-Cache", "miss");
+  } else if (cacheDecision.bypass) {
+    c.header("X-Ahura-Cache", "bypass");
+  } else if (cacheDecision.reason === "streaming") {
+    c.header("X-Ahura-Cache", "streaming-skipped");
+  } else if (cacheDecision.reason === "non-deterministic") {
+    c.header("X-Ahura-Cache", "non-deterministic");
+  }
+
   // 6. Forward to OpenRouter
   const upstream = await forwardJson({
     env: c.env,
@@ -229,6 +261,25 @@ export const messagesShim: Handler<{
       status: "success",
     })
   );
+
+  // Write-through to L1 cache. We cache the Anthropic-shaped JSON, not the
+  // upstream OpenAI shape — a cache hit can short-circuit the entire response
+  // translation step.
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    c.executionCtx.waitUntil(
+      writeCache(
+        c.env,
+        cacheDecision.key,
+        JSON.stringify(anthropicResp),
+        "application/json",
+        cacheDecision.ttlSeconds,
+        {
+          prompt_tokens: oaiResp.usage?.prompt_tokens,
+          completion_tokens: oaiResp.usage?.completion_tokens,
+        }
+      )
+    );
+  }
 
   return c.json(anthropicResp);
 };

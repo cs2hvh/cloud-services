@@ -11,7 +11,7 @@ Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway
 
 **Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State:** Phases **0, 1, 4, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phases 2, 3, 7 not started.
+**State:** Phases **0, 1, 2, 4, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phases 3, 7 not started.
 
 **What works right now (verified live):**
 - `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
@@ -228,11 +228,23 @@ Cumulative timeline vs original plan in [phases.md](./phases.md).
 - [ ] Rotate keys pasted in chat history (operator OpenRouter key + the Supabase service role / RunPod / R2 / Upstash creds shared during LKE bootstrap)
 - [ ] Domain migration `cs2hvh.com → ahurasense.com` once CF perms granted
 
-### Phases 2, 3, 7 — Not started
+### Phase 2 — Catalog curation + presets + L1 cache + off-peak ✅ SHIPPED 2026-05-25
+
+Most of Phase 2 landed in earlier commits (catalog browser, presets CRUD with
+gateway integration, L1 cache on chat-completions, off-peak window enforcement).
+This session extended the L1 cache to `/v1/embeddings` and `/v1/messages`.
+
+| Chunk | Description | Status |
+|---|---|---|
+| 2.A | Catalog browser at `/dashboard/services/inference/models` — full-text search on id/name/description, provider chips (15+ dynamic), capability filters (vision/tools/json/thinking/audio/web-search), featured-only toggle, off-peak hints, copy-to-clipboard on model IDs. | ✅ |
+| 2.B | Routing presets — CRUD at `/dashboard/services/inference/presets` + API at `/api/inference/presets/[id]`, schema `inference.model_presets` with `config` JSONB. Gateway reads `X-Ahura-Preset` header, resolves via `workers/inference/src/lib/presets.ts` (5-min in-memory cache), merges fallback chain + provider preferences into the OpenRouter body. Audit-logged. | ✅ |
+| 2.C | L1 response cache — `workers/inference/src/lib/cache.ts`. sha256(orgId+normalized request) → `L1_CACHE` KV. Default TTL 300s, override via `X-Ahura-Cache-TTL: 60-3600`. Bypass via `Cache-Control: no-cache` or `X-Ahura-Cache: off`. Aggressive opt-in via `X-Ahura-Cache: aggressive`. Originally chat-only; THIS SESSION added `shouldCacheMessages` (Anthropic `/v1/messages` — caches the post-translation Anthropic-shape JSON so hits skip both upstream + translation) and `shouldCacheEmbeddings` (always cacheable, deterministic by nature). Response headers: `X-Ahura-Cache: hit\|miss\|bypass\|streaming-skipped\|non-deterministic` + `X-Ahura-Cache-Age`. | ✅ |
+| 2.D | Off-peak pricing — `inference.models.off_peak.{window_utc, discount_pct}` JSON applied in `workers/inference/src/consumers/usage.ts:computeCost()`. Handles midnight-wrap windows. Sets `usage.is_off_peak` for audit. Catalog card renders the discount hint when set. | ✅ |
+
+### Phases 3, 7 — Not started
 
 | Phase | Scope | Est. |
 |---|---|---|
-| **2** | Catalog curation UI, routing presets, response caching (L1 in KV), off-peak pricing enforcement | 1 wk |
 | **3** | Playground UI — interactive model picker, multi-model compare | 1 wk |
 | **7** | Prompt-injection guardrail, semantic cache, batch endpoint, SOC 2 readiness docs, runbooks, status page | 1.5 wks |
 | **11** | Managed FT serving (vLLM Multi-LoRA shared per base, Fireworks pattern) as premium upsell on top of Phase 10's self-serve | 2 wks |
@@ -647,6 +659,7 @@ Immediate hygiene (do soon):
 - [ ] Operator: train one new FT job to validate the full self-serve flow end-to-end (expect: completion → expandable row → "Copy serve command" → paste on a GPU pod → vLLM listens on :8000 → OpenAI-compatible request returns adapter output)
 - [ ] Operator: apply Phase 4 polish migration `supabase/migrations/20260525000001_phase4_polish_vector_rows_anydim.sql` (relaxes vector_rows.embedding to any-dim + adds 2 audit enum values). Without this, text-embedding-3-large upserts will fail with a pgvector dimension error.
 - [ ] Operator: restart Next.js dev server to pick up the new `/vectors/[id]` detail page and `/rows` API routes.
+- [ ] Operator: redeploy the inference worker (`cd workers/inference && npx wrangler deploy`) for the L1 cache extension on `/v1/embeddings` and `/v1/messages` to take effect. Smoke test with two identical `Cache-Control: no-cache`-less requests to `/v1/embeddings` — second should respond with `X-Ahura-Cache: hit`.
 
 Phase 1.5 polish (small, valuable, do before Phase 2):
 - [ ] Migration: add `rate_limit_rpm INTEGER` column to `inference.api_keys` (default 60)

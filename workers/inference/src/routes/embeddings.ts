@@ -13,6 +13,7 @@ import type { Handler } from "hono";
 import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import { forwardJson, resolveUpstreamKey } from "../lib/openrouter.ts";
+import { lookupCache, shouldCacheEmbeddings, writeCache } from "../lib/cache.ts";
 
 const embeddingsRequestSchema = z
   .object({
@@ -119,7 +120,34 @@ export const embeddings: Handler<{
   c.header("X-Ahura-Model", req.model);
   c.header("X-Ahura-Billing", auth.billing);
 
-  // 4. Forward to OpenRouter
+  // 4. L1 cache lookup — embeddings are deterministic, so we cache aggressively
+  //    unless the caller opts out via Cache-Control: no-cache or X-Ahura-Cache: off.
+  //    Cache hits skip the upstream call AND the billing event (the user paid
+  //    once already; serving a cache hit costs us nothing).
+  const cacheDecision = await shouldCacheEmbeddings(c.req.raw, req, auth.orgId);
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    const hit = await lookupCache(c.env, cacheDecision.key);
+    if (hit) {
+      c.header("X-Ahura-Cache", "hit");
+      c.header("X-Ahura-Cache-Age", String(Math.round((Date.now() - hit.cachedAt) / 1000)));
+      return new Response(hit.body, {
+        status: 200,
+        headers: {
+          "content-type": hit.contentType,
+          "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Model": req.model,
+          "X-Ahura-Billing": auth.billing,
+          "X-Ahura-Cache": "hit",
+          "X-Ahura-Cache-Age": String(Math.round((Date.now() - hit.cachedAt) / 1000)),
+        },
+      });
+    }
+    c.header("X-Ahura-Cache", "miss");
+  } else if (cacheDecision.bypass) {
+    c.header("X-Ahura-Cache", "bypass");
+  }
+
+  // 5. Forward to OpenRouter
   const upstream = await forwardJson({
     env: c.env,
     body: req,
@@ -148,13 +176,15 @@ export const embeddings: Handler<{
   }
 
   const text = await upstream.text();
+  let promptTokens: number | null = null;
   try {
     const data = JSON.parse(text) as OpenAIEmbeddingsResponse;
+    promptTokens = data.usage?.prompt_tokens ?? null;
     const inputs = Array.isArray(req.input) ? req.input : [req.input];
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, req.model, requestId, startedAt),
-        inputTokens: data.usage?.prompt_tokens ?? null,
+        inputTokens: promptTokens,
         outputTokens: 0,
         numUnits: inputs.length,
         unitLabel: "embedding",
@@ -169,6 +199,20 @@ export const embeddings: Handler<{
         message: "Failed to parse embeddings response for usage",
         err: String(err),
       })
+    );
+  }
+
+  // Write-through to L1 cache so subsequent identical requests skip the upstream.
+  if (cacheDecision.cacheable && cacheDecision.key) {
+    c.executionCtx.waitUntil(
+      writeCache(
+        c.env,
+        cacheDecision.key,
+        text,
+        upstream.headers.get("content-type") ?? "application/json",
+        cacheDecision.ttlSeconds,
+        { prompt_tokens: promptTokens ?? undefined, completion_tokens: 0 }
+      )
     );
   }
 
