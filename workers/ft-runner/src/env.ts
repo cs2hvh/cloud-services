@@ -65,6 +65,7 @@ export interface RunnerEnv {
   monitorPollIntervalMs: number;
   heartbeatStallMs: number;
   consecutiveStallsToKill: number;
+  bootGraceMs: number;
   jobLockDurationMs: number;
   healthPort: number;
 }
@@ -101,6 +102,12 @@ export function loadEnv(): RunnerEnv {
     monitorPollIntervalMs: optionalInt("MONITOR_POLL_INTERVAL_MS", 15_000),
     heartbeatStallMs: optionalInt("HEARTBEAT_STALL_MS", 90_000),
     consecutiveStallsToKill: optionalInt("CONSECUTIVE_STALLS_TO_KILL", 3),
+    // Skip heartbeat-stall counting for this long after a pod is provisioned.
+    // RunPod cold-pulls of our 22GB axolotl image regularly take 5-10 min,
+    // during which the training container hasn't started and can't send
+    // heartbeats. Without this grace window we'd kill every pod mid-pull.
+    // After grace expires, normal stall detection kicks in.
+    bootGraceMs: optionalInt("BOOT_GRACE_MS", 5 * 60_000),
     jobLockDurationMs: optionalInt("JOB_LOCK_DURATION_MS", 60_000),
     healthPort: optionalInt("HEALTH_PORT", 8080),
   };

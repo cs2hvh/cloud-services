@@ -143,7 +143,7 @@ export function FineTuning({
     base_model_id: bases[0]?.model_id ?? "",
     method: "lora" as "lora" | "qlora" | "full",
     dataset_url: "",
-    gpu_sku: "A100-80GB",
+    gpu_sku: "A40",
     rank: 16,
     alpha: 32,
     lr: 0.0002,

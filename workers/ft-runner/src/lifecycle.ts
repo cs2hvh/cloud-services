@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Job } from "bullmq";
 import type { RunnerEnv } from "./env.js";
+import { resolveHuggingFaceId } from "./ft-base-models.js";
 import type { HeartbeatStore } from "./heartbeat.js";
 import type { Logger } from "./logger.js";
 import type { RunPod } from "./runpod.js";
@@ -94,21 +95,34 @@ export async function runJob(
         return;
       }
       log.info({ status: cur.status, podId: cur.runpod_job_id }, "adopting in-flight job");
-      await monitorUntilDone(deps, jobId, cur.runpod_job_id, log);
+      // Adopted job: we don't know when it was actually provisioned, so
+      // assume the boot grace already elapsed (worst case = some stalls
+      // counted that "shouldn't" be, but adopted jobs are by definition
+      // already past the bootstrap window).
+      const adoptedProvisionedAt = Date.now() - deps.env.bootGraceMs;
+      await monitorUntilDone(deps, jobId, cur.runpod_job_id, adoptedProvisionedAt, log);
       return;
     }
     log.info({ status: cur.status }, "job no longer queued — skipping");
     return;
   }
 
-  log.info({ baseModel: claimed.base_model_id, gpuSku: claimed.gpu_sku }, "claimed");
+  // Resolve our internal model id (e.g. "qwen/qwen-3-8b-instruct") to the
+  // actual HuggingFace name axolotl needs ("Qwen/Qwen3-8B"). If we passed
+  // the internal id straight through, every non-phi-4 base would 404 on HF.
+  const hfModelId = resolveHuggingFaceId(claimed.base_model_id);
+  log.info(
+    { baseModel: claimed.base_model_id, hfModelId, gpuSku: claimed.gpu_sku },
+    "claimed"
+  );
 
   // ── 2. Provision pod ─────────────────────────────────────────────
+  const provisionedAt = Date.now();
   let podId: string;
   try {
     const provisioned = await runpod.createPod({
       jobId,
-      baseModelId: claimed.base_model_id,
+      baseModelId: hfModelId,
       method: claimed.method,
       datasetUrl: claimed.dataset_url,
       hyperparams: claimed.hyperparams,
@@ -155,18 +169,20 @@ export async function runJob(
     .eq("status", "preparing");
 
   // ── 3. Monitor ───────────────────────────────────────────────────
-  await monitorUntilDone(deps, jobId, podId, log);
+  await monitorUntilDone(deps, jobId, podId, provisionedAt, log);
 }
 
 async function monitorUntilDone(
   deps: LifecycleDeps,
   jobId: string,
   podId: string,
+  provisionedAt: number,
   log: Logger
 ): Promise<void> {
   const { env, supabase, runpod, heartbeats } = deps;
   let consecutiveStalls = 0;
   let consecutivePodDown = 0;
+  let bootGraceLogged = false;
 
   while (true) {
     await sleep(env.monitorPollIntervalMs);
@@ -236,6 +252,26 @@ async function monitorUntilDone(
     consecutivePodDown = 0;
 
     // ── Heartbeat / stall detection ──────────────────────────────
+    // Boot grace: skip stall counting for the first BOOT_GRACE_MS after
+    // provision. RunPod's 22GB image pull on a cold node takes 5-10 min,
+    // during which the training container literally doesn't exist yet
+    // and can't send heartbeats. Without this window we'd kill every pod
+    // mid-pull. Once grace elapses, the normal stall-count→kill logic
+    // kicks in for real "container started but heartbeat.py crashed"
+    // situations.
+    const sinceProvisionMs = Date.now() - provisionedAt;
+    if (sinceProvisionMs < env.bootGraceMs) {
+      if (!bootGraceLogged) {
+        const remainingMs = env.bootGraceMs - sinceProvisionMs;
+        log.info(
+          { bootGraceRemainingMs: remainingMs, podStatus },
+          "in boot grace window — skipping heartbeat-stall counting"
+        );
+        bootGraceLogged = true;
+      }
+      continue;
+    }
+
     const stale = await heartbeats.isStale(jobId, env.heartbeatStallMs);
     if (stale) {
       consecutiveStalls += 1;
