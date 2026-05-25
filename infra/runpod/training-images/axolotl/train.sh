@@ -192,10 +192,25 @@ fi
 ELAPSED=$(($(date +%s) - START_TS))
 log "Training finished in ${ELAPSED}s"
 
-# ─── 6. Upload adapter to R2 ───────────────────────────────────────────
+# ─── 6. Upload adapter + training.log to R2 ────────────────────────────
 log "Uploading adapter to $OUTPUT_R2_PREFIX"
 if ! /workspace/shared/upload-adapter.sh /workspace/output "$OUTPUT_R2_PREFIX"; then
     post_failure "adapter_upload_failed" "$ELAPSED"
+fi
+
+# Also upload the full training.log alongside the adapter so the dashboard
+# can link to it. Best-effort: if this fails (e.g. rclone error), don't
+# break the whole job — the run already succeeded.
+TRAINING_LOG_URL=""
+if [ -s /workspace/training.log ]; then
+    log "Uploading training.log"
+    # Copy log into the adapter dir then re-use the upload script
+    cp /workspace/training.log /workspace/output/training.log || true
+    if /workspace/shared/upload-adapter.sh /workspace/output "$OUTPUT_R2_PREFIX" 2>/dev/null; then
+        # OUTPUT_R2_PREFIX is r2://bucket/path/; the log lives at that prefix + training.log
+        TRAINING_LOG_URL="${OUTPUT_R2_PREFIX}training.log"
+        log "training.log available at $TRAINING_LOG_URL"
+    fi
 fi
 
 # ─── 7. Quality smoke test ─────────────────────────────────────────────
@@ -255,6 +270,7 @@ PAYLOAD=$(jq -nc \
     --arg job_id "$JOB_ID" \
     --arg status "completed" \
     --arg adapter "$OUTPUT_R2_PREFIX" \
+    --arg training_log "$TRAINING_LOG_URL" \
     --argjson elapsed "$ELAPSED" \
     --argjson final_loss "$FINAL_LOSS" \
     --argjson samples "$SAMPLE_OUTPUT" \
@@ -262,6 +278,7 @@ PAYLOAD=$(jq -nc \
         job_id: $job_id,
         status: $status,
         adapter_url: $adapter,
+        training_log_url: $training_log,
         elapsed_seconds: $elapsed,
         final_loss: $final_loss,
         sample_outputs: $samples

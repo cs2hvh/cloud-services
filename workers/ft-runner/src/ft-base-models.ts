@@ -5,61 +5,47 @@
  *
  * Our internal IDs follow the pattern `<vendor>/<lowercase-name>` (e.g.
  * `qwen/qwen-3-8b-instruct`). HF's actual repo names use mixed case and
- * different naming conventions (e.g. `Qwen/Qwen3-8B`). When the dashboard
- * lets a user pick a base for fine-tuning, we store the internal ID; the
- * runner translates it here before passing BASE_MODEL into the training
- * container's env.
- *
- * If the internal ID has no mapping entry, we pass it through verbatim
- * (caller's responsibility) and axolotl will hit HF's 404 path on its own.
+ * different naming conventions (e.g. `Qwen/Qwen3-8B`).
  *
  * Keep this in sync with ALLOWED_FT_BASE_MODELS in
- * app/api/inference/fine-tuning/jobs/route.ts.
+ * app/api/inference/fine-tuning/jobs/route.ts and with the dashboard's
+ * model dropdown.
  */
-
-export const INTERNAL_TO_HF_MODEL_ID: Record<string, string> = {
-  // ─── Llama 4 (Meta, 2025) ─────────────────────────────────────────
-  "meta-llama/llama-4-scout": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-  "meta-llama/llama-4-maverick": "meta-llama/Llama-4-Maverick-17B-128E-Instruct",
-
-  // ─── Llama 3.x (Meta) ─────────────────────────────────────────────
-  // Llama 3.3 only shipped a 70B SKU; the "8B" slot in our catalog maps
-  // to Llama 3.1 8B Instruct which is still the canonical small Meta
-  // open-weight at this scale.
-  "meta-llama/llama-3.3-70b-instruct": "meta-llama/Llama-3.3-70B-Instruct",
-  "meta-llama/llama-3.3-8b-instruct": "meta-llama/Llama-3.1-8B-Instruct",
-
-  // ─── DeepSeek ─────────────────────────────────────────────────────
-  "deepseek/deepseek-v3.2": "deepseek-ai/DeepSeek-V3.2-Exp",
-
-  // ─── Qwen3 (Alibaba) ──────────────────────────────────────────────
-  // Qwen3 dropped the "-Instruct" suffix in HF naming for the open
-  // sizes; the "instruct" variant is the default repo.
-  "qwen/qwen-3-235b-instruct": "Qwen/Qwen3-235B-A22B",
-  "qwen/qwen-3-32b-instruct": "Qwen/Qwen3-32B",
-  "qwen/qwen-3-14b-instruct": "Qwen/Qwen3-14B",
-  "qwen/qwen-3-8b-instruct": "Qwen/Qwen3-8B",
-
-  // ─── Mistral ──────────────────────────────────────────────────────
-  // Mistral's "Large 3" is internal codename for Mistral-Large-Instruct-2411.
-  "mistralai/mistral-large-3": "mistralai/Mistral-Large-Instruct-2411",
-  "mistralai/mistral-nemo": "mistralai/Mistral-Nemo-Instruct-2407",
-
-  // ─── Microsoft ────────────────────────────────────────────────────
-  // phi-4 is the only entry where our internal ID already matches HF.
-  "microsoft/phi-4": "microsoft/phi-4",
-
-  // ─── Google ───────────────────────────────────────────────────────
-  // Gemma 4 isn't out yet; the "gemma-4-27b-it" slot in our catalog
-  // maps to Gemma 3 27B IT (the latest open Gemma at this scale).
-  "google/gemma-4-27b-it": "google/gemma-3-27b-it",
-};
 
 /**
- * Translate our internal ID to the HF ID. If no mapping exists, returns
- * the internal ID as-is — caller can rely on axolotl/HF to surface a
- * clear 404 instead of us silently doing the wrong thing.
+ * Per-base metadata. `gated` is whether HuggingFace requires manual
+ * approval before downloading (true for all Meta + Google models as of
+ * 2026-05). Gated models still work if HF_TOKEN belongs to an approved
+ * account, but the training pod 403s at config.json fetch if not.
  */
+export interface FtBaseModelInfo {
+  hf_id: string;
+  gated: boolean;
+  /** Approx params for cost preview ("8B", "14B", "70B-MoE", "235B"). */
+  size: string;
+}
+
+export const BASE_MODEL_INFO: Record<string, FtBaseModelInfo> = {
+  "meta-llama/llama-4-scout":          { hf_id: "meta-llama/Llama-4-Scout-17B-16E-Instruct",    gated: true,  size: "17B-MoE" },
+  "meta-llama/llama-4-maverick":       { hf_id: "meta-llama/Llama-4-Maverick-17B-128E-Instruct",gated: true,  size: "17B-MoE" },
+  "meta-llama/llama-3.3-70b-instruct": { hf_id: "meta-llama/Llama-3.3-70B-Instruct",            gated: true,  size: "70B" },
+  // Llama 3.3 only ships at 70B — internal "8B" slot maps to Llama 3.1 8B,
+  // the canonical small Meta open-weight at this scale.
+  "meta-llama/llama-3.3-8b-instruct":  { hf_id: "meta-llama/Llama-3.1-8B-Instruct",             gated: true,  size: "8B" },
+  "deepseek/deepseek-v3.2":            { hf_id: "deepseek-ai/DeepSeek-V3.2-Exp",                gated: false, size: "671B-MoE" },
+  "qwen/qwen-3-235b-instruct":         { hf_id: "Qwen/Qwen3-235B-A22B",                         gated: false, size: "235B-MoE" },
+  "qwen/qwen-3-32b-instruct":          { hf_id: "Qwen/Qwen3-32B",                               gated: false, size: "32B" },
+  "qwen/qwen-3-14b-instruct":          { hf_id: "Qwen/Qwen3-14B",                               gated: false, size: "14B" },
+  "qwen/qwen-3-8b-instruct":           { hf_id: "Qwen/Qwen3-8B",                                gated: false, size: "8B" },
+  "mistralai/mistral-large-3":         { hf_id: "mistralai/Mistral-Large-Instruct-2411",        gated: false, size: "123B" },
+  "mistralai/mistral-nemo":            { hf_id: "mistralai/Mistral-Nemo-Instruct-2407",         gated: false, size: "12B" },
+  "microsoft/phi-4":                   { hf_id: "microsoft/phi-4",                              gated: false, size: "14B" },
+  // Gemma 4 isn't released; internal "gemma-4-27b-it" slot maps to Gemma 3.
+  "google/gemma-4-27b-it":             { hf_id: "google/gemma-3-27b-it",                        gated: true,  size: "27B" },
+};
+
+/** Translate internal ID → HF ID. Falls back to passthrough so a missing
+ *  mapping fails loudly at HF (404) rather than silently misrouting. */
 export function resolveHuggingFaceId(internalId: string): string {
-  return INTERNAL_TO_HF_MODEL_ID[internalId] ?? internalId;
+  return BASE_MODEL_INFO[internalId]?.hf_id ?? internalId;
 }

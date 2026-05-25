@@ -58,6 +58,11 @@ def post_heartbeat(payload: dict):
         headers={
             "Content-Type": "application/json",
             "X-Ahura-Webhook-Signature": sig,
+            # Identify ourselves so Cloudflare's Bot Fight / Browser
+            # Integrity Check doesn't 403 the plain Python-urllib UA.
+            # First job got "heartbeat: post failed: HTTP Error 403"
+            # repeatedly without this; CF's BIC was the culprit.
+            "User-Agent": "ahura-ft-heartbeat/1.0",
         },
         method="POST",
     )
