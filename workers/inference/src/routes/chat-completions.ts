@@ -181,14 +181,14 @@ export const chatCompletions: Handler<{
   c.header("X-Ahura-Billing", auth.billing);
 
   // 4b. Look up the model in the catalog to decide routing. proxy models
-  //     forward to the upstream gateway (default path below); fine-tune
-  //     and BYO models route to their own serverless endpoint.
+  //     forward to the upstream gateway (default path below). Fine-tune /
+  //     BYO models go to per-deployment serving endpoints — disabled in
+  //     v1; user serves them on their own rented GPU pod.
   const routing = await lookupModelRouting(c.env, effectiveModel);
   if (routing && !routing.is_active) {
     return c.json(
       errorBody(
-        `Model "${effectiveModel}" is not currently available. ` +
-          `It may still be provisioning or has been disabled.`,
+        `Model "${effectiveModel}" is not currently available.`,
         "invalid_request_error",
         "model_unavailable",
         requestId
@@ -207,51 +207,22 @@ export const chatCompletions: Handler<{
     c.header("X-Ahura-Preset", presetName!);
   }
 
-  // 5b. Self-hosted fast path — fine-tune + BYO models go to their
-  //     dedicated serverless endpoint, bypassing the upstream gateway +
-  //     L1 cache + preset-aware billing. Pass-through streaming is
-  //     identical; usage metering still happens via the response body.
+  // 5b. Self-hosted models (FT outputs, BYO deploys) — gateway-routed
+  // managed serving is out of scope for v1. User runs vLLM on their own
+  // rented GPU pod (see /dashboard/services/gpu/deploy). For now, return
+  // a clear redirect message instead of attempting to forward.
   if (routing && (routing.serving_type === "runpod_ft" || routing.serving_type === "runpod_byo")) {
-    if (!routing.endpoint_id || !routing.served_model_name) {
-      return c.json(
-        errorBody(
-          `Model "${effectiveModel}" has no serving endpoint configured.`,
-          "invalid_request_error",
-          "endpoint_missing",
-          requestId
-        ),
-        503
-      );
-    }
-    const upstream = await forwardToSelfHosted({
-      env: c.env,
-      endpointId: routing.endpoint_id,
-      body: outgoingBody,
-      servedModelName: routing.served_model_name,
-      signal: c.req.raw.signal,
-    });
-    c.header("X-Ahura-Route", "self-hosted");
-    if (!upstream.ok) {
-      const text = await upstream.text();
-      return c.json(
-        errorBody(text || "Serving endpoint error", "upstream_error", `upstream_${upstream.status}`, requestId),
-        upstream.status as 400 | 401 | 403 | 404 | 429 | 500 | 502 | 503 | 504
-      );
-    }
-    if (req.stream) {
-      return streamPassthrough(upstream, () => null);
-    }
-    const text = await upstream.text();
-    return new Response(text, {
-      status: 200,
-      headers: {
-        "content-type": upstream.headers.get("content-type") ?? "application/json",
-        "X-Ahura-Request-Id": requestId,
-        "X-Ahura-Model": effectiveModel,
-        "X-Ahura-Billing": auth.billing,
-        "X-Ahura-Route": "self-hosted",
-      },
-    });
+    return c.json(
+      errorBody(
+        `Model "${effectiveModel}" is a private adapter. Serve it on a GPU pod you control; ` +
+          `the gateway does not currently route to per-tenant adapters. ` +
+          `See the dashboard's job detail dialog for deployment instructions.`,
+        "invalid_request_error",
+        "self_serve_model",
+        requestId
+      ),
+      400
+    );
   }
 
   // 5. L1 cache check — only non-streaming deterministic requests, scoped per org

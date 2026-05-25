@@ -921,40 +921,29 @@ export function FineTuning({
                   </div>
                 )}
 
-                {/* Output + Use this model */}
-                {d.output_model_id && (() => {
-                  // Mirror the model id construction in the webhook handler
-                  // (app/api/inference/fine-tuning/jobs/[id]/webhook/route.ts).
-                  // Source of truth lives there; this is a display-only copy.
+                {/* Deploy this adapter (self-serve) */}
+                {d.status === "completed" && Boolean((d as Record<string, unknown>).output_artifact_url) && (() => {
+                  const adapterR2 = String((d as Record<string, unknown>).output_artifact_url);
                   const baseShort = d.base_model_id.split("/")[1] ?? d.base_model_id;
-                  const modelId = `ahura/${baseShort}:ft-${d.id.slice(0, 8)}`;
-                  const curlSample = `curl https://api.cs2hvh.com/v1/chat/completions \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "${modelId}",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'`;
+                  const dockerCmd = `docker run --gpus all -p 8000:8000 \\
+  -e BASE_MODEL="${baseShort}" \\
+  -e ADAPTER_R2_URL="${adapterR2}" \\
+  -e R2_ACCESS_KEY_ID="<your-r2-read-key>" \\
+  -e R2_SECRET_ACCESS_KEY="<your-r2-secret>" \\
+  -e R2_ENDPOINT="<your-r2-endpoint>" \\
+  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
                   return (
                   <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Use this model</h4>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Deploy this adapter</h4>
                     <Row
-                      k="Status"
-                      v={
-                        <span className="inline-flex items-center gap-1 text-emerald-300/85">
-                          <CheckCircle2 className="h-3 w-3" /> registered in catalog
-                        </span>
-                      }
-                    />
-                    <Row
-                      k="Model id"
+                      k="Adapter location"
                       v={
                         <span className="inline-flex items-center gap-2">
-                          <code className="text-[11px] text-[#0095FF] select-all">{modelId}</code>
+                          <code className="text-[11px] text-[#0095FF] select-all break-all">{adapterR2}</code>
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard.writeText(modelId);
+                              navigator.clipboard.writeText(adapterR2);
                               toast.success("Copied");
                             }}
                             className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
@@ -965,30 +954,39 @@ export function FineTuning({
                       }
                     />
                     <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5 border-b border-white/[0.04]">
-                      <div className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45`}>Call example</div>
+                      <div className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45`}>How to serve</div>
                       <div>
-                        <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative group">
-                          <pre className={`${MONO} text-[10.5px] text-white/80 whitespace-pre-wrap overflow-x-auto`}>{curlSample}</pre>
+                        <p className={`${MONO} text-[10.5px] text-white/65 leading-relaxed mb-2`}>
+                          Rent a GPU pod from our compute service, then run the prebuilt
+                          serving container below. vLLM exposes an OpenAI-compatible
+                          API on port 8000 with your adapter mounted.
+                        </p>
+                        <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative">
+                          <pre className={`${MONO} text-[10.5px] text-white/80 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard.writeText(curlSample);
-                              toast.success("cURL copied");
+                              navigator.clipboard.writeText(dockerCmd);
+                              toast.success("Command copied");
                             }}
                             className={`${MONO} absolute top-2 right-2 text-[10px] text-white/45 hover:text-white/85 bg-black/40 px-2 py-0.5 rounded`}
                           >
                             copy
                           </button>
                         </div>
+                        <a
+                          href="/dashboard/services/gpu/deploy"
+                          className={`${MONO} inline-flex items-center gap-1 mt-2 text-[11px] text-[#0095FF] hover:underline`}
+                        >
+                          → Rent a GPU pod
+                        </a>
                         <p className={`${MONO} mt-2 text-[10px] text-white/45 leading-relaxed`}>
-                          First call after ~1 min of idle takes ~30-60s while the serving worker
-                          warms up. Subsequent calls within the idle window are 1-2s.
+                          Recommended GPU: A40 ($0.40/hr) for 8-14B bases. Cold start ~60s
+                          (downloads base from HuggingFace + adapter from your R2 + vLLM
+                          loads). Subsequent requests are 1-2s.
                         </p>
                       </div>
                     </div>
-                    {(d as Record<string, unknown>).output_artifact_url ? (
-                      <Row k="Adapter (R2)" v={<code className="text-[10.5px]">{String((d as Record<string, unknown>).output_artifact_url)}</code>} />
-                    ) : null}
                     {d.training_log_url && (
                       <Row
                         k="Training log"

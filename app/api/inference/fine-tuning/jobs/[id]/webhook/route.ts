@@ -15,8 +15,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
-import { createServerlessEndpoint } from "@/lib/inference/deploy-runpod";
-import { resolveHuggingFaceId, recommendedServingGpu } from "@/lib/inference/ft-base-models";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
 
@@ -199,125 +197,24 @@ export async function POST(
     return NextResponse.json({ ok: true, gated: true });
   }
 
-  // ── Provision serving endpoint ────────────────────────────────────
-  // Best-effort: spin up a dedicated serverless endpoint with our vLLM-LoRA
-  // image that loads the adapter from R2 at startup. If this fails, the
-  // model still gets registered (adapter is valid) but with no endpoint —
-  // operator can retry from dashboard. The endpoint creation itself is
-  // fast (~2s API call); becoming READY takes ~30-60s afterwards but we
-  // don't block on that.
-  let provisionedEndpointId: string | null = null;
-  let provisionError: string | null = null;
-  try {
-    const hfBase = resolveHuggingFaceId(existing.base_model_id);
-    const servingGpu = recommendedServingGpu(existing.base_model_id);
-    const servingImage = process.env.FT_SERVING_IMAGE_URI
-      ?? "ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3";
-
-    const ep = await createServerlessEndpoint({
-      name: `ahura-ft-serve-${id.slice(0, 8)}`,
-      imageUri: servingImage,
-      gpuSku: servingGpu,
-      autoscale: { min_workers: 0, max_workers: 2, idle_timeout_s: 60 },
-      env: {
-        BASE_MODEL: hfBase,
-        ADAPTER_R2_URL: payload.adapter_url ?? "",
-        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? "",
-        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "",
-        R2_ENDPOINT: process.env.R2_ENDPOINT ?? "",
-        ...(process.env.HF_TOKEN ? { HF_TOKEN: process.env.HF_TOKEN } : {}),
-        SERVED_MODEL_NAME: "adapter",
-      },
-      port: 8000,
-    });
-    provisionedEndpointId = ep.id;
-    console.log(
-      `[FT Webhook] Provisioned serving endpoint ${ep.id} for job ${id} (${servingGpu})`
-    );
-  } catch (err) {
-    // Structured RunPodError from RunPodClient: { code, status, message, retryable, raw }.
-    // Plain Error: .message. Anything else: JSON-stringify with a fallback to String().
-    if (err instanceof Error) {
-      provisionError = err.message;
-    } else if (err && typeof err === "object") {
-      const e = err as { message?: unknown; code?: unknown; status?: unknown; raw?: unknown };
-      const parts: string[] = [];
-      if (e.message && typeof e.message === "string") parts.push(e.message);
-      if (e.code) parts.push(`code=${e.code}`);
-      if (e.status) parts.push(`status=${e.status}`);
-      // Include the upstream's response body if present — usually has the
-      // actual reason ("Field X is required", "Invalid GPU type", etc.).
-      if (e.raw) {
-        const rawStr = typeof e.raw === "string" ? e.raw : JSON.stringify(e.raw);
-        parts.push(`response=${rawStr.slice(0, 300)}`);
-      }
-      provisionError = parts.length > 0 ? parts.join(" · ") : JSON.stringify(err).slice(0, 400);
-    } else {
-      provisionError = String(err);
-    }
-    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, JSON.stringify(err, null, 2));
-    // Continue — model still gets registered; user can retry via dashboard.
-  }
-
-  // ── Register output model in catalog ──────────────────────────────
-  const baseShort = existing.base_model_id.split("/")[1] ?? existing.base_model_id;
-  const shortId = id.slice(0, 8);
-  const modelId = `ahura/${baseShort}:ft-${shortId}`;
-
-  const { data: insertedModel, error: modelErr } = await supabase
-    .schema("inference")
-    .from("models")
-    .insert({
-      model_id: modelId,
-      display_name: `${existing.name} (LoRA of ${baseShort})`,
-      description: `Private LoRA adapter from job ${shortId}. Trained on ${existing.base_model_id}.`,
-      modality: "chat",
-      serving_type: "runpod_ft",
-      org_id: existing.org_id,
-      upstream_provider: "openrouter",
-      upstream_model_id: modelId,
-      // The just-provisioned endpoint (or null if provisioning failed).
-      // Operator-only column; never exposed in API responses.
-      runpod_endpoint_id: provisionedEndpointId,
-      capabilities: {
-        streaming: true,
-        tools: true,
-        json_mode: true,
-        context_window: 8192,
-      },
-      pricing: { input_cents_per_mtok: 100, output_cents_per_mtok: 500 },
-      // Activate ONLY if endpoint was successfully provisioned — otherwise
-      // the model would 5xx on every call. Operator can flip active=true
-      // after retrying endpoint provision.
-      is_active: provisionedEndpointId !== null,
-    })
-    .select("id")
-    .single();
-
-  // Compute final cost from the training duration and the hourly rate we
-  // recorded at provision time. Applies to both the model-registration-
-  // failed branch and the happy path.
+  // ── Persist completion ────────────────────────────────────────────
+  // Design choice (2026-05-25): we do NOT auto-provision a serving endpoint
+  // and we do NOT auto-register the model in the inference catalog.
+  //
+  // Rationale: managed serving introduces a long list of operational
+  // problems (image-architecture impedance with Serverless runtimes,
+  // multi-tenant cost allocation, idle-tier billing, eval drift) that
+  // are out of scope for v1. Instead, the adapter sits in R2 and the
+  // user serves it on their own rented GPU pod (we already have that
+  // product at /dashboard/services/gpu/deploy). The FT detail dialog
+  // surfaces:
+  //   - the adapter R2 location + presigned download
+  //   - a "deploy to your own pod" guide using our vllm-lora image
+  //
+  // We'll add a managed-serving tier later as a separate product line
+  // (vLLM Multi-LoRA shared per base — Fireworks/Together pattern).
+  // Until then, the inference gateway never routes for FT outputs.
   const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
-
-  if (modelErr || !insertedModel) {
-    console.error("[FT Webhook] Failed to register output model", modelErr);
-    // Don't fail the webhook — mark the job as completed but log the
-    // registration failure. Operator can re-register from inference.finetunes.
-    await supabase
-      .schema("inference")
-      .from("finetunes")
-      .update({
-        status: "completed",
-        output_artifact_url: payload.adapter_url,
-        training_log_url: payload.training_log_url ?? null,
-        training_seconds: payload.elapsed_seconds,
-        cost_cents: costCents,
-        completed_at: new Date().toISOString(),
-        error_message: `WARN: model registration failed: ${modelErr?.message ?? "unknown"}`,
-      })
-      .eq("id", id);
-    return NextResponse.json({ ok: true, model_registration_failed: true, cost_cents: costCents });
-  }
 
   await supabase
     .schema("inference")
@@ -325,23 +222,17 @@ export async function POST(
     .update({
       status: "completed",
       output_artifact_url: payload.adapter_url,
-      output_model_id: insertedModel.id,
       training_log_url: payload.training_log_url ?? null,
       training_seconds: payload.elapsed_seconds,
       cost_cents: costCents,
       completed_at: new Date().toISOString(),
-      error_message: provisionError
-        ? `WARN: training succeeded but serving-endpoint provision failed: ${provisionError.slice(0, 400)}. Model registered but is_active=false; retry from dashboard.`
-        : null,
+      error_message: null,
     })
     .eq("id", id);
 
   // TODO Phase 7: trigger Svix customer webhook fine_tuning.job.succeeded
   return NextResponse.json({
     ok: true,
-    model_id: modelId,
-    output_model_uuid: insertedModel.id,
     cost_cents: costCents,
-    serving_endpoint_provisioned: provisionedEndpointId !== null,
   });
 }
