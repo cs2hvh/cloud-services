@@ -7,9 +7,9 @@
  * embedded directly in the docker run command so the user doesn't need
  * any R2 credentials.
  *
- * Mirrors /log-url shape for consistency. 1-hour TTL is sufficient for
- * the container's startup curl; once the tarball is unpacked locally,
- * the URL can expire safely.
+ * Mirrors /log-url shape for consistency. 6-hour TTL covers the common
+ * flow of copy-command → rent-pod → ssh → docker pull (which itself can
+ * take 5-10 min) → run, without forcing the user to refresh halfway.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -19,7 +19,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 
-const URL_TTL_SECONDS = 3600;
+const URL_TTL_SECONDS = 6 * 3600;
 const ADAPTER_FILENAME = "adapter.tar.gz";
 const ALLOWED_BUCKETS = new Set(["ahura-ft-adapters"]);
 

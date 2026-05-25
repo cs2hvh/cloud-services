@@ -16,7 +16,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 
-const URL_TTL_SECONDS = 3600;
+const URL_TTL_SECONDS = 6 * 3600;
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);

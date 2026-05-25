@@ -230,7 +230,7 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
   -e ADAPTER_DOWNLOAD_URL="${data.url}" \\
   ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
       await navigator.clipboard.writeText(fullCmd);
-      toast.success("Serve command copied (1-hour validity)");
+      toast.success("Serve command copied (6-hour validity)");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't generate URL");
     }
@@ -319,7 +319,7 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
               <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
                 Click the button below to copy a ready-to-paste docker command.
-                The adapter download URL is signed and valid for 1 hour — generate
+                The adapter download URL is signed and valid for 6 hours — generate
                 a fresh one if it expires before you run.
               </p>
               <button
@@ -327,7 +327,7 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
                 onClick={copyServeCommand}
                 className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded transition-colors mb-2`}
               >
-                Copy serve command (1h validity)
+                Copy serve command (6h validity)
               </button>
               <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
                 <pre className={`${MONO} text-[10.5px] text-white/55 whitespace-pre-wrap overflow-x-auto`}>{dockerCmdTemplate}</pre>
