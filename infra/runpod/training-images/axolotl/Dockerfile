@@ -21,13 +21,27 @@
 
 # IMPORTANT: do NOT use :main-latest — that tag stopped updating around
 # 2026-05-21 while the team's daily builds continue under dated tags like
-# main-YYYYMMDD-py3.11-cu128-2.9.1. main-latest will silently ship a stale
-# peft <0.18 → BloomPreTrainedModel crash on every job. The dated tag
-# below is the canonical "today's rolling build" pointer.
+# main-YYYYMMDD-py3.11-cu128-2.9.1.
+#
+# Confirmed 2026-05-25: even the latest dated tag ships peft <0.18 which
+# has the broken `from transformers import BloomPreTrainedModel` eager
+# import. We patch it ourselves in the next layer.
 #
 # When bumping: check https://hub.docker.com/r/axolotlai/axolotl/tags
 # and pick the most recent main-YYYYMMDD-py3.11-cu128-2.9.1.
 FROM axolotlai/axolotl:main-20260525-py3.11-cu128-2.9.1
+
+# ─── Surgical peft override ──────────────────────────────────────────
+# Forces peft 0.19+ where the Bloom eager-import is gone. Pip's resolver
+# will refuse if axolotl pins peft incompatibly — in that case bump the
+# upper bound or switch to an even newer axolotl base. As of axolotl
+# 0.16.1 (what this image ships) the requirements.txt says
+# `peft>=0.19.1,<0.20.0` — so this upgrade is in-spec, the base just
+# didn't actually install the pinned version (bug in upstream image
+# build).
+RUN pip install --no-cache-dir --upgrade "peft>=0.19,<0.21" \
+    && python -c "import peft; print(f'peft={peft.__version__}'); from peft import PeftModel" \
+    && echo "peft sanity check passed"
 
 # ─── System tools train.sh + download-dataset.sh need ─────────────────
 # Axolotl's image is Debian-based. We add: rclone (R2/S3 dataset pulls),
