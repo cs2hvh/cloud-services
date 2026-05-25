@@ -235,8 +235,21 @@ export async function POST(
       `[FT Webhook] Provisioned serving endpoint ${ep.id} for job ${id} (${servingGpu})`
     );
   } catch (err) {
-    provisionError = err instanceof Error ? err.message : String(err);
-    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, provisionError);
+    // Structured RunPodError from RunPodClient: { code, status, message, retryable, raw }.
+    // Plain Error: .message. Anything else: JSON-stringify with a fallback to String().
+    if (err instanceof Error) {
+      provisionError = err.message;
+    } else if (err && typeof err === "object") {
+      const e = err as { message?: unknown; code?: unknown; status?: unknown };
+      const parts: string[] = [];
+      if (e.message && typeof e.message === "string") parts.push(e.message);
+      if (e.code) parts.push(`code=${e.code}`);
+      if (e.status) parts.push(`status=${e.status}`);
+      provisionError = parts.length > 0 ? parts.join(" · ") : JSON.stringify(err).slice(0, 400);
+    } else {
+      provisionError = String(err);
+    }
+    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, err);
     // Continue — model still gets registered; user can retry via dashboard.
   }
 
