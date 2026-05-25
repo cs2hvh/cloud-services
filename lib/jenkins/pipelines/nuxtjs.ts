@@ -16,7 +16,7 @@
  * - Default port: 3000
  * - Production command: node .output/server/index.mjs
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateImageScanStage, generateSecurityStages } from '../security';
 
@@ -32,6 +32,7 @@ export function createNuxtJsPipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -292,20 +293,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
             echo "Generating Kubernetes service manifest"

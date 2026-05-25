@@ -6,7 +6,7 @@
  * 2. Project has a valid pom.xml file
  * 3. Auto-creates Dockerfile if missing, builds with BuildKit, deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize } from './utils';
+import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -22,6 +22,7 @@ export function createJavaPipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -278,22 +279,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        livenessProbe:
-          httpGet:
-            path: /actuator/health
-            port: \${CONTAINER_PORT}
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /actuator/health
-            port: \${CONTAINER_PORT}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+${generateProbeYaml(port, healthcheckPath ?? '/actuator/health', { readinessInitialDelay: 30, livenessInitialDelay: 60 })}
 ---
 apiVersion: v1
 kind: Service

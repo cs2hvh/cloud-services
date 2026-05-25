@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       auto_deploy: appData.auto_deploy,
       deploy_branch: appData.deploy_branch,
       container_port: appData.container_port,
+      healthcheck_path: appData.healthcheck_path,
       userId: auth.user!.id,
       userEmail: auth.user?.email,
       auditContext: {

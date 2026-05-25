@@ -32,6 +32,7 @@ export interface CreateAppRequest {
   auto_deploy?: boolean;
   deploy_branch?: string;
   container_port?: number;
+  healthcheck_path?: string;
   userId: string;
   userEmail?: string;
   auditContext?: {
@@ -423,6 +424,7 @@ export class PlatformAppService {
         deploy_branch: request.deploy_branch || request.branch || 'main',
         project_id: request.project_id,
         container_port: request.container_port,
+        healthcheck_path: request.healthcheck_path,
         idempotencyKey: request.idempotencyKey ?? null,
       };
 

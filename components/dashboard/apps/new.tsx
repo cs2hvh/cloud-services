@@ -154,6 +154,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     const [hasDockerfile, setHasDockerfile] = useState(false);
     const [containerPort, setContainerPort] = useState<number | undefined>(undefined);
     const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined);
+    const [healthcheckPath, setHealthcheckPath] = useState("");
     const [detectingFramework, setDetectingFramework] = useState(false);
     const userEditedPortRef = useRef(false);
 
@@ -481,6 +482,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                             ? selectedProject
                             : undefined,
                     container_port: containerPort,
+                    healthcheck_path: healthcheckPath || undefined,
                 }),
             });
 
@@ -1308,6 +1310,20 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                         />
                                     </div>
                                 )}
+                                <div>
+                                    <FieldLabel hint="optional · HTTP GET">
+                                        Health check path
+                                    </FieldLabel>
+                                    <Input
+                                        value={healthcheckPath}
+                                        onChange={(e) => setHealthcheckPath(e.target.value)}
+                                        placeholder="/health"
+                                        mono
+                                    />
+                                    <p className={`${MONO} mt-1.5 text-[11px] text-white/35`}>
+                                        The platform probes this endpoint to confirm the app is live before routing traffic.
+                                    </p>
+                                </div>
                             </div>
 
                             {selectedFrameworkConfig && (

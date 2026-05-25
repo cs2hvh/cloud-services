@@ -137,6 +137,11 @@ export const createPlatformAppSchema = z.object({
   auto_deploy: z.boolean().optional().default(false),
   deploy_branch: z.string().optional(),
   container_port: z.number().int().min(1).max(65535).optional(),
+  healthcheck_path: z
+    .string()
+    .regex(/^\//, "Health check path must start with /")
+    .max(255, "Health check path must be at most 255 characters")
+    .optional(),
 });
 
 export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;

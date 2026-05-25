@@ -9,7 +9,7 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -24,6 +24,7 @@ export function createDockerfilePipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -379,20 +380,7 @@ ${envFromSection}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
             echo "Generating Kubernetes service manifest"

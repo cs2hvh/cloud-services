@@ -3,7 +3,7 @@
  * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * Uses Kubernetes Secrets for environment variables (secure)
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateStaticSiteDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -19,6 +19,7 @@ export function createVuePipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -298,20 +299,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
               echo 'Generating Kubernetes service manifest'

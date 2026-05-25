@@ -152,6 +152,7 @@ export async function POST(req: NextRequest) {
             app.port ?? undefined,
             app.framework ?? undefined,
             operationId,
+            app.healthcheck_path ?? undefined,
           );
 
           // Trigger the resize job (separate from the main app build job)

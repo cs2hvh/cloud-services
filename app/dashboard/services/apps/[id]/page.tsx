@@ -104,6 +104,7 @@ interface AppDetail {
   rollback_target_commit_sha?: string | null;
   // Failure tracking
   last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
 type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
@@ -289,6 +290,9 @@ export default function AppDetailPage() {
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
+
+  // Health path check state
+  const [healthPathStatus, setHealthPathStatus] = useState<'checking' | 'reachable' | 'unreachable' | 'not_configured' | null>(null);
 
   // Resize state
   const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
@@ -781,6 +785,17 @@ export default function AppDetailPage() {
       setEnvVarsModified(false);
     }
   }, [activeTab]);
+
+  // Check healthcheck_path reachability when Settings tab opens.
+  useEffect(() => {
+    if (activeTab !== 'settings' || !app?.id) return;
+    if (!app.healthcheck_path) { setHealthPathStatus('not_configured'); return; }
+    setHealthPathStatus('checking');
+    fetch(`/api/services/platform-apps/check-health-path?app_id=${app.id}`)
+      .then(r => r.json())
+      .then(d => setHealthPathStatus(d.reachable ? 'reachable' : 'unreachable'))
+      .catch(() => setHealthPathStatus('unreachable'));
+  }, [activeTab, app?.id, app?.healthcheck_path]);
 
   // Lazy-load env var values only when the Settings tab is first opened.
   // Values are intentionally excluded from the main page-load GET response
@@ -1961,6 +1976,27 @@ export default function AppDetailPage() {
                     <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
                       {app.output_directory || 'Default'}
                     </p>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                    <p className="text-xs text-white/40 mb-1">Health Check Path</p>
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                        {app.healthcheck_path || <span className="text-white/30">Not set · TCP socket probe</span>}
+                      </p>
+                      {app.healthcheck_path && (
+                        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded ${
+                          healthPathStatus === 'checking'     ? 'bg-white/[0.06] text-white/40' :
+                          healthPathStatus === 'reachable'    ? 'bg-green-500/10 text-green-400' :
+                          healthPathStatus === 'unreachable'  ? 'bg-orange-500/10 text-orange-400' :
+                          'bg-white/[0.06] text-white/40'
+                        }`}>
+                          {healthPathStatus === 'checking'    ? 'Checking…' :
+                           healthPathStatus === 'reachable'   ? '✓ Reachable' :
+                           healthPathStatus === 'unreachable' ? '⚠ Not reachable' :
+                           ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

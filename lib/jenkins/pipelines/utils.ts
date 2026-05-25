@@ -48,6 +48,43 @@ export function resolveAppSize(sizeKey: string, minSize: string = 'small'): AppS
 }
 
 /**
+ * Generate liveness + readiness probe YAML for a K8s container spec.
+ *
+ * Always uses tcpSocket probes (port-open check). This keeps deployments
+ * resilient — a misconfigured healthcheck_path never crashes the pod.
+ * The healthcheckPath parameter is accepted but ignored here; it is stored
+ * in the database for display and future soft-check use only.
+ *
+ * @param port               - Container port (TypeScript value, baked into XML at codegen time)
+ * @param healthcheckPath    - Stored but not used for K8s probes (reserved for future use)
+ * @param options.readinessInitialDelay - Seconds before first readiness check (default 15)
+ * @param options.livenessInitialDelay  - Seconds before first liveness check (default 30)
+ */
+export function generateProbeYaml(
+  port: number | string,
+  healthcheckPath?: string | null,
+  options?: { readinessInitialDelay?: number; livenessInitialDelay?: number },
+): string {
+  const readinessDelay = options?.readinessInitialDelay ?? 15;
+  const livenessDelay  = options?.livenessInitialDelay  ?? 30;
+
+  return `        readinessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${readinessDelay}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${livenessDelay}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3`;
+}
+
+/**
  * Supported runtime types for default environment variables
  */
 export type Runtime = 'node' | 'python' | 'java';

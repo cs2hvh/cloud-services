@@ -38,16 +38,13 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
   }));
 
   // Resolve authenticated git URL
-  let gitUrl: string =
-    (app as { repository_url?: string }).repository_url ||
-    (app as { git_url?: string }).git_url ||
-    "";
+  let gitUrl: string = app.repository_url || "";
 
   if (!gitUrl) {
     return v1Error("CONFIGURATION_ERROR", 422, "Repository URL not configured for this app");
   }
 
-  const gitProvider = (app as { git_provider?: string }).git_provider;
+  const gitProvider = app.git_provider;
   if (gitProvider === "github" || gitProvider === "gitlab" || gitProvider === "bitbucket") {
     let accessToken: string | null = null;
     try {
@@ -103,7 +100,8 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
           app.size || "small",
           "manual",
           envVars,
-          app.port ?? undefined
+          app.port ?? undefined,
+          app.healthcheck_path ?? undefined,
         );
 
         const execution = await jenkins.triggerBuild({
