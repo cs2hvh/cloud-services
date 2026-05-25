@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowRight, Cpu, Gauge, Layers, Server } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
@@ -91,6 +92,106 @@ const FALLBACK_CATEGORIES: KubernetesCategory[] = [
     },
 ];
 
+const ACCENT_MAP: Record<string, string> = {
+    dev: "#0095FF",
+    standard: "#10B981",
+    production: "#8B5CF6",
+    gpu: "#F59E0B",
+};
+
+function TierCard({ cat }: { cat: KubernetesCategory }) {
+    const [hovered, setHovered] = useState(false);
+    const Icon = cat.icon;
+    const plan = cat.plans[0];
+    const accent = ACCENT_MAP[cat.key] ?? "#0095FF";
+
+    return (
+        <article
+            className="flex flex-col rounded-[10px] border p-6 transition-all duration-200"
+            style={{
+                borderColor: hovered ? `${accent}45` : "rgba(0,0,0,0.10)",
+                background: hovered ? `${accent}0C` : "#EEECE4",
+            }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            {/* Icon + label */}
+            <div className="flex items-start justify-between">
+                <div
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border transition-all"
+                    style={{
+                        background: hovered ? `${accent}18` : "rgba(0,0,0,0.03)",
+                        borderColor: hovered ? `${accent}40` : "rgba(0,0,0,0.10)",
+                        color: hovered ? accent : "#1A1814",
+                    }}
+                >
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.7} />
+                </div>
+            </div>
+
+            <h3 className="mt-5 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814]">
+                {cat.label}
+            </h3>
+            <p className="mt-1.5 text-[12.5px] leading-[1.5] text-black/60">
+                {cat.description}
+            </p>
+
+            {/* Price */}
+            <div className="mt-5 border-t border-black/10 pt-4">
+                <div className="flex items-end gap-1">
+                    <span
+                        className={`${MONO} text-[28px] font-bold leading-none tabular-nums`}
+                        style={{ color: hovered ? accent : "#1A1814" }}
+                    >
+                        ${plan.price}
+                    </span>
+                    <span className="mb-1 text-[11px] text-black/55">/ mo</span>
+                </div>
+                <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.12em] text-black/45`}>
+                    {plan.nodes} {plan.nodes === 1 ? "node" : "nodes"} · {plan.vcpu} vCPU · {plan.ram}
+                    {plan.gpu ? ` · ${plan.gpu}` : ""}
+                </p>
+            </div>
+
+            {/* Features */}
+            <ul className="mt-5 flex-1 space-y-2">
+                {cat.features.map((f) => (
+                    <li
+                        key={f}
+                        className="flex items-start gap-2 text-[12.5px] leading-[1.5] text-black/70"
+                    >
+                        <span
+                            className="mt-[7px] h-1 w-1 shrink-0 rounded-full"
+                            style={{ background: hovered ? accent : "rgba(0,0,0,0.45)" }}
+                        />
+                        {f}
+                    </li>
+                ))}
+            </ul>
+
+            {/* CTA */}
+            <div
+                className="mt-6 overflow-hidden rounded-[5px] border transition-all"
+                style={{
+                    borderColor: hovered ? `${accent}50` : "rgba(0,0,0,0.15)",
+                    background: hovered ? `${accent}15` : "transparent",
+                }}
+            >
+                <AuthAwareServiceCta
+                    service="kubernetes"
+                    intent="new"
+                    className={`${MONO} inline-flex h-10 w-full items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80`}
+                >
+                    <span className="flex items-center gap-1.5">
+                        Deploy
+                        <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                </AuthAwareServiceCta>
+            </div>
+        </article>
+    );
+}
+
 interface KubernetesPricingSectionProps {
     categories?: KubernetesCategory[];
 }
@@ -120,75 +221,9 @@ export default function KubernetesPricingSection({
 
                 {/* 4 tier cards */}
                 <div className="mx-auto mt-12 grid max-w-[1120px] gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-                    {categories.map((cat) => {
-                        const Icon = cat.icon;
-                        const plan = cat.plans[0];
-                        return (
-                            <article
-                                key={cat.key}
-                                className="flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-colors hover:border-black/25"
-                            >
-                                {/* Icon + label */}
-                                <div className="flex items-start justify-between">
-                                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border border-black/10 bg-black/[0.03] text-[#1A1814]">
-                                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.7} />
-                                    </div>
-                                </div>
-
-                                <h3 className="mt-5 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814]">
-                                    {cat.label}
-                                </h3>
-                                <p className="mt-1.5 text-[12.5px] leading-[1.5] text-black/60">
-                                    {cat.description}
-                                </p>
-
-                                {/* Price */}
-                                <div className="mt-5 border-t border-black/10 pt-4">
-                                    <div className="flex items-end gap-1">
-                                        <span
-                                            className={`${MONO} text-[28px] font-bold leading-none tabular-nums text-[#1A1814]`}
-                                        >
-                                            ${plan.price}
-                                        </span>
-                                        <span className="mb-1 text-[11px] text-black/55">
-                                            / mo
-                                        </span>
-                                    </div>
-                                    <p
-                                        className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.12em] text-black/45`}
-                                    >
-                                        {plan.nodes} {plan.nodes === 1 ? "node" : "nodes"} · {plan.vcpu} vCPU · {plan.ram}
-                                        {plan.gpu ? ` · ${plan.gpu}` : ""}
-                                    </p>
-                                </div>
-
-                                {/* Features */}
-                                <ul className="mt-5 flex-1 space-y-2">
-                                    {cat.features.map((f) => (
-                                        <li
-                                            key={f}
-                                            className="flex items-start gap-2 text-[12.5px] leading-[1.5] text-black/70"
-                                        >
-                                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-black/45" />
-                                            {f}
-                                        </li>
-                                    ))}
-                                </ul>
-
-                                {/* CTA */}
-                                <AuthAwareServiceCta
-                                    service="kubernetes"
-                                    intent="new"
-                                    className={`${MONO} mt-6 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-[#1A1814]`}
-                                >
-                                    <span className="flex items-center gap-1.5">
-                                        Deploy
-                                        <ArrowRight className="h-3.5 w-3.5" />
-                                    </span>
-                                </AuthAwareServiceCta>
-                            </article>
-                        );
-                    })}
+                    {categories.map((cat) => (
+                        <TierCard key={cat.key} cat={cat} />
+                    ))}
                 </div>
 
                 {/* Footnote */}

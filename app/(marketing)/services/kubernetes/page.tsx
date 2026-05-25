@@ -7,35 +7,44 @@ import ServicesHomeSectionSix, {
   type UseCase,
 } from "@/components/serviceshome/section-6";
 import { getKubernetesCategories } from "@/lib/helpers/kubernetes-categories";
-import { Boxes, Brain, GitMerge, ShieldCheck } from "lucide-react";
+import {
+  IconLayoutGridFilled,
+  IconSparklesFilled,
+  IconAppsFilled,
+  IconShieldCheckFilled,
+} from "@tabler/icons-react";
 
 const KubernetesPage = async () => {
   const categories = await getKubernetesCategories();
 
   const cases: UseCase[] = [
     {
-      icon: Boxes,
+      iconNode: <IconLayoutGridFilled size={20} />,
+      accent: "#0095FF",
       metric: "Microservices",
       title: "Microservices and APIs",
       description:
         "Run dozens of services on one cluster with namespace isolation, mTLS via a service mesh, and HPA based on request volume.",
     },
     {
-      icon: Brain,
+      iconNode: <IconSparklesFilled size={20} />,
+      accent: "#8B5CF6",
       metric: "AI / ML",
       title: "Training and inference at scale",
       description:
         "GPU node pools with CUDA preinstalled, spot pricing for training, and warm pools to keep inference latency predictable.",
     },
     {
-      icon: GitMerge,
+      iconNode: <IconAppsFilled size={20} />,
+      accent: "#10B981",
       metric: "Platform teams",
       title: "Internal developer platforms",
       description:
         "Multi-tenant clusters with RBAC, network policies, and per-namespace quotas. Argo CD or Flux wired in from day one.",
     },
     {
-      icon: ShieldCheck,
+      iconNode: <IconShieldCheckFilled size={20} />,
+      accent: "#E11D48",
       metric: "Regulated",
       title: "Compliance-bound workloads",
       description:

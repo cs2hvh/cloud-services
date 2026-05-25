@@ -8,8 +8,12 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 export type UseCase = {
     title: string;
     description: string;
-    /** Optional lucide icon — falls back to no icon if omitted */
+    /** Optional lucide icon component — falls back to no icon if omitted */
     icon?: LucideIcon;
+    /** Pre-instantiated icon node (e.g. Tabler filled icon) — takes precedence over icon */
+    iconNode?: React.ReactNode;
+    /** Accent colour for the icon container */
+    accent?: string;
     /** Optional small metric / tag shown above the title */
     metric?: string;
 };
@@ -30,32 +34,51 @@ type SectionProps = {
 
 function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
     const Icon = item.icon;
+    const hasIcon = !!(item.iconNode ?? item.icon);
+    const accent = item.accent;
+
     return (
         <article
-            className="group relative flex flex-col gap-5 rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#161A1F]"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#161A1F]"
             style={{
                 boxShadow:
                     "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.7)",
             }}
         >
+            {/* Accent hover glow */}
+            {accent && (
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    style={{ background: `radial-gradient(circle at 30% 0%, ${accent}10, transparent 60%)` }}
+                />
+            )}
+
             {/* Top — icon + index */}
-            <div className="flex items-start justify-between">
-                {Icon ? (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/80">
-                        <Icon className="h-5 w-5" strokeWidth={1.6} />
+            <div className="relative flex items-start justify-between">
+                {hasIcon ? (
+                    <div
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
+                        style={accent
+                            ? { background: `${accent}18`, borderColor: `${accent}40`, color: accent }
+                            : { borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)" }
+                        }
+                    >
+                        {item.iconNode ?? (Icon ? <Icon className="h-5 w-5" strokeWidth={1.6} /> : null)}
                     </div>
                 ) : (
                     <div className="h-11 w-11" aria-hidden="true" />
                 )}
                 <span
-                    className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+                    className={`${MONO} text-[10.5px] tabular-nums`}
+                    style={{ color: accent ? `${accent}60` : "rgba(255,255,255,0.3)" }}
                 >
                     {String(index + 1).padStart(2, "0")}
                 </span>
             </div>
 
             {/* Body */}
-            <div>
+            <div className="relative">
                 {item.metric && (
                     <p
                         className={`${MONO} mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}
