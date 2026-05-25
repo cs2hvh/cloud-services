@@ -19,7 +19,15 @@
 # Use `main-latest` while iterating; pin to a dated tag like
 # `main-20260525-py3.11-cu128-2.9.1` for production reproducibility.
 
-FROM axolotlai/axolotl:main-latest
+# IMPORTANT: do NOT use :main-latest — that tag stopped updating around
+# 2026-05-21 while the team's daily builds continue under dated tags like
+# main-YYYYMMDD-py3.11-cu128-2.9.1. main-latest will silently ship a stale
+# peft <0.18 → BloomPreTrainedModel crash on every job. The dated tag
+# below is the canonical "today's rolling build" pointer.
+#
+# When bumping: check https://hub.docker.com/r/axolotlai/axolotl/tags
+# and pick the most recent main-YYYYMMDD-py3.11-cu128-2.9.1.
+FROM axolotlai/axolotl:main-20260525-py3.11-cu128-2.9.1
 
 # ─── System tools train.sh + download-dataset.sh need ─────────────────
 # Axolotl's image is Debian-based. We add: rclone (R2/S3 dataset pulls),
