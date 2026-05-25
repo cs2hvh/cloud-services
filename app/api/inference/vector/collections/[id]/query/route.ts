@@ -131,8 +131,7 @@ export async function POST(
       p_distance_metric: collection.distance_metric,
       p_limit: parsed.data.top_k,
       p_min_similarity: parsed.data.min_similarity,
-    })
-    .returns<SearchRow[]>();
+    });
 
   if (error) {
     console.error("[Inference Vector] query error:", error);
@@ -142,15 +141,19 @@ export async function POST(
     );
   }
 
+  // Supabase's generated RPC types are over-strict for SETOF RETURNS TABLE
+  // functions; cast through unknown to the row shape we declared.
+  const rows = (data as unknown as SearchRow[] | null) ?? [];
+
   return NextResponse.json({
     success: true,
-    results: (data ?? []).map((r) => ({
+    results: rows.map((r) => ({
       id: r.id,
       external_id: r.external_id,
       content: r.content,
       metadata: r.metadata,
       similarity: r.similarity,
     })),
-    count: data?.length ?? 0,
+    count: rows.length,
   });
 }

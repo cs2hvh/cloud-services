@@ -11,7 +11,7 @@ Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway
 
 **Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State:** Phases **0, 1, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phase **4** (embeddings + vector collections) in progress. Phases 2, 3, 7 not started.
+**State:** Phases **0, 1, 4, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phases 2, 3, 7 not started.
 
 **What works right now (verified live):**
 - `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
@@ -235,24 +235,30 @@ Cumulative timeline vs original plan in [phases.md](./phases.md).
 | **2** | Catalog curation UI, routing presets, response caching (L1 in KV), off-peak pricing enforcement | 1 wk |
 | **3** | Playground UI — interactive model picker, multi-model compare | 1 wk |
 | **7** | Prompt-injection guardrail, semantic cache, batch endpoint, SOC 2 readiness docs, runbooks, status page | 1.5 wks |
+| **11** | Managed FT serving (vLLM Multi-LoRA shared per base, Fireworks pattern) as premium upsell on top of Phase 10's self-serve | 2 wks |
 
-### Phase 4 — Embeddings + vector collections — IN PROGRESS 2026-05-25
+### Phase 4 — Embeddings + Vector Store ✅ SHIPPED 2026-05-25
 
-Schema exists since Phase 0 (`inference.vector_collections` + `inference.vector_rows`
-with pgvector). Worker has placeholder `embeddings.ts`. Real implementation
-landing next.
-
-**Planned chunks (in shipping order):**
+Most of Phase 4 landed in commit `88e15107` (pre-session). This session added the
+detail-page drill-in + per-row admin so the dashboard isn't a write-only black box.
 
 | Chunk | Description | Status |
 |---|---|---|
-| 4.A | Catalog seed for embeddings models (text-embedding-3-small/large, voyage-3, cohere-embed-v3, BGE) via OpenRouter where possible, or direct providers via BYOK. Add `embedding` capability flag + `dimensions` column on `inference.models`. | TODO |
-| 4.B | Real `POST /v1/embeddings` in worker — OpenAI-compatible (single string OR array of strings input, returns `{object,data,model,usage}`). Auth + spend + rate-limit identical to chat. Streaming not applicable. Emits usage event (input tokens only). | TODO |
-| 4.C | Next.js API: `app/api/inference/vector-collections/` — CRUD with org scoping. Schema on collection: name, embedding_model_id, dimensions, metric (cosine/l2/ip), shape. Distinct from `inference.models` rows. | TODO |
-| 4.D | `app/api/inference/vector-collections/[id]/rows/` — POST upsert (single or batch, auto-embeds inputs via 4.B), GET search (vector or text query, k+filter+metric). DELETE by id or filter. | TODO |
-| 4.E | Dashboard page `app/dashboard/services/inference/vectors/page.tsx` — collection list, create dialog (pick embedding model + metric + dimensions), drill-in shows row count + sample search box. Uses editorial chrome. | TODO |
-| 4.F | Sidebar entry "Vector Store" already exists; wire to /vectors page. | TODO |
-| 4.G | Marketing page `/services/embeddings` already drafted; add "Vector Store" sub-section with code snippet (Python + curl) once API stabilizes. | TODO |
+| 4.A | Catalog seed for 3 embedding models: text-embedding-3-large (3072-dim), -3-small (1536-dim), ada-002 (1536-dim). Stored as `modality='embedding'` rows with `pricing.input_cents_per_mtok` (13/2/10 cents) + `capabilities.dimensions`. | ✅ |
+| 4.B | Real `POST /v1/embeddings` in worker (`workers/inference/src/routes/embeddings.ts`) — OpenAI-compatible, single string OR array input, auth + spend + rate-limit + scope-check parity with chat. Emits usage event with `modality='embedding'`. | ✅ |
+| 4.C | `app/api/inference/vector/collections/` — POST create (with embedding_model_id validation against catalog) + GET list, both org-scoped + audit-logged. | ✅ |
+| 4.D | `app/api/inference/vector/collections/[id]/{upsert,query}` — upsert auto-embeds via `lib/inference/embeddings.ts` (OpenRouter platform key), max 100 rows/batch. Query supports text OR pre-computed embedding + top_k + min_similarity, calls the `inference.search_vectors()` RPC which switches metric (cosine/l2/inner_product) at query time. | ✅ |
+| 4.E | Dashboard page `app/dashboard/services/inference/vectors/page.tsx` + client `vectors.tsx` — collection list, stats strip, create dialog with model→dimensions auto-bind, delete with confirm. Editorial chrome. | ✅ |
+| 4.F | Sidebar entry "Vectors" wired in `components/dashboard/sidebar/index.tsx` between Presets and Fine-Tuning. | ✅ |
+| 4.G | Collection detail page `/dashboard/services/inference/vectors/[id]` (THIS SESSION) — drill-in from collection card, live test-query box (text→auto-embed→search with similarity %), paginated rows table with external_id filter, per-row delete with confirm. + new API routes `/rows` (GET list, DELETE bulk by external_id) and `/rows/[rowId]` (GET full row incl. embedding, DELETE single). | ✅ |
+| 4.X | Migration `20260525000001_phase4_polish_vector_rows_anydim.sql` — relaxes `vector_rows.embedding` from `vector(1536)` to dimensionless `vector` so text-embedding-3-large (3072-dim) can store rows; adds `vector_row.deleted` + `vector_rows.deleted` to the audit_action enum. **Operator must apply this migration to Supabase.** | ✅ |
+
+**Operator note:** Until migration `20260525000001` is applied, only 1536-dim
+collections can accept upserts (text-embedding-3-large will fail at the INSERT
+with a pgvector dimension error). Apply via `supabase db push` or the SQL editor.
+
+**Marketing page:** `/services/embeddings` page exists from Phase 0; vector-store
+code snippet section to be added when public API surface stabilizes (deferred).
 
 ### Phase 5 — Fine-Tuning ✅ SHIPPED 2026-05-25
 
@@ -412,7 +418,13 @@ c:\cloud-services\
 │   ├── fine-tuning/jobs/[id]/webhook/route.ts     ← HMAC-verified completion ingress from train.sh
 │   ├── fine-tuning/jobs/[id]/heartbeat/route.ts   ← HMAC-verified progress ingress (every 30s)
 │   ├── fine-tuning/jobs/[id]/log-url/route.ts     ← 6h presigned URL for training.log
-│   └── fine-tuning/jobs/[id]/adapter-url/route.ts ← 6h presigned URL for adapter.tar.gz (self-serve)
+│   ├── fine-tuning/jobs/[id]/adapter-url/route.ts ← 6h presigned URL for adapter.tar.gz (self-serve)
+│   ├── vector/collections/route.ts                ← GET list + POST create (with model validation)
+│   ├── vector/collections/[id]/route.ts           ← GET detail + DELETE
+│   ├── vector/collections/[id]/upsert/route.ts    ← POST batch upsert (auto-embeds via OpenRouter)
+│   ├── vector/collections/[id]/query/route.ts     ← POST similarity search (text or embedding)
+│   ├── vector/collections/[id]/rows/route.ts      ← GET list (paginated, filter by external_id) + DELETE bulk
+│   └── vector/collections/[id]/rows/[rowId]/route.ts ← GET single (incl. embedding) + DELETE single
 │
 ├── app/dashboard/services/inference/       ← Next.js client dashboard pages
 │   ├── page.tsx                            ← Overview (server component, fetches stats directly)
@@ -633,6 +645,8 @@ Immediate hygiene (do soon):
 - [ ] Operator: flip `cs2hvh/ahura-ft-serving-vllm` GHCR package to public (gap 15 above) — needed before any "Copy serve command" flow works
 - [ ] Operator: wait for / verify GHA builds of `ahura-ft-axolotl` (with `adapter.tar.gz` packing in `train.sh`) and `ahura-ft-serving-vllm` have published `:latest` tags
 - [ ] Operator: train one new FT job to validate the full self-serve flow end-to-end (expect: completion → expandable row → "Copy serve command" → paste on a GPU pod → vLLM listens on :8000 → OpenAI-compatible request returns adapter output)
+- [ ] Operator: apply Phase 4 polish migration `supabase/migrations/20260525000001_phase4_polish_vector_rows_anydim.sql` (relaxes vector_rows.embedding to any-dim + adds 2 audit enum values). Without this, text-embedding-3-large upserts will fail with a pgvector dimension error.
+- [ ] Operator: restart Next.js dev server to pick up the new `/vectors/[id]` detail page and `/rows` API routes.
 
 Phase 1.5 polish (small, valuable, do before Phase 2):
 - [ ] Migration: add `rate_limit_rpm INTEGER` column to `inference.api_keys` (default 60)

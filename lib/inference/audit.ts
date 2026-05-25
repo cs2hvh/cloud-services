@@ -38,7 +38,9 @@ export type InferenceAuditAction =
   | "deployment.updated"
   | "deployment.deleted"
   | "collection.created"
-  | "collection.deleted";
+  | "collection.deleted"
+  | "vector_row.deleted"
+  | "vector_rows.deleted";
 
 export interface RecordAuditInput {
   orgId: string;

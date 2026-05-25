@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Database, Plus, RotateCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -264,12 +265,15 @@ export function VectorCollections({
               className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.5fr)] md:items-center"
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
+                <Link
+                  href={`/dashboard/services/inference/vectors/${c.id}`}
+                  className="flex items-center gap-1.5 group"
+                >
                   <Database className="h-3.5 w-3.5 shrink-0 text-[#0095FF]/70" />
-                  <span className={`${MONO} text-[12.5px] font-semibold text-white truncate`}>
+                  <span className={`${MONO} text-[12.5px] font-semibold text-white truncate group-hover:text-[#33adff] transition-colors`}>
                     {c.name}
                   </span>
-                </div>
+                </Link>
                 {c.description && (
                   <span className={`${MONO} block text-[10.5px] text-white/40 mt-0.5 truncate`}>
                     {c.description}
