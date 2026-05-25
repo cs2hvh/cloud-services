@@ -178,6 +178,13 @@ export function FineTuning({
   // real-time price + availability badges on the GPU dropdown.
   const [gpuInventory, setGpuInventory] = useState<InventoryRow[] | null>(null);
   const [gpuInventoryError, setGpuInventoryError] = useState<string | null>(null);
+  // Detail dialog state — populated when user clicks a row. We fetch fresh
+  // job data (sample_outputs, full error_message, etc.) on open instead of
+  // re-using the list row, since some fields are too long to render in the
+  // list view (and update independently via heartbeat / webhook).
+  const [detailTarget, setDetailTarget] = useState<FineTuneJob | null>(null);
+  const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -207,6 +214,32 @@ export function FineTuning({
   };
 
   // Auto-refresh while any job is in-flight
+  // Fetch full job details when the detail dialog opens
+  useEffect(() => {
+    if (!detailTarget) {
+      setDetailData(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const r = await fetch(`/api/inference/fine-tuning/jobs/${detailTarget.id}`, {
+          credentials: "include",
+        });
+        const data = await r.json();
+        if (!cancelled && data.success) setDetailData(data.data);
+      } catch {
+        // silent — UI shows last list-row data as fallback
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTarget]);
+
   // Fetch live GPU inventory when the create dialog opens (or on mount if
   // already open). Cached for the dialog's lifetime; closing+reopening
   // refetches.
@@ -357,25 +390,6 @@ export function FineTuning({
         />
       </StatsStrip>
 
-      {/* Runner status banner (Phase 5.B operator note) */}
-      <section className="mb-10">
-        <div className="border border-amber-400/15 bg-amber-400/[0.03] rounded-[6px] p-4 flex items-start gap-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-amber-300/80 mt-0.5" />
-          <div className="min-w-0 flex-1">
-            <p
-              className={`${MONO} text-[11px] uppercase tracking-[0.12em] font-semibold text-amber-200/90`}
-            >
-              Phase 5.A — jobs API live, runner pending
-            </p>
-            <p className={`${MONO} mt-1 text-[11px] text-white/55 leading-relaxed`}>
-              Jobs created here land in <span className="text-white/80">status=queued</span> and wait for the BullMQ FT runner
-              to pick them up. Phase 5.B ships the runner (RunPod pod provisioning with axolotl, dataset
-              mount from R2, completion webhook). Until then, jobs accept submissions and the dashboard
-              tracks them — useful for testing the API contract.
-            </p>
-          </div>
-        </div>
-      </section>
 
       <SectionHead
         eyebrow="Inventory"
@@ -399,7 +413,12 @@ export function FineTuning({
             return (
               <div
                 key={j.id}
-                className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center"
+                onClick={(e) => {
+                  // Don't open detail when clicking action buttons inside the row
+                  if ((e.target as HTMLElement).closest("button,a")) return;
+                  setDetailTarget(j);
+                }}
+                className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] cursor-pointer transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -774,6 +793,155 @@ export function FineTuning({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Job detail dialog ─────────────────────────────────────── */}
+      <Dialog open={!!detailTarget} onOpenChange={(o) => !o && setDetailTarget(null)}>
+        <DialogContent className="border-white/[0.08] bg-[#111216] max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white`}>
+              {detailTarget?.name ?? "Job details"}
+            </DialogTitle>
+            <DialogDescription className={`${MONO} text-[11px] text-white/55`}>
+              {detailTarget?.id}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailTarget && (() => {
+            const d = (detailData ?? detailTarget) as Record<string, unknown> & FineTuneJob;
+            const hp = (d.hyperparams ?? {}) as Record<string, unknown>;
+            const samples = (d.sample_outputs ?? []) as Array<{ prompt: string; output: string }>;
+            const s = statusMeta(d.status);
+            const runpodPodId = d.runpod_job_id as string | null;
+
+            const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+              <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
+                <div className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45`}>{k}</div>
+                <div className={`${MONO} text-[11.5px] text-white/85 break-all`}>{v}</div>
+              </div>
+            );
+
+            return (
+              <div className="space-y-4 mt-2">
+                {/* Status strip */}
+                <div className="flex items-center gap-3 px-3 py-2 bg-white/[0.02] rounded-[6px] border border-white/[0.05]">
+                  <span
+                    className={`h-2 w-2 rounded-full ${s.pulse ? "animate-pulse" : ""}`}
+                    style={{ background: s.color, boxShadow: s.color.startsWith("rgba") ? "none" : `0 0 6px ${s.color}` }}
+                  />
+                  <span className={`${MONO} text-[11px] uppercase tracking-[0.12em] font-semibold`} style={{ color: s.color }}>
+                    {s.label}
+                  </span>
+                  {d.status === "running" && d.current_step != null && (
+                    <span className={`${MONO} text-[10.5px] text-white/55 ml-auto tabular-nums`}>
+                      step {d.current_step}{d.max_steps != null && `/${d.max_steps}`}
+                      {d.current_epoch != null && ` · ep ${d.current_epoch.toFixed(2)}`}
+                      {d.latest_loss != null && ` · loss ${d.latest_loss.toFixed(4)}`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Core */}
+                <div>
+                  <Row k="Base model" v={<code>{d.base_model_id}</code>} />
+                  <Row k="Method" v={d.method.toUpperCase()} />
+                  <Row k="GPU" v={`${d.gpu_sku}${d.hourly_cost_cents ? ` · $${(d.hourly_cost_cents / 100).toFixed(2)}/hr at provision` : ""}`} />
+                  <Row k="Duration" v={formatDuration(d.training_seconds)} />
+                  <Row k="Cost" v={formatCents(d.cost_cents)} />
+                  {d.queued_at && <Row k="Queued" v={new Date(d.queued_at).toLocaleString()} />}
+                  {d.started_at && <Row k="Started" v={new Date(d.started_at).toLocaleString()} />}
+                  {d.completed_at && <Row k="Completed" v={new Date(d.completed_at).toLocaleString()} />}
+                </div>
+
+                {/* Hyperparams */}
+                {Object.keys(hp).length > 0 && (
+                  <div>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Hyperparameters</h4>
+                    <div className="bg-black/40 border border-white/[0.05] rounded-[4px] p-3">
+                      <pre className={`${MONO} text-[10.5px] text-white/75 whitespace-pre-wrap`}>{JSON.stringify(hp, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Output */}
+                {d.output_model_id && (
+                  <div>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Output</h4>
+                    <Row
+                      k="Model id"
+                      v={
+                        <span className="inline-flex items-center gap-1 text-emerald-300/85">
+                          <CheckCircle2 className="h-3 w-3" /> registered in catalog
+                        </span>
+                      }
+                    />
+                    {(d as Record<string, unknown>).output_artifact_url ? (
+                      <Row k="Adapter (R2)" v={<code className="text-[10.5px]">{String((d as Record<string, unknown>).output_artifact_url)}</code>} />
+                    ) : null}
+                    {d.training_log_url && (
+                      <Row
+                        k="Training log"
+                        v={
+                          <a href={d.training_log_url} target="_blank" rel="noreferrer noopener" className="text-[#0095FF] hover:underline">
+                            {d.training_log_url}
+                          </a>
+                        }
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Sample outputs (smoke test) */}
+                {samples.length > 0 && (
+                  <div>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>
+                      Sample generations ({samples.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {samples.map((s, i) => (
+                        <div key={i} className="bg-black/40 border border-white/[0.05] rounded-[4px] p-3">
+                          <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 mb-1`}>Prompt</div>
+                          <div className={`${MONO} text-[11px] text-white/75 mb-2 whitespace-pre-wrap`}>{s.prompt}</div>
+                          <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 mb-1`}>Output</div>
+                          <div className={`${MONO} text-[11px] text-emerald-200/85 whitespace-pre-wrap`}>{s.output || "(empty)"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Infra */}
+                {runpodPodId && (
+                  <div>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Infrastructure</h4>
+                    <Row k="RunPod pod id" v={<code>{runpodPodId}</code>} />
+                    {d.last_heartbeat_at && <Row k="Last heartbeat" v={new Date(d.last_heartbeat_at).toLocaleString()} />}
+                  </div>
+                )}
+
+                {/* Error */}
+                {d.error_message && (
+                  <div>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-red-300/85 mb-2`}>
+                      {d.status === "failed" ? "Failure reason" : "Warning"}
+                    </h4>
+                    <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3">
+                      <pre className={`${MONO} text-[10.5px] text-red-200/85 whitespace-pre-wrap break-all`}>{d.error_message}</pre>
+                    </div>
+                  </div>
+                )}
+
+                {detailLoading && (
+                  <div className={`${MONO} text-[10px] text-white/35 text-center`}>refreshing…</div>
+                )}
+              </div>
+            );
+          })()}
+
+          <DialogFooter>
+            <GhostButton onClick={() => setDetailTarget(null)}>Close</GhostButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageCanvas>
   );
 }
