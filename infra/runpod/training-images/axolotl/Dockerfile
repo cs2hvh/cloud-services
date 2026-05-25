@@ -29,12 +29,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools packaging ninja
 
-# Pre-install torch deps that axolotl will pull (avoids long resolution)
+# Pre-install torch deps that axolotl will pull (avoids long resolution).
+#
+# Version pinning notes:
+# - peft<0.15 still imports BloomPreTrainedModel from transformers; newer
+#   transformers (4.46+) removed it from the public surface → ImportError
+#   at axolotl boot. Fix: peft>=0.15.
+# - Letting transformers stay <4.51 keeps Llama-4/Phi-4 architecture
+#   support landing in 4.50.x without surprise breaking changes.
 RUN pip install --no-cache-dir \
-    "transformers>=4.45,<4.51" \
+    "transformers>=4.50,<4.55" \
     "accelerate>=1.0,<2.0" \
-    "peft>=0.13,<0.16" \
-    "trl>=0.12,<0.15" \
+    "peft>=0.15,<1.0" \
+    "trl>=0.12,<0.16" \
     "bitsandbytes>=0.44" \
     "datasets>=3.0" \
     "huggingface_hub[hf_transfer]>=0.27" \
