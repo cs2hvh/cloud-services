@@ -240,16 +240,22 @@ export async function POST(
     if (err instanceof Error) {
       provisionError = err.message;
     } else if (err && typeof err === "object") {
-      const e = err as { message?: unknown; code?: unknown; status?: unknown };
+      const e = err as { message?: unknown; code?: unknown; status?: unknown; raw?: unknown };
       const parts: string[] = [];
       if (e.message && typeof e.message === "string") parts.push(e.message);
       if (e.code) parts.push(`code=${e.code}`);
       if (e.status) parts.push(`status=${e.status}`);
+      // Include the upstream's response body if present — usually has the
+      // actual reason ("Field X is required", "Invalid GPU type", etc.).
+      if (e.raw) {
+        const rawStr = typeof e.raw === "string" ? e.raw : JSON.stringify(e.raw);
+        parts.push(`response=${rawStr.slice(0, 300)}`);
+      }
       provisionError = parts.length > 0 ? parts.join(" · ") : JSON.stringify(err).slice(0, 400);
     } else {
       provisionError = String(err);
     }
-    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, err);
+    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, JSON.stringify(err, null, 2));
     // Continue — model still gets registered; user can retry via dashboard.
   }
 
