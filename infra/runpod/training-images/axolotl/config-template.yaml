@@ -1,6 +1,8 @@
 # AhuraCloud Fine-Tuning — Axolotl YAML template
 #
-# Variables ($NAME) substituted by train.sh via Python's string.Template.
+# Variables ($$NAME) substituted by train.sh via Python's string.Template.
+# ($$ escapes the dollar in this illustrative comment so Template.substitute()
+# doesn't try to resolve a literal "NAME" placeholder.)
 # See https://docs.axolotl.ai for full schema reference.
 
 base_model: $BASE_MODEL
