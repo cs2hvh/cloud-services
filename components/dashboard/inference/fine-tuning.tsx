@@ -92,14 +92,42 @@ export interface FineTuneBaseModel {
   input_cents_per_mtok: number | null;
 }
 
-const GPU_OPTIONS = [
-  { value: "A100-80GB", label: "A100 80GB — large LoRA workhorse" },
-  { value: "A100-40GB", label: "A100 40GB — small LoRA, qLoRA" },
-  { value: "H100-80GB", label: "H100 80GB — fastest, premium" },
-  { value: "L40S", label: "L40S — small qLoRA, very cheap" },
-  { value: "A40", label: "A40 — budget tier" },
-  { value: "RTX-6000-Ada", label: "RTX 6000 Ada — small jobs, low cost" },
-];
+/**
+ * Map our internal SKU (used in inference.finetunes.gpu_sku + the RunPod
+ * pod-create call) to RunPod's `displayName` in inventory.runpod_inventory.
+ * Keep in sync with lib/inference/finetune-runpod.ts GPU_SKU_TO_RUNPOD_TYPE.
+ */
+const SKU_TO_RUNPOD_DISPLAY_NAME: Record<string, string> = {
+  "A40": "NVIDIA A40",
+  "L40S": "NVIDIA L40S",
+  "RTX-6000-Ada": "NVIDIA RTX 6000 Ada Generation",
+  "A100-40GB": "NVIDIA A100-PCIE-40GB",
+  "A100-80GB": "NVIDIA A100 80GB PCIe",
+  "H100-80GB": "NVIDIA H100 80GB HBM3",
+};
+
+const SKU_BLURB: Record<string, string> = {
+  "A40": "budget tier",
+  "L40S": "small qLoRA",
+  "RTX-6000-Ada": "small jobs",
+  "A100-40GB": "small LoRA, qLoRA",
+  "A100-80GB": "large LoRA workhorse",
+  "H100-80GB": "fastest, premium",
+};
+
+interface InventoryRow {
+  displayName: string;
+  cloudType: "SECURE" | "COMMUNITY";
+  stockStatus: "high" | "medium" | "low" | "none";
+  onDemandPerHr: number | null;
+  spotPerHr: number | null;
+}
+
+function formatPerHr(usd: number | null): string {
+  if (usd == null || usd <= 0) return "—";
+  if (usd < 1) return `$${usd.toFixed(2)}/hr`;
+  return `$${usd.toFixed(2)}/hr`;
+}
 
 function statusMeta(status: FineTuneJob["status"]): {
   color: string;
@@ -146,6 +174,10 @@ export function FineTuning({
   const [creating, setCreating] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<FineTuneJob | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Live RunPod inventory — fetched when the create dialog opens. Powers
+  // real-time price + availability badges on the GPU dropdown.
+  const [gpuInventory, setGpuInventory] = useState<InventoryRow[] | null>(null);
+  const [gpuInventoryError, setGpuInventoryError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -175,6 +207,32 @@ export function FineTuning({
   };
 
   // Auto-refresh while any job is in-flight
+  // Fetch live GPU inventory when the create dialog opens (or on mount if
+  // already open). Cached for the dialog's lifetime; closing+reopening
+  // refetches.
+  useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/services/gpu/inventory", { credentials: "include" });
+        const data = await r.json();
+        if (cancelled) return;
+        if (!r.ok || !data.ok) {
+          setGpuInventoryError(data.error ?? "inventory fetch failed");
+          return;
+        }
+        setGpuInventory(data.inventory ?? []);
+        setGpuInventoryError(null);
+      } catch (err) {
+        if (!cancelled) setGpuInventoryError(err instanceof Error ? err.message : "fetch failed");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen]);
+
   useEffect(() => {
     const inFlight = jobs.some((j) =>
       ["queued", "preparing", "running"].includes(j.status)
@@ -575,13 +633,51 @@ export function FineTuning({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {GPU_OPTIONS.map((g) => (
-                    <SelectItem key={g.value} value={g.value}>
-                      {g.label}
-                    </SelectItem>
-                  ))}
+                  {Object.keys(SKU_TO_RUNPOD_DISPLAY_NAME).map((sku) => {
+                    const row = gpuInventory?.find(
+                      (r) =>
+                        r.cloudType === "SECURE" &&
+                        r.displayName === SKU_TO_RUNPOD_DISPLAY_NAME[sku]
+                    );
+                    const price = row?.onDemandPerHr;
+                    const outOfStock = row?.stockStatus === "none";
+                    return (
+                      <SelectItem
+                        key={sku}
+                        value={sku}
+                        disabled={outOfStock || undefined}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <span className="font-medium">{sku}</span>
+                          <span className="text-white/45 text-[11px]">
+                            — {SKU_BLURB[sku]}
+                          </span>
+                          {price != null ? (
+                            <span className="text-emerald-300/80 text-[11px] tabular-nums">
+                              {formatPerHr(price)}
+                            </span>
+                          ) : null}
+                          {outOfStock && (
+                            <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
+                              out of stock
+                            </span>
+                          )}
+                          {row?.stockStatus === "low" && (
+                            <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
+                              low
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              {gpuInventoryError && (
+                <p className={`${MONO} mt-1 text-[10px] text-amber-300/60`}>
+                  live inventory unavailable; pricing/availability not shown
+                </p>
+              )}
             </Field>
 
             <div className="border-t border-white/[0.05] pt-3">
