@@ -6,7 +6,6 @@ import {
   Box,
   CheckCircle2,
   Cpu,
-  ExternalLink,
   Globe,
   Loader2,
   Plus,
@@ -279,7 +278,7 @@ export function Deployments({
         breadcrumb={{ label: "Inference", href: "/dashboard/services/inference" }}
         title="BYO deploys"
         accent="& endpoints"
-        caption="Bring any Docker image, HuggingFace model, or Truss bundle. We provision a RunPod Serverless endpoint with autoscale, register it in your catalog, and route calls through the same gateway as the rest of your models."
+        caption="Bring any Docker image, HuggingFace model, or Truss bundle. We provision a managed serverless endpoint with autoscale, register it in your catalog, and route calls through the same gateway as the rest of your models."
         size="md"
         actions={
           <>
@@ -327,9 +326,10 @@ export function Deployments({
             </p>
             <p className={`${MONO} mt-1 text-[11px] text-white/55 leading-relaxed`}>
               Deployments created here land in <span className="text-white/80">status=building</span>. The
-              BullMQ deploy-runner that calls RunPod Serverless and registers the resulting model in the
-              catalog ships in Phase 6.G — until then rows sit pending. Pre-flight (image manifest /
-              HF / git probes) is fully active, so bad inputs still get rejected at create time.
+              compute-provisioning worker that turns these queued rows into live endpoints and
+              registers the resulting model in the catalog is the next milestone — until then rows
+              sit pending. Pre-flight checks (image manifest, source-registry probes) are fully
+              active, so bad inputs still get rejected at create time.
             </p>
           </div>
         </div>
@@ -417,16 +417,13 @@ export function Deployments({
                 </div>
                 <div className="min-w-0">
                   {d.runpod_endpoint_id ? (
-                    <a
-                      href={`https://www.runpod.io/console/serverless/${d.runpod_endpoint_id}`}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85 hover:text-emerald-200`}
+                    <span
+                      className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85`}
+                      title="Serverless endpoint id (internal)"
                     >
                       <Globe className="h-2.5 w-2.5" />
                       <span className="truncate max-w-[120px]">{d.runpod_endpoint_id.slice(0, 12)}</span>
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
+                    </span>
                   ) : d.error_message ? (
                     <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[160px]`}>
                       {d.error_message}
@@ -477,7 +474,7 @@ export function Deployments({
           <DialogHeader>
             <DialogTitle>New deployment</DialogTitle>
             <DialogDescription>
-              Provision a RunPod Serverless endpoint from a Docker image, HuggingFace repo,
+              Provision a managed serverless endpoint from a Docker image, HuggingFace repo,
               or Truss bundle. Pre-flight validates the source before queueing.
             </DialogDescription>
           </DialogHeader>
@@ -620,7 +617,7 @@ export function Deployments({
               Scale <span className="font-mono text-[#0095FF]">{scaleTarget?.name}</span>
             </DialogTitle>
             <DialogDescription>
-              Updates the autoscale config and applies it to the live RunPod endpoint.
+              Updates the autoscale config and applies it to the live endpoint.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
@@ -678,7 +675,7 @@ export function Deployments({
               Tear down <span className="font-mono text-[#0095FF]">{deleteTarget?.name}</span>?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This terminates the RunPod endpoint (workers stop billing within ~30s),
+              This terminates the serving endpoint (workers stop billing within ~30s),
               unregisters the model from your catalog, and marks the deployment deleted.
               The action is asynchronous — the row will move to <span className="font-mono text-white/80">paused</span> first,
               then <span className="font-mono text-white/80">deleted</span> once teardown completes.

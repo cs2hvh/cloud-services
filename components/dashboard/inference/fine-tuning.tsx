@@ -123,11 +123,6 @@ interface InventoryRow {
   spotPerHr: number | null;
 }
 
-function formatPerHr(usd: number | null): string {
-  if (usd == null || usd <= 0) return "—";
-  if (usd < 1) return `$${usd.toFixed(2)}/hr`;
-  return `$${usd.toFixed(2)}/hr`;
-}
 
 function statusMeta(status: FineTuneJob["status"]): {
   color: string;
@@ -599,8 +594,9 @@ export function FineTuning({
               New fine-tuning job
             </DialogTitle>
             <DialogDescription className={`${MONO} text-[11px] text-white/45 leading-relaxed`}>
-              Job lands in <span className="text-white/80">queued</span> state. Runner picks it up
-              from the BullMQ ft-runner queue and provisions a RunPod pod.
+              Job lands in <span className="text-white/80">queued</span> state and starts running
+              automatically as soon as a GPU is allocated. You can leave the page; progress and
+              cost will keep updating in the background.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -672,7 +668,6 @@ export function FineTuning({
                         r.cloudType === "SECURE" &&
                         r.displayName === SKU_TO_RUNPOD_DISPLAY_NAME[sku]
                     );
-                    const price = row?.onDemandPerHr;
                     const outOfStock = row?.stockStatus === "none";
                     return (
                       <SelectItem
@@ -685,19 +680,14 @@ export function FineTuning({
                           <span className="text-white/45 text-[11px]">
                             — {SKU_BLURB[sku]}
                           </span>
-                          {price != null ? (
-                            <span className="text-emerald-300/80 text-[11px] tabular-nums">
-                              {formatPerHr(price)}
-                            </span>
-                          ) : null}
                           {outOfStock && (
                             <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
-                              out of stock
+                              unavailable
                             </span>
                           )}
                           {row?.stockStatus === "low" && (
                             <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
-                              low
+                              limited
                             </span>
                           )}
                         </span>
@@ -708,7 +698,7 @@ export function FineTuning({
               </Select>
               {gpuInventoryError && (
                 <p className={`${MONO} mt-1 text-[10px] text-amber-300/60`}>
-                  live inventory unavailable; pricing/availability not shown
+                  live capacity status unavailable
                 </p>
               )}
             </Field>
@@ -785,8 +775,8 @@ export function FineTuning({
               Cancel job
             </AlertDialogTitle>
             <AlertDialogDescription className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>
-              Cancelling &quot;{cancelTarget?.name}&quot; sets status to cancelled. Any RunPod pod
-              already provisioned will be torn down by the runner on its next check. GPU-seconds
+              Cancelling &quot;{cancelTarget?.name}&quot; sets status to cancelled. Any compute
+              already provisioned will be released on the next health check. GPU-seconds
               consumed up to that point are still billed.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -810,7 +800,7 @@ export function FineTuning({
 
       {/* ── Job detail dialog ─────────────────────────────────────── */}
       <Dialog open={!!detailTarget} onOpenChange={(o) => !o && setDetailTarget(null)}>
-        <DialogContent className="border-white/[0.08] bg-[#111216] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="border-white/[0.08] bg-[#111216] max-w-3xl max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
           <DialogHeader>
             <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white`}>
               {detailTarget?.name ?? "Job details"}
@@ -942,8 +932,8 @@ export function FineTuning({
                 {/* Infra */}
                 {runpodPodId && (
                   <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Infrastructure</h4>
-                    <Row k="RunPod pod id" v={<code>{runpodPodId}</code>} />
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Compute</h4>
+                    <Row k="Pod id" v={<code>{runpodPodId}</code>} />
                     {d.last_heartbeat_at && <Row k="Last heartbeat" v={new Date(d.last_heartbeat_at).toLocaleString()} />}
                   </div>
                 )}

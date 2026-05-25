@@ -22,13 +22,24 @@ function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
 }
 
+/** Allow-list of buckets we'll mint signed URLs against. Without this an
+ *  attacker who could inject a row could trick us into signing arbitrary
+ *  paths inside any bucket our R2 creds reach. Defense-in-depth: even
+ *  though row writes are gated by HMAC + service-role, this caps blast
+ *  radius if a future bug lets through unsanitized URLs. */
+const ALLOWED_LOG_BUCKETS = new Set(["ahura-ft-adapters"]);
+
 /** Parse "r2://bucket/key/path" → { bucket, key }. */
 function parseR2Url(url: string): { bucket: string; key: string } | null {
   if (!url.startsWith("r2://") && !url.startsWith("s3://")) return null;
   const rest = url.replace(/^(r2|s3):\/\//, "");
   const slash = rest.indexOf("/");
   if (slash <= 0) return null;
-  return { bucket: rest.slice(0, slash), key: rest.slice(slash + 1) };
+  const bucket = rest.slice(0, slash);
+  const key = rest.slice(slash + 1);
+  // No path traversal — keys with .. or // are suspicious; reject.
+  if (key.includes("..") || key.startsWith("/") || key.includes("//")) return null;
+  return { bucket, key };
 }
 
 export async function GET(
@@ -73,10 +84,20 @@ export async function GET(
 
   const parsed = parseR2Url(data.training_log_url);
   if (!parsed) {
-    return NextResponse.json(
-      { error: `Invalid log URL scheme: ${data.training_log_url}` },
-      { status: 500 }
-    );
+    // Don't echo the URL back to the user — could leak internal paths.
+    console.error("[FT log-url] unparseable URL for job", id);
+    return NextResponse.json({ error: "Log URL is malformed" }, { status: 500 });
+  }
+  if (!ALLOWED_LOG_BUCKETS.has(parsed.bucket)) {
+    console.error("[FT log-url] bucket not in allow-list:", parsed.bucket);
+    return NextResponse.json({ error: "Log URL bucket not permitted" }, { status: 403 });
+  }
+  // Lock key prefix to <org_id>/<job_id>/ — prevents signing URLs that
+  // belong to OTHER orgs' adapters even if a row got cross-contaminated.
+  const expectedPrefix = `${data.org_id}/${id}/`;
+  if (!parsed.key.startsWith(expectedPrefix)) {
+    console.error("[FT log-url] key prefix mismatch:", parsed.key, "expected", expectedPrefix);
+    return NextResponse.json({ error: "Log URL path is not authorized" }, { status: 403 });
   }
 
   // R2 speaks the S3 API; AWS SDK works out of the box with the R2 endpoint.
