@@ -1,19 +1,24 @@
 # Inference Platform — Status & Session Handoff
 
-> Live state of the AhuraCloud Inference build. Last updated **2026-05-24**.
+> Live state of the AhuraCloud Inference build. Last updated **2026-05-25**.
 > Hand this to a fresh Claude session for full context awareness.
 
 ---
 
 ## TL;DR
 
-We're building a serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway proxying every major model through OpenRouter, plus adjacent products (Fine-Tuning, Embeddings + Vector, BYO Model Deploy) running on the existing RunPod GPU substrate.
+Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway, plus adjacent products (Fine-Tuning, Embeddings + Vector, BYO Model Deploy). User-facing branding does NOT name upstream providers; internally the inference gateway proxies via OpenRouter and the FT/BYO pipelines run on RunPod, but those names never appear in user-visible UI, API responses, or error messages.
 
-**Branch:** `ai` (off `dev` at `784fa43c`). **Domain (temporary):** `api.cs2hvh.com` (will migrate to `api.ahurasense.com` once CF permissions are granted — see [migration-ahurasense.md](./migration-ahurasense.md)).
+**Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State today:** Phase 0 (foundation) **deployed and verified end-to-end**. Phase 1 (real inference + dashboard + audit + load test) **SHIPPED 2026-05-24** — public beta ready. Phases 2–7 not started.
+**State:** Phases **0, 1, 5, 6** SHIPPED end-to-end (validated with real money-spending jobs). Phase **8** (observability + cost + dashboard polish) shipped. Phase **9** (security hardening + brand scrub) in progress. Phases 2, 3, 4, 7 not started.
 
-**What works right now in production:** A developer with an `ahu_live_*` key can hit `https://api.cs2hvh.com/v1/chat/completions` with any of 52 models (Claude/GPT/Gemini/Llama/DeepSeek/Qwen/Mistral/etc.), with platform OR BYOK billing, streaming or non-streaming, and see real metered usage in `/dashboard/services/inference` within seconds.
+**What works right now (verified live):**
+- `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
+- Click "New job" in dashboard → LoRA fine-tune runs on an A40/A100 → adapter uploads to R2 → completion webhook → model auto-registers in catalog → cost computed and shown (`$0.10` for a 4-min phi-4 run). First successful e2e run verified 2026-05-25 (Phase 5).
+- BYO Model Deploy API + dashboard wired; deploy-runner ships docker source end-to-end (HF + Truss sources need a builder, Phase 7).
+- Live job progress (current step / epoch / loss) streams from training pods into Postgres → dashboard updates without poll, no provider-naming.
+- Job detail dialog with hyperparams, sample generations, presigned R2 log link.
 
 ---
 
@@ -141,15 +146,40 @@ For the full diagram + per-component rationale see [architecture.md](./architect
 
 ### Next.js app
 
-- **Not deployed** to a public URL yet. Runs locally via `npm run dev`.
-- All `/dashboard/services/inference/*` and `/api/inference/*` routes work against the dev server.
-- Needs `BYOK_DEK` in `.env` matching the wrangler secret (so encrypt-on-Next-side and decrypt-on-Worker-side both produce the same ciphertext).
+- Runs on the operator's Windows RDP server (148.113.13.152:3000) in `npm run dev`. Not yet a real prod deploy.
+- Exposed publicly via **Cloudflare Tunnel** (`cloudflared` running on the box) at `https://wao.cs2hvh.com` → `localhost:3000`. Tunnel id `a985081b-...`. Cert + creds in `~/.cloudflared/`.
+- This is the host that receives FT pod webhooks (`/api/inference/fine-tuning/jobs/[id]/{webhook,heartbeat}`) and serves the dashboard.
+- `FT_WEBHOOK_SECRET` in this app's `.env` MUST match the one in the LKE secret (currently `af52ce4b246b74b99a0e76d9909c989b4d2e4e146b05edd6601f04ef78f1c4f5`).
+
+### LKE cluster (Linode Kubernetes Engine, Mumbai) — runs the runners
+
+| Resource | State |
+|---|---|
+| Cluster `ahura-prod` | LKE id 607257, 2× g6-standard-2 nodes, k8s 1.35, standard control plane, ~$49/mo all-in |
+| Kubeconfig | `~/.kube/lke-ahura.yaml` on operator box |
+| Namespace `ahura` | redis (1 replica + 10GB PVC), ahura-ft-runner, ahura-deploy-runner |
+| `ahura-ft-runner` Deployment | `ghcr.io/cs2hvh/ahura-ft-runner:latest`, 1 replica, `MAX_CONCURRENT_JOBS=4`, `BOOT_GRACE_MS=300000`, `CONSECUTIVE_STALLS_TO_KILL=60`, points at `ghcr.io/cs2hvh/ahura-ft-axolotl:axolotl-0.29.0` |
+| `ahura-deploy-runner` Deployment | `ghcr.io/cs2hvh/ahura-deploy-runner:latest`, 1 replica |
+| Bootstrap playbook | `infra/k8s/lke/01-create-cluster.sh` (idempotent) + `02-apply-all.sh` |
+| Secret env | `~/.ahura-lke.env` on operator box (OUTSIDE repo, gitignored shape in template) |
+| **Drift warning** | Several env keys were patched live via `kubectl patch secret` but never written back to `~/.ahura-lke.env` — `CONTROL_PLANE_URL`, `CONSECUTIVE_STALLS_TO_KILL`, `BOOT_GRACE_MS`, `AXOLOTL_IMAGE_URI`. A cluster re-apply would reset these. Operator needs to add them to the env file. |
+
+### GHCR images (all public)
+
+| Image | What | Trigger |
+|---|---|---|
+| `ghcr.io/hav0ky/ahura-ft-runner` | Pre-move builds (still works, k8s deployment points here) | OBSOLETE — new builds go to cs2hvh |
+| `ghcr.io/cs2hvh/ahura-ft-runner` | FT orchestrator (Node 22, BullMQ) | Pushes to `workers/ft-runner/**` |
+| `ghcr.io/cs2hvh/ahura-deploy-runner` | BYO Deploy orchestrator (Node 22, BullMQ) | Pushes to `workers/deploy-runner/**` |
+| `ghcr.io/cs2hvh/ahura-ft-axolotl` | Training container — wraps axolotl's official `axolotl-cloud-uv:main-YYYYMMDD-py3.11-cu128-2.9.1` base + our train.sh / heartbeat.py / config-template.yaml | Pushes to `infra/runpod/training-images/axolotl/**` |
 
 ### Test data in Supabase
 
-- Org `d9a35b5b-7efc-414e-aa65-ff76839fb50e` (personal, user: harshit.hv@outlook.com)
+- Org `d9a35b5b-7efc-414e-aa65-ff76839fb50e` (personal, user: harshit.hv@samatva.com)
 - API key: `ahu_live_test1234567890abcdef` (prefix `ahu_live_test`, last four `cdef`) — used for all testing
-- BYOK key stored: 1 OpenRouter key (the one the operator pasted in chat — **flagged as compromised**; rotate before public beta)
+- BYOK key stored: 1 OpenRouter key (operator pasted in chat — **flagged as compromised**, rotate before public beta)
+- First successful FT job (verified e2e 2026-05-25): `5097104c-0869-4780-a12d-344d09dedc79`, phi-4 LoRA, $0.10
+- Public test dataset for smoke tests: `https://wao.cs2hvh.com/test-finetune.jsonl` (103 OpenAI-Messages examples, committed in `public/`)
 
 ---
 
@@ -193,22 +223,70 @@ Cumulative timeline vs original plan in [phases.md](./phases.md).
 
 ### Phase 1.5 — Optional polish (not started)
 
-- [ ] Add `rate_limit_rpm` column to `inference.api_keys` and read it in `workers/inference/src/middleware/rate-limit.ts` → enables per-key rate-limit overrides
-- [ ] Rotate the compromised OpenRouter key the operator pasted earlier
-- [ ] Domain migration `cs2hvh.com → ahurasense.com` when CF perms are granted ([migration-ahurasense.md](./migration-ahurasense.md))
+- [ ] Add `rate_limit_rpm` column to `inference.api_keys` for per-key overrides
+- [ ] Rotate keys pasted in chat history (operator OpenRouter key + the Supabase service role / RunPod / R2 / Upstash creds shared during LKE bootstrap)
+- [ ] Domain migration `cs2hvh.com → ahurasense.com` once CF perms granted
 
-### Phases 2–7 — Not started
+### Phases 2, 3, 4, 7 — Not started
 
 | Phase | Scope | Est. |
 |---|---|---|
-| **2** | Catalog curation UI (filter chips, model browser), routing presets (fallback chains/provider prefs surfaced as `inference.model_presets`), response caching (L1 in KV), off-peak pricing window enforcement on platform-billed | 1 wk |
-| **3** | Playground UI — interactive model picker, parameter sliders, multi-model compare, copy-as-cURL/Python/TS. Uses prod /v1 path. | 1 wk |
-| **4** | `/v1/embeddings` real implementation via OpenRouter + managed vector collections API (`POST/GET/DELETE /v1/vector/collections`, upsert, query) + per-tenant `inference.vector_rows` + batch upsert via BullMQ | 2 wks |
-| **5** | LoRA Fine-Tuning: `POST /v1/fine-tuning/jobs` + BullMQ worker orchestrating RunPod pods (axolotl/unsloth) + output adapter pushed to R2 + auto-registered as `ahura/<base>:user-ft-{id}` model with `serving_type='runpod_ft'` | 3 wks |
-| **6** | BYO Model Deploy: `POST /v1/deployments` + Truss/Docker/HF container builds + RunPod Serverless Workers + autoscale config | 2.5 wks |
-| **7** | Polish: prompt-injection guardrail, smarter response cache (semantic), batch inference endpoint, SOC 2 readiness docs, runbooks, status page hookup | 1.5 wks |
+| **2** | Catalog curation UI, routing presets, response caching (L1 in KV), off-peak pricing enforcement | 1 wk |
+| **3** | Playground UI — interactive model picker, multi-model compare | 1 wk |
+| **4** | `/v1/embeddings` + managed vector collections (`POST /v1/vector/collections`, upsert, query) + per-tenant `inference.vector_rows` + batch upsert via BullMQ | 2 wks |
+| **7** | Prompt-injection guardrail, semantic cache, batch endpoint, SOC 2 readiness docs, runbooks, status page | 1.5 wks |
 
-**Total remaining after Phase 1 ships:** ~11 weeks.
+### Phase 5 — Fine-Tuning ✅ SHIPPED 2026-05-25
+
+Verified end-to-end with `microsoft/phi-4` LoRA: queued → claimed → pod provisioned → image pulled → training ran → adapter uploaded to R2 → completion webhook → model registered in `inference.models` → cost `$0.10` computed and shown. Wall time ~7 min, GPU spend ~$0.10 on A40.
+
+| Chunk | Description | Status |
+|---|---|---|
+| 5.A | Schema (`inference.finetunes` + enum), POST /api/inference/fine-tuning/jobs, dashboard with chrome.tsx primitives | ✅ |
+| 5.B step 3 | Pre-flight validation lib (`lib/inference/finetune-validate.ts`) — HEAD size cap, JSONL parse, schema check, approximate token count, cost preview | ✅ |
+| 5.B step 4 | Compute wrapper (`lib/inference/finetune-runpod.ts`) — internal GPU SKU → compute-provider type map, provision/status/terminate | ✅ |
+| 5.B step 5 | `workers/ft-runner/` — Node 22 BullMQ orchestrator on LKE, dual responsibility (Postgres claimer + per-job lifecycle), heartbeat-based stall detection with 5-min boot grace, adopt-in-flight on restart | ✅ |
+| 5.B step 6 | Webhook receiver — HMAC verify, idempotent on row state, eval gate (final_loss > baseline × 1.1 fails), registers `ahura/<base>:ft-<short>` in catalog, computes `cost_cents` | ✅ |
+| 5.B step 7 | Heartbeat receiver — HMAC verify, Upstash 90s TTL, mirrors progress to Postgres `current_step`/`max_steps`/`current_epoch`/`latest_loss` | ✅ |
+| FT image | `infra/runpod/training-images/axolotl/` — based on `axolotlai/axolotl-cloud-uv:main-20260525-py3.11-cu128-2.9.1` (uv venv, properly version-aligned axolotl 0.16 + transformers 5.5 + peft 0.19 + accelerate 1.13 + torch 2.9 + CUDA 12.8). Adds rclone+jq+curl+openssl, our train.sh + heartbeat.py + config-template.yaml + accelerate-config.yaml. Build-time sanity check imports peft/transformers/axolotl to catch dep-hell at build, not 11s into every pod. | ✅ |
+
+**Lessons learned the hard way (~5 hours of debugging):** Don't pin transformers/peft/accelerate yourself before `pip install axolotl[deepspeed]` — axolotl 0.16's hard pin overrides yours, the new transformers breaks the precompiled C-extensions, and the resulting torch ABI mismatch surfaces as a misleading `BloomPreTrainedModel` error from `_LazyModule.__getattr__`. Use axolotl's `-uv` variant which keeps deps insulated from pip drift. Detail: see commit `644ef58…ad4b4cb…7dcb3ce` arc.
+
+### Phase 6 — BYO Model Deploy ✅ SHIPPED 2026-05-24 (docker source only)
+
+| Chunk | Description | Status |
+|---|---|---|
+| 6.A | Pre-flight (`lib/inference/deploy-validate.ts`) — Docker registry HEAD, HF API probe, public GitHub probe | ✅ |
+| 6.B | Compute wrapper (`lib/inference/deploy-runpod.ts`) — Serverless endpoint CRUD via REST | ✅ |
+| 6.C | Best-effort BullMQ enqueue (`lib/inference/deploy-queue.ts`) | ✅ |
+| 6.D | API routes: list/create/detail/delete/scale (`app/api/inference/deployments/`) | ✅ |
+| 6.E | Dashboard component (`components/dashboard/inference/deployments.tsx`) — chrome primitives, stats strip, create dialog, scale dialog, delete confirm | ✅ |
+| 6.F | Page wire + sidebar entry | ✅ |
+| 6.G | `workers/deploy-runner/` — Node 22 BullMQ orchestrator on LKE, 3-action state machine (create/scale/delete), 30-min READY budget, idempotent on restart | ✅ |
+| **Known gap** | HF + Truss source types accepted at API but `resolveImageUri()` in deploy-runner returns null → marked failed. Need a builder worker (Phase 7 work). | ⚠️ |
+
+### Phase 8 — Observability + cost + dashboard polish ✅ SHIPPED 2026-05-25
+
+| Batch | Description |
+|---|---|
+| 8.1 | Heartbeat 403 fix (`User-Agent: ahura-ft-heartbeat/1.0` so Cloudflare BIC doesn't reject the Python-urllib default UA) + HF model id mapping audit (all 13 internal IDs verified against real HF repos, 5 marked `gated`) + training.log → R2 + URL in completion webhook |
+| 8.2 | DB migration adding `current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url`. Heartbeat receiver writes progress to Postgres (fire-and-forget). Cost computed at completion (`hourly × elapsed / 3600`). Runner records `hourly_cost_cents` at pod provision. Dashboard renders live progress bar + cost + log link. |
+| 8.3 | Real-time GPU dropdown reads `/api/services/gpu/inventory` for SECURE-cloud availability badges. Pricing removed from the dropdown (cost transparency stays in the post-completion detail dialog only). |
+| 8.4 | Clickable job rows → detail dialog with sectioned view (status / core / hyperparams / output / samples / compute / errors). Dark-themed scrollbar. Stale "runner pending" banner removed. |
+| 8.5 | `GET /api/inference/fine-tuning/jobs/[id]/log-url` — mints 1-hour presigned URL via R2's S3 API. Auth-gated + org-scoped + bucket-allow-listed + key-prefix-locked to `<org_id>/<job_id>/` + rejects path traversal. |
+| 8.6 | Brand scrub round 1 — captions, dialog descriptions, GPU dropdown wording, removed runpod.io console deep-link from deployments row. |
+
+### Phase 9 — Enterprise polish (partial) — 2026-05-25
+
+| Chunk | Description | Status |
+|---|---|---|
+| 9.A | Deep brand scrub — `runpod_job_id` → API `pod_id` alias, `runpod_endpoint_id` → API `endpoint_id` alias on every SELECT. Dashboard types + refs updated. Internal DB schema unchanged. | ✅ |
+| 9.B | Generic 5xx error envelope (`lib/inference/api-errors.ts`). 6 routes converted from `err.message` to `internalError()` with server-side logging. 4xx specifics preserved. | ✅ |
+| 9.C | Security headers — verified already in `next.config.ts`: HSTS 2yr+preload, X-Frame-Options DENY, Permissions-Policy, COOP/CORP/CSP. No change needed. | ✅ |
+| 9.D | Webhook idempotency-key persistence — train.sh already sends `X-Ahura-Idempotency-Key`; receiver currently uses row-state idempotency which is sufficient for v1. Header-based dedup table deferred. | DEFERRED |
+| 9.E | PII redaction in `error_message` — low priority (customer's own data, org-scoped). Deferred. | DEFERRED |
+| 9.F | Gated badges in model dropdown (5 Meta + Google models need HF approval) — deferred to dashboard work session. | DEFERRED |
+| 9.G | RunPod template pre-cache (skip cold image pull) — deferred. Current cold-pull adds 5-10 min to first job on a fresh node; subsequent jobs on the same node are fast due to per-node cache. | DEFERRED |
 
 ---
 
@@ -404,7 +482,12 @@ ORDER BY created_at DESC LIMIT 10;
 | # | Issue | Severity | Where it bites |
 |---|---|---|---|
 | 1 | **Per-key rate limit hard-coded at 10 RPS / 60 burst** in `workers/inference/src/middleware/rate-limit.ts`. `inference.api_keys.rate_limit_rpm` column doesn't exist yet. | Medium | Load tests exceeding 10 RPS per key get throttled. Real production usage at 10 RPS per key is fine. Fix in Phase 1.5. |
-| 2 | **OpenRouter key the operator pasted earlier in chat is compromised.** | High | Rotate at openrouter.ai/keys before any public exposure. |
+| 2 | **Many keys pasted in chat history are compromised.** OpenRouter key, Supabase service role, RunPod API key, R2 access/secret, Upstash REST token, HF token, Linode PAT, FT webhook secret. | **HIGH** | Rotate all before public beta. Linode PAT was set to 24h expiry so likely auto-expired; others have no expiry. |
+| 2a | **5 of 13 catalog FT base models are HF-gated** (Llama-4 Scout, Llama-4 Maverick, Llama-3.3-70B, Llama-3.1-8B, gemma-3-27b-it). Users hit 403 from HF at training time unless their HF_TOKEN is approved. Dashboard doesn't badge them yet (Phase 9.F deferred). | Medium | First training job on any of these fails fast with `Cannot access gated repo for url ...`. User must request access at the HF model page. |
+| 2b | **BYO Deploy: HF + Truss sources are accepted at API but always fail in the runner** (`resolveImageUri()` returns null). Only `source: "docker"` works end-to-end. The dashboard create dialog still offers all 3 source types. | Medium | UX confusion — fix is either restrict the dropdown to Docker only OR build the HF→OCI / Truss→OCI builder (Phase 7 scope). |
+| 2c | **First job on a fresh RunPod node waits 5-10 min for the 20GB training image to pull.** Subsequent jobs on the same node start in ~30s. RunPod Template pre-cache (Phase 9.G deferred) would eliminate the cold pull. | Medium | Boot-grace window (5 min default) often isn't enough for cold pulls; bumped to 16 min in cluster secret. Operator note: if you see "heartbeat stall threshold exceeded — killing pod" before 16 min, bump `CONSECUTIVE_STALLS_TO_KILL` further or wait for pre-cache work. |
+| 2d | **`~/.ahura-lke.env` is stale.** 4 keys patched live via `kubectl patch secret` but never written back: `CONTROL_PLANE_URL`, `CONSECUTIVE_STALLS_TO_KILL`, `BOOT_GRACE_MS`, `AXOLOTL_IMAGE_URI`. A cluster re-apply would reset them. | Medium | Operator: add those 4 lines to `~/.ahura-lke.env` to prevent drift. |
+| 2e | **`api.cs2hvh.com` Worker route was broken on 2026-05-25** when this session ran `cloudflared tunnel route dns --overwrite-dns api.cs2hvh.com` (intended `wao.cs2hvh.com`). Operator needs to `cd workers/inference && npx wrangler deploy` to re-bind. | Medium | Inference gateway `/v1/*` calls fail until restored. |
 | 3 | **Some catalog model IDs may not match OpenRouter's actual catalog** (especially less-mainstream ones like LFM, OLMo, Hermes, Jamba). | Low | Will return 404 from upstream if used. Easy fix: `UPDATE inference.models SET model_id='correct/id', upstream_model_id='correct/id' WHERE model_id='wrong/id';` |
 | 4 | **`L1_CACHE` KV namespace bound but unused.** | None | Reserved for Phase 2 response caching. |
 | 5 | **`workers/inference/src/lib/openrouter.ts` HTTP-Referer hard-coded to `https://cs2hvh.com`** | Low | Will need update during domain migration to ahurasense.com. Already noted in migration runbook. |
@@ -419,12 +502,80 @@ ORDER BY created_at DESC LIMIT 10;
 
 ---
 
+## Operator runbook — common ops
+
+### Inspect a job from the runner pod (no SQL editor needed)
+
+```bash
+export KUBECONFIG=$HOME/.kube/lke-ahura.yaml
+export PATH=$HOME/bin:$PATH
+kubectl -n ahura exec deploy/ahura-ft-runner -- node -e "
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+sb.schema('inference').from('finetunes')
+  .select('id, name, status, base_model_id, gpu_sku, training_seconds, cost_cents, error_message, training_log_url')
+  .order('created_at', { ascending: false }).limit(5)
+  .then(r => console.log(JSON.stringify(r.data, null, 2)));
+"
+```
+
+### Tail runner logs
+
+```bash
+kubectl -n ahura logs -f deploy/ahura-ft-runner
+kubectl -n ahura logs -f deploy/ahura-deploy-runner
+```
+
+### Update a cluster secret without re-applying the whole config
+
+```bash
+kubectl -n ahura patch secret ahura-ft-runner-secrets \
+  --patch '{"stringData":{"BOOT_GRACE_MS":"600000"}}'
+kubectl -n ahura rollout restart deploy/ahura-ft-runner
+```
+
+### Recreate the LKE cluster from zero
+
+```bash
+# Cluster
+export LINODE_PAT=...   # fresh scoped PAT, 24h expiry
+bash infra/k8s/lke/01-create-cluster.sh
+
+# Manifests
+export KUBECONFIG=$HOME/.kube/lke-ahura.yaml
+set -a; source ~/.ahura-lke.env; set +a
+bash infra/k8s/lke/02-apply-all.sh
+
+# Re-patch the drifted env keys (see gap 2d above)
+kubectl -n ahura patch secret ahura-ft-runner-secrets --patch '{"stringData":{"CONTROL_PLANE_URL":"https://wao.cs2hvh.com","CONSECUTIVE_STALLS_TO_KILL":"60","BOOT_GRACE_MS":"300000","AXOLOTL_IMAGE_URI":"ghcr.io/cs2hvh/ahura-ft-axolotl:axolotl-0.29.0"}}'
+```
+
+### Restart the Cloudflare Tunnel if it dies
+
+```bash
+# On the Windows operator box (Git Bash)
+~/bin/cloudflared.exe tunnel run ahura-api &
+# Or install as a Windows service for persistence:
+~/bin/cloudflared.exe service install
+```
+
+### Make a fresh test FT job from the dashboard (smoke check)
+
+1. Dashboard → Inference → Fine-Tuning → New job
+2. Name: anything; Base: `microsoft/phi-4` (only ungated 14B); Dataset: `https://wao.cs2hvh.com/test-finetune.jsonl`; GPU: A40
+3. Wait ~7 min; expect `$0.10` and a model in catalog.
+4. If it gets stuck at "preparing" for >2 min, check `kubectl -n ahura logs deploy/ahura-ft-runner` for the claim event.
+5. If pod is provisioned but never sends heartbeats and stalls, check pod logs at `https://www.runpod.io/console/pods` BEFORE it's deleted — RunPod drops logs post-stop.
+
+---
+
 ## Active TODO
 
 Immediate hygiene (do soon):
 - [x] ~~Re-run `k6 run load.k6.js`~~ — done 2026-05-24, all infra thresholds pass
-- [ ] **Rotate the leaked OpenRouter key** at openrouter.ai/keys, delete the old one from BYOK vault, re-add the new one
-- [ ] Commit Phase 1 work to the `ai` branch (currently uncommitted)
+- [ ] **Rotate ALL keys pasted in this conversation** — OpenRouter, Supabase service role, RunPod, R2, Upstash, HF, Linode (likely expired), FT webhook secret
+- [ ] Operator: write the 4 drifted env keys back to `~/.ahura-lke.env` (gap 2d above)
+- [ ] Operator: `cd workers/inference && npx wrangler deploy` to restore `api.cs2hvh.com` Worker route (gap 2e above)
 
 Phase 1.5 polish (small, valuable, do before Phase 2):
 - [ ] Migration: add `rate_limit_rpm INTEGER` column to `inference.api_keys` (default 60)
