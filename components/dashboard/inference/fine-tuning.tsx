@@ -511,15 +511,29 @@ export function FineTuning({
                         <CheckCircle2 className="h-2.5 w-2.5" /> Registered
                       </span>
                       {j.training_log_url && (
-                        <a
-                          href={j.training_log_url}
-                          target="_blank"
-                          rel="noreferrer noopener"
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const r = await fetch(
+                                `/api/inference/fine-tuning/jobs/${j.id}/log-url`,
+                                { credentials: "include" }
+                              );
+                              const data = await r.json();
+                              if (!r.ok) throw new Error(data.error ?? "log fetch failed");
+                              window.open(data.url, "_blank", "noopener,noreferrer");
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error ? err.message : "Couldn't fetch log URL"
+                              );
+                            }
+                          }}
                           className={`${MONO} block mt-0.5 text-[10px] text-white/45 hover:text-[#0095FF]`}
-                          title="Full training log on R2"
+                          title="Open training log (1-hour signed URL)"
                         >
                           download log ↗
-                        </a>
+                        </button>
                       )}
                     </div>
                   ) : j.error_message ? (
@@ -881,9 +895,25 @@ export function FineTuning({
                       <Row
                         k="Training log"
                         v={
-                          <a href={d.training_log_url} target="_blank" rel="noreferrer noopener" className="text-[#0095FF] hover:underline">
-                            {d.training_log_url}
-                          </a>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const r = await fetch(
+                                  `/api/inference/fine-tuning/jobs/${d.id}/log-url`,
+                                  { credentials: "include" }
+                                );
+                                const data = await r.json();
+                                if (!r.ok) throw new Error(data.error ?? "log fetch failed");
+                                window.open(data.url, "_blank", "noopener,noreferrer");
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Couldn't fetch log URL");
+                              }
+                            }}
+                            className="text-[#0095FF] hover:underline cursor-pointer"
+                          >
+                            open signed url ↗ ({d.training_log_url})
+                          </button>
                         }
                       />
                     )}
