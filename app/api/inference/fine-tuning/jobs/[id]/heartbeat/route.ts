@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { Redis } from "@upstash/redis";
+import { createClient } from "@supabase/supabase-js";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
 
@@ -106,6 +107,33 @@ export async function POST(
     },
     { ex: 90 }
   );
+
+  // Also persist live progress to Postgres so the dashboard can render
+  // "step 142/300 · epoch 1.42 · loss 0.85" without hitting Upstash on
+  // every page load. Fire-and-forget — heartbeat liveness is the Upstash
+  // path's job; PG write is purely for UX. A failed PG write does not
+  // 500 the heartbeat (would make the stall detector kill healthy pods).
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { persistSession: false } }
+    );
+    void supabase
+      .schema("inference")
+      .from("finetunes")
+      .update({
+        current_step: payload.global_step ?? null,
+        max_steps: payload.max_steps ?? null,
+        current_epoch: payload.epoch ?? null,
+        latest_loss: payload.loss ?? null,
+        last_heartbeat_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .then(({ error }) => {
+        if (error) console.warn("[Heartbeat] PG update failed:", error.message);
+      });
+  }
 
   return NextResponse.json({ ok: true });
 }

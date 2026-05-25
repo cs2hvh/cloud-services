@@ -22,10 +22,18 @@ interface WebhookPayload {
   job_id: string;
   status: "completed" | "failed";
   adapter_url?: string;
+  /** R2 URL of the full training.log (uploaded by train.sh post-success). */
+  training_log_url?: string;
   elapsed_seconds: number;
   final_loss?: number;
   sample_outputs?: Array<{ prompt: string; output: string }>;
   error?: string;
+}
+
+/** Hourly $/hr from RunPod → final cost_cents based on actual training_seconds. */
+function computeCostCents(hourlyCostCents: number | null, trainingSeconds: number): number {
+  if (!hourlyCostCents || hourlyCostCents <= 0 || trainingSeconds <= 0) return 0;
+  return Math.ceil((hourlyCostCents * trainingSeconds) / 3600);
 }
 
 function isUuid(s: string): boolean {
@@ -93,7 +101,7 @@ export async function POST(
   const { data: existing } = await supabase
     .schema("inference")
     .from("finetunes")
-    .select("id, status, org_id, base_model_id, name, hyperparams, output_model_id")
+    .select("id, status, org_id, base_model_id, name, hyperparams, output_model_id, hourly_cost_cents")
     .eq("id", id)
     .maybeSingle<{
       id: string;
@@ -103,6 +111,7 @@ export async function POST(
       name: string;
       hyperparams: Record<string, unknown>;
       output_model_id: string | null;
+      hourly_cost_cents: number | null;
     }>();
 
   if (!existing) {
@@ -117,7 +126,10 @@ export async function POST(
   }
 
   // ── Failure path ──────────────────────────────────────────────────
+  // Cost still applies to failed runs — RunPod billed us for the pod-up
+  // time, customer should see what they paid for.
   if (payload.status === "failed") {
+    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
     await supabase
       .schema("inference")
       .from("finetunes")
@@ -125,12 +137,13 @@ export async function POST(
         status: "failed",
         error_message: payload.error ?? "training_container_reported_failure",
         training_seconds: payload.elapsed_seconds,
+        cost_cents: costCents,
         completed_at: new Date().toISOString(),
       })
       .eq("id", id);
 
     // TODO Phase 7: trigger Svix customer webhook fine_tuning.job.failed
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, cost_cents: costCents });
   }
 
   // ── Success path ──────────────────────────────────────────────────
@@ -214,6 +227,11 @@ export async function POST(
     .select("id")
     .single();
 
+  // Compute final cost from the training duration and the hourly rate we
+  // recorded at provision time. Applies to both the model-registration-
+  // failed branch and the happy path.
+  const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+
   if (modelErr || !insertedModel) {
     console.error("[FT Webhook] Failed to register output model", modelErr);
     // Don't fail the webhook — mark the job as completed but log the
@@ -224,12 +242,14 @@ export async function POST(
       .update({
         status: "completed",
         output_artifact_url: payload.adapter_url,
+        training_log_url: payload.training_log_url ?? null,
         training_seconds: payload.elapsed_seconds,
+        cost_cents: costCents,
         completed_at: new Date().toISOString(),
         error_message: `WARN: model registration failed: ${modelErr?.message ?? "unknown"}`,
       })
       .eq("id", id);
-    return NextResponse.json({ ok: true, model_registration_failed: true });
+    return NextResponse.json({ ok: true, model_registration_failed: true, cost_cents: costCents });
   }
 
   await supabase
@@ -239,7 +259,9 @@ export async function POST(
       status: "completed",
       output_artifact_url: payload.adapter_url,
       output_model_id: insertedModel.id,
+      training_log_url: payload.training_log_url ?? null,
       training_seconds: payload.elapsed_seconds,
+      cost_cents: costCents,
       completed_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -249,5 +271,6 @@ export async function POST(
     ok: true,
     model_id: modelId,
     output_model_uuid: insertedModel.id,
+    cost_cents: costCents,
   });
 }

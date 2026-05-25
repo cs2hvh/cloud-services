@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("finetunes")
     .select(
-      "id, name, base_model_id, method, hyperparams, dataset_url, validation_dataset_url, status, gpu_sku, runpod_job_id, output_model_id, output_artifact_url, training_seconds, cost_cents, error_message, queued_at, started_at, completed_at, created_at, updated_at"
+      "id, name, base_model_id, method, hyperparams, dataset_url, validation_dataset_url, status, gpu_sku, runpod_job_id, output_model_id, output_artifact_url, training_seconds, cost_cents, error_message, queued_at, started_at, completed_at, created_at, updated_at, current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url"
     )
     .eq("org_id", org.org_id)
     .order("created_at", { ascending: false })

@@ -74,6 +74,15 @@ export interface FineTuneJob {
   output_model_id: string | null;
   error_message: string | null;
   created_at: string;
+  // Phase 8.B+D+F additions — present once heartbeats start landing /
+  // completion webhook fires.
+  current_step?: number | null;
+  max_steps?: number | null;
+  current_epoch?: number | null;
+  latest_loss?: number | null;
+  last_heartbeat_at?: string | null;
+  hourly_cost_cents?: number | null;
+  training_log_url?: string | null;
 }
 
 export interface FineTuneBaseModel {
@@ -369,22 +378,46 @@ export function FineTuning({
                     </span>
                   </div>
                 </div>
-                <div className="inline-flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${s.pulse ? "animate-pulse" : ""}`}
-                    style={{
-                      background: s.color,
-                      boxShadow:
-                        s.color === "rgba(255,255,255,0.45)" ? "none" : `0 0 5px ${s.color}`,
-                    }}
-                  />
-                  <span
-                    className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold`}
-                    style={{ color: s.color }}
-                  >
-                    {s.label}
-                  </span>
-                  {s.pulse && <Loader2 className="h-3 w-3 animate-spin text-white/40" />}
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${s.pulse ? "animate-pulse" : ""}`}
+                      style={{
+                        background: s.color,
+                        boxShadow:
+                          s.color === "rgba(255,255,255,0.45)" ? "none" : `0 0 5px ${s.color}`,
+                      }}
+                    />
+                    <span
+                      className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold`}
+                      style={{ color: s.color }}
+                    >
+                      {s.label}
+                    </span>
+                    {s.pulse && <Loader2 className="h-3 w-3 animate-spin text-white/40" />}
+                  </div>
+                  {/* Live progress for running jobs — populated by heartbeat receiver */}
+                  {j.status === "running" && j.current_step != null && (
+                    <div className="mt-1">
+                      <div className={`${MONO} text-[10px] text-white/55 tabular-nums`}>
+                        step {j.current_step}
+                        {j.max_steps != null && `/${j.max_steps}`}
+                        {j.current_epoch != null && ` · ep ${j.current_epoch.toFixed(2)}`}
+                        {j.latest_loss != null && ` · loss ${j.latest_loss.toFixed(4)}`}
+                      </div>
+                      {j.max_steps != null && j.max_steps > 0 && (
+                        <div className="mt-1 h-0.5 w-24 bg-white/[0.08] overflow-hidden rounded-full">
+                          <div
+                            className="h-full bg-[#0095FF] transition-all"
+                            style={{
+                              width: `${Math.min(100, ((j.current_step ?? 0) / j.max_steps) * 100)}%`,
+                              boxShadow: "0 0 4px #0095FF",
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
                   <span style={SERIF_STYLE} className="text-[14px] font-bold text-white tabular-nums">
@@ -396,11 +429,24 @@ export function FineTuning({
                 </div>
                 <div className="min-w-0">
                   {j.output_model_id ? (
-                    <span className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85`}>
-                      <CheckCircle2 className="h-2.5 w-2.5" /> Registered
-                    </span>
+                    <div>
+                      <span className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85`}>
+                        <CheckCircle2 className="h-2.5 w-2.5" /> Registered
+                      </span>
+                      {j.training_log_url && (
+                        <a
+                          href={j.training_log_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className={`${MONO} block mt-0.5 text-[10px] text-white/45 hover:text-[#0095FF]`}
+                          title="Full training log on R2"
+                        >
+                          download log ↗
+                        </a>
+                      )}
+                    </div>
                   ) : j.error_message ? (
-                    <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[160px]`}>
+                    <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[180px]`} title={j.error_message}>
                       {j.error_message}
                     </span>
                   ) : (

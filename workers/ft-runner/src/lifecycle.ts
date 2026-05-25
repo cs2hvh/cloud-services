@@ -119,6 +119,7 @@ export async function runJob(
   // ── 2. Provision pod ─────────────────────────────────────────────
   const provisionedAt = Date.now();
   let podId: string;
+  let hourlyCostCents: number | null = null;
   try {
     const provisioned = await runpod.createPod({
       jobId,
@@ -140,8 +141,11 @@ export async function runJob(
       imageUri: env.axolotlImageUri,
     });
     podId = provisioned.podId;
+    if (provisioned.hourlyCostUsd && provisioned.hourlyCostUsd > 0) {
+      hourlyCostCents = Math.round(provisioned.hourlyCostUsd * 100);
+    }
     log.info(
-      { podId, gpuTypeId: provisioned.gpuTypeId, hourlyCostUsd: provisioned.hourlyCostUsd },
+      { podId, gpuTypeId: provisioned.gpuTypeId, hourlyCostUsd: provisioned.hourlyCostUsd, hourlyCostCents },
       "pod provisioned"
     );
   } catch (err) {
@@ -160,11 +164,17 @@ export async function runJob(
     throw err;
   }
 
-  // Persist pod id + flip to running so cancellations have something to terminate
+  // Persist pod id + hourly cost so the completion webhook can compute
+  // final cost_cents = hourlyCostCents × elapsed/3600. Flip to running so
+  // cancellations have something to terminate.
   await supabase
     .schema("inference")
     .from("finetunes")
-    .update({ status: "running", runpod_job_id: podId })
+    .update({
+      status: "running",
+      runpod_job_id: podId,
+      hourly_cost_cents: hourlyCostCents,
+    })
     .eq("id", jobId)
     .eq("status", "preparing");
 
