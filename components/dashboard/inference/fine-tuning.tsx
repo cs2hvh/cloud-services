@@ -5,6 +5,7 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   Cpu,
   Layers,
   Loader2,
@@ -83,6 +84,12 @@ export interface FineTuneJob {
   last_heartbeat_at?: string | null;
   hourly_cost_cents?: number | null;
   training_log_url?: string | null;
+  // Used by the inline expansion panel (page.tsx + jobs list endpoint
+  // include these so we don't need a per-row detail fetch).
+  hyperparams?: Record<string, unknown> | null;
+  dataset_url?: string | null;
+  output_artifact_url?: string | null;
+  pod_id?: string | null;
 }
 
 export interface FineTuneBaseModel {
@@ -182,6 +189,204 @@ function formatCents(c: number | null): string {
   return `$${(c / 100).toFixed(0)}`;
 }
 
+/**
+ * Inline detail panel that renders below a job row when the user expands it.
+ * Replaces the old popup dialog. All fields are present in the list-row
+ * data so no per-row fetch is needed.
+ */
+function ExpandedRow({ job: j }: { job: FineTuneJob }) {
+  const hp = (j.hyperparams ?? {}) as Record<string, unknown>;
+  const podId = j.pod_id ?? null;
+
+  const InfoRow = ({ k, v }: { k: string; v: React.ReactNode }) => (
+    <div className="grid grid-cols-[140px_1fr] gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
+      <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45`}>{k}</div>
+      <div className={`${MONO} text-[11.5px] text-white/85 break-all`}>{v}</div>
+    </div>
+  );
+
+  const adapterR2 = j.output_artifact_url ?? "";
+  const baseShort = j.base_model_id.split("/")[1] ?? j.base_model_id;
+  const dockerCmd = `docker run --gpus all -p 8000:8000 \\
+  -e BASE_MODEL="${baseShort}" \\
+  -e ADAPTER_R2_URL="${adapterR2}" \\
+  -e R2_ACCESS_KEY_ID="<your-r2-read-key>" \\
+  -e R2_SECRET_ACCESS_KEY="<your-r2-secret>" \\
+  -e R2_ENDPOINT="<your-r2-endpoint>" \\
+  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
+
+  return (
+    <div className="bg-white/[0.015] border-t border-white/[0.04] px-5 py-5 space-y-5">
+      {/* Core */}
+      <div>
+        <InfoRow k="Base model" v={<code>{j.base_model_id}</code>} />
+        <InfoRow k="Method" v={j.method.toUpperCase()} />
+        <InfoRow
+          k="GPU"
+          v={`${j.gpu_sku}${j.hourly_cost_cents ? ` · $${(j.hourly_cost_cents / 100).toFixed(2)}/hr at provision` : ""}`}
+        />
+        <InfoRow k="Duration" v={formatDuration(j.training_seconds)} />
+        <InfoRow k="Cost" v={formatCents(j.cost_cents)} />
+        {j.queued_at && <InfoRow k="Queued" v={new Date(j.queued_at).toLocaleString()} />}
+        {j.started_at && <InfoRow k="Started" v={new Date(j.started_at).toLocaleString()} />}
+        {j.completed_at && <InfoRow k="Completed" v={new Date(j.completed_at).toLocaleString()} />}
+        {j.dataset_url && (
+          <InfoRow k="Dataset" v={<code className="text-[10.5px]">{j.dataset_url}</code>} />
+        )}
+      </div>
+
+      {/* Hyperparams */}
+      {Object.keys(hp).length > 0 && (
+        <div>
+          <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Hyperparameters</h4>
+          <div className="bg-black/40 border border-white/[0.05] rounded-[4px] p-3">
+            <pre className={`${MONO} text-[10.5px] text-white/75 whitespace-pre-wrap`}>{JSON.stringify(hp, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {/* Your trained model + serve guide (completed jobs only) */}
+      {j.status === "completed" && adapterR2 && (
+        <div>
+          <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-emerald-300/85 mb-2`}>Your trained model</h4>
+          <InfoRow
+            k="Status"
+            v={
+              <span className="inline-flex items-center gap-1 text-emerald-300/85">
+                <CheckCircle2 className="h-3 w-3" /> ready to serve
+              </span>
+            }
+          />
+          <InfoRow
+            k="Adapter"
+            v={
+              <span className="inline-flex items-center gap-2">
+                <code className="text-[11px] text-white/85 select-all break-all">{adapterR2}</code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(adapterR2);
+                    toast.success("Copied");
+                  }}
+                  className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
+                >
+                  copy
+                </button>
+              </span>
+            }
+          />
+
+          <div className="mt-5 mb-3">
+            <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55 mb-3`}>How to serve</h4>
+
+            <div className="mb-4 pl-5 relative">
+              <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>1.</span>
+              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Rent a GPU pod</div>
+              <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                Pick A40 (~$0.40/hr) for 8-14B bases, A100 80GB for 27-32B, H100 for larger MoE.
+              </p>
+              <a
+                href="/dashboard/services/gpu/deploy"
+                className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-[#0095FF] hover:bg-[#33adff] px-3 py-1.5 rounded transition-colors`}
+              >
+                Open GPU compute → rent a pod
+              </a>
+            </div>
+
+            <div className="mb-4 pl-5 relative">
+              <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>2.</span>
+              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
+              <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                vLLM exposes an OpenAI-compatible API on port 8000 with your adapter mounted.
+                Replace the R2 placeholder values with your bucket read credentials.
+              </p>
+              <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative">
+                <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(dockerCmd);
+                    toast.success("Command copied");
+                  }}
+                  className={`${MONO} absolute top-2 right-2 text-[10px] text-white/45 hover:text-white/85 bg-black/40 px-2 py-0.5 rounded`}
+                >
+                  copy
+                </button>
+              </div>
+              <p className={`${MONO} mt-2 text-[10px] text-white/45`}>
+                First boot ~60s (downloads base + adapter, vLLM warms up). Subsequent requests 1-2s.
+              </p>
+            </div>
+
+            <div className="pl-5 relative">
+              <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>3.</span>
+              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Call your model</div>
+              <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                Once the container is healthy, hit your pod&apos;s exposed port:
+              </p>
+              <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
+                <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{`curl http://<your-pod-ip>:8000/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "adapter",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'`}</pre>
+              </div>
+            </div>
+          </div>
+
+          {j.training_log_url && (
+            <InfoRow
+              k="Training log"
+              v={
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/log-url`, {
+                        credentials: "include",
+                      });
+                      const data = await r.json();
+                      if (!r.ok) throw new Error(data.error ?? "log fetch failed");
+                      window.open(data.url, "_blank", "noopener,noreferrer");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Couldn't fetch log URL");
+                    }
+                  }}
+                  className="text-[#0095FF] hover:underline cursor-pointer"
+                >
+                  download log ↗
+                </button>
+              }
+            />
+          )}
+        </div>
+      )}
+
+      {/* Infra */}
+      {podId && (
+        <div>
+          <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Compute</h4>
+          <InfoRow k="Pod id" v={<code>{podId}</code>} />
+          {j.last_heartbeat_at && <InfoRow k="Last heartbeat" v={new Date(j.last_heartbeat_at).toLocaleString()} />}
+        </div>
+      )}
+
+      {/* Error */}
+      {j.error_message && (
+        <div>
+          <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-red-300/85 mb-2`}>
+            {j.status === "failed" ? "Failure reason" : "Warning"}
+          </h4>
+          <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3">
+            <pre className={`${MONO} text-[10.5px] text-red-200/85 whitespace-pre-wrap break-all`}>{j.error_message}</pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FineTuning({
   bases,
   initial,
@@ -201,13 +406,10 @@ export function FineTuning({
   // real-time price + availability badges on the GPU dropdown.
   const [gpuInventory, setGpuInventory] = useState<InventoryRow[] | null>(null);
   const [gpuInventoryError, setGpuInventoryError] = useState<string | null>(null);
-  // Detail dialog state — populated when user clicks a row. We fetch fresh
-  // job data (sample_outputs, full error_message, etc.) on open instead of
-  // re-using the list row, since some fields are too long to render in the
-  // list view (and update independently via heartbeat / webhook).
-  const [detailTarget, setDetailTarget] = useState<FineTuneJob | null>(null);
-  const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  // Inline expandable rows — clicking a row toggles its expanded state.
+  // Detail panel renders below the summary; we no longer use a popup.
+  // All needed fields are in the list response so no per-row fetch.
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -237,32 +439,6 @@ export function FineTuning({
   };
 
   // Auto-refresh while any job is in-flight
-  // Fetch full job details when the detail dialog opens
-  useEffect(() => {
-    if (!detailTarget) {
-      setDetailData(null);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    (async () => {
-      try {
-        const r = await fetch(`/api/inference/fine-tuning/jobs/${detailTarget.id}`, {
-          credentials: "include",
-        });
-        const data = await r.json();
-        if (!cancelled && data.success) setDetailData(data.data);
-      } catch {
-        // silent — UI shows last list-row data as fallback
-      } finally {
-        if (!cancelled) setDetailLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [detailTarget]);
-
   // Fetch live GPU inventory when the create dialog opens (or on mount if
   // already open). Cached for the dialog's lifetime; closing+reopening
   // refetches.
@@ -434,17 +610,19 @@ export function FineTuning({
           {jobs.map((j) => {
             const s = statusMeta(j.status);
             return (
+              <div key={j.id} className="border-b border-white/[0.04] last:border-b-0">
               <div
-                key={j.id}
                 onClick={(e) => {
-                  // Don't open detail when clicking action buttons inside the row
                   if ((e.target as HTMLElement).closest("button,a")) return;
-                  setDetailTarget(j);
+                  setExpandedJobId(expandedJobId === j.id ? null : j.id);
                 }}
-                className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] cursor-pointer transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center"
+                className="grid grid-cols-1 gap-2 px-5 py-3 hover:bg-white/[0.02] cursor-pointer transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
+                    <ChevronRight
+                      className={`h-3 w-3 shrink-0 text-white/35 transition-transform ${expandedJobId === j.id ? "rotate-90 text-white/70" : ""}`}
+                    />
                     <Layers className="h-3.5 w-3.5 shrink-0 text-[#0095FF]/70" />
                     <span className={`${MONO} text-[12.5px] font-semibold text-white truncate`}>
                       {j.name}
@@ -575,6 +753,8 @@ export function FineTuning({
                     </RowActionButton>
                   )}
                 </div>
+              </div>
+              {expandedJobId === j.id && <ExpandedRow job={j} />}
               </div>
             );
           })}
@@ -853,264 +1033,6 @@ export function FineTuning({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Job detail dialog ─────────────────────────────────────── */}
-      <Dialog open={!!detailTarget} onOpenChange={(o) => !o && setDetailTarget(null)}>
-        <DialogContent className="border-white/[0.08] bg-[#111216] max-w-3xl max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
-          <DialogHeader>
-            <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white`}>
-              {detailTarget?.name ?? "Job details"}
-            </DialogTitle>
-            <DialogDescription className={`${MONO} text-[11px] text-white/55`}>
-              {detailTarget?.id}
-            </DialogDescription>
-          </DialogHeader>
-
-          {detailTarget && (() => {
-            const d = (detailData ?? detailTarget) as Record<string, unknown> & FineTuneJob;
-            const hp = (d.hyperparams ?? {}) as Record<string, unknown>;
-            const samples = (d.sample_outputs ?? []) as Array<{ prompt: string; output: string }>;
-            const s = statusMeta(d.status);
-            const podId = (d as Record<string, unknown>).pod_id as string | null;
-
-            const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
-              <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
-                <div className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45`}>{k}</div>
-                <div className={`${MONO} text-[11.5px] text-white/85 break-all`}>{v}</div>
-              </div>
-            );
-
-            return (
-              <div className="space-y-4 mt-2">
-                {/* Status strip */}
-                <div className="flex items-center gap-3 px-3 py-2 bg-white/[0.02] rounded-[6px] border border-white/[0.05]">
-                  <span
-                    className={`h-2 w-2 rounded-full ${s.pulse ? "animate-pulse" : ""}`}
-                    style={{ background: s.color, boxShadow: s.color.startsWith("rgba") ? "none" : `0 0 6px ${s.color}` }}
-                  />
-                  <span className={`${MONO} text-[11px] uppercase tracking-[0.12em] font-semibold`} style={{ color: s.color }}>
-                    {s.label}
-                  </span>
-                  {d.status === "running" && d.current_step != null && (
-                    <span className={`${MONO} text-[10.5px] text-white/55 ml-auto tabular-nums`}>
-                      step {d.current_step}{d.max_steps != null && `/${d.max_steps}`}
-                      {d.current_epoch != null && ` · ep ${d.current_epoch.toFixed(2)}`}
-                      {d.latest_loss != null && ` · loss ${d.latest_loss.toFixed(4)}`}
-                    </span>
-                  )}
-                </div>
-
-                {/* Core */}
-                <div>
-                  <Row k="Base model" v={<code>{d.base_model_id}</code>} />
-                  <Row k="Method" v={d.method.toUpperCase()} />
-                  <Row k="GPU" v={`${d.gpu_sku}${d.hourly_cost_cents ? ` · $${(d.hourly_cost_cents / 100).toFixed(2)}/hr at provision` : ""}`} />
-                  <Row k="Duration" v={formatDuration(d.training_seconds)} />
-                  <Row k="Cost" v={formatCents(d.cost_cents)} />
-                  {d.queued_at && <Row k="Queued" v={new Date(d.queued_at).toLocaleString()} />}
-                  {d.started_at && <Row k="Started" v={new Date(d.started_at).toLocaleString()} />}
-                  {d.completed_at && <Row k="Completed" v={new Date(d.completed_at).toLocaleString()} />}
-                </div>
-
-                {/* Hyperparams */}
-                {Object.keys(hp).length > 0 && (
-                  <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Hyperparameters</h4>
-                    <div className="bg-black/40 border border-white/[0.05] rounded-[4px] p-3">
-                      <pre className={`${MONO} text-[10.5px] text-white/75 whitespace-pre-wrap`}>{JSON.stringify(hp, null, 2)}</pre>
-                    </div>
-                  </div>
-                )}
-
-                {/* Your trained model + serve guide */}
-                {d.status === "completed" && Boolean((d as Record<string, unknown>).output_artifact_url) && (() => {
-                  const adapterR2 = String((d as Record<string, unknown>).output_artifact_url);
-                  const baseShort = d.base_model_id.split("/")[1] ?? d.base_model_id;
-                  const dockerCmd = `docker run --gpus all -p 8000:8000 \\
-  -e BASE_MODEL="${baseShort}" \\
-  -e ADAPTER_R2_URL="${adapterR2}" \\
-  -e R2_ACCESS_KEY_ID="<your-r2-read-key>" \\
-  -e R2_SECRET_ACCESS_KEY="<your-r2-secret>" \\
-  -e R2_ENDPOINT="<your-r2-endpoint>" \\
-  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
-                  return (
-                  <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-emerald-300/85 mb-2`}>Your trained model</h4>
-                    <Row
-                      k="Name"
-                      v={<span className="text-white font-medium">{d.name}</span>}
-                    />
-                    <Row
-                      k="Status"
-                      v={
-                        <span className="inline-flex items-center gap-1 text-emerald-300/85">
-                          <CheckCircle2 className="h-3 w-3" /> ready to serve
-                        </span>
-                      }
-                    />
-                    <Row
-                      k="Adapter"
-                      v={
-                        <span className="inline-flex items-center gap-2">
-                          <code className="text-[11px] text-white/85 select-all break-all">{adapterR2}</code>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(adapterR2);
-                              toast.success("Copied");
-                            }}
-                            className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
-                          >
-                            copy
-                          </button>
-                        </span>
-                      }
-                    />
-
-                    {/* Serve flow — 3 steps */}
-                    <div className="mt-5 mb-3">
-                      <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-3`}>How to serve</h4>
-
-                      {/* Step 1 */}
-                      <div className="mb-4 pl-5 relative">
-                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>1.</span>
-                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Rent a GPU pod</div>
-                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                          Pick A40 (~$0.40/hr) for 8-14B bases, A100 80GB for 27-32B, H100 for larger MoE.
-                        </p>
-                        <a
-                          href="/dashboard/services/gpu/deploy"
-                          className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-[#0095FF] hover:bg-[#33adff] px-3 py-1.5 rounded transition-colors`}
-                        >
-                          Open GPU compute → rent a pod
-                        </a>
-                      </div>
-
-                      {/* Step 2 */}
-                      <div className="mb-4 pl-5 relative">
-                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>2.</span>
-                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
-                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                          vLLM exposes an OpenAI-compatible API on port 8000 with your adapter mounted.
-                          Replace the R2 placeholder values with your bucket read credentials.
-                        </p>
-                        <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative">
-                          <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(dockerCmd);
-                              toast.success("Command copied");
-                            }}
-                            className={`${MONO} absolute top-2 right-2 text-[10px] text-white/45 hover:text-white/85 bg-black/40 px-2 py-0.5 rounded`}
-                          >
-                            copy
-                          </button>
-                        </div>
-                        <p className={`${MONO} mt-2 text-[10px] text-white/45`}>
-                          First boot ~60s (downloads base + adapter, vLLM warms up). Subsequent requests 1-2s.
-                        </p>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="pl-5 relative">
-                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>3.</span>
-                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Call your model</div>
-                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                          Once the container is healthy, hit your pod&apos;s exposed port:
-                        </p>
-                        <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
-                          <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{`curl http://<your-pod-ip>:8000/v1/chat/completions \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "adapter",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'`}</pre>
-                        </div>
-                      </div>
-                    </div>
-
-                    {d.training_log_url && (
-                      <Row
-                        k="Training log"
-                        v={
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const r = await fetch(
-                                  `/api/inference/fine-tuning/jobs/${d.id}/log-url`,
-                                  { credentials: "include" }
-                                );
-                                const data = await r.json();
-                                if (!r.ok) throw new Error(data.error ?? "log fetch failed");
-                                window.open(data.url, "_blank", "noopener,noreferrer");
-                              } catch (err) {
-                                toast.error(err instanceof Error ? err.message : "Couldn't fetch log URL");
-                              }
-                            }}
-                            className="text-[#0095FF] hover:underline cursor-pointer"
-                          >
-                            open signed url ↗ ({d.training_log_url})
-                          </button>
-                        }
-                      />
-                    )}
-                  </div>
-                  );
-                })()}
-
-                {/* Sample outputs (smoke test) */}
-                {samples.length > 0 && (
-                  <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>
-                      Sample generations ({samples.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {samples.map((s, i) => (
-                        <div key={i} className="bg-black/40 border border-white/[0.05] rounded-[4px] p-3">
-                          <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 mb-1`}>Prompt</div>
-                          <div className={`${MONO} text-[11px] text-white/75 mb-2 whitespace-pre-wrap`}>{s.prompt}</div>
-                          <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 mb-1`}>Output</div>
-                          <div className={`${MONO} text-[11px] text-emerald-200/85 whitespace-pre-wrap`}>{s.output || "(empty)"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Infra */}
-                {podId && (
-                  <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Compute</h4>
-                    <Row k="Pod id" v={<code>{podId}</code>} />
-                    {d.last_heartbeat_at && <Row k="Last heartbeat" v={new Date(d.last_heartbeat_at).toLocaleString()} />}
-                  </div>
-                )}
-
-                {/* Error */}
-                {d.error_message && (
-                  <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-red-300/85 mb-2`}>
-                      {d.status === "failed" ? "Failure reason" : "Warning"}
-                    </h4>
-                    <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3">
-                      <pre className={`${MONO} text-[10.5px] text-red-200/85 whitespace-pre-wrap break-all`}>{d.error_message}</pre>
-                    </div>
-                  </div>
-                )}
-
-                {detailLoading && (
-                  <div className={`${MONO} text-[10px] text-white/35 text-center`}>refreshing…</div>
-                )}
-              </div>
-            );
-          })()}
-
-          <DialogFooter>
-            <GhostButton onClick={() => setDetailTarget(null)}>Close</GhostButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </PageCanvas>
   );
 }
