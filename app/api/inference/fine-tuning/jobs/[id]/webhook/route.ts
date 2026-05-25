@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
+import { createServerlessEndpoint } from "@/lib/inference/deploy-runpod";
+import { resolveHuggingFaceId, recommendedServingGpu } from "@/lib/inference/ft-base-models";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
 
@@ -197,6 +199,47 @@ export async function POST(
     return NextResponse.json({ ok: true, gated: true });
   }
 
+  // ── Provision serving endpoint ────────────────────────────────────
+  // Best-effort: spin up a dedicated serverless endpoint with our vLLM-LoRA
+  // image that loads the adapter from R2 at startup. If this fails, the
+  // model still gets registered (adapter is valid) but with no endpoint —
+  // operator can retry from dashboard. The endpoint creation itself is
+  // fast (~2s API call); becoming READY takes ~30-60s afterwards but we
+  // don't block on that.
+  let provisionedEndpointId: string | null = null;
+  let provisionError: string | null = null;
+  try {
+    const hfBase = resolveHuggingFaceId(existing.base_model_id);
+    const servingGpu = recommendedServingGpu(existing.base_model_id);
+    const servingImage = process.env.FT_SERVING_IMAGE_URI
+      ?? "ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3";
+
+    const ep = await createServerlessEndpoint({
+      name: `ahura-ft-serve-${id.slice(0, 8)}`,
+      imageUri: servingImage,
+      gpuSku: servingGpu,
+      autoscale: { min_workers: 0, max_workers: 2, idle_timeout_s: 60 },
+      env: {
+        BASE_MODEL: hfBase,
+        ADAPTER_R2_URL: payload.adapter_url ?? "",
+        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? "",
+        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "",
+        R2_ENDPOINT: process.env.R2_ENDPOINT ?? "",
+        ...(process.env.HF_TOKEN ? { HF_TOKEN: process.env.HF_TOKEN } : {}),
+        SERVED_MODEL_NAME: "adapter",
+      },
+      port: 8000,
+    });
+    provisionedEndpointId = ep.id;
+    console.log(
+      `[FT Webhook] Provisioned serving endpoint ${ep.id} for job ${id} (${servingGpu})`
+    );
+  } catch (err) {
+    provisionError = err instanceof Error ? err.message : String(err);
+    console.error(`[FT Webhook] Endpoint provisioning failed for job ${id}:`, provisionError);
+    // Continue — model still gets registered; user can retry via dashboard.
+  }
+
   // ── Register output model in catalog ──────────────────────────────
   const baseShort = existing.base_model_id.split("/")[1] ?? existing.base_model_id;
   const shortId = id.slice(0, 8);
@@ -214,7 +257,9 @@ export async function POST(
       org_id: existing.org_id,
       upstream_provider: "openrouter",
       upstream_model_id: modelId,
-      runpod_endpoint_id: process.env.LORA_SERVING_ENDPOINT_ID ?? null,
+      // The just-provisioned endpoint (or null if provisioning failed).
+      // Operator-only column; never exposed in API responses.
+      runpod_endpoint_id: provisionedEndpointId,
       capabilities: {
         streaming: true,
         tools: true,
@@ -222,7 +267,10 @@ export async function POST(
         context_window: 8192,
       },
       pricing: { input_cents_per_mtok: 100, output_cents_per_mtok: 500 },
-      is_active: true,
+      // Activate ONLY if endpoint was successfully provisioned — otherwise
+      // the model would 5xx on every call. Operator can flip active=true
+      // after retrying endpoint provision.
+      is_active: provisionedEndpointId !== null,
     })
     .select("id")
     .single();
@@ -263,6 +311,9 @@ export async function POST(
       training_seconds: payload.elapsed_seconds,
       cost_cents: costCents,
       completed_at: new Date().toISOString(),
+      error_message: provisionError
+        ? `WARN: training succeeded but serving-endpoint provision failed: ${provisionError.slice(0, 400)}. Model registered but is_active=false; retry from dashboard.`
+        : null,
     })
     .eq("id", id);
 
@@ -272,5 +323,6 @@ export async function POST(
     model_id: modelId,
     output_model_uuid: insertedModel.id,
     cost_cents: costCents,
+    serving_endpoint_provisioned: provisionedEndpointId !== null,
   });
 }
