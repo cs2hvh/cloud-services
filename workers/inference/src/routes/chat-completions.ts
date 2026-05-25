@@ -19,6 +19,7 @@ import {
 } from "../lib/openrouter.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
+import { lookupModelRouting, forwardToSelfHosted } from "../lib/model-routing.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Request schema — permissive on tool/content shape since OpenAI
@@ -179,6 +180,23 @@ export const chatCompletions: Handler<{
   c.header("X-Ahura-Model", effectiveModel);
   c.header("X-Ahura-Billing", auth.billing);
 
+  // 4b. Look up the model in the catalog to decide routing. proxy models
+  //     forward to the upstream gateway (default path below); fine-tune
+  //     and BYO models route to their own serverless endpoint.
+  const routing = await lookupModelRouting(c.env, effectiveModel);
+  if (routing && !routing.is_active) {
+    return c.json(
+      errorBody(
+        `Model "${effectiveModel}" is not currently available. ` +
+          `It may still be provisioning or has been disabled.`,
+        "invalid_request_error",
+        "model_unavailable",
+        requestId
+      ),
+      503
+    );
+  }
+
   // 5. Apply routing preset (already resolved above for the model check)
   let outgoingBody: Record<string, unknown> = {
     ...(req as unknown as Record<string, unknown>),
@@ -187,6 +205,53 @@ export const chatCompletions: Handler<{
   if (presetConfig) {
     outgoingBody = applyPreset(outgoingBody, presetConfig);
     c.header("X-Ahura-Preset", presetName!);
+  }
+
+  // 5b. Self-hosted fast path — fine-tune + BYO models go to their
+  //     dedicated serverless endpoint, bypassing the upstream gateway +
+  //     L1 cache + preset-aware billing. Pass-through streaming is
+  //     identical; usage metering still happens via the response body.
+  if (routing && (routing.serving_type === "runpod_ft" || routing.serving_type === "runpod_byo")) {
+    if (!routing.endpoint_id || !routing.served_model_name) {
+      return c.json(
+        errorBody(
+          `Model "${effectiveModel}" has no serving endpoint configured.`,
+          "invalid_request_error",
+          "endpoint_missing",
+          requestId
+        ),
+        503
+      );
+    }
+    const upstream = await forwardToSelfHosted({
+      env: c.env,
+      endpointId: routing.endpoint_id,
+      body: outgoingBody,
+      servedModelName: routing.served_model_name,
+      signal: c.req.raw.signal,
+    });
+    c.header("X-Ahura-Route", "self-hosted");
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      return c.json(
+        errorBody(text || "Serving endpoint error", "upstream_error", `upstream_${upstream.status}`, requestId),
+        upstream.status as 400 | 401 | 403 | 404 | 429 | 500 | 502 | 503 | 504
+      );
+    }
+    if (req.stream) {
+      return streamPassthrough(upstream, () => null);
+    }
+    const text = await upstream.text();
+    return new Response(text, {
+      status: 200,
+      headers: {
+        "content-type": upstream.headers.get("content-type") ?? "application/json",
+        "X-Ahura-Request-Id": requestId,
+        "X-Ahura-Model": effectiveModel,
+        "X-Ahura-Billing": auth.billing,
+        "X-Ahura-Route": "self-hosted",
+      },
+    });
   }
 
   // 5. L1 cache check — only non-streaming deterministic requests, scoped per org

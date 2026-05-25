@@ -26,6 +26,9 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string;
   OPENROUTER_PLATFORM_KEY: string;
   BYOK_DEK: string;
+  // For routing fine-tune + BYO models to their per-deployment serving
+  // endpoints on the compute provider's serverless layer.
+  RUNPOD_API_KEY?: string;
   OTEL_EXPORTER_OTLP_HEADERS?: string;
 }
 
