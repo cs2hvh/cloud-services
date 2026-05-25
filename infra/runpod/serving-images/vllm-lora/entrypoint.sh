@@ -1,42 +1,54 @@
 #!/usr/bin/env bash
-# vLLM serving entrypoint.
+# vLLM serving entrypoint. Two adapter source modes:
 #
-# Required env (set by the runner at endpoint create time):
-#   BASE_MODEL           — HuggingFace base model id, e.g. "microsoft/phi-4"
-#   ADAPTER_R2_URL       — r2://bucket/path/ to the LoRA adapter directory
-#   R2_ACCESS_KEY_ID     — for adapter download
-#   R2_SECRET_ACCESS_KEY — for adapter download
-#   R2_ENDPOINT          — e.g. https://<accountid>.r2.cloudflarestorage.com
+# 1) DOWNLOAD URL (preferred, used by dashboard's self-serve docker command):
+#      ADAPTER_DOWNLOAD_URL  — presigned https URL to adapter.tar.gz
+#    No credentials needed. URL typically expires in 1 hour but only needs
+#    to be valid at container startup; once the tar is unpacked locally,
+#    the URL can expire.
+#
+# 2) DIRECT R2 (operator/ops use only — full bucket access required):
+#      ADAPTER_R2_URL        — r2://bucket/path/ to loose adapter files
+#      R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT
+#
+# Required regardless of source:
+#   BASE_MODEL              — HuggingFace base model id, e.g. "microsoft/phi-4"
 #
 # Optional env:
-#   HF_TOKEN             — required for gated bases (Llama, Gemma)
-#   MAX_MODEL_LEN        — vllm --max-model-len override (defaults to model default)
-#   GPU_MEMORY_UTILIZATION — defaults to 0.9
+#   HF_TOKEN                — required for gated bases (Llama, Gemma)
+#   MAX_MODEL_LEN           — vllm --max-model-len override
+#   GPU_MEMORY_UTILIZATION  — defaults to 0.9
+#   SERVED_MODEL_NAME       — defaults to "adapter"
 #
-# vLLM's openai-server then exposes /v1/chat/completions etc. on port 8000.
-# The provider's serverless layer wraps this and adds auth + autoscale.
+# vLLM's openai-server exposes /v1/chat/completions etc. on port 8000.
 
 set -euo pipefail
 
 log() { echo "[$(date -Iseconds)] $*"; }
 
 : "${BASE_MODEL:?missing BASE_MODEL}"
-: "${ADAPTER_R2_URL:?missing ADAPTER_R2_URL}"
-: "${R2_ACCESS_KEY_ID:?missing R2_ACCESS_KEY_ID}"
-: "${R2_SECRET_ACCESS_KEY:?missing R2_SECRET_ACCESS_KEY}"
-: "${R2_ENDPOINT:?missing R2_ENDPOINT}"
 
-# ─── 1. Download adapter from R2 ──────────────────────────────────────
-log "Downloading adapter from $ADAPTER_R2_URL"
-
-SCHEME="${ADAPTER_R2_URL%%://*}"
-REST="${ADAPTER_R2_URL#*://}"
-BUCKET="${REST%%/*}"
-PREFIX="${REST#*/}"
-# Strip trailing slash from prefix
-PREFIX="${PREFIX%/}"
-
-cat > /tmp/rclone.conf <<EOF
+# ─── 1. Download adapter ─────────────────────────────────────────────
+if [ -n "${ADAPTER_DOWNLOAD_URL:-}" ]; then
+    # Preferred: presigned URL to tar.gz. No credentials anywhere.
+    log "Downloading adapter from presigned URL (tar.gz)"
+    curl -fL --retry 3 --retry-delay 2 "$ADAPTER_DOWNLOAD_URL" -o /tmp/adapter.tar.gz
+    log "Adapter tarball: $(du -h /tmp/adapter.tar.gz | cut -f1)"
+    mkdir -p /workspace/adapter
+    tar -xzf /tmp/adapter.tar.gz -C /workspace/adapter
+    rm /tmp/adapter.tar.gz
+elif [ -n "${ADAPTER_R2_URL:-}" ]; then
+    # Fallback: direct R2 access with credentials. Operator path only.
+    : "${R2_ACCESS_KEY_ID:?missing R2_ACCESS_KEY_ID (or set ADAPTER_DOWNLOAD_URL instead)}"
+    : "${R2_SECRET_ACCESS_KEY:?missing R2_SECRET_ACCESS_KEY}"
+    : "${R2_ENDPOINT:?missing R2_ENDPOINT}"
+    log "Downloading adapter from $ADAPTER_R2_URL via S3 API"
+    SCHEME="${ADAPTER_R2_URL%%://*}"
+    REST="${ADAPTER_R2_URL#*://}"
+    BUCKET="${REST%%/*}"
+    PREFIX="${REST#*/}"
+    PREFIX="${PREFIX%/}"
+    cat > /tmp/rclone.conf <<EOF
 [remote]
 type = s3
 provider = ${SCHEME^^}
@@ -45,17 +57,20 @@ secret_access_key = ${R2_SECRET_ACCESS_KEY}
 endpoint = ${R2_ENDPOINT}
 acl = private
 EOF
+    rclone --config /tmp/rclone.conf copy "remote:$BUCKET/$PREFIX" /workspace/adapter --retries 3
+else
+    echo "ERROR: must set either ADAPTER_DOWNLOAD_URL (preferred) or ADAPTER_R2_URL + R2 creds" >&2
+    exit 1
+fi
 
-rclone --config /tmp/rclone.conf copy "remote:$BUCKET/$PREFIX" /workspace/adapter --retries 3
-
-# Sanity-check: adapter_config.json + adapter_model.safetensors must exist
+# Sanity-check: adapter_config.json + adapter weights must exist
 if [ ! -s /workspace/adapter/adapter_config.json ]; then
-    echo "ERROR: adapter_config.json missing after R2 sync" >&2
+    echo "ERROR: adapter_config.json missing after download" >&2
     ls -la /workspace/adapter || true
     exit 1
 fi
 if ! ls /workspace/adapter/adapter_model.* >/dev/null 2>&1; then
-    echo "ERROR: adapter_model.safetensors / .bin missing after R2 sync" >&2
+    echo "ERROR: adapter_model.safetensors / .bin missing after download" >&2
     ls -la /workspace/adapter || true
     exit 1
 fi

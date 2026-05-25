@@ -213,6 +213,19 @@ if [ -s /workspace/training.log ]; then
     fi
 fi
 
+# Also pack the adapter into a single tar.gz next to the loose files. The
+# dashboard's "Deploy this adapter" flow uses a presigned URL to this
+# tarball — user runs ONE docker command, no credentials needed. The loose
+# files stay around for ops debugging via R2 browser.
+log "Packing adapter into tar.gz for self-serve download"
+( cd /workspace/output && tar --exclude='training.log' -czf /tmp/adapter.tar.gz . ) || true
+if [ -s /tmp/adapter.tar.gz ]; then
+    cp /tmp/adapter.tar.gz /workspace/output/adapter.tar.gz
+    if /workspace/shared/upload-adapter.sh /workspace/output "$OUTPUT_R2_PREFIX" 2>/dev/null; then
+        log "adapter.tar.gz uploaded ($(du -h /tmp/adapter.tar.gz | cut -f1))"
+    fi
+fi
+
 # ─── 7. Quality smoke test ─────────────────────────────────────────────
 log "Running sample generations for smoke test"
 SAMPLE_OUTPUT=$(python << 'PYEOF' || echo '[]'

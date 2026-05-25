@@ -207,13 +207,34 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
 
   const adapterR2 = j.output_artifact_url ?? "";
   const baseShort = j.base_model_id.split("/")[1] ?? j.base_model_id;
-  const dockerCmd = `docker run --gpus all -p 8000:8000 \\
+
+  // Build docker command. URL is injected at copy-time (1-hour signed
+  // URL minted on demand) so the dialog doesn't ship live secrets in
+  // the rendered HTML.
+  const dockerCmdTemplate = `docker run --gpus all -p 8000:8000 \\
   -e BASE_MODEL="${baseShort}" \\
-  -e ADAPTER_R2_URL="${adapterR2}" \\
-  -e R2_ACCESS_KEY_ID="<your-r2-read-key>" \\
-  -e R2_SECRET_ACCESS_KEY="<your-r2-secret>" \\
-  -e R2_ENDPOINT="<your-r2-endpoint>" \\
+  -e ADAPTER_DOWNLOAD_URL="<paste-presigned-url-from-button-above>" \\
   ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
+
+  async function copyServeCommand() {
+    try {
+      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/adapter-url`, {
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) {
+        throw new Error(data.error ?? "Failed to mint adapter URL");
+      }
+      const fullCmd = `docker run --gpus all -p 8000:8000 \\
+  -e BASE_MODEL="${baseShort}" \\
+  -e ADAPTER_DOWNLOAD_URL="${data.url}" \\
+  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
+      await navigator.clipboard.writeText(fullCmd);
+      toast.success("Serve command copied (1-hour validity)");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't generate URL");
+    }
+  }
 
   return (
     <div className="bg-white/[0.015] border-t border-white/[0.04] px-5 py-5 space-y-5">
@@ -297,24 +318,23 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
               <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>2.</span>
               <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                vLLM exposes an OpenAI-compatible API on port 8000 with your adapter mounted.
-                Replace the R2 placeholder values with your bucket read credentials.
+                Click the button below to copy a ready-to-paste docker command.
+                The adapter download URL is signed and valid for 1 hour — generate
+                a fresh one if it expires before you run.
               </p>
-              <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative">
-                <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(dockerCmd);
-                    toast.success("Command copied");
-                  }}
-                  className={`${MONO} absolute top-2 right-2 text-[10px] text-white/45 hover:text-white/85 bg-black/40 px-2 py-0.5 rounded`}
-                >
-                  copy
-                </button>
+              <button
+                type="button"
+                onClick={copyServeCommand}
+                className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded transition-colors mb-2`}
+              >
+                Copy serve command (1h validity)
+              </button>
+              <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
+                <pre className={`${MONO} text-[10.5px] text-white/55 whitespace-pre-wrap overflow-x-auto`}>{dockerCmdTemplate}</pre>
               </div>
               <p className={`${MONO} mt-2 text-[10px] text-white/45`}>
-                First boot ~60s (downloads base + adapter, vLLM warms up). Subsequent requests 1-2s.
+                vLLM exposes an OpenAI-compatible API on port 8000 with your adapter loaded.
+                First boot ~60s (downloads base + adapter). Subsequent requests 1-2s.
               </p>
             </div>
 
