@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
-  AlertCircle,
   CheckCircle2,
   ChevronRight,
   Cpu,
@@ -306,12 +306,12 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
                 Pick A40 (~$0.40/hr) for 8-14B bases, A100 80GB for 27-32B, H100 for larger MoE.
               </p>
-              <a
+              <Link
                 href="/dashboard/services/gpu/deploy"
                 className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-[#0095FF] hover:bg-[#33adff] px-3 py-1.5 rounded transition-colors`}
               >
                 Open GPU compute → rent a pod
-              </a>
+              </Link>
             </div>
 
             <div className="mb-4 pl-5 relative">

@@ -25,9 +25,12 @@ async function importDek(base64Dek: string): Promise<CryptoKey> {
           `BYOK_DEK must be ${KEY_LENGTH} bytes (256 bits) base64-encoded; got ${raw.byteLength} bytes`
         );
       }
+      // TS 5.7 narrows `new Uint8Array(n)` to Uint8Array<ArrayBufferLike>,
+      // which crypto.subtle.importKey's BufferSource overload rejects.
+      // Cast is safe — raw is a fresh ArrayBuffer-backed view.
       return crypto.subtle.importKey(
         "raw",
-        raw,
+        raw as BufferSource,
         { name: "AES-GCM", length: 256 },
         false,
         ["encrypt", "decrypt"]
