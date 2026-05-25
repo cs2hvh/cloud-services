@@ -93,42 +93,55 @@ export async function createServerlessEndpoint(
     ...(input.port ? { HTTP_PORT: String(input.port) } : {}),
   }).map(([key, value]) => ({ key, value }));
 
-  // 1. Template
-  const template = await RunPodClient.rest<RunPodTemplateResponse>("POST", "/templates", {
-    name: `${input.name}-tmpl`,
-    imageName: input.imageUri,
-    containerDiskInGb: DEFAULT_CONTAINER_DISK_GB,
-    env: envArray,
-    isServerless: true,
-    ...(input.startCommand?.length ? { dockerArgs: input.startCommand.join(" ") } : {}),
-  });
+  // 1. Template — tag step in error reporting so we know which call 400'd
+  let template: RunPodTemplateResponse;
+  try {
+    template = await RunPodClient.rest<RunPodTemplateResponse>("POST", "/templates", {
+      name: `${input.name}-tmpl`,
+      imageName: input.imageUri,
+      containerDiskInGb: DEFAULT_CONTAINER_DISK_GB,
+      env: envArray,
+      isServerless: true,
+      ...(input.startCommand?.length ? { dockerArgs: input.startCommand.join(" ") } : {}),
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && "message" in err) {
+      (err as { message: string }).message = `[template create] ${(err as { message: string }).message}`;
+    }
+    throw err;
+  }
 
-  // 2. Endpoint
-  const endpoint = await RunPodClient.rest<RunPodEndpointResponse>("POST", "/endpoints", {
-    name: input.name,
-    templateId: template.id,
-    gpuTypeIds: [gpuTypeId],
-    gpuCount: 1,
-    workersMin: input.autoscale.min_workers,
-    workersMax: input.autoscale.max_workers,
-    idleTimeout: input.autoscale.idle_timeout_s,
-    networkVolumeId: null,
-    scalerType: "QUEUE_DELAY",
-    scalerValue: 4,
-    flashboot: true,
-  });
-
-  return {
-    id: endpoint.id,
-    name: input.name,
-    status: parseStatus(endpoint.status),
-    workersMin: endpoint.workersMin ?? input.autoscale.min_workers,
-    workersMax: endpoint.workersMax ?? input.autoscale.max_workers,
-    workersIdleTimeoutS: endpoint.idleTimeout ?? input.autoscale.idle_timeout_s,
-    imageUri: input.imageUri,
-    gpuTypeId,
-    url: endpoint.url ?? `https://api.runpod.ai/v2/${endpoint.id}`,
-  };
+  // 2. Endpoint — omit nullable fields entirely (some upstream validators
+  //    reject explicit null on optional fields with 400 INVALID).
+  try {
+    const endpoint = await RunPodClient.rest<RunPodEndpointResponse>("POST", "/endpoints", {
+      name: input.name,
+      templateId: template.id,
+      gpuTypeIds: [gpuTypeId],
+      gpuCount: 1,
+      workersMin: input.autoscale.min_workers,
+      workersMax: input.autoscale.max_workers,
+      idleTimeout: input.autoscale.idle_timeout_s,
+      scalerType: "QUEUE_DELAY",
+      scalerValue: 4,
+    });
+    return {
+      id: endpoint.id,
+      name: input.name,
+      status: parseStatus(endpoint.status),
+      workersMin: endpoint.workersMin ?? input.autoscale.min_workers,
+      workersMax: endpoint.workersMax ?? input.autoscale.max_workers,
+      workersIdleTimeoutS: endpoint.idleTimeout ?? input.autoscale.idle_timeout_s,
+      imageUri: input.imageUri,
+      gpuTypeId,
+      url: endpoint.url ?? `https://api.runpod.ai/v2/${endpoint.id}`,
+    };
+  } catch (err) {
+    if (err && typeof err === "object" && "message" in err) {
+      (err as { message: string }).message = `[endpoint create] ${(err as { message: string }).message}`;
+    }
+    throw err;
+  }
 }
 
 // ── Read ────────────────────────────────────────────────────────────
