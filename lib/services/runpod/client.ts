@@ -59,15 +59,40 @@ function isRunPodError(value: unknown): value is RunPodError {
 function buildError(err: unknown): RunPodError {
     if (isRunPodError(err)) return err;
     if (axios.isAxiosError(err)) {
-        const ax = err as AxiosError<{ error?: string; message?: string }>;
+        const ax = err as AxiosError<unknown>;
         const status = ax.response?.status;
         const { code, retryable } = categorize(status);
-        const message =
-            ax.response?.data?.error ||
-            ax.response?.data?.message ||
-            ax.message ||
-            "RunPod request failed";
-        return { code, status, message, retryable, raw: ax.response?.data };
+        // RunPod returns errors in several shapes depending on which endpoint /
+        // validator path triggered:
+        //   { error: "...", message: "..." }
+        //   [{ error: "...", problems: [...] }]          ← OpenAPI validator
+        //   { errors: [{ message: "..." }] }             ← GraphQL
+        // Probe in priority order and fold the validator `problems` array
+        // into the message so callers see actionable detail.
+        const data = ax.response?.data as unknown;
+        let message: string | undefined;
+        if (data && typeof data === "object") {
+            const obj = data as { error?: string; message?: string; errors?: Array<{ message?: string }> };
+            if (Array.isArray(data) && data.length > 0) {
+                const first = data[0] as { error?: string; problems?: unknown };
+                message = first.error;
+                if (first.problems) {
+                    message = `${message ?? "validation failed"} — problems: ${JSON.stringify(first.problems).slice(0, 400)}`;
+                }
+            } else {
+                message = obj.error || obj.message;
+                if (!message && Array.isArray(obj.errors) && obj.errors[0]?.message) {
+                    message = obj.errors[0].message;
+                }
+            }
+        }
+        return {
+            code,
+            status,
+            message: message || ax.message || "RunPod request failed",
+            retryable,
+            raw: data,
+        };
     }
     return {
         code: "UNKNOWN",

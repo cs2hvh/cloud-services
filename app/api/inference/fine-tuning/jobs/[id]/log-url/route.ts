@@ -101,13 +101,26 @@ export async function GET(
   }
 
   // R2 speaks the S3 API; AWS SDK works out of the box with the R2 endpoint.
+  // Guard against missing creds — SDK v3 throws an opaque "Resolved
+  // credential object is not valid" if either field is empty/undefined.
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const endpoint = process.env.R2_ENDPOINT;
+  if (!accessKeyId || !secretAccessKey || !endpoint) {
+    console.error("[FT log-url] missing R2 env:", {
+      hasKey: !!accessKeyId,
+      hasSecret: !!secretAccessKey,
+      hasEndpoint: !!endpoint,
+    });
+    return NextResponse.json(
+      { error: "Log download is not configured on this server" },
+      { status: 500 }
+    );
+  }
   const s3 = new S3Client({
     region: "auto",
-    endpoint: process.env.R2_ENDPOINT!,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
+    endpoint,
+    credentials: { accessKeyId, secretAccessKey },
   });
 
   try {
