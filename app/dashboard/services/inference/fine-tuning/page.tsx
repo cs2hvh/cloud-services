@@ -66,7 +66,7 @@ async function loadJobs(orgId: string): Promise<FineTuneJob[]> {
     .schema("inference")
     .from("finetunes")
     .select(
-      "id, name, base_model_id, method, status, gpu_sku, training_seconds, cost_cents, queued_at, started_at, completed_at, output_model_id, error_message, created_at, current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url"
+      "id, name, base_model_id, method, status, gpu_sku, training_seconds, cost_cents, queued_at, started_at, completed_at, output_model_id, error_message, created_at, current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url, pod_id:runpod_job_id"
     )
     .eq("org_id", orgId)
     .order("created_at", { ascending: false })

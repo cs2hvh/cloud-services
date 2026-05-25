@@ -20,7 +20,7 @@ async function loadDeployments(orgId: string): Promise<Deployment[]> {
     .schema("inference")
     .from("deployments")
     .select(
-      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, runpod_endpoint_id, image_uri, model_id, error_message, deployed_at, created_at, updated_at"
+      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, endpoint_id:runpod_endpoint_id, image_uri, model_id, error_message, deployed_at, created_at, updated_at"
     )
     .eq("org_id", orgId)
     .order("created_at", { ascending: false })

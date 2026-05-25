@@ -815,7 +815,7 @@ export function FineTuning({
             const hp = (d.hyperparams ?? {}) as Record<string, unknown>;
             const samples = (d.sample_outputs ?? []) as Array<{ prompt: string; output: string }>;
             const s = statusMeta(d.status);
-            const runpodPodId = d.runpod_job_id as string | null;
+            const podId = (d as Record<string, unknown>).pod_id as string | null;
 
             const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
               <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
@@ -930,10 +930,10 @@ export function FineTuning({
                 )}
 
                 {/* Infra */}
-                {runpodPodId && (
+                {podId && (
                   <div>
                     <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Compute</h4>
-                    <Row k="Pod id" v={<code>{runpodPodId}</code>} />
+                    <Row k="Pod id" v={<code>{podId}</code>} />
                     {d.last_heartbeat_at && <Row k="Last heartbeat" v={new Date(d.last_heartbeat_at).toLocaleString()} />}
                   </div>
                 )}

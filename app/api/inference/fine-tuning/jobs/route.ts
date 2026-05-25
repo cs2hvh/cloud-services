@@ -17,6 +17,7 @@ import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDataset } from "@/lib/inference/finetune-validate";
 import { enqueueFinetuneJob } from "@/lib/inference/finetune-queue";
+import { internalError, tooManyRequests } from "@/lib/inference/api-errors";
 
 const createSchema = z.object({
   name: z
@@ -95,10 +96,7 @@ export async function GET(request: NextRequest) {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
 
   const statusFilter = request.nextUrl.searchParams.get("status");
@@ -113,7 +111,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("finetunes")
     .select(
-      "id, name, base_model_id, method, hyperparams, dataset_url, validation_dataset_url, status, gpu_sku, runpod_job_id, output_model_id, output_artifact_url, training_seconds, cost_cents, error_message, queued_at, started_at, completed_at, created_at, updated_at, current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url"
+      "id, name, base_model_id, method, hyperparams, dataset_url, validation_dataset_url, status, gpu_sku, pod_id:runpod_job_id, output_model_id, output_artifact_url, training_seconds, cost_cents, error_message, queued_at, started_at, completed_at, created_at, updated_at, current_step, max_steps, current_epoch, latest_loss, last_heartbeat_at, hourly_cost_cents, training_log_url"
     )
     .eq("org_id", org.org_id)
     .order("created_at", { ascending: false })
@@ -169,10 +167,7 @@ export async function POST(request: NextRequest) {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
   if (org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot create fine-tuning jobs" }, { status: 403 });

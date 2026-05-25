@@ -77,10 +77,10 @@ export async function DELETE(
   const { data: existing } = await supabase
     .schema("inference")
     .from("finetunes")
-    .select("id, name, status, runpod_job_id")
+    .select("id, name, status, pod_id:runpod_job_id")
     .eq("id", id)
     .eq("org_id", org.org_id)
-    .maybeSingle<{ id: string; name: string; status: string; runpod_job_id: string | null }>();
+    .maybeSingle<{ id: string; name: string; status: string; pod_id: string | null }>();
 
   if (!existing) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -121,7 +121,7 @@ export async function DELETE(
     metadata: {
       name: existing.name,
       previous_status: existing.status,
-      runpod_job_id: existing.runpod_job_id,
+      pod_id: existing.pod_id,
     },
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,

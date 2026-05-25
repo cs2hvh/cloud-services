@@ -9,6 +9,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
+import { internalError } from "@/lib/inference/api-errors";
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
@@ -37,10 +38,7 @@ export async function GET(
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
 
   const supabase = createClient(
@@ -53,7 +51,7 @@ export async function GET(
     .schema("inference")
     .from("deployments")
     .select(
-      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, runpod_endpoint_id, image_uri, build_log_url, model_id, error_message, deployed_at, created_at, updated_at, org_id"
+      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, endpoint_id:runpod_endpoint_id, image_uri, build_log_url, model_id, error_message, deployed_at, created_at, updated_at, org_id"
     )
     .eq("id", id)
     .maybeSingle();
@@ -95,10 +93,7 @@ export async function DELETE(
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
   if (org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot delete deployments" }, { status: 403 });
@@ -116,14 +111,14 @@ export async function DELETE(
   const { data: existing } = await supabase
     .schema("inference")
     .from("deployments")
-    .select("id, name, org_id, status, runpod_endpoint_id")
+    .select("id, name, org_id, status, endpoint_id:runpod_endpoint_id")
     .eq("id", id)
     .maybeSingle<{
       id: string;
       name: string;
       org_id: string;
       status: string;
-      runpod_endpoint_id: string | null;
+      endpoint_id: string | null;
     }>();
 
   if (!existing) {
@@ -140,8 +135,8 @@ export async function DELETE(
     .schema("inference")
     .from("deployments")
     .update({
-      status: existing.runpod_endpoint_id ? "paused" : "deleted",
-      error_message: existing.runpod_endpoint_id
+      status: existing.endpoint_id ? "paused" : "deleted",
+      error_message: existing.endpoint_id
         ? "Pending deploy-runner teardown"
         : null,
     })
@@ -160,13 +155,13 @@ export async function DELETE(
     action: "deployment.deleted",
     targetType: "deployment",
     targetId: id,
-    metadata: { name: existing.name, runpod_endpoint_id: existing.runpod_endpoint_id },
+    metadata: { name: existing.name, endpoint_id: existing.endpoint_id },
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
   });
 
   // Tell the runner to tear down the RunPod endpoint
-  if (existing.runpod_endpoint_id) {
+  if (existing.endpoint_id) {
     void enqueueDeploymentJob(id, "delete");
   }
 

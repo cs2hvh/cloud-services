@@ -14,6 +14,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
+import { internalError } from "@/lib/inference/api-errors";
 
 const scaleSchema = z
   .object({
@@ -61,10 +62,7 @@ export async function POST(
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
   if (org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot scale deployments" }, { status: 403 });
@@ -79,14 +77,14 @@ export async function POST(
   const { data: existing } = await supabase
     .schema("inference")
     .from("deployments")
-    .select("id, name, org_id, status, runpod_endpoint_id")
+    .select("id, name, org_id, status, endpoint_id:runpod_endpoint_id")
     .eq("id", id)
     .maybeSingle<{
       id: string;
       name: string;
       org_id: string;
       status: string;
-      runpod_endpoint_id: string | null;
+      endpoint_id: string | null;
     }>();
 
   if (!existing || existing.org_id !== org.org_id) {
@@ -122,7 +120,7 @@ export async function POST(
 
   // Tell the runner to PATCH RunPod (no-op if endpoint not yet provisioned —
   // the runner will pick up the new config on next create attempt)
-  if (existing.runpod_endpoint_id) {
+  if (existing.endpoint_id) {
     void enqueueDeploymentJob(id, "scale");
   }
 

@@ -69,7 +69,7 @@ export interface Deployment {
   gpu_sku: string;
   autoscale: { min_workers: number; max_workers: number; idle_timeout_s: number };
   status: "building" | "deploying" | "active" | "paused" | "failed" | "deleted";
-  runpod_endpoint_id: string | null;
+  endpoint_id: string | null;
   image_uri: string | null;
   model_id: string | null;
   error_message: string | null;
@@ -416,13 +416,13 @@ export function Deployments({
                   </span>
                 </div>
                 <div className="min-w-0">
-                  {d.runpod_endpoint_id ? (
+                  {d.endpoint_id ? (
                     <span
                       className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85`}
                       title="Serverless endpoint id (internal)"
                     >
                       <Globe className="h-2.5 w-2.5" />
-                      <span className="truncate max-w-[120px]">{d.runpod_endpoint_id.slice(0, 12)}</span>
+                      <span className="truncate max-w-[120px]">{d.endpoint_id.slice(0, 12)}</span>
                     </span>
                   ) : d.error_message ? (
                     <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[160px]`}>

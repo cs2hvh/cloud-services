@@ -20,6 +20,7 @@ import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDeployment } from "@/lib/inference/deploy-validate";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
+import { internalError } from "@/lib/inference/api-errors";
 
 const createSchema = z.object({
   name: z
@@ -61,10 +62,7 @@ export async function GET(request: NextRequest) {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
 
   const statusFilter = request.nextUrl.searchParams.get("status");
@@ -79,7 +77,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("deployments")
     .select(
-      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, runpod_endpoint_id, image_uri, model_id, error_message, deployed_at, created_at, updated_at"
+      "id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, endpoint_id:runpod_endpoint_id, image_uri, model_id, error_message, deployed_at, created_at, updated_at"
     )
     .eq("org_id", org.org_id)
     .order("created_at", { ascending: false })
@@ -124,10 +122,7 @@ export async function POST(request: NextRequest) {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
+    return internalError("Org resolution failed", err, "org_resolution_failed");
   }
   if (org.role === "viewer") {
     return NextResponse.json(
