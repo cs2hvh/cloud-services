@@ -921,7 +921,7 @@ export function FineTuning({
                   </div>
                 )}
 
-                {/* Deploy this adapter (self-serve) */}
+                {/* Your trained model + serve guide */}
                 {d.status === "completed" && Boolean((d as Record<string, unknown>).output_artifact_url) && (() => {
                   const adapterR2 = String((d as Record<string, unknown>).output_artifact_url);
                   const baseShort = d.base_model_id.split("/")[1] ?? d.base_model_id;
@@ -934,12 +934,24 @@ export function FineTuning({
   ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
                   return (
                   <div>
-                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Deploy this adapter</h4>
+                    <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-emerald-300/85 mb-2`}>Your trained model</h4>
                     <Row
-                      k="Adapter location"
+                      k="Name"
+                      v={<span className="text-white font-medium">{d.name}</span>}
+                    />
+                    <Row
+                      k="Status"
+                      v={
+                        <span className="inline-flex items-center gap-1 text-emerald-300/85">
+                          <CheckCircle2 className="h-3 w-3" /> ready to serve
+                        </span>
+                      }
+                    />
+                    <Row
+                      k="Adapter"
                       v={
                         <span className="inline-flex items-center gap-2">
-                          <code className="text-[11px] text-[#0095FF] select-all break-all">{adapterR2}</code>
+                          <code className="text-[11px] text-white/85 select-all break-all">{adapterR2}</code>
                           <button
                             type="button"
                             onClick={() => {
@@ -953,16 +965,36 @@ export function FineTuning({
                         </span>
                       }
                     />
-                    <div className="grid grid-cols-[160px_1fr] gap-3 py-1.5 border-b border-white/[0.04]">
-                      <div className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45`}>How to serve</div>
-                      <div>
-                        <p className={`${MONO} text-[10.5px] text-white/65 leading-relaxed mb-2`}>
-                          Rent a GPU pod from our compute service, then run the prebuilt
-                          serving container below. vLLM exposes an OpenAI-compatible
-                          API on port 8000 with your adapter mounted.
+
+                    {/* Serve flow — 3 steps */}
+                    <div className="mt-5 mb-3">
+                      <h4 className={`${MONO} text-[10.5px] uppercase tracking-[0.16em] text-white/55 mb-3`}>How to serve</h4>
+
+                      {/* Step 1 */}
+                      <div className="mb-4 pl-5 relative">
+                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>1.</span>
+                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Rent a GPU pod</div>
+                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                          Pick A40 (~$0.40/hr) for 8-14B bases, A100 80GB for 27-32B, H100 for larger MoE.
+                        </p>
+                        <a
+                          href="/dashboard/services/gpu/deploy"
+                          className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-[#0095FF] hover:bg-[#33adff] px-3 py-1.5 rounded transition-colors`}
+                        >
+                          Open GPU compute → rent a pod
+                        </a>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className="mb-4 pl-5 relative">
+                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>2.</span>
+                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
+                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                          vLLM exposes an OpenAI-compatible API on port 8000 with your adapter mounted.
+                          Replace the R2 placeholder values with your bucket read credentials.
                         </p>
                         <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 relative">
-                          <pre className={`${MONO} text-[10.5px] text-white/80 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
+                          <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{dockerCmd}</pre>
                           <button
                             type="button"
                             onClick={() => {
@@ -974,19 +1006,29 @@ export function FineTuning({
                             copy
                           </button>
                         </div>
-                        <a
-                          href="/dashboard/services/gpu/deploy"
-                          className={`${MONO} inline-flex items-center gap-1 mt-2 text-[11px] text-[#0095FF] hover:underline`}
-                        >
-                          → Rent a GPU pod
-                        </a>
-                        <p className={`${MONO} mt-2 text-[10px] text-white/45 leading-relaxed`}>
-                          Recommended GPU: A40 ($0.40/hr) for 8-14B bases. Cold start ~60s
-                          (downloads base from HuggingFace + adapter from your R2 + vLLM
-                          loads). Subsequent requests are 1-2s.
+                        <p className={`${MONO} mt-2 text-[10px] text-white/45`}>
+                          First boot ~60s (downloads base + adapter, vLLM warms up). Subsequent requests 1-2s.
                         </p>
                       </div>
+
+                      {/* Step 3 */}
+                      <div className="pl-5 relative">
+                        <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>3.</span>
+                        <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Call your model</div>
+                        <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                          Once the container is healthy, hit your pod&apos;s exposed port:
+                        </p>
+                        <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
+                          <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{`curl http://<your-pod-ip>:8000/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "adapter",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'`}</pre>
+                        </div>
+                      </div>
                     </div>
+
                     {d.training_log_url && (
                       <Row
                         k="Training log"
