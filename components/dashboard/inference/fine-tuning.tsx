@@ -93,6 +93,34 @@ export interface FineTuneBaseModel {
 }
 
 /**
+ * Bases that require a manual approval form on the upstream model registry
+ * before download will succeed. Keep in sync with BASE_MODEL_INFO.gated in
+ * workers/ft-runner/src/ft-base-models.ts.
+ *
+ * Surfaced as a "approval required" badge in the dropdown so users don't
+ * queue a job that's guaranteed to fail at model-download time with a 403.
+ */
+const GATED_BASES = new Set([
+  "meta-llama/llama-4-scout",
+  "meta-llama/llama-4-maverick",
+  "meta-llama/llama-3.3-70b-instruct",
+  "meta-llama/llama-3.3-8b-instruct",
+  "google/gemma-4-27b-it",
+]);
+
+/** Maps internal base id → "where to request access" URL on the upstream
+ *  catalog. We don't display the upstream brand name; just a link. */
+function approvalUrlFor(internalId: string): string | null {
+  if (internalId.startsWith("meta-llama/")) {
+    return `https://huggingface.co/meta-llama`;
+  }
+  if (internalId === "google/gemma-4-27b-it") {
+    return `https://huggingface.co/google/gemma-3-27b-it`;
+  }
+  return null;
+}
+
+/**
  * Map our internal SKU (used in inference.finetunes.gpu_sku + the RunPod
  * pod-create call) to RunPod's `displayName` in inventory.runpod_inventory.
  * Keep in sync with lib/inference/finetune-runpod.ts GPU_SKU_TO_RUNPOD_TYPE.
@@ -635,13 +663,40 @@ export function FineTuning({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {bases.map((b) => (
-                    <SelectItem key={b.model_id} value={b.model_id}>
-                      {b.display_name}
-                    </SelectItem>
-                  ))}
+                  {bases.map((b) => {
+                    const gated = GATED_BASES.has(b.model_id);
+                    return (
+                      <SelectItem key={b.model_id} value={b.model_id}>
+                        <span className="inline-flex items-center gap-2">
+                          <span>{b.display_name}</span>
+                          {gated && (
+                            <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
+                              approval required
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+              {GATED_BASES.has(form.base_model_id) && (
+                <p className={`${MONO} mt-1 text-[10.5px] text-amber-300/70 leading-snug`}>
+                  This model requires you to have been granted access on the
+                  upstream catalog. Without it, the training pod will fail to
+                  download the weights.{" "}
+                  {approvalUrlFor(form.base_model_id) && (
+                    <a
+                      href={approvalUrlFor(form.base_model_id)!}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-[#0095FF] hover:underline"
+                    >
+                      Request access ↗
+                    </a>
+                  )}
+                </p>
+              )}
             </Field>
 
             <Field label="Dataset URL (JSONL)">

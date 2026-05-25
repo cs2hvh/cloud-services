@@ -139,6 +139,7 @@ export async function runJob(
       },
       hfToken: env.hfToken,
       imageUri: env.axolotlImageUri,
+      templateId: env.runpodTemplateId,
     });
     podId = provisioned.podId;
     if (provisioned.hourlyCostUsd && provisioned.hourlyCostUsd > 0) {

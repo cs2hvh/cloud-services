@@ -56,6 +56,10 @@ export interface RunnerEnv {
   // Training image
   axolotlImageUri: string;
 
+  /** Pre-warmed compute-provider Pod Template id; null = use inline image+disk
+   *  on every pod create (slower cold pulls). */
+  runpodTemplateId: string | null;
+
   // Optional HF token for gated bases (passed through to pods)
   hfToken: string | null;
 
@@ -94,6 +98,15 @@ export function loadEnv(): RunnerEnv {
       "AXOLOTL_IMAGE_URI",
       "ghcr.io/hav0ky/ahura-ft-axolotl:axolotl-0.29.0"
     ),
+
+    // Optional: a pre-warmed Pod Template id. When set, the compute provider's
+    // node-level image cache hits dramatically more often (subsequent pods
+    // on the same template start in ~30s instead of ~10 min for our 20GB
+    // image). Leave empty to fall back to inline image+disk+env params.
+    // Operator setup: create a Pod Template in the compute provider's console
+    // with imageName=$AXOLOTL_IMAGE_URI, containerDisk=300GB, volumeMount=
+    // /workspace/cache, then paste the template id here.
+    runpodTemplateId: process.env.RUNPOD_TEMPLATE_ID?.trim() || null,
 
     hfToken: process.env.HF_TOKEN?.trim() || null,
 

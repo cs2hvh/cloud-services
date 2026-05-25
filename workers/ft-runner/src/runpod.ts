@@ -57,6 +57,9 @@ export interface ProvisionInput {
   };
   hfToken: string | null;
   imageUri: string;
+  /** When set, use this template id instead of inline image+disk+env baseline.
+   *  Image pulls are 10-20× faster on cache-warm nodes. */
+  templateId?: string | null;
 }
 
 export interface ProvisionResult {
@@ -97,19 +100,30 @@ export class RunPod {
       );
     }
 
-    const body = {
+    // Template path: image + disk + base env all live in the template;
+    // we only have to pass per-job env vars + GPU choice. Pulls are much
+    // faster because the template's image stays cache-warm on the
+    // provider's nodes.
+    //
+    // Inline path: every field set explicitly. Slow first pull on a fresh
+    // node (~10 min for our 20GB image) but works without operator setup.
+    const body: Record<string, unknown> = {
       name: `ahura-ft-${input.jobId.slice(0, 8)}`,
-      imageName: input.imageUri,
       gpuTypeIds: [gpuTypeId],
       gpuCount: 1,
       cloudType: "SECURE",
-      containerDiskInGb: CONTAINER_DISK_GB[input.gpuSku] ?? 100,
-      volumeInGb: 100,
-      volumeMountPath: "/workspace/cache",
       env: buildPodEnv(input),
       ports: [] as string[],
       supportPublicIp: false,
     };
+    if (input.templateId) {
+      body.templateId = input.templateId;
+    } else {
+      body.imageName = input.imageUri;
+      body.containerDiskInGb = CONTAINER_DISK_GB[input.gpuSku] ?? 100;
+      body.volumeInGb = 100;
+      body.volumeMountPath = "/workspace/cache";
+    }
 
     const resp = await this.withRetry(() =>
       axios.post<RunPodPodResponse>(`${this.baseUrl}/pods`, body, {
