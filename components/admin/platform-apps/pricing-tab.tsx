@@ -42,9 +42,11 @@ interface PlatformAppProduct {
 }
 
 const instanceSizeDefaults: Record<string, { cpu: string; ram: string; replicas: number; name: string; cpuNum: number; ramNum: number }> = {
-  small: { cpu: "250m", ram: "256Mi", replicas: 1, name: "Small", cpuNum: 250, ramNum: 256 },
-  medium: { cpu: "500m", ram: "512Mi", replicas: 2, name: "Medium", cpuNum: 500, ramNum: 512 },
-  large: { cpu: "1", ram: "1Gi", replicas: 3, name: "Large", cpuNum: 1000, ramNum: 1024 },
+  small:   { cpu: "250m", ram: "256Mi", replicas: 1, name: "Small",   cpuNum: 250,  ramNum: 256  },
+  medium:  { cpu: "500m", ram: "512Mi", replicas: 2, name: "Medium",  cpuNum: 500,  ramNum: 512  },
+  large:   { cpu: "1",    ram: "1Gi",   replicas: 3, name: "Large",   cpuNum: 1000, ramNum: 1024 },
+  xlarge:  { cpu: "2",    ram: "4Gi",   replicas: 4, name: "XLarge",  cpuNum: 2000, ramNum: 4096 },
+  xxlarge: { cpu: "4",    ram: "8Gi",   replicas: 6, name: "XXLarge", cpuNum: 4000, ramNum: 8192 },
 };
 
 export default function PricingTab() {
@@ -227,8 +229,8 @@ export default function PricingTab() {
       </div>
 
       {/* Pricing Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {(["small", "medium", "large"] as const).map((size) => {
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {(["small", "medium", "large", "xlarge", "xxlarge"] as const).map((size) => {
           const product = getProductBySize(size);
           const config = instanceSizeDefaults[size];
 
@@ -237,7 +239,7 @@ export default function PricingTab() {
               key={size}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * (["small", "medium", "large"].indexOf(size) + 1) }}
+              transition={{ delay: 0.1 * (["small", "medium", "large", "xlarge", "xxlarge"].indexOf(size) + 1) }}
               className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
             >
               <div className="px-5 py-5">
@@ -372,7 +374,7 @@ export default function PricingTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(["small", "medium", "large"] as const).map((size) => {
+                    {(["small", "medium", "large", "xlarge", "xxlarge"] as const).map((size) => {
                       const existing = getProductBySize(size);
                       return (
                         <SelectItem key={size} value={size} disabled={!!existing}>

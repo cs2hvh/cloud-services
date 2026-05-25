@@ -1358,8 +1358,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                 size.charAt(0).toUpperCase() + size.slice(1)
                             }
                         >
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-[720px]">
-                                {(["small", "medium", "large"] as const).map((opt) => {
+                            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                                {(["small", "medium", "large", "xlarge", "xxlarge"] as const).map((opt) => {
                                     const cfg = instanceSizeConfigs[opt];
                                     const sizePrice = pricing?.[opt];
                                     const selected = size === opt;

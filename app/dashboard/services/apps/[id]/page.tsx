@@ -1271,7 +1271,7 @@ export default function AppDetailPage() {
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
-  const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+  const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
   const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
   const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
 
@@ -2102,11 +2102,11 @@ export default function AppDetailPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
                     {PLATFORM_APP_SIZE_ORDER.map((size) => {
                       const specs = PLATFORM_APP_SIZE_SPECS[size];
                       const monthlyPrice = platformPricing[size]?.price ?? 0;
-                      const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+                      const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
                       const isCurrent = size === currentSize;
                       const isUpgrade =
                         PLATFORM_APP_SIZE_ORDER.indexOf(size) >

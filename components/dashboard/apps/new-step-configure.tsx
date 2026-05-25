@@ -330,8 +330,8 @@ export function StepConfigure({
 
         {/* ── Instance size ────────────────────────────────── */}
         <FormSection title="Instance size">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {(["small", "medium", "large"] as const).map((opt) => {
+          <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+            {(["small", "medium", "large", "xlarge", "xxlarge"] as const).map((opt) => {
               const cfg = instanceSizeConfigs[opt];
               const sizePrice = pricing?.[opt];
               const selected = size === opt;
