@@ -11,14 +11,15 @@ Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway
 
 **Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State:** Phases **0, 1, 5, 6** SHIPPED end-to-end (validated with real money-spending jobs). Phase **8** (observability + cost + dashboard polish) shipped. Phase **9** (security hardening + brand scrub) in progress. Phases 2, 3, 4, 7 not started.
+**State:** Phases **0, 1, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phase **4** (embeddings + vector collections) in progress. Phases 2, 3, 7 not started.
 
 **What works right now (verified live):**
 - `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
-- Click "New job" in dashboard → LoRA fine-tune runs on an A40/A100 → adapter uploads to R2 → completion webhook → model auto-registers in catalog → cost computed and shown (`$0.10` for a 4-min phi-4 run). First successful e2e run verified 2026-05-25 (Phase 5).
+- Click "New job" in dashboard → LoRA fine-tune runs on an A40/A100 → adapter uploads to R2 → completion webhook → model registered in catalog as a `runpod_ft` row → cost computed and shown (`$0.10` for a 4-min phi-4 run). First successful e2e run verified 2026-05-25 (Phase 5).
+- After completion: row expands inline in the dashboard with a "How to serve" 3-step flow. **"Copy serve command" mints a 6-hour presigned URL for `adapter.tar.gz` and copies a credential-free `docker run` command** — user pastes it on any GPU pod (ours or theirs), the serving image (`ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`) curls the URL, unpacks, and launches vLLM with `--enable-lora` on port 8000 (OpenAI-compatible). No R2 creds anywhere on the user's side. (Phase 10)
 - BYO Model Deploy API + dashboard wired; deploy-runner ships docker source end-to-end (HF + Truss sources need a builder, Phase 7).
 - Live job progress (current step / epoch / loss) streams from training pods into Postgres → dashboard updates without poll, no provider-naming.
-- Job detail dialog with hyperparams, sample generations, presigned R2 log link.
+- Inline expandable job rows with hyperparams, sample generations, presigned R2 log link, presigned adapter download.
 
 ---
 
@@ -227,14 +228,31 @@ Cumulative timeline vs original plan in [phases.md](./phases.md).
 - [ ] Rotate keys pasted in chat history (operator OpenRouter key + the Supabase service role / RunPod / R2 / Upstash creds shared during LKE bootstrap)
 - [ ] Domain migration `cs2hvh.com → ahurasense.com` once CF perms granted
 
-### Phases 2, 3, 4, 7 — Not started
+### Phases 2, 3, 7 — Not started
 
 | Phase | Scope | Est. |
 |---|---|---|
 | **2** | Catalog curation UI, routing presets, response caching (L1 in KV), off-peak pricing enforcement | 1 wk |
 | **3** | Playground UI — interactive model picker, multi-model compare | 1 wk |
-| **4** | `/v1/embeddings` + managed vector collections (`POST /v1/vector/collections`, upsert, query) + per-tenant `inference.vector_rows` + batch upsert via BullMQ | 2 wks |
 | **7** | Prompt-injection guardrail, semantic cache, batch endpoint, SOC 2 readiness docs, runbooks, status page | 1.5 wks |
+
+### Phase 4 — Embeddings + vector collections — IN PROGRESS 2026-05-25
+
+Schema exists since Phase 0 (`inference.vector_collections` + `inference.vector_rows`
+with pgvector). Worker has placeholder `embeddings.ts`. Real implementation
+landing next.
+
+**Planned chunks (in shipping order):**
+
+| Chunk | Description | Status |
+|---|---|---|
+| 4.A | Catalog seed for embeddings models (text-embedding-3-small/large, voyage-3, cohere-embed-v3, BGE) via OpenRouter where possible, or direct providers via BYOK. Add `embedding` capability flag + `dimensions` column on `inference.models`. | TODO |
+| 4.B | Real `POST /v1/embeddings` in worker — OpenAI-compatible (single string OR array of strings input, returns `{object,data,model,usage}`). Auth + spend + rate-limit identical to chat. Streaming not applicable. Emits usage event (input tokens only). | TODO |
+| 4.C | Next.js API: `app/api/inference/vector-collections/` — CRUD with org scoping. Schema on collection: name, embedding_model_id, dimensions, metric (cosine/l2/ip), shape. Distinct from `inference.models` rows. | TODO |
+| 4.D | `app/api/inference/vector-collections/[id]/rows/` — POST upsert (single or batch, auto-embeds inputs via 4.B), GET search (vector or text query, k+filter+metric). DELETE by id or filter. | TODO |
+| 4.E | Dashboard page `app/dashboard/services/inference/vectors/page.tsx` — collection list, create dialog (pick embedding model + metric + dimensions), drill-in shows row count + sample search box. Uses editorial chrome. | TODO |
+| 4.F | Sidebar entry "Vector Store" already exists; wire to /vectors page. | TODO |
+| 4.G | Marketing page `/services/embeddings` already drafted; add "Vector Store" sub-section with code snippet (Python + curl) once API stabilizes. | TODO |
 
 ### Phase 5 — Fine-Tuning ✅ SHIPPED 2026-05-25
 
@@ -251,6 +269,34 @@ Verified end-to-end with `microsoft/phi-4` LoRA: queued → claimed → pod prov
 | FT image | `infra/runpod/training-images/axolotl/` — based on `axolotlai/axolotl-cloud-uv:main-20260525-py3.11-cu128-2.9.1` (uv venv, properly version-aligned axolotl 0.16 + transformers 5.5 + peft 0.19 + accelerate 1.13 + torch 2.9 + CUDA 12.8). Adds rclone+jq+curl+openssl, our train.sh + heartbeat.py + config-template.yaml + accelerate-config.yaml. Build-time sanity check imports peft/transformers/axolotl to catch dep-hell at build, not 11s into every pod. | ✅ |
 
 **Lessons learned the hard way (~5 hours of debugging):** Don't pin transformers/peft/accelerate yourself before `pip install axolotl[deepspeed]` — axolotl 0.16's hard pin overrides yours, the new transformers breaks the precompiled C-extensions, and the resulting torch ABI mismatch surfaces as a misleading `BloomPreTrainedModel` error from `_LazyModule.__getattr__`. Use axolotl's `-uv` variant which keeps deps insulated from pip drift. Detail: see commit `644ef58…ad4b4cb…7dcb3ce` arc.
+
+### Phase 10 — FT serving path ✅ SHIPPED 2026-05-25 (reframed mid-build)
+
+The original design (per Phase 5.B build guide) was an auto-provisioned serverless
+endpoint per FT, with the gateway routing `/v1/chat/completions` to it. Built that
+end-to-end and discovered a fundamental impedance mismatch: our custom serving
+image (`FROM vllm/vllm-openai`) speaks the OpenAI HTTP protocol on port 8000,
+but RunPod Serverless workers invoke a Python `handler.py` per-request. The two
+architectures don't compose; would need to either abandon our image for
+`runpod/worker-vllm` (no R2 adapter loader) or switch entirely to Pods
+(always-on, ~$10/day per FT, prohibitive at scale).
+
+**Reframed to self-serve.** AhuraCloud trains and stores the adapter; user serves
+on a GPU pod they rent from our existing `/dashboard/services/gpu/deploy` product.
+Industry pattern (HF, Together, Modal all offer this tier). Managed serving stays
+on the roadmap as Phase 11 (vLLM Multi-LoRA shared per base — Fireworks pattern).
+
+| Chunk | Description | Status |
+|---|---|---|
+| 10.A | Serving image at `infra/runpod/serving-images/vllm-lora/` — wraps `vllm/vllm-openai:v0.7.3`, two adapter source modes (presigned download URL preferred, R2 creds fallback for ops) | ✅ |
+| 10.B | GHA workflow `.github/workflows/ft-serving-image.yml` builds to `ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3` + `:latest` + `:sha-<short>` | ✅ |
+| 10.C-D | Originally auto-provisioned endpoint + gateway routing. ROLLED BACK in reframe. Gateway now returns 400 `self_serve_model` for any `runpod_ft`/`runpod_byo` model rows. | ROLLED BACK |
+| 10.E | Dashboard inline expandable rows (replaces popup dialog). Each row's expanded view shows: core fields, hyperparams, "Your trained model" section, "How to serve" 3-step flow, compute info, error message. ChevronRight rotates 90° as visual cue. | ✅ |
+| 10.X | Presigned-URL adapter download. `train.sh` packs adapter into `adapter.tar.gz` alongside loose files; new `/api/inference/fine-tuning/jobs/[id]/adapter-url` endpoint mints 6-hour signed URLs; serving image's `entrypoint.sh` accepts `ADAPTER_DOWNLOAD_URL` (no creds needed); dashboard's "Copy serve command" button generates a ready-to-paste docker command. | ✅ |
+
+**Operator note:** The `cs2hvh/ahura-ft-serving-vllm` GHCR package must be public
+for RunPod to pull it. Same flip as the other images
+(<https://github.com/users/cs2hvh/packages/container/ahura-ft-serving-vllm/settings>).
 
 ### Phase 6 — BYO Model Deploy ✅ SHIPPED 2026-05-24 (docker source only)
 
@@ -360,7 +406,13 @@ c:\cloud-services\
 │   ├── audit-log/route.ts                  ← GET (filterable, paginated)
 │   ├── orgs/current/route.ts               ← GET (org + counts) + PATCH (name/zdr/region)
 │   ├── members/route.ts                    ← GET (list with auth.users hydration)
-│   └── members/[id]/route.ts               ← PATCH (role) + DELETE (remove)
+│   ├── members/[id]/route.ts               ← PATCH (role) + DELETE (remove)
+│   ├── fine-tuning/jobs/route.ts           ← POST (create + queue) + GET (list)
+│   ├── fine-tuning/jobs/[id]/route.ts      ← GET (detail) + DELETE (cancel/remove)
+│   ├── fine-tuning/jobs/[id]/webhook/route.ts     ← HMAC-verified completion ingress from train.sh
+│   ├── fine-tuning/jobs/[id]/heartbeat/route.ts   ← HMAC-verified progress ingress (every 30s)
+│   ├── fine-tuning/jobs/[id]/log-url/route.ts     ← 6h presigned URL for training.log
+│   └── fine-tuning/jobs/[id]/adapter-url/route.ts ← 6h presigned URL for adapter.tar.gz (self-serve)
 │
 ├── app/dashboard/services/inference/       ← Next.js client dashboard pages
 │   ├── page.tsx                            ← Overview (server component, fetches stats directly)
@@ -499,6 +551,8 @@ ORDER BY created_at DESC LIMIT 10;
 | 11 | **Audit log is org-scoped read but writes from anywhere** (no append-only enforcement at DB level — relies on service role discipline). | Low | Add a Postgres rule or revoke UPDATE/DELETE on `audit_log` from service_role in a hardening migration. |
 | 12 | **AI Agents subsystem (`app/api/ai-agents/*`) coexists with inference.** The two products are decoupled but both consume catalog/key concepts. | Info | Future convergence: AI Agents could call /v1/chat/completions internally. Not planned for now. |
 | 13 | **Worker is on wrangler v3.x** — works fine, but v4 is current. `npm install --save-dev wrangler@4` in `workers/inference/` to upgrade when convenient. | Low | No functional impact. |
+| 14 | **FT jobs trained before 2026-05-25 lack `adapter.tar.gz` in R2** (only loose files). Their "Copy serve command" will mint a presigned URL pointing at a missing key; the docker run will fail at the `curl -fL` step. | Medium | Either re-run those jobs to regenerate, or operator can tar+upload manually: `rclone copy remote:ahura-ft-adapters/<org>/<job>/ ./tmp/ && cd tmp && tar -czf adapter.tar.gz . && rclone copy adapter.tar.gz remote:ahura-ft-adapters/<org>/<job>/`. New jobs (post-train.sh update) get it automatically. |
+| 15 | **`cs2hvh/ahura-ft-serving-vllm` GHCR package must be flipped to public** for docker pull to work from any user's GPU pod (same flip we did for `ahura-ft-axolotl`). Operator: <https://github.com/users/cs2hvh/packages/container/ahura-ft-serving-vllm/settings>. | High | Until flipped, every "Copy serve command" → docker run will fail at the image pull step with 403/denied. First GHA build of the image must also have completed. |
 
 ---
 
@@ -576,6 +630,9 @@ Immediate hygiene (do soon):
 - [ ] **Rotate ALL keys pasted in this conversation** — OpenRouter, Supabase service role, RunPod, R2, Upstash, HF, Linode (likely expired), FT webhook secret
 - [ ] Operator: write the 4 drifted env keys back to `~/.ahura-lke.env` (gap 2d above)
 - [ ] Operator: `cd workers/inference && npx wrangler deploy` to restore `api.cs2hvh.com` Worker route (gap 2e above)
+- [ ] Operator: flip `cs2hvh/ahura-ft-serving-vllm` GHCR package to public (gap 15 above) — needed before any "Copy serve command" flow works
+- [ ] Operator: wait for / verify GHA builds of `ahura-ft-axolotl` (with `adapter.tar.gz` packing in `train.sh`) and `ahura-ft-serving-vllm` have published `:latest` tags
+- [ ] Operator: train one new FT job to validate the full self-serve flow end-to-end (expect: completion → expandable row → "Copy serve command" → paste on a GPU pod → vLLM listens on :8000 → OpenAI-compatible request returns adapter output)
 
 Phase 1.5 polish (small, valuable, do before Phase 2):
 - [ ] Migration: add `rate_limit_rpm INTEGER` column to `inference.api_keys` (default 60)
