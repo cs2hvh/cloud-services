@@ -181,16 +181,29 @@ export default {
   /**
    * Cron-triggered sweeps. Cloudflare fires this for every entry in
    * wrangler.toml's [triggers.crons]. Today we only have one schedule
-   * (`* * * * *`) which invokes the serving-pod watchdog so idle hosted-
-   * serving instances past their auto_stop_at deadline get reaped.
+   * (`* * * * *`) which fires every minute. Inside the handler we
+   * dispatch by what's due:
+   *
+   *   - Every minute → serving-pod watchdog (reap idle hosted-serving
+   *     instances past their auto_stop_at).
+   *   - Once per hour (minute == 0) → semantic cache GC (delete rows
+   *     past the TTL so the table doesn't grow unbounded).
    *
    * Failures don't retry (Workers cron has no automatic retry); we log
-   * + rely on the next minute's invocation to catch up. The watchdog
-   * is idempotent (state flip is conditional on state='running') so
-   * over-firing is safe.
+   * + rely on the next firing to catch up. Both sweeps are idempotent
+   * (watchdog: state flip conditional on state='running'; GC: DELETE
+   * by time predicate), so over-firing is safe.
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runServingPodWatchdog(env, event));
+    // GC once per hour to keep noise out of logs + bound Supabase
+    // RPC pressure. The query-time freshness filter keeps stale
+    // rows invisible to callers between sweeps, so frequency is
+    // purely about storage, not correctness.
+    const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
+    if (minuteOfHour === 0) {
+      ctx.waitUntil(runSemanticCacheGc(env, event));
+    }
   },
 };
 
@@ -279,6 +292,59 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
       JSON.stringify({
         level: "error",
         message: "scheduled: watchdog fetch failed",
+        err: err instanceof Error ? err.message : String(err),
+        cron: event.cron,
+      })
+    );
+  }
+}
+
+/**
+ * Hourly sweep that calls inference.gc_semantic_cache to delete
+ * cache rows older than the TTL the lib uses (3600s). Best-effort —
+ * never throws to the cron runtime since the freshness filter in
+ * lookup_semantic_cache already keeps stale rows invisible.
+ */
+async function runSemanticCacheGc(env: Env, event: ScheduledEvent): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+      global: { headers: { "X-Client-Info": "ahura-inference-semantic-cache-gc" } },
+    });
+    const { data, error } = await supabase
+      .schema("inference")
+      .rpc("gc_semantic_cache", { p_ttl_seconds: 3600 });
+    const elapsedMs = Date.now() - startedAt;
+    if (error) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          message: "scheduled: semantic cache gc rpc failed",
+          err: error.message,
+          elapsedMs,
+          cron: event.cron,
+        })
+      );
+      return;
+    }
+    const deleted = typeof data === "number" ? data : null;
+    if (deleted && deleted > 0) {
+      console.log(
+        JSON.stringify({
+          level: "info",
+          message: "scheduled: semantic cache gc completed",
+          deleted,
+          elapsedMs,
+        })
+      );
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "scheduled: semantic cache gc threw",
         err: err instanceof Error ? err.message : String(err),
         cron: event.cron,
       })

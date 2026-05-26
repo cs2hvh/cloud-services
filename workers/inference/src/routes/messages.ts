@@ -27,6 +27,11 @@ import {
 } from "../lib/openrouter.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import {
+  extractEmbeddableText,
+  lookupSemanticCache,
+  writeSemanticCache,
+} from "../lib/semantic-cache.ts";
+import {
   evaluateGuardrail,
   extractUserTextsFromAnthropic,
   parseGuardrailPolicy,
@@ -241,6 +246,65 @@ export const messagesShim: Handler<{
     c.header("X-Ahura-Cache", "non-deterministic");
   }
 
+  // 5c. Semantic cache check (Phase 7.C) — Anthropic Messages parity
+  //     with /v1/chat/completions. Same eligibility gate:
+  //     opted-in + non-ZDR + non-streaming + non-tool + L1-cacheable.
+  //     The stored body is the Anthropic-shaped response so a hit
+  //     skips both the upstream call AND the response translation.
+  const semanticEligible =
+    auth.semanticCacheEnabled &&
+    !auth.zdrEnabled &&
+    !req.stream &&
+    !req.tools &&
+    cacheDecision.cacheable;
+  let semanticPromptText: string | null = null;
+  if (semanticEligible) {
+    // Anthropic content blocks for type:"text" are { type, text } —
+    // identical to OpenAI multimodal text parts, so the OAI helper
+    // works as-is on req.messages.
+    semanticPromptText = extractEmbeddableText(
+      req.messages as Array<{ role?: string; content?: unknown }>
+    );
+    if (semanticPromptText) {
+      const semanticHit = await lookupSemanticCache({
+        env: c.env,
+        orgId: auth.orgId,
+        modelId: normalizedModel,
+        temperature: req.temperature,
+        promptText: semanticPromptText,
+        upstreamKey,
+      });
+      if (semanticHit) {
+        c.executionCtx.waitUntil(
+          sendUsage(c.env, {
+            ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
+            inputTokens: semanticHit.usage?.prompt_tokens ?? null,
+            outputTokens: semanticHit.usage?.completion_tokens ?? null,
+            cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
+            status: "success",
+          })
+        );
+        return new Response(semanticHit.responseBody, {
+          status: 200,
+          headers: {
+            "content-type": semanticHit.contentType,
+            "X-Ahura-Request-Id": requestId,
+            "X-Ahura-Model": normalizedModel,
+            "X-Ahura-Billing": auth.billing,
+            "X-Ahura-Cache": "semantic-hit",
+            "X-Ahura-Cache-Similarity": semanticHit.similarity.toFixed(4),
+            "X-Ahura-Cache-Age": String(
+              Math.floor(
+                (Date.now() - new Date(semanticHit.cachedAt).getTime()) / 1000
+              )
+            ),
+            "anthropic-version": c.req.header("anthropic-version") ?? "2023-06-01",
+          },
+        });
+      }
+    }
+  }
+
   // 6. Forward to OpenRouter
   const upstream = await forwardJson({
     env: c.env,
@@ -319,6 +383,30 @@ export const messagesShim: Handler<{
           completion_tokens: oaiResp.usage?.completion_tokens,
         }
       )
+    );
+  }
+
+  // Semantic cache write-through — same eligibility as the read path.
+  // Store the Anthropic-shaped body so a hit can return without
+  // translating, matching the L1 cache convention above.
+  if (semanticEligible && semanticPromptText) {
+    c.executionCtx.waitUntil(
+      writeSemanticCache({
+        env: c.env,
+        orgId: auth.orgId,
+        modelId: normalizedModel,
+        temperature: req.temperature,
+        promptText: semanticPromptText,
+        upstreamKey,
+        responseBody: JSON.stringify(anthropicResp),
+        contentType: "application/json",
+        usage: oaiResp.usage
+          ? {
+              prompt_tokens: oaiResp.usage.prompt_tokens,
+              completion_tokens: oaiResp.usage.completion_tokens,
+            }
+          : null,
+      })
     );
   }
 
