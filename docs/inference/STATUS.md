@@ -11,7 +11,7 @@ Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway
 
 **Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State:** Phases **0, 1, 2, 4, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phases 3, 7 not started.
+**State:** Phases **0, 1, 2, 3, 4, 5, 6, 8, 10** SHIPPED end-to-end (validated with real money-spending jobs). Phase **9** (security hardening + brand scrub) in progress. Phase 7 not started.
 
 **What works right now (verified live):**
 - `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
@@ -241,11 +241,29 @@ This session extended the L1 cache to `/v1/embeddings` and `/v1/messages`.
 | 2.C | L1 response cache — `workers/inference/src/lib/cache.ts`. sha256(orgId+normalized request) → `L1_CACHE` KV. Default TTL 300s, override via `X-Ahura-Cache-TTL: 60-3600`. Bypass via `Cache-Control: no-cache` or `X-Ahura-Cache: off`. Aggressive opt-in via `X-Ahura-Cache: aggressive`. Originally chat-only; THIS SESSION added `shouldCacheMessages` (Anthropic `/v1/messages` — caches the post-translation Anthropic-shape JSON so hits skip both upstream + translation) and `shouldCacheEmbeddings` (always cacheable, deterministic by nature). Response headers: `X-Ahura-Cache: hit\|miss\|bypass\|streaming-skipped\|non-deterministic` + `X-Ahura-Cache-Age`. | ✅ |
 | 2.D | Off-peak pricing — `inference.models.off_peak.{window_utc, discount_pct}` JSON applied in `workers/inference/src/consumers/usage.ts:computeCost()`. Handles midnight-wrap windows. Sets `usage.is_off_peak` for audit. Catalog card renders the discount hint when set. | ✅ |
 
-### Phases 3, 7 — Not started
+### Phase 3 — Playground ✅ SHIPPED 2026-05-26
+
+Single-model playground (streaming, params, BYOK toggle, copy-as-code) already
+shipped earlier. This session added the headline differentiator: multi-model
+compare mode, plus routing-preset integration that ties Phase 2's preset CRUD
+into the live runtime.
+
+| Chunk | Description | Status |
+|---|---|---|
+| 3.A | Single-model mode — streaming display, system prompt, temp/top_p/max_tokens sliders, model picker with search, token usage + cost stats, TTFT/latency, copy-as-code (curl/python/typescript), Cmd+Enter to run, BYOK paste-key flow, key provisioning via `/api/inference/api-keys`. | ✅ (pre-session) |
+| 3.B | Shared runner — `lib/playground/run-chat.ts` extracts the SSE parsing + abort + stats collection into a React-free async function. Used by both single and compare modes so they stay in sync. Exports `GatewayError` (with status + body) so callers can surface real upstream errors instead of opaque "Request failed". | ✅ |
+| 3.C | **Multi-model compare** — new `components/dashboard/inference/playground-compare.tsx`. 2–3 model panes side-by-side, parallel `runChat` calls, shared prompt + params, per-pane Run/Stop + global Run-all/Stop-all, per-pane stats footer (in/out/cost/latency/TTFT/cache). Panes are addable/removable up to 3; default picks the first two featured models. | ✅ |
+| 3.D | **Preset picker** in the left settings column — loads org's `inference.model_presets` server-side, renders a dropdown that forwards the chosen preset id as `X-Ahura-Preset` on every gateway call (both modes). Shows the preset's description or first 3 fallback models as a hint. Wired through `runChat` so compare mode hits the same routing path. | ✅ |
+| 3.E | Polish — Single/Compare mode toggle pill in the Hero (MessageSquare ↔ Layers icons); fixed the uncontrolled paste-key input (was `value=""` literal with onChange-only autosave; now a controlled draft + explicit Save button + on-error toast); the `runChat` cleanup correctly aborts in-flight pane requests on unmount. | ✅ |
+
+**Out of scope:** sharable session URLs / JSON export (Phase 7-ish, requires
+persistence), prompt templates (separate concept from routing presets), tool-use
+in the playground (no clear need yet).
+
+### Phase 7 — Not started
 
 | Phase | Scope | Est. |
 |---|---|---|
-| **3** | Playground UI — interactive model picker, multi-model compare | 1 wk |
 | **7** | Prompt-injection guardrail, semantic cache, batch endpoint, SOC 2 readiness docs, runbooks, status page | 1.5 wks |
 | **11** | Managed FT serving (vLLM Multi-LoRA shared per base, Fireworks pattern) as premium upsell on top of Phase 10's self-serve | 2 wks |
 

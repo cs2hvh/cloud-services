@@ -5,6 +5,7 @@ import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import {
   Playground,
   type PlaygroundModel,
+  type PlaygroundPreset,
 } from "@/components/dashboard/inference/playground";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,40 @@ interface RawModelRow {
   is_featured: boolean;
   sort_order: number;
   org_id: string | null;
+}
+
+interface RawPresetRow {
+  id: string;
+  name: string;
+  description: string | null;
+  config: Record<string, unknown> | null;
+}
+
+async function loadPresets(orgId: string): Promise<PlaygroundPreset[]> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+  const { data } = await supabase
+    .schema("inference")
+    .from("model_presets")
+    .select("id, name, description, config")
+    .eq("org_id", orgId)
+    .order("name", { ascending: true })
+    .returns<RawPresetRow[]>();
+  return (data ?? []).map((p) => {
+    const cfg = (p.config ?? {}) as Record<string, unknown>;
+    const models = Array.isArray(cfg.models)
+      ? (cfg.models as unknown[]).filter((m): m is string => typeof m === "string")
+      : [];
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      fallback_models: models,
+    };
+  });
 }
 
 async function loadChatModels(orgId: string): Promise<PlaygroundModel[]> {
@@ -69,10 +104,20 @@ async function loadChatModels(orgId: string): Promise<PlaygroundModel[]> {
 export default async function PlaygroundPage() {
   const user = await requireAuthProfile();
   const org = await getOrBootstrapOrgForUser(user.id, user.email ?? "");
-  const models = await loadChatModels(org.org_id);
+  const [models, presets] = await Promise.all([
+    loadChatModels(org.org_id),
+    loadPresets(org.org_id),
+  ]);
 
   const apiBase =
     process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.cs2hvh.com/v1";
 
-  return <Playground models={models} apiBase={apiBase} orgName={org.org_name} />;
+  return (
+    <Playground
+      models={models}
+      presets={presets}
+      apiBase={apiBase}
+      orgName={org.org_name}
+    />
+  );
 }

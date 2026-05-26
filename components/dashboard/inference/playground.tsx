@@ -8,11 +8,12 @@ import {
   Eye,
   EyeOff,
   Key,
+  Layers,
   Loader2,
+  MessageSquare,
   Play,
-  RotateCw,
+  Rocket,
   Search,
-  Send,
   StopCircle,
   Trash2,
   Zap,
@@ -31,7 +32,6 @@ import {
 import {
   ACCENT,
   ColHead,
-  EmptyState,
   GhostButton,
   Hero,
   MONO,
@@ -42,6 +42,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { PlaygroundCompare } from "@/components/dashboard/inference/playground-compare";
 
 export interface PlaygroundModel {
   model_id: string;
@@ -57,6 +58,15 @@ export interface PlaygroundModel {
   output_price_per_mtok: number | null;
 }
 
+export interface PlaygroundPreset {
+  id: string;
+  name: string;
+  description: string | null;
+  fallback_models: string[];
+}
+
+type PlaygroundMode = "single" | "compare";
+
 interface RunStats {
   model: string;
   inputTokens: number | null;
@@ -71,16 +81,22 @@ const KEY_STORAGE = "ahura.playground.key";
 
 export function Playground({
   models,
+  presets,
   apiBase,
   orgName,
 }: {
   models: PlaygroundModel[];
+  presets: PlaygroundPreset[];
   apiBase: string;
   orgName: string;
 }) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keySetupOpen, setKeySetupOpen] = useState(false);
   const [keyVisible, setKeyVisible] = useState(false);
+  const [pasteKeyDraft, setPasteKeyDraft] = useState("");
+
+  const [mode, setMode] = useState<PlaygroundMode>("single");
+  const [presetId, setPresetId] = useState<string>("");
 
   const [modelId, setModelId] = useState<string>(models[0]?.model_id ?? "");
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -163,6 +179,24 @@ export function Playground({
     toast.info("Playground key cleared from this browser");
   };
 
+  const savePastedKey = () => {
+    const v = pasteKeyDraft.trim();
+    if (!v.startsWith("ahu_")) {
+      toast.error("Key must start with ahu_");
+      return;
+    }
+    window.localStorage.setItem(KEY_STORAGE, v);
+    setApiKey(v);
+    setPasteKeyDraft("");
+    setKeySetupOpen(false);
+    toast.success("Key saved to browser");
+  };
+
+  const selectedPreset = useMemo(
+    () => presets.find((p) => p.id === presetId) ?? null,
+    [presets, presetId]
+  );
+
   // ── Build request body ───────────────────────────────────────────────
   const buildBody = () => {
     const messages: Array<{ role: string; content: string }> = [];
@@ -202,12 +236,14 @@ export function Playground({
     abortRef.current = ctrl;
 
     try {
+      const runHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      };
+      if (presetId) runHeaders["X-Ahura-Preset"] = presetId;
       const r = await fetch(`${apiBase}/chat/completions`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: runHeaders,
         body: JSON.stringify(buildBody()),
         signal: ctrl.signal,
       });
@@ -381,6 +417,7 @@ ${streamOn
         size="md"
         actions={
           <>
+            <ModeToggle mode={mode} onChange={setMode} />
             {apiKey ? (
               <GhostButton onClick={() => setKeySetupOpen(true)}>
                 <Key className="h-3.5 w-3.5" />
@@ -392,16 +429,18 @@ ${streamOn
                 Set up key
               </PrimaryButton>
             )}
-            {running ? (
-              <PrimaryButton onClick={stop}>
-                <StopCircle className="h-3.5 w-3.5" />
-                Stop
-              </PrimaryButton>
-            ) : (
-              <PrimaryButton onClick={run} disabled={!apiKey || !userPrompt.trim() || !modelId}>
-                <Play className="h-3.5 w-3.5" />
-                Run
-              </PrimaryButton>
+            {mode === "single" && (
+              running ? (
+                <PrimaryButton onClick={stop}>
+                  <StopCircle className="h-3.5 w-3.5" />
+                  Stop
+                </PrimaryButton>
+              ) : (
+                <PrimaryButton onClick={run} disabled={!apiKey || !userPrompt.trim() || !modelId}>
+                  <Play className="h-3.5 w-3.5" />
+                  Run
+                </PrimaryButton>
+              )
             )}
           </>
         }
@@ -444,8 +483,52 @@ ${streamOn
 
       {/* Main 2-col workspace */}
       <section className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 mb-8">
-        {/* Left: settings */}
+        {/* Left: settings (shared by single + compare) */}
         <div className="space-y-4">
+          {/* Preset picker — applies to all routes via X-Ahura-Preset header */}
+          {presets.length > 0 && (
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
+              <div className="flex items-baseline justify-between mb-2">
+                <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
+                  Routing preset
+                </p>
+                {selectedPreset && (
+                  <button
+                    type="button"
+                    onClick={() => setPresetId("")}
+                    className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] text-white/40 hover:text-white/70`}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Rocket className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/35" />
+                <select
+                  value={presetId}
+                  onChange={(e) => setPresetId(e.target.value)}
+                  className={`${MONO} h-9 w-full pl-8 pr-3 text-[11.5px] text-white bg-white/[0.02] border border-white/[0.08] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 appearance-none cursor-pointer`}
+                >
+                  <option value="">— none —</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-[#111216]">
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedPreset && (
+                <p className={`${MONO} mt-1.5 text-[10px] text-white/45 leading-relaxed`}>
+                  {selectedPreset.description ??
+                    `Fallback chain: ${selectedPreset.fallback_models.slice(0, 3).join(" → ")}${selectedPreset.fallback_models.length > 3 ? "…" : ""}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {mode === "single" && (
+            <>
+          {/* Single-mode-only blocks below */}
           {/* Model picker */}
           <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
             <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}>
@@ -539,9 +622,49 @@ ${streamOn
               className={`${MONO} w-full text-[12px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-none`}
             />
           </div>
+            </>
+          )}
+
+          {mode === "compare" && (
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4 space-y-3">
+              <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
+                Compare params
+              </p>
+              <Slider
+                label="Temperature"
+                value={temperature}
+                min={0}
+                max={2}
+                step={0.05}
+                onChange={setTemperature}
+              />
+              <Slider label="Top P" value={topP} min={0} max={1} step={0.05} onChange={setTopP} />
+              <Slider
+                label="Max tokens"
+                value={maxTokens}
+                min={64}
+                max={8192}
+                step={64}
+                onChange={(v) => setMaxTokens(Math.round(v))}
+                integer
+              />
+              <div className="border border-white/[0.06] bg-[#0f1014] rounded-[5px] p-3">
+                <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-1.5`}>
+                  System prompt
+                </p>
+                <textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  placeholder="You are a helpful assistant…"
+                  rows={3}
+                  className={`${MONO} w-full text-[11.5px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[4px] px-2.5 py-2 focus:outline-none focus:border-[#0095FF]/40 resize-none`}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right: prompt + output */}
+        {/* Right: prompt + (single output | compare grid) */}
         <div className="space-y-4 min-w-0">
           <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
             <div className="flex items-center justify-between mb-2">
@@ -558,7 +681,8 @@ ${streamOn
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
-                  if (!running) run();
+                  if (mode === "single" && !running) run();
+                  // compare mode: per-pane Run buttons handle this — Cmd+Enter is single-mode UX
                 }
               }}
               placeholder="Ask anything…"
@@ -567,58 +691,77 @@ ${streamOn
             />
           </div>
 
-          {/* Output */}
-          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-              <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-                Response
-              </p>
-              <div className="flex items-center gap-2">
-                {running && <Loader2 className="h-3 w-3 animate-spin text-[#0095FF]" />}
-                {output && !running && (
-                  <button
-                    type="button"
-                    onClick={() => setOutput("")}
-                    className="text-[11px] text-white/45 hover:text-white/80 inline-flex items-center gap-1"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    clear
-                  </button>
+          {mode === "single" ? (
+            /* Single-model output */
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+                <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
+                  Response
+                </p>
+                <div className="flex items-center gap-2">
+                  {running && <Loader2 className="h-3 w-3 animate-spin text-[#0095FF]" />}
+                  {output && !running && (
+                    <button
+                      type="button"
+                      onClick={() => setOutput("")}
+                      className="text-[11px] text-white/45 hover:text-white/80 inline-flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              <pre
+                ref={outputRef}
+                className={`${MONO} px-4 py-3 text-[12.5px] text-white/90 leading-relaxed whitespace-pre-wrap break-words max-h-[480px] min-h-[120px] overflow-y-auto`}
+              >
+                {error ? (
+                  <span className="text-red-300/85">{error}</span>
+                ) : output ? (
+                  output + (running ? "▍" : "")
+                ) : (
+                  <span className="text-white/30">{running ? "Waiting for response…" : "Output appears here."}</span>
                 )}
-              </div>
-            </div>
-            <pre
-              ref={outputRef}
-              className={`${MONO} px-4 py-3 text-[12.5px] text-white/90 leading-relaxed whitespace-pre-wrap break-words max-h-[480px] min-h-[120px] overflow-y-auto`}
-            >
-              {error ? (
-                <span className="text-red-300/85">{error}</span>
-              ) : output ? (
-                output + (running ? "▍" : "")
-              ) : (
-                <span className="text-white/30">{running ? "Waiting for response…" : "Output appears here."}</span>
+              </pre>
+              {stats && (
+                <div className="border-t border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/[0.04]">
+                  <StatFoot label="Input" value={stats.inputTokens?.toString() ?? "—"} />
+                  <StatFoot label="Output" value={stats.outputTokens?.toString() ?? "—"} />
+                  <StatFoot
+                    label="Cost"
+                    value={
+                      stats.costCents !== null
+                        ? `$${(stats.costCents / 100).toFixed(4)}`
+                        : "—"
+                    }
+                  />
+                  <StatFoot
+                    label="TTFT / Total"
+                    value={`${stats.ttftMs ?? "—"} / ${stats.latencyMs}ms`}
+                    hint={stats.cacheStatus ? `cache: ${stats.cacheStatus}` : undefined}
+                  />
+                </div>
               )}
-            </pre>
-            {stats && (
-              <div className="border-t border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/[0.04]">
-                <StatFoot label="Input" value={stats.inputTokens?.toString() ?? "—"} />
-                <StatFoot label="Output" value={stats.outputTokens?.toString() ?? "—"} />
-                <StatFoot
-                  label="Cost"
-                  value={
-                    stats.costCents !== null
-                      ? `$${(stats.costCents / 100).toFixed(4)}`
-                      : "—"
-                  }
-                />
-                <StatFoot
-                  label="TTFT / Total"
-                  value={`${stats.ttftMs ?? "—"} / ${stats.latencyMs}ms`}
-                  hint={stats.cacheStatus ? `cache: ${stats.cacheStatus}` : undefined}
-                />
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Compare mode — 2-3 side-by-side panes, parallel runs, shared prompt + params */
+            <PlaygroundCompare
+              models={models}
+              params={{
+                apiKey,
+                apiBase,
+                systemPrompt,
+                userPrompt,
+                temperature,
+                topP,
+                maxTokens,
+                stream: streamOn,
+                presetId: presetId || undefined,
+              }}
+              onRequestKeyDialog={() => setKeySetupOpen(true)}
+            />
+          )}
         </div>
       </section>
 
@@ -786,21 +929,24 @@ ${streamOn
               <p className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/55 mb-1`}>
                 Paste an existing key
               </p>
-              <input
-                type="password"
-                value=""
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  if (v.startsWith("ahu_")) {
-                    window.localStorage.setItem(KEY_STORAGE, v);
-                    setApiKey(v);
-                    setKeySetupOpen(false);
-                    toast.success("Key saved to browser");
-                  }
-                }}
-                placeholder="ahu_live_…"
-                className={`${MONO} h-9 w-full px-3 text-[12px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40`}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={pasteKeyDraft}
+                  onChange={(e) => setPasteKeyDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") savePastedKey();
+                  }}
+                  placeholder="ahu_live_…"
+                  className={`${MONO} h-9 flex-1 px-3 text-[12px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40`}
+                />
+                <GhostButton onClick={savePastedKey} disabled={!pasteKeyDraft.trim()}>
+                  Save
+                </GhostButton>
+              </div>
+              <p className={`${MONO} text-[10px] text-white/35 mt-1.5`}>
+                Stored only in this browser&apos;s localStorage. Must start with <code className="text-white/55">ahu_</code>.
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -862,6 +1008,43 @@ function Slider({
         className="w-full accent-[#0095FF] h-1"
       />
       {hint && <p className={`${MONO} text-[10px] text-white/40 mt-1`}>{hint}</p>}
+    </div>
+  );
+}
+
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: PlaygroundMode;
+  onChange: (m: PlaygroundMode) => void;
+}) {
+  return (
+    <div className="inline-flex h-9 rounded-[5px] border border-white/[0.08] bg-white/[0.02] p-0.5">
+      <button
+        type="button"
+        onClick={() => onChange("single")}
+        className={`${MONO} h-full inline-flex items-center gap-1.5 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold rounded-[4px] transition-colors ${
+          mode === "single"
+            ? "bg-[#0095FF]/15 text-white shadow-[0_0_12px_rgba(0,149,255,0.18)_inset]"
+            : "text-white/55 hover:text-white"
+        }`}
+      >
+        <MessageSquare className="h-3 w-3" />
+        Single
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("compare")}
+        className={`${MONO} h-full inline-flex items-center gap-1.5 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold rounded-[4px] transition-colors ${
+          mode === "compare"
+            ? "bg-[#0095FF]/15 text-white shadow-[0_0_12px_rgba(0,149,255,0.18)_inset]"
+            : "text-white/55 hover:text-white"
+        }`}
+      >
+        <Layers className="h-3 w-3" />
+        Compare
+      </button>
     </div>
   );
 }
