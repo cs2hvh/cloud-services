@@ -26,6 +26,11 @@ import {
   streamPassthrough,
 } from "../lib/openrouter.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
+import {
+  evaluateGuardrail,
+  extractUserTextsFromAnthropic,
+  parseGuardrailPolicy,
+} from "../lib/guardrail.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Anthropic request schema (subset — passthrough additional fields)
@@ -139,6 +144,42 @@ export const messagesShim: Handler<{
         requestId
       ),
       403
+    );
+  }
+
+  // 3b. Prompt-injection guardrail — see chat-completions.ts for full
+  //     rationale. Default policy "warn" so this is a non-breaking roll-out.
+  const guardrailPolicy = parseGuardrailPolicy(c.req.header("X-Ahura-Guardrail"));
+  const guardrail = evaluateGuardrail(
+    extractUserTextsFromAnthropic(
+      req.system,
+      req.messages as Array<{ role?: string; content?: unknown }>
+    ),
+    guardrailPolicy
+  );
+  c.header("X-Ahura-Guardrail", guardrail.action);
+  if (guardrail.hits.length > 0) {
+    console.log(
+      JSON.stringify({
+        level: guardrail.action === "blocked" ? "warn" : "info",
+        requestId,
+        orgId: auth.orgId,
+        keyId: auth.keyId,
+        message: `guardrail.${guardrail.action}`,
+        policy: guardrail.policy,
+        pattern_ids: guardrail.hits.map((h) => h.pattern_id),
+        route: "messages",
+      })
+    );
+  }
+  if (guardrail.action === "blocked") {
+    return c.json(
+      anthropicError(
+        "invalid_request_error",
+        `Request blocked by prompt-injection guardrail (patterns: ${guardrail.hits.map((h) => h.pattern_id).join(", ")})`,
+        requestId
+      ),
+      400
     );
   }
 

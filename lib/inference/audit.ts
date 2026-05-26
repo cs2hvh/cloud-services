@@ -40,7 +40,8 @@ export type InferenceAuditAction =
   | "collection.created"
   | "collection.deleted"
   | "vector_row.deleted"
-  | "vector_rows.deleted";
+  | "vector_rows.deleted"
+  | "guardrail.blocked";
 
 export interface RecordAuditInput {
   orgId: string;

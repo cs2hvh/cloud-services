@@ -51,12 +51,17 @@ app.use(
       "X-Ahura-Request-Id",
       "X-Ahura-Idempotency-Key",
       "X-Ahura-Preset",
+      "X-Ahura-Guardrail",
+      "X-Ahura-Cache",
+      "X-Ahura-Cache-TTL",
     ],
     exposeHeaders: [
       "X-Ahura-Request-Id",
       "X-Ahura-Model",
       "X-Ahura-Cost-Cents",
       "X-Ahura-Cache",
+      "X-Ahura-Cache-Age",
+      "X-Ahura-Guardrail",
     ],
     maxAge: 86400,
   })

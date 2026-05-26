@@ -20,6 +20,11 @@ import {
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import { lookupModelRouting, forwardToSelfHosted } from "../lib/model-routing.ts";
+import {
+  evaluateGuardrail,
+  extractUserTextsFromOpenAI,
+  parseGuardrailPolicy,
+} from "../lib/guardrail.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Request schema — permissive on tool/content shape since OpenAI
@@ -153,6 +158,43 @@ export const chatCompletions: Handler<{
         requestId
       ),
       403
+    );
+  }
+
+  // 3b. Prompt-injection guardrail — scans user+system text for known
+  //     jailbreak/role-injection patterns. Policy comes from header,
+  //     defaults to "warn" so rollout is non-breaking. The header is set
+  //     unconditionally (off → "clean"; warn → "clean"|"flagged";
+  //     block → "clean"|"flagged"|"blocked") so callers can wire alerting.
+  const guardrailPolicy = parseGuardrailPolicy(c.req.header("X-Ahura-Guardrail"));
+  const guardrail = evaluateGuardrail(
+    extractUserTextsFromOpenAI(req.messages as Array<{ role?: string; content?: unknown }>),
+    guardrailPolicy
+  );
+  c.header("X-Ahura-Guardrail", guardrail.action);
+  if (guardrail.hits.length > 0) {
+    // Single line, structured so the log shipper can grep + aggregate.
+    console.log(
+      JSON.stringify({
+        level: guardrail.action === "blocked" ? "warn" : "info",
+        requestId,
+        orgId: auth.orgId,
+        keyId: auth.keyId,
+        message: `guardrail.${guardrail.action}`,
+        policy: guardrail.policy,
+        pattern_ids: guardrail.hits.map((h) => h.pattern_id),
+      })
+    );
+  }
+  if (guardrail.action === "blocked") {
+    return c.json(
+      errorBody(
+        `Request blocked by prompt-injection guardrail (patterns: ${guardrail.hits.map((h) => h.pattern_id).join(", ")})`,
+        "invalid_request_error",
+        "guardrail_blocked",
+        requestId
+      ),
+      400
     );
   }
 
