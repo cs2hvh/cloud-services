@@ -99,3 +99,45 @@ export async function forwardToManaged(opts: {
     signal: opts.signal ?? undefined,
   });
 }
+
+/**
+ * Push the matching FT row's `serving_pod_auto_stop_at` forward by N
+ * minutes (default 60). Called from the gateway on every successful
+ * managed call so active pods don't get killed by the watchdog while
+ * customers are using them. Idle pods (no calls) hit their original
+ * deadline and get reaped.
+ *
+ * Best-effort: failures here are logged but never bubble up — a failed
+ * extend is far better than a failed customer response.
+ *
+ * Implementation note: we look up by `serving_url` not by model id
+ * (avoids an extra round trip — the gateway already has the URL from
+ * the routing lookup).
+ */
+export async function extendServingPodIdle(
+  env: Env,
+  servingUrl: string,
+  extendMinutes = 60
+): Promise<void> {
+  try {
+    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+    const newDeadline = new Date(Date.now() + extendMinutes * 60 * 1000).toISOString();
+    await supabase
+      .schema("inference")
+      .from("finetunes")
+      .update({ serving_pod_auto_stop_at: newDeadline })
+      .eq("serving_url", servingUrl)
+      .eq("serving_pod_state", "running");
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        message: "extendServingPodIdle failed",
+        servingUrl,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+}

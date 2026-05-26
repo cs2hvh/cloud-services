@@ -19,7 +19,11 @@ import {
 } from "../lib/openrouter.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
-import { lookupModelRouting, forwardToManaged } from "../lib/model-routing.ts";
+import {
+  lookupModelRouting,
+  forwardToManaged,
+  extendServingPodIdle,
+} from "../lib/model-routing.ts";
 import {
   evaluateGuardrail,
   extractUserTextsFromOpenAI,
@@ -271,20 +275,51 @@ export const chatCompletions: Handler<{
       );
     }
 
-    // Managed path — forward directly to the operator-deployed vLLM URL.
+    // Managed path — forward directly to the AhuraCloud-operated vLLM URL.
     // The cache + guardrail already ran above; preset rewrite already
     // applied. Pass the body as-is (with model rewritten to vLLM's
     // served-model-name inside forwardToManaged).
     const servedName = routing.served_model_name ?? "adapter";
-    const upstream = await forwardToManaged({
-      servingUrl: routing.serving_url,
-      body: outgoingBody,
-      servedModelName: servedName,
-      signal: c.req.raw.signal,
-    });
+    let upstream: Response;
+    try {
+      upstream = await forwardToManaged({
+        servingUrl: routing.serving_url,
+        body: outgoingBody,
+        servedModelName: servedName,
+        signal: c.req.raw.signal,
+      });
+    } catch (err) {
+      // Network-level failure (DNS, connection refused, TLS, etc.) —
+      // most common cause is the pod still warming up (or just torn
+      // down). Return a customer-friendly 503 with Retry-After so the
+      // client knows to back off, not a raw 502 with a stack trace.
+      const msg = err instanceof Error ? err.message : String(err);
+      c.executionCtx.waitUntil(
+        sendUsage(c.env, {
+          ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+          status: "error_upstream",
+          errorCode: "managed_warming_up",
+        })
+      );
+      c.header("Retry-After", "10");
+      return c.json(
+        errorBody(
+          `Serving instance is warming up. Retry in a few seconds.`,
+          "service_unavailable",
+          "instance_warming_up",
+          requestId
+        ),
+        503
+      );
+      void msg;
+    }
     c.header("X-Ahura-Routing", "managed");
 
     if (!upstream.ok) {
+      // 502 / 503 / 504 from vLLM almost always = cold-start: the pod
+      // exists but vLLM hasn't finished loading the model yet. Convert
+      // to a clean 503 + Retry-After. 4xx codes pass through as-is
+      // (those are real client bugs that the customer needs to fix).
       const text = await upstream.text();
       c.executionCtx.waitUntil(
         sendUsage(c.env, {
@@ -293,6 +328,18 @@ export const chatCompletions: Handler<{
           errorCode: `managed_${upstream.status}`,
         })
       );
+      if (upstream.status >= 500 && upstream.status < 600) {
+        c.header("Retry-After", "10");
+        return c.json(
+          errorBody(
+            `Serving instance is warming up. Retry in a few seconds.`,
+            "service_unavailable",
+            "instance_warming_up",
+            requestId
+          ),
+          503
+        );
+      }
       return new Response(text, {
         status: upstream.status,
         headers: {
@@ -303,6 +350,11 @@ export const chatCompletions: Handler<{
         },
       });
     }
+
+    // Successful managed call — extend the pod's idle deadline so the
+    // watchdog doesn't reap it while it's actively being used. Fire-and-
+    // forget; never block the customer response on this.
+    c.executionCtx.waitUntil(extendServingPodIdle(c.env, routing.serving_url));
 
     // Stream OR non-stream — passthrough body unchanged. vLLM's openai-server
     // emits usage in both shapes; we read it the same way the OpenRouter

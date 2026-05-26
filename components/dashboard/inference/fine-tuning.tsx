@@ -45,6 +45,7 @@ import {
 
 import {
   ACCENT,
+  ACCENT_BRIGHT,
   ColHead,
   DataTable,
   EmptyState,
@@ -432,11 +433,13 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
 
             {podState === "running" || podState === "provisioning" ? (
               <>
-                <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-3`}>
-                  {podState === "provisioning"
-                    ? "Your serving instance is starting up (~60s). Once it's ready, calls to the model below will route through it automatically."
-                    : "Calls to the model below now route through your dedicated instance."}
-                </p>
+                {podState === "provisioning" ? (
+                  <ProvisioningBanner startedAt={j.serving_pod_started_at} />
+                ) : (
+                  <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-3`}>
+                    Calls to the model below now route through your dedicated instance.
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                   <PodStat label="Model id" mono>
@@ -605,6 +608,44 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
 }
 
 // ─── Hosted-serving sub-components ───────────────────────────────────
+
+function ProvisioningBanner({ startedAt }: { startedAt: string | null | undefined }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const elapsedSec = startedAt
+    ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
+    : 0;
+  // Typical cold-start is 45-90s depending on base model size. Show
+  // friendlier copy as it drags on.
+  const stage =
+    elapsedSec < 30
+      ? "Booting GPU and pulling the serving image…"
+      : elapsedSec < 75
+        ? "Downloading your adapter from storage and warming vLLM…"
+        : elapsedSec < 150
+          ? "Larger base — still loading model weights into GPU memory…"
+          : "Taking longer than expected. If this exceeds 5 minutes, stop the instance and try a different GPU.";
+  return (
+    <div className="mb-3 rounded-[5px] border border-[#33adff]/25 bg-[#0095FF]/[0.06] p-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <Loader2 className="h-3 w-3 animate-spin" style={{ color: ACCENT_BRIGHT }} />
+        <span
+          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] font-semibold`}
+          style={{ color: ACCENT_BRIGHT }}
+        >
+          Starting — {String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:{String(elapsedSec % 60).padStart(2, "0")} elapsed
+        </span>
+      </div>
+      <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed`}>
+        {stage} Requests during warm-up return a 503 with{" "}
+        <code className="text-white/75">Retry-After: 10</code> — your SDK should retry automatically.
+      </p>
+    </div>
+  );
+}
 
 function PodStatePill({ state }: { state: string }) {
   const map: Record<string, { color: string; label: string; pulse?: boolean }> = {
@@ -867,12 +908,20 @@ export function FineTuning({
   }, [createOpen]);
 
   useEffect(() => {
-    const inFlight = jobs.some((j) =>
+    const inFlightTraining = jobs.some((j) =>
       ["queued", "preparing", "running"].includes(j.status)
     );
-    if (!inFlight) return;
-    const t = setInterval(reload, 8000);
+    const inFlightServing = jobs.some(
+      (j) => j.serving_pod_state === "provisioning"
+    );
+    if (!inFlightTraining && !inFlightServing) return;
+    // Poll faster while a serving pod is starting (the customer is
+    // staring at the dashboard waiting). 3s during serving start-up,
+    // 8s otherwise.
+    const interval = inFlightServing ? 3000 : 8000;
+    const t = setInterval(reload, interval);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs]);
 
   const create = async () => {
