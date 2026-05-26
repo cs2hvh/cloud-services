@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
             "manual",
             envVars,
             app.port ?? undefined,
+            app.healthcheck_path ?? undefined,
           );
           console.log(`[Redeploy] Pipeline XML updated successfully`);
 

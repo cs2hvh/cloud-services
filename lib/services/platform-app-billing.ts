@@ -3,11 +3,11 @@ import { Platform_App_Deployments } from "@/lib/supabase/queries";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { Billing } from "@/lib/supabase/queries/billing";
 
-type PlatformAppSize = "small" | "medium" | "large";
+type PlatformAppSize = "small" | "medium" | "large" | "xlarge" | "xxlarge";
 
 export class PlatformAppBillingService {
   private static normalizeSize(size?: string | null): PlatformAppSize {
-    if (size === "medium" || size === "large") {
+    if (size === "medium" || size === "large" || size === "xlarge" || size === "xxlarge") {
       return size;
     }
     return "small";

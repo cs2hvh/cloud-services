@@ -1,17 +1,87 @@
 /**
  * Shared utilities for pipeline generation
- * 
+ *
  * PLATFORM DEPLOYMENT CONTRACT:
  * 1. Build stage - builds the container image
  * 2. Runtime secret sync is handled by backend API/Kubernetes service (NOT Jenkins templates)
  * 3. Deploy to Kubernetes stage - deploys the application
- * 
+ *
  * All pipelines MUST follow this order. No exceptions.
  */
 
 export interface EnvVar {
   key: string;
   value: string;
+}
+
+export interface AppSizeSpec {
+  cpuRequest: string;
+  cpuLimit: string;
+  memoryRequest: string;
+  memoryLimit: string;
+  replicas: number;
+}
+
+const SIZE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge'] as const;
+
+const APP_SIZE_SPECS: Record<string, AppSizeSpec> = {
+  small:   { cpuRequest: '250m', cpuLimit: '500m', memoryRequest: '256Mi', memoryLimit: '512Mi', replicas: 1 },
+  medium:  { cpuRequest: '500m', cpuLimit: '1',    memoryRequest: '512Mi', memoryLimit: '1Gi',   replicas: 2 },
+  large:   { cpuRequest: '1',    cpuLimit: '2',    memoryRequest: '1Gi',   memoryLimit: '2Gi',   replicas: 3 },
+  xlarge:  { cpuRequest: '2',    cpuLimit: '4',    memoryRequest: '2Gi',   memoryLimit: '4Gi',   replicas: 4 },
+  'xxlarge': { cpuRequest: '4', cpuLimit: '8',    memoryRequest: '4Gi',   memoryLimit: '8Gi',   replicas: 6 },
+};
+
+/**
+ * Resolve K8s resource spec for a given app size key.
+ * @param sizeKey - Requested size ('small' | 'medium' | 'large' | 'xlarge' | 'xxlarge')
+ * @param minSize - Floor size — when the requested size ranks below this, the floor is used.
+ *                  Use 'medium' for runtimes that need more base resources (JVM, SSR).
+ */
+export function resolveAppSize(sizeKey: string, minSize: string = 'small'): AppSizeSpec {
+  const key = (sizeKey || 'small').toLowerCase();
+  const min = (minSize || 'small').toLowerCase();
+  const keyIdx = SIZE_ORDER.indexOf(key as typeof SIZE_ORDER[number]);
+  const minIdx = SIZE_ORDER.indexOf(min as typeof SIZE_ORDER[number]);
+  const effectiveKey = keyIdx >= minIdx ? key : min;
+  return APP_SIZE_SPECS[effectiveKey] ?? APP_SIZE_SPECS.small;
+}
+
+/**
+ * Generate liveness + readiness probe YAML for a K8s container spec.
+ *
+ * Always uses tcpSocket probes (port-open check). This keeps deployments
+ * resilient — a misconfigured healthcheck_path never crashes the pod.
+ * The healthcheckPath parameter is accepted but ignored here; it is stored
+ * in the database for display and future soft-check use only.
+ *
+ * @param port               - Container port (TypeScript value, baked into XML at codegen time)
+ * @param healthcheckPath    - Stored but not used for K8s probes (reserved for future use)
+ * @param options.readinessInitialDelay - Seconds before first readiness check (default 15)
+ * @param options.livenessInitialDelay  - Seconds before first liveness check (default 30)
+ */
+export function generateProbeYaml(
+  port: number | string,
+  healthcheckPath?: string | null,
+  options?: { readinessInitialDelay?: number; livenessInitialDelay?: number },
+): string {
+  const readinessDelay = options?.readinessInitialDelay ?? 15;
+  const livenessDelay  = options?.livenessInitialDelay  ?? 30;
+
+  return `        readinessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${readinessDelay}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${livenessDelay}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3`;
 }
 
 /**

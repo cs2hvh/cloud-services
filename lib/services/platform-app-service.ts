@@ -28,10 +28,11 @@ export interface CreateAppRequest {
   output_directory?: string;
   project_id?: string;
   env_vars?: Array<{ key: string; value: string }>;
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   auto_deploy?: boolean;
   deploy_branch?: string;
   container_port?: number;
+  healthcheck_path?: string;
   userId: string;
   userEmail?: string;
   auditContext?: {
@@ -84,7 +85,7 @@ export interface DeleteAppResult {
 export interface ResizeAppOptions {
   appId: string;
   userId: string;
-  newSize: 'small' | 'medium' | 'large';
+  newSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   audit_context?: {
     ip_address?: string;
     user_agent?: string;
@@ -370,7 +371,7 @@ export class PlatformAppService {
       }
 
       // 4. Check billing
-      const instanceSize = (request.size || 'small') as "small" | "medium" | "large";
+      const instanceSize = (request.size || 'small') as "small" | "medium" | "large" | "xlarge" | "xxlarge";
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
         await getRatesForPlatformApp(instanceSize);
 
@@ -423,6 +424,7 @@ export class PlatformAppService {
         deploy_branch: request.deploy_branch || request.branch || 'main',
         project_id: request.project_id,
         container_port: request.container_port,
+        healthcheck_path: request.healthcheck_path,
         idempotencyKey: request.idempotencyKey ?? null,
       };
 
@@ -866,11 +868,13 @@ export class PlatformAppService {
       throw error;
     }
 
-    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large';
+    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
     const SIZE_ORDER: Record<string, number> = {
       small: 1,
       medium: 2,
       large: 3,
+      xlarge: 4,
+      'xxlarge': 5,
     };
 
     // Validate upsize only
@@ -935,7 +939,7 @@ export class PlatformAppService {
    */
   static async checkBalanceForResize(
     userId: string,
-    newSize: 'small' | 'medium' | 'large'
+    newSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge'
   ): Promise<{ ok: boolean; balance?: number; required?: number }> {
     let hourlyRate: number;
     try {

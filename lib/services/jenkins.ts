@@ -308,7 +308,8 @@ export class JenkinsService {
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
     envVars: Array<{ key: string; value: string }> = [],
     containerPort?: number,
-    gitAuthUrl?: string
+    gitAuthUrl?: string,
+    healthcheckPath?: string,
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -335,7 +336,8 @@ export class JenkinsService {
       size,
       deployTrigger,
       envVars,
-      containerPort
+      containerPort,
+      healthcheckPath,
     );
     const pipeline = this.hardenPipelineXml(pipelineRaw);
 
@@ -1150,6 +1152,7 @@ export class JenkinsService {
     containerPort?: number,
     framework?: string | null,
     operationId?: string,
+    healthcheckPath?: string,
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -1170,6 +1173,7 @@ export class JenkinsService {
         containerPort,
         framework,
         operationId ?? '',
+        healthcheckPath,
       )
     );
 
@@ -1315,7 +1319,8 @@ export class JenkinsService {
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
     envVars: Array<{ key: string; value: string }> = [],
-    containerPort?: number
+    containerPort?: number,
+    healthcheckPath?: string,
   ): string {
     const fw = framework?.toLowerCase();
     
@@ -1332,7 +1337,7 @@ export class JenkinsService {
       case 'dockerfile':
       case 'custom':
         console.log(`[JenkinsService] Using GENERIC DOCKERFILE pipeline (existing Dockerfile)`);
-        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'java':
       case 'maven':
@@ -1340,50 +1345,50 @@ export class JenkinsService {
       case 'spring-boot':
       case 'springboot':
         console.log(`[JenkinsService] Using JAVA/MAVEN pipeline (auto-Dockerfile with Maven build)`);
-        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'nextjs':
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
-        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'nuxtjs':
       case 'nuxt.js':
       case 'nuxt':
         console.log(`[JenkinsService] Using NUXT.JS pipeline (auto-Dockerfile with Nitro server)`);
-        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'vite-react':
       case 'vitereact':
       case 'react-vite':
         console.log(`[JenkinsService] Using VITE-REACT pipeline (auto-Dockerfile with Vite build)`);
-        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'vue':
       case 'vue.js':
       case 'vuejs':
         console.log(`[JenkinsService] Using VUE pipeline (auto-Dockerfile with Vite build)`);
-        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'angular':
         console.log(`[JenkinsService] Using ANGULAR pipeline (auto-Dockerfile with Angular CLI)`);
-        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'sveltekit':
         console.log(`[JenkinsService] Using SVELTEKIT pipeline (auto-Dockerfile with Node adapter)`);
-        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
 
       case 'nodejs':
       case 'node.js':
@@ -1391,7 +1396,7 @@ export class JenkinsService {
       case 'react': // Standard React (CRA) - requires Dockerfile
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
+        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
     }
   }
 
@@ -1408,7 +1413,8 @@ export class JenkinsService {
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'webhook',
     envVars: Array<{ key: string; value: string }> = [],
-    containerPort?: number
+    containerPort?: number,
+    healthcheckPath?: string,
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -1416,7 +1422,7 @@ export class JenkinsService {
 
     const jobName = `${appName}-job`;
     const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
-    
+
     console.log(`[JenkinsService] Updating job config: ${jobName}`);
     console.log(`[JenkinsService] New Git URL: ${cleanGitUrl}`);
     console.log(`[JenkinsService] Size: ${size}, EnvVars: ${envVars.length}`);
@@ -1429,12 +1435,13 @@ export class JenkinsService {
       appName,
       appId,
       cleanGitUrl,
-      branch, 
-      framework, 
+      branch,
+      framework,
       size,
       deployTrigger,
       envVars,
-      containerPort
+      containerPort,
+      healthcheckPath,
     );
     const pipeline = this.hardenPipelineXml(pipelineRaw);
 

@@ -163,6 +163,8 @@ export type PlatformApp = {
   project_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
 export type Rule = {

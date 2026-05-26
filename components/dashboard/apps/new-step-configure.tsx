@@ -54,6 +54,8 @@ interface Props {
   containerPort: number | undefined;
   onContainerPortChange: (v: number | undefined) => void;
   detectedPort: number | undefined;
+  healthcheckPath: string;
+  onHealthcheckPathChange: (v: string) => void;
   size: string;
   onSizeChange: (v: string) => void;
   autoDeploy: boolean;
@@ -73,7 +75,8 @@ export function StepConfigure({
   appName, onAppNameChange, selectedBranch, onSelectBranch,
   branches, loadingBranches, framework, onFrameworkChange,
   detectingFramework, hasDockerfile, containerPort, onContainerPortChange,
-  detectedPort, size, onSizeChange, autoDeploy, onAutoDeployChange,
+  detectedPort, healthcheckPath, onHealthcheckPathChange,
+  size, onSizeChange, autoDeploy, onAutoDeployChange,
   envVars, onEnvVarsChange, selectedRepoData, onDetectFramework,
   onRefreshBranches, onPrev, onNext,
 }: Props) {
@@ -309,12 +312,26 @@ export function StepConfigure({
               )}
             </div>
           )}
+
+          <div className="mt-3 border border-white/[0.06] bg-[#0d0e11] p-3.5">
+            <Field label="Health check path" hint="optional · HTTP GET">
+              <Input
+                value={healthcheckPath}
+                onChange={(e) => onHealthcheckPathChange(e.target.value)}
+                placeholder="/health"
+                mono
+              />
+            </Field>
+            <p className={`${MONO} mt-2 text-[11px] text-white/35`}>
+              The platform will probe this endpoint to confirm the app is live before routing traffic.
+            </p>
+          </div>
         </FormSection>
 
         {/* ── Instance size ────────────────────────────────── */}
         <FormSection title="Instance size">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {(["small", "medium", "large"] as const).map((opt) => {
+          <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+            {(["small", "medium", "large", "xlarge", "xxlarge"] as const).map((opt) => {
               const cfg = instanceSizeConfigs[opt];
               const sizePrice = pricing?.[opt];
               const selected = size === opt;

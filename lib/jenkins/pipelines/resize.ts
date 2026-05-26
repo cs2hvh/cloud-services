@@ -8,7 +8,7 @@
  * It reuses the existing latest Docker image and only updates the Kubernetes
  * deployment with new resource limits (cpu/memory) and replica count.
  */
-import { generateEnvFromSection, generateEnvSecret, generateRuntimeDefaultEnvYaml, EnvVar, Runtime } from './utils';
+import { generateEnvFromSection, generateEnvSecret, generateRuntimeDefaultEnvYaml, resolveAppSize, generateProbeYaml, EnvVar, Runtime } from './utils';
 
 function frameworkToRuntime(framework?: string | null): Runtime {
   const fw = framework?.toLowerCase();
@@ -28,32 +28,14 @@ export function createResizePipeline(
   containerPort?: number,
   framework?: string | null,
   operationId: string = '',
+  healthcheckPath?: string,
 ): string {
   // const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   // const ingressName = `${name}-ingress`;
 
-  const sizeKey = (size || 'small').toLowerCase();
-  let cpuRequest = '250m';
-  let cpuLimit = '500m';
-  let memoryRequest = '256Mi';
-  let memoryLimit = '512Mi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
 
   const port = containerPort ?? 3000;
 
@@ -110,7 +92,7 @@ pipeline {
           echo 'STAGE: Initialize'
           echo 'PIPELINE: Resize Operation Pipeline'
           echo "Application Name: \${env.APP_NAME}"
-          echo "Target Size: ${sizeKey}"
+          echo "Target Size: ${size}"
           echo "CPU: ${cpuRequest} -> ${cpuLimit}"
           echo "Memory: ${memoryRequest} -> ${memoryLimit}"
           echo "Replicas: ${replicas}"
@@ -169,20 +151,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
               echo 'Applying deployment manifest'

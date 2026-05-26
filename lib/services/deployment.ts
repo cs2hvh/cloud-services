@@ -34,6 +34,7 @@ export interface DeploymentConfig {
   deploy_branch?: string;
   project_id?: string;
   container_port?: number; // User-specified or auto-detected port
+  healthcheck_path?: string;
   idempotencyKey?: string | null;
 }
 
@@ -133,6 +134,7 @@ export class DeploymentService {
         deploy_branch: config.deploy_branch || config.branch,
         size: config.size || 'small', // Store size for redeployments
         project_id: config.project_id || null,
+        healthcheck_path: config.healthcheck_path || null,
       };
 
       const result = await Platform_Apps.create(appPayload);
@@ -200,6 +202,7 @@ export class DeploymentService {
               envVars: envVarsToPass,
               containerPort,
               gitAuthUrl: config.authenticated_url || undefined,
+              healthcheckPath: config.healthcheck_path || undefined,
             });
             console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
             return {

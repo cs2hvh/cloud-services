@@ -383,8 +383,8 @@ export class AppRuntimeMutationService {
     appName: string;
     appStatus?: string | null;
     appFailureReason?: string | null;
-    currentSize: "small" | "medium" | "large";
-    targetSize: "small" | "medium" | "large";
+    currentSize: "small" | "medium" | "large" | "xlarge" | "xxlarge";
+    targetSize: "small" | "medium" | "large" | "xlarge" | "xxlarge";
     idempotencyKey?: string | null;
     executor: (operationId: string) => Promise<{
       buildNumber: number;

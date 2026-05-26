@@ -24,8 +24,8 @@ export interface BuildPollConfig {
   operationId?: string; // required for resize: the DB record ID to update by
   trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
   resizeContext?: {
-    previousSize: 'small' | 'medium' | 'large';
-    targetSize: 'small' | 'medium' | 'large';
+    previousSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+    targetSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   };
   maxPolls?: number;
   pollInterval?: number;
@@ -40,7 +40,7 @@ export interface BuildPollResult {
   pollCount: number;
 }
 
-type PlatformAppSize = 'small' | 'medium' | 'large';
+type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 
 export class BuildPollingService {
   private static readonly DEFAULT_MAX_POLLS = 180; // 30 minutes
@@ -63,7 +63,9 @@ export class BuildPollingService {
   private static getSizeFromReplicaCount(replicas?: number | null): PlatformAppSize | null {
     if (!replicas || replicas <= 1) return 'small';
     if (replicas === 2) return 'medium';
-    if (replicas >= 3) return 'large';
+    if (replicas === 3) return 'large';
+    if (replicas === 4) return 'xlarge';
+    if (replicas >= 6) return 'xxlarge';
     return null;
   }
 
@@ -558,6 +560,7 @@ export class BuildPollingService {
       // No need to handle them inline here.
 
       console.log(`[BuildPolling] ✅ App ${appName} is healthy and running`);
+      await this.softCheckHealthEndpoint(appId, appName);
       await this.finalizeBuildRecord({
         appId,
         appName,
@@ -672,6 +675,33 @@ export class BuildPollingService {
 
     console.log(`[BuildPolling] ⚠️ Health verification failed: ${lastReason}`);
     return { healthy: false, reason: lastReason };
+  }
+
+  private static async softCheckHealthEndpoint(appId: string, appName: string): Promise<void> {
+    try {
+      const { Platform_Apps } = await import("@/lib/supabase/queries");
+      const appResult = await Platform_Apps.get(appId);
+      const healthcheckPath = appResult.data?.healthcheck_path;
+      if (!healthcheckPath) return;
+
+      const APP_DOMAIN = process.env.APP_DOMAIN || 'galaxyhvh.com';
+      const url = `https://${appName}.${APP_DOMAIN}${healthcheckPath}`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (res.ok) {
+          console.log(`[BuildPolling] ✅ Health endpoint ${healthcheckPath} → ${res.status}`);
+        } else {
+          console.warn(`[BuildPolling] ⚠️ Health endpoint ${healthcheckPath} → ${res.status} (app running but path may be wrong)`);
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (error) {
+      console.warn(`[BuildPolling] ⚠️ Health endpoint check skipped:`, error instanceof Error ? error.message : String(error));
+    }
   }
 
   /**

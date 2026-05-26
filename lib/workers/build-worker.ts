@@ -25,18 +25,7 @@ async function processBuildJob(job: Job<BuildJobData>): Promise<void> {
     throw new Error(`App not found: ${appId}`);
   }
 
-  const app = appResult.data as {
-    id: string;
-    name: string;
-    user_id: string;
-    git_provider?: string | null;
-    repository_url?: string | null;
-    branch?: string | null;
-    deploy_branch?: string | null;
-    framework?: string | null;
-    size?: string | null;
-    port?: number | null;
-  };
+  const app = appResult.data;
 
   if (!app.repository_url) {
     throw new Error(`App ${app.name} has no repository URL`);
@@ -55,6 +44,7 @@ async function processBuildJob(job: Job<BuildJobData>): Promise<void> {
     framework: app.framework ?? 'nodejs',
     size: app.size ?? 'small',
     containerPort: app.port ?? undefined,
+    healthcheckPath: app.healthcheck_path ?? undefined,
     commitSha: sourceHash,
     deliveryId: deliveryId,
   });

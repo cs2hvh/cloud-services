@@ -104,9 +104,10 @@ interface AppDetail {
   rollback_target_commit_sha?: string | null;
   // Failure tracking
   last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
-type PlatformAppSize = 'small' | 'medium' | 'large';
+type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 type SizeKey = PlatformAppSize;
 
 type PlatformAppRates = {
@@ -115,15 +116,17 @@ type PlatformAppRates = {
   price: number;
 };
 
-const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large'];
+const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
 
 const PLATFORM_APP_SIZE_SPECS: Record<
   SizeKey,
   { cpu: string; memory: string; replicas: number }
 > = {
-  small: { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
-  medium: { cpu: '0.5 CPU', memory: '512 MB', replicas: 2 },
-  large: { cpu: '1 CPU', memory: '1 GB', replicas: 3 },
+  small:     { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
+  medium:    { cpu: '0.5 CPU',  memory: '512 MB', replicas: 2 },
+  large:     { cpu: '1 CPU',    memory: '1 GB',   replicas: 3 },
+  xlarge:    { cpu: '2 CPU',    memory: '2 GB',   replicas: 4 },
+  'xxlarge': { cpu: '4 CPU',    memory: '4 GB',   replicas: 6 },
 };
 
 const SECTION_META: Array<{
@@ -287,6 +290,9 @@ export default function AppDetailPage() {
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
+
+  // Health path check state
+  const [healthPathStatus, setHealthPathStatus] = useState<'checking' | 'reachable' | 'unreachable' | 'not_configured' | null>(null);
 
   // Resize state
   const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
@@ -780,6 +786,17 @@ export default function AppDetailPage() {
     }
   }, [activeTab]);
 
+  // Check healthcheck_path reachability when Settings tab opens.
+  useEffect(() => {
+    if (activeTab !== 'settings' || !app?.id) return;
+    if (!app.healthcheck_path) { setHealthPathStatus('not_configured'); return; }
+    setHealthPathStatus('checking');
+    fetch(`/api/services/platform-apps/check-health-path?app_id=${app.id}`)
+      .then(r => r.json())
+      .then(d => setHealthPathStatus(d.reachable ? 'reachable' : 'unreachable'))
+      .catch(() => setHealthPathStatus('unreachable'));
+  }, [activeTab, app?.id, app?.healthcheck_path]);
+
   // Lazy-load env var values only when the Settings tab is first opened.
   // Values are intentionally excluded from the main page-load GET response
   // to avoid sending decrypted secrets over the wire unnecessarily.
@@ -1254,7 +1271,7 @@ export default function AppDetailPage() {
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
-  const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+  const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
   const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
   const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
 
@@ -1960,6 +1977,27 @@ export default function AppDetailPage() {
                       {app.output_directory || 'Default'}
                     </p>
                   </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                    <p className="text-xs text-white/40 mb-1">Health Check Path</p>
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                        {app.healthcheck_path || <span className="text-white/30">Not set · TCP socket probe</span>}
+                      </p>
+                      {app.healthcheck_path && (
+                        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded ${
+                          healthPathStatus === 'checking'     ? 'bg-white/[0.06] text-white/40' :
+                          healthPathStatus === 'reachable'    ? 'bg-green-500/10 text-green-400' :
+                          healthPathStatus === 'unreachable'  ? 'bg-orange-500/10 text-orange-400' :
+                          'bg-white/[0.06] text-white/40'
+                        }`}>
+                          {healthPathStatus === 'checking'    ? 'Checking…' :
+                           healthPathStatus === 'reachable'   ? '✓ Reachable' :
+                           healthPathStatus === 'unreachable' ? '⚠ Not reachable' :
+                           ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Project Assignment */}
@@ -2064,11 +2102,11 @@ export default function AppDetailPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
                     {PLATFORM_APP_SIZE_ORDER.map((size) => {
                       const specs = PLATFORM_APP_SIZE_SPECS[size];
                       const monthlyPrice = platformPricing[size]?.price ?? 0;
-                      const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+                      const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
                       const isCurrent = size === currentSize;
                       const isUpgrade =
                         PLATFORM_APP_SIZE_ORDER.indexOf(size) >
