@@ -1,15 +1,20 @@
 /**
  * Model routing — looks up the model in inference.models and decides
- * whether to forward to the upstream gateway (proxy) or to a self-hosted
- * fine-tune serving endpoint (runpod_ft).
+ * whether to forward to the upstream gateway (proxy) or to a managed
+ * serving endpoint (Phase 11).
  *
- * The catalog row's `serving_type` is the switch:
- *   'proxy'      → forward to upstream gateway (default path)
- *   'runpod_ft'  → forward to the per-FT serving endpoint stored on the
- *                  row's `runpod_endpoint_id`; rewrite `model` to "adapter"
- *                  (the vLLM --served-model-name).
- *   'runpod_byo' → BYO Deploy, similar to runpod_ft. (Phase 6 — not all
- *                  source types implemented yet.)
+ * The decision tree:
+ *   serving_type='proxy'                    → forward to OpenRouter (default)
+ *   serving_type='runpod_ft'/'runpod_byo':
+ *     - models.serving_url IS NOT NULL      → forward to that URL
+ *                                              (managed; Phase 11)
+ *     - models.serving_url IS NULL          → 400 self_serve_model
+ *                                              (user runs vLLM themselves;
+ *                                              Phase 10)
+ *
+ * The serving_url shape is a full OpenAI-compatible base URL:
+ *   "https://phi-4-managed.ahura.svc:8000"
+ * The gateway appends "/v1/chat/completions" when forwarding.
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
@@ -18,10 +23,10 @@ export type ServingType = "proxy" | "runpod_ft" | "runpod_byo";
 
 export interface ModelRouting {
   serving_type: ServingType;
-  /** The per-FT or per-BYO endpoint id; null for proxy models. */
-  endpoint_id: string | null;
+  /** Full HTTPS URL of the managed vLLM server. NULL = self-serve only. */
+  serving_url: string | null;
   /** The name to put in the outgoing `model` field when forwarding to a
-   *  self-hosted endpoint. vLLM's openai-server only accepts requests
+   *  managed endpoint. vLLM's openai-server only accepts requests
    *  whose `model` matches its `--served-model-name`. */
   served_model_name: string | null;
   is_active: boolean;
@@ -42,11 +47,11 @@ export async function lookupModelRouting(
   const { data } = await supabase
     .schema("inference")
     .from("models")
-    .select("serving_type, runpod_endpoint_id, is_active")
+    .select("serving_type, serving_url, is_active")
     .eq("model_id", modelId)
     .maybeSingle<{
       serving_type: ServingType;
-      runpod_endpoint_id: string | null;
+      serving_url: string | null;
       is_active: boolean;
     }>();
 
@@ -54,44 +59,43 @@ export async function lookupModelRouting(
 
   return {
     serving_type: data.serving_type,
-    endpoint_id: data.runpod_endpoint_id,
+    serving_url: data.serving_url,
     served_model_name: data.serving_type === "runpod_ft" ? "adapter" : null,
     is_active: data.is_active,
   };
 }
 
 /**
- * Forward a chat/completions request to a self-hosted serving endpoint.
- * The endpoint is expected to be OpenAI-compatible (vLLM openai-server).
+ * Forward a chat/completions request to a managed vLLM server.
+ * The serving_url is treated as a base ("https://host:port") and the
+ * gateway appends "/v1/chat/completions". vLLM's openai-server lives
+ * at /v1/* so the URL composition matches OpenAI's own spec.
  *
  * Returns the upstream Response. Caller is responsible for streaming
  * passthrough or buffering.
  */
-export async function forwardToSelfHosted(opts: {
-  env: Env;
-  endpointId: string;
+export async function forwardToManaged(opts: {
+  servingUrl: string;
   body: Record<string, unknown>;
   servedModelName: string;
   signal?: AbortSignal | null;
-  pathSuffix?: string; // defaults to "/openai/v1/chat/completions"
+  pathSuffix?: string; // defaults to "/v1/chat/completions"
 }): Promise<Response> {
-  const { env, endpointId, body, servedModelName, signal } = opts;
-  const path = opts.pathSuffix ?? "/openai/v1/chat/completions";
+  const path = opts.pathSuffix ?? "/v1/chat/completions";
+  const base = opts.servingUrl.replace(/\/+$/, "");
 
   // Rewrite model to vLLM's served-model-name. Caller's original model id
-  // (e.g. "ahura/phi-4:ft-abc12345") wouldn't pass vLLM's check.
-  const outgoing = { ...body, model: servedModelName };
+  // (e.g. "ahura/phi-4:ft-abc12345") wouldn't pass vLLM's --served-model-name
+  // check unless the operator explicitly set --served-model-name to that
+  // value at container start.
+  const outgoing = { ...opts.body, model: opts.servedModelName };
 
-  // Auth via the same RunPod API key we use for orchestration. The provider's
-  // serverless layer requires this header on every request.
-  const url = `https://api.runpod.ai/v2/${endpointId}${path}`;
-  return fetch(url, {
+  return fetch(`${base}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${env.RUNPOD_API_KEY ?? ""}`,
     },
     body: JSON.stringify(outgoing),
-    signal: signal ?? undefined,
+    signal: opts.signal ?? undefined,
   });
 }

@@ -19,7 +19,7 @@ import {
 } from "../lib/openrouter.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
-import { lookupModelRouting, forwardToSelfHosted } from "../lib/model-routing.ts";
+import { lookupModelRouting, forwardToManaged } from "../lib/model-routing.ts";
 import {
   evaluateGuardrail,
   extractUserTextsFromOpenAI,
@@ -249,22 +249,104 @@ export const chatCompletions: Handler<{
     c.header("X-Ahura-Preset", presetName!);
   }
 
-  // 5b. Self-hosted models (FT outputs, BYO deploys) — gateway-routed
-  // managed serving is out of scope for v1. User runs vLLM on their own
-  // rented GPU pod (see /dashboard/services/gpu/deploy). For now, return
-  // a clear redirect message instead of attempting to forward.
+  // 5b. Self-hosted models (FT outputs, BYO deploys) — two branches:
+  //
+  //   • serving_url SET → AhuraCloud-managed serving (Phase 11). Forward to
+  //                       that URL; the URL hosts a vLLM openai-server we
+  //                       operate.
+  //   • serving_url NULL → self-serve only (Phase 10). User runs vLLM on
+  //                        their own GPU pod. Return a redirect message.
   if (routing && (routing.serving_type === "runpod_ft" || routing.serving_type === "runpod_byo")) {
-    return c.json(
-      errorBody(
-        `Model "${effectiveModel}" is a private adapter. Serve it on a GPU pod you control; ` +
-          `the gateway does not currently route to per-tenant adapters. ` +
-          `See the dashboard's job detail dialog for deployment instructions.`,
-        "invalid_request_error",
-        "self_serve_model",
-        requestId
-      ),
-      400
+    if (!routing.serving_url) {
+      return c.json(
+        errorBody(
+          `Model "${effectiveModel}" is a private adapter. Serve it on a GPU pod you control ` +
+            `(see the FT job detail in the dashboard for the docker command), or ask your ` +
+            `org admin to enable managed serving for this adapter.`,
+          "invalid_request_error",
+          "self_serve_model",
+          requestId
+        ),
+        400
+      );
+    }
+
+    // Managed path — forward directly to the operator-deployed vLLM URL.
+    // The cache + guardrail already ran above; preset rewrite already
+    // applied. Pass the body as-is (with model rewritten to vLLM's
+    // served-model-name inside forwardToManaged).
+    const servedName = routing.served_model_name ?? "adapter";
+    const upstream = await forwardToManaged({
+      servingUrl: routing.serving_url,
+      body: outgoingBody,
+      servedModelName: servedName,
+      signal: c.req.raw.signal,
+    });
+    c.header("X-Ahura-Routing", "managed");
+
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      c.executionCtx.waitUntil(
+        sendUsage(c.env, {
+          ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+          status: mapUpstreamStatus(upstream.status),
+          errorCode: `managed_${upstream.status}`,
+        })
+      );
+      return new Response(text, {
+        status: upstream.status,
+        headers: {
+          "content-type": upstream.headers.get("content-type") ?? "application/json",
+          "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Model": effectiveModel,
+          "X-Ahura-Routing": "managed",
+        },
+      });
+    }
+
+    // Stream OR non-stream — passthrough body unchanged. vLLM's openai-server
+    // emits usage in both shapes; we read it the same way the OpenRouter
+    // path below does, just from a different upstream.
+    if (outgoingBody.stream === true) {
+      return streamPassthrough(upstream, (rawText) => {
+        const usage = extractUsageFromSse(rawText);
+        c.executionCtx.waitUntil(
+          sendUsage(c.env, {
+            ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+            inputTokens: usage?.prompt_tokens ?? null,
+            outputTokens: usage?.completion_tokens ?? null,
+            status: "success",
+          })
+        );
+      });
+    }
+
+    const text = await upstream.text();
+    let usage: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    try {
+      const parsedResp = JSON.parse(text) as { usage?: typeof usage };
+      usage = parsedResp.usage;
+    } catch {
+      // upstream returned non-JSON — pass through but skip usage
+    }
+    c.executionCtx.waitUntil(
+      sendUsage(c.env, {
+        ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+        inputTokens: usage?.prompt_tokens ?? null,
+        outputTokens: usage?.completion_tokens ?? null,
+        status: "success",
+      })
     );
+    return new Response(text, {
+      status: 200,
+      headers: {
+        "content-type": upstream.headers.get("content-type") ?? "application/json",
+        "X-Ahura-Request-Id": requestId,
+        "X-Ahura-Model": effectiveModel,
+        "X-Ahura-Billing": auth.billing,
+        "X-Ahura-Routing": "managed",
+      },
+    });
   }
 
   // 5. L1 cache check — only non-streaming deterministic requests, scoped per org

@@ -90,6 +90,8 @@ export interface FineTuneJob {
   dataset_url?: string | null;
   output_artifact_url?: string | null;
   pod_id?: string | null;
+  is_managed?: boolean | null;
+  serving_url?: string | null;
 }
 
 export interface FineTuneBaseModel {
@@ -647,6 +649,19 @@ export function FineTuning({
                     <span className={`${MONO} text-[12.5px] font-semibold text-white truncate`}>
                       {j.name}
                     </span>
+                    {j.is_managed && (
+                      <span
+                        className={`${MONO} text-[9px] uppercase tracking-[0.14em] font-semibold px-1.5 py-0.5 rounded shrink-0`}
+                        style={{
+                          color: "#33adff",
+                          background: "rgba(0,149,255,0.10)",
+                          border: "1px solid rgba(0,149,255,0.25)",
+                        }}
+                        title={j.serving_url ?? "Routed via AhuraCloud-operated vLLM"}
+                      >
+                        Managed
+                      </span>
+                    )}
                   </div>
                   <span className={`${MONO} block text-[10.5px] text-white/35 mt-0.5`}>
                     {new Date(j.created_at).toLocaleDateString(undefined, {
