@@ -26,15 +26,43 @@ ALTER TABLE inference.orgs
   ADD COLUMN IF NOT EXISTS monthly_budget_cents BIGINT,
   ADD COLUMN IF NOT EXISTS hard_cap_cents       BIGINT;
 
--- Sanity check — neither value can be negative.
-ALTER TABLE inference.orgs
-  ADD CONSTRAINT orgs_monthly_budget_cents_nonneg
-    CHECK (monthly_budget_cents IS NULL OR monthly_budget_cents >= 0),
-  ADD CONSTRAINT orgs_hard_cap_cents_nonneg
-    CHECK (hard_cap_cents IS NULL OR hard_cap_cents >= 0);
+-- Sanity check — neither value can be negative. Wrapped in DO blocks
+-- so a re-run after a previous partial apply is a no-op (CHECK
+-- constraints don't support ADD CONSTRAINT IF NOT EXISTS until pg17).
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'orgs_monthly_budget_cents_nonneg'
+      AND conrelid = 'inference.orgs'::regclass
+  ) THEN
+    ALTER TABLE inference.orgs
+      ADD CONSTRAINT orgs_monthly_budget_cents_nonneg
+      CHECK (monthly_budget_cents IS NULL OR monthly_budget_cents >= 0);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'orgs_hard_cap_cents_nonneg'
+      AND conrelid = 'inference.orgs'::regclass
+  ) THEN
+    ALTER TABLE inference.orgs
+      ADD CONSTRAINT orgs_hard_cap_cents_nonneg
+      CHECK (hard_cap_cents IS NULL OR hard_cap_cents >= 0);
+  END IF;
+END $$;
 
 -- Replace the RPC so the gateway picks up the org-level fields. Backed
 -- by an INNER JOIN since every api_keys row references an org.
+--
+-- Postgres won't let CREATE OR REPLACE change a function's return
+-- column list — we're adding org_monthly_budget_cents +
+-- org_hard_cap_cents — so drop first. Safe: the old shape is a strict
+-- subset of the new one; the only caller is the Worker, which gets
+-- redeployed alongside this migration.
+DROP FUNCTION IF EXISTS inference.lookup_api_key(TEXT);
+
 CREATE OR REPLACE FUNCTION inference.lookup_api_key(p_hash TEXT)
 RETURNS TABLE (
   key_id                   UUID,
