@@ -212,9 +212,22 @@ export function NotificationsSettings({
         method: "POST",
         credentials: "include",
       });
-      const data = await r.json();
+      const data = (await r.json()) as {
+        success?: boolean;
+        error?: string;
+        channels?: { in_app: boolean; email: boolean; webhook: boolean };
+      };
       if (!r.ok) throw new Error(data.error ?? "Test failed");
-      toast.success("Test event fired — check your inbox + webhook + bell");
+      const fired = data.channels
+        ? Object.entries(data.channels)
+            .filter(([, on]) => on)
+            .map(([k]) => (k === "in_app" ? "in-app bell" : k))
+        : [];
+      toast.success(
+        fired.length
+          ? `Test event fired to: ${fired.join(", ")}`
+          : "Test fired — no channels enabled, nothing was delivered"
+      );
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Test failed");

@@ -49,6 +49,10 @@ export interface InferenceEventInput {
   /** Optional user_id to attach the in-app notification to. If omitted,
    *  the in-app notification is sent to the org owner only. */
   userId?: string;
+  /** When true, skip the events_subscribed filter — used by the
+   *  /notifications/test endpoint so a user can verify their channels
+   *  even before they've explicitly subscribed to the test event type. */
+  bypassSubscriptionFilter?: boolean;
 }
 
 /**
@@ -106,7 +110,7 @@ export async function emitInferenceEvent(input: InferenceEventInput): Promise<vo
     "finetune.failed",
     "batch.completed",
   ];
-  if (!eventsSubscribed.includes(input.event)) {
+  if (!input.bypassSubscriptionFilter && !eventsSubscribed.includes(input.event)) {
     return;
   }
 
