@@ -47,7 +47,9 @@ export type InferenceAuditAction =
   | "batch.created"
   | "batch.cancelled"
   | "batch.completed"
-  | "batch.failed";
+  | "batch.failed"
+  | "notifications.config_updated"
+  | "notifications.webhook_rotated";
 
 export interface RecordAuditInput {
   orgId: string;

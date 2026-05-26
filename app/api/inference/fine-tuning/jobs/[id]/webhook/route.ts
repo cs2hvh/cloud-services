@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
+import { emitInferenceEvent } from "@/lib/inference/notifications";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
 
@@ -142,7 +143,25 @@ export async function POST(
       })
       .eq("id", id);
 
-    // TODO Phase 7: trigger Svix customer webhook fine_tuning.job.failed
+    // Fan out to org's configured notification channels (in-app + email
+    // + customer webhook). Fire-and-forget — failures here never bubble
+    // up to the FT pod's webhook call.
+    void emitInferenceEvent({
+      orgId: existing.org_id,
+      event: "finetune.failed",
+      resourceId: id,
+      title: `Fine-tune "${existing.name}" failed`,
+      summary: `Your fine-tune of ${existing.base_model_id} failed after ${Math.round(payload.elapsed_seconds / 60)} min.`,
+      details: [
+        { label: "Job", value: existing.name },
+        { label: "Base model", value: existing.base_model_id },
+        { label: "Runtime", value: `${Math.round(payload.elapsed_seconds / 60)} min` },
+        { label: "Cost", value: `$${(costCents / 100).toFixed(2)}` },
+      ],
+      errorMessage: payload.error ?? "training_container_reported_failure",
+      dashboardPath: "/dashboard/services/inference/fine-tuning",
+      actionLabel: "View job",
+    });
     return NextResponse.json({ ok: true, cost_cents: costCents });
   }
 
@@ -230,7 +249,25 @@ export async function POST(
     })
     .eq("id", id);
 
-  // TODO Phase 7: trigger Svix customer webhook fine_tuning.job.succeeded
+  // Fan out to org's configured notification channels.
+  void emitInferenceEvent({
+    orgId: existing.org_id,
+    event: "finetune.succeeded",
+    resourceId: id,
+    title: `Fine-tune "${existing.name}" finished`,
+    summary: `Your fine-tune of ${existing.base_model_id} is ready to call.`,
+    details: [
+      { label: "Job", value: existing.name },
+      { label: "Base model", value: existing.base_model_id },
+      { label: "Runtime", value: `${Math.round(payload.elapsed_seconds / 60)} min` },
+      { label: "Cost", value: `$${(costCents / 100).toFixed(2)}` },
+      ...(payload.final_loss !== undefined
+        ? [{ label: "Final loss", value: payload.final_loss.toFixed(4) }]
+        : []),
+    ],
+    dashboardPath: "/dashboard/services/inference/fine-tuning",
+    actionLabel: "Use your model",
+  });
   return NextResponse.json({
     ok: true,
     cost_cents: costCents,

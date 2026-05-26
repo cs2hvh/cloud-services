@@ -1,9 +1,9 @@
 export type NotificationType = 'success' | 'info' | 'warning' | 'error';
 
-export type ServiceType = 
-  | 'platform_app' 
-  | 'database' 
-  | 'kubernetes' 
+export type ServiceType =
+  | 'platform_app'
+  | 'database'
+  | 'kubernetes'
   | 'object_storage'
   | 'network_ddos'
   | 'compute'
@@ -13,7 +13,8 @@ export type ServiceType =
   | 'ai_agent'
   | 'knowledge_base'
   | 'domain'
-  | 'billing';
+  | 'billing'
+  | 'inference';
 
 export type ActionType = 
   | 'created' 
