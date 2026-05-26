@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { emitInferenceEvent } from "@/lib/inference/notifications";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
 
@@ -131,12 +132,15 @@ export async function POST(
   // time, customer should see what they paid for.
   if (payload.status === "failed") {
     const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const safeError =
+      customerSafeErrorMessage(payload.error) ||
+      "Training did not complete. Re-run the job; if it fails again, try a different GPU size or contact support.";
     await supabase
       .schema("inference")
       .from("finetunes")
       .update({
         status: "failed",
-        error_message: payload.error ?? "training_container_reported_failure",
+        error_message: safeError,
         training_seconds: payload.elapsed_seconds,
         cost_cents: costCents,
         completed_at: new Date().toISOString(),
@@ -158,7 +162,7 @@ export async function POST(
         { label: "Runtime", value: `${Math.round(payload.elapsed_seconds / 60)} min` },
         { label: "Cost", value: `$${(costCents / 100).toFixed(2)}` },
       ],
-      errorMessage: payload.error ?? "training_container_reported_failure",
+      errorMessage: safeError,
       dashboardPath: "/dashboard/services/inference/fine-tuning",
       actionLabel: "View job",
     });

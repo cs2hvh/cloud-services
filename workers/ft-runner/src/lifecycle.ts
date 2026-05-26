@@ -152,12 +152,21 @@ export async function runJob(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, "provisioning failed");
+    // Customer-facing error_message — DO NOT leak internal infra terms
+    // like "Pod", "RunPod", "BullMQ". Operator detail is logged above
+    // via log.error; customer sees a clean explanation here. The msg
+    // from the upstream provider IS logged for operator debug but never
+    // shown raw to the customer because it sometimes contains vendor
+    // names + opaque ids.
+    void msg;
+    log.error({ err: String(err).slice(0, 1000) }, "provision failed; sanitized message sent to customer");
     await supabase
       .schema("inference")
       .from("finetunes")
       .update({
         status: "failed",
-        error_message: `Pod provisioning failed: ${msg.slice(0, 500)}`,
+        error_message:
+          "Could not start training. Try again in a moment, or pick a different GPU size if this persists.",
         completed_at: new Date().toISOString(),
       })
       .eq("id", jobId)
@@ -252,10 +261,11 @@ async function monitorUntilDone(
         continue;
       }
       log.error({ podStatus }, "pod down + no completion webhook — marking failed");
+      // Customer-facing — vendor-neutral, action-oriented.
       await markFailedIfStillRunning(
         supabase,
         jobId,
-        `Pod ${podStatus.toLowerCase()} without completion webhook`
+        "Training stopped unexpectedly before completing. Re-run the job; if it fails again, try a different GPU size."
       );
       await runpod.terminatePod(podId).catch(() => undefined);
       return;
@@ -300,10 +310,17 @@ async function monitorUntilDone(
         { consecutiveStalls, podStatus },
         "heartbeat stall threshold exceeded — killing pod"
       );
+      // Customer-facing — no "heartbeat" / "pod" / threshold internals.
+      // Operator detail (consecutiveStalls, podStatus, threshold) is in
+      // the log line above; customer just needs a clear, actionable
+      // explanation + next step.
+      const stallMin = Math.round(
+        (env.heartbeatStallMs * env.consecutiveStallsToKill) / 60000
+      );
       await markFailedIfStillRunning(
         supabase,
         jobId,
-        `No heartbeat for >${(env.heartbeatStallMs * env.consecutiveStallsToKill) / 1000}s (pod ${podStatus})`
+        `Training stopped responding for ${stallMin} minutes and was cancelled. Re-run the job; if it repeats, try a different GPU size or contact support.`
       );
       await runpod.terminatePod(podId).catch(() => undefined);
       return;

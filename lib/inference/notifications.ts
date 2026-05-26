@@ -18,6 +18,7 @@ import { createHmac } from "crypto";
 import { emailService } from "@/lib/email/service";
 import { NotificationService } from "@/lib/notifications/service";
 import type { InferenceEventName } from "@/lib/email/types";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const DASHBOARD_BASE =
   process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://wao.cs2hvh.com";
@@ -56,6 +57,13 @@ export interface InferenceEventInput {
  * waitUntil(emit(...))` style.
  */
 export async function emitInferenceEvent(input: InferenceEventInput): Promise<void> {
+  // Scrub any leaky upstream/internal terms before the message ever
+  // leaves our process boundary (email, in-app, outbound webhook).
+  const sanitizedError = input.errorMessage
+    ? customerSafeErrorMessage(input.errorMessage)
+    : undefined;
+  input = { ...input, errorMessage: sanitizedError || undefined };
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,

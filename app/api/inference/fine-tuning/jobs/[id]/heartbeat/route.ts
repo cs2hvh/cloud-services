@@ -63,7 +63,7 @@ export async function POST(
   }
   if (!redis) {
     return NextResponse.json(
-      { error: "Redis not configured — set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN" },
+      { error: "Heartbeat receiver not configured" },
       { status: 500 }
     );
   }

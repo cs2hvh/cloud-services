@@ -60,6 +60,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 export interface FineTuneJob {
   id: string;
@@ -532,7 +533,7 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
               <>
                 <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3 mb-3">
                   <p className={`${MONO} text-[10.5px] text-red-200/85 leading-relaxed`}>
-                    {j.serving_pod_error_message ?? "The serving instance failed to start. Try again with a different GPU size."}
+                    {customerSafeErrorMessage(j.serving_pod_error_message) || "The serving instance failed to start. Try again with a different GPU size."}
                   </p>
                 </div>
                 <button
@@ -589,48 +590,20 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
         </div>
       )}
 
-      {/* Infra */}
-      {podId && (
-        <div>
-          <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55 mb-2`}>Compute</h4>
-          <InfoRow k="Pod id" v={<code>{podId}</code>} />
-          {j.last_heartbeat_at && <InfoRow k="Last heartbeat" v={new Date(j.last_heartbeat_at).toLocaleString()} />}
-        </div>
-      )}
-
-      {/* Error */}
+      {/* Error — error_message goes through customerSafeErrorMessage() so
+          stored strings from older versions of the runner ("No heartbeat
+          for >5400s (pod RUNNING)" etc.) get re-rendered with vendor-
+          neutral copy. New jobs write clean strings from the runner. */}
       {j.error_message && (
         <div>
           <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-red-300/85 mb-2`}>
-            {j.status === "failed" ? "Failure reason" : "Warning"}
+            {j.status === "failed" ? "What happened" : "Notice"}
           </h4>
           <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3">
-            <pre className={`${MONO} text-[10.5px] text-red-200/85 whitespace-pre-wrap break-all`}>{j.error_message}</pre>
+            <p className={`${MONO} text-[11px] text-red-200/85 leading-relaxed`}>
+              {customerSafeErrorMessage(j.error_message)}
+            </p>
           </div>
-          {/* Pattern-based hint: heartbeat-related failures often mean training was
-              still alive but the monitor lost touch. Surface that + link to
-              diagnostics so the operator can verify the heartbeat path. */}
-          {/heartbeat/i.test(j.error_message) && (
-            <div className="mt-2 rounded-[4px] border border-amber-700/40 bg-amber-950/30 p-3 space-y-1.5">
-              <p className={`${MONO} text-[10.5px] text-amber-200/85 leading-relaxed`}>
-                <strong>This may be a false failure.</strong> The training pod can keep running
-                even when the monitor can&apos;t see heartbeats — usually a misconfigured
-                Upstash Redis on one side. Common cause: the LKE ft-runner and the Next.js
-                receiver point at different Upstash databases.
-              </p>
-              <p className={`${MONO} text-[10.5px] text-amber-200/70 leading-relaxed`}>
-                Open{" "}
-                <Link
-                  href="/dashboard/services/inference/diagnostics"
-                  className="text-[#33adff] hover:underline"
-                >
-                  Diagnostics
-                </Link>{" "}
-                and check &quot;Upstash same on both sides&quot; — that has the exact kubectl
-                command to align the two.
-              </p>
-            </div>
-          )}
         </div>
       )}
 
