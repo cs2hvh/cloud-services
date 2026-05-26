@@ -427,11 +427,12 @@ ${pm.setupPm}
 ${pm.copyLockfiles}
 ${pm.install}
 
+# Build args for client-side vars declared BEFORE COPY . . so that changing
+# their values busts the BuildKit registry cache and forces a fresh npm run build.
+# npm install above remains cached — only the build step re-runs on env changes.
+${argDirectives}${envDirectives}
 COPY . .
 
-# Build args for client-side vars (placed after install to preserve cache)
-${argDirectives}# Pass build args as environment variables for Next.js
-${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
 ${pm.build}
@@ -501,11 +502,12 @@ ${pm.setupPm}
 ${pm.copyLockfiles}
 ${pm.install}
 
+# Build args for client-side vars declared BEFORE COPY . . so that changing
+# their values busts the BuildKit registry cache and forces a fresh npm run build.
+# npm install above remains cached — only the build step re-runs on env changes.
+${argDirectives}${envDirectives}
 COPY . .
 
-# Build args for client-side vars (placed after install to preserve cache)
-${argDirectives}# Pass build args as environment variables for Next.js
-${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
 ${pm.build}
@@ -571,13 +573,16 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 ${pm.install}
 
+# Build args for VITE_* client-side vars declared BEFORE COPY . . so that changing
+# their values busts the BuildKit registry cache and forces a fresh vite build.
+# npm install above remains cached — only the build step re-runs on env changes.
+${argDirectives}${envDirectives}
 COPY . .
 
-# Pass build args as environment variables for Vite
-${envDirectives}${pm.build}
+${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-slim
@@ -642,9 +647,12 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 ${pm.install}
 
+# Build args declared BEFORE COPY . . so that changing their values busts the
+# BuildKit registry cache. npm install above remains cached.
+${argDirectives}
 COPY . .
 
 ${envInjection}${pm.build}
@@ -718,9 +726,9 @@ CMD ["sh", "-c", "serve -s dist -l $PORT"]
 export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   // SECURITY FIX: Only pass public vars as build args (client-side only)
   // Server-side env vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
-  // Nuxt 3 uses NUXT_PUBLIC_* or PUBLIC_* prefix for public runtime config
-  const clientEnvVars = envVars.filter(e => 
-    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_')
+  // Nuxt 3 public env: NUXT_PUBLIC_* / PUBLIC_* for runtimeConfig, VITE_* via import.meta.env
+  const clientEnvVars = envVars.filter(e =>
+    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_') || e.key.startsWith('VITE_')
   );
   
   const argDirectives = clientEnvVars.length > 0 
@@ -745,11 +753,11 @@ ${pm.copyLockfiles}
 
 ${pm.install}
 
+# Build args for client-side vars declared BEFORE COPY . . so that changing
+# their values busts the BuildKit registry cache and forces a fresh build.
+${argDirectives}${envDirectives}
 COPY . .
 
-# Build args for client-side vars (placed after install to preserve cache)
-${argDirectives}# Pass build args as environment variables for Nuxt
-${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
 ${pm.build}
@@ -807,11 +815,11 @@ ${pm.setupPm}
 ${pm.copyLockfiles}
 ${pm.install}
 
+# Build args for client-side vars declared BEFORE COPY . . so that changing
+# their values busts the BuildKit registry cache and forces a fresh build.
+${argDirectives}${envDirectives}
 COPY . .
 
-# Build args for client-side vars (placed after install to preserve cache)
-${argDirectives}# Pass build args as environment variables for SvelteKit
-${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
 ${pm.build}

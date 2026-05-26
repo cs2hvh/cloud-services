@@ -198,6 +198,23 @@ export function analyzeEnvLifecycle(
     runtimeKeys = envVars.map((e) => e.key);
   }
 
+  // SSR frameworks (Next.js, Nuxt, SvelteKit) read public vars (NEXT_PUBLIC_*/PUBLIC_*) from
+  // process.env on the SERVER at runtime — SSR, server components, instrumentation hooks, and
+  // env-validation schemas. Next.js only statically inlines literal `process.env.NEXT_PUBLIC_X`
+  // references into bundles; a dynamic `process.env` read (e.g. zod parsing the whole object) is
+  // undefined at runtime unless the var is present in the server environment. So public vars must
+  // be BOTH build args (client bundle) AND runtime secret entries (server process.env).
+  // Client-only frameworks (Vue, Vite, Angular) serve static files with no server process, so
+  // their public vars stay build-time only (supportsRuntimeInjection === false).
+  if (profile.supportsRuntimeInjection && buildTimeKeys.length > 0) {
+    const runtimeKeySet = new Set(runtimeKeys);
+    for (const key of buildTimeKeys) {
+      if (!runtimeKeySet.has(key)) {
+        runtimeKeys.push(key);
+      }
+    }
+  }
+
   // Fallback for unknown framework keys: treat as runtime profile (safe default).
   if (
     envVars.length > 0 &&
@@ -214,7 +231,8 @@ export function analyzeEnvLifecycle(
 
   const hasBuildTimeVars = buildTimeKeys.length > 0;
   const hasRuntimeVars = runtimeKeys.length > 0;
-  const effectiveKeyCount = buildTimeKeys.length + runtimeKeys.length;
+  // Public vars on SSR frameworks appear in both lists, so count distinct keys.
+  const effectiveKeyCount = effectiveKeys.size;
   const ignoredOnly = envVars.length > 0 && effectiveKeyCount === 0 && ignoredKeys.length === envVars.length;
   const requiresRedeploy = hasBuildTimeVars || profile.allVarsAreBuildTime;
 

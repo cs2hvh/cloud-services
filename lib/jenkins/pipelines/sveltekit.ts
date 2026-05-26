@@ -61,12 +61,13 @@ export function createSvelteKitPipeline(
   // Use provided container port or default to 3000 (SvelteKit with adapter-node)
   const port = containerPort ?? 3000;
 
-  // Split env vars: PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  // Public vars (PUBLIC_*) are baked into the client bundle via build args.
   const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
-  const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
 
-  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
+  // Runtime secret must include ALL vars: SvelteKit reads public vars from process.env on the
+  // server at runtime (SSR, $env/dynamic, server hooks), so they must be present in the runtime
+  // environment in addition to being baked into the client bundle via build args.
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -74,8 +75,8 @@ export function createSvelteKitPipeline(
   // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
   const buildOpts: string[] = [
     ...clientEnvVars.map(e => {
-      const escapedValue = e.value.replace(/\$/g, '\\$');
-      return `--opt build-arg:${e.key}=${escapedValue}`;
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
     }),
     '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
   ];
