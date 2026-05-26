@@ -16,6 +16,7 @@ import { getActiveOrgForUser } from "@/lib/inference/orgs";
 
 interface UsageRow {
   created_at: string;
+  api_key_id: string;
   model_id: string;
   modality: string;
   input_tokens: number | null;
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("usage")
     .select(
-      "created_at, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to"
+      "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to"
     )
     .eq("org_id", org.org_id)
     .gte("created_at", since.toISOString())
@@ -86,6 +87,7 @@ export async function GET(request: NextRequest) {
   let monthRequests = 0;
   const dayBuckets = new Map<string, { spent: number; requests: number }>();
   const modelBuckets = new Map<string, { spent: number; requests: number }>();
+  const keyBuckets = new Map<string, { spent: number; requests: number }>();
   let successCount = 0;
   let errorCount = 0;
   let inputTokens = 0;
@@ -108,6 +110,13 @@ export async function GET(request: NextRequest) {
     mB.requests += 1;
     modelBuckets.set(row.model_id, mB);
 
+    if (row.api_key_id) {
+      const kB = keyBuckets.get(row.api_key_id) ?? { spent: 0, requests: 0 };
+      kB.spent += row.cost_cents;
+      kB.requests += 1;
+      keyBuckets.set(row.api_key_id, kB);
+    }
+
     if (row.status === "success") successCount += 1;
     else errorCount += 1;
     if (row.input_tokens) inputTokens += row.input_tokens;
@@ -129,6 +138,54 @@ export async function GET(request: NextRequest) {
     .map(([model_id, b]) => ({ model_id, spent_cents: b.spent, requests: b.requests }))
     .sort((a, b) => b.spent_cents - a.spent_cents)
     .slice(0, 10);
+
+  const topKeyIds = [...keyBuckets.entries()]
+    .sort((a, b) => b[1].spent - a[1].spent)
+    .slice(0, 10);
+
+  // Resolve names + previews for the top-N keys in a single query so we
+  // can render "Production server (ahu_live_...••••)" instead of bare
+  // UUIDs in the dashboard.
+  let topApiKeys: Array<{
+    id: string;
+    name: string;
+    preview: string;
+    spent_cents: number;
+    requests: number;
+  }> = [];
+  if (topKeyIds.length > 0) {
+    const ids = topKeyIds.map(([id]) => id);
+    const { data: keyMeta } = await supabase
+      .schema("inference")
+      .from("api_keys")
+      .select("id, name, key_prefix, key_last_four")
+      .in("id", ids)
+      .returns<
+        Array<{
+          id: string;
+          name: string | null;
+          key_prefix: string;
+          key_last_four: string;
+        }>
+      >();
+    const metaById = new Map<string, { name: string | null; preview: string }>();
+    for (const m of keyMeta ?? []) {
+      metaById.set(m.id, {
+        name: m.name,
+        preview: `${m.key_prefix}••••${m.key_last_four}`,
+      });
+    }
+    topApiKeys = topKeyIds.map(([id, b]) => {
+      const meta = metaById.get(id);
+      return {
+        id,
+        name: meta?.name ?? "(revoked or deleted)",
+        preview: meta?.preview ?? "—",
+        spent_cents: b.spent,
+        requests: b.requests,
+      };
+    });
+  }
 
   latencies.sort((a, b) => a - b);
   const pct = (p: number) =>
@@ -154,6 +211,7 @@ export async function GET(request: NextRequest) {
     },
     day_series: daySeries,
     top_models: topModels,
+    top_api_keys: topApiKeys,
     recent: rows.slice(0, 20).map((r) => ({
       created_at: r.created_at,
       model_id: r.model_id,

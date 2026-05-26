@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RotateCw } from 'lucide-react';
+import { Download, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Area,
@@ -55,6 +55,13 @@ interface UsageData {
   };
   day_series: Array<{ day: string; spent_cents: number; requests: number }>;
   top_models: Array<{ model_id: string; spent_cents: number; requests: number }>;
+  top_api_keys: Array<{
+    id: string;
+    name: string;
+    preview: string;
+    spent_cents: number;
+    requests: number;
+  }>;
   recent: Array<{
     created_at: string;
     model_id: string;
@@ -71,6 +78,7 @@ interface UsageData {
 export default function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [days, setDays] = useState('7');
 
   const load = async () => {
@@ -90,6 +98,46 @@ export default function UsagePage() {
 
   useEffect(() => { load(); }, [days]);
 
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`/api/inference/usage/export?days=${days}`, {
+        credentials: 'include',
+      });
+      if (!r.ok) {
+        let msg = 'Export failed';
+        try {
+          const j = (await r.json()) as { error?: string };
+          if (j.error) msg = j.error;
+        } catch { /* non-JSON body */ }
+        throw new Error(msg);
+      }
+      const blob = await r.blob();
+      const filename =
+        /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') ?? '')?.[1] ??
+        `inference-usage-${days}d.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const truncated = r.headers.get('X-Truncated') === 'true';
+      const rows = r.headers.get('X-Row-Count') ?? '?';
+      toast.success(
+        truncated
+          ? `Exported ${rows} rows (capped — narrow the window for the full set)`
+          : `Exported ${rows} rows`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const formatCents = (c: number) => {
     if (c === 0) return '$0';
     if (c < 100) return `$${(c / 100).toFixed(4)}`;
@@ -102,7 +150,7 @@ export default function UsagePage() {
         breadcrumb={{ label: 'Inference', href: '/dashboard/services/inference' }}
         title="Usage &"
         accent="analytics"
-        caption="Spend, request volume, latency percentiles, and per-model breakdown. Powered by inference.usage — partitioned monthly for fast time-window queries."
+        caption="Spend, request volume, latency percentiles, and per-model + per-API-key breakdowns. Export the raw window as CSV for finance and accounting workflows."
         size="md"
         actions={
           <>
@@ -119,6 +167,10 @@ export default function UsagePage() {
                 </SelectContent>
               </Select>
             </div>
+            <GhostButton onClick={exportCsv} disabled={exporting || loading}>
+              <Download className={`h-3.5 w-3.5 ${exporting ? 'animate-pulse' : ''}`} />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </GhostButton>
             <GhostButton onClick={load} disabled={loading}>
               <RotateCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -281,6 +333,53 @@ export default function UsagePage() {
           </DataTable>
         ) : (
           <EmptyState title="No model activity" description="Once requests come in, top models will appear here." />
+        )}
+      </section>
+
+      {/* Top API keys */}
+      <section className="mb-14">
+        <SectionHead
+          eyebrow="API keys"
+          title="Top by"
+          accent="spend"
+          rightMeta={
+            data?.top_api_keys
+              ? `${data.top_api_keys.length} key${data.top_api_keys.length === 1 ? '' : 's'} active`
+              : undefined
+          }
+        />
+        {data?.top_api_keys && data.top_api_keys.length > 0 ? (
+          <DataTable>
+            <div className="hidden md:grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.6fr)] gap-3 px-5 py-2.5 border-b border-white/[0.06]">
+              <ColHead>Key</ColHead>
+              <ColHead>Preview</ColHead>
+              <ColHead align="right">Requests</ColHead>
+              <ColHead align="right">Spend</ColHead>
+            </div>
+            {data.top_api_keys.map((k) => (
+              <div
+                key={k.id}
+                className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.6fr)] gap-3 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors items-center"
+              >
+                <span className={`${MONO} text-[12.5px] text-white truncate`}>{k.name}</span>
+                <code className={`${MONO} text-[11px] text-white/55 truncate`}>{k.preview}</code>
+                <span className={`${MONO} text-[11.5px] text-white/75 tabular-nums text-right`}>
+                  {k.requests.toLocaleString()}
+                </span>
+                <span
+                  style={SERIF_STYLE}
+                  className="text-[15px] font-bold text-white tabular-nums text-right"
+                >
+                  {formatCents(k.spent_cents)}
+                </span>
+              </div>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState
+            title="No API-key activity"
+            description="Once requests come in, top API keys will appear here."
+          />
         )}
       </section>
 
