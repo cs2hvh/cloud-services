@@ -380,10 +380,14 @@ export function Playground({
   };
 
   const isBusy = mode === "single" ? running : compareRunning;
+  // Only truly disable when there's no prompt to send and nothing in flight.
+  // Missing API key intentionally does NOT disable — sendPrompt() opens the
+  // key-setup dialog so users can complete the missing step in one click
+  // instead of hunting for a separate "set up key" button.
   const sendButton = (
     <PrimaryButton
       onClick={sendPrompt}
-      disabled={!apiKey || (!isBusy && !userPrompt.trim())}
+      disabled={!isBusy && !userPrompt.trim()}
     >
       {isBusy ? (
         <>
@@ -393,7 +397,7 @@ export function Playground({
       ) : (
         <>
           <Play className="h-3.5 w-3.5" />
-          {mode === "compare" ? "Send to all" : "Send"}
+          {!apiKey ? "Set up key" : mode === "compare" ? "Send to all" : "Send"}
         </>
       )}
     </PrimaryButton>
