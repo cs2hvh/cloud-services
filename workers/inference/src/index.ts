@@ -205,12 +205,19 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
     );
     return;
   }
-  if (!env.INTERNAL_CRON_TOKEN) {
+  // The token has two accepted env names. Operators were previously asked
+  // to set BATCH_PROCESSOR_TOKEN on Next.js + INTERNAL_CRON_TOKEN on the
+  // worker, then keep them in sync. That's a footgun (silent 401s = no
+  // auto-stop) so we now ALSO accept BATCH_PROCESSOR_TOKEN here. Set
+  // either — the docs recommend BATCH_PROCESSOR_TOKEN on both sides so
+  // the value can be set once and reused.
+  const token = env.INTERNAL_CRON_TOKEN ?? env.BATCH_PROCESSOR_TOKEN;
+  if (!token) {
     console.error(
       JSON.stringify({
         level: "error",
         message:
-          "scheduled: INTERNAL_CRON_TOKEN not set as worker secret — wrangler secret put INTERNAL_CRON_TOKEN",
+          "scheduled: no shared-cron secret set — wrangler secret put BATCH_PROCESSOR_TOKEN (same value as Next.js .env)",
         cron: event.cron,
       })
     );
@@ -223,7 +230,7 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Ahura-Internal-Token": env.INTERNAL_CRON_TOKEN,
+        "X-Ahura-Internal-Token": token,
         "User-Agent": "ahura-inference-edge/cron",
       },
       // Empty body — the endpoint reads nothing from the request.
@@ -231,10 +238,16 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
     });
     const elapsedMs = Date.now() - startedAt;
     if (!r.ok) {
+      // 401 is the high-signal failure mode (token mismatch). Surface it
+      // loudly with a remediation hint so the operator notices in logs.
+      const hint =
+        r.status === 401
+          ? " — token mismatch. Set worker secret BATCH_PROCESSOR_TOKEN to the SAME value as the Next.js .env BATCH_PROCESSOR_TOKEN."
+          : "";
       console.error(
         JSON.stringify({
           level: "error",
-          message: "scheduled: watchdog returned non-2xx",
+          message: `scheduled: watchdog returned ${r.status}${hint}`,
           status: r.status,
           elapsedMs,
           cron: event.cron,

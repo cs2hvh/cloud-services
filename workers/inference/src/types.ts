@@ -34,8 +34,13 @@ export interface Env {
   // endpoints on the compute provider's serverless layer.
   RUNPOD_API_KEY?: string;
   OTEL_EXPORTER_OTLP_HEADERS?: string;
-  // Shared with the Next.js BATCH_PROCESSOR_TOKEN env. scheduled()
-  // sends it as X-Ahura-Internal-Token to authenticate cron invocations.
+  // Shared cron secret. Two accepted env names — the worker accepts
+  // either. Recommended path: set BATCH_PROCESSOR_TOKEN on BOTH the
+  // worker (`wrangler secret put BATCH_PROCESSOR_TOKEN`) and Next.js
+  // (`.env BATCH_PROCESSOR_TOKEN`) to the same value, so the secret can
+  // live in one place. INTERNAL_CRON_TOKEN kept as a fallback for
+  // operators who already set it under that name.
+  BATCH_PROCESSOR_TOKEN?: string;
   INTERNAL_CRON_TOKEN?: string;
 }
 

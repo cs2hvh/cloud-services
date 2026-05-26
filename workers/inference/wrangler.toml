@@ -121,8 +121,14 @@ CONTROL_PLANE_URL = "https://wao.cs2hvh.com"
 #   • OPENROUTER_PLATFORM_KEY    — used for platform-billed requests
 #   • BYOK_DEK                   — AES-GCM data encryption key (matches Postgres kms_key_version)
 #   • OTEL_EXPORTER_OTLP_HEADERS — auth header for OTel collector
-#   • INTERNAL_CRON_TOKEN        — shared with Next.js BATCH_PROCESSOR_TOKEN;
-#                                  scheduled() sends it as X-Ahura-Internal-Token
+#   • BATCH_PROCESSOR_TOKEN      — shared cron secret. MUST equal the
+#                                  Next.js .env BATCH_PROCESSOR_TOKEN
+#                                  value, or scheduled() will silently
+#                                  401 every minute and idle pods will
+#                                  never auto-stop. Set it ONCE, paste
+#                                  the same value into Next.js.
+#                                  (Legacy alias INTERNAL_CRON_TOKEN
+#                                   also accepted for back-compat.)
 
 # ───────────────────────────────────────────────────────────────
 # Cron Triggers
