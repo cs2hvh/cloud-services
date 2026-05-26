@@ -61,6 +61,21 @@ import {
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import {
+  approvalUrlFor,
+  formatCents,
+  formatDuration,
+  SKU_BLURB,
+  SKU_TO_RUNPOD_DISPLAY_NAME,
+} from "@/components/dashboard/inference/fine-tuning-utils";
+import {
+  Field,
+  PodStat,
+  PodStatePill,
+  ProvisioningBanner,
+  ReferenceCard,
+  RunningCostMeter,
+} from "@/components/dashboard/inference/fine-tuning-cells";
 
 export interface FineTuneJob {
   id: string;
@@ -127,41 +142,6 @@ const GATED_BASES = new Set([
   "google/gemma-4-27b-it",
 ]);
 
-/** Maps internal base id → "where to request access" URL on the upstream
- *  catalog. We don't display the upstream brand name; just a link. */
-function approvalUrlFor(internalId: string): string | null {
-  if (internalId.startsWith("meta-llama/")) {
-    return `https://huggingface.co/meta-llama`;
-  }
-  if (internalId === "google/gemma-4-27b-it") {
-    return `https://huggingface.co/google/gemma-3-27b-it`;
-  }
-  return null;
-}
-
-/**
- * Map our internal SKU (used in inference.finetunes.gpu_sku + the RunPod
- * pod-create call) to RunPod's `displayName` in inventory.runpod_inventory.
- * Keep in sync with lib/inference/finetune-runpod.ts GPU_SKU_TO_RUNPOD_TYPE.
- */
-const SKU_TO_RUNPOD_DISPLAY_NAME: Record<string, string> = {
-  "A40": "NVIDIA A40",
-  "L40S": "NVIDIA L40S",
-  "RTX-6000-Ada": "NVIDIA RTX 6000 Ada Generation",
-  "A100-40GB": "NVIDIA A100-PCIE-40GB",
-  "A100-80GB": "NVIDIA A100 80GB PCIe",
-  "H100-80GB": "NVIDIA H100 80GB HBM3",
-};
-
-const SKU_BLURB: Record<string, string> = {
-  "A40": "budget tier",
-  "L40S": "small qLoRA",
-  "RTX-6000-Ada": "small jobs",
-  "A100-40GB": "small LoRA, qLoRA",
-  "A100-80GB": "large LoRA workhorse",
-  "H100-80GB": "fastest, premium",
-};
-
 interface InventoryRow {
   displayName: string;
   cloudType: "SECURE" | "COMMUNITY";
@@ -183,22 +163,6 @@ function statusMeta(status: FineTuneJob["status"]): {
   if (status === "failed") return { color: "#f87171", label: "Failed" };
   if (status === "cancelled") return { color: "rgba(255,255,255,0.45)", label: "Cancelled" };
   return { color: "rgba(255,255,255,0.45)", label: status };
-}
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return "—";
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
-}
-
-function formatCents(c: number | null): string {
-  if (c === null) return "—";
-  if (c === 0) return "$0";
-  if (c < 100) return `$${(c / 100).toFixed(2)}`;
-  return `$${(c / 100).toFixed(0)}`;
 }
 
 /**
@@ -752,111 +716,6 @@ console.log(response.choices[0].message.content);`,
       <pre className={`${MONO} px-4 py-3 text-[10.5px] text-white/85 leading-relaxed overflow-x-auto whitespace-pre`}>
         {snippets[lang]}
       </pre>
-    </div>
-  );
-}
-
-function ProvisioningBanner({ startedAt }: { startedAt: string | null | undefined }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
-  const elapsedSec = startedAt
-    ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
-    : 0;
-  // Typical cold-start is 45-90s depending on base model size. Show
-  // friendlier copy as it drags on.
-  const stage =
-    elapsedSec < 30
-      ? "Booting GPU and pulling the serving image…"
-      : elapsedSec < 75
-        ? "Downloading your adapter and warming up the serving runtime…"
-        : elapsedSec < 150
-          ? "Larger base — still loading model weights into GPU memory…"
-          : "Taking longer than expected. If this exceeds 5 minutes, stop the instance and try a different GPU.";
-  return (
-    <div className="mb-3 rounded-[5px] border border-[#33adff]/25 bg-[#0095FF]/[0.06] p-3">
-      <div className="flex items-center gap-2 mb-1.5">
-        <Loader2 className="h-3 w-3 animate-spin" style={{ color: ACCENT_BRIGHT }} />
-        <span
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] font-semibold`}
-          style={{ color: ACCENT_BRIGHT }}
-        >
-          Starting — {String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:{String(elapsedSec % 60).padStart(2, "0")} elapsed
-        </span>
-      </div>
-      <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed`}>
-        {stage} Requests during warm-up return a 503 with{" "}
-        <code className="text-white/75">Retry-After: 10</code> — your SDK should retry automatically.
-      </p>
-    </div>
-  );
-}
-
-function PodStatePill({ state }: { state: string }) {
-  const map: Record<string, { color: string; label: string; pulse?: boolean }> = {
-    none:         { color: "rgba(255,255,255,0.35)", label: "Inactive" },
-    provisioning: { color: "#33adff", label: "Starting", pulse: true },
-    running:      { color: "#22c55e", label: "Running" },
-    stopped:      { color: "rgba(255,255,255,0.35)", label: "Stopped" },
-    failed:       { color: "#ef4444", label: "Failed" },
-  };
-  const m = map[state] ?? map.none!;
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[10.5px]">
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${m.pulse ? "animate-pulse" : ""}`}
-        style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }}
-      />
-      <span
-        className={`${MONO} uppercase tracking-[0.12em] font-semibold`}
-        style={{ color: m.color }}
-      >
-        {m.label}
-      </span>
-    </span>
-  );
-}
-
-function PodStat({ label, mono, children }: { label: string; mono?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="rounded-[4px] border border-white/[0.06] bg-[#0c0d11] px-3 py-2">
-      <p className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/40 mb-1`}>
-        {label}
-      </p>
-      <p className={`${mono ? MONO : ""} text-[11.5px] text-white/85 break-all`}>{children}</p>
-    </div>
-  );
-}
-
-function RunningCostMeter({
-  startedAt,
-  hourlyCents,
-  live,
-}: {
-  startedAt: string | null | undefined;
-  hourlyCents: number | null | undefined;
-  live: boolean;
-}) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!live) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, [live]);
-
-  if (!startedAt || hourlyCents == null) return null;
-  const elapsedSec = Math.max(0, (now - new Date(startedAt).getTime()) / 1000);
-  const costCents = (elapsedSec / 3600) * hourlyCents;
-  const hh = Math.floor(elapsedSec / 3600);
-  const mm = Math.floor((elapsedSec % 3600) / 60);
-  const ss = Math.floor(elapsedSec % 60);
-  const runtime = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-  return (
-    <div className="grid grid-cols-2 gap-2 mb-3">
-      <PodStat label="Runtime">{runtime}</PodStat>
-      <PodStat label="Cost so far">${(costCents / 100).toFixed(4)}</PodStat>
     </div>
   );
 }
@@ -1651,38 +1510,3 @@ export function FineTuning({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-        {label}
-      </Label>
-      {children}
-    </div>
-  );
-}
-
-function ReferenceCard({
-  icon: Icon,
-  eyebrow,
-  title,
-  body,
-}: {
-  icon: React.ElementType;
-  eyebrow: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="h-3.5 w-3.5 text-[#0095FF]/70" />
-        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-          {eyebrow}
-        </p>
-      </div>
-      <h4 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">{title}</h4>
-      <p className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>{body}</p>
-    </div>
-  );
-}
