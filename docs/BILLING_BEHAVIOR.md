@@ -1,7 +1,7 @@
 # Billing System — Complete Behavior Reference
 
 > Last verified against real Supabase: **8 April 2026**
-> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, `credit-system-cron/cron-worker.js`
+> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, `credit-system-cron/cron-worker.ts`
 
 ---
 
@@ -42,9 +42,9 @@
 
 ### ISSUE-001 — Kubernetes Cluster Not Being Billed (CRITICAL)
 - **What:** Cluster `6873d186-...` has `last_billed_at` = 337+ minutes ago
-- **Why:** The cron worker (`credit-system-cron/cron-worker.js`) was not running
+- **Why:** The cron worker (`credit-system-cron/cron-worker.ts`) was not running
 - **Impact:** User is getting hours of Kubernetes for free; billing gap in DB
-- **Fix:** Start the cron worker: `cd credit-system-cron && node cron-worker.js`
+- **Fix:** Start the cron worker: `cd credit-system-cron && npm run start`
 - **Detection:** Run `node scripts/smoke-billing.mjs` — will flag any table with rows older than 30 min
 
 ### ISSUE-002 — Float Precision at Very Large Balances (LOW)
@@ -207,7 +207,7 @@ Kubernetes is the only service that scales rate by node count. A 3-node cluster 
 ## 6. How the Cron Worker Works
 
 ### Location
-`credit-system-cron/cron-worker.js` — separate Node.js process, NOT part of Next.js
+`credit-system-cron/cron-worker.ts` — separate Node.js process, NOT part of Next.js
 
 ### Schedule
 ```
@@ -219,7 +219,7 @@ Runs 288 times per day. Each run bills all 5 service tables in parallel (`Promis
 ```bash
 cd credit-system-cron
 # Copy .env from root or set vars manually
-SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... node cron-worker.js
+SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... npm run start
 ```
 
 ### How It Decides What to Charge

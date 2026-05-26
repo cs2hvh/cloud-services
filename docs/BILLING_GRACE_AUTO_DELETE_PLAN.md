@@ -13,7 +13,7 @@ When hourly billing hits insufficient balance for a service:
 
 ## 2) Current System Facts (Validated in Code)
 
-- `credit-system-cron/cron-worker.js` runs every 5 minutes.
+- `credit-system-cron/cron-worker.ts` runs every 5 minutes.
 - Billing source tables:
   - `billing.active_kubernetes`
   - `billing.active_database`

@@ -2,6 +2,91 @@ import cron from "node-cron";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
+type SupabaseLikeClient = any;
+type JsonObject = Record<string, unknown>;
+type NullableString = string | null;
+
+type SupabaseErrorLike = {
+  code?: string | null;
+  message?: string | null;
+};
+
+type ActiveService = {
+  service_id?: string;
+  user_id?: string;
+  hourly_rate?: number | string;
+  last_billed_at?: string | Date | null;
+  created_at?: string | Date | null;
+};
+
+type BillingFailureEvent = {
+  tableName: string;
+  serviceId: string;
+  userId: string;
+  amount: number;
+  failureType: string;
+  errorCode?: NullableString;
+  errorMessage?: NullableString;
+  occurredAt: string;
+  lastBilledAt?: NullableString;
+};
+
+type GraceOutboxEvent = {
+  eventKey: string;
+  eventType: string;
+  userId: string;
+  serviceTable?: NullableString;
+  serviceId?: NullableString;
+  payload?: JsonObject;
+};
+
+type GraceLifecycleStart = {
+  tableName: string;
+  serviceId: string;
+  userId: string;
+  hourlyRate: number;
+  attemptedAmount: number;
+  availableBalance: number | string | null;
+  occurredAtIso: string;
+};
+
+type UsageTransaction = {
+  userId: string;
+  serviceId: string;
+  serviceType: string;
+  amount: number;
+  balanceAfter: number | null;
+  periodStart: NullableString;
+  periodEnd: string;
+  hourlyRate: number | string;
+  hoursUsed: number;
+  tableName: string;
+};
+
+type AtomicBillingParams = {
+  p_table_name: string;
+  p_service_id: string;
+  p_user_id: string;
+  p_amount: number;
+  p_new_last_billed_at: string;
+  p_expected_last_billed_at: NullableString;
+};
+
+declare global {
+  var __CRON_TEST_SUPABASE__: SupabaseLikeClient | undefined;
+}
+
+function asSupabaseError(error: unknown): SupabaseErrorLike {
+  return error && typeof error === "object" ? (error as SupabaseErrorLike) : {};
+}
+
+function getErrorMessage(error: unknown): string {
+  const candidate = asSupabaseError(error).message;
+  return typeof candidate === "string" && candidate.length > 0
+    ? candidate
+    : String(error);
+}
+
 // Load environment variables
 dotenv.config();
 
@@ -15,7 +100,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 // -----------------------------
 // 1. SUPABASE CLIENT
 // -----------------------------
-const supabase =
+const supabase: SupabaseLikeClient =
   globalThis.__CRON_TEST_SUPABASE__ ||
   createClient(
     process.env.SUPABASE_URL,
@@ -44,7 +129,7 @@ export const VALID_TABLE_NAMES = [
   "active_objectspace",
   "active_spectrum",
   "active_platform_apps",
-];
+] as const;
 
 const TABLE_TO_SERVICE_TYPE = {
   active_kubernetes: "kubernetes",
@@ -52,9 +137,17 @@ const TABLE_TO_SERVICE_TYPE = {
   active_objectspace: "objectspace",
   active_spectrum: "spectrum",
   active_platform_apps: "platform_apps",
-};
+} as const;
 
-const BILLING_SERVICE_TABLES = Object.keys(TABLE_TO_SERVICE_TYPE);
+type BillingServiceTable = keyof typeof TABLE_TO_SERVICE_TYPE;
+
+const BILLING_SERVICE_TABLES = Object.keys(
+  TABLE_TO_SERVICE_TYPE
+) as BillingServiceTable[];
+
+function isBillingServiceTable(tableName: string): tableName is BillingServiceTable {
+  return (VALID_TABLE_NAMES as readonly string[]).includes(tableName);
+}
 
 const GRACE_LIFECYCLE_STATES = {
   GRACE: "grace",
@@ -64,13 +157,13 @@ const GRACE_LIFECYCLE_STATES = {
   RESTORED: "restored",
 };
 
-function parsePositiveNumberEnv(name, fallback) {
+function parsePositiveNumberEnv(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 }
 
-function parseReminderOffsetsEnv() {
+function parseReminderOffsetsEnv(): number[] {
   const raw = process.env.BILLING_REMINDER_OFFSETS_DAYS ?? "3,1";
   const values = raw
     .split(",")
@@ -99,11 +192,11 @@ const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
 let hasWarnedGraceSchemaUnavailable = false;
 let hasWarnedGraceRouteConfiguration = false;
 
-function roundToCurrency(value) {
+function roundToCurrency(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function parseBillingTimestamp(value) {
+function parseBillingTimestamp(value: string | Date | null | undefined): Date | null {
   if (!value) return null;
 
   const parsed =
@@ -122,13 +215,14 @@ function parseBillingTimestamp(value) {
   return parsed;
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isTransientSupabaseError(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || "").toLowerCase();
+function isTransientSupabaseError(error: unknown): boolean {
+  const supabaseError = asSupabaseError(error);
+  const code = String(supabaseError.code || "");
+  const message = String(supabaseError.message || "").toLowerCase();
 
   return (
     code === "40001" || // serialization_failure
@@ -144,9 +238,11 @@ function isTransientSupabaseError(error) {
   );
 }
 
-function isTransactionHistorySchemaMismatch(error) {
+function isTransactionHistorySchemaMismatch(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
-  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  const supabaseError = asSupabaseError(error);
+  const message =
+    typeof supabaseError.message === "string" ? supabaseError.message.toLowerCase() : "";
   const mentionsNewColumn =
     message.includes("service_id") ||
     message.includes("service_type") ||
@@ -156,65 +252,71 @@ function isTransactionHistorySchemaMismatch(error) {
 
   return Boolean(
     mentionsNewColumn &&
-      (error.code === "PGRST204" ||
-        error.code === "42703" ||
+      (supabaseError.code === "PGRST204" ||
+        supabaseError.code === "42703" ||
         message.includes("could not find the") ||
         message.includes("column"))
   );
 }
 
-function isTransactionTypeConstraintMismatch(error) {
+function isTransactionTypeConstraintMismatch(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
-  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  const supabaseError = asSupabaseError(error);
+  const message =
+    typeof supabaseError.message === "string" ? supabaseError.message.toLowerCase() : "";
   return (
-    error.code === "23514" ||
+    supabaseError.code === "23514" ||
     message.includes("transactions_type_check") ||
     (message.includes("check constraint") && message.includes("type"))
   );
 }
 
-function warnServiceLedgerUnavailable(error) {
+function warnServiceLedgerUnavailable(error: unknown): void {
   if (hasWarnedServiceLedgerUnavailable) return;
   hasWarnedServiceLedgerUnavailable = true;
   console.warn(
     "⚠️ Service usage transaction history is unavailable until the billing.transactions ledger migration is applied.",
-    error?.message || ""
+    asSupabaseError(error).message || ""
   );
 }
 
-function shouldAttemptServiceLedger() {
+function shouldAttemptServiceLedger(): boolean {
   if (transactionHistoryMode !== "legacy") return true;
   return Date.now() - lastServiceLedgerMismatchAt >= SERVICE_LEDGER_REPROBE_INTERVAL_MS;
 }
 
-function markServiceLedgerAvailable() {
+function markServiceLedgerAvailable(): void {
   transactionHistoryMode = "service_ledger";
   hasWarnedServiceLedgerUnavailable = false;
   lastServiceLedgerMismatchAt = 0;
 }
 
-function markServiceLedgerLegacy() {
+function markServiceLedgerLegacy(): void {
   transactionHistoryMode = "legacy";
   lastServiceLedgerMismatchAt = Date.now();
 }
 
-function asObject(value) {
+function asObject(value: unknown): JsonObject {
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
+    return value as JsonObject;
   }
   return {};
 }
 
-function formatGraceNumber(value, fallback = null) {
+function formatGraceNumber(
+  value: unknown,
+  fallback: number | null = null
+): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function isGraceSchemaUnavailable(error) {
+function isGraceSchemaUnavailable(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
-  const code = String(error.code || "");
-  const message = String(error.message || "").toLowerCase();
+  const supabaseError = asSupabaseError(error);
+  const code = String(supabaseError.code || "");
+  const message = String(supabaseError.message || "").toLowerCase();
   const mentionsGraceTables =
     message.includes("service_lifecycle") || message.includes("notification_outbox");
 
@@ -229,22 +331,22 @@ function isGraceSchemaUnavailable(error) {
   );
 }
 
-function warnGraceSchemaUnavailable(error) {
+function warnGraceSchemaUnavailable(error: unknown): void {
   if (hasWarnedGraceSchemaUnavailable) return;
   hasWarnedGraceSchemaUnavailable = true;
   console.warn(
     "⚠️ Grace lifecycle schema is unavailable. Apply billing grace migrations to enable auto-delete flow.",
-    error?.message || ""
+    asSupabaseError(error).message || ""
   );
 }
 
-function getAppDomainBaseUrl() {
+function getAppDomainBaseUrl(): string {
   const raw = String(process.env.DOMAIN || "").trim();
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
-async function postInternalCronRoute(path, payload) {
+async function postInternalCronRoute(path: string, payload: JsonObject) {
   const appUrl = getAppDomainBaseUrl();
   const cronSecret = process.env.CRON_SECRET;
 
@@ -306,7 +408,7 @@ async function postInternalCronRoute(path, payload) {
       skipped: false,
       status: 0,
       data: null,
-      errorMessage: error?.message || "Unknown request failure",
+      errorMessage: getErrorMessage(error) || "Unknown request failure",
     };
   }
 }
@@ -318,7 +420,7 @@ async function enqueueGraceOutboxEvent({
   serviceTable,
   serviceId,
   payload,
-}) {
+}: GraceOutboxEvent): Promise<boolean> {
   try {
     const nowIso = new Date().toISOString();
     const { error } = await supabase
@@ -343,7 +445,9 @@ async function enqueueGraceOutboxEvent({
         warnGraceSchemaUnavailable(error);
         return false;
       }
-      console.warn(`⚠️ Failed to enqueue grace outbox event ${eventKey}: ${error.message}`);
+      console.warn(
+        `⚠️ Failed to enqueue grace outbox event ${eventKey}: ${getErrorMessage(error)}`
+      );
       return false;
     }
 
@@ -354,13 +458,13 @@ async function enqueueGraceOutboxEvent({
       return false;
     }
     console.warn(
-      `⚠️ Failed to enqueue grace outbox event ${eventKey}: ${error?.message || "Unknown error"}`
+      `⚠️ Failed to enqueue grace outbox event ${eventKey}: ${getErrorMessage(error)}`
     );
     return false;
   }
 }
 
-function mapReminderOffsetToEventType(daysOffset) {
+function mapReminderOffsetToEventType(daysOffset: number): string {
   const rounded = Math.round(daysOffset);
   if (rounded === 3) return "grace_reminder_day3";
   if (rounded === 1) return "grace_reminder_day1";
@@ -375,7 +479,7 @@ async function startGraceLifecycleForInsufficientCredit({
   attemptedAmount,
   availableBalance,
   occurredAtIso,
-}) {
+}: GraceLifecycleStart): Promise<void> {
   if (!GRACE_CONFIG.ENABLED) return;
 
   const now = parseBillingTimestamp(occurredAtIso) || new Date();
@@ -387,7 +491,7 @@ async function startGraceLifecycleForInsufficientCredit({
     Math.max(hourlyRate * GRACE_CONFIG.RECOVERY_MIN_HOURS_COVERAGE, 0)
   );
 
-  let lifecycleRow = null;
+  let lifecycleRow: JsonObject | null = null;
 
   try {
     const { data: existing, error: readError } = await supabase
@@ -421,8 +525,9 @@ async function startGraceLifecycleForInsufficientCredit({
         return;
       }
 
+      const existingRow = existing as JsonObject;
       const mergedMetadata = {
-        ...asObject(existing.metadata),
+        ...asObject(existingRow.metadata),
         reason: "insufficient_credit",
         required_balance: requiredBalance,
         recovery_min_hours_coverage: GRACE_CONFIG.RECOVERY_MIN_HOURS_COVERAGE,
@@ -433,7 +538,7 @@ async function startGraceLifecycleForInsufficientCredit({
             : null,
         billing_attempt_amount: attemptedAmount,
         hourly_rate: formatGraceNumber(hourlyRate),
-        previous_state: existing.state,
+        previous_state: existingRow.state,
       };
 
       const { data: updatedRow, error: updateError } = await supabase
@@ -451,7 +556,7 @@ async function startGraceLifecycleForInsufficientCredit({
           metadata: mergedMetadata,
           updated_at: nowIso,
         })
-        .eq("id", existing.id)
+        .eq("id", existingRow.id)
         .select("id, grace_expires_at")
         .maybeSingle();
 
@@ -499,7 +604,7 @@ async function startGraceLifecycleForInsufficientCredit({
         .maybeSingle();
 
       if (insertError) {
-        if (insertError.code === "23505") {
+        if (asSupabaseError(insertError).code === "23505") {
           return;
         }
         if (isGraceSchemaUnavailable(insertError)) {
@@ -521,7 +626,7 @@ async function startGraceLifecycleForInsufficientCredit({
     }
     console.error(
       `CRITICAL: Grace lifecycle handling failed for ${tableName}:${serviceId}:`,
-      error?.message || String(error)
+      getErrorMessage(error)
     );
     return;
   }
@@ -535,7 +640,10 @@ async function startGraceLifecycleForInsufficientCredit({
     serviceId,
     payload: {
       grace_started_at: nowIso,
-      grace_expires_at: lifecycleRow?.grace_expires_at || graceExpiresAtIso,
+      grace_expires_at:
+        typeof lifecycleRow?.grace_expires_at === "string"
+          ? lifecycleRow.grace_expires_at
+          : graceExpiresAtIso,
       required_balance: requiredBalance,
       available_balance:
         formatGraceNumber(availableBalance) !== null
@@ -547,13 +655,13 @@ async function startGraceLifecycleForInsufficientCredit({
   });
 }
 
-async function enqueueGraceReminderEvents() {
+async function enqueueGraceReminderEvents(): Promise<void> {
   if (!GRACE_CONFIG.ENABLED) return;
 
   const now = new Date();
   const nowIso = now.toISOString();
 
-  let rows = null;
+  let rows: JsonObject[] = [];
   try {
     const { data, error } = await supabase
       .schema("billing")
@@ -574,7 +682,7 @@ async function enqueueGraceReminderEvents() {
       return;
     }
 
-    rows = data || [];
+    rows = (data || []) as JsonObject[];
   } catch (error) {
     if (isGraceSchemaUnavailable(error)) {
       warnGraceSchemaUnavailable(error);
@@ -582,13 +690,15 @@ async function enqueueGraceReminderEvents() {
     }
     console.error(
       "CRITICAL: Grace reminder lifecycle query failed:",
-      error?.message || String(error)
+      getErrorMessage(error)
     );
     return;
   }
 
   for (const row of rows) {
-    const graceExpiresAt = parseBillingTimestamp(row.grace_expires_at);
+    const graceExpiresAt = parseBillingTimestamp(
+      typeof row.grace_expires_at === "string" ? row.grace_expires_at : null
+    );
     if (!graceExpiresAt) continue;
 
     const millisecondsRemaining = graceExpiresAt.getTime() - now.getTime();
@@ -609,11 +719,11 @@ async function enqueueGraceReminderEvents() {
 
       const reminderEventType = mapReminderOffsetToEventType(offsetDays);
       await enqueueGraceOutboxEvent({
-        eventKey: `${reminderEventType}:${row.id}:${row.grace_expires_at}`,
+        eventKey: `${reminderEventType}:${String(row.id)}:${String(row.grace_expires_at)}`,
         eventType: reminderEventType,
-        userId: row.user_id,
-        serviceTable: row.service_table,
-        serviceId: row.service_id,
+        userId: String(row.user_id),
+        serviceTable: typeof row.service_table === "string" ? row.service_table : null,
+        serviceId: typeof row.service_id === "string" ? row.service_id : null,
         payload: {
           grace_expires_at: row.grace_expires_at,
           reminder_offset_days: offsetDays,
@@ -626,11 +736,11 @@ async function enqueueGraceReminderEvents() {
 
     if (hoursRemaining <= GRACE_CONFIG.FINAL_WARNING_HOURS) {
       await enqueueGraceOutboxEvent({
-        eventKey: `grace_reminder_6h:${row.id}:${row.grace_expires_at}`,
+        eventKey: `grace_reminder_6h:${String(row.id)}:${String(row.grace_expires_at)}`,
         eventType: "grace_reminder_6h",
-        userId: row.user_id,
-        serviceTable: row.service_table,
-        serviceId: row.service_id,
+        userId: String(row.user_id),
+        serviceTable: typeof row.service_table === "string" ? row.service_table : null,
+        serviceId: typeof row.service_id === "string" ? row.service_id : null,
         payload: {
           grace_expires_at: row.grace_expires_at,
           final_warning_hours: GRACE_CONFIG.FINAL_WARNING_HOURS,
@@ -643,14 +753,14 @@ async function enqueueGraceReminderEvents() {
   }
 }
 
-async function executeGraceDeletionForExpiredServices() {
+async function executeGraceDeletionForExpiredServices(): Promise<void> {
   if (!GRACE_CONFIG.ENABLED) return;
 
   const now = new Date();
   const nowIso = now.toISOString();
   const backoffMs = GRACE_CONFIG.DELETE_RETRY_BACKOFF_SECONDS * 1000;
 
-  let rows = null;
+  let rows: JsonObject[] = [];
   try {
     const { data, error } = await supabase
       .schema("billing")
@@ -674,7 +784,7 @@ async function executeGraceDeletionForExpiredServices() {
       console.error(`CRITICAL: Failed to load expired grace rows: ${error.message}`);
       return;
     }
-    rows = data || [];
+    rows = (data || []) as JsonObject[];
   } catch (error) {
     if (isGraceSchemaUnavailable(error)) {
       warnGraceSchemaUnavailable(error);
@@ -682,7 +792,7 @@ async function executeGraceDeletionForExpiredServices() {
     }
     console.error(
       "CRITICAL: Expired grace lifecycle query failed:",
-      error?.message || String(error)
+      getErrorMessage(error)
     );
     return;
   }
@@ -693,7 +803,9 @@ async function executeGraceDeletionForExpiredServices() {
       continue;
     }
 
-    const lastDeletionStart = parseBillingTimestamp(row.deletion_started_at);
+    const lastDeletionStart = parseBillingTimestamp(
+      typeof row.deletion_started_at === "string" ? row.deletion_started_at : null
+    );
     if (lastDeletionStart && now.getTime() - lastDeletionStart.getTime() < backoffMs) {
       continue;
     }
@@ -804,9 +916,9 @@ async function executeGraceDeletionForExpiredServices() {
       await enqueueGraceOutboxEvent({
         eventKey: `grace_deleted:${row.id}`,
         eventType: "grace_deleted",
-        userId: row.user_id,
-        serviceTable: row.service_table,
-        serviceId: row.service_id,
+        userId: String(row.user_id),
+        serviceTable: typeof row.service_table === "string" ? row.service_table : null,
+        serviceId: typeof row.service_id === "string" ? row.service_id : null,
         payload: {
           grace_expires_at: row.grace_expires_at,
           deleted_at: deletedAtIso,
@@ -861,7 +973,7 @@ async function executeGraceDeletionForExpiredServices() {
   }
 }
 
-async function dispatchPendingGraceOutboxEvents() {
+async function dispatchPendingGraceOutboxEvents(): Promise<void> {
   if (!GRACE_CONFIG.ENABLED) return;
 
   const response = await postInternalCronRoute("/api/internal/billing/grace-events/process", {
@@ -891,7 +1003,7 @@ async function dispatchPendingGraceOutboxEvents() {
   }
 }
 
-async function getBalanceAfterDeduction(userId) {
+async function getBalanceAfterDeduction(userId: string): Promise<number | null> {
   try {
     const { data, error } = await supabase
       .schema("billing")
@@ -917,7 +1029,7 @@ async function getBalanceAfterDeduction(userId) {
     return null;
   } catch (error) {
     console.warn(
-      `⚠️ Failed to fetch balance after deduction for ${userId}: ${error?.message || String(error)}`
+      `⚠️ Failed to fetch balance after deduction for ${userId}: ${getErrorMessage(error)}`
     );
     return null;
   }
@@ -934,12 +1046,12 @@ async function recordUsageTransaction({
   hourlyRate,
   hoursUsed,
   tableName,
-}) {
+}: UsageTransaction): Promise<void> {
   if (!shouldAttemptServiceLedger()) {
     return;
   }
 
-  let error = null;
+  let error: SupabaseErrorLike | null = null;
   try {
     const result = await supabase
       .schema("billing")
@@ -956,19 +1068,19 @@ async function recordUsageTransaction({
         service_type: serviceType,
         period_start: periodStart,
         period_end: periodEnd,
-      metadata: {
-        source: "credit-system-cron",
-        table: tableName,
-        hourly_rate: rateToMetadata(hourlyRate),
-        hours_used: Number(hoursUsed.toFixed(2)),
-      },
-      completed_at: periodEnd,
-    });
+        metadata: {
+          source: "credit-system-cron",
+          table: tableName,
+          hourly_rate: rateToMetadata(hourlyRate),
+          hours_used: Number(hoursUsed.toFixed(2)),
+        },
+        completed_at: periodEnd,
+      });
     error = result?.error || null;
   } catch (caughtError) {
     error = {
       code: "CLIENT_SHAPE_MISMATCH",
-      message: caughtError?.message || String(caughtError),
+      message: getErrorMessage(caughtError),
     };
   }
 
@@ -984,18 +1096,18 @@ async function recordUsageTransaction({
   }
 
   console.warn(
-    `⚠️ Failed to record usage transaction for ${serviceId}: ${error.message}`
+    `⚠️ Failed to record usage transaction for ${serviceId}: ${error.message || "Unknown error"}`
   );
 }
 
-function rateToMetadata(value) {
+function rateToMetadata(value: unknown): number | null {
   if (typeof value === "number") return value;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-async function runAtomicBillingCycle(params) {
-  let lastError = null;
+async function runAtomicBillingCycle(params: AtomicBillingParams) {
+  let lastError: SupabaseErrorLike | null = null;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const { data, error } = await supabase
@@ -1027,7 +1139,7 @@ async function recordBillingFailure({
   errorMessage = null,
   occurredAt,
   lastBilledAt = null,
-}) {
+}: BillingFailureEvent): Promise<void> {
   try {
     await supabase
       .schema("billing")
@@ -1050,12 +1162,16 @@ async function recordBillingFailure({
       serviceId,
       userId,
       failureType,
-      error: error?.message || String(error),
+      error: getErrorMessage(error),
     });
   }
 }
 
-async function resolveBillingFailures(tableName, serviceId, userId) {
+async function resolveBillingFailures(
+  tableName: string,
+  serviceId: string,
+  userId: string
+): Promise<void> {
   try {
     await supabase
       .schema("billing")
@@ -1073,9 +1189,12 @@ async function resolveBillingFailures(tableName, serviceId, userId) {
   }
 }
 
-export async function billSingleService(tableName, svc) {
+export async function billSingleService(
+  tableName: string,
+  svc: ActiveService
+): Promise<void> {
   // Validate table name to prevent SQL injection
-  if (!VALID_TABLE_NAMES.includes(tableName)) {
+  if (!isBillingServiceTable(tableName)) {
     console.error(`SECURITY: Invalid table name attempted: ${tableName}`);
     return;
   }
@@ -1118,9 +1237,9 @@ export async function billSingleService(tableName, svc) {
     return;
   }
 
-  let hoursUsed;
+  let hoursUsed: number;
   if (last) {
-    hoursUsed = (now - last) / (1000 * 60 * 60);
+    hoursUsed = (now.getTime() - last.getTime()) / (1000 * 60 * 60);
   } else if (created_at) {
     const createdDate = parseBillingTimestamp(created_at);
     // Validate created_at is not in the future or too far in the past
@@ -1134,7 +1253,7 @@ export async function billSingleService(tableName, svc) {
       );
       return;
     }
-    hoursUsed = (now - createdDate) / (1000 * 60 * 60);
+    hoursUsed = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
   } else {
     // No last_billed_at or created_at, use safe default
     hoursUsed = 1;
@@ -1159,7 +1278,7 @@ export async function billSingleService(tableName, svc) {
   }
 
   // Parse and validate hourly rate with strict type checking
-  let rate;
+  let rate: number;
   if (typeof hourly_rate === "number") {
     rate = hourly_rate;
   } else if (typeof hourly_rate === "string") {
@@ -1345,7 +1464,7 @@ export async function billSingleService(tableName, svc) {
   );
 }
 
-export async function processServiceTable(tableName) {
+export async function processServiceTable(tableName: string): Promise<void> {
   try {
     console.log(
       `Loading active services from billing schema table ${tableName}...`
@@ -1374,22 +1493,22 @@ export async function processServiceTable(tableName) {
       `Processing ${services.length} active services from ${tableName}`
     );
 
-    for (const svc of services) {
+    for (const svc of services as ActiveService[]) {
       try {
         await billSingleService(tableName, svc);
       } catch (error) {
         console.error(`CRITICAL: Failed to bill service in ${tableName}:`, {
           service_id: svc.service_id,
-          error: error.message,
-          stack: error.stack,
+          error: getErrorMessage(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
         // Continue processing other services even if one fails
       }
     }
   } catch (error) {
     console.error(`CRITICAL: processServiceTable failed for ${tableName}:`, {
-      error: error.message,
-      stack: error.stack,
+      error: getErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
       timestamp: new Date().toISOString(),
     });
     throw error; // Re-throw to be caught by Promise.allSettled
@@ -1424,8 +1543,8 @@ cron.schedule("*/5 * * * *", async () => {
     console.log("Billing cycle completed:", new Date().toISOString());
   } catch (error) {
     console.error("CRITICAL: Billing cycle crashed:", {
-      error: error.message,
-      stack: error.stack,
+      error: getErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
       timestamp: new Date().toISOString(),
     });
     // Don't throw - let cron continue to next cycle
@@ -1468,7 +1587,7 @@ cron.schedule("0 * * * *", async () => {
       console.log("[domain-contact-sync] Reconciliation completed:", data.message);
     }
   } catch (error) {
-    console.error("[domain-contact-sync] Reconciliation error:", error.message);
+    console.error("[domain-contact-sync] Reconciliation error:", getErrorMessage(error));
   }
 });
 
@@ -1504,7 +1623,7 @@ cron.schedule("*/30 * * * *", async () => {
       console.log("[domain-transfer-poll] Poll completed:", data.message);
     }
   } catch (error) {
-    console.error("[domain-transfer-poll] Poll error:", error.message);
+    console.error("[domain-transfer-poll] Poll error:", getErrorMessage(error));
   }
 });
 
@@ -1540,7 +1659,7 @@ cron.schedule("0 9 * * *", async () => {
       console.log("[domain-renewal] Renewal billing completed:", data.message);
     }
   } catch (error) {
-    console.error("[domain-renewal] Renewal billing error:", error.message);
+    console.error("[domain-renewal] Renewal billing error:", getErrorMessage(error));
   }
 });
 
@@ -1575,7 +1694,7 @@ cron.schedule("20 3 * * *", async () => {
       console.log("[platform-build-log-cleanup] Cleanup completed:", data);
     }
   } catch (error) {
-    console.error("[platform-build-log-cleanup] Cleanup error:", error.message);
+    console.error("[platform-build-log-cleanup] Cleanup error:", getErrorMessage(error));
   }
 });
 
