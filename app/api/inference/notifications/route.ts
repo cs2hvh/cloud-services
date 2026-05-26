@@ -20,6 +20,7 @@ const EVENTS = [
   "batch.failed",
   "serving_pod.ready",
   "serving_pod.stopped",
+  "org.spend_threshold_reached",
 ] as const;
 
 const settingsSchema = z.object({

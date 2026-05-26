@@ -10,8 +10,11 @@ const SUCCESS_GREEN = "#16a34a";
 const FAIL_RED = "#dc2626";
 const NEUTRAL_BLUE = "#2563eb";
 
+const WARN_AMBER = "#d97706";
+
 function accentFor(event: InferenceEventEmailData["event"]): string {
   if (event.endsWith(".failed")) return FAIL_RED;
+  if (event === "org.spend_threshold_reached") return WARN_AMBER;
   if (event.endsWith(".succeeded") || event.endsWith(".completed") || event.endsWith(".ready"))
     return SUCCESS_GREEN;
   return NEUTRAL_BLUE;
@@ -31,6 +34,8 @@ function headingFor(event: InferenceEventEmailData["event"]): string {
       return "Serving instance ready";
     case "serving_pod.stopped":
       return "Serving instance stopped";
+    case "org.spend_threshold_reached":
+      return "Spend threshold reached";
   }
 }
 

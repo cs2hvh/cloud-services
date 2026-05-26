@@ -161,7 +161,8 @@ export type InferenceEventName =
   | "batch.completed"
   | "batch.failed"
   | "serving_pod.ready"
-  | "serving_pod.stopped";
+  | "serving_pod.stopped"
+  | "org.spend_threshold_reached";
 
 export interface InferenceEventEmailData {
   recipientName: string;

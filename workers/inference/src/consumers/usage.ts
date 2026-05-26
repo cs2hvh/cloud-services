@@ -128,17 +128,29 @@ export async function handleUsageBatch(
     spendByOrg.set(row.org_id, (spendByOrg.get(row.org_id) ?? 0) + row.cost_cents);
   }
 
+  // Capture per-org { prev, next } so the threshold-alert pass below can
+  // see which boundaries were crossed by THIS batch. Otherwise we'd
+  // either re-read KV or miss the prev value.
+  const totalsByOrg = new Map<string, { prev: number; next: number }>();
   await Promise.allSettled(
     [...spendByOrg.entries()].map(async ([orgId, addCents]) => {
       const key = `org:${orgId}:month:${month}`;
       const currentRaw = await env.SPEND.get(key);
       const current = currentRaw ? Number.parseInt(currentRaw, 10) : 0;
-      const next = (Number.isFinite(current) ? current : 0) + addCents;
+      const prev = Number.isFinite(current) ? current : 0;
+      const next = prev + addCents;
+      totalsByOrg.set(orgId, { prev, next });
       // KV is eventually consistent; for hard-cap accuracy we don't need atomic CAS
       // at 100k req/hour scale. If we cross 10k RPS later, move to Durable Object.
       await env.SPEND.put(key, String(next));
     })
   );
+
+  // 4b. Spend-threshold alerts — for each org that just bumped, check
+  //     whether the new total crosses 80%/100% of the org's monthly
+  //     budget OR 90%/100% of the hard cap. Dedup via KV so we never
+  //     fire the same threshold twice in one month.
+  await fireSpendAlerts(env, totalsByOrg, month);
 
   batch.ackAll();
 
@@ -219,4 +231,166 @@ function computeCost(
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
   return { costCents: finalCents, isOffPeak };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Spend threshold alerts
+// ────────────────────────────────────────────────────────────────────
+
+type ThresholdName = "budget_80" | "budget_100" | "cap_90" | "cap_100";
+
+interface ThresholdSpec {
+  name: ThresholdName;
+  pct: number;
+  source: "budget" | "cap";
+}
+
+const THRESHOLDS: ThresholdSpec[] = [
+  { name: "budget_80", pct: 0.8, source: "budget" },
+  { name: "budget_100", pct: 1.0, source: "budget" },
+  { name: "cap_90", pct: 0.9, source: "cap" },
+  { name: "cap_100", pct: 1.0, source: "cap" },
+];
+
+/**
+ * Detects which spend thresholds (if any) the new batch caused each org
+ * to cross, dedupes against KV, and fires one POST per crossing to the
+ * control-plane internal endpoint. Best-effort throughout — alert
+ * failures NEVER block the usage-batch ack.
+ */
+async function fireSpendAlerts(
+  env: Env,
+  totalsByOrg: Map<string, { prev: number; next: number }>,
+  month: string
+): Promise<void> {
+  if (totalsByOrg.size === 0) return;
+
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { "X-Client-Info": "ahura-inference-spend-alerts" } },
+  });
+
+  const orgIds = [...totalsByOrg.keys()];
+  const { data: orgRows } = await supabase
+    .schema("inference")
+    .from("orgs")
+    .select("id, monthly_budget_cents, hard_cap_cents")
+    .in("id", orgIds)
+    .returns<Array<{ id: string; monthly_budget_cents: number | null; hard_cap_cents: number | null }>>();
+
+  if (!orgRows || orgRows.length === 0) return;
+
+  // Compute seconds until the end of the current UTC month — used as
+  // the dedup-key TTL so alerts auto-reset on the 1st.
+  const ttl = secondsUntilNextMonth();
+
+  const work: Array<Promise<unknown>> = [];
+
+  for (const row of orgRows) {
+    const orgId = row.id;
+    const totals = totalsByOrg.get(orgId);
+    if (!totals) continue;
+
+    const budget = row.monthly_budget_cents;
+    const cap = row.hard_cap_cents;
+
+    for (const spec of THRESHOLDS) {
+      const sourceCap = spec.source === "budget" ? budget : cap;
+      if (!sourceCap || sourceCap <= 0) continue;
+      const triggerAt = Math.floor(sourceCap * spec.pct);
+      const crossed = totals.prev < triggerAt && totals.next >= triggerAt;
+      if (!crossed) continue;
+
+      work.push(
+        maybeFireOne(env, {
+          orgId,
+          threshold: spec.name,
+          currentCents: totals.next,
+          capCents: sourceCap,
+          month,
+          ttl,
+        })
+      );
+    }
+  }
+
+  await Promise.allSettled(work);
+}
+
+async function maybeFireOne(
+  env: Env,
+  input: {
+    orgId: string;
+    threshold: ThresholdName;
+    currentCents: number;
+    capCents: number;
+    month: string;
+    ttl: number;
+  }
+): Promise<void> {
+  const dedupKey = `org:${input.orgId}:alert:${input.month}:${input.threshold}`;
+  const existing = await env.SPEND.get(dedupKey);
+  if (existing) return; // already fired this month — skip
+
+  // Mark first so a concurrent isolate also processing the same batch
+  // doesn't double-fire. KV is eventually consistent; the race window
+  // is tiny and the cost of a dupe is one extra email.
+  await env.SPEND.put(dedupKey, "1", { expirationTtl: input.ttl });
+
+  const url = `${env.CONTROL_PLANE_URL.replace(/\/+$/, "")}/api/inference/internal/spend-alert`;
+  const token = env.BATCH_PROCESSOR_TOKEN ?? env.INTERNAL_CRON_TOKEN;
+  if (!token) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "spend-alert",
+        message: "No BATCH_PROCESSOR_TOKEN configured; skipping alert fan-out",
+      })
+    );
+    return;
+  }
+
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-ahura-internal-token": token,
+      },
+      body: JSON.stringify({
+        org_id: input.orgId,
+        threshold: input.threshold,
+        current_cents: input.currentCents,
+        cap_cents: input.capCents,
+        month: input.month,
+      }),
+    });
+    if (!r.ok) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          scope: "spend-alert",
+          message: "Control plane returned non-2xx for spend alert",
+          status: r.status,
+          org_id: input.orgId,
+          threshold: input.threshold,
+        })
+      );
+    }
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "spend-alert",
+        message: "Spend alert POST failed",
+        err: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+}
+
+function secondsUntilNextMonth(): number {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return Math.max(60, Math.floor((next.getTime() - now.getTime()) / 1000));
 }

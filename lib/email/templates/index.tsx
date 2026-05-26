@@ -183,6 +183,7 @@ export const emailTemplates: EmailTemplateRegistry = {
         event === "batch.failed"       ? "Batch failed" :
         event === "serving_pod.ready"  ? "Serving instance ready" :
         event === "serving_pod.stopped"? "Serving instance stopped" :
+        event === "org.spend_threshold_reached" ? "Spend alert" :
         "Inference event";
       return `AhuraSense | ${label}${lead}`;
     },

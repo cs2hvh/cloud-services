@@ -33,7 +33,8 @@ export type NotificationEvent =
   | "batch.completed"
   | "batch.failed"
   | "serving_pod.ready"
-  | "serving_pod.stopped";
+  | "serving_pod.stopped"
+  | "org.spend_threshold_reached";
 
 export interface NotificationsConfig {
   events_subscribed: NotificationEvent[];
@@ -64,9 +65,17 @@ const EVENT_LABELS: Record<NotificationEvent, string> = {
   "batch.failed": "Batch failed",
   "serving_pod.ready": "Serving instance ready",
   "serving_pod.stopped": "Serving instance stopped",
+  "org.spend_threshold_reached": "Spend threshold reached (budget / hard cap)",
 };
 
-const ALL_EVENTS = Object.keys(EVENT_LABELS) as NotificationEvent[];
+// Spend alerts are operational — they bypass the events_subscribed
+// filter on the server, so we hide them from the per-event toggle grid
+// to avoid showing a switch that doesn't do anything. The static "Spend
+// alerts" callout below the grid explains the behavior.
+const HIDDEN_FROM_PICKER: NotificationEvent[] = ["org.spend_threshold_reached"];
+const ALL_EVENTS = (Object.keys(EVENT_LABELS) as NotificationEvent[]).filter(
+  (e) => !HIDDEN_FROM_PICKER.includes(e)
+);
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#94a3b8",
@@ -428,6 +437,19 @@ export function NotificationsSettings({
 
       {/* ─── Events ─────────────────────────────────────────────── */}
       <SectionHead eyebrow="Filter" title="Which" accent="events" />
+
+      {/* Spend alerts are operational and always fire on enabled channels —
+          surface that here so customers don't go looking for a toggle. */}
+      <div className="mb-3 rounded-[5px] border border-[#33adff]/25 bg-[#0095FF]/[0.04] px-4 py-3">
+        <p className={`${MONO} text-[11px] text-white/75 leading-relaxed`}>
+          <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-[#33adff] font-semibold mr-2`}>
+            Always on
+          </span>
+          Spend threshold alerts (80% / 100% of monthly budget, 90% / 100% of hard cap)
+          fire automatically on whichever channels above you have enabled.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-12">
         {ALL_EVENTS.map((e) => {
           const on = config.events_subscribed.includes(e);

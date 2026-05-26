@@ -1,0 +1,23 @@
+-- ============================================================
+-- Phase 11.E.2 — Org spend threshold notifications
+--
+-- The hard cap landed in Phase 11.E (migration 20260526000007). That
+-- gate is binary — traffic flows fine right up until the moment it's
+-- blocked. Enterprise customers need a heads-up before the wall:
+--
+--   80% of monthly_budget_cents  → informational
+--   100% of monthly_budget_cents → informational (budget is advisory)
+--   90% of hard_cap_cents         → warning ("raise it before it bites")
+--   100% of hard_cap_cents        → critical (traffic now 402s)
+--
+-- The Worker usage consumer detects crossings and fires through the
+-- existing notifications fan-out (in-app + email + outbound webhook).
+-- This migration adds the one new event value the enum needs.
+-- ============================================================
+
+-- Single event, threshold details carried in notification metadata so
+-- customers can subscribe to "all spend alerts" or none. Splitting
+-- into one event per threshold (org.spend_alert_80 etc.) would let
+-- people mute specific ones, but adds four enum values and four
+-- toggles to the dashboard — defer until someone asks.
+ALTER TYPE inference.notification_event ADD VALUE IF NOT EXISTS 'org.spend_threshold_reached';
