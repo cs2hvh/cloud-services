@@ -151,9 +151,10 @@ app.notFound((c) =>
 
 // ───────────────────────────────────────────────────────────────
 // Worker export — combines the HTTP router (fetch) with the queue
-// consumer (queue). Cloudflare invokes whichever handler matches
-// the trigger. The same Worker code therefore both produces events
-// (in the request path) and consumes them (in the consumer path).
+// consumer (queue) and the cron trigger (scheduled). Cloudflare invokes
+// whichever handler matches the trigger. The same Worker code therefore
+// both produces events (in the request path) and consumes them (in the
+// consumer path), and runs the cron-scheduled control-plane sweeps.
 // ───────────────────────────────────────────────────────────────
 export default {
   fetch: app.fetch.bind(app),
@@ -176,7 +177,101 @@ export default {
       batch.ackAll();
     }
   },
+
+  /**
+   * Cron-triggered sweeps. Cloudflare fires this for every entry in
+   * wrangler.toml's [triggers.crons]. Today we only have one schedule
+   * (`* * * * *`) which invokes the serving-pod watchdog so idle hosted-
+   * serving instances past their auto_stop_at deadline get reaped.
+   *
+   * Failures don't retry (Workers cron has no automatic retry); we log
+   * + rely on the next minute's invocation to catch up. The watchdog
+   * is idempotent (state flip is conditional on state='running') so
+   * over-firing is safe.
+   */
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runServingPodWatchdog(env, event));
+  },
 };
+
+async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  if (!env.CONTROL_PLANE_URL) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "scheduled: CONTROL_PLANE_URL not configured",
+        cron: event.cron,
+      })
+    );
+    return;
+  }
+  if (!env.INTERNAL_CRON_TOKEN) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message:
+          "scheduled: INTERNAL_CRON_TOKEN not set as worker secret — wrangler secret put INTERNAL_CRON_TOKEN",
+        cron: event.cron,
+      })
+    );
+    return;
+  }
+  const url = `${env.CONTROL_PLANE_URL.replace(/\/+$/, "")}/api/inference/internal/serving-pod-watchdog`;
+  const startedAt = Date.now();
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Ahura-Internal-Token": env.INTERNAL_CRON_TOKEN,
+        "User-Agent": "ahura-inference-edge/cron",
+      },
+      // Empty body — the endpoint reads nothing from the request.
+      body: "{}",
+    });
+    const elapsedMs = Date.now() - startedAt;
+    if (!r.ok) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          message: "scheduled: watchdog returned non-2xx",
+          status: r.status,
+          elapsedMs,
+          cron: event.cron,
+        })
+      );
+      return;
+    }
+    const summary = (await r.json().catch(() => ({}))) as {
+      scanned?: number;
+      stopped?: number;
+      errors?: number;
+    };
+    // Only log when something happened — avoids 1440 zero-activity log
+    // lines per day. Errors always log.
+    if ((summary.scanned ?? 0) > 0 || (summary.errors ?? 0) > 0) {
+      console.log(
+        JSON.stringify({
+          level: "info",
+          message: "scheduled: watchdog completed",
+          scanned: summary.scanned,
+          stopped: summary.stopped,
+          errors: summary.errors,
+          elapsedMs,
+        })
+      );
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "scheduled: watchdog fetch failed",
+        err: err instanceof Error ? err.message : String(err),
+        cron: event.cron,
+      })
+    );
+  }
+}
 
 // Re-export the Durable Object class for wrangler
 export { RateLimiter } from "./durable-objects/rate-limiter.ts";

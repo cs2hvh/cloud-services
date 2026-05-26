@@ -110,12 +110,29 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
 GATEWAY_VERSION = "0.1.0"
 ENV = "production"
+# Where the Next.js control plane lives. The scheduled() handler hits
+# {CONTROL_PLANE_URL}/api/inference/internal/serving-pod-watchdog every
+# minute to reap idle hosted-serving pods. Change this when the dashboard
+# moves to a different domain.
+CONTROL_PLANE_URL = "https://wao.cs2hvh.com"
 
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC
 #   • OPENROUTER_PLATFORM_KEY    — used for platform-billed requests
 #   • BYOK_DEK                   — AES-GCM data encryption key (matches Postgres kms_key_version)
 #   • OTEL_EXPORTER_OTLP_HEADERS — auth header for OTel collector
+#   • INTERNAL_CRON_TOKEN        — shared with Next.js BATCH_PROCESSOR_TOKEN;
+#                                  scheduled() sends it as X-Ahura-Internal-Token
+
+# ───────────────────────────────────────────────────────────────
+# Cron Triggers
+# ───────────────────────────────────────────────────────────────
+# Every minute: invoke the serving-pod watchdog so idle pods past their
+# auto_stop_at deadline get torn down. Cheap (a single POST to the
+# control plane); the Worker's scheduled() handler in src/index.ts
+# handles auth + retry. See docs/inference/STATUS.md Phase 11.C.
+[triggers]
+crons = ["* * * * *"]
 
 # ───────────────────────────────────────────────────────────────
 # Limits

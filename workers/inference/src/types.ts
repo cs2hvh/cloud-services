@@ -22,6 +22,10 @@ export interface Env {
   GATEWAY_VERSION: string;
   ENV: "production" | "preview" | "development";
 
+  // Where the Next.js control plane lives — used by scheduled() to
+  // invoke internal endpoints (currently just the serving-pod watchdog).
+  CONTROL_PLANE_URL: string;
+
   // Secrets (populated via `wrangler secret put`)
   SUPABASE_SERVICE_ROLE_KEY: string;
   OPENROUTER_PLATFORM_KEY: string;
@@ -30,6 +34,9 @@ export interface Env {
   // endpoints on the compute provider's serverless layer.
   RUNPOD_API_KEY?: string;
   OTEL_EXPORTER_OTLP_HEADERS?: string;
+  // Shared with the Next.js BATCH_PROCESSOR_TOKEN env. scheduled()
+  // sends it as X-Ahura-Internal-Token to authenticate cron invocations.
+  INTERNAL_CRON_TOKEN?: string;
 }
 
 /**
