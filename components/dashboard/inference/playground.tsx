@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bot,
   Check,
   ChevronDown,
   Copy,
+  Eraser,
   Eye,
   EyeOff,
   Key,
@@ -12,10 +14,13 @@ import {
   Loader2,
   MessageSquare,
   Play,
+  RefreshCw,
   Rocket,
   Search,
+  Sparkles,
   StopCircle,
   Trash2,
+  User as UserIcon,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +36,7 @@ import {
 
 import {
   ACCENT,
+  ACCENT_BRIGHT,
   ColHead,
   GhostButton,
   Hero,
@@ -70,14 +76,24 @@ export interface PlaygroundPreset {
 
 type PlaygroundMode = "single" | "compare";
 
-interface RunStats {
-  model: string;
+interface TurnStats {
   inputTokens: number | null;
   outputTokens: number | null;
   costCents: number | null;
   latencyMs: number;
   ttftMs: number | null;
-  cacheStatus: string | null;
+}
+
+interface Turn {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  /** Set on assistant turns — the model that produced this response. */
+  modelId?: string;
+  stats?: TurnStats;
+  cacheStatus?: string | null;
+  error?: string;
+  running?: boolean;
 }
 
 const KEY_STORAGE = "ahura.playground.key";
@@ -114,12 +130,14 @@ export function Playground({
   const [maxTokens, setMaxTokens] = useState(1024);
   const [streamOn, setStreamOn] = useState(true);
 
-  const [output, setOutput] = useState("");
-  const [running, setRunning] = useState(false);
-  const [stats, setStats] = useState<RunStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const outputRef = useRef<HTMLPreElement | null>(null);
+  // Chat-style conversation history. Each Send appends a user + assistant
+  // turn; previous turns persist so the user can see the full thread and
+  // build a multi-turn conversation. The model gets the full history each
+  // turn so responses are context-aware.
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const running = useMemo(() => turns.some((t) => t.running), [turns]);
+  const abortRefs = useRef<Map<string, AbortController>>(new Map());
+  const conversationRef = useRef<HTMLDivElement | null>(null);
 
   const [codeLang, setCodeLang] = useState<"curl" | "python" | "typescript">("curl");
   const [codeCopied, setCodeCopied] = useState(false);
@@ -164,12 +182,14 @@ export function Playground({
     })();
   }, []);
 
-  // Auto-scroll output as tokens stream
+  // Auto-scroll the conversation panel as new tokens stream in, but only
+  // while a turn is actively running — once it finishes the user might
+  // scroll up to re-read; don't yank them back to the bottom.
   useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [output]);
+    if (!conversationRef.current) return;
+    if (!running) return;
+    conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+  }, [turns, running]);
 
   const selectedModel = useMemo(
     () => models.find((m) => m.model_id === modelId) ?? null,
@@ -234,43 +254,89 @@ export function Playground({
     [presets, presetId]
   );
 
-  // ── Build request body ───────────────────────────────────────────────
-  const buildBody = () => {
-    const messages: Array<{ role: string; content: string }> = [];
-    if (systemPrompt.trim()) {
-      messages.push({ role: "system", content: systemPrompt.trim() });
+  // Stats from the most-recently-completed assistant turn — drives the top
+  // "Last latency" stat-strip cell.
+  const lastAssistantStats = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const t = turns[i]!;
+      if (t.role === "assistant" && t.stats && !t.running) return t.stats;
     }
-    messages.push({ role: "user", content: userPrompt.trim() });
-    return {
-      model: modelId,
-      messages,
-      temperature,
-      top_p: topP,
-      max_tokens: maxTokens,
-      stream: streamOn,
-    };
+    return null;
+  }, [turns]);
+
+  // ── Build the messages array for the OpenAI-compatible request ─────
+  //    Includes the full conversation history so the model has context
+  //    for follow-up questions. System prompt is prepended each turn.
+  const buildMessages = (priorTurns: Turn[], nextUserContent: string) => {
+    const msgs: Array<{ role: string; content: string }> = [];
+    if (systemPrompt.trim()) {
+      msgs.push({ role: "system", content: systemPrompt.trim() });
+    }
+    for (const t of priorTurns) {
+      // Skip errored assistant turns — sending an empty/error message
+      // back to the model just confuses it.
+      if (t.role === "assistant" && (t.error || !t.content)) continue;
+      msgs.push({ role: t.role, content: t.content });
+    }
+    msgs.push({ role: "user", content: nextUserContent });
+    return msgs;
   };
 
-  // ── Run the request ──────────────────────────────────────────────────
-  const run = async () => {
+  /**
+   * Append a user turn + an assistant placeholder, then stream the
+   * assistant's response into the placeholder. Previous turns persist.
+   *
+   * @param explicitUserContent — when set, use this instead of reading
+   *   userPrompt from state. The retry flow uses this to avoid racing
+   *   against the textarea state update.
+   * @param historyOverride — when set, use this instead of `turns` from
+   *   state. The retry flow passes the trimmed-back history.
+   */
+  const run = async (explicitUserContent?: string, historyOverride?: Turn[]) => {
     if (!apiKey) {
       setKeySetupOpen(true);
       return;
     }
-    if (!userPrompt.trim()) {
-      toast.error("Enter a user message first");
+    const userContent = (explicitUserContent ?? userPrompt).trim();
+    if (!userContent) {
+      toast.error("Type a message first");
       return;
     }
 
-    setOutput("");
-    setStats(null);
-    setError(null);
-    setRunning(true);
+    // Snapshot history BEFORE we append so the API gets prior context
+    // without including the in-flight placeholder itself.
+    const priorTurns = historyOverride ?? turns;
+
+    const userTurn: Turn = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: userContent,
+    };
+    const assistantTurn: Turn = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+      modelId,
+      running: true,
+    };
+    // If the caller supplied a historyOverride (retry path), it's the
+    // trimmed-back turn list and we replace state with it; otherwise
+    // append to the current state.
+    if (historyOverride) {
+      setTurns([...historyOverride, userTurn, assistantTurn]);
+    } else {
+      setTurns((prev) => [...prev, userTurn, assistantTurn]);
+      setUserPrompt(""); // clear input so user can type the next turn
+    }
 
     const startedAt = Date.now();
     let firstTokenAt: number | null = null;
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    abortRefs.current.set(assistantTurn.id, ctrl);
+
+    const patch = (patcher: (t: Turn) => Turn) => {
+      setTurns((prev) => prev.map((t) => (t.id === assistantTurn.id ? patcher(t) : t)));
+    };
 
     try {
       const runHeaders: Record<string, string> = {
@@ -278,10 +344,18 @@ export function Playground({
         Authorization: `Bearer ${apiKey}`,
       };
       if (presetId) runHeaders["X-Ahura-Preset"] = presetId;
+
       const r = await fetch(`${apiBase}/chat/completions`, {
         method: "POST",
         headers: runHeaders,
-        body: JSON.stringify(buildBody()),
+        body: JSON.stringify({
+          model: modelId,
+          messages: buildMessages(priorTurns, userContent),
+          temperature,
+          top_p: topP,
+          max_tokens: maxTokens,
+          stream: streamOn,
+        }),
         signal: ctrl.signal,
       });
 
@@ -289,7 +363,7 @@ export function Playground({
 
       if (!r.ok) {
         const text = await r.text();
-        setError(text);
+        patch((t) => ({ ...t, running: false, error: truncateError(text), cacheStatus }));
         toast.error(`Request failed: ${r.status}`);
         return;
       }
@@ -301,24 +375,27 @@ export function Playground({
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
         const content = data.choices?.[0]?.message?.content ?? "";
-        setOutput(content);
         const elapsed = Date.now() - startedAt;
-        setStats({
-          model: modelId,
-          inputTokens: data.usage?.prompt_tokens ?? null,
-          outputTokens: data.usage?.completion_tokens ?? null,
-          costCents: computeCostCents(data.usage, selectedModel),
-          latencyMs: elapsed,
-          ttftMs: null,
+        patch((t) => ({
+          ...t,
+          content,
+          running: false,
           cacheStatus,
-        });
+          stats: {
+            inputTokens: data.usage?.prompt_tokens ?? null,
+            outputTokens: data.usage?.completion_tokens ?? null,
+            costCents: computeCostCents(data.usage, selectedModel),
+            latencyMs: elapsed,
+            ttftMs: null,
+          },
+        }));
         return;
       }
 
       // Streaming — SSE
       const reader = r.body?.getReader();
       if (!reader) {
-        setError("No response body");
+        patch((t) => ({ ...t, running: false, error: "No response body" }));
         return;
       }
       const decoder = new TextDecoder();
@@ -347,7 +424,7 @@ export function Playground({
             const delta = chunk.choices?.[0]?.delta?.content ?? "";
             if (delta) {
               if (firstTokenAt === null) firstTokenAt = Date.now();
-              setOutput((prev) => prev + delta);
+              patch((t) => ({ ...t, content: t.content + delta }));
             }
             if (chunk.usage) {
               if (chunk.usage.prompt_tokens !== undefined)
@@ -363,31 +440,68 @@ export function Playground({
 
       const elapsed = Date.now() - startedAt;
       const ttft = firstTokenAt !== null ? firstTokenAt - startedAt : null;
-      setStats({
-        model: modelId,
-        inputTokens,
-        outputTokens,
-        costCents: computeCostCents({ prompt_tokens: inputTokens ?? undefined, completion_tokens: outputTokens ?? undefined }, selectedModel),
-        latencyMs: elapsed,
-        ttftMs: ttft,
+      patch((t) => ({
+        ...t,
+        running: false,
         cacheStatus,
-      });
+        stats: {
+          inputTokens,
+          outputTokens,
+          costCents: computeCostCents(
+            { prompt_tokens: inputTokens ?? undefined, completion_tokens: outputTokens ?? undefined },
+            selectedModel
+          ),
+          latencyMs: elapsed,
+          ttftMs: ttft,
+        },
+      }));
     } catch (err) {
       if ((err as Error).name === "AbortError") {
+        // Keep whatever partial content streamed in; just mark not-running.
+        patch((t) => ({ ...t, running: false }));
         toast.info("Stopped");
       } else {
         const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        patch((t) => ({ ...t, running: false, error: msg }));
         toast.error(`Error: ${msg}`);
       }
     } finally {
-      setRunning(false);
-      abortRef.current = null;
+      abortRefs.current.delete(assistantTurn.id);
     }
   };
 
   const stop = () => {
-    abortRef.current?.abort();
+    // Abort whatever turn is currently running (there should be at most one
+    // in single mode).
+    for (const ctrl of abortRefs.current.values()) ctrl.abort();
+  };
+
+  const clearConversation = () => {
+    // Abort any in-flight requests first so they don't keep mutating state
+    // after we wipe the turn array.
+    for (const ctrl of abortRefs.current.values()) ctrl.abort();
+    abortRefs.current.clear();
+    setTurns([]);
+  };
+
+  const copyTurn = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const retryAssistantTurn = (assistantTurnId: string) => {
+    const idx = turns.findIndex((t) => t.id === assistantTurnId);
+    if (idx <= 0) return;
+    const userTurn = turns[idx - 1];
+    if (!userTurn || userTurn.role !== "user") return;
+    // Hand the history-up-to-but-not-including the failed user turn directly
+    // to run() so we don't race the setTurns state update.
+    const trimmed = turns.slice(0, idx - 1);
+    void run(userTurn.content, trimmed);
   };
 
   // Unified send/stop handler used by both the textarea Cmd+Enter shortcut
@@ -441,8 +555,18 @@ export function Playground({
   );
 
   // ── Copy-as-code ─────────────────────────────────────────────────────
+  //    Snapshot the current request shape for display. Uses the full
+  //    conversation history + the textarea contents as the new user turn
+  //    so the snippet matches exactly what Send would fire.
   const codeSnippet = useMemo(() => {
-    const body = buildBody();
+    const body = {
+      model: modelId,
+      messages: buildMessages(turns, userPrompt.trim() || "Hello"),
+      temperature,
+      top_p: topP,
+      max_tokens: maxTokens,
+      stream: streamOn,
+    };
     const bodyJson = JSON.stringify(body, null, 2);
     if (codeLang === "curl") {
       return `curl ${apiBase}/chat/completions \\
@@ -483,7 +607,10 @@ ${streamOn
   if (delta) process.stdout.write(delta);
 }`
         : 'console.log(response.choices[0].message.content);'}`;
-  }, [apiBase, apiKey, codeLang, modelId, streamOn, systemPrompt, userPrompt, temperature, topP, maxTokens]);
+    // buildMessages is closed over { systemPrompt, turns } — both already
+    // appear in deps, so we don't need to add the function itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBase, apiKey, codeLang, modelId, streamOn, systemPrompt, userPrompt, temperature, topP, maxTokens, turns]);
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(codeSnippet);
@@ -549,9 +676,9 @@ ${streamOn
         />
         <StatCell
           label="Last latency"
-          value={stats?.latencyMs ? `${stats.latencyMs} ms` : "—"}
-          hint={stats?.ttftMs ? `TTFT ${stats.ttftMs} ms` : "—"}
-          accent={stats ? "#4ade80" : undefined}
+          value={lastAssistantStats?.latencyMs ? `${lastAssistantStats.latencyMs} ms` : "—"}
+          hint={lastAssistantStats?.ttftMs ? `TTFT ${lastAssistantStats.ttftMs} ms` : "—"}
+          accent={lastAssistantStats ? "#4ade80" : undefined}
         />
       </StatsStrip>
 
@@ -773,57 +900,85 @@ ${streamOn
           </div>
 
           {mode === "single" ? (
-            /* Single-model output */
-            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+            /* Conversation history — turns accumulate so the user has full
+               context for follow-ups, and previous responses never silently
+               disappear when a new send fires. */
+            <div className="border border-white/[0.06] bg-[#0c0d11] rounded-[6px] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
                 <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-                  Response
+                  Conversation
+                  {turns.length > 0 && (
+                    <span className="ml-2 text-white/30">
+                      · {turns.filter((t) => t.role === "assistant").length}{" "}
+                      {turns.filter((t) => t.role === "assistant").length === 1 ? "turn" : "turns"}
+                    </span>
+                  )}
                 </p>
                 <div className="flex items-center gap-2">
-                  {running && <Loader2 className="h-3 w-3 animate-spin text-[#0095FF]" />}
-                  {output && !running && (
+                  {running && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[#33adff]">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      streaming
+                    </span>
+                  )}
+                  {turns.length > 0 && !running && (
                     <button
                       type="button"
-                      onClick={() => setOutput("")}
-                      className="text-[11px] text-white/45 hover:text-white/80 inline-flex items-center gap-1"
+                      onClick={clearConversation}
+                      className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 hover:text-white/80 inline-flex items-center gap-1 h-7 px-2 rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors`}
                     >
-                      <Trash2 className="h-3 w-3" />
-                      clear
+                      <Eraser className="h-3 w-3" />
+                      Clear
                     </button>
                   )}
                 </div>
               </div>
-              <pre
-                ref={outputRef}
-                className={`${MONO} px-4 py-3 text-[12.5px] text-white/90 leading-relaxed whitespace-pre-wrap break-words max-h-[480px] min-h-[120px] overflow-y-auto`}
+              <div
+                ref={conversationRef}
+                className="px-3 py-3 max-h-[560px] min-h-[200px] overflow-y-auto"
               >
-                {error ? (
-                  <span className="text-red-300/85">{error}</span>
-                ) : output ? (
-                  output + (running ? "▍" : "")
+                {turns.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-center py-12">
+                    <div
+                      className="mb-3 h-9 w-9 rounded-full flex items-center justify-center"
+                      style={{ background: "rgba(0,149,255,0.10)" }}
+                    >
+                      <Sparkles className="h-4 w-4" style={{ color: ACCENT }} />
+                    </div>
+                    <p className={`${MONO} text-[11.5px] text-white/55 mb-1`}>
+                      Start a conversation
+                    </p>
+                    <p className={`${MONO} text-[10.5px] text-white/35 max-w-xs`}>
+                      Type a message below and press Send. Previous turns persist as context for follow-ups.
+                    </p>
+                  </div>
                 ) : (
-                  <span className="text-white/30">{running ? "Waiting for response…" : "Output appears here."}</span>
+                  <div className="space-y-2">
+                    {turns.map((turn) => (
+                      <TurnRow
+                        key={turn.id}
+                        turn={turn}
+                        modelLabel={
+                          turn.role === "assistant"
+                            ? models.find((m) => m.model_id === turn.modelId)?.display_name ?? turn.modelId
+                            : undefined
+                        }
+                        onCopy={() => copyTurn(turn.content)}
+                        onStop={
+                          turn.running
+                            ? () => abortRefs.current.get(turn.id)?.abort()
+                            : undefined
+                        }
+                        onRetry={
+                          turn.role === "assistant" && !turn.running
+                            ? () => retryAssistantTurn(turn.id)
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </div>
                 )}
-              </pre>
-              {stats && (
-                <div className="border-t border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/[0.04]">
-                  <StatFoot label="Input" value={stats.inputTokens?.toString() ?? "—"} />
-                  <StatFoot label="Output" value={stats.outputTokens?.toString() ?? "—"} />
-                  <StatFoot
-                    label="Cost"
-                    value={
-                      stats.costCents !== null
-                        ? `$${(stats.costCents / 100).toFixed(4)}`
-                        : "—"
-                    }
-                  />
-                  <StatFoot
-                    label="TTFT / Total"
-                    value={`${stats.ttftMs ?? "—"} / ${stats.latencyMs}ms`}
-                    hint={stats.cacheStatus ? `cache: ${stats.cacheStatus}` : undefined}
-                  />
-                </div>
-              )}
+              </div>
             </div>
           ) : (
             /* Compare mode — 2-3 side-by-side panes, parallel runs, shared prompt + params */
@@ -1132,6 +1287,152 @@ function ModeToggle({
   );
 }
 
+function TurnRow({
+  turn,
+  modelLabel,
+  onCopy,
+  onStop,
+  onRetry,
+}: {
+  turn: Turn;
+  modelLabel?: string;
+  onCopy: () => void;
+  onStop?: () => void;
+  onRetry?: () => void;
+}) {
+  const isUser = turn.role === "user";
+  return (
+    <div
+      className="rounded-[5px] border bg-[#111216] overflow-hidden"
+      style={{
+        borderColor: isUser
+          ? "rgba(255,255,255,0.06)"
+          : turn.error
+            ? "rgba(239,68,68,0.25)"
+            : "rgba(0,149,255,0.18)",
+      }}
+    >
+      {/* Turn header — role badge + action row */}
+      <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-white/[0.04]">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="h-5 w-5 rounded inline-flex items-center justify-center shrink-0"
+            style={{
+              background: isUser ? "rgba(255,255,255,0.06)" : "rgba(0,149,255,0.12)",
+            }}
+          >
+            {isUser ? (
+              <UserIcon className="h-3 w-3 text-white/65" />
+            ) : (
+              <Bot className="h-3 w-3" style={{ color: ACCENT_BRIGHT }} />
+            )}
+          </span>
+          <span
+            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold ${
+              isUser ? "text-white/55" : "text-[#33adff]"
+            }`}
+          >
+            {isUser ? "You" : "Assistant"}
+          </span>
+          {modelLabel && (
+            <span className={`${MONO} text-[10px] text-white/35 truncate`}>· {modelLabel}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {turn.running ? (
+            <Loader2 className="h-3 w-3 animate-spin" style={{ color: ACCENT_BRIGHT }} />
+          ) : null}
+          {turn.content && !turn.running && (
+            <button
+              type="button"
+              onClick={onCopy}
+              className="h-6 w-6 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+              aria-label="Copy"
+              title="Copy"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          )}
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="h-6 w-6 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+              aria-label="Retry"
+              title="Retry"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          )}
+          {onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              className="h-6 inline-flex items-center gap-1 px-1.5 rounded text-[10px] uppercase tracking-[0.12em] font-semibold text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
+              aria-label="Stop"
+            >
+              <StopCircle className="h-3 w-3" />
+              Stop
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="px-4 py-2.5">
+        {turn.error ? (
+          <pre className={`${MONO} text-[11.5px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}>
+            {turn.error}
+          </pre>
+        ) : (
+          <pre
+            className={`${MONO} text-[12.5px] leading-relaxed whitespace-pre-wrap break-words ${
+              isUser ? "text-white/85" : "text-white/95"
+            }`}
+          >
+            {turn.content || (turn.running ? "" : "(empty)")}
+            {turn.running && (
+              <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5">
+                ▍
+              </span>
+            )}
+          </pre>
+        )}
+      </div>
+
+      {/* Assistant footer — stats + cache */}
+      {!isUser && turn.stats && (
+        <div className="border-t border-white/[0.04] grid grid-cols-4 divide-x divide-white/[0.04] text-center">
+          <StatFoot label="In" value={turn.stats.inputTokens?.toLocaleString() ?? "—"} />
+          <StatFoot label="Out" value={turn.stats.outputTokens?.toLocaleString() ?? "—"} />
+          <StatFoot
+            label="Cost"
+            value={
+              turn.stats.costCents !== null && turn.stats.costCents !== undefined
+                ? `$${(turn.stats.costCents / 100).toFixed(4)}`
+                : "—"
+            }
+          />
+          <StatFoot
+            label="Latency"
+            value={`${turn.stats.latencyMs}ms`}
+            hint={turn.stats.ttftMs !== null ? `TTFT ${turn.stats.ttftMs}ms` : undefined}
+          />
+        </div>
+      )}
+      {turn.cacheStatus && (
+        <div
+          className={`${MONO} px-3 py-1 text-[9.5px] uppercase tracking-[0.12em] border-t border-white/[0.04] ${
+            turn.cacheStatus === "hit" ? "text-emerald-300/85" : "text-white/35"
+          }`}
+        >
+          cache: {turn.cacheStatus}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatFoot({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="px-4 py-3">
@@ -1145,6 +1446,13 @@ function StatFoot({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+function truncateError(text: string): string {
+  // Gateway errors can be huge JSON blobs; show enough to be useful, link
+  // to the request id via X-Ahura-Request-Id if the user wants more.
+  if (text.length <= 600) return text;
+  return text.slice(0, 600) + "…";
+}
 
 function formatPrice(cents: number | null): string {
   if (cents === null) return "—";
