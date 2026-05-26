@@ -33,10 +33,16 @@ export function customerSafeErrorMessage(raw: string | null | undefined): string
     .replace(/\bCloudflare\b/gi, "edge")
     .replace(/\bOpenRouter\b/gi, "model gateway")
     .replace(/\bkubectl\b/gi, "operator")
+    .replace(/\bvLLM\b/gi, "serving runtime")
     .replace(/\bLKE\b/g, "cluster")
     .replace(/\bLinode\b/gi, "cluster")
+    .replace(/\bdeploy-runner\b/gi, "deploy worker")
+    .replace(/\bft-runner\b/gi, "training worker")
+    .replace(/\bOPENROUTER_PLATFORM_KEY\b/g, "platform upstream key")
+    .replace(/\bOPENROUTER_[A-Z_]+\b/g, "upstream config")
     .replace(/\bpod\b/gi, "instance")
     .replace(/\bheartbeat\b/gi, "training activity")
+    .replace(/\bwatchdog\b/gi, "monitor")
     .replace(/\s{2,}/g, " ")
     .trim();
 }

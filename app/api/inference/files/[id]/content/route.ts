@@ -17,6 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { downloadText, presignDownload } from "@/lib/inference/batch-storage";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 function isFileId(s: string): boolean {
   return /^file_[a-z0-9]+$/i.test(s);
@@ -78,7 +79,11 @@ export async function GET(
   } catch (err) {
     console.error("[Inference Files] R2 download failed:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "R2 download failed" },
+      {
+        error:
+          customerSafeErrorMessage(err instanceof Error ? err.message : "Download failed") ||
+          "Could not retrieve file from object storage. Please retry.",
+      },
       { status: 502 }
     );
   }

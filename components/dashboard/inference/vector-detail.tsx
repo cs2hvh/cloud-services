@@ -33,6 +33,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 export interface VectorCollectionRecord {
   id: string;
@@ -174,7 +175,8 @@ export function VectorCollectionDetail({
       setQueryResults(data.results ?? []);
       setQueryMs(Math.round(performance.now() - startedAt));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Query failed";
+      const raw = err instanceof Error ? err.message : "Query failed";
+      const msg = customerSafeErrorMessage(raw) || "Query failed";
       setQueryError(msg);
       toast.error(msg);
     } finally {

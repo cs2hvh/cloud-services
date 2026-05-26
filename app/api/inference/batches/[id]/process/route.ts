@@ -31,6 +31,7 @@ import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { downloadText, uploadBytes } from "@/lib/inference/batch-storage";
 import { type BatchRow, type BatchStatus } from "@/lib/inference/batches";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 function isBatchId(s: string): boolean {
   return /^batch_[a-z0-9]+$/i.test(s);
@@ -124,18 +125,22 @@ export async function POST(
   //     for batch — BYOK in async land is hairy and out of scope). ──
   const upstreamKey = process.env.OPENROUTER_PLATFORM_KEY;
   if (!upstreamKey) {
+    console.error("[Inference Batches] OPENROUTER_PLATFORM_KEY missing — batch cannot run");
     await supabase
       .schema("inference")
       .from("batches")
       .update({
         status: "failed",
         failed_at: new Date().toISOString(),
-        errors: { message: "OPENROUTER_PLATFORM_KEY is not configured" },
+        errors: {
+          message:
+            "Batch processing is temporarily unavailable. Please retry shortly or contact support.",
+        },
       })
       .eq("id", id);
     return NextResponse.json(
-      { error: "Platform upstream key not configured" },
-      { status: 500 }
+      { error: "Batch processing is temporarily unavailable. Please retry shortly." },
+      { status: 503 }
     );
   }
 
@@ -153,7 +158,13 @@ export async function POST(
   try {
     rawInput = await downloadText(batch.org_id, batch.input_file_id);
   } catch (err) {
-    await markFailed(supabase, id, err instanceof Error ? err.message : String(err));
+    console.error("[Inference Batches] input fetch failed:", err);
+    await markFailed(
+      supabase,
+      id,
+      customerSafeErrorMessage(err instanceof Error ? err.message : String(err)) ||
+        "Could not read input file from storage."
+    );
     return NextResponse.json({ error: "Failed to fetch input file" }, { status: 502 });
   }
 
@@ -234,6 +245,7 @@ export async function POST(
       });
       clearTimeout(t);
     } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
       errorLines.push(
         JSON.stringify({
           id: `batch_req_${crypto.randomUUID()}`,
@@ -241,7 +253,9 @@ export async function POST(
           response: null,
           error: {
             code: "upstream_unreachable",
-            message: err instanceof Error ? err.message : String(err),
+            message:
+              customerSafeErrorMessage(rawMsg) ||
+              "Upstream did not respond. Please retry this line.",
           },
         } as ErrorLine)
       );
@@ -260,6 +274,10 @@ export async function POST(
     }
 
     if (!resp.ok) {
+      const upstreamRaw =
+        typeof respJson === "object" && respJson && "error" in respJson
+          ? String((respJson as { error?: { message?: string } }).error?.message ?? respText.slice(0, 280))
+          : respText.slice(0, 280);
       errorLines.push(
         JSON.stringify({
           id: requestId,
@@ -267,9 +285,9 @@ export async function POST(
           response: null,
           error: {
             code: `upstream_${resp.status}`,
-            message: typeof respJson === "object" && respJson && "error" in respJson
-              ? String((respJson as { error?: { message?: string } }).error?.message ?? respText.slice(0, 280))
-              : respText.slice(0, 280),
+            message:
+              customerSafeErrorMessage(upstreamRaw) ||
+              `Upstream returned ${resp.status}. Please retry this line.`,
           },
         } as ErrorLine)
       );
@@ -402,13 +420,16 @@ export async function POST(
 type Sb = any;
 
 async function markFailed(supabase: Sb, id: string, message: string): Promise<void> {
+  // Defense-in-depth: ensure no leaky upstream copy lands in the customer-
+  // visible `errors` field even if a caller forgot to sanitize.
+  const safe = customerSafeErrorMessage(message) || "Batch failed. Please retry.";
   await supabase
     .schema("inference")
     .from("batches")
     .update({
       status: "failed",
       failed_at: new Date().toISOString(),
-      errors: { message },
+      errors: { message: safe },
     })
     .eq("id", id);
 }

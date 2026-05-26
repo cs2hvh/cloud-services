@@ -9,6 +9,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const createSchema = z.object({
   name: z
@@ -39,8 +40,13 @@ export async function GET() {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
+    console.error("[Inference Vector] org resolution failed:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
+      {
+        error: customerSafeErrorMessage(
+          err instanceof Error ? err.message : "Org resolution failed"
+        ) || "Org resolution failed",
+      },
       { status: 500 }
     );
   }
@@ -96,8 +102,13 @@ export async function POST(request: NextRequest) {
   try {
     org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
   } catch (err) {
+    console.error("[Inference Vector] org resolution failed:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
+      {
+        error: customerSafeErrorMessage(
+          err instanceof Error ? err.message : "Org resolution failed"
+        ) || "Org resolution failed",
+      },
       { status: 500 }
     );
   }

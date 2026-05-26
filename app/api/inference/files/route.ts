@@ -23,6 +23,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { uploadBytes, BATCH_BUCKET, fileKey, deleteObject } from "@/lib/inference/batch-storage";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const PURPOSE_VALUES = ["batch"] as const;
 const MAX_BYTES = 200 * 1024 * 1024; // 200MB — matches OpenAI's limit
@@ -203,7 +204,11 @@ export async function POST(request: NextRequest) {
     console.error("[Inference Files] R2 upload failed:", err);
     await supabase.schema("inference").from("files").delete().eq("id", fileId);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "R2 upload failed" },
+      {
+        error:
+          customerSafeErrorMessage(err instanceof Error ? err.message : "Upload failed") ||
+          "Upload to object storage failed. Please retry.",
+      },
       { status: 502 }
     );
   }

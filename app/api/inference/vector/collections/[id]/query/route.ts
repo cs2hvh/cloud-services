@@ -22,6 +22,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { embedText } from "@/lib/inference/embeddings";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const querySchema = z
   .object({
@@ -105,8 +106,13 @@ export async function POST(
       const result = await embedText(parsed.data.text, collection.embedding_model_id);
       queryEmbedding = result.embedding;
     } catch (err) {
+      console.error("[Inference Vector] query auto-embed failed:", err);
       return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Auto-embed failed" },
+        {
+          error: customerSafeErrorMessage(
+            err instanceof Error ? err.message : "Auto-embed failed"
+          ) || "Auto-embed failed. Try again, or pass a pre-computed `embedding` array.",
+        },
         { status: 502 }
       );
     }
@@ -136,7 +142,7 @@ export async function POST(
   if (error) {
     console.error("[Inference Vector] query error:", error);
     return NextResponse.json(
-      { error: "Vector search failed", detail: error.message },
+      { error: "Vector search failed" },
       { status: 500 }
     );
   }

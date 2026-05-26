@@ -21,6 +21,7 @@ import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDeployment } from "@/lib/inference/deploy-validate";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
 import { internalError } from "@/lib/inference/api-errors";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const createSchema = z.object({
   name: z
@@ -91,10 +92,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to list deployments" }, { status: 500 });
   }
 
+  // Sanitize error_message before handing rows to the customer — covers
+  // back-compat for older rows that may contain leaky upstream copy.
+  const sanitized = (data ?? []).map((row) => ({
+    ...row,
+    error_message: row.error_message ? customerSafeErrorMessage(row.error_message) : null,
+  }));
+
   return NextResponse.json({
     success: true,
     org: { id: org.org_id, slug: org.org_slug, name: org.org_name, role: org.role },
-    data: data ?? [],
+    data: sanitized,
   });
 }
 

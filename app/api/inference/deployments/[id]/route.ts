@@ -10,6 +10,7 @@ import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
 import { internalError } from "@/lib/inference/api-errors";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
@@ -67,7 +68,13 @@ export async function GET(
     return NextResponse.json({ error: "Deployment not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, data });
+  // Sanitize error_message before handing it to the customer (back-compat
+  // for rows written by older code paths that may have leaked upstream copy).
+  const sanitized = {
+    ...data,
+    error_message: data.error_message ? customerSafeErrorMessage(data.error_message) : null,
+  };
+  return NextResponse.json({ success: true, data: sanitized });
 }
 
 export async function DELETE(
@@ -137,7 +144,7 @@ export async function DELETE(
     .update({
       status: existing.endpoint_id ? "paused" : "deleted",
       error_message: existing.endpoint_id
-        ? "Pending deploy-runner teardown"
+        ? "Tear-down in progress — workers stop billing within ~30s."
         : null,
     })
     .eq("id", id);

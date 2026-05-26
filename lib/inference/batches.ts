@@ -3,6 +3,7 @@
  * route files so multiple endpoints (list, get, cancel, processor) can
  * import without duplicating the row shape or the OpenAI-mapper.
  */
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 export type BatchStatus =
   | "validating"
@@ -49,7 +50,7 @@ export function serializeBatch(row: BatchRow): Record<string, unknown> {
     id: row.id,
     object: "batch",
     endpoint: row.endpoint,
-    errors: row.errors ?? undefined,
+    errors: sanitizeErrors(row.errors),
     input_file_id: row.input_file_id,
     completion_window: row.completion_window,
     status: row.status,
@@ -67,4 +68,28 @@ export function serializeBatch(row: BatchRow): Record<string, unknown> {
     request_counts: row.request_counts,
     metadata: row.metadata,
   };
+}
+
+/**
+ * Defense-in-depth read-time scrub for the batch `errors` field. Covers
+ * back-compat: older rows may have been written before write-time
+ * sanitization landed in the processor, and any future code path that
+ * forgets to scrub the message before persist still won't leak.
+ */
+function sanitizeErrors(errors: unknown | null): unknown {
+  if (errors === null || errors === undefined) return undefined;
+  if (typeof errors === "string") {
+    return customerSafeErrorMessage(errors) || undefined;
+  }
+  if (typeof errors === "object") {
+    const obj = errors as Record<string, unknown>;
+    if (typeof obj.message === "string") {
+      return {
+        ...obj,
+        message:
+          customerSafeErrorMessage(obj.message) || "Batch failed. Please retry.",
+      };
+    }
+  }
+  return errors;
 }

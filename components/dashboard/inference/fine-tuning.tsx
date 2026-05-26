@@ -1347,9 +1347,14 @@ export function FineTuning({
                       )}
                     </div>
                   ) : j.error_message ? (
-                    <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[180px]`} title={j.error_message}>
-                      {j.error_message}
-                    </span>
+                    (() => {
+                      const safe = customerSafeErrorMessage(j.error_message);
+                      return (
+                        <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[180px]`} title={safe}>
+                          {safe}
+                        </span>
+                      );
+                    })()
                   ) : (
                     <span className={`${MONO} text-[10.5px] text-white/30`}>—</span>
                   )}

@@ -214,7 +214,7 @@ export default function PresetsPage() {
         breadcrumb={{ label: 'Inference', href: '/dashboard/services/inference' }}
         title="Routing"
         accent="presets"
-        caption="Named fallback chains + provider preferences. Reference a preset via the X-Ahura-Preset header — the gateway compiles its config into OpenRouter routing on every request."
+        caption="Named fallback chains + provider preferences. Reference a preset via the X-Ahura-Preset header — the gateway applies its routing config on every request."
         size="md"
         actions={
           <>

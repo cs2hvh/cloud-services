@@ -59,6 +59,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 export interface Deployment {
   id: string;
@@ -316,19 +317,18 @@ export function Deployments({
         />
       </StatsStrip>
 
-      {/* Operator note — until Phase 6.G ships, deployments will stall in 'building' */}
+      {/* Customer-visible note — explains why new deployments may sit in 'building' */}
       <section className="mb-10">
         <div className="border border-amber-400/15 bg-amber-400/[0.03] rounded-[6px] p-4 flex items-start gap-3">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-300/80 mt-0.5" />
           <div className="min-w-0 flex-1">
             <p className={`${MONO} text-[11px] uppercase tracking-[0.12em] font-semibold text-amber-200/90`}>
-              Phase 6.A–F — API live, deploy-runner pending
+              Preview — API live, provisioning in private beta
             </p>
             <p className={`${MONO} mt-1 text-[11px] text-white/55 leading-relaxed`}>
-              Deployments created here land in <span className="text-white/80">status=building</span>. The
-              compute-provisioning worker that turns these queued rows into live endpoints and
-              registers the resulting model in the catalog is the next milestone — until then rows
-              sit pending. Pre-flight checks (image manifest, source-registry probes) are fully
+              Deployments created here land in <span className="text-white/80">status=building</span> and
+              are queued for provisioning. End-to-end deploy is rolling out to organizations
+              progressively. Pre-flight checks (image manifest, source-registry probes) are fully
               active, so bad inputs still get rejected at create time.
             </p>
           </div>
@@ -426,7 +426,7 @@ export function Deployments({
                     </span>
                   ) : d.error_message ? (
                     <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[160px]`}>
-                      {d.error_message}
+                      {customerSafeErrorMessage(d.error_message)}
                     </span>
                   ) : (
                     <span className={`${MONO} text-[10.5px] text-white/30`}>—</span>

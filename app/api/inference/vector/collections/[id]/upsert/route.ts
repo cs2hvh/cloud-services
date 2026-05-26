@@ -18,6 +18,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { embedText } from "@/lib/inference/embeddings";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const upsertSchema = z.object({
   rows: z
@@ -110,9 +111,12 @@ export async function POST(
         const result = await embedText(r.content, collection.embedding_model_id);
         embedding = result.embedding;
       } catch (err) {
+        console.error("[Inference Vector] auto-embed failed:", err);
         return NextResponse.json(
           {
-            error: err instanceof Error ? err.message : "Auto-embed failed",
+            error: customerSafeErrorMessage(
+              err instanceof Error ? err.message : "Auto-embed failed"
+            ) || "Auto-embed failed. Try again, or pass a pre-computed `embedding` array.",
             failing_row: r.external_id,
           },
           { status: 502 }
@@ -155,7 +159,7 @@ export async function POST(
   if (insErr) {
     console.error("[Inference Vector] upsert error:", insErr);
     return NextResponse.json(
-      { error: "Failed to upsert rows", detail: insErr.message },
+      { error: "Failed to upsert rows" },
       { status: 500 }
     );
   }

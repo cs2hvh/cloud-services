@@ -158,7 +158,7 @@ export function ModelCatalog({
         breadcrumb={{ label: "Inference", href: "/dashboard/services/inference" }}
         title="Model"
         accent="catalog"
-        caption={`${models.length} models from ${providers.length - 1} labs proxied through OpenRouter. Pass any model_id directly to /v1/chat/completions — the catalog is yours.`}
+        caption={`${models.length} models from ${providers.length - 1} labs, served through the AhuraCloud gateway. Pass any model_id directly to /v1/chat/completions — the catalog is yours.`}
         size="md"
       />
 
