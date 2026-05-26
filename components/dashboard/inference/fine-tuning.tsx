@@ -607,6 +607,30 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
           <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3">
             <pre className={`${MONO} text-[10.5px] text-red-200/85 whitespace-pre-wrap break-all`}>{j.error_message}</pre>
           </div>
+          {/* Pattern-based hint: heartbeat-related failures often mean training was
+              still alive but the monitor lost touch. Surface that + link to
+              diagnostics so the operator can verify the heartbeat path. */}
+          {/heartbeat/i.test(j.error_message) && (
+            <div className="mt-2 rounded-[4px] border border-amber-700/40 bg-amber-950/30 p-3 space-y-1.5">
+              <p className={`${MONO} text-[10.5px] text-amber-200/85 leading-relaxed`}>
+                <strong>This may be a false failure.</strong> The training pod can keep running
+                even when the monitor can&apos;t see heartbeats — usually a misconfigured
+                Upstash Redis on one side. Common cause: the LKE ft-runner and the Next.js
+                receiver point at different Upstash databases.
+              </p>
+              <p className={`${MONO} text-[10.5px] text-amber-200/70 leading-relaxed`}>
+                Open{" "}
+                <Link
+                  href="/dashboard/services/inference/diagnostics"
+                  className="text-[#33adff] hover:underline"
+                >
+                  Diagnostics
+                </Link>{" "}
+                and check &quot;Upstash same on both sides&quot; — that has the exact kubectl
+                command to align the two.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

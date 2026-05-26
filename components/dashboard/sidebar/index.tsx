@@ -394,6 +394,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
             { label: "Members", href: "/dashboard/services/inference/members", icon: Users, matchPrefix: true },
             { label: "Audit Log", href: "/dashboard/services/inference/audit", icon: ShieldCheck, matchPrefix: true },
+            { label: "Diagnostics", href: "/dashboard/services/inference/diagnostics", icon: Activity, matchPrefix: true },
             { label: "Settings", href: "/dashboard/services/inference/settings", icon: Settings, matchPrefix: true },
         ],
     };
