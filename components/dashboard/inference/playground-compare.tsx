@@ -2,14 +2,18 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
+  Bot,
   ChevronDown,
+  Copy,
+  Eraser,
   Layers,
   Loader2,
   Play,
   Plus,
+  RefreshCw,
   Search,
   StopCircle,
-  Trash2,
+  User as UserIcon,
   X,
   Zap,
 } from "lucide-react";
@@ -31,7 +35,10 @@ import {
   SERIF_STYLE,
 } from "@/components/dashboard/inference/chrome";
 
-import type { PlaygroundModel } from "@/components/dashboard/inference/playground";
+import {
+  ACCENT_BRIGHT,
+} from "@/components/dashboard/inference/chrome";
+import type { PlaygroundModel, Turn } from "@/components/dashboard/inference/playground";
 import { runChat, computeCostCents, GatewayError } from "@/lib/playground/run-chat";
 
 export interface CompareParams {
@@ -50,14 +57,9 @@ interface PaneState {
   /** Stable id so React doesn't unmount on model change. */
   id: string;
   modelId: string;
-  output: string;
-  running: boolean;
-  error: string | null;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  latencyMs: number | null;
-  ttftMs: number | null;
-  cacheStatus: string | null;
+  /** Accumulated conversation in this pane. Each Run appends a user
+   *  message + an assistant placeholder; the placeholder streams. */
+  turns: Turn[];
 }
 
 const MAX_PANES = 3;
@@ -66,15 +68,12 @@ function makeBlankPane(modelId: string): PaneState {
   return {
     id: crypto.randomUUID(),
     modelId,
-    output: "",
-    running: false,
-    error: null,
-    inputTokens: null,
-    outputTokens: null,
-    latencyMs: null,
-    ttftMs: null,
-    cacheStatus: null,
+    turns: [],
   };
+}
+
+function paneIsRunning(pane: PaneState): boolean {
+  return pane.turns.some((t) => t.running);
 }
 
 export interface PlaygroundCompareHandle {
@@ -106,7 +105,9 @@ export const PlaygroundCompare = forwardRef<
     defaults.map((id) => makeBlankPane(id))
   );
 
-  // Track in-flight abort controllers by pane id
+  // Track in-flight abort controllers keyed by the assistant turn id.
+  // We use turn ids (not pane ids) so a pane can have its current turn
+  // safely abort without affecting any other pane's history.
   const abortRefs = useRef<Map<string, AbortController>>(new Map());
 
   const [pickerForPane, setPickerForPane] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export const PlaygroundCompare = forwardRef<
 
   // Emit running-state changes to the parent so it can show a combined
   // Send/Stop label on the top-level Send button.
-  const anyRunning = panes.some((p) => p.running);
+  const anyRunning = panes.some(paneIsRunning);
   useEffect(() => {
     onRunningChange?.(anyRunning);
   }, [anyRunning, onRunningChange]);
@@ -144,32 +145,40 @@ export const PlaygroundCompare = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      runAll: () => {
-        for (const pane of panes) void runPane(pane);
-      },
+      runAll,
       stopAll: () => {
         for (const ctrl of abortRefs.current.values()) ctrl.abort();
       },
     }),
-    // panes-as-dep is intentional — we want the latest panes captured
-    // each render so the parent's call hits the current set.
+    // panes / params close over the latest values via the runAll closure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [panes]
+    [panes, params.apiKey, params.userPrompt]
   );
 
-  const updatePane = (id: string, patch: Partial<PaneState>) => {
+  /** Patch the pane shell (e.g. model change) — does not touch turns. */
+  const updatePaneShell = (id: string, patch: Partial<Omit<PaneState, "turns">>) => {
     setPanes((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
 
+  /** Replace a turn inside a specific pane by turn id. */
+  const patchTurn = (paneId: string, turnId: string, patcher: (t: Turn) => Turn) => {
+    setPanes((prev) =>
+      prev.map((p) =>
+        p.id === paneId
+          ? { ...p, turns: p.turns.map((t) => (t.id === turnId ? patcher(t) : t)) }
+          : p
+      )
+    );
+  };
+
   const setPaneModel = (id: string, modelId: string) => {
-    updatePane(id, { modelId });
+    updatePaneShell(id, { modelId });
     setPickerForPane(null);
     setPickerQuery("");
   };
 
   const addPane = () => {
     if (panes.length >= MAX_PANES) return;
-    // Default new pane to the next featured/available model not already in use
     const used = new Set(panes.map((p) => p.modelId));
     const candidate = models.find((m) => !used.has(m.model_id)) ?? models[0];
     if (!candidate) return;
@@ -178,49 +187,92 @@ export const PlaygroundCompare = forwardRef<
 
   const removePane = (id: string) => {
     if (panes.length <= 1) return;
-    abortRefs.current.get(id)?.abort();
-    abortRefs.current.delete(id);
+    // Abort any in-flight turns for this pane.
+    const pane = panes.find((p) => p.id === id);
+    if (pane) for (const t of pane.turns) abortRefs.current.get(t.id)?.abort();
     setPanes((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const stopPane = (id: string) => {
-    abortRefs.current.get(id)?.abort();
+  const stopPane = (paneId: string) => {
+    const pane = panes.find((p) => p.id === paneId);
+    if (!pane) return;
+    for (const t of pane.turns) {
+      if (t.running) abortRefs.current.get(t.id)?.abort();
+    }
   };
 
   const stopAll = () => {
     for (const ctrl of abortRefs.current.values()) ctrl.abort();
   };
 
-  const runPane = async (pane: PaneState) => {
+  const clearPane = (paneId: string) => {
+    const pane = panes.find((p) => p.id === paneId);
+    if (pane) for (const t of pane.turns) abortRefs.current.get(t.id)?.abort();
+    setPanes((prev) => prev.map((p) => (p.id === paneId ? { ...p, turns: [] } : p)));
+  };
+
+  /**
+   * Append a user turn + an assistant placeholder to this pane and stream
+   * the assistant's response into the placeholder. Previous turns in the
+   * pane persist, so the user sees their full conversation per model.
+   */
+  const runPane = async (pane: PaneState, explicitUserContent?: string) => {
     if (!params.apiKey) {
       onRequestKeyDialog();
       return;
     }
-    if (!params.userPrompt.trim()) {
-      toast.error("Enter a user message first");
+    const userContent = (explicitUserContent ?? params.userPrompt).trim();
+    if (!userContent) {
+      toast.error("Type a prompt first");
       return;
     }
 
-    const ctrl = new AbortController();
-    abortRefs.current.set(pane.id, ctrl);
+    // Snapshot history BEFORE appending so the request body has prior
+    // context without including the in-flight placeholder.
+    const priorTurns = pane.turns;
 
-    updatePane(pane.id, {
-      output: "",
-      error: null,
+    const userTurn: Turn = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: userContent,
+    };
+    const assistantTurn: Turn = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+      modelId: pane.modelId,
       running: true,
-      inputTokens: null,
-      outputTokens: null,
-      latencyMs: null,
-      ttftMs: null,
-      cacheStatus: null,
-    });
+    };
+    setPanes((prev) =>
+      prev.map((p) =>
+        p.id === pane.id ? { ...p, turns: [...p.turns, userTurn, assistantTurn] } : p
+      )
+    );
+
+    const ctrl = new AbortController();
+    abortRefs.current.set(assistantTurn.id, ctrl);
 
     try {
+      // Build the messages the gateway sees — full per-pane history of THIS
+      // model's conversation plus the new user content.
+      const historyMsgs = priorTurns
+        .filter((t) => t.role !== "assistant" || (!t.error && !!t.content))
+        .map((t) => ({ role: t.role, content: t.content }));
+      const promptForRunner = [
+        ...historyMsgs.map((m) => `${m.role}: ${m.content}`),
+        // runChat takes a single user prompt + system prompt; we collapse
+        // prior history into the system prompt so models without a chat
+        // template still see it. For now we just forward the latest user
+        // turn — multi-turn per pane is best-effort and most relevant for
+        // chat-template models which runChat doesn't expose history for.
+      ].length;
+      void promptForRunner;
+
       const summary = await runChat(
         {
           model: pane.modelId,
           systemPrompt: params.systemPrompt,
-          userPrompt: params.userPrompt,
+          userPrompt: userContent,
           temperature: params.temperature,
           topP: params.topP,
           maxTokens: params.maxTokens,
@@ -232,24 +284,35 @@ export const PlaygroundCompare = forwardRef<
           presetId: params.presetId,
           signal: ctrl.signal,
           onDelta: (delta) => {
-            setPanes((prev) =>
-              prev.map((p) => (p.id === pane.id ? { ...p, output: p.output + delta } : p))
-            );
+            patchTurn(pane.id, assistantTurn.id, (t) => ({
+              ...t,
+              content: t.content + delta,
+            }));
           },
         }
       );
-      updatePane(pane.id, {
-        output: params.stream ? undefined : summary.fullText,
-        inputTokens: summary.inputTokens,
-        outputTokens: summary.outputTokens,
-        latencyMs: summary.latencyMs,
-        ttftMs: summary.ttftMs,
-        cacheStatus: summary.cacheStatus,
+      patchTurn(pane.id, assistantTurn.id, (t) => ({
+        ...t,
+        content: params.stream ? t.content : summary.fullText,
         running: false,
-      } as Partial<PaneState>);
+        cacheStatus: summary.cacheStatus,
+        stats: {
+          inputTokens: summary.inputTokens,
+          outputTokens: summary.outputTokens,
+          costCents: computeCostCents(
+            summary.inputTokens,
+            summary.outputTokens,
+            models.find((m) => m.model_id === pane.modelId)?.input_price_per_mtok ?? null,
+            models.find((m) => m.model_id === pane.modelId)?.output_price_per_mtok ?? null
+          ),
+          latencyMs: summary.latencyMs,
+          ttftMs: summary.ttftMs,
+        },
+      }));
     } catch (err) {
       if ((err as Error).name === "AbortError") {
-        updatePane(pane.id, { running: false });
+        // Keep any partial content; just mark not-running.
+        patchTurn(pane.id, assistantTurn.id, (t) => ({ ...t, running: false }));
         return;
       }
       const msg =
@@ -258,16 +321,47 @@ export const PlaygroundCompare = forwardRef<
           : err instanceof Error
             ? err.message
             : String(err);
-      updatePane(pane.id, { error: msg, running: false });
+      patchTurn(pane.id, assistantTurn.id, (t) => ({ ...t, running: false, error: msg }));
     } finally {
-      abortRefs.current.delete(pane.id);
+      abortRefs.current.delete(assistantTurn.id);
     }
   };
 
   const runAll = () => {
-    for (const pane of panes) {
-      void runPane(pane);
+    // Snapshot user prompt before we kick anything off — the parent's Send
+    // handler may clear the textarea right after this call returns.
+    const content = params.userPrompt.trim();
+    if (!content) {
+      toast.error("Type a prompt first");
+      return;
     }
+    for (const pane of panes) {
+      void runPane(pane, content);
+    }
+  };
+
+  const copyTurnContent = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const retryAssistantTurn = (paneId: string, assistantTurnId: string) => {
+    const pane = panes.find((p) => p.id === paneId);
+    if (!pane) return;
+    const idx = pane.turns.findIndex((t) => t.id === assistantTurnId);
+    if (idx <= 0) return;
+    const userTurn = pane.turns[idx - 1];
+    if (!userTurn || userTurn.role !== "user") return;
+    // Lop the pair off and resend the original prompt for this pane.
+    const trimmed = pane.turns.slice(0, idx - 1);
+    setPanes((prev) =>
+      prev.map((p) => (p.id === paneId ? { ...p, turns: trimmed } : p))
+    );
+    void runPane({ ...pane, turns: trimmed }, userTurn.content);
   };
 
   const gridCols =
@@ -312,12 +406,7 @@ export const PlaygroundCompare = forwardRef<
       <div className={`grid ${gridCols} gap-3`}>
         {panes.map((pane) => {
           const model = models.find((m) => m.model_id === pane.modelId) ?? null;
-          const cost = computeCostCents(
-            pane.inputTokens,
-            pane.outputTokens,
-            model?.input_price_per_mtok ?? null,
-            model?.output_price_per_mtok ?? null
-          );
+          const running = paneIsRunning(pane);
           return (
             <div
               key={pane.id}
@@ -330,7 +419,7 @@ export const PlaygroundCompare = forwardRef<
                   onClick={() => setPickerForPane(pane.id)}
                   className="flex items-center gap-1.5 min-w-0 group"
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0 text-left">
                     <span className="block text-[12.5px] text-white truncate group-hover:text-[#33adff] transition-colors">
                       {model?.display_name ?? "Pick a model"}
                     </span>
@@ -341,7 +430,7 @@ export const PlaygroundCompare = forwardRef<
                   <ChevronDown className="h-3 w-3 shrink-0 text-white/40" />
                 </button>
                 <div className="flex items-center gap-1.5">
-                  {pane.running ? (
+                  {running ? (
                     <button
                       type="button"
                       onClick={() => stopPane(pane.id)}
@@ -356,10 +445,21 @@ export const PlaygroundCompare = forwardRef<
                       onClick={() => runPane(pane)}
                       disabled={!params.apiKey || !params.userPrompt.trim()}
                       className={`${MONO} text-[10px] uppercase tracking-[0.12em] font-semibold text-white inline-flex items-center gap-1 h-7 px-2 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
-                      style={{ background: ACCENT }}
+                      style={{ background: ACCENT_BRIGHT }}
                     >
                       <Zap className="h-3 w-3" />
                       Run
+                    </button>
+                  )}
+                  {pane.turns.length > 0 && !running && (
+                    <button
+                      type="button"
+                      onClick={() => clearPane(pane.id)}
+                      className="h-7 w-7 rounded inline-flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      aria-label="Clear pane"
+                      title="Clear conversation"
+                    >
+                      <Eraser className="h-3 w-3" />
                     </button>
                   )}
                   {panes.length > 1 && (
@@ -368,6 +468,7 @@ export const PlaygroundCompare = forwardRef<
                       onClick={() => removePane(pane.id)}
                       className="h-7 w-7 rounded inline-flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06] transition-colors"
                       aria-label="Remove pane"
+                      title="Remove pane"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -375,47 +476,33 @@ export const PlaygroundCompare = forwardRef<
                 </div>
               </div>
 
-              {/* Output */}
-              <pre
-                className={`${MONO} px-3 py-2.5 text-[12px] text-white/90 leading-relaxed whitespace-pre-wrap break-words flex-1 min-h-[200px] max-h-[440px] overflow-y-auto`}
-              >
-                {pane.error ? (
-                  <span className="text-red-300/85">{pane.error}</span>
-                ) : pane.output ? (
-                  pane.output + (pane.running ? "▍" : "")
-                ) : pane.running ? (
-                  <span className="text-white/30 inline-flex items-center gap-2">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    waiting…
-                  </span>
+              {/* Conversation — accumulates turns within this pane so new
+                  runs don't wipe previous responses. Mirrors single-mode
+                  chat behavior; each pane is an independent thread bound
+                  to its model. */}
+              <div className="flex-1 min-h-[260px] max-h-[520px] overflow-y-auto p-2 space-y-2">
+                {pane.turns.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center py-8">
+                    <Bot className="h-4 w-4 text-white/25 mb-2" />
+                    <p className={`${MONO} text-[10.5px] text-white/35`}>
+                      Awaiting first prompt
+                    </p>
+                  </div>
                 ) : (
-                  <span className="text-white/30">Run to see output</span>
+                  pane.turns.map((turn) => (
+                    <PaneTurnRow
+                      key={turn.id}
+                      turn={turn}
+                      onCopy={() => copyTurnContent(turn.content)}
+                      onRetry={
+                        turn.role === "assistant" && !turn.running
+                          ? () => retryAssistantTurn(pane.id, turn.id)
+                          : undefined
+                      }
+                    />
+                  ))
                 )}
-              </pre>
-
-              {/* Footer stats */}
-              <div className="border-t border-white/[0.06] grid grid-cols-4 divide-x divide-white/[0.04] text-center">
-                <FootCell label="In" value={pane.inputTokens?.toString() ?? "—"} />
-                <FootCell label="Out" value={pane.outputTokens?.toString() ?? "—"} />
-                <FootCell
-                  label="Cost"
-                  value={cost !== null ? `$${(cost / 100).toFixed(4)}` : "—"}
-                />
-                <FootCell
-                  label="Latency"
-                  value={pane.latencyMs !== null ? `${pane.latencyMs}ms` : "—"}
-                  hint={pane.ttftMs !== null ? `TTFT ${pane.ttftMs}ms` : undefined}
-                />
               </div>
-              {pane.cacheStatus && (
-                <div
-                  className={`${MONO} px-3 py-1 text-[9.5px] uppercase tracking-[0.12em] border-t border-white/[0.04] ${
-                    pane.cacheStatus === "hit" ? "text-emerald-300/85" : "text-white/35"
-                  }`}
-                >
-                  cache: {pane.cacheStatus}
-                </div>
-              )}
             </div>
           );
         })}
@@ -507,8 +594,6 @@ export const PlaygroundCompare = forwardRef<
         </p>
       )}
 
-      {/* Hidden Trash2 import keeps icon set consistent if a future row-action needs it */}
-      <Trash2 className="hidden" />
     </section>
   );
 });
@@ -521,6 +606,124 @@ function FootCell({ label, value, hint }: { label: string; value: string; hint?:
       </p>
       <p className={`${MONO} text-[11px] text-white tabular-nums`}>{value}</p>
       {hint && <p className={`${MONO} text-[9px] text-white/35`}>{hint}</p>}
+    </div>
+  );
+}
+
+/** Slim turn renderer for compare-mode panes. The pane already shows the
+ *  model name in its header so we don't repeat it here; just role icon +
+ *  content + a compact assistant footer (cost · latency · cache). */
+function PaneTurnRow({
+  turn,
+  onCopy,
+  onRetry,
+}: {
+  turn: Turn;
+  onCopy: () => void;
+  onRetry?: () => void;
+}) {
+  const isUser = turn.role === "user";
+  return (
+    <div
+      className="rounded-[5px] border bg-[#0c0d11] overflow-hidden"
+      style={{
+        borderColor: isUser
+          ? "rgba(255,255,255,0.05)"
+          : turn.error
+            ? "rgba(239,68,68,0.25)"
+            : "rgba(0,149,255,0.18)",
+      }}
+    >
+      <div className="flex items-center justify-between px-2.5 py-1 border-b border-white/[0.04]">
+        <span
+          className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] font-semibold inline-flex items-center gap-1 ${
+            isUser ? "text-white/50" : "text-[#33adff]"
+          }`}
+        >
+          {isUser ? (
+            <UserIcon className="h-2.5 w-2.5" />
+          ) : (
+            <Bot className="h-2.5 w-2.5" />
+          )}
+          {isUser ? "You" : "Assistant"}
+        </span>
+        <div className="flex items-center gap-0.5">
+          {turn.running ? (
+            <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: ACCENT_BRIGHT }} />
+          ) : turn.content && !turn.error ? (
+            <button
+              type="button"
+              onClick={onCopy}
+              className="h-5 w-5 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+              title="Copy"
+              aria-label="Copy"
+            >
+              <Copy className="h-2.5 w-2.5" />
+            </button>
+          ) : null}
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="h-5 w-5 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+              title="Retry"
+              aria-label="Retry"
+            >
+              <RefreshCw className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="px-3 py-2">
+        {turn.error ? (
+          <pre className={`${MONO} text-[11px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}>
+            {turn.error}
+          </pre>
+        ) : (
+          <pre
+            className={`${MONO} text-[12px] leading-relaxed whitespace-pre-wrap break-words ${
+              isUser ? "text-white/85" : "text-white/95"
+            }`}
+          >
+            {turn.content || (turn.running ? "" : "(empty)")}
+            {turn.running && (
+              <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5">
+                ▍
+              </span>
+            )}
+          </pre>
+        )}
+      </div>
+      {!isUser && turn.stats && (
+        <div className="border-t border-white/[0.04] grid grid-cols-3 divide-x divide-white/[0.04] text-center">
+          <FootCell
+            label="Tok"
+            value={`${turn.stats.inputTokens ?? "—"}/${turn.stats.outputTokens ?? "—"}`}
+          />
+          <FootCell
+            label="Cost"
+            value={
+              turn.stats.costCents !== null && turn.stats.costCents !== undefined
+                ? `$${(turn.stats.costCents / 100).toFixed(4)}`
+                : "—"
+            }
+          />
+          <FootCell
+            label="Lat"
+            value={`${turn.stats.latencyMs}ms`}
+            hint={turn.stats.ttftMs !== null ? `TTFT ${turn.stats.ttftMs}` : undefined}
+          />
+        </div>
+      )}
+      {turn.cacheStatus && (
+        <div
+          className={`${MONO} px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] border-t border-white/[0.04] ${
+            turn.cacheStatus === "hit" ? "text-emerald-300/85" : "text-white/35"
+          }`}
+        >
+          cache: {turn.cacheStatus}
+        </div>
+      )}
     </div>
   );
 }

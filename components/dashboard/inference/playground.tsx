@@ -76,7 +76,7 @@ export interface PlaygroundPreset {
 
 type PlaygroundMode = "single" | "compare";
 
-interface TurnStats {
+export interface TurnStats {
   inputTokens: number | null;
   outputTokens: number | null;
   costCents: number | null;
@@ -84,7 +84,7 @@ interface TurnStats {
   ttftMs: number | null;
 }
 
-interface Turn {
+export interface Turn {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -983,35 +983,9 @@ ${streamOn
               </div>
             </>
           ) : (
-            /* Compare mode — input above, panes below (each pane is its
-               own response surface; no shared conversation history). */
+            /* Compare mode — panes ABOVE, input BELOW (matches single-mode
+               chat layout; each pane is its own per-model conversation). */
             <>
-              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={userPrompt}
-                    onChange={(e) => setUserPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        sendPrompt();
-                      }
-                    }}
-                    placeholder="Compare this prompt across models… (Cmd/Ctrl + Enter to run all)"
-                    rows={3}
-                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
-                  />
-                  <div className="shrink-0">{sendButton}</div>
-                </div>
-                <div className="flex items-center justify-between mt-2 px-0.5">
-                  <span className={`${MONO} text-[10px] text-white/35`}>
-                    {userPrompt.trim().length > 0
-                      ? `${userPrompt.trim().length.toLocaleString()} chars`
-                      : "All selected models will receive this prompt in parallel"}
-                  </span>
-                </div>
-              </div>
-
               <PlaygroundCompare
                 ref={compareRef}
                 models={models}
@@ -1029,6 +1003,32 @@ ${streamOn
                 onRequestKeyDialog={() => setKeySetupOpen(true)}
                 onRunningChange={setCompareRunning}
               />
+
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={userPrompt}
+                    onChange={(e) => setUserPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        sendPrompt();
+                      }
+                    }}
+                    placeholder="Compare across models… (Cmd/Ctrl + Enter to run all)"
+                    rows={3}
+                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
+                  />
+                  <div className="shrink-0">{sendButton}</div>
+                </div>
+                <div className="flex items-center justify-between mt-2 px-0.5">
+                  <span className={`${MONO} text-[10px] text-white/35`}>
+                    {userPrompt.trim().length > 0
+                      ? `${userPrompt.trim().length.toLocaleString()} chars`
+                      : "All selected models receive this prompt in parallel"}
+                  </span>
+                </div>
+              </div>
             </>
           )}
         </div>
