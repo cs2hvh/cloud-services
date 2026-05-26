@@ -51,12 +51,16 @@ export function createNextJsPipeline(
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;
 
-  // Split env vars: NEXT_PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  // NEXT_PUBLIC_* vars are baked into the client bundle via build args.
+  // ALL vars (including NEXT_PUBLIC_*) are also injected at runtime via K8s Secret so the
+  // server process can read them from process.env.
   const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
-  const serverEnvVars = envVars.filter(e => !e.key.startsWith('NEXT_PUBLIC_'));
 
-  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
+  // Runtime secret must include ALL vars: server-side vars AND NEXT_PUBLIC_* vars.
+  // Next.js reads NEXT_PUBLIC_* from process.env on the server at runtime (SSR, server
+  // components, instrumentation hooks, env validation), so they must be present in the
+  // runtime environment in addition to being baked into the client bundle via build args.
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -64,8 +68,8 @@ export function createNextJsPipeline(
   // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
   const buildOpts: string[] = [
     ...clientEnvVars.map(e => {
-      const escapedValue = e.value.replace(/\$/g, '\\$');
-      return `--opt build-arg:${e.key}=${escapedValue}`;
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
     }),
     '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
   ];

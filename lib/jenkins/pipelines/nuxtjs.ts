@@ -71,16 +71,15 @@ export function createNuxtJsPipeline(
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;
 
-  // Split env vars: NUXT_PUBLIC_*/PUBLIC_*/VITE_* → client-side (build args), others → server-side (K8s Secrets)
-  const clientEnvVars = envVars.filter(e => 
+  // Public vars (NUXT_PUBLIC_*/PUBLIC_*/VITE_*) are baked into the client bundle via build args.
+  const clientEnvVars = envVars.filter(e =>
     e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_') || e.key.startsWith('VITE_')
   );
-  const serverEnvVars = envVars.filter(e => 
-    !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('PUBLIC_') && !e.key.startsWith('VITE_')
-  );
 
-  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
+  // Runtime secret must include ALL vars: Nuxt reads public vars from process.env on the server
+  // at runtime (SSR, nitro server, runtimeConfig), so they must be present in the runtime
+  // environment in addition to being baked into the client bundle via build args.
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -88,8 +87,8 @@ export function createNuxtJsPipeline(
   // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
   const buildOpts: string[] = [
     ...clientEnvVars.map(e => {
-      const escapedValue = e.value.replace(/\$/g, '\\$');
-      return `--opt build-arg:${e.key}=${escapedValue}`;
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
     }),
     '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
   ];

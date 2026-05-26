@@ -70,8 +70,8 @@ export function createAngularPipeline(
   // [WARN] All Angular env vars will be visible in image layers — avoid sensitive values.
   const buildOpts: string[] = [
     ...envVars.map(e => {
-      const escapedValue = e.value.replace(/\$/g, '\\$');
-      return `--opt build-arg:${e.key}=${escapedValue}`;
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
     }),
     '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
   ];
