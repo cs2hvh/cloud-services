@@ -865,140 +865,171 @@ ${streamOn
           )}
         </div>
 
-        {/* Right: prompt + (single output | compare grid) */}
-        <div className="space-y-4 min-w-0">
-          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-                User message
-              </p>
-              <span className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] text-white/30`}>
-                Cmd/Ctrl + Enter to send
-              </span>
-            </div>
-            <textarea
-              value={userPrompt}
-              onChange={(e) => setUserPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  sendPrompt();
-                }
-              }}
-              placeholder="Ask anything…"
-              rows={5}
-              className={`${MONO} w-full text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y`}
-            />
-            <div className="flex items-center justify-between mt-3">
-              <span className={`${MONO} text-[10px] text-white/35`}>
-                {userPrompt.trim().length > 0
-                  ? `${userPrompt.trim().length.toLocaleString()} chars`
-                  : "Type a prompt to begin"}
-              </span>
-              {sendButton}
-            </div>
-          </div>
-
+        {/* Right column — conversation ABOVE, input BELOW (chat-app convention).
+            In single mode, the conversation panel is the dominant visual
+            element so the response is impossible to miss after Send. */}
+        <div className="space-y-3 min-w-0">
           {mode === "single" ? (
-            /* Conversation history — turns accumulate so the user has full
-               context for follow-ups, and previous responses never silently
-               disappear when a new send fires. */
-            <div className="border border-white/[0.06] bg-[#0c0d11] rounded-[6px] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-                <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-                  Conversation
-                  {turns.length > 0 && (
-                    <span className="ml-2 text-white/30">
-                      · {turns.filter((t) => t.role === "assistant").length}{" "}
-                      {turns.filter((t) => t.role === "assistant").length === 1 ? "turn" : "turns"}
-                    </span>
-                  )}
-                </p>
-                <div className="flex items-center gap-2">
-                  {running && (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[#33adff]">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      streaming
-                    </span>
-                  )}
-                  {turns.length > 0 && !running && (
-                    <button
-                      type="button"
-                      onClick={clearConversation}
-                      className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 hover:text-white/80 inline-flex items-center gap-1 h-7 px-2 rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors`}
-                    >
-                      <Eraser className="h-3 w-3" />
-                      Clear
-                    </button>
+            <>
+              {/* Conversation (above input, like every modern chat UI). */}
+              <div className="border border-white/[0.06] bg-[#0c0d11] rounded-[6px] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+                  <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
+                    Conversation
+                    {turns.length > 0 && (
+                      <span className="ml-2 text-white/30">
+                        · {turns.filter((t) => t.role === "assistant").length}{" "}
+                        {turns.filter((t) => t.role === "assistant").length === 1 ? "turn" : "turns"}
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {running && (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-[#33adff]">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        streaming
+                      </span>
+                    )}
+                    {turns.length > 0 && !running && (
+                      <button
+                        type="button"
+                        onClick={clearConversation}
+                        className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 hover:text-white/80 inline-flex items-center gap-1 h-7 px-2 rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors`}
+                      >
+                        <Eraser className="h-3 w-3" />
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div
+                  ref={conversationRef}
+                  className="px-3 py-3 h-[520px] overflow-y-auto"
+                >
+                  {turns.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center text-center h-full">
+                      <div
+                        className="mb-3 h-10 w-10 rounded-full flex items-center justify-center"
+                        style={{ background: "rgba(0,149,255,0.10)" }}
+                      >
+                        <Sparkles className="h-4 w-4" style={{ color: ACCENT }} />
+                      </div>
+                      <p className={`${MONO} text-[11.5px] text-white/55 mb-1`}>
+                        Start a conversation
+                      </p>
+                      <p className={`${MONO} text-[10.5px] text-white/35 max-w-xs`}>
+                        Type a message below and press Send. Previous turns persist as context for follow-ups.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {turns.map((turn) => (
+                        <TurnRow
+                          key={turn.id}
+                          turn={turn}
+                          modelLabel={
+                            turn.role === "assistant"
+                              ? models.find((m) => m.model_id === turn.modelId)?.display_name ?? turn.modelId
+                              : undefined
+                          }
+                          onCopy={() => copyTurn(turn.content)}
+                          onStop={
+                            turn.running
+                              ? () => abortRefs.current.get(turn.id)?.abort()
+                              : undefined
+                          }
+                          onRetry={
+                            turn.role === "assistant" && !turn.running
+                              ? () => retryAssistantTurn(turn.id)
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
-              <div
-                ref={conversationRef}
-                className="px-3 py-3 max-h-[560px] min-h-[200px] overflow-y-auto"
-              >
-                {turns.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center py-12">
-                    <div
-                      className="mb-3 h-9 w-9 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(0,149,255,0.10)" }}
-                    >
-                      <Sparkles className="h-4 w-4" style={{ color: ACCENT }} />
-                    </div>
-                    <p className={`${MONO} text-[11.5px] text-white/55 mb-1`}>
-                      Start a conversation
-                    </p>
-                    <p className={`${MONO} text-[10.5px] text-white/35 max-w-xs`}>
-                      Type a message below and press Send. Previous turns persist as context for follow-ups.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {turns.map((turn) => (
-                      <TurnRow
-                        key={turn.id}
-                        turn={turn}
-                        modelLabel={
-                          turn.role === "assistant"
-                            ? models.find((m) => m.model_id === turn.modelId)?.display_name ?? turn.modelId
-                            : undefined
-                        }
-                        onCopy={() => copyTurn(turn.content)}
-                        onStop={
-                          turn.running
-                            ? () => abortRefs.current.get(turn.id)?.abort()
-                            : undefined
-                        }
-                        onRetry={
-                          turn.role === "assistant" && !turn.running
-                            ? () => retryAssistantTurn(turn.id)
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
+
+              {/* Input box — below conversation, like ChatGPT/Claude. */}
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={userPrompt}
+                    onChange={(e) => setUserPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        sendPrompt();
+                      }
+                    }}
+                    placeholder="Message the model… (Cmd/Ctrl + Enter to send)"
+                    rows={3}
+                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
+                  />
+                  <div className="shrink-0">{sendButton}</div>
+                </div>
+                <div className="flex items-center justify-between mt-2 px-0.5">
+                  <span className={`${MONO} text-[10px] text-white/35`}>
+                    {userPrompt.trim().length > 0
+                      ? `${userPrompt.trim().length.toLocaleString()} chars`
+                      : "Conversation history is sent on every turn"}
+                  </span>
+                  {selectedModel && (
+                    <span className={`${MONO} text-[10px] text-white/35`}>
+                      → {selectedModel.display_name}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           ) : (
-            /* Compare mode — 2-3 side-by-side panes, parallel runs, shared prompt + params */
-            <PlaygroundCompare
-              ref={compareRef}
-              models={models}
-              params={{
-                apiKey,
-                apiBase,
-                systemPrompt,
-                userPrompt,
-                temperature,
-                topP,
-                maxTokens,
-                stream: streamOn,
-                presetId: presetId || undefined,
-              }}
-              onRequestKeyDialog={() => setKeySetupOpen(true)}
-              onRunningChange={setCompareRunning}
-            />
+            /* Compare mode — input above, panes below (each pane is its
+               own response surface; no shared conversation history). */
+            <>
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={userPrompt}
+                    onChange={(e) => setUserPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        sendPrompt();
+                      }
+                    }}
+                    placeholder="Compare this prompt across models… (Cmd/Ctrl + Enter to run all)"
+                    rows={3}
+                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
+                  />
+                  <div className="shrink-0">{sendButton}</div>
+                </div>
+                <div className="flex items-center justify-between mt-2 px-0.5">
+                  <span className={`${MONO} text-[10px] text-white/35`}>
+                    {userPrompt.trim().length > 0
+                      ? `${userPrompt.trim().length.toLocaleString()} chars`
+                      : "All selected models will receive this prompt in parallel"}
+                  </span>
+                </div>
+              </div>
+
+              <PlaygroundCompare
+                ref={compareRef}
+                models={models}
+                params={{
+                  apiKey,
+                  apiBase,
+                  systemPrompt,
+                  userPrompt,
+                  temperature,
+                  topP,
+                  maxTokens,
+                  stream: streamOn,
+                  presetId: presetId || undefined,
+                }}
+                onRequestKeyDialog={() => setKeySetupOpen(true)}
+                onRunningChange={setCompareRunning}
+              />
+            </>
           )}
         </div>
       </section>
