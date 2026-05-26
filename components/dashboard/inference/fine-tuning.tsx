@@ -92,6 +92,14 @@ export interface FineTuneJob {
   pod_id?: string | null;
   is_managed?: boolean | null;
   serving_url?: string | null;
+  // Phase 11.B serving-pod lifecycle (Tier 1 per-customer dedicated)
+  serving_pod_state?: "provisioning" | "running" | "stopped" | "failed" | null;
+  serving_pod_gpu_sku?: string | null;
+  serving_pod_started_at?: string | null;
+  serving_pod_stopped_at?: string | null;
+  serving_pod_hourly_cents?: number | null;
+  serving_pod_auto_stop_at?: string | null;
+  serving_pod_error_message?: string | null;
 }
 
 export interface FineTuneBaseModel {
@@ -200,54 +208,56 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
   const hp = (j.hyperparams ?? {}) as Record<string, unknown>;
   const podId = j.pod_id ?? null;
 
-  // ── Managed-serving activation state ─────────────────────────
-  const [managedDialogOpen, setManagedDialogOpen] = useState(false);
-  const [servingUrlDraft, setServingUrlDraft] = useState("");
-  const [submittingManaged, setSubmittingManaged] = useState(false);
+  // ── Hosted-serving lifecycle state (Phase 11.B Tier 1) ─────────
+  const [hostedDialogOpen, setHostedDialogOpen] = useState(false);
+  const [pickedGpu, setPickedGpu] = useState<string>("A40");
+  const [submittingHosted, setSubmittingHosted] = useState(false);
 
-  const activateManaged = async () => {
-    const url = servingUrlDraft.trim();
-    if (!url) {
-      toast.error("Paste the serving URL");
+  const podState = j.serving_pod_state ?? "none";
+  const podBusy = podState === "provisioning";
+  const podLive = podState === "running";
+
+  const provisionHosted = async () => {
+    if (!pickedGpu) {
+      toast.error("Pick a GPU size");
       return;
     }
-    setSubmittingManaged(true);
+    setSubmittingHosted(true);
     try {
-      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/managed-serving`, {
+      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/serving-pod`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serving_url: url }),
+        body: JSON.stringify({ gpu_sku: pickedGpu, auto_stop_hours: 6 }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Activation failed");
-      toast.success("Managed serving activated");
-      setManagedDialogOpen(false);
-      setServingUrlDraft("");
+      if (!r.ok) throw new Error(data.error ?? "Could not start serving instance");
+      toast.success("Serving instance starting — ready in ~60s");
+      setHostedDialogOpen(false);
       onChanged?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Activation failed");
+      toast.error(err instanceof Error ? err.message : "Could not start serving instance");
     } finally {
-      setSubmittingManaged(false);
+      setSubmittingHosted(false);
     }
   };
 
-  const deactivateManaged = async () => {
-    if (!confirm("Disable managed serving for this fine-tune? Customers will get the self-serve redirect again.")) return;
-    setSubmittingManaged(true);
+  const stopHosted = async () => {
+    if (!confirm("Stop the serving instance? You'll stop being billed for it immediately. The model will return to self-serve mode.")) return;
+    setSubmittingHosted(true);
     try {
-      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/managed-serving`, {
+      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/serving-pod`, {
         method: "DELETE",
         credentials: "include",
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Deactivation failed");
-      toast.success("Managed serving disabled");
+      if (!r.ok) throw new Error(data.error ?? "Could not stop instance");
+      toast.success("Serving instance stopped");
       onChanged?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Deactivation failed");
+      toast.error(err instanceof Error ? err.message : "Could not stop instance");
     } finally {
-      setSubmittingManaged(false);
+      setSubmittingHosted(false);
     }
   };
 
@@ -408,59 +418,88 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
             </div>
           </div>
 
-          {/* ─── Managed serving (Phase 11.A) ─────────────────── */}
+          {/* ─── Hosted serving (Phase 11.B Tier 1) ──────────────
+              Replaces the Phase 10 docker self-serve for customers who'd
+              rather not run their own GPU. Per-customer dedicated
+              instance, per-hour billing, customer controls lifecycle. */}
           <div className="mt-6 mb-3 border-t border-white/[0.06] pt-5">
             <div className="flex items-center justify-between mb-2">
               <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55`}>
-                Managed serving
+                Hosted serving
               </h4>
-              {j.is_managed && (
-                <span className="inline-flex items-center gap-1.5 text-[10.5px]">
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
-                  />
-                  <span className={`${MONO} uppercase tracking-[0.12em] text-emerald-300/85 font-semibold`}>
-                    Active
-                  </span>
-                </span>
-              )}
+              <PodStatePill state={podState} />
             </div>
 
-            {j.is_managed ? (
+            {podState === "running" || podState === "provisioning" ? (
               <>
-                <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                  Customer requests to <code className="text-white/75">{j.output_model_id ? `ahura/${baseShort}:ft-${j.id.slice(0, 8)}` : "this model"}</code>{" "}
-                  route through AhuraCloud&apos;s gateway to the URL below. No GPU pod for them to manage.
+                <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-3`}>
+                  {podState === "provisioning"
+                    ? "Your serving instance is starting up (~60s). Once it's ready, calls to the model below will route through it automatically."
+                    : "Calls to the model below now route through your dedicated instance."}
                 </p>
-                <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 mb-3">
-                  <code className={`${MONO} text-[10.5px] text-white/85 break-all`}>
-                    {j.serving_url ?? "—"}
-                  </code>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                  <PodStat label="Model id" mono>
+                    {j.output_model_id ? `ahura/${baseShort}:ft-${j.id.slice(0, 8)}` : "—"}
+                  </PodStat>
+                  <PodStat label="GPU">{j.serving_pod_gpu_sku ?? "—"}</PodStat>
+                  <PodStat label="Rate">
+                    {j.serving_pod_hourly_cents != null
+                      ? `$${(j.serving_pod_hourly_cents / 100).toFixed(2)}/hr`
+                      : "—"}
+                  </PodStat>
+                </div>
+
+                <RunningCostMeter
+                  startedAt={j.serving_pod_started_at}
+                  hourlyCents={j.serving_pod_hourly_cents}
+                  live={podLive}
+                />
+
+                {j.serving_pod_auto_stop_at && (
+                  <p className={`${MONO} text-[10px] text-white/40 mb-3`}>
+                    Auto-stops {new Date(j.serving_pod_auto_stop_at).toLocaleString()} if idle (saves you money on forgotten instances)
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={stopHosted}
+                  disabled={submittingHosted || podBusy}
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded border border-white/[0.08] bg-white/[0.02] text-white/75 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {submittingHosted ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Stop instance
+                </button>
+              </>
+            ) : podState === "failed" ? (
+              <>
+                <div className="bg-red-950/40 border border-red-900/40 rounded-[4px] p-3 mb-3">
+                  <p className={`${MONO} text-[10.5px] text-red-200/85 leading-relaxed`}>
+                    {j.serving_pod_error_message ?? "The serving instance failed to start. Try again with a different GPU size."}
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={deactivateManaged}
-                  disabled={submittingManaged}
-                  className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded border border-white/[0.08] bg-white/[0.02] text-white/75 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40`}
+                  onClick={() => setHostedDialogOpen(true)}
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded text-white transition-colors`}
+                  style={{ background: "#0095FF" }}
                 >
-                  Disable managed
+                  Try again
                 </button>
               </>
             ) : (
               <>
                 <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-3`}>
-                  Activate managed serving to route customer traffic through AhuraCloud&apos;s gateway
-                  to an operator-deployed vLLM server. Skips the self-serve <code className="text-white/75">docker run</code>{" "}
-                  on the customer side. Org admins only.
+                  Skip the self-serve <code className="text-white/75">docker run</code> above. Start a dedicated serving instance with one click — we handle the GPU, you call the model from your app.
                 </p>
                 <button
                   type="button"
-                  onClick={() => setManagedDialogOpen(true)}
+                  onClick={() => setHostedDialogOpen(true)}
                   className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded text-white transition-colors`}
                   style={{ background: "#0095FF" }}
                 >
-                  Activate managed serving
+                  Start hosted serving
                 </button>
               </>
             )}
@@ -515,68 +554,236 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
         </div>
       )}
 
-      {/* Activate-managed dialog */}
-      <Dialog open={managedDialogOpen} onOpenChange={setManagedDialogOpen}>
+      {/* Start-hosted-serving dialog (Phase 11.B Tier 1) */}
+      <Dialog open={hostedDialogOpen} onOpenChange={setHostedDialogOpen}>
         <DialogContent className="max-w-lg border-white/[0.08] bg-[#111216]">
           <DialogHeader>
             <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white/80`}>
-              Activate managed serving
+              Start hosted serving
             </DialogTitle>
             <DialogDescription className={`${MONO} text-[11px] text-white/45 leading-relaxed`}>
-              Paste the HTTPS URL of an already-deployed vLLM openai-server that holds this
-              adapter. The gateway will route customer requests to{" "}
-              <code className="text-white/75">&lt;url&gt;/v1/chat/completions</code>.
+              We&apos;ll provision a dedicated GPU instance to serve your fine-tune.
+              You&apos;ll be billed per hour while it&apos;s running. Stop it any time.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label className={`${MONO} block text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-              Serving URL
-            </Label>
-            <Input
-              value={servingUrlDraft}
-              onChange={(e) => setServingUrlDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") activateManaged();
-              }}
-              placeholder="https://phi-4-ft-abc12345.managed.ahura.cloud:8000"
-              className="bg-white/[0.02] border-white/[0.08]"
-              autoFocus
-            />
-            <p className={`${MONO} text-[10px] text-white/40 leading-relaxed`}>
-              Base URL only — don&apos;t include the path. vLLM must serve with
-              <code className="text-white/60"> --served-model-name=adapter</code>. See{" "}
-              <a
-                href="https://github.com/cs2hvh/cloud-services/blob/ai/docs/inference/managed-serving.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#0095FF] hover:underline"
-              >
-                managed-serving.md
-              </a>{" "}
-              for the operator runbook.
-            </p>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+                GPU size
+              </Label>
+              <GpuPicker value={pickedGpu} onChange={setPickedGpu} />
+              <p className={`${MONO} mt-1.5 text-[10px] text-white/40 leading-relaxed`}>
+                A40 fits 8-14B bases · A100 80GB for 27-32B · H100 for larger.
+                Auto-stops after 6 hours of zero requests.
+              </p>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <button
               type="button"
-              onClick={() => setManagedDialogOpen(false)}
-              disabled={submittingManaged}
+              onClick={() => setHostedDialogOpen(false)}
+              disabled={submittingHosted}
               className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-9 px-3 rounded border border-white/[0.08] bg-white/[0.02] text-white/75 hover:bg-white/[0.06] transition-colors`}
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={activateManaged}
-              disabled={submittingManaged || !servingUrlDraft.trim()}
+              onClick={provisionHosted}
+              disabled={submittingHosted || !pickedGpu}
               className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-9 px-3 rounded text-white transition-colors disabled:opacity-40`}
               style={{ background: "#0095FF" }}
             >
-              {submittingManaged ? "Activating…" : "Activate"}
+              {submittingHosted ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {submittingHosted ? "Starting…" : "Start instance"}
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ─── Hosted-serving sub-components ───────────────────────────────────
+
+function PodStatePill({ state }: { state: string }) {
+  const map: Record<string, { color: string; label: string; pulse?: boolean }> = {
+    none:         { color: "rgba(255,255,255,0.35)", label: "Inactive" },
+    provisioning: { color: "#33adff", label: "Starting", pulse: true },
+    running:      { color: "#22c55e", label: "Running" },
+    stopped:      { color: "rgba(255,255,255,0.35)", label: "Stopped" },
+    failed:       { color: "#ef4444", label: "Failed" },
+  };
+  const m = map[state] ?? map.none!;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10.5px]">
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${m.pulse ? "animate-pulse" : ""}`}
+        style={{ background: m.color, boxShadow: `0 0 6px ${m.color}` }}
+      />
+      <span
+        className={`${MONO} uppercase tracking-[0.12em] font-semibold`}
+        style={{ color: m.color }}
+      >
+        {m.label}
+      </span>
+    </span>
+  );
+}
+
+function PodStat({ label, mono, children }: { label: string; mono?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[4px] border border-white/[0.06] bg-[#0c0d11] px-3 py-2">
+      <p className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/40 mb-1`}>
+        {label}
+      </p>
+      <p className={`${mono ? MONO : ""} text-[11.5px] text-white/85 break-all`}>{children}</p>
+    </div>
+  );
+}
+
+function RunningCostMeter({
+  startedAt,
+  hourlyCents,
+  live,
+}: {
+  startedAt: string | null | undefined;
+  hourlyCents: number | null | undefined;
+  live: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [live]);
+
+  if (!startedAt || hourlyCents == null) return null;
+  const elapsedSec = Math.max(0, (now - new Date(startedAt).getTime()) / 1000);
+  const costCents = (elapsedSec / 3600) * hourlyCents;
+  const hh = Math.floor(elapsedSec / 3600);
+  const mm = Math.floor((elapsedSec % 3600) / 60);
+  const ss = Math.floor(elapsedSec % 60);
+  const runtime = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  return (
+    <div className="grid grid-cols-2 gap-2 mb-3">
+      <PodStat label="Runtime">{runtime}</PodStat>
+      <PodStat label="Cost so far">${(costCents / 100).toFixed(4)}</PodStat>
+    </div>
+  );
+}
+
+function GpuPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  // GPU options — same SKU keys the FT creation page uses. Real-time stock
+  // pulled from the inventory API the GPU pages already expose.
+  interface InventoryRow {
+    sku: string;
+    label: string;
+    available: number;
+    cents_per_hour: number;
+  }
+  const [inv, setInv] = useState<InventoryRow[] | null>(null);
+  const [loadingInv, setLoadingInv] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/services/gpu/inventory", { credentials: "include" });
+        const data = await r.json();
+        // The inventory endpoint returns a list with provider-specific
+        // fields; normalize to what the picker needs.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = (data?.data ?? data ?? []) as any[];
+        if (cancelled) return;
+        const normalized: InventoryRow[] = raw
+          .map((r) => {
+            const sku =
+              r.sku ?? r.gpu_sku ?? r.id ?? r.name ?? "";
+            const available = Number(r.available ?? r.stock ?? 0);
+            const cents =
+              Number(r.cents_per_hour ?? r.hourly_cents ?? (r.cost_per_hour ? r.cost_per_hour * 100 : 0));
+            return {
+              sku,
+              label: r.label ?? r.display_name ?? sku,
+              available,
+              cents_per_hour: cents,
+            };
+          })
+          .filter((r) => r.sku);
+        setInv(normalized);
+      } catch (err) {
+        console.warn("[GpuPicker] inventory fetch failed:", err);
+        setInv([]);
+      } finally {
+        if (!cancelled) setLoadingInv(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fallback static list when inventory is unavailable — every SKU the
+  // backend knows about (must match GPU_SKU_TO_RUNPOD_TYPE in
+  // lib/inference/finetune-runpod.ts).
+  const FALLBACK: InventoryRow[] = [
+    { sku: "A40",          label: "A40 (48GB)",        available: -1, cents_per_hour: 40 },
+    { sku: "L40S",         label: "L40S (48GB)",       available: -1, cents_per_hour: 80 },
+    { sku: "RTX-6000-Ada", label: "RTX 6000 Ada (48GB)", available: -1, cents_per_hour: 80 },
+    { sku: "A100-40GB",    label: "A100 (40GB)",       available: -1, cents_per_hour: 120 },
+    { sku: "A100-80GB",    label: "A100 (80GB)",       available: -1, cents_per_hour: 170 },
+    { sku: "H100-80GB",    label: "H100 (80GB)",       available: -1, cents_per_hour: 290 },
+  ];
+  const rows = (inv && inv.length > 0 ? inv : FALLBACK).filter((r) =>
+    FALLBACK.some((f) => f.sku === r.sku)
+  );
+
+  if (loadingInv) {
+    return (
+      <div className={`${MONO} text-[11px] text-white/45 inline-flex items-center gap-2`}>
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Checking GPU availability…
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {rows.map((row) => {
+        const selected = row.sku === value;
+        const oos = row.available === 0;
+        return (
+          <button
+            key={row.sku}
+            type="button"
+            disabled={oos}
+            onClick={() => onChange(row.sku)}
+            className={`text-left rounded-[5px] border px-3 py-2.5 transition-colors ${
+              selected
+                ? "border-[#0095FF]/60 bg-[#0095FF]/[0.08]"
+                : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]"
+            } ${oos ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <span className={`${MONO} text-[11.5px] text-white font-semibold`}>{row.label}</span>
+              <span
+                className={`${MONO} text-[10.5px] tabular-nums`}
+                style={{ color: selected ? "#33adff" : "rgba(255,255,255,0.55)" }}
+              >
+                ${(row.cents_per_hour / 100).toFixed(2)}/hr
+              </span>
+            </div>
+            <div className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>
+              {row.available === -1
+                ? "availability live-checked on start"
+                : oos
+                  ? "Out of stock"
+                  : `${row.available} available now`}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
