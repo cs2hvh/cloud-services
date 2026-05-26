@@ -2,18 +2,14 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
-  Bot,
   ChevronDown,
-  Copy,
   Eraser,
   Layers,
   Loader2,
   Play,
   Plus,
-  RefreshCw,
   Search,
   StopCircle,
-  User as UserIcon,
   X,
   Zap,
 } from "lucide-react";
@@ -480,11 +476,10 @@ export const PlaygroundCompare = forwardRef<
                   runs don't wipe previous responses. Mirrors single-mode
                   chat behavior; each pane is an independent thread bound
                   to its model. */}
-              <div className="flex-1 min-h-[260px] max-h-[520px] overflow-y-auto p-2 space-y-2">
+              <div className="flex-1 min-h-[260px] max-h-[520px] overflow-y-auto px-2">
                 {pane.turns.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center py-8">
-                    <Bot className="h-4 w-4 text-white/25 mb-2" />
-                    <p className={`${MONO} text-[10.5px] text-white/35`}>
+                  <div className="h-full flex items-center justify-center text-center py-8">
+                    <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/30`}>
                       Awaiting first prompt
                     </p>
                   </div>
@@ -598,21 +593,9 @@ export const PlaygroundCompare = forwardRef<
   );
 });
 
-function FootCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="px-2 py-1.5">
-      <p className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold text-white/45`}>
-        {label}
-      </p>
-      <p className={`${MONO} text-[11px] text-white tabular-nums`}>{value}</p>
-      {hint && <p className={`${MONO} text-[9px] text-white/35`}>{hint}</p>}
-    </div>
-  );
-}
-
-/** Slim turn renderer for compare-mode panes. The pane already shows the
- *  model name in its header so we don't repeat it here; just role icon +
- *  content + a compact assistant footer (cost · latency · cache). */
+/** Minimal turn renderer for compare-mode panes. No icons, no per-turn
+ *  metrics — the pane header already shows the model. Hover-revealed
+ *  Copy / Regenerate action labels match single-mode TurnRow. */
 function PaneTurnRow({
   turn,
   onCopy,
@@ -624,105 +607,56 @@ function PaneTurnRow({
 }) {
   const isUser = turn.role === "user";
   return (
-    <div
-      className="rounded-[5px] border bg-[#0c0d11] overflow-hidden"
-      style={{
-        borderColor: isUser
-          ? "rgba(255,255,255,0.05)"
-          : turn.error
-            ? "rgba(239,68,68,0.25)"
-            : "rgba(0,149,255,0.18)",
-      }}
-    >
-      <div className="flex items-center justify-between px-2.5 py-1 border-b border-white/[0.04]">
+    <div className="group px-2 py-2 border-b border-white/[0.04] last:border-b-0">
+      <div className="flex items-center justify-between mb-1">
         <span
-          className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] font-semibold inline-flex items-center gap-1 ${
-            isUser ? "text-white/50" : "text-[#33adff]"
+          className={`${MONO} text-[9.5px] uppercase tracking-[0.16em] font-semibold ${
+            isUser ? "text-white/45" : "text-[#33adff]"
           }`}
         >
-          {isUser ? (
-            <UserIcon className="h-2.5 w-2.5" />
-          ) : (
-            <Bot className="h-2.5 w-2.5" />
-          )}
           {isUser ? "You" : "Assistant"}
         </span>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
           {turn.running ? (
             <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: ACCENT_BRIGHT }} />
           ) : turn.content && !turn.error ? (
             <button
               type="button"
               onClick={onCopy}
-              className="h-5 w-5 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
-              title="Copy"
-              aria-label="Copy"
+              className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] text-white/40 hover:text-white transition-colors`}
             >
-              <Copy className="h-2.5 w-2.5" />
+              Copy
             </button>
           ) : null}
           {onRetry && (
             <button
               type="button"
               onClick={onRetry}
-              className="h-5 w-5 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
-              title="Retry"
-              aria-label="Retry"
+              className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] text-white/40 hover:text-white transition-colors`}
             >
-              <RefreshCw className="h-2.5 w-2.5" />
+              Regenerate
             </button>
           )}
         </div>
       </div>
-      <div className="px-3 py-2">
-        {turn.error ? (
-          <pre className={`${MONO} text-[11px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}>
-            {turn.error}
-          </pre>
-        ) : (
-          <pre
-            className={`${MONO} text-[12px] leading-relaxed whitespace-pre-wrap break-words ${
-              isUser ? "text-white/85" : "text-white/95"
-            }`}
-          >
-            {turn.content || (turn.running ? "" : "(empty)")}
-            {turn.running && (
-              <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5">
-                ▍
-              </span>
-            )}
-          </pre>
-        )}
-      </div>
-      {!isUser && turn.stats && (
-        <div className="border-t border-white/[0.04] grid grid-cols-3 divide-x divide-white/[0.04] text-center">
-          <FootCell
-            label="Tok"
-            value={`${turn.stats.inputTokens ?? "—"}/${turn.stats.outputTokens ?? "—"}`}
-          />
-          <FootCell
-            label="Cost"
-            value={
-              turn.stats.costCents !== null && turn.stats.costCents !== undefined
-                ? `$${(turn.stats.costCents / 100).toFixed(4)}`
-                : "—"
-            }
-          />
-          <FootCell
-            label="Lat"
-            value={`${turn.stats.latencyMs}ms`}
-            hint={turn.stats.ttftMs !== null ? `TTFT ${turn.stats.ttftMs}` : undefined}
-          />
-        </div>
-      )}
-      {turn.cacheStatus && (
-        <div
-          className={`${MONO} px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] border-t border-white/[0.04] ${
-            turn.cacheStatus === "hit" ? "text-emerald-300/85" : "text-white/35"
+      {turn.error ? (
+        <pre className={`${MONO} text-[11px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}>
+          {turn.error}
+        </pre>
+      ) : (
+        <pre
+          className={`text-[12.5px] leading-[1.6] whitespace-pre-wrap break-words ${
+            isUser ? "text-white/85" : "text-white/95"
           }`}
+          style={{ fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" }}
         >
-          cache: {turn.cacheStatus}
-        </div>
+          {turn.content || (turn.running ? "" : "")}
+          {turn.running && (
+            <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5 animate-pulse">
+              ▍
+            </span>
+          )}
+        </pre>
       )}
     </div>
   );

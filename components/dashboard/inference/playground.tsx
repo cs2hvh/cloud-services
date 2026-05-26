@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
   Check,
   ChevronDown,
   Copy,
-  Eraser,
   Eye,
   EyeOff,
   Key,
@@ -14,13 +12,10 @@ import {
   Loader2,
   MessageSquare,
   Play,
-  RefreshCw,
   Rocket,
   Search,
-  Sparkles,
   StopCircle,
   Trash2,
-  User as UserIcon,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,8 +40,6 @@ import {
   PrimaryButton,
   SectionHead,
   SERIF_STYLE,
-  StatCell,
-  StatsStrip,
 } from "@/components/dashboard/inference/chrome";
 import {
   PlaygroundCompare,
@@ -254,15 +247,6 @@ export function Playground({
     [presets, presetId]
   );
 
-  // Stats from the most-recently-completed assistant turn — drives the top
-  // "Last latency" stat-strip cell.
-  const lastAssistantStats = useMemo(() => {
-    for (let i = turns.length - 1; i >= 0; i--) {
-      const t = turns[i]!;
-      if (t.role === "assistant" && t.stats && !t.running) return t.stats;
-    }
-    return null;
-  }, [turns]);
 
   // ── Build the messages array for the OpenAI-compatible request ─────
   //    Includes the full conversation history so the model has context
@@ -647,41 +631,6 @@ ${streamOn
         }
       />
 
-      <StatsStrip>
-        <StatCell
-          label="Model"
-          value={selectedModel?.display_name ?? "—"}
-          hint={selectedModel ? selectedModel.provider : "Pick one below"}
-          accent={ACCENT}
-        />
-        <StatCell
-          label="Context"
-          value={
-            selectedModel?.context_window
-              ? selectedModel.context_window >= 1_000_000
-                ? `${(selectedModel.context_window / 1_000_000).toFixed(0)}M`
-                : `${Math.round(selectedModel.context_window / 1_000)}K`
-              : "—"
-          }
-          hint="Max input tokens"
-        />
-        <StatCell
-          label="Price /Mtok"
-          value={
-            selectedModel
-              ? `${formatPrice(selectedModel.input_price_per_mtok)} / ${formatPrice(selectedModel.output_price_per_mtok)}`
-              : "—"
-          }
-          hint="Input / Output"
-        />
-        <StatCell
-          label="Last latency"
-          value={lastAssistantStats?.latencyMs ? `${lastAssistantStats.latencyMs} ms` : "—"}
-          hint={lastAssistantStats?.ttftMs ? `TTFT ${lastAssistantStats.ttftMs} ms` : "—"}
-          accent={lastAssistantStats ? "#4ade80" : undefined}
-        />
-      </StatsStrip>
-
       {/* Main 2-col workspace */}
       <section className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 mb-8">
         {/* Left: settings (shared by single + compare) */}
@@ -871,32 +820,26 @@ ${streamOn
         <div className="space-y-3 min-w-0">
           {mode === "single" ? (
             <>
-              {/* Conversation (above input, like every modern chat UI). */}
-              <div className="border border-white/[0.06] bg-[#0c0d11] rounded-[6px] overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-                  <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-                    Conversation
-                    {turns.length > 0 && (
-                      <span className="ml-2 text-white/30">
-                        · {turns.filter((t) => t.role === "assistant").length}{" "}
-                        {turns.filter((t) => t.role === "assistant").length === 1 ? "turn" : "turns"}
-                      </span>
-                    )}
-                  </p>
-                  <div className="flex items-center gap-2">
+              {/* Conversation (above input). Minimal chrome — no busy header,
+                  no per-turn footers, no decorative icons. Action labels
+                  surface on row hover. */}
+              <div className="border border-white/[0.06] bg-[#0b0c10] rounded-[6px] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] min-h-[36px]">
+                  <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}>
+                    {selectedModel?.display_name ?? "—"}
+                  </span>
+                  <div className="flex items-center gap-4">
                     {running && (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] text-[#33adff]">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        streaming
+                      <span className={`${MONO} text-[10px] uppercase tracking-[0.14em]`} style={{ color: ACCENT_BRIGHT }}>
+                        Streaming
                       </span>
                     )}
                     {turns.length > 0 && !running && (
                       <button
                         type="button"
                         onClick={clearConversation}
-                        className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/45 hover:text-white/80 inline-flex items-center gap-1 h-7 px-2 rounded border border-white/[0.06] hover:bg-white/[0.04] transition-colors`}
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-white transition-colors`}
                       >
-                        <Eraser className="h-3 w-3" />
                         Clear
                       </button>
                     )}
@@ -904,25 +847,19 @@ ${streamOn
                 </div>
                 <div
                   ref={conversationRef}
-                  className="px-3 py-3 h-[520px] overflow-y-auto"
+                  className="px-4 h-[520px] overflow-y-auto"
                 >
                   {turns.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center text-center h-full">
-                      <div
-                        className="mb-3 h-10 w-10 rounded-full flex items-center justify-center"
-                        style={{ background: "rgba(0,149,255,0.10)" }}
-                      >
-                        <Sparkles className="h-4 w-4" style={{ color: ACCENT }} />
-                      </div>
-                      <p className={`${MONO} text-[11.5px] text-white/55 mb-1`}>
-                        Start a conversation
+                    <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto">
+                      <p className="text-[15px] text-white/65 mb-2 tracking-[-0.01em]">
+                        How can I help you today?
                       </p>
-                      <p className={`${MONO} text-[10.5px] text-white/35 max-w-xs`}>
-                        Type a message below and press Send. Previous turns persist as context for follow-ups.
+                      <p className={`${MONO} text-[10.5px] text-white/30 leading-relaxed`}>
+                        Conversation history is sent on every turn — follow-ups are context-aware.
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div>
                       {turns.map((turn) => (
                         <TurnRow
                           key={turn.id}
@@ -1333,145 +1270,95 @@ function TurnRow({
 }) {
   const isUser = turn.role === "user";
   return (
-    <div
-      className="rounded-[5px] border bg-[#111216] overflow-hidden"
-      style={{
-        borderColor: isUser
-          ? "rgba(255,255,255,0.06)"
-          : turn.error
-            ? "rgba(239,68,68,0.25)"
-            : "rgba(0,149,255,0.18)",
-      }}
-    >
-      {/* Turn header — role badge + action row */}
-      <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-white/[0.04]">
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className="h-5 w-5 rounded inline-flex items-center justify-center shrink-0"
-            style={{
-              background: isUser ? "rgba(255,255,255,0.06)" : "rgba(0,149,255,0.12)",
-            }}
-          >
-            {isUser ? (
-              <UserIcon className="h-3 w-3 text-white/65" />
-            ) : (
-              <Bot className="h-3 w-3" style={{ color: ACCENT_BRIGHT }} />
-            )}
-          </span>
-          <span
-            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold ${
-              isUser ? "text-white/55" : "text-[#33adff]"
-            }`}
-          >
-            {isUser ? "You" : "Assistant"}
-          </span>
-          {modelLabel && (
-            <span className={`${MONO} text-[10px] text-white/35 truncate`}>· {modelLabel}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {turn.running ? (
-            <Loader2 className="h-3 w-3 animate-spin" style={{ color: ACCENT_BRIGHT }} />
-          ) : null}
-          {turn.content && !turn.running && (
-            <button
-              type="button"
-              onClick={onCopy}
-              className="h-6 w-6 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
-              aria-label="Copy"
-              title="Copy"
-            >
-              <Copy className="h-3 w-3" />
-            </button>
-          )}
-          {onRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="h-6 w-6 inline-flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
-              aria-label="Retry"
-              title="Retry"
-            >
-              <RefreshCw className="h-3 w-3" />
-            </button>
-          )}
-          {onStop && (
-            <button
-              type="button"
-              onClick={onStop}
-              className="h-6 inline-flex items-center gap-1 px-1.5 rounded text-[10px] uppercase tracking-[0.12em] font-semibold text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
-              aria-label="Stop"
-            >
-              <StopCircle className="h-3 w-3" />
-              Stop
-            </button>
-          )}
-        </div>
+    <div className="group flex gap-3 px-1 py-3 border-b border-white/[0.04] last:border-b-0">
+      {/* Letter avatar — restrained, no cartoon icons */}
+      <div
+        className="h-7 w-7 shrink-0 rounded-[4px] flex items-center justify-center"
+        style={{
+          background: isUser ? "rgba(255,255,255,0.05)" : "rgba(0,149,255,0.12)",
+          border: `1px solid ${isUser ? "rgba(255,255,255,0.08)" : "rgba(0,149,255,0.25)"}`,
+        }}
+      >
+        <span
+          className={`${MONO} text-[10.5px] font-bold tabular-nums leading-none`}
+          style={{ color: isUser ? "rgba(255,255,255,0.65)" : ACCENT_BRIGHT }}
+        >
+          {isUser ? "U" : "A"}
+        </span>
       </div>
 
-      {/* Body */}
-      <div className="px-4 py-2.5">
+      <div className="flex-1 min-w-0">
+        {/* Role line — small label + optional model name */}
+        <div className="flex items-center justify-between gap-3 mb-1.5">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span
+              className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold ${
+                isUser ? "text-white/55" : "text-[#33adff]"
+              }`}
+            >
+              {isUser ? "You" : "Assistant"}
+            </span>
+            {modelLabel && (
+              <span className="text-[11px] text-white/35 truncate">{modelLabel}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+            {turn.running ? (
+              <Loader2 className="h-3 w-3 animate-spin" style={{ color: ACCENT_BRIGHT }} />
+            ) : null}
+            {turn.content && !turn.running && (
+              <button
+                type="button"
+                onClick={onCopy}
+                className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 hover:text-white transition-colors`}
+              >
+                Copy
+              </button>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/45 hover:text-white transition-colors`}
+              >
+                Regenerate
+              </button>
+            )}
+            {onStop && (
+              <button
+                type="button"
+                onClick={onStop}
+                className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/70 hover:text-white transition-colors`}
+              >
+                Stop
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Body */}
         {turn.error ? (
-          <pre className={`${MONO} text-[11.5px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}>
+          <pre
+            className={`${MONO} text-[12px] text-red-300/85 leading-relaxed whitespace-pre-wrap break-words`}
+          >
             {turn.error}
           </pre>
         ) : (
           <pre
-            className={`${MONO} text-[12.5px] leading-relaxed whitespace-pre-wrap break-words ${
+            className={`text-[13.5px] leading-[1.65] whitespace-pre-wrap break-words ${
               isUser ? "text-white/85" : "text-white/95"
             }`}
+            style={{ fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" }}
           >
-            {turn.content || (turn.running ? "" : "(empty)")}
+            {turn.content || (turn.running ? "" : "")}
             {turn.running && (
-              <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5">
+              <span style={{ color: ACCENT_BRIGHT }} className="ml-0.5 animate-pulse">
                 ▍
               </span>
             )}
           </pre>
         )}
       </div>
-
-      {/* Assistant footer — stats + cache */}
-      {!isUser && turn.stats && (
-        <div className="border-t border-white/[0.04] grid grid-cols-4 divide-x divide-white/[0.04] text-center">
-          <StatFoot label="In" value={turn.stats.inputTokens?.toLocaleString() ?? "—"} />
-          <StatFoot label="Out" value={turn.stats.outputTokens?.toLocaleString() ?? "—"} />
-          <StatFoot
-            label="Cost"
-            value={
-              turn.stats.costCents !== null && turn.stats.costCents !== undefined
-                ? `$${(turn.stats.costCents / 100).toFixed(4)}`
-                : "—"
-            }
-          />
-          <StatFoot
-            label="Latency"
-            value={`${turn.stats.latencyMs}ms`}
-            hint={turn.stats.ttftMs !== null ? `TTFT ${turn.stats.ttftMs}ms` : undefined}
-          />
-        </div>
-      )}
-      {turn.cacheStatus && (
-        <div
-          className={`${MONO} px-3 py-1 text-[9.5px] uppercase tracking-[0.12em] border-t border-white/[0.04] ${
-            turn.cacheStatus === "hit" ? "text-emerald-300/85" : "text-white/35"
-          }`}
-        >
-          cache: {turn.cacheStatus}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatFoot({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="px-4 py-3">
-      <p className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] font-semibold text-white/45 mb-1`}>
-        {label}
-      </p>
-      <p className={`${MONO} text-[12px] text-white tabular-nums`}>{value}</p>
-      {hint && <p className={`${MONO} text-[9.5px] text-white/35 mt-0.5`}>{hint}</p>}
     </div>
   );
 }
