@@ -196,9 +196,60 @@ function formatCents(c: number | null): string {
  * Replaces the old popup dialog. All fields are present in the list-row
  * data so no per-row fetch is needed.
  */
-function ExpandedRow({ job: j }: { job: FineTuneJob }) {
+function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () => void }) {
   const hp = (j.hyperparams ?? {}) as Record<string, unknown>;
   const podId = j.pod_id ?? null;
+
+  // ── Managed-serving activation state ─────────────────────────
+  const [managedDialogOpen, setManagedDialogOpen] = useState(false);
+  const [servingUrlDraft, setServingUrlDraft] = useState("");
+  const [submittingManaged, setSubmittingManaged] = useState(false);
+
+  const activateManaged = async () => {
+    const url = servingUrlDraft.trim();
+    if (!url) {
+      toast.error("Paste the serving URL");
+      return;
+    }
+    setSubmittingManaged(true);
+    try {
+      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/managed-serving`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serving_url: url }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Activation failed");
+      toast.success("Managed serving activated");
+      setManagedDialogOpen(false);
+      setServingUrlDraft("");
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Activation failed");
+    } finally {
+      setSubmittingManaged(false);
+    }
+  };
+
+  const deactivateManaged = async () => {
+    if (!confirm("Disable managed serving for this fine-tune? Customers will get the self-serve redirect again.")) return;
+    setSubmittingManaged(true);
+    try {
+      const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/managed-serving`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Deactivation failed");
+      toast.success("Managed serving disabled");
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Deactivation failed");
+    } finally {
+      setSubmittingManaged(false);
+    }
+  };
 
   const InfoRow = ({ k, v }: { k: string; v: React.ReactNode }) => (
     <div className="grid grid-cols-[140px_1fr] gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
@@ -357,6 +408,64 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
             </div>
           </div>
 
+          {/* ─── Managed serving (Phase 11.A) ─────────────────── */}
+          <div className="mt-6 mb-3 border-t border-white/[0.06] pt-5">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55`}>
+                Managed serving
+              </h4>
+              {j.is_managed && (
+                <span className="inline-flex items-center gap-1.5 text-[10.5px]">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
+                  />
+                  <span className={`${MONO} uppercase tracking-[0.12em] text-emerald-300/85 font-semibold`}>
+                    Active
+                  </span>
+                </span>
+              )}
+            </div>
+
+            {j.is_managed ? (
+              <>
+                <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
+                  Customer requests to <code className="text-white/75">{j.output_model_id ? `ahura/${baseShort}:ft-${j.id.slice(0, 8)}` : "this model"}</code>{" "}
+                  route through AhuraCloud&apos;s gateway to the URL below. No GPU pod for them to manage.
+                </p>
+                <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3 mb-3">
+                  <code className={`${MONO} text-[10.5px] text-white/85 break-all`}>
+                    {j.serving_url ?? "—"}
+                  </code>
+                </div>
+                <button
+                  type="button"
+                  onClick={deactivateManaged}
+                  disabled={submittingManaged}
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded border border-white/[0.08] bg-white/[0.02] text-white/75 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-40`}
+                >
+                  Disable managed
+                </button>
+              </>
+            ) : (
+              <>
+                <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-3`}>
+                  Activate managed serving to route customer traffic through AhuraCloud&apos;s gateway
+                  to an operator-deployed vLLM server. Skips the self-serve <code className="text-white/75">docker run</code>{" "}
+                  on the customer side. Org admins only.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setManagedDialogOpen(true)}
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-8 px-3 rounded text-white transition-colors`}
+                  style={{ background: "#0095FF" }}
+                >
+                  Activate managed serving
+                </button>
+              </>
+            )}
+          </div>
+
           {j.training_log_url && (
             <InfoRow
               k="Training log"
@@ -405,6 +514,69 @@ function ExpandedRow({ job: j }: { job: FineTuneJob }) {
           </div>
         </div>
       )}
+
+      {/* Activate-managed dialog */}
+      <Dialog open={managedDialogOpen} onOpenChange={setManagedDialogOpen}>
+        <DialogContent className="max-w-lg border-white/[0.08] bg-[#111216]">
+          <DialogHeader>
+            <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white/80`}>
+              Activate managed serving
+            </DialogTitle>
+            <DialogDescription className={`${MONO} text-[11px] text-white/45 leading-relaxed`}>
+              Paste the HTTPS URL of an already-deployed vLLM openai-server that holds this
+              adapter. The gateway will route customer requests to{" "}
+              <code className="text-white/75">&lt;url&gt;/v1/chat/completions</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label className={`${MONO} block text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+              Serving URL
+            </Label>
+            <Input
+              value={servingUrlDraft}
+              onChange={(e) => setServingUrlDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") activateManaged();
+              }}
+              placeholder="https://phi-4-ft-abc12345.managed.ahura.cloud:8000"
+              className="bg-white/[0.02] border-white/[0.08]"
+              autoFocus
+            />
+            <p className={`${MONO} text-[10px] text-white/40 leading-relaxed`}>
+              Base URL only — don&apos;t include the path. vLLM must serve with
+              <code className="text-white/60"> --served-model-name=adapter</code>. See{" "}
+              <a
+                href="https://github.com/cs2hvh/cloud-services/blob/ai/docs/inference/managed-serving.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0095FF] hover:underline"
+              >
+                managed-serving.md
+              </a>{" "}
+              for the operator runbook.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <button
+              type="button"
+              onClick={() => setManagedDialogOpen(false)}
+              disabled={submittingManaged}
+              className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-9 px-3 rounded border border-white/[0.08] bg-white/[0.02] text-white/75 hover:bg-white/[0.06] transition-colors`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={activateManaged}
+              disabled={submittingManaged || !servingUrlDraft.trim()}
+              className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold h-9 px-3 rounded text-white transition-colors disabled:opacity-40`}
+              style={{ background: "#0095FF" }}
+            >
+              {submittingManaged ? "Activating…" : "Activate"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -789,7 +961,7 @@ export function FineTuning({
                   )}
                 </div>
               </div>
-              {expandedJobId === j.id && <ExpandedRow job={j} />}
+              {expandedJobId === j.id && <ExpandedRow job={j} onChanged={reload} />}
               </div>
             );
           })}
