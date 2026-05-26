@@ -20,6 +20,11 @@ import {
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
+  extractEmbeddableText,
+  lookupSemanticCache,
+  writeSemanticCache,
+} from "../lib/semantic-cache.ts";
+import {
   lookupModelRouting,
   forwardToManaged,
   extendServingPodIdle,
@@ -440,6 +445,64 @@ export const chatCompletions: Handler<{
           : "miss"
   );
 
+  // 5b. Semantic cache check (Phase 7.C) — only after L1 misses, and
+  //     only when the key has opted in. ZDR keys + streaming +
+  //     tool-call requests skip entirely. We pull the prompt text
+  //     from the last user message; if nothing embeddable is there,
+  //     skip too.
+  const semanticEligible =
+    auth.semanticCacheEnabled &&
+    !auth.zdrEnabled &&
+    !req.stream &&
+    !req.tools &&
+    cacheDecision.cacheable;
+  let semanticPromptText: string | null = null;
+  if (semanticEligible) {
+    semanticPromptText = extractEmbeddableText(
+      req.messages as Array<{ role?: string; content?: unknown }>
+    );
+    if (semanticPromptText) {
+      const semanticHit = await lookupSemanticCache({
+        env: c.env,
+        orgId: auth.orgId,
+        modelId: effectiveModel,
+        temperature: req.temperature,
+        promptText: semanticPromptText,
+        upstreamKey,
+      });
+      if (semanticHit) {
+        c.executionCtx.waitUntil(
+          sendUsage(c.env, {
+            ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+            inputTokens: semanticHit.usage?.prompt_tokens ?? null,
+            outputTokens: semanticHit.usage?.completion_tokens ?? null,
+            // Account semantic hits at the cached_tokens rate too — the
+            // consumer's pricing function reads cachedTokens to apply
+            // the cached-input rate, matching the L1 path.
+            cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
+            status: "success",
+          })
+        );
+        return new Response(semanticHit.responseBody, {
+          status: 200,
+          headers: {
+            "content-type": semanticHit.contentType,
+            "X-Ahura-Request-Id": requestId,
+            "X-Ahura-Model": effectiveModel,
+            "X-Ahura-Billing": auth.billing,
+            "X-Ahura-Cache": "semantic-hit",
+            "X-Ahura-Cache-Similarity": semanticHit.similarity.toFixed(4),
+            "X-Ahura-Cache-Age": String(
+              Math.floor(
+                (Date.now() - new Date(semanticHit.cachedAt).getTime()) / 1000
+              )
+            ),
+          },
+        });
+      }
+    }
+  }
+
   // 6. Forward to OpenRouter
   const upstream = await forwardJson({
     env: c.env,
@@ -531,6 +594,30 @@ export const chatCompletions: Handler<{
             }
           : undefined
       )
+    );
+  }
+
+  // Semantic cache write-through — same eligibility we checked on
+  // the read path. We re-evaluate here in case anything changed
+  // (auth.semanticCacheEnabled won't have, but defensive parity).
+  if (semanticEligible && semanticPromptText) {
+    c.executionCtx.waitUntil(
+      writeSemanticCache({
+        env: c.env,
+        orgId: auth.orgId,
+        modelId: effectiveModel,
+        temperature: req.temperature,
+        promptText: semanticPromptText,
+        upstreamKey,
+        responseBody: text,
+        contentType: "application/json",
+        usage: parsedUsage
+          ? {
+              prompt_tokens: parsedUsage.prompt_tokens,
+              completion_tokens: parsedUsage.completion_tokens,
+            }
+          : null,
+      })
     );
   }
 

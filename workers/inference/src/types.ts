@@ -63,6 +63,9 @@ export interface AuthContext {
   // blow past the agreed ceiling. monthly_budget is informational only.
   orgMonthlyBudgetCents: number | null;
   orgHardCapCents: number | null;
+  // Phase 7.C — per-key opt-in to semantic cache. ZDR keys always
+  // skip cache regardless of this flag (privacy guarantee).
+  semanticCacheEnabled: boolean;
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";

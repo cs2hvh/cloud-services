@@ -15,6 +15,7 @@ const patchSchema = z.object({
   allowed_models: z.array(z.string()).optional().nullable(),
   allowed_ip_cidrs: z.array(z.string()).optional().nullable(),
   zdr_enabled: z.boolean().optional(),
+  semantic_cache_enabled: z.boolean().optional(),
   monthly_budget_cents: z.number().int().nonnegative().optional().nullable(),
   hard_cap_cents: z.number().int().nonnegative().optional().nullable(),
 });
@@ -84,7 +85,12 @@ export async function PATCH(
   const changedKeys = Object.keys(parsed.data);
   const budgetChanged = changedKeys.some((k) => k === "monthly_budget_cents" || k === "hard_cap_cents");
   const scopeChanged = changedKeys.some(
-    (k) => k === "allowed_models" || k === "allowed_ip_cidrs" || k === "zdr_enabled" || k === "name"
+    (k) =>
+      k === "allowed_models" ||
+      k === "allowed_ip_cidrs" ||
+      k === "zdr_enabled" ||
+      k === "semantic_cache_enabled" ||
+      k === "name"
   );
   const ctx = auditContextFrom(request);
   const actions: InferenceAuditAction[] = [];

@@ -80,6 +80,7 @@ export const authMiddleware: MiddlewareHandler<{
     hardCapCents: resolved.hardCapCents,
     orgMonthlyBudgetCents: resolved.orgMonthlyBudgetCents,
     orgHardCapCents: resolved.orgHardCapCents,
+    semanticCacheEnabled: resolved.semanticCacheEnabled,
     billing,
     byokProvider,
   };
@@ -101,6 +102,7 @@ interface CachedKey {
   hardCapCents: number | null;
   orgMonthlyBudgetCents: number | null;
   orgHardCapCents: number | null;
+  semanticCacheEnabled: boolean;
   expiresAt: string | null;
 }
 
@@ -136,6 +138,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       hard_cap_cents: number | null;
       org_monthly_budget_cents: number | null;
       org_hard_cap_cents: number | null;
+      semantic_cache_enabled: boolean;
       expires_at: string | null;
     }>();
 
@@ -151,6 +154,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
     hardCapCents: data.hard_cap_cents,
     orgMonthlyBudgetCents: data.org_monthly_budget_cents,
     orgHardCapCents: data.org_hard_cap_cents,
+    semanticCacheEnabled: data.semantic_cache_enabled ?? false,
     expiresAt: data.expires_at,
   };
 }

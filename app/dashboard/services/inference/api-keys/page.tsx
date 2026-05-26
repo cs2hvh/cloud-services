@@ -59,6 +59,7 @@ interface ApiKey {
   name: string;
   preview: string;
   zdr_enabled: boolean;
+  semantic_cache_enabled: boolean;
   monthly_budget_cents: number | null;
   hard_cap_cents: number | null;
   expires_at: string | null;
@@ -79,6 +80,7 @@ export default function ApiKeysPage() {
   const [form, setForm] = useState({
     name: '',
     zdr_enabled: false,
+    semantic_cache_enabled: false,
     monthly_budget_cents: '',
     hard_cap_cents: '',
   });
@@ -107,7 +109,11 @@ export default function ApiKeysPage() {
     }
     setCreating(true);
     try {
-      const body: Record<string, unknown> = { name: form.name.trim(), zdr_enabled: form.zdr_enabled };
+      const body: Record<string, unknown> = {
+        name: form.name.trim(),
+        zdr_enabled: form.zdr_enabled,
+        semantic_cache_enabled: form.semantic_cache_enabled && !form.zdr_enabled,
+      };
       if (form.monthly_budget_cents) body.monthly_budget_cents = Math.round(Number(form.monthly_budget_cents) * 100);
       if (form.hard_cap_cents) body.hard_cap_cents = Math.round(Number(form.hard_cap_cents) * 100);
 
@@ -122,7 +128,7 @@ export default function ApiKeysPage() {
 
       setCreatedKey(data.data.api_key);
       setKeyVisible(false);
-      setForm({ name: '', zdr_enabled: false, monthly_budget_cents: '', hard_cap_cents: '' });
+      setForm({ name: '', zdr_enabled: false, semantic_cache_enabled: false, monthly_budget_cents: '', hard_cap_cents: '' });
       setCreateOpen(false);
       await load();
     } catch (err) {
@@ -358,7 +364,36 @@ export default function ApiKeysPage() {
               <Switch
                 id="zdr"
                 checked={form.zdr_enabled}
-                onCheckedChange={(v) => setForm({ ...form, zdr_enabled: v })}
+                onCheckedChange={(v) =>
+                  setForm({
+                    ...form,
+                    zdr_enabled: v,
+                    // Mutually exclusive — ZDR forbids any persistence,
+                    // including semantic-cache embeddings.
+                    semantic_cache_enabled: v ? false : form.semantic_cache_enabled,
+                  })
+                }
+              />
+            </div>
+            <div
+              className="flex items-center justify-between rounded-[5px] border border-white/[0.08] bg-white/[0.02] px-3 py-2.5"
+              style={{ opacity: form.zdr_enabled ? 0.4 : 1 }}
+            >
+              <div>
+                <Label htmlFor="semcache" className={`${MONO} text-[11px] uppercase tracking-[0.12em] text-white/80`}>
+                  Semantic cache
+                </Label>
+                <p className={`${MONO} mt-0.5 text-[10.5px] text-white/40 max-w-md leading-relaxed`}>
+                  {form.zdr_enabled
+                    ? 'Disabled while ZDR is on — semantic cache requires storing prompt embeddings.'
+                    : 'Match near-duplicate prompts against recent cached responses to cut cost. Stores embeddings (not prompt text); 1-hour TTL; only for non-streaming, deterministic requests.'}
+                </p>
+              </div>
+              <Switch
+                id="semcache"
+                disabled={form.zdr_enabled}
+                checked={form.semantic_cache_enabled && !form.zdr_enabled}
+                onCheckedChange={(v) => setForm({ ...form, semantic_cache_enabled: v })}
               />
             </div>
           </div>
