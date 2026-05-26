@@ -40,6 +40,8 @@ interface OrgResponse {
     zdr_default: boolean;
     region_pin: 'us' | 'eu' | 'asia' | null;
     owner_user_id: string | null;
+    monthly_budget_cents: number | null;
+    hard_cap_cents: number | null;
     created_at: string | null;
     updated_at: string | null;
   };
@@ -48,6 +50,21 @@ interface OrgResponse {
     active_members: number;
     byok_keys: number;
   };
+}
+
+// Parse a "$1,234.56" / "1234.56" / "1234" input string into integer
+// cents. Returns null for empty input, NaN for invalid. Negative -> NaN.
+function parseUsdToCents(raw: string): number | null | typeof NaN {
+  const trimmed = raw.replace(/[\s,$]/g, '').trim();
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  if (!Number.isFinite(num) || num < 0) return NaN;
+  return Math.round(num * 100);
+}
+
+function centsToUsdInput(c: number | null): string {
+  if (c === null || c === undefined) return '';
+  return (c / 100).toFixed(2);
 }
 
 const REGION_OPTIONS = [
@@ -66,7 +83,15 @@ export default function SettingsPage() {
     name: string;
     zdr_default: boolean;
     region_pin: string;
-  }>({ name: '', zdr_default: false, region_pin: '__any__' });
+    monthly_budget_usd: string;
+    hard_cap_usd: string;
+  }>({
+    name: '',
+    zdr_default: false,
+    region_pin: '__any__',
+    monthly_budget_usd: '',
+    hard_cap_usd: '',
+  });
 
   const load = async () => {
     setLoading(true);
@@ -79,6 +104,8 @@ export default function SettingsPage() {
         name: json.org.name,
         zdr_default: json.org.zdr_default,
         region_pin: json.org.region_pin ?? '__any__',
+        monthly_budget_usd: centsToUsdInput(json.org.monthly_budget_cents),
+        hard_cap_usd: centsToUsdInput(json.org.hard_cap_cents),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load');
@@ -91,14 +118,33 @@ export default function SettingsPage() {
 
   const isAdminish = data?.org.role === 'owner' || data?.org.role === 'admin';
 
+  const parsedBudgetCents = parseUsdToCents(form.monthly_budget_usd);
+  const parsedHardCapCents = parseUsdToCents(form.hard_cap_usd);
+  const capsValid = !Number.isNaN(parsedBudgetCents) && !Number.isNaN(parsedHardCapCents);
+  const budgetGtCap =
+    capsValid &&
+    parsedBudgetCents !== null &&
+    parsedHardCapCents !== null &&
+    (parsedBudgetCents as number) > (parsedHardCapCents as number);
+
   const dirty =
     data &&
     (form.name.trim() !== data.org.name ||
       form.zdr_default !== data.org.zdr_default ||
-      (form.region_pin === '__any__' ? null : form.region_pin) !== data.org.region_pin);
+      (form.region_pin === '__any__' ? null : form.region_pin) !== data.org.region_pin ||
+      (capsValid && parsedBudgetCents !== data.org.monthly_budget_cents) ||
+      (capsValid && parsedHardCapCents !== data.org.hard_cap_cents));
 
   const save = async () => {
     if (!data || !form.name.trim()) return;
+    if (!capsValid) {
+      toast.error('Spend caps must be non-negative numbers');
+      return;
+    }
+    if (budgetGtCap) {
+      toast.error('Monthly budget cannot exceed the hard cap');
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {};
@@ -106,6 +152,12 @@ export default function SettingsPage() {
       if (form.zdr_default !== data.org.zdr_default) payload.zdr_default = form.zdr_default;
       const region = form.region_pin === '__any__' ? null : form.region_pin;
       if (region !== data.org.region_pin) payload.region_pin = region;
+      if (parsedBudgetCents !== data.org.monthly_budget_cents) {
+        payload.monthly_budget_cents = parsedBudgetCents;
+      }
+      if (parsedHardCapCents !== data.org.hard_cap_cents) {
+        payload.hard_cap_cents = parsedHardCapCents;
+      }
 
       const r = await fetch('/api/inference/orgs/current', {
         method: 'PATCH',
@@ -267,6 +319,65 @@ export default function SettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      </section>
+
+      {/* Spend caps */}
+      <section className="mb-14">
+        <SectionHead eyebrow="Spend" title="Org-level" accent="caps" />
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
+          <div>
+            <Label className={`${MONO} block mb-1.5 text-[11px] uppercase tracking-[0.12em] text-white/80`}>
+              Monthly budget (USD)
+            </Label>
+            <p className={`${MONO} mb-2 text-[11px] text-white/45 leading-relaxed max-w-md`}>
+              Informational target — surfaced on usage dashboards as an overage indicator but does NOT
+              block traffic when crossed. Leave blank for no budget.
+            </p>
+            <div className="flex items-center gap-2 max-w-xs">
+              <span className={`${MONO} text-[12px] text-white/55`}>$</span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={form.monthly_budget_usd}
+                onChange={(e) => setForm({ ...form, monthly_budget_usd: e.target.value })}
+                placeholder="500.00"
+                className="bg-white/[0.02] border-white/[0.08]"
+                disabled={!isAdminish || loading}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-white/[0.06] pt-5">
+            <Label className={`${MONO} block mb-1.5 text-[11px] uppercase tracking-[0.12em] text-white/80`}>
+              Monthly hard cap (USD)
+            </Label>
+            <p className={`${MONO} mb-2 text-[11px] text-white/45 leading-relaxed max-w-md`}>
+              Enforced ceiling — once this month&apos;s spend reaches this number, the inference
+              gateway returns <CodeChip>402 org_hard_cap_reached</CodeChip> for every request until
+              the next billing period or you raise it. Leave blank for no cap.
+            </p>
+            <div className="flex items-center gap-2 max-w-xs">
+              <span className={`${MONO} text-[12px] text-white/55`}>$</span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={form.hard_cap_usd}
+                onChange={(e) => setForm({ ...form, hard_cap_usd: e.target.value })}
+                placeholder="1000.00"
+                className="bg-white/[0.02] border-white/[0.08]"
+                disabled={!isAdminish || loading}
+              />
+            </div>
+            {budgetGtCap && (
+              <p className={`${MONO} mt-2 text-[10.5px] text-amber-300/85`}>
+                Monthly budget is higher than the hard cap — the cap will fire first.
+              </p>
+            )}
+            <p className={`${MONO} mt-3 text-[10.5px] text-white/40 max-w-md leading-relaxed`}>
+              Per-API-key caps still apply on top. Whichever cap (key or org) is reached first wins.
+            </p>
           </div>
         </div>
       </section>

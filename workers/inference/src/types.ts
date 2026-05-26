@@ -55,8 +55,14 @@ export interface AuthContext {
   allowedModels: string[] | null; // null = unrestricted
   allowedIpCidrs: string[] | null;
   zdrEnabled: boolean;
+  // Per-API-key spend caps (legacy, granular control)
   monthlyBudgetCents: number | null;
   hardCapCents: number | null;
+  // Org-level spend caps. The gateway enforces the LOWER of (orgHardCap,
+  // keyHardCap) so neither a misconfigured key nor an over-quota org can
+  // blow past the agreed ceiling. monthly_budget is informational only.
+  orgMonthlyBudgetCents: number | null;
+  orgHardCapCents: number | null;
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";

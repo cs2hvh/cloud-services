@@ -15,6 +15,20 @@ const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   zdr_default: z.boolean().optional(),
   region_pin: z.enum(["us", "eu", "asia"]).nullable().optional(),
+  monthly_budget_cents: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(100_000_000) // $1M cap on the cap, sanity bound
+    .nullable()
+    .optional(),
+  hard_cap_cents: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(100_000_000)
+    .nullable()
+    .optional(),
 });
 
 export async function GET() {
@@ -52,7 +66,9 @@ export async function GET() {
       supabase
         .schema("inference")
         .from("orgs")
-        .select("id, slug, name, zdr_default, region_pin, owner_user_id, created_at, updated_at")
+        .select(
+          "id, slug, name, zdr_default, region_pin, owner_user_id, monthly_budget_cents, hard_cap_cents, created_at, updated_at"
+        )
         .eq("id", org.org_id)
         .maybeSingle(),
       supabase
@@ -74,18 +90,26 @@ export async function GET() {
         .eq("org_id", org.org_id),
     ]);
 
+  type OrgRow = {
+    monthly_budget_cents: number | null;
+    hard_cap_cents: number | null;
+  } | null;
+  const row = orgRow as (typeof orgRow & OrgRow) | null;
+
   return NextResponse.json({
     success: true,
     org: {
       id: org.org_id,
       slug: org.org_slug,
-      name: orgRow?.name ?? org.org_name,
+      name: row?.name ?? org.org_name,
       role: org.role,
-      zdr_default: orgRow?.zdr_default ?? org.zdr_default,
-      region_pin: orgRow?.region_pin ?? null,
-      owner_user_id: orgRow?.owner_user_id ?? null,
-      created_at: orgRow?.created_at ?? null,
-      updated_at: orgRow?.updated_at ?? null,
+      zdr_default: row?.zdr_default ?? org.zdr_default,
+      region_pin: row?.region_pin ?? null,
+      owner_user_id: row?.owner_user_id ?? null,
+      monthly_budget_cents: row?.monthly_budget_cents ?? null,
+      hard_cap_cents: row?.hard_cap_cents ?? null,
+      created_at: row?.created_at ?? null,
+      updated_at: row?.updated_at ?? null,
     },
     counts: {
       active_api_keys: keyCount ?? 0,
@@ -148,7 +172,9 @@ export async function PATCH(request: NextRequest) {
     .from("orgs")
     .update(parsed.data)
     .eq("id", org.org_id)
-    .select("id, slug, name, zdr_default, region_pin, updated_at")
+    .select(
+      "id, slug, name, zdr_default, region_pin, monthly_budget_cents, hard_cap_cents, updated_at"
+    )
     .single();
 
   if (error || !data) {
@@ -156,11 +182,15 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Failed to update org" }, { status: 500 });
   }
 
+  // Spend-cap changes are security-relevant — file under a dedicated
+  // audit action so they're easy to grep / alert on in the audit log.
+  const capChanged =
+    "monthly_budget_cents" in parsed.data || "hard_cap_cents" in parsed.data;
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
     actorUserId: auth.user!.id,
-    action: "org.updated",
+    action: capChanged ? "org.spend_cap_updated" : "org.updated",
     targetType: "org",
     targetId: org.org_id,
     metadata: { changed: Object.keys(parsed.data), after: parsed.data },

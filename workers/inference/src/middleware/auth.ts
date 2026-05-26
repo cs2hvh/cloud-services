@@ -78,6 +78,8 @@ export const authMiddleware: MiddlewareHandler<{
     zdrEnabled: resolved.zdrEnabled,
     monthlyBudgetCents: resolved.monthlyBudgetCents,
     hardCapCents: resolved.hardCapCents,
+    orgMonthlyBudgetCents: resolved.orgMonthlyBudgetCents,
+    orgHardCapCents: resolved.orgHardCapCents,
     billing,
     byokProvider,
   };
@@ -97,6 +99,8 @@ interface CachedKey {
   zdrEnabled: boolean;
   monthlyBudgetCents: number | null;
   hardCapCents: number | null;
+  orgMonthlyBudgetCents: number | null;
+  orgHardCapCents: number | null;
   expiresAt: string | null;
 }
 
@@ -130,6 +134,8 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       zdr_enabled: boolean;
       monthly_budget_cents: number | null;
       hard_cap_cents: number | null;
+      org_monthly_budget_cents: number | null;
+      org_hard_cap_cents: number | null;
       expires_at: string | null;
     }>();
 
@@ -143,6 +149,8 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
     zdrEnabled: data.zdr_enabled,
     monthlyBudgetCents: data.monthly_budget_cents,
     hardCapCents: data.hard_cap_cents,
+    orgMonthlyBudgetCents: data.org_monthly_budget_cents,
+    orgHardCapCents: data.org_hard_cap_cents,
     expiresAt: data.expires_at,
   };
 }

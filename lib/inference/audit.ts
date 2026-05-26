@@ -21,6 +21,7 @@ export type InferenceAuditAction =
   | "org.created"
   | "org.updated"
   | "org.deleted"
+  | "org.spend_cap_updated"
   | "member.invited"
   | "member.joined"
   | "member.role_changed"
