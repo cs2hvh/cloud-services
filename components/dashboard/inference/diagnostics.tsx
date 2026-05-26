@@ -84,9 +84,9 @@ export function Diagnostics({
       <PageCanvas>
         <Hero
           breadcrumb={{ label: "Inference", href: "/dashboard/services/inference" }}
-          title="Diagnostics"
-          accent="restricted"
-          caption="Only org admins and owners can run platform diagnostics. Ask your org admin if you're seeing failures."
+          title="Service"
+          accent="health"
+          caption="Only org admins and owners can view the service-health page for this org. Ask your org admin if you're seeing failures."
           size="md"
         />
       </PageCanvas>

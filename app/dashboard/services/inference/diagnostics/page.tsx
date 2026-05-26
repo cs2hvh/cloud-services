@@ -4,10 +4,16 @@ import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
 
 import { requireAuthProfile } from "@/lib/supabase/auth";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { isPlatformOperator } from "@/lib/inference/operators";
 import {
   Diagnostics,
   type DiagnosticCheck,
 } from "@/components/dashboard/inference/diagnostics";
+import {
+  ServiceHealth,
+  type ServiceHealthCategory,
+  type ServiceHealthStatus,
+} from "@/components/dashboard/inference/service-health";
 
 export const dynamic = "force-dynamic";
 // Fresh check on every load — no caching. Operators are here BECAUSE
@@ -315,34 +321,155 @@ async function checkOpenRouterKey(): Promise<DiagnosticCheck> {
   }
 }
 
+// ─── Customer-facing roll-up ──────────────────────────────────────
+//
+// Maps the internal infra checks (which name upstream providers and
+// internal mechanics) onto vendor-neutral customer categories. The
+// detailed view stays gated behind isPlatformOperator(); everyone else
+// sees this.
+
+interface CategorySpec {
+  id: string;
+  label: string;
+  /** Internal check ids that roll up into this category. Worst status
+   *  of any contributing check becomes the category status. */
+  checkIds: string[];
+  copy: Record<ServiceHealthStatus, string>;
+}
+
+const CUSTOMER_CATEGORIES: CategorySpec[] = [
+  {
+    id: "control_plane",
+    label: "Control plane",
+    checkIds: ["env", "supabase", "schema"],
+    copy: {
+      operational:
+        "Dashboard, API, and metadata stores are responding normally.",
+      degraded:
+        "Some control-plane operations may be slower than usual. Authentication and reads are unaffected.",
+      down:
+        "Control-plane operations (creating keys, saving settings) are currently disrupted. Inference traffic in flight is unaffected.",
+    },
+  },
+  {
+    id: "object_storage",
+    label: "Object storage",
+    checkIds: ["r2"],
+    copy: {
+      operational: "Uploads + downloads for adapters, batches, and files are healthy.",
+      degraded: "Storage operations may be slower or intermittent.",
+      down: "Adapter uploads, batch file uploads, and downloads are currently unavailable.",
+    },
+  },
+  {
+    id: "real_time_state",
+    label: "Real-time state",
+    checkIds: ["upstash", "upstash_crossside"],
+    copy: {
+      operational: "Rate limits, spend counters, and live progress are tracking normally.",
+      degraded:
+        "Live progress + spend may be reporting with a delay. Limits and caps are still enforced.",
+      down:
+        "Live progress and spend tracking are temporarily unavailable. Inference requests are still served and billed.",
+    },
+  },
+  {
+    id: "inference_gateway",
+    label: "Inference gateway",
+    checkIds: ["gateway", "openrouter"],
+    copy: {
+      operational:
+        "All inference endpoints are routing normally to the model catalog.",
+      degraded:
+        "Some models may have elevated latency or intermittent errors. Retry with exponential backoff.",
+      down: "Inference endpoints are currently disrupted. We're actively investigating.",
+    },
+  },
+];
+
+function rollupForCustomer(checks: DiagnosticCheck[]): ServiceHealthCategory[] {
+  const byId = new Map(checks.map((c) => [c.id, c]));
+
+  return CUSTOMER_CATEGORIES.map((cat): ServiceHealthCategory => {
+    const contributing = cat.checkIds
+      .map((id) => byId.get(id))
+      .filter((c): c is DiagnosticCheck => Boolean(c));
+
+    let status: ServiceHealthStatus = "operational";
+    for (const c of contributing) {
+      if (c.status === "fail") {
+        status = "down";
+        break;
+      }
+      if (c.status === "warn" && status === "operational") {
+        status = "degraded";
+      }
+    }
+
+    return {
+      id: cat.id,
+      label: cat.label,
+      status,
+      summary: cat.copy[status],
+    };
+  });
+}
+
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default async function DiagnosticsPage() {
   const user = await requireAuthProfile();
   const org = await getOrBootstrapOrgForUser(user.id, user.email ?? "");
-  // Only org admins / owners see this — these checks expose infra
-  // detail that's not appropriate for regular members.
-  const canView = org.role === "owner" || org.role === "admin";
 
-  const checks = canView
-    ? await Promise.all([
-        checkEnvVars(),
-        checkSupabase(),
-        checkSchemaColumns(),
-        checkR2(),
-        checkUpstash(),
-        checkUpstashCrossSide(),
-        checkGateway(),
-        checkOpenRouterKey(),
-      ])
-    : [];
+  // Three audiences:
+  //   1. Platform operators (AhuraCloud staff, allowlisted by email):
+  //      see the detailed infra view with real provider names + remediation.
+  //   2. Customer admins/owners: see the vendor-neutral health rollup.
+  //   3. Regular members: restricted message.
+  const isOperator = isPlatformOperator(user.email);
+  const canViewHealth = org.role === "owner" || org.role === "admin";
+
+  if (!canViewHealth) {
+    // Reuse the existing Diagnostics restricted-mode message — it's
+    // already worded for this case (canView=false branch).
+    return (
+      <Diagnostics
+        checks={[]}
+        canView={false}
+        orgName={org.org_name}
+        fetchedAt={new Date().toISOString()}
+      />
+    );
+  }
+
+  const checks = await Promise.all([
+    checkEnvVars(),
+    checkSupabase(),
+    checkSchemaColumns(),
+    checkR2(),
+    checkUpstash(),
+    checkUpstashCrossSide(),
+    checkGateway(),
+    checkOpenRouterKey(),
+  ]);
+  const fetchedAt = new Date().toISOString();
+
+  if (isOperator) {
+    return (
+      <Diagnostics
+        checks={checks}
+        canView={true}
+        orgName={org.org_name}
+        fetchedAt={fetchedAt}
+      />
+    );
+  }
 
   return (
-    <Diagnostics
-      checks={checks}
-      canView={canView}
+    <ServiceHealth
+      categories={rollupForCustomer(checks)}
       orgName={org.org_name}
-      fetchedAt={new Date().toISOString()}
+      fetchedAt={fetchedAt}
     />
   );
 }
