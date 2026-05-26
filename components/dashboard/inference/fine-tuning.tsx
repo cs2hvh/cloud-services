@@ -420,7 +420,7 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
 
             <div className="mb-4 pl-5 relative">
               <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>1.</span>
-              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Rent a GPU pod</div>
+              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Rent a GPU instance</div>
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
                 Pick A40 (~$0.40/hr) for 8-14B bases, A100 80GB for 27-32B, H100 for larger MoE.
               </p>
@@ -428,13 +428,13 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
                 href="/dashboard/services/gpu/deploy"
                 className={`${MONO} inline-flex items-center gap-1.5 text-[11px] font-medium text-white bg-[#0095FF] hover:bg-[#33adff] px-3 py-1.5 rounded transition-colors`}
               >
-                Open GPU compute → rent a pod
+                Open GPU compute
               </Link>
             </div>
 
             <div className="mb-4 pl-5 relative">
               <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>2.</span>
-              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH into the pod and run the serving container</div>
+              <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>SSH in and run the serving container</div>
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
                 Click the button below to copy a ready-to-paste docker command.
                 The adapter download URL is signed and valid for 6 hours — generate
@@ -451,7 +451,7 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
                 <pre className={`${MONO} text-[10.5px] text-white/55 whitespace-pre-wrap overflow-x-auto`}>{dockerCmdTemplate}</pre>
               </div>
               <p className={`${MONO} mt-2 text-[10px] text-white/45`}>
-                vLLM exposes an OpenAI-compatible API on port 8000 with your adapter loaded.
+                Exposes an OpenAI-compatible API on port 8000 with your adapter loaded.
                 First boot ~60s (downloads base + adapter). Subsequent requests 1-2s.
               </p>
             </div>
@@ -460,10 +460,10 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
               <span className={`${MONO} absolute left-0 top-0 text-[10px] text-[#0095FF] font-bold`}>3.</span>
               <div className={`${MONO} text-[11.5px] text-white/85 mb-1`}>Call your model</div>
               <p className={`${MONO} text-[10.5px] text-white/55 leading-relaxed mb-2`}>
-                Once the container is healthy, hit your pod&apos;s exposed port:
+                Once the container is healthy, hit your instance&apos;s exposed port:
               </p>
               <div className="bg-black/60 border border-white/[0.06] rounded-[4px] p-3">
-                <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{`curl http://<your-pod-ip>:8000/v1/chat/completions \\
+                <pre className={`${MONO} text-[10.5px] text-white/85 whitespace-pre-wrap overflow-x-auto`}>{`curl http://<your-instance-ip>:8000/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "adapter",
@@ -771,7 +771,7 @@ function ProvisioningBanner({ startedAt }: { startedAt: string | null | undefine
     elapsedSec < 30
       ? "Booting GPU and pulling the serving image…"
       : elapsedSec < 75
-        ? "Downloading your adapter from storage and warming vLLM…"
+        ? "Downloading your adapter and warming up the serving runtime…"
         : elapsedSec < 150
           ? "Larger base — still loading model weights into GPU memory…"
           : "Taking longer than expected. If this exceeds 5 minutes, stop the instance and try a different GPU.";
@@ -1231,7 +1231,7 @@ export function FineTuning({
                           background: "rgba(0,149,255,0.10)",
                           border: "1px solid rgba(0,149,255,0.25)",
                         }}
-                        title={j.serving_url ?? "Routed via AhuraCloud-operated vLLM"}
+                        title={j.serving_url ?? "Routed via AhuraCloud managed serving"}
                       >
                         Managed
                       </span>
@@ -1477,8 +1477,8 @@ export function FineTuning({
               {GATED_BASES.has(form.base_model_id) && (
                 <p className={`${MONO} mt-1 text-[10.5px] text-amber-300/70 leading-snug`}>
                   This model requires you to have been granted access on the
-                  upstream catalog. Without it, the training pod will fail to
-                  download the weights.{" "}
+                  upstream catalog. Without it, training will fail when it
+                  tries to download the weights.{" "}
                   {approvalUrlFor(form.base_model_id) && (
                     <a
                       href={approvalUrlFor(form.base_model_id)!}
