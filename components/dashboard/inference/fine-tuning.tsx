@@ -271,6 +271,9 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
 
   const adapterR2 = j.output_artifact_url ?? "";
   const baseShort = j.base_model_id.split("/")[1] ?? j.base_model_id;
+  // Customer-facing model id used in the SDK snippets. Matches the
+  // pattern the FT registration uses when inserting into inference.models.
+  const modelCallId = `ahura/${baseShort}:ft-${j.id.slice(0, 8)}`;
 
   // Build docker command. URL is injected at copy-time (1-hour signed
   // URL minted on demand) so the dialog doesn't ship live secrets in
@@ -343,6 +346,26 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
             }
           />
           <InfoRow
+            k="Model id"
+            v={
+              <span className="inline-flex items-center gap-2">
+                <code className="text-[11px] text-white/85 select-all break-all">
+                  {modelCallId}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(modelCallId);
+                    toast.success("Copied");
+                  }}
+                  className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
+                >
+                  copy
+                </button>
+              </span>
+            }
+          />
+          <InfoRow
             k="Adapter"
             v={
               <span className="inline-flex items-center gap-2">
@@ -360,6 +383,36 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
               </span>
             }
           />
+
+          {/* ─── Call from your code ─────────────────────────────
+              Pre-filled snippets in the three formats most customers
+              start with: cURL for testing, Python for ML workloads,
+              TypeScript for product code. Model id is wired in; API
+              key stays a placeholder so we never leak a real one. */}
+          <div className="mt-5 mb-3 border-t border-white/[0.06] pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55`}>
+                Call from your code
+              </h4>
+              <Link
+                href={`/dashboard/services/inference/playground?model=${encodeURIComponent(modelCallId)}`}
+                className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-[#33adff] hover:text-white inline-flex items-center gap-1`}
+              >
+                Try in playground →
+              </Link>
+            </div>
+            <CallSnippets modelId={modelCallId} />
+            <p className={`${MONO} mt-2 text-[10px] text-white/40 leading-relaxed`}>
+              Replace <code className="text-white/60">YOUR_API_KEY</code> with a key from{" "}
+              <Link
+                href="/dashboard/services/inference/api-keys"
+                className="text-[#0095FF] hover:underline"
+              >
+                API Keys
+              </Link>
+              . The OpenAI SDK works as-is — just change <code className="text-white/60">base_url</code> + <code className="text-white/60">model</code>.
+            </p>
+          </div>
 
           <div className="mt-5 mb-3">
             <h4 className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/55 mb-3`}>How to serve</h4>
@@ -608,6 +661,103 @@ function ExpandedRow({ job: j, onChanged }: { job: FineTuneJob; onChanged?: () =
 }
 
 // ─── Hosted-serving sub-components ───────────────────────────────────
+
+function CallSnippets({ modelId }: { modelId: string }) {
+  type Lang = "curl" | "python" | "typescript";
+  const [lang, setLang] = useState<Lang>("curl");
+  const [copied, setCopied] = useState(false);
+
+  const apiBase = "https://api.cs2hvh.com/v1";
+
+  const snippets: Record<Lang, string> = {
+    curl: `curl ${apiBase}/chat/completions \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelId}",
+    "messages": [
+      {"role": "user", "content": "Hello from my fine-tune"}
+    ]
+  }'`,
+    python: `from openai import OpenAI
+
+client = OpenAI(
+    base_url="${apiBase}",
+    api_key="YOUR_API_KEY",
+)
+
+response = client.chat.completions.create(
+    model="${modelId}",
+    messages=[
+        {"role": "user", "content": "Hello from my fine-tune"}
+    ],
+)
+
+print(response.choices[0].message.content)`,
+    typescript: `import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "${apiBase}",
+  apiKey: process.env.AHURA_API_KEY,
+});
+
+const response = await client.chat.completions.create({
+  model: "${modelId}",
+  messages: [
+    { role: "user", content: "Hello from my fine-tune" },
+  ],
+});
+
+console.log(response.choices[0].message.content);`,
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(snippets[lang]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  return (
+    <div className="border border-white/[0.06] bg-black/40 rounded-[5px] overflow-hidden">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-1.5">
+        <div className="flex">
+          {(["curl", "python", "typescript"] as Lang[]).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLang(l)}
+              className={`${MONO} h-8 px-3 text-[10px] uppercase tracking-[0.14em] font-semibold transition-colors relative ${
+                lang === l ? "text-white" : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              {l}
+              {lang === l && (
+                <span
+                  className="absolute left-2 right-2 bottom-0 h-0.5"
+                  style={{ background: ACCENT_BRIGHT, boxShadow: `0 0 6px ${ACCENT_BRIGHT}` }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={copy}
+          className={`${MONO} h-7 px-2 text-[10px] uppercase tracking-[0.12em] font-semibold inline-flex items-center gap-1 rounded text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors`}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className={`${MONO} px-4 py-3 text-[10.5px] text-white/85 leading-relaxed overflow-x-auto whitespace-pre`}>
+        {snippets[lang]}
+      </pre>
+    </div>
+  );
+}
 
 function ProvisioningBanner({ startedAt }: { startedAt: string | null | undefined }) {
   const [now, setNow] = useState(() => Date.now());
@@ -921,7 +1071,6 @@ export function FineTuning({
     const interval = inFlightServing ? 3000 : 8000;
     const t = setInterval(reload, interval);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs]);
 
   const create = async () => {

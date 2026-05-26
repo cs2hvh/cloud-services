@@ -112,7 +112,16 @@ export function Playground({
   const [compareRunning, setCompareRunning] = useState(false);
   const compareRef = useRef<PlaygroundCompareHandle | null>(null);
 
-  const [modelId, setModelId] = useState<string>(models[0]?.model_id ?? "");
+  // Initial model — honor ?model=<id> query param so deep-links from other
+  // dashboard pages (e.g. FT detail "Try in playground" link) land on the
+  // right model. Falls back to the first catalog entry otherwise.
+  const [modelId, setModelId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const fromUrl = new URLSearchParams(window.location.search).get("model");
+      if (fromUrl && models.some((m) => m.model_id === fromUrl)) return fromUrl;
+    }
+    return models[0]?.model_id ?? "";
+  });
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState("");
 
