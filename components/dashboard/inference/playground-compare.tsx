@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Layers,
@@ -77,16 +77,22 @@ function makeBlankPane(modelId: string): PaneState {
   };
 }
 
-export function PlaygroundCompare({
-  models,
-  params,
-  onRequestKeyDialog,
-}: {
-  models: PlaygroundModel[];
-  params: CompareParams;
-  /** Called when user clicks Run without a key configured. */
-  onRequestKeyDialog: () => void;
-}) {
+export interface PlaygroundCompareHandle {
+  runAll: () => void;
+  stopAll: () => void;
+}
+
+export const PlaygroundCompare = forwardRef<
+  PlaygroundCompareHandle,
+  {
+    models: PlaygroundModel[];
+    params: CompareParams;
+    /** Called when user clicks Run without a key configured. */
+    onRequestKeyDialog: () => void;
+    /** Called whenever any pane's running state changes. */
+    onRunningChange?: (anyRunning: boolean) => void;
+  }
+>(function PlaygroundCompare({ models, params, onRequestKeyDialog, onRunningChange }, ref) {
   // Default to the first two featured models so compare is immediately useful
   const defaults = useMemo(() => {
     const featured = models.filter((m) => m.is_featured).slice(0, 2);
@@ -125,6 +131,31 @@ export function PlaygroundCompare({
       refs.clear();
     };
   }, []);
+
+  // Emit running-state changes to the parent so it can show a combined
+  // Send/Stop label on the top-level Send button.
+  const anyRunning = panes.some((p) => p.running);
+  useEffect(() => {
+    onRunningChange?.(anyRunning);
+  }, [anyRunning, onRunningChange]);
+
+  // Expose run/stop-all to the parent so the shared Send button works
+  // in compare mode without duplicating the panel-control logic.
+  useImperativeHandle(
+    ref,
+    () => ({
+      runAll: () => {
+        for (const pane of panes) void runPane(pane);
+      },
+      stopAll: () => {
+        for (const ctrl of abortRefs.current.values()) ctrl.abort();
+      },
+    }),
+    // panes-as-dep is intentional — we want the latest panes captured
+    // each render so the parent's call hits the current set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panes]
+  );
 
   const updatePane = (id: string, patch: Partial<PaneState>) => {
     setPanes((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -239,7 +270,6 @@ export function PlaygroundCompare({
     }
   };
 
-  const anyRunning = panes.some((p) => p.running);
   const gridCols =
     panes.length === 1
       ? "grid-cols-1"
@@ -481,7 +511,7 @@ export function PlaygroundCompare({
       <Trash2 className="hidden" />
     </section>
   );
-}
+});
 
 function FootCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (

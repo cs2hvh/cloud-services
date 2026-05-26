@@ -42,7 +42,10 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
-import { PlaygroundCompare } from "@/components/dashboard/inference/playground-compare";
+import {
+  PlaygroundCompare,
+  type PlaygroundCompareHandle,
+} from "@/components/dashboard/inference/playground-compare";
 
 export interface PlaygroundModel {
   model_id: string;
@@ -97,6 +100,8 @@ export function Playground({
 
   const [mode, setMode] = useState<PlaygroundMode>("single");
   const [presetId, setPresetId] = useState<string>("");
+  const [compareRunning, setCompareRunning] = useState(false);
+  const compareRef = useRef<PlaygroundCompareHandle | null>(null);
 
   const [modelId, setModelId] = useState<string>(models[0]?.model_id ?? "");
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -353,6 +358,47 @@ export function Playground({
     abortRef.current?.abort();
   };
 
+  // Unified send/stop handler used by both the textarea Cmd+Enter shortcut
+  // and the explicit Send button below the textarea. Routes to the right
+  // action based on the active mode.
+  const sendPrompt = () => {
+    if (!apiKey) {
+      setKeySetupOpen(true);
+      return;
+    }
+    if (!userPrompt.trim()) {
+      toast.error("Type a prompt first");
+      return;
+    }
+    if (mode === "single") {
+      if (running) stop();
+      else run();
+    } else {
+      if (compareRunning) compareRef.current?.stopAll();
+      else compareRef.current?.runAll();
+    }
+  };
+
+  const isBusy = mode === "single" ? running : compareRunning;
+  const sendButton = (
+    <PrimaryButton
+      onClick={sendPrompt}
+      disabled={!apiKey || (!isBusy && !userPrompt.trim())}
+    >
+      {isBusy ? (
+        <>
+          <StopCircle className="h-3.5 w-3.5" />
+          Stop
+        </>
+      ) : (
+        <>
+          <Play className="h-3.5 w-3.5" />
+          {mode === "compare" ? "Send to all" : "Send"}
+        </>
+      )}
+    </PrimaryButton>
+  );
+
   // ── Copy-as-code ─────────────────────────────────────────────────────
   const codeSnippet = useMemo(() => {
     const body = buildBody();
@@ -428,19 +474,6 @@ ${streamOn
                 <Key className="h-3.5 w-3.5" />
                 Set up key
               </PrimaryButton>
-            )}
-            {mode === "single" && (
-              running ? (
-                <PrimaryButton onClick={stop}>
-                  <StopCircle className="h-3.5 w-3.5" />
-                  Stop
-                </PrimaryButton>
-              ) : (
-                <PrimaryButton onClick={run} disabled={!apiKey || !userPrompt.trim() || !modelId}>
-                  <Play className="h-3.5 w-3.5" />
-                  Run
-                </PrimaryButton>
-              )
             )}
           </>
         }
@@ -672,7 +705,7 @@ ${streamOn
                 User message
               </p>
               <span className={`${MONO} text-[9.5px] uppercase tracking-[0.12em] text-white/30`}>
-                Cmd/Ctrl + Enter to run
+                Cmd/Ctrl + Enter to send
               </span>
             </div>
             <textarea
@@ -681,14 +714,21 @@ ${streamOn
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                   e.preventDefault();
-                  if (mode === "single" && !running) run();
-                  // compare mode: per-pane Run buttons handle this — Cmd+Enter is single-mode UX
+                  sendPrompt();
                 }
               }}
               placeholder="Ask anything…"
               rows={5}
               className={`${MONO} w-full text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y`}
             />
+            <div className="flex items-center justify-between mt-3">
+              <span className={`${MONO} text-[10px] text-white/35`}>
+                {userPrompt.trim().length > 0
+                  ? `${userPrompt.trim().length.toLocaleString()} chars`
+                  : "Type a prompt to begin"}
+              </span>
+              {sendButton}
+            </div>
           </div>
 
           {mode === "single" ? (
@@ -747,6 +787,7 @@ ${streamOn
           ) : (
             /* Compare mode — 2-3 side-by-side panes, parallel runs, shared prompt + params */
             <PlaygroundCompare
+              ref={compareRef}
               models={models}
               params={{
                 apiKey,
@@ -760,6 +801,7 @@ ${streamOn
                 presetId: presetId || undefined,
               }}
               onRequestKeyDialog={() => setKeySetupOpen(true)}
+              onRunningChange={setCompareRunning}
             />
           )}
         </div>
