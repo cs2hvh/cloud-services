@@ -124,12 +124,44 @@ export function Playground({
   const [codeLang, setCodeLang] = useState<"curl" | "python" | "typescript">("curl");
   const [codeCopied, setCodeCopied] = useState(false);
 
-  // Load key from localStorage on mount
+  const [autoBootstrapping, setAutoBootstrapping] = useState(false);
+
+  // On mount: load the existing playground key from localStorage if any,
+  // OR silently provision a new one. Logged-in users with credits should
+  // never have to know what an "API key" is to use the playground — the
+  // dialog still exists for power users who want to paste/rotate.
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem(KEY_STORAGE);
-      if (stored) setApiKey(stored);
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(KEY_STORAGE);
+    if (stored) {
+      setApiKey(stored);
+      return;
     }
+    setAutoBootstrapping(true);
+    void (async () => {
+      try {
+        const r = await fetch("/api/inference/api-keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ name: `playground-${Date.now().toString(36)}` }),
+        });
+        if (!r.ok) {
+          // 401 → not logged in, 403 → no org, 500 → infra. Stay silent;
+          // the Send button label will still surface "Set up key" so the
+          // user can manually open the dialog and see the real error.
+          return;
+        }
+        const data = await r.json();
+        const newKey: string = data?.data?.api_key;
+        if (newKey?.startsWith("ahu_")) {
+          window.localStorage.setItem(KEY_STORAGE, newKey);
+          setApiKey(newKey);
+        }
+      } finally {
+        setAutoBootstrapping(false);
+      }
+    })();
   }, []);
 
   // Auto-scroll output as tokens stream
@@ -387,12 +419,17 @@ export function Playground({
   const sendButton = (
     <PrimaryButton
       onClick={sendPrompt}
-      disabled={!isBusy && !userPrompt.trim()}
+      disabled={(!isBusy && !userPrompt.trim()) || autoBootstrapping}
     >
       {isBusy ? (
         <>
           <StopCircle className="h-3.5 w-3.5" />
           Stop
+        </>
+      ) : autoBootstrapping ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Preparing…
         </>
       ) : (
         <>
