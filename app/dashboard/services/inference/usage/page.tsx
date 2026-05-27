@@ -64,6 +64,9 @@ interface UsageData {
     preview: string;
     spent_cents: number;
     requests: number;
+    cache_l1_hits: number;
+    cache_semantic_hits: number;
+    cache_hit_rate: number | null;
   }>;
   recent: Array<{
     created_at: string;
@@ -374,30 +377,46 @@ export default function UsagePage() {
         />
         {data?.top_api_keys && data.top_api_keys.length > 0 ? (
           <DataTable>
-            <div className="hidden md:grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.6fr)] gap-3 px-5 py-2.5 border-b border-white/[0.06]">
+            <div className="hidden md:grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_minmax(0,0.6fr)_minmax(0,0.55fr)] gap-3 px-5 py-2.5 border-b border-white/[0.06]">
               <ColHead>Key</ColHead>
               <ColHead>Preview</ColHead>
               <ColHead align="right">Requests</ColHead>
               <ColHead align="right">Spend</ColHead>
+              <ColHead align="right">Cache hit</ColHead>
             </div>
-            {data.top_api_keys.map((k) => (
-              <div
-                key={k.id}
-                className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.6fr)] gap-3 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors items-center"
-              >
-                <span className={`${MONO} text-[12.5px] text-white truncate`}>{k.name}</span>
-                <code className={`${MONO} text-[11px] text-white/55 truncate`}>{k.preview}</code>
-                <span className={`${MONO} text-[11.5px] text-white/75 tabular-nums text-right`}>
-                  {k.requests.toLocaleString()}
-                </span>
-                <span
-                  style={SERIF_STYLE}
-                  className="text-[15px] font-bold text-white tabular-nums text-right"
+            {data.top_api_keys.map((k) => {
+              const hits = k.cache_l1_hits + k.cache_semantic_hits;
+              const rate = k.cache_hit_rate;
+              return (
+                <div
+                  key={k.id}
+                  className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_minmax(0,0.6fr)_minmax(0,0.55fr)] gap-3 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors items-center"
                 >
-                  {formatCents(k.spent_cents)}
-                </span>
-              </div>
-            ))}
+                  <span className={`${MONO} text-[12.5px] text-white truncate`}>{k.name}</span>
+                  <code className={`${MONO} text-[11px] text-white/55 truncate`}>{k.preview}</code>
+                  <span className={`${MONO} text-[11.5px] text-white/75 tabular-nums text-right`}>
+                    {k.requests.toLocaleString()}
+                  </span>
+                  <span
+                    style={SERIF_STYLE}
+                    className="text-[15px] font-bold text-white tabular-nums text-right"
+                  >
+                    {formatCents(k.spent_cents)}
+                  </span>
+                  <span
+                    className={`${MONO} text-[11.5px] tabular-nums text-right`}
+                    style={{ color: hits > 0 ? '#4ade80' : 'rgba(255,255,255,0.45)' }}
+                    title={
+                      hits > 0
+                        ? `${hits.toLocaleString()} hits · L1 ${k.cache_l1_hits.toLocaleString()} / sem ${k.cache_semantic_hits.toLocaleString()}`
+                        : 'No cache hits in this window'
+                    }
+                  >
+                    {rate !== null ? `${(rate * 100).toFixed(1)}%` : '—'}
+                  </span>
+                </div>
+              );
+            })}
           </DataTable>
         ) : (
           <EmptyState

@@ -88,7 +88,13 @@ export async function GET(request: NextRequest) {
   let monthRequests = 0;
   const dayBuckets = new Map<string, { spent: number; requests: number }>();
   const modelBuckets = new Map<string, { spent: number; requests: number }>();
-  const keyBuckets = new Map<string, { spent: number; requests: number }>();
+  // Per-API-key bucket tracks cache hit counts alongside spend/requests so
+  // the dashboard can show "this key hit cache 42% of the time" — the
+  // per-key signal that complements the org-wide rollup in the stats strip.
+  const keyBuckets = new Map<
+    string,
+    { spent: number; requests: number; cacheL1: number; cacheSemantic: number }
+  >();
   let successCount = 0;
   let errorCount = 0;
   let inputTokens = 0;
@@ -114,9 +120,16 @@ export async function GET(request: NextRequest) {
     modelBuckets.set(row.model_id, mB);
 
     if (row.api_key_id) {
-      const kB = keyBuckets.get(row.api_key_id) ?? { spent: 0, requests: 0 };
+      const kB = keyBuckets.get(row.api_key_id) ?? {
+        spent: 0,
+        requests: 0,
+        cacheL1: 0,
+        cacheSemantic: 0,
+      };
       kB.spent += row.cost_cents;
       kB.requests += 1;
+      if (row.cache_kind === "l1") kB.cacheL1 += 1;
+      else if (row.cache_kind === "semantic") kB.cacheSemantic += 1;
       keyBuckets.set(row.api_key_id, kB);
     }
 
@@ -157,6 +170,9 @@ export async function GET(request: NextRequest) {
     preview: string;
     spent_cents: number;
     requests: number;
+    cache_l1_hits: number;
+    cache_semantic_hits: number;
+    cache_hit_rate: number | null;
   }> = [];
   if (topKeyIds.length > 0) {
     const ids = topKeyIds.map(([id]) => id);
@@ -182,12 +198,16 @@ export async function GET(request: NextRequest) {
     }
     topApiKeys = topKeyIds.map(([id, b]) => {
       const meta = metaById.get(id);
+      const hits = b.cacheL1 + b.cacheSemantic;
       return {
         id,
         name: meta?.name ?? "(revoked or deleted)",
         preview: meta?.preview ?? "—",
         spent_cents: b.spent,
         requests: b.requests,
+        cache_l1_hits: b.cacheL1,
+        cache_semantic_hits: b.cacheSemantic,
+        cache_hit_rate: b.requests > 0 ? hits / b.requests : null,
       };
     });
   }
