@@ -40,15 +40,13 @@ const AiUseCasesPage = () => {
   ];
 
   return (
-    <main>
+    <main className="bg-[#0E0F0F]">
       <UseCasesHeroSection />
       <UseCasesChatbotsSection />
       <UseCasesRagSection />
       <UseCasesCodegenSection />
       <UseCasesDocsSection />
-      <div className="bg-[#0E0F0F]">
-        <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
-      </div>
+      <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
     </main>
   );
 };
