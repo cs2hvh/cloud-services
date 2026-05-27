@@ -64,14 +64,15 @@ export default function ModelHostingHeroSection({
     <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#0E0F0F] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
       <div className="absolute inset-0 -z-10">
         <PixelBlast
+          variant="circle"
           color={BRAND}
-          variant="square"
           pixelSize={5}
+          patternScale={3}
+          patternDensity={0.7}
           pixelSizeJitter={0.5}
-          patternScale={3.4}
-          patternDensity={1.0}
-          speed={0.42}
-          edgeFade={0.30}
+          speed={0.3}
+          edgeFade={0.4}
+          transparent
         />
         <div
           aria-hidden

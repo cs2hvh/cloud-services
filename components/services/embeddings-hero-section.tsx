@@ -91,14 +91,15 @@ export default function EmbeddingsHeroSection({
       {/* Atmospheric backdrop */}
       <div className="absolute inset-0 -z-10">
         <PixelBlast
-          color={BRAND}
           variant="circle"
+          color={BRAND}
           pixelSize={5}
-          pixelSizeJitter={0.55}
-          patternScale={3.2}
-          patternDensity={1.05}
-          speed={0.45}
-          edgeFade={0.32}
+          patternScale={3}
+          patternDensity={0.7}
+          pixelSizeJitter={0.5}
+          speed={0.3}
+          edgeFade={0.4}
+          transparent
         />
         <div
           aria-hidden
