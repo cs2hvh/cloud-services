@@ -1,5 +1,6 @@
 import InferenceHeroSection from "@/components/services/inference-hero-section";
 import InferenceModelsSection from "@/components/services/inference-models-section";
+import InferencePrivateHostingSection from "@/components/services/inference-private-hosting-section";
 import InferenceFeaturesSection from "@/components/services/inference-features-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix, {
@@ -89,6 +90,7 @@ const InferencePage = () => {
         secondaryAction={{ label: "View documentation", href: "/api-docs" }}
       />
       <InferenceModelsSection />
+      <InferencePrivateHostingSection />
       <InferenceFeaturesSection />
       <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
       <ServicesHomeSectionSix
