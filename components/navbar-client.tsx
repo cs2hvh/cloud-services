@@ -77,30 +77,6 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["NVIDIA", "A100", "H100", "Training", "Inference"],
   },
   {
-    label: "Inference",
-    desc: "OpenAI-compatible API for 400+ frontier and open-source models",
-    href: "/services/inference",
-    tags: ["OpenAI compat", "Streaming", "BYOK", "All models"],
-  },
-  {
-    label: "Fine-Tuning",
-    desc: "Train LoRA adapters on Llama, DeepSeek, Qwen, Mistral",
-    href: "/services/fine-tuning",
-    tags: ["LoRA", "qLoRA", "Auto-deploy", "Open weights"],
-  },
-  {
-    label: "Embeddings & Vector",
-    desc: "Hosted embedding models with managed pgvector collections",
-    href: "/services/embeddings",
-    tags: ["BGE", "Voyage", "pgvector", "RAG"],
-  },
-  {
-    label: "Model Hosting",
-    desc: "Deploy any container or Truss to autoscaling GPU workers",
-    href: "/services/model-hosting",
-    tags: ["BYO weights", "Truss", "Docker", "Autoscale"],
-  },
-  {
     label: "Managed Database",
     desc: "Fully managed databases with auto-scaling",
     href: "/services/database",
@@ -132,6 +108,36 @@ const PRODUCTS: SolutionItem[] = [
   },
 ];
 
+// A.I. Labs — surfaced as its own top-level nav item (not buried under
+// Products) so visitors looking for inference / fine-tuning / embeddings
+// don't have to dig through compute/storage/networking first.
+const AI_LABS: SolutionItem[] = [
+  {
+    label: "Inference",
+    desc: "OpenAI-compatible API for 50+ frontier and open-source models",
+    href: "/services/inference",
+    tags: ["OpenAI compat", "Streaming", "BYOK", "All models"],
+  },
+  {
+    label: "Fine-Tuning",
+    desc: "Train LoRA adapters on Llama, DeepSeek, Qwen, Mistral, Phi",
+    href: "/services/fine-tuning",
+    tags: ["LoRA", "qLoRA", "Auto-deploy", "Open weights"],
+  },
+  {
+    label: "Embeddings & Vector",
+    desc: "Hosted embedding models with managed pgvector collections",
+    href: "/services/embeddings",
+    tags: ["text-embedding-3", "pgvector", "RAG"],
+  },
+  {
+    label: "Model Hosting",
+    desc: "Deploy any container or HuggingFace model to a dedicated GPU endpoint",
+    href: "/services/model-hosting",
+    tags: ["BYO weights", "Docker", "HuggingFace", "Autoscale"],
+  },
+];
+
 export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(initialUser);
@@ -139,9 +145,11 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [solutionsOpen, setSolutionsOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [aiLabsOpen, setAiLabsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const solutionsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiLabsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -187,11 +195,15 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
     }
   };
 
+  // All three dropdowns share the same mutually-exclusive behavior:
+  // opening one closes the other two so we don't get overlapping panels.
   const handleSolutionsEnter = () => {
     if (solutionsTimeout.current) clearTimeout(solutionsTimeout.current);
     if (productsTimeout.current) clearTimeout(productsTimeout.current);
+    if (aiLabsTimeout.current) clearTimeout(aiLabsTimeout.current);
     setSolutionsOpen(true);
     setProductsOpen(false);
+    setAiLabsOpen(false);
   };
 
   const handleSolutionsLeave = () => {
@@ -201,12 +213,27 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const handleProductsEnter = () => {
     if (productsTimeout.current) clearTimeout(productsTimeout.current);
     if (solutionsTimeout.current) clearTimeout(solutionsTimeout.current);
+    if (aiLabsTimeout.current) clearTimeout(aiLabsTimeout.current);
     setProductsOpen(true);
     setSolutionsOpen(false);
+    setAiLabsOpen(false);
   };
 
   const handleProductsLeave = () => {
     productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
+  };
+
+  const handleAiLabsEnter = () => {
+    if (aiLabsTimeout.current) clearTimeout(aiLabsTimeout.current);
+    if (solutionsTimeout.current) clearTimeout(solutionsTimeout.current);
+    if (productsTimeout.current) clearTimeout(productsTimeout.current);
+    setAiLabsOpen(true);
+    setSolutionsOpen(false);
+    setProductsOpen(false);
+  };
+
+  const handleAiLabsLeave = () => {
+    aiLabsTimeout.current = setTimeout(() => setAiLabsOpen(false), 150);
   };
 
   const navLinks = [
@@ -256,6 +283,19 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
               Products
               <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
               <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${productsOpen ? "scale-x-100" : ""}`} />
+            </button>
+          </div>
+
+          {/* A.I. Labs with dropdown */}
+          <div
+            className="relative"
+            onMouseEnter={handleAiLabsEnter}
+            onMouseLeave={handleAiLabsLeave}
+          >
+            <button className="group relative flex cursor-pointer items-center gap-1 py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white">
+              A.I. Labs
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${aiLabsOpen ? "rotate-180" : ""}`} />
+              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${aiLabsOpen ? "scale-x-100" : ""}`} />
             </button>
           </div>
 
@@ -458,6 +498,58 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {aiLabsOpen && (
+              <motion.div
+                key="ai-labs"
+                initial={{ opacity: 0, clipPath: "inset(0 0% 0 100%)" }}
+                animate={{ opacity: 1, clipPath: "inset(0 0% 0 0%)" }}
+                exit={{ opacity: 0, clipPath: "inset(0 0% 0 100%)" }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-x-0 top-0"
+                onMouseEnter={handleAiLabsEnter}
+                onMouseLeave={handleAiLabsLeave}
+              >
+                <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+                  <div className="grid grid-cols-3">
+                    <div className="col-span-2 p-8">
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                        {AI_LABS.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setAiLabsOpen(false)}
+                            className="group block"
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                                {item.label}
+                              </span>
+                              <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                            </div>
+                            <p className="text-[12px] text-black/50 leading-relaxed mb-2">{item.desc}</p>
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.tags.map((tag) => (
+                                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="relative overflow-hidden">
+                      <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
+                        <Image src="/images/main-page/solutions-navbar-1.png" alt="A.I. Labs" fill className="object-contain object-right" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         </div>
       </div>
 
@@ -477,6 +569,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
 
               {/* Products accordion in mobile */}
               <MobileProductsAccordion onNavigate={() => setIsOpen(false)} />
+
+              {/* A.I. Labs accordion in mobile */}
+              <MobileAiLabsAccordion onNavigate={() => setIsOpen(false)} />
 
               {navLinks.map((link) => (
                 <Link
@@ -594,6 +689,54 @@ function MobileProductsAccordion({ onNavigate }: { onNavigate: () => void }) {
           >
             <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
               {PRODUCTS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className="group block px-3 py-2.5 rounded-md hover:bg-white/[0.04] transition-colors duration-200"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-medium text-white/70 group-hover:text-white transition-colors duration-200">
+                      {item.label}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all duration-200" />
+                  </div>
+                  <p className="text-[11px] text-white/40 mt-0.5">
+                    {item.desc}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function MobileAiLabsAccordion({ onNavigate }: { onNavigate: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="cursor-pointer w-full flex items-center justify-between px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200"
+      >
+        A.I. Labs
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
+              {AI_LABS.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
