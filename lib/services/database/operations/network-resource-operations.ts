@@ -10,6 +10,7 @@ import type { Rule } from "@/lib/supabase/types";
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import type { AddFirewallRuleResult, DeleteFirewallRuleRequest, DeleteFirewallRuleResult } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 
 export const networkResourceOperations = {
   async addFirewallRule(
@@ -134,6 +135,24 @@ export const networkResourceOperations = {
         );
       } catch (notifErr) {
         console.error("[addFirewallRule] Failed to create notification:", notifErr);
+      }
+
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Firewall rule added",
+          summary: `A new trusted source (${ipAddress}) was added to the firewall of your database cluster "${clusterData.name}".`,
+          severity: "info",
+          metadata: {
+            Operation: "Add firewall rule",
+            Cluster: String(clusterData.name),
+            "IP address": ipAddress,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[addFirewallRule] Failed to send email:", emailErr);
       }
 
       return { success: true, rules: readFirewall.data?.rules };
@@ -275,6 +294,24 @@ export const networkResourceOperations = {
         );
       } catch (notifErr) {
         console.error("[deleteFirewallRule] Failed to create notification:", notifErr);
+      }
+
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Firewall rule removed",
+          summary: `A trusted source (${deletedRuleValue}) was removed from the firewall of your database cluster "${clusterData.name}".`,
+          severity: "warning",
+          metadata: {
+            Operation: "Remove firewall rule",
+            Cluster: String(clusterData.name),
+            "IP address": deletedRuleValue,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[deleteFirewallRule] Failed to send email:", emailErr);
       }
 
       return { success: true };

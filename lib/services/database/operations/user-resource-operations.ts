@@ -16,7 +16,7 @@ import type {
   ListDatabaseUsersResult,
   ResetDatabaseUserPasswordRequest,
 } from "../types";
-import { sendDatabaseAlertEmail } from "./database-alert-email";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
 function decryptStoredPassword(
@@ -128,6 +128,25 @@ export const userResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[createDatabaseUser] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient =
+            userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database user created",
+            summary: `A new database user "${request.name}" was created on your cluster "${clusterData.data.name}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Create database user",
+              "Database user": request.name,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[createDatabaseUser] Failed to send email:", emailErr);
         }
       }
 
@@ -309,6 +328,25 @@ export const userResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[deleteDatabaseUser] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient =
+            request.userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database user deleted",
+            summary: `The database user "${request.username}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database user",
+              "Database user": request.username,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabaseUser] Failed to send email:", emailErr);
         }
       }
 

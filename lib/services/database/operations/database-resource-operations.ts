@@ -25,6 +25,7 @@ import type {
   RetrieveDatabaseRequest,
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 
 async function listDatabasesFromProvider(
   clusterId: string,
@@ -236,6 +237,25 @@ export const databaseResourceOperations = {
         console.error("[createDatabase] Failed to create notification:", notifErr);
       }
 
+      try {
+        const recipient =
+          userEmail || (await resolveUserEmail(String(clusterResult.data.owner_id)));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterResult.data.name),
+          alertTitle: "Database created",
+          summary: `A new database "${request.name}" was created in your cluster "${clusterResult.data.name}".`,
+          severity: "info",
+          metadata: {
+            Operation: "Create database",
+            Database: request.name,
+            Cluster: String(clusterResult.data.name),
+          },
+        });
+      } catch (emailErr) {
+        console.error("[createDatabase] Failed to send email:", emailErr);
+      }
+
       return { success: true, data: database };
     } catch (err: unknown) {
       if (err instanceof Error && "response" in err) {
@@ -360,6 +380,25 @@ export const databaseResourceOperations = {
         } catch (notifErr) {
           console.error("[createDatabase] Failed to create notification:", notifErr);
         }
+
+        try {
+          const recipient =
+            userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database created",
+            summary: `A new database "${request.name}" was created in your cluster "${clusterData.data.name}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Create database",
+              Database: request.name,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[createDatabase] Failed to send email:", emailErr);
+        }
       }
 
       return { success: true, data: database, statusCode: 201 };
@@ -435,6 +474,24 @@ export const databaseResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[deleteDatabase] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient = await resolveUserEmail(String(clusterData.data.owner_id));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database deleted",
+            summary: `The database "${request.dbName}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database",
+              Database: request.dbName,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabase] Failed to send email:", emailErr);
         }
       }
 
@@ -515,6 +572,24 @@ export const databaseResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[deleteDatabase] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient = await resolveUserEmail(String(clusterData.data.owner_id));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database deleted",
+            summary: `The database "${request.dbName}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database",
+              Database: request.dbName,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabase] Failed to send email:", emailErr);
         }
       }
 
