@@ -13,6 +13,7 @@ import {
 
 import { requireAuthProfile } from "@/lib/supabase/auth";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { INFERENCE_API_BASE } from "@/lib/inference/branding";
 
 import {
   ACCENT,
@@ -203,17 +204,17 @@ export default async function InferenceOverview() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <EndpointCard
             label="OpenAI Chat Completions"
-            url="https://api.cs2hvh.com/v1/chat/completions"
+            url={`${INFERENCE_API_BASE}/chat/completions`}
             description="Drop-in for the OpenAI SDK. Set base_url and pass any model from the catalog."
           />
           <EndpointCard
             label="Anthropic Messages"
-            url="https://api.cs2hvh.com/v1/messages"
+            url={`${INFERENCE_API_BASE}/messages`}
             description="Drop-in for the Anthropic SDK. Same key, same models, native message shape."
           />
           <EndpointCard
             label="Catalog"
-            url="https://api.cs2hvh.com/v1/models"
+            url={`${INFERENCE_API_BASE}/models`}
             description="GET the full model list with capability flags and per-Mtok pricing."
           />
         </div>
@@ -354,7 +355,7 @@ function FirstRunGuide({ hasKey }: { hasKey: boolean }) {
         >
           <Snippet
             label="curl"
-            code={`curl https://api.cs2hvh.com/v1/chat/completions \\
+            code={`curl ${INFERENCE_API_BASE}/chat/completions \\
   -H "Authorization: Bearer $AHURA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -366,7 +367,7 @@ function FirstRunGuide({ hasKey }: { hasKey: boolean }) {
             label="Python"
             code={`from openai import OpenAI
 client = OpenAI(
-    base_url="https://api.cs2hvh.com/v1",
+    base_url="${INFERENCE_API_BASE}",
     api_key="<your AhuraCloud key>",
 )
 r = client.chat.completions.create(

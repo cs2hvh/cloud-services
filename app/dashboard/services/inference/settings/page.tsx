@@ -28,6 +28,7 @@ import {
   StatCell,
   StatsStrip,
 } from '@/components/dashboard/inference/chrome';
+import { SUPPORT_EMAIL } from '@/lib/inference/branding';
 
 type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 
@@ -511,7 +512,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() =>
-                toast.info('Org deletion requires support contact for Phase 1. Email support@cs2hvh.com.')
+                toast.info(`Org deletion requires support contact for Phase 1. Email ${SUPPORT_EMAIL}.`)
               }
               disabled={data?.org.role !== 'owner'}
               className={`${MONO} h-10 px-4 text-[11px] uppercase tracking-[0.12em] font-semibold rounded-[5px] border border-red-400/20 bg-red-400/[0.04] text-red-300/90 hover:bg-red-400/[0.08] hover:text-red-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}

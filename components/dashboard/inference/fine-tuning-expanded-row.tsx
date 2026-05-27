@@ -32,6 +32,7 @@ import {
   MONO,
 } from "@/components/dashboard/inference/chrome";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { INFERENCE_API_BASE, SERVING_IMAGE_URI } from "@/lib/inference/branding";
 import {
   formatCents,
   formatDuration,
@@ -128,7 +129,7 @@ export function ExpandedRow({
   const dockerCmdTemplate = `docker run --gpus all -p 8000:8000 \\
   -e BASE_MODEL="${baseShort}" \\
   -e ADAPTER_DOWNLOAD_URL="<paste-presigned-url-from-button-above>" \\
-  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
+  ${SERVING_IMAGE_URI}`;
 
   async function copyServeCommand() {
     try {
@@ -142,7 +143,7 @@ export function ExpandedRow({
       const fullCmd = `docker run --gpus all -p 8000:8000 \\
   -e BASE_MODEL="${baseShort}" \\
   -e ADAPTER_DOWNLOAD_URL="${data.url}" \\
-  ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`;
+  ${SERVING_IMAGE_URI}`;
       await navigator.clipboard.writeText(fullCmd);
       toast.success("Serve command copied (6-hour validity)");
     } catch (err) {
@@ -510,7 +511,7 @@ function CallSnippets({ modelId }: { modelId: string }) {
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState(false);
 
-  const apiBase = "https://api.cs2hvh.com/v1";
+  const apiBase = INFERENCE_API_BASE;
 
   const snippets: Record<Lang, string> = {
     curl: `curl ${apiBase}/chat/completions \\

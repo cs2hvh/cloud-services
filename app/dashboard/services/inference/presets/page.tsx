@@ -49,6 +49,7 @@ import {
   StatCell,
   StatsStrip,
 } from '@/components/dashboard/inference/chrome';
+import { INFERENCE_API_BASE } from '@/lib/inference/branding';
 
 interface PresetConfig {
   models: string[];
@@ -375,7 +376,7 @@ export default function PresetsPage() {
             One header swap
           </h4>
           <pre className={`${MONO} text-[10.5px] text-white/65 leading-relaxed bg-black/40 border border-white/[0.06] rounded p-2.5 overflow-x-auto`}>
-{`curl -X POST https://api.cs2hvh.com/v1/chat/completions \\
+{`curl -X POST ${INFERENCE_API_BASE}/chat/completions \\
   -H "Authorization: Bearer ahu_live_..." \\
   -H "Content-Type: application/json" \\
   -H "X-Ahura-Preset: production-cheap-first" \\
