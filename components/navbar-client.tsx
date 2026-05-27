@@ -111,32 +111,105 @@ const PRODUCTS: SolutionItem[] = [
 // A.I. Labs — surfaced as its own top-level nav item (not buried under
 // Products) so visitors looking for inference / fine-tuning / embeddings
 // don't have to dig through compute/storage/networking first.
-const AI_LABS: SolutionItem[] = [
+//
+// Three sections in the dropdown so the panel feels full without linking
+// to broken pages:
+//   • Products   — our four AI services (own marketing landing each)
+//   • Use cases  — what you'd build with them (all point at /solutions/ai-ml
+//                  until per-use-case landing pages ship)
+//   • Resources  — Docs / Pricing / etc.
+type AiLabsGroup = { label: string; items: SolutionItem[] };
+
+const AI_LABS_GROUPS: AiLabsGroup[] = [
   {
-    label: "Inference",
-    desc: "OpenAI-compatible API for 50+ frontier and open-source models",
-    href: "/services/inference",
-    tags: ["OpenAI compat", "Streaming", "BYOK", "All models"],
+    label: "Products",
+    items: [
+      {
+        label: "Inference",
+        desc: "OpenAI-compatible API for 50+ frontier and open-source models",
+        href: "/services/inference",
+        tags: ["OpenAI compat", "Streaming", "BYOK"],
+      },
+      {
+        label: "Fine-Tuning",
+        desc: "Train LoRA adapters on Llama, DeepSeek, Qwen, Mistral, Phi",
+        href: "/services/fine-tuning",
+        tags: ["LoRA", "qLoRA", "Auto-deploy"],
+      },
+      {
+        label: "Embeddings & Vector",
+        desc: "Hosted embedding models with managed pgvector collections",
+        href: "/services/embeddings",
+        tags: ["text-embedding-3", "pgvector", "RAG"],
+      },
+      {
+        label: "Model Hosting",
+        desc: "Deploy any container or HuggingFace model to a dedicated GPU endpoint",
+        href: "/services/model-hosting",
+        tags: ["BYO weights", "Docker", "HuggingFace"],
+      },
+    ],
   },
   {
-    label: "Fine-Tuning",
-    desc: "Train LoRA adapters on Llama, DeepSeek, Qwen, Mistral, Phi",
-    href: "/services/fine-tuning",
-    tags: ["LoRA", "qLoRA", "Auto-deploy", "Open weights"],
+    label: "Use cases",
+    items: [
+      {
+        label: "Chatbots & Agents",
+        desc: "Customer support copilots, internal assistants, tool-using agents",
+        href: "/solutions/ai-ml",
+        tags: ["Streaming", "Tool calling", "Memory"],
+      },
+      {
+        label: "RAG & Knowledge Search",
+        desc: "Vector retrieval over your docs with citation-ready answers",
+        href: "/solutions/ai-ml",
+        tags: ["pgvector", "Reranking", "Citations"],
+      },
+      {
+        label: "Code Generation",
+        desc: "Code completion, refactoring, review with frontier + OSS code models",
+        href: "/solutions/ai-ml",
+        tags: ["Codestral", "DeepSeek-Coder", "Qwen-Coder"],
+      },
+      {
+        label: "Document Intelligence",
+        desc: "Summarization, extraction, classification, OCR-aware pipelines",
+        href: "/solutions/ai-ml",
+        tags: ["Long context", "JSON mode", "Batches"],
+      },
+    ],
   },
   {
-    label: "Embeddings & Vector",
-    desc: "Hosted embedding models with managed pgvector collections",
-    href: "/services/embeddings",
-    tags: ["text-embedding-3", "pgvector", "RAG"],
-  },
-  {
-    label: "Model Hosting",
-    desc: "Deploy any container or HuggingFace model to a dedicated GPU endpoint",
-    href: "/services/model-hosting",
-    tags: ["BYO weights", "Docker", "HuggingFace", "Autoscale"],
+    label: "Resources",
+    items: [
+      {
+        label: "Model Catalog",
+        desc: "Browse 50+ models with capability flags + per-Mtok pricing",
+        href: "/services/inference",
+        tags: ["Frontier", "Open source", "Off-peak"],
+      },
+      {
+        label: "API Documentation",
+        desc: "Quickstart, endpoint reference, SDKs (OpenAI + Anthropic compat)",
+        href: "/api-docs",
+        tags: ["curl", "Python", "TypeScript"],
+      },
+      {
+        label: "Pricing",
+        desc: "Pay-per-token inference, hourly GPU for training + hosted serving",
+        href: "/pricing",
+        tags: ["No markup", "Off-peak", "Spend caps"],
+      },
+      {
+        label: "All AI Solutions",
+        desc: "Industry- and pattern-specific blueprints built on the platform",
+        href: "/solutions/ai-ml",
+        tags: ["Reference", "Patterns"],
+      },
+    ],
   },
 ];
+
 
 export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -511,31 +584,43 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                 onMouseLeave={handleAiLabsLeave}
               >
                 <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
-                  <div className="grid grid-cols-3">
-                    <div className="col-span-2 p-8">
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                        {AI_LABS.map((item) => (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setAiLabsOpen(false)}
-                            className="group block"
-                          >
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
-                                {item.label}
-                              </span>
-                              <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                  {/* 3-column grid: each section gets its own column so the
+                      panel reads top-to-bottom within each cluster + has
+                      breathing room. Right rail keeps the existing image. */}
+                  <div className="grid grid-cols-4">
+                    <div className="col-span-3 p-8">
+                      <div className="grid grid-cols-3 gap-x-8 gap-y-5">
+                        {AI_LABS_GROUPS.map((group) => (
+                          <div key={group.label}>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/45 mb-4 pb-2 border-b border-black/10">
+                              {group.label}
+                            </p>
+                            <div className="space-y-5">
+                              {group.items.map((item) => (
+                                <Link
+                                  key={`${group.label}-${item.label}`}
+                                  href={item.href}
+                                  onClick={() => setAiLabsOpen(false)}
+                                  className="group block"
+                                >
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-[13.5px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                                      {item.label}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                                  </div>
+                                  <p className="text-[11.5px] text-black/50 leading-relaxed mb-1.5">{item.desc}</p>
+                                  {item.tags && item.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {item.tags.map((tag) => (
+                                        <span key={tag} className="px-1.5 py-0.5 text-[9.5px] font-medium text-black/60 border border-black/20 rounded bg-white/50">{tag}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </Link>
+                              ))}
                             </div>
-                            <p className="text-[12px] text-black/50 leading-relaxed mb-2">{item.desc}</p>
-                            {item.tags && item.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {item.tags.map((tag) => (
-                                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50">{tag}</span>
-                                ))}
-                              </div>
-                            )}
-                          </Link>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -735,24 +820,31 @@ function MobileAiLabsAccordion({ onNavigate }: { onNavigate: () => void }) {
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
-              {AI_LABS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onNavigate}
-                  className="group block px-3 py-2.5 rounded-md hover:bg-white/[0.04] transition-colors duration-200"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-medium text-white/70 group-hover:text-white transition-colors duration-200">
-                      {item.label}
-                    </span>
-                    <ArrowRight className="w-3 h-3 text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all duration-200" />
-                  </div>
-                  <p className="text-[11px] text-white/40 mt-0.5">
-                    {item.desc}
+            <div className="pl-3 py-2 space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar">
+              {AI_LABS_GROUPS.map((group) => (
+                <div key={group.label} className="space-y-1">
+                  <p className="px-3 pt-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/30">
+                    {group.label}
                   </p>
-                </Link>
+                  {group.items.map((item) => (
+                    <Link
+                      key={`${group.label}-${item.label}`}
+                      href={item.href}
+                      onClick={onNavigate}
+                      className="group block px-3 py-2 rounded-md hover:bg-white/[0.04] transition-colors duration-200"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-medium text-white/70 group-hover:text-white transition-colors duration-200">
+                          {item.label}
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all duration-200" />
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-0.5">
+                        {item.desc}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
               ))}
             </div>
           </motion.div>
