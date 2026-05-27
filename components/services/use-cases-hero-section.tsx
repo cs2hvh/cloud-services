@@ -1,28 +1,37 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Bot, Brain, Code2, FileSearch } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Bot, Brain, Code2, FileSearch } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import PixelBlast from "@/components/hero/pixel-blast";
 
-const BRAND = "#0095FF";
-
-const CASES: { icon: LucideIcon; label: string; sub: string }[] = [
-  { icon: Bot, label: "Chatbots & Agents", sub: "Streaming · Tools · Memory" },
-  { icon: Brain, label: "RAG & Knowledge", sub: "Vectors · Reranking · Citations" },
-  { icon: Code2, label: "Code Generation", sub: "Completion · Refactoring · Review" },
-  { icon: FileSearch, label: "Document Intel", sub: "Extraction · JSON · Batches" },
+const CASES: { icon: LucideIcon; label: string; sub: string; href: string }[] = [
+  { icon: Bot, label: "Chatbots & Agents", sub: "Streaming · Tools · Memory", href: "#chatbots" },
+  { icon: Brain, label: "RAG & Knowledge", sub: "Vectors · Reranking · Citations", href: "#rag" },
+  { icon: Code2, label: "Code Generation", sub: "Completion · Refactoring · Review", href: "#codegen" },
+  { icon: FileSearch, label: "Document Intel", sub: "Extraction · JSON · Batches", href: "#docs" },
 ];
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 30, scale: 0.95 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.5, delay: 0.2 + i * 0.1, ease: [0.25, 0.4, 0.25, 1] as const },
+  }),
+};
 
 export default function UseCasesHeroSection() {
   return (
-    <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#0E0F0F] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
+    <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-black pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
       <div className="absolute inset-0 -z-10">
         <PixelBlast
           variant="circle"
-          color={BRAND}
+          color="#0095FF"
           pixelSize={5}
           patternScale={3}
           patternDensity={0.7}
@@ -31,103 +40,79 @@ export default function UseCasesHeroSection() {
           edgeFade={0.4}
           transparent
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(80% 60% at 50% 0%, rgba(0,149,255,0.10), transparent 70%)",
-          }}
-        />
       </div>
 
       <Container className="relative z-10">
         <div className="mx-auto max-w-4xl text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55"
+            transition={{ duration: 0.4 }}
+            className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[11px] uppercase tracking-[0.22em] text-white/45"
           >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#33adff] opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#33adff]" />
-            </span>
             Use cases
-          </motion.div>
+          </motion.p>
 
           <motion.h1
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-7 text-4xl font-[400] leading-[1.04] tracking-tight text-white sm:text-5xl lg:text-[4.2rem]"
+            transition={{ duration: 0.6, delay: 0.05, ease: [0.25, 0.4, 0.25, 1] }}
+            className="mt-5 text-5xl font-semibold leading-[1.04] tracking-[-0.035em] text-white sm:text-6xl lg:text-[72px]"
           >
-            What you can build{" "}
-            <span className="text-[#8ecaff]">with the platform.</span>
+            What you can build
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.14 }}
-            className="mx-auto mt-5 max-w-lg text-[15.5px] leading-7 text-white/50"
+            transition={{ duration: 0.5, delay: 0.12 }}
+            className="mx-auto mt-5 max-w-md text-[15px] leading-[1.65] text-white/55"
           >
             One API, one bill. Four patterns that cover how teams ship AI.
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.18 }}
+            className="mt-8 flex justify-center"
+          >
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-2 bg-white px-5 py-2.5 text-[13px] font-semibold text-black transition-all hover:bg-white/90"
+            >
+              Get started
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </motion.div>
         </div>
 
-        {/* Four cards — minimal text, icon-forward */}
-        <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        {/* Four use-case cards */}
+        <div className="mx-auto mt-20 grid max-w-5xl grid-cols-2 gap-[1px] border border-white/[0.06] bg-white/[0.04] sm:grid-cols-4">
           {CASES.map((c, i) => {
             const Icon = c.icon;
             return (
-              <motion.div
+              <motion.a
                 key={c.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.55,
-                  delay: 0.25 + i * 0.08,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-                className="group relative overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.015] p-5 transition-all duration-500 hover:border-white/[0.18] hover:bg-white/[0.03]"
+                href={c.href}
+                custom={i}
+                initial="hidden"
+                animate="visible"
+                variants={cardVariants}
+                className="group relative bg-[#0a0a0a] px-5 py-6 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#111]"
               >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-50 transition-opacity duration-500 group-hover:opacity-100"
-                  style={{
-                    background: "linear-gradient(90deg, transparent, rgba(51,173,255,0.85), transparent)",
-                    boxShadow: "0 0 14px rgba(0,149,255,0.4)",
-                  }}
+                <Icon
+                  className="h-6 w-6 text-[#0095FF] transition-colors duration-300"
+                  strokeWidth={1.5}
                 />
-
-                <div className="relative mb-4">
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-2 rounded-2xl opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-80"
-                    style={{
-                      background: "radial-gradient(50% 50%, rgba(0,149,255,0.40), transparent 70%)",
-                    }}
-                  />
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -inset-[3px] rounded-[13px] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                    style={{
-                      background: "conic-gradient(from 140deg, rgba(51,173,255,0.55), rgba(0,149,255,0.05), rgba(51,173,255,0.55))",
-                    }}
-                  />
-                  <div className="relative flex h-11 w-11 items-center justify-center rounded-[10px] border border-white/[0.08] bg-white/[0.025] transition-all duration-500 group-hover:border-[#33adff]/40 group-hover:bg-[#0095FF]/[0.08]">
-                    <Icon className="h-5 w-5 text-[#33adff] transition-colors duration-500" strokeWidth={1.6} />
-                  </div>
-                </div>
-
-                <p className="text-[14px] font-medium tracking-tight text-white">
+                <p className="mt-4 text-[14px] font-semibold tracking-tight text-white">
                   {c.label}
                 </p>
-                <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/35">
+                <p className="mt-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] tracking-[0.12em] text-white/35">
                   {c.sub}
                 </p>
-              </motion.div>
+                <ArrowRight className="mt-4 h-3.5 w-3.5 text-white/20 transition-all duration-300 group-hover:translate-x-1 group-hover:text-[#0095FF]" />
+              </motion.a>
             );
           })}
         </div>

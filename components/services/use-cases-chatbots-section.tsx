@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "motion/react";
+import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bot, MessageSquare, Plug, Terminal } from "lucide-react";
 
@@ -8,15 +8,8 @@ import { Container } from "@/components/ui/container";
 
 const MESSAGES = [
   { role: "user" as const, text: "What's the status of order #4821?" },
-  {
-    role: "tool" as const,
-    name: "lookup_order",
-    text: '{"order_id":"4821","status":"shipped","eta":"May 29"}',
-  },
-  {
-    role: "assistant" as const,
-    text: "Order #4821 shipped yesterday — arrives May 29. Want tracking details sent to your email?",
-  },
+  { role: "tool" as const, name: "lookup_order", text: '{"order_id":"4821","status":"shipped","eta":"May 29"}' },
+  { role: "assistant" as const, text: "Order #4821 shipped yesterday — arrives May 29. Want tracking details?" },
 ];
 
 const CODE = `const stream = await fetch("https://api.cs2hvh.com/v1/chat/completions", {
@@ -41,24 +34,14 @@ const CODE = `const stream = await fetch("https://api.cs2hvh.com/v1/chat/complet
 });`;
 
 export default function UseCasesChatbotsSection() {
-  const sectionRef = useRef<HTMLDivElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const [visibleMsgs, setVisibleMsgs] = useState(0);
   const [inView, setInView] = useState(false);
 
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start 80%", "start 20%"],
-  });
-  const headerY = useTransform(scrollYProgress, [0, 1], [30, 0]);
-  const headerOpacity = useTransform(scrollYProgress, [0, 0.4], [0, 1]);
-
   useEffect(() => {
-    if (!sectionRef.current || inView) return;
-    const obs = new IntersectionObserver(
-      (entries) => { if (entries[0]?.isIntersecting) setInView(true); },
-      { threshold: 0.25 }
-    );
-    obs.observe(sectionRef.current);
+    if (!ref.current || inView) return;
+    const obs = new IntersectionObserver((e) => { if (e[0]?.isIntersecting) setInView(true); }, { threshold: 0.25 });
+    obs.observe(ref.current);
     return () => obs.disconnect();
   }, [inView]);
 
@@ -69,101 +52,95 @@ export default function UseCasesChatbotsSection() {
   }, [inView, visibleMsgs]);
 
   return (
-    <section ref={sectionRef} className="relative isolate overflow-clip bg-[#04060a] py-28 sm:py-36">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.18]"
-        style={{ background: "radial-gradient(55% 40% at 30% 30%, rgba(0,149,255,0.28), transparent 70%)" }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: "radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-          maskImage: "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
-          WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
-        }}
-      />
+    <section ref={ref} id="chatbots" className="relative z-10 bg-[#04060a] py-16 lg:py-24">
+      {/* Section divider */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      <Container className="relative z-10">
-        <motion.div style={{ y: headerY, opacity: headerOpacity }}>
-          <div className="flex items-center gap-3">
-            <IconBadge icon={Bot} />
-            <div>
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/35">Use case 01</p>
-              <p className="font-mono text-[12px] uppercase tracking-[0.20em] text-[#8ecaff]">Chatbots &amp; Agents</p>
-            </div>
-          </div>
-          <h2 className="mt-7 max-w-xl text-3xl font-[400] leading-[1.08] tracking-tight text-white sm:text-4xl lg:text-[3rem]">
-            Conversations that <span className="text-[#8ecaff]">take action.</span>
-          </h2>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {["Streaming", "Tool calling", "Memory"].map((t) => (
-              <Tag key={t} label={t} />
-            ))}
+      <Container>
+        {/* Header row */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.5 }}
+          className="flex items-start gap-4"
+        >
+          <Bot className="mt-1 h-6 w-6 shrink-0 text-[#0095FF]" strokeWidth={1.5} />
+          <div>
+            <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] uppercase tracking-[0.16em] text-white/40">
+              01 · Chatbots &amp; Agents
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-white sm:text-4xl lg:text-[44px]">
+              Conversations that take action
+            </h2>
           </div>
         </motion.div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-10">
-          {/* Chat viz */}
+        <div className="mt-3 flex gap-3 pl-10">
+          {["Streaming", "Tool calling", "Memory"].map((t) => (
+            <span key={t} className="border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] tracking-[0.12em] text-white/45">
+              {t}
+            </span>
+          ))}
+        </div>
+
+        {/* Content: chat + code side by side */}
+        <div className="mt-12 grid gap-[1px] bg-white/[0.04] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          {/* Chat visualization */}
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="relative overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#0b0d12] shadow-[0_28px_72px_rgba(0,0,0,0.5)]"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            className="bg-[#0a0a0a] shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
           >
-            <CardAccent />
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-              <div className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
-                <MessageSquare className="h-3.5 w-3.5 text-[#33adff]" strokeWidth={1.8} />
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+              <div className="flex items-center gap-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] tracking-[0.14em] text-white/45">
+                <MessageSquare className="h-3.5 w-3.5 text-[#0095FF]" strokeWidth={1.5} />
                 support-copilot
               </div>
-              <LiveDot />
+              <span className="flex items-center gap-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] tracking-[0.14em] text-white/25">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" style={{ animationDuration: "2.5s" }} />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                live
+              </span>
             </div>
 
             <div className="space-y-3 p-5">
               {MESSAGES.map((m, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                  animate={i < visibleMsgs ? { opacity: 1, y: 0, filter: "blur(0px)" } : {}}
-                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={i < visibleMsgs ? { opacity: 1, y: 0 } : {}}
+                  transition={{ duration: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
                   className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {m.role === "user" ? (
-                    <div className="max-w-[85%] rounded-[10px] rounded-tr-[3px] bg-[#0095FF]/15 px-4 py-3">
-                      <p className="text-[13px] leading-relaxed text-white/85">{m.text}</p>
+                    <div className="max-w-[85%] border border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+                      <p className="text-[13px] leading-relaxed text-white/80">{m.text}</p>
                     </div>
                   ) : m.role === "tool" ? (
-                    <div className="max-w-[90%] overflow-hidden rounded-[8px] border border-[#33adff]/20 bg-[#0095FF]/[0.04]">
-                      <div className="flex items-center gap-1.5 border-b border-[#33adff]/10 px-3 py-1.5">
-                        <Plug className="h-3 w-3 text-[#33adff]/70" strokeWidth={1.8} />
-                        <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#33adff]/70">{m.name}</span>
+                    <div className="max-w-[90%] border border-[#0095FF]/15 bg-[#0095FF]/[0.03]">
+                      <div className="flex items-center gap-1.5 border-b border-[#0095FF]/10 px-3 py-1.5">
+                        <Plug className="h-3 w-3 text-[#0095FF]/60" strokeWidth={1.5} />
+                        <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] tracking-[0.14em] text-[#0095FF]/60">{m.name}</span>
                       </div>
-                      <pre className="px-3 py-2 font-mono text-[10.5px] text-[#8ecaff]/65">{m.text}</pre>
+                      <pre className="px-3 py-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] text-[#8ecaff]/55">{m.text}</pre>
                     </div>
                   ) : (
-                    <div className="max-w-[85%] rounded-[10px] rounded-tl-[3px] border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                      <p className="text-[13px] leading-relaxed text-white/80">{m.text}</p>
+                    <div className="max-w-[85%] border border-white/[0.06] bg-[#1B1B1B] px-4 py-2.5">
+                      <p className="text-[13px] leading-relaxed text-white/75">{m.text}</p>
                     </div>
                   )}
                 </motion.div>
               ))}
-
               {visibleMsgs < MESSAGES.length && (
-                <div className="flex justify-start">
-                  <div className="flex gap-1 px-4 py-3">
-                    {[0, 1, 2].map((d) => (
-                      <motion.span
-                        key={d}
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.2 }}
-                        className="block h-1.5 w-1.5 rounded-full bg-white/40"
-                      />
-                    ))}
-                  </div>
+                <div className="flex gap-1 px-2 py-2">
+                  {[0, 1, 2].map((d) => (
+                    <motion.span key={d} animate={{ opacity: [0.2, 0.8, 0.2] }} transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.2 }} className="block h-1 w-1 rounded-full bg-white/40" />
+                  ))}
                 </div>
               )}
             </div>
@@ -171,59 +148,23 @@ export default function UseCasesChatbotsSection() {
 
           {/* Code */}
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="relative overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#0b0d12] shadow-[0_28px_72px_rgba(0,0,0,0.5)]"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-[#0a0a0a] shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
           >
-            <CardAccent />
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-              <div className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
-                <Terminal className="h-3.5 w-3.5 text-[#33adff]" strokeWidth={1.8} />
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+              <div className="flex items-center gap-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] tracking-[0.14em] text-white/45">
+                <Terminal className="h-3.5 w-3.5 text-white/30" strokeWidth={1.5} />
                 agent.ts
               </div>
-              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">streaming + tools</span>
+              <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] tracking-[0.14em] text-white/20">streaming + tools</span>
             </div>
-            <pre className="overflow-x-auto p-6 font-mono text-[11.5px] leading-[20px] text-white/80">{CODE}</pre>
+            <pre className="overflow-x-auto p-5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[11.5px] leading-[20px] text-white/70">{CODE}</pre>
           </motion.div>
         </div>
       </Container>
     </section>
-  );
-}
-
-function IconBadge({ icon: Icon }: { icon: typeof Bot }) {
-  return (
-    <div className="relative">
-      <span aria-hidden className="pointer-events-none absolute -inset-3 rounded-2xl blur-xl" style={{ background: "radial-gradient(50% 50%, rgba(0,149,255,0.45), transparent 70%)" }} />
-      <span aria-hidden className="pointer-events-none absolute -inset-[3px] rounded-[14px]" style={{ background: "conic-gradient(from 140deg, rgba(51,173,255,0.55), rgba(0,149,255,0.05), rgba(51,173,255,0.55))" }} />
-      <div className="relative flex h-12 w-12 items-center justify-center rounded-[12px] border border-[#33adff]/50 bg-gradient-to-br from-[#0095FF]/30 to-[#0095FF]/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_6px_20px_rgba(0,149,255,0.35)]">
-        <Icon className="h-5 w-5 text-white" strokeWidth={1.6} />
-      </div>
-    </div>
-  );
-}
-
-function CardAccent() {
-  return (
-    <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[2px]" style={{ background: "linear-gradient(90deg, transparent, rgba(51,173,255,0.85), transparent)", boxShadow: "0 0 16px rgba(0,149,255,0.55)" }} />
-  );
-}
-
-function LiveDot() {
-  return (
-    <span className="relative flex h-1.5 w-1.5">
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-    </span>
-  );
-}
-
-function Tag({ label }: { label: string }) {
-  return (
-    <span className="rounded-[5px] border border-[#33adff]/20 bg-[#0095FF]/[0.06] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#33adff]/85">
-      {label}
-    </span>
   );
 }
