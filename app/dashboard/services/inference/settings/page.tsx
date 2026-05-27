@@ -84,6 +84,10 @@ export default function SettingsPage() {
   const [data, setData] = useState<OrgResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Current month spend — fetched alongside org info on load so the
+  // budget + cap inputs show "you've used $X of $Y" inline, instead
+  // of forcing the customer to navigate to /usage and back.
+  const [monthSpentCents, setMonthSpentCents] = useState<number | null>(null);
 
   const [form, setForm] = useState<{
     name: string;
@@ -112,9 +116,15 @@ export default function SettingsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/inference/orgs/current', { credentials: 'include' });
-      if (!r.ok) throw new Error('Failed to load org');
-      const json: OrgResponse = await r.json();
+      // Fan-out to org info + usage summary in parallel — the summary
+      // call is cheap (cached row counter + one window scan) and lets
+      // us render the spend-context line without a second round-trip.
+      const [orgResp, usageResp] = await Promise.all([
+        fetch('/api/inference/orgs/current', { credentials: 'include' }),
+        fetch('/api/inference/usage/summary?days=1', { credentials: 'include' }),
+      ]);
+      if (!orgResp.ok) throw new Error('Failed to load org');
+      const json: OrgResponse = await orgResp.json();
       setData(json);
       setForm({
         name: json.org.name,
@@ -126,6 +136,15 @@ export default function SettingsPage() {
           json.org.semantic_cache_threshold ?? SEMANTIC_CACHE_DEFAULT_THRESHOLD,
         semantic_cache_threshold_overridden: json.org.semantic_cache_threshold !== null,
       });
+      if (usageResp.ok) {
+        const usageJson = (await usageResp.json()) as {
+          summary?: { month_spent_cents?: number };
+        };
+        const cents = usageJson.summary?.month_spent_cents;
+        setMonthSpentCents(typeof cents === 'number' ? cents : 0);
+      } else {
+        setMonthSpentCents(null);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load');
     } finally {
@@ -364,6 +383,15 @@ export default function SettingsPage() {
       <section className="mb-14">
         <SectionHead eyebrow="Spend" title="Org-level" accent="caps" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
+          {/* Live current-month spend banner — anchors the inputs in
+              reality so a customer setting "500" can immediately see
+              whether they're at $5 or $480 today. */}
+          <CurrentSpendBanner
+            spentCents={monthSpentCents}
+            budgetCents={parsedBudgetCents}
+            capCents={parsedHardCapCents}
+          />
+
           <div>
             <Label className={`${MONO} block mb-1.5 text-[11px] uppercase tracking-[0.12em] text-white/80`}>
               Monthly budget (USD)
@@ -547,6 +575,111 @@ function ReadOnlyField({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Compact live-spend strip rendered above the cap inputs. Reads the
+ * org's current month spend (passed in from the parent's parallel
+ * usage fetch) and crosses it against whichever cap the user has typed
+ * into the form right now — so the page reflects the in-flight edit
+ * BEFORE save, not just the persisted value.
+ */
+function CurrentSpendBanner({
+  spentCents,
+  budgetCents,
+  capCents,
+}: {
+  spentCents: number | null;
+  /** Parsed from the form — may be null (cleared), undefined while
+   *  loading, or NaN on invalid input. We treat any non-number as
+   *  "no cap to compare against". */
+  budgetCents: number | null | typeof NaN | undefined;
+  capCents: number | null | typeof NaN | undefined;
+}) {
+  const spent = spentCents ?? 0;
+  const spentUsd = `$${(spent / 100).toFixed(2)}`;
+
+  const cap =
+    typeof capCents === 'number' && Number.isFinite(capCents) && capCents > 0
+      ? capCents
+      : null;
+  const budget =
+    typeof budgetCents === 'number' && Number.isFinite(budgetCents) && budgetCents > 0
+      ? budgetCents
+      : null;
+  // Use the most-restrictive non-null cap for the progress comparison —
+  // matches what the worker's spendCheckMiddleware actually enforces.
+  const effective = cap !== null && budget !== null ? Math.min(cap, budget) : cap ?? budget;
+
+  let pct: number | null = null;
+  if (effective !== null) {
+    pct = Math.min(100, (spent / effective) * 100);
+  }
+
+  // Status color tracks the same thresholds the alert pipeline uses
+  // (80% warning, 100% critical) so the dashboard matches notifications.
+  const tone =
+    pct === null
+      ? 'neutral'
+      : pct >= 100
+        ? 'critical'
+        : pct >= 80
+          ? 'warning'
+          : 'ok';
+  const palette: Record<typeof tone, { bar: string; text: string; bg: string }> = {
+    neutral: { bar: 'rgba(255,255,255,0.35)', text: 'rgba(255,255,255,0.65)', bg: 'rgba(255,255,255,0.06)' },
+    ok:       { bar: '#4ade80',               text: '#86efac',                  bg: 'rgba(34,197,94,0.10)' },
+    warning:  { bar: '#fbbf24',               text: '#fcd34d',                  bg: 'rgba(251,191,36,0.10)' },
+    critical: { bar: '#f87171',               text: '#fca5a5',                  bg: 'rgba(248,113,113,0.10)' },
+  };
+  const p = palette[tone];
+
+  return (
+    <div
+      className="rounded-[5px] border px-4 py-3"
+      style={{ borderColor: 'rgba(255,255,255,0.08)', background: p.bg }}
+    >
+      <div className="flex items-baseline justify-between gap-4 mb-2">
+        <div>
+          <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+            Spent this month
+          </p>
+          <p
+            style={{ ...SERIF_STYLE, color: p.text }}
+            className="text-[20px] font-bold tabular-nums leading-tight mt-0.5"
+          >
+            {spentCents === null ? '—' : spentUsd}
+          </p>
+        </div>
+        {pct !== null && (
+          <div className="text-right">
+            <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+              of effective cap
+            </p>
+            <p
+              className={`${MONO} text-[14px] tabular-nums mt-0.5`}
+              style={{ color: p.text }}
+            >
+              {pct.toFixed(1)}%
+            </p>
+          </div>
+        )}
+      </div>
+      {pct !== null && (
+        <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+          <div
+            className="h-full transition-all duration-300"
+            style={{ width: `${pct}%`, background: p.bar }}
+          />
+        </div>
+      )}
+      <p className={`${MONO} mt-2 text-[10.5px] text-white/45 leading-relaxed`}>
+        {effective === null
+          ? 'No org cap set yet. Type a budget or hard cap below to see how close this month sits.'
+          : `Against your typed cap of $${(effective / 100).toFixed(2)}. Saves to apply.`}
+      </p>
     </div>
   );
 }
