@@ -403,7 +403,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     };
 
     const inferenceGroup: NavGroup = {
-        label: "Inference",
+        label: "AI/ML labs",
         icon: Sparkles,
         href: "/dashboard/services/inference",
         children: [
