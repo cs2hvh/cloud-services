@@ -104,8 +104,7 @@ export default function InferenceHeroSection({
             </h1>
 
             <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]">
-              OpenAI- and Anthropic-compatible gateway for 50+ frontier and open-source models.
-              Streaming, tool calling, BYOK, semantic cache. Pass-through pricing, one bill.
+              OpenAI- and Anthropic-compatible gateway. 50+ frontier and open-source models, one key, one bill. Streaming, tools, BYOK, semantic cache — zero markup.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">

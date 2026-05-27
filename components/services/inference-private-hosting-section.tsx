@@ -275,10 +275,7 @@ export default function InferencePrivateHostingSection() {
                 Your data path.
               </h2>
               <p className="mt-6 max-w-lg text-[15px] leading-7 text-white/55 sm:text-[16px]">
-                For fine-tuned adapters and bring-your-own models, we spin up a dedicated GPU
-                instance — one pod per customer, never shared. Your traffic routes through the
-                same gateway as everything else, with the same key, but the compute is yours
-                alone, billed by the hour, auto-stopped when idle.
+                Fine-tunes and bring-your-own models get a dedicated GPU — one instance per customer, never shared. Same gateway, same key. Billed by the hour, auto-stopped when idle.
               </p>
 
               <div className="mt-10 grid gap-3 sm:grid-cols-2">

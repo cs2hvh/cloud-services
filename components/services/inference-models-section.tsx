@@ -121,9 +121,7 @@ export default function InferenceModelsSection() {
                 One key. One bill.
               </h2>
               <p className="mt-6 max-w-md text-[15px] leading-7 text-white/55 sm:text-[16px]">
-                50+ frontier and open-source models from 12 providers, behind a single
-                OpenAI- and Anthropic-compatible endpoint. Switch providers with a string
-                change — not a code rewrite, not a new SDK, not a new contract.
+                50+ models, 12 providers, one OpenAI- and Anthropic-compatible endpoint. Switch providers with a string change — no rewrite, no new SDK, no new contract.
               </p>
 
               {/* Stat strip with hairline dividers — matches the hero's strip */}
