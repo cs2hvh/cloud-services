@@ -3,43 +3,8 @@ import InferenceModelsSection from "@/components/services/inference-models-secti
 import InferencePrivateHostingSection from "@/components/services/inference-private-hosting-section";
 import InferenceFeaturesSection from "@/components/services/inference-features-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
-import ServicesHomeSectionSix, {
-  type UseCase,
-} from "@/components/serviceshome/section-6";
-import { Bot, Code, FileText, MessageSquare } from "lucide-react";
 
 const InferencePage = () => {
-  const cases: UseCase[] = [
-    {
-      icon: MessageSquare,
-      metric: "Chat",
-      title: "Conversational interfaces",
-      description:
-        "Drop-in OpenAI-compatible endpoint for chatbots, support assistants, and product copilots. Stream from Claude, GPT-4o, Gemini, Llama 4, or DeepSeek with a single API key.",
-    },
-    {
-      icon: Bot,
-      metric: "Agents",
-      title: "Tool-using agents",
-      description:
-        "Function calling and strict JSON-schema output on every model that supports them. Routing presets give you fallback chains so a single upstream 5xx doesn't take your agent down.",
-    },
-    {
-      icon: Code,
-      metric: "Copilots",
-      title: "Coding copilots and code review",
-      description:
-        "Codestral, DeepSeek-Coder, Qwen-Coder, Claude 4.5 Sonnet, GPT-4o — behind one base URL. Run autocomplete on the cheap fast model, review on the smart model, switch without rewriting.",
-    },
-    {
-      icon: FileText,
-      metric: "Content",
-      title: "Generation and summarization",
-      description:
-        "Long-context summarization, structured extraction, multilingual generation. Use the Batches API for offline workloads at a 50% discount; tune the semantic cache for high-traffic Q&A.",
-    },
-  ];
-
   const faqs = [
     {
       question: "Which models can I call through the API?",
@@ -93,13 +58,6 @@ const InferencePage = () => {
       <InferencePrivateHostingSection />
       <InferenceFeaturesSection />
       <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
-      <ServicesHomeSectionSix
-        cases={cases}
-        eyebrow="Use cases"
-        heading="Built for the apps you"
-        headingAccent="actually ship."
-        subtitle="Four workloads our customers ship every day — same endpoint, same key, every model."
-      />
     </main>
   );
 };
