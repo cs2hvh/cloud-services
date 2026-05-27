@@ -1,0 +1,103 @@
+# ahura-ft-runner Deployment
+#
+# Single replica is fine for v1: concurrency is per-process (MAX_CONCURRENT_JOBS,
+# default 4). Scaling means more parallel pod provisions, not more throughput per
+# pod — and we're rate-limited by RunPod's API + total GPU quota anyway.
+#
+# When we need >4 concurrent jobs:
+#   - bump MAX_CONCURRENT_JOBS in the secret
+#   - then horizontal scale to 2 replicas
+#   - BullMQ + deterministic jobIds handle the dedup naturally
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ahura-ft-runner
+  namespace: ahura
+  labels:
+    app: ahura-ft-runner
+    tier: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Avoid two replicas racing during rollout
+  selector:
+    matchLabels:
+      app: ahura-ft-runner
+  template:
+    metadata:
+      labels:
+        app: ahura-ft-runner
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: runner
+          image: ghcr.io/cs2hvh/ahura-ft-runner:latest
+          imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: ahura-ft-runner-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: APP_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/version']
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            # k8s requires a numeric UID to verify runAsNonRoot. Our
+            # Dockerfile sets USER 'app' (named) so we override here.
+            # 1000 is just a conventional non-system UID; /app files are
+            # world-readable so it works.
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop: ["ALL"]
+      # imagePullSecrets removed — ghcr.io/cs2hvh/ahura-ft-runner is a public package.
+      # If you make the package private later, add back:
+      #   imagePullSecrets:
+      #     - name: ghcr-pull
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahura-ft-runner-health
+  namespace: ahura
+spec:
+  type: ClusterIP
+  selector:
+    app: ahura-ft-runner
+  ports:
+    - port: 8080
+      targetPort: health
+      protocol: TCP
+      name: health

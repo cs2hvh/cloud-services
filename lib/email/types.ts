@@ -155,6 +155,31 @@ export interface SupportTicketReplyEmailData {
   conversation: SupportConversationEmailMessageData[];
 }
 
+export type InferenceEventName =
+  | "finetune.succeeded"
+  | "finetune.failed"
+  | "batch.completed"
+  | "batch.failed"
+  | "serving_pod.ready"
+  | "serving_pod.stopped"
+  | "org.spend_threshold_reached";
+
+export interface InferenceEventEmailData {
+  recipientName: string;
+  event: InferenceEventName;
+  /** One-line summary shown above the details card. */
+  summary: string;
+  /** Key/value pairs rendered in the details card. */
+  items: Array<{ label: string; value: string }>;
+  /** Optional error block — shown only on .failed events. */
+  errorMessage?: string;
+  /** CTA button target; if omitted the CTA is hidden. */
+  actionUrl?: string;
+  actionLabel?: string;
+  /** Inbox preview text — falls back to event heading. */
+  preview?: string;
+}
+
 export interface EmailTemplateDataMap {
   otp: OtpEmailData;
   forgotPassword: ForgotPasswordEmailData;
@@ -169,6 +194,7 @@ export interface EmailTemplateDataMap {
   consultationRequest: ConsultationRequestEmailData;
   supportTicketCreated: SupportTicketCreatedEmailData;
   supportTicketReply: SupportTicketReplyEmailData;
+  inferenceEvent: InferenceEventEmailData;
 }
 
 export type EmailTemplateId = keyof EmailTemplateDataMap;

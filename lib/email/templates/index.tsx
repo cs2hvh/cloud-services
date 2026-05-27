@@ -11,6 +11,7 @@ import { ConsultationRequestEmailTemplate } from "@/lib/email/templates/alerts/c
 import { SystemAlertEmailTemplate } from "@/lib/email/templates/alerts/system-alert";
 import { SupportTicketCreatedEmailTemplate } from "@/lib/email/templates/support/support-ticket-created";
 import { SupportTicketReplyEmailTemplate } from "@/lib/email/templates/support/support-ticket-reply";
+import { InferenceEventEmailTemplate } from "@/lib/email/templates/inference/inference-event";
 import type { EmailTemplateRegistry } from "@/lib/email/types";
 
 export const emailTemplates: EmailTemplateRegistry = {
@@ -168,6 +169,37 @@ export const emailTemplates: EmailTemplateRegistry = {
     tags: () => [
       { name: "category", value: "support" },
       { name: "event", value: "ticket-reply" },
+    ],
+  },
+  inferenceEvent: {
+    subject: ({ event, items }) => {
+      // Surface the model/job name in the subject if the caller put it
+      // first in items — makes inbox triage easy.
+      const lead = items[0]?.value ? ` · ${items[0].value}` : "";
+      const label =
+        event === "finetune.succeeded" ? "Fine-tune finished" :
+        event === "finetune.failed"    ? "Fine-tune failed" :
+        event === "batch.completed"    ? "Batch completed" :
+        event === "batch.failed"       ? "Batch failed" :
+        event === "serving_pod.ready"  ? "Serving instance ready" :
+        event === "serving_pod.stopped"? "Serving instance stopped" :
+        event === "org.spend_threshold_reached" ? "Spend alert" :
+        "Inference event";
+      return `AhuraSense | ${label}${lead}`;
+    },
+    previewText: ({ summary }) => summary,
+    render: (data) => <InferenceEventEmailTemplate {...data} />,
+    text: ({ recipientName, event, summary, items, errorMessage }) =>
+      [
+        `Hi ${recipientName},`,
+        `Event: ${event}`,
+        summary,
+        ...items.map((it) => `${it.label}: ${it.value}`),
+        errorMessage ? `Error: ${errorMessage}` : null,
+      ].filter(Boolean).join("\n"),
+    tags: ({ event }) => [
+      { name: "category", value: "inference" },
+      { name: "event", value: event.replace(/\./g, "-") },
     ],
   },
 };

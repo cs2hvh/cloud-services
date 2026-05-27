@@ -1,0 +1,21 @@
+# AhuraCloud — Accelerate config for single-GPU jobs.
+#
+# Multi-GPU / multi-node configs live in separate files mounted by the
+# ft-runner based on hyperparams.gpu_count. For Phase 5.B v1 we ship
+# single-GPU axolotl LoRA only.
+
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: 'NO'
+downcast_bf16: 'no'
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 1
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

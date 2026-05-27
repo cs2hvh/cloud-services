@@ -180,6 +180,7 @@ export function createServiceNotification(params: {
     knowledge_base: 'Knowledge Base',
     domain: 'Domain',
     billing: 'Billing',
+    inference: 'Inference',
   };
 
   const { type: defaultType, verb } = actionMessages[action];

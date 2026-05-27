@@ -16,6 +16,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+    Atom,
+    Bell,
     ChevronDown,
     LogOut,
     Menu,
@@ -108,11 +110,27 @@ type NavItem = {
     matchPrefix?: boolean;
 };
 
+/**
+ * Inline section divider inside an expanded group's children list.
+ * Renders as a small uppercase label between items so 16-entry groups
+ * (Inference) read as 3-4 functional clusters rather than one wall.
+ */
+type NavSectionHeader = {
+    kind: "section";
+    label: string;
+};
+
+type NavChildEntry = NavItem | NavSectionHeader;
+
+function isSectionHeader(entry: NavChildEntry): entry is NavSectionHeader {
+    return (entry as NavSectionHeader).kind === "section";
+}
+
 type NavGroup = {
     label: string;
     icon: LucideIcon;
     href: string;
-    children: NavItem[];
+    children: NavChildEntry[];
 };
 
 // ─── Primitives ───────────────────────────────────────────────
@@ -270,9 +288,18 @@ function GroupRow({
             >
                 <div className="overflow-hidden">
                     <div className="mt-0.5 space-y-0.5">
-                        {group.children.map((child) => (
-                            <NavRow key={child.href} item={child} pathname={pathname} nested />
-                        ))}
+                        {group.children.map((child, idx) =>
+                            isSectionHeader(child) ? (
+                                <p
+                                    key={`section-${idx}-${child.label}`}
+                                    className="pl-9 pr-2.5 pt-2.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/30"
+                                >
+                                    {child.label}
+                                </p>
+                            ) : (
+                                <NavRow key={child.href} item={child} pathname={pathname} nested />
+                            )
+                        )}
                     </div>
                 </div>
             </div>
@@ -290,6 +317,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     const [computeExpanded, setComputeExpanded] = useState(pathname.startsWith("/dashboard/services/compute"));
     const [gpuExpanded, setGpuExpanded] = useState(pathname.startsWith("/dashboard/services/gpu"));
     const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.startsWith("/dashboard/services/ai-agents"));
+    const [inferenceExpanded, setInferenceExpanded] = useState(pathname.startsWith("/dashboard/services/inference"));
     const [domainsExpanded, setDomainsExpanded] = useState(pathname.startsWith("/dashboard/domains"));
     const [adminExpanded, setAdminExpanded] = useState(pathname.startsWith("/dashboard/admin"));
     const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -302,6 +330,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         if (pathname.startsWith("/dashboard/services/compute")) setComputeExpanded(true);
         if (pathname.startsWith("/dashboard/services/gpu")) setGpuExpanded(true);
         if (pathname.startsWith("/dashboard/services/ai-agents")) setAiAgentsExpanded(true);
+        if (pathname.startsWith("/dashboard/services/inference")) setInferenceExpanded(true);
         if (pathname.startsWith("/dashboard/domains")) setDomainsExpanded(true);
         if (pathname.startsWith("/dashboard/admin")) setAdminExpanded(true);
     }, [pathname]);
@@ -370,6 +399,41 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "New Agent", href: "/dashboard/services/ai-agents/new", icon: Plus },
             { label: "Knowledge", href: "/dashboard/services/ai-agents/knowledge-bases", icon: BookOpen, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/ai-agents/settings", icon: Key, matchPrefix: true },
+        ],
+    };
+
+    const inferenceGroup: NavGroup = {
+        label: "A.I. Labs",
+        icon: Atom,
+        href: "/dashboard/services/inference",
+        children: [
+            // Overview always lives at the very top — it's the "home" of
+            // the inference section, not part of any subgroup.
+            { label: "Overview", href: "/dashboard/services/inference", icon: LayoutDashboard },
+
+            // ─── Build: things you USE to make calls ──────────
+            { kind: "section", label: "Build" },
+            { label: "Models", href: "/dashboard/services/inference/models", icon: BookOpen, matchPrefix: true },
+            { label: "Playground", href: "/dashboard/services/inference/playground", icon: Bot, matchPrefix: true },
+            { label: "Presets", href: "/dashboard/services/inference/presets", icon: Rocket, matchPrefix: true },
+            { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
+            { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
+
+            // ─── Workloads: async / long-running jobs ─────────
+            { kind: "section", label: "Workloads" },
+            { label: "Fine-Tuning", href: "/dashboard/services/inference/fine-tuning", icon: GpuCloudIcon, matchPrefix: true },
+            { label: "Deployments", href: "/dashboard/services/inference/deployments", icon: AppDeployLucide, matchPrefix: true },
+            { label: "Batches", href: "/dashboard/services/inference/batches", icon: FileText, matchPrefix: true },
+            { label: "Vectors", href: "/dashboard/services/inference/vectors", icon: Database, matchPrefix: true },
+
+            // ─── Manage: observe + configure + org admin ──────
+            { kind: "section", label: "Manage" },
+            { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
+            { label: "Notifications", href: "/dashboard/services/inference/notifications", icon: Bell, matchPrefix: true },
+            { label: "Audit Log", href: "/dashboard/services/inference/audit", icon: ShieldCheck, matchPrefix: true },
+            { label: "Members", href: "/dashboard/services/inference/members", icon: Users, matchPrefix: true },
+            { label: "Service health", href: "/dashboard/services/inference/diagnostics", icon: Activity, matchPrefix: true },
+            { label: "Settings", href: "/dashboard/services/inference/settings", icon: Settings, matchPrefix: true },
         ],
     };
 
@@ -561,6 +625,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             onToggle={() => setGpuExpanded((p) => !p)}
                         />
                         <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
+                        <GroupRow group={inferenceGroup} pathname={pathname} expanded={inferenceExpanded} onToggle={() => setInferenceExpanded((p) => !p)} />
                         {standaloneServices.map((it) => (
                             <NavRow key={it.href} item={it} pathname={pathname} />
                         ))}

@@ -1,0 +1,147 @@
+# AhuraCloud Inference Edge Gateway
+#
+# Cloudflare Workers project serving api.cs2hvh.com/v1
+# (temporary domain — migration target is api.ahurasense.com once
+#  Workers/KV/Queues permissions are granted on that account.
+#  See docs/inference/migration-ahurasense.md for the switch runbook.)
+#
+# Handles: auth, rate limiting, spend caps, request normalization,
+# response caching, audit log enqueue, streaming proxy to OpenRouter.
+
+name = "ahura-inference-edge"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ───────────────────────────────────────────────────────────────
+# Routes
+# ───────────────────────────────────────────────────────────────
+routes = [
+  { pattern = "api.cs2hvh.com/v1/*", zone_name = "cs2hvh.com" },
+]
+
+# ───────────────────────────────────────────────────────────────
+# Observability — Workers Logs + tail-based tracing
+# ───────────────────────────────────────────────────────────────
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# ───────────────────────────────────────────────────────────────
+# KV namespaces
+# ───────────────────────────────────────────────────────────────
+# API_KEYS — sha256(key) → { key_id, org_id, allowed_models, zdr, ... }
+#   Hot-cached lookups; backing store is Postgres (inference.api_keys).
+#   TTL on entries so revocations propagate within minutes.
+#
+# SPEND — org:{org_id}:month:{YYYY-MM} → cents-spent counter
+#   INCRBY at request time, reset by monthly rollover worker.
+#
+# L1_CACHE — sha256(normalized_request) → cached response (json or SSE replay)
+#   TTL configurable per route; default 5 min for non-streaming completions.
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "8c23f1a9daf94652a9e718489e9ecb3b"
+preview_id = "ff286be03f8840618473ca859fc5f480"
+
+[[kv_namespaces]]
+binding = "SPEND"
+id = "ee6a19a24d9c4d20a6f5c13494dcd0d9"
+preview_id = "e1a44e57bc8943eb926fe98b6a06bf90"
+
+[[kv_namespaces]]
+binding = "L1_CACHE"
+id = "331e27c11b654bf6ad9003b30530deff"
+preview_id = "039a89a1e882413c8f59c75a531a1f40"
+
+# ───────────────────────────────────────────────────────────────
+# Durable Objects
+# ───────────────────────────────────────────────────────────────
+# RateLimiter — token-bucket per (api_key_id, model_id). Consistent
+#               state across the globe; survives Worker isolate eviction.
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+# ───────────────────────────────────────────────────────────────
+# Queues — async audit + usage event ingestion
+# ───────────────────────────────────────────────────────────────
+# AUDIT_EVENTS — fire-and-forget audit log writes from the request path
+# USAGE_EVENTS — fire-and-forget per-request usage rows (durable, then
+#                consumer flushes batches into Postgres inference.usage)
+[[queues.producers]]
+binding = "AUDIT_EVENTS"
+queue = "ahura-inference-audit"
+
+[[queues.producers]]
+binding = "USAGE_EVENTS"
+queue = "ahura-inference-usage"
+
+# ───────────────────────────────────────────────────────────────
+# Queue consumers — same Worker drains the queues it produces to
+# ───────────────────────────────────────────────────────────────
+# USAGE consumer: looks up catalog pricing per model, computes final
+#   cost (incl. off-peak discount), batch-inserts into inference.usage,
+#   bumps the per-org SPEND counter in KV.
+[[queues.consumers]]
+queue = "ahura-inference-usage"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 3
+max_concurrency = 4
+
+# AUDIT consumer: append-only insert into inference.audit_log.
+[[queues.consumers]]
+queue = "ahura-inference-audit"
+max_batch_size = 50
+max_batch_timeout = 10
+max_retries = 3
+max_concurrency = 2
+
+# ───────────────────────────────────────────────────────────────
+# Environment variables
+# ───────────────────────────────────────────────────────────────
+[vars]
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
+GATEWAY_VERSION = "0.1.0"
+ENV = "production"
+# Where the Next.js control plane lives. The scheduled() handler hits
+# {CONTROL_PLANE_URL}/api/inference/internal/serving-pod-watchdog every
+# minute to reap idle hosted-serving pods. Change this when the dashboard
+# moves to a different domain.
+CONTROL_PLANE_URL = "https://wao.cs2hvh.com"
+
+# Secrets (set via `wrangler secret put` — never commit values):
+#   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC
+#   • OPENROUTER_PLATFORM_KEY    — used for platform-billed requests
+#   • BYOK_DEK                   — AES-GCM data encryption key (matches Postgres kms_key_version)
+#   • OTEL_EXPORTER_OTLP_HEADERS — auth header for OTel collector
+#   • BATCH_PROCESSOR_TOKEN      — shared cron secret. MUST equal the
+#                                  Next.js .env BATCH_PROCESSOR_TOKEN
+#                                  value, or scheduled() will silently
+#                                  401 every minute and idle pods will
+#                                  never auto-stop. Set it ONCE, paste
+#                                  the same value into Next.js.
+#                                  (Legacy alias INTERNAL_CRON_TOKEN
+#                                   also accepted for back-compat.)
+
+# ───────────────────────────────────────────────────────────────
+# Cron Triggers
+# ───────────────────────────────────────────────────────────────
+# Every minute: invoke the serving-pod watchdog so idle pods past their
+# auto_stop_at deadline get torn down. Cheap (a single POST to the
+# control plane); the Worker's scheduled() handler in src/index.ts
+# handles auth + retry. See docs/inference/STATUS.md Phase 11.C.
+[triggers]
+crons = ["* * * * *"]
+
+# ───────────────────────────────────────────────────────────────
+# Limits
+# ───────────────────────────────────────────────────────────────
+[limits]
+cpu_ms = 30000   # streaming requests have low CPU but long wall clock; CPU cap is generous

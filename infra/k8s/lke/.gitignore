@@ -1,0 +1,4 @@
+# Never commit the real env file or kubeconfig
+.env.lke
+*.kubeconfig
+kubeconfig*
