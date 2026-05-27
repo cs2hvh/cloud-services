@@ -87,7 +87,7 @@ export default function EmbeddingsHeroSection({
   }, [queryChars, chunksShown, fullQueryLen, demo.chunks.length]);
 
   return (
-    <section className="relative isolate overflow-hidden bg-[#0E0F0F] pb-24 pt-32 sm:pb-32 sm:pt-40">
+    <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#0E0F0F] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
       {/* Atmospheric backdrop */}
       <div className="absolute inset-0 -z-10">
         <PixelBlast

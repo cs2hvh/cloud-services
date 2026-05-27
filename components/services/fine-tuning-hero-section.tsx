@@ -69,7 +69,7 @@ export default function FineTuningHeroSection({
   const elapsed = `${elapsedM}m ${String(elapsedS).padStart(2, "0")}s`;
 
   return (
-    <section className="relative isolate flex min-h-[760px] flex-col justify-center overflow-hidden bg-[#04060a] pb-20 pt-32 sm:pb-24 sm:pt-36 lg:min-h-[820px] lg:pb-28 lg:pt-40">
+    <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#04060a] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
       {/* Atmospheric backdrop — same PixelBlast as inference for consistency */}
       <div
         aria-hidden="true"

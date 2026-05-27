@@ -61,7 +61,7 @@ export default function ModelHostingHeroSection({
   const lastModelId = useMemo(() => "ahura/llama-3.3-8b:deploy-9f2a1c", []);
 
   return (
-    <section className="relative isolate overflow-hidden bg-[#0E0F0F] pb-24 pt-32 sm:pb-32 sm:pt-40">
+    <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#0E0F0F] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
       <div className="absolute inset-0 -z-10">
         <PixelBlast
           color={BRAND}
