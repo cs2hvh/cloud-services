@@ -120,10 +120,9 @@ export default function FineTuningPipelineSection() {
   return (
     <section
       ref={sectionRef}
-      className="relative isolate overflow-clip bg-[#0E0F0F] py-28 sm:py-36"
+      className="relative isolate overflow-clip bg-[#0E0F0F] py-32 sm:py-40"
     >
-      {/* Atmospheric backdrop — radial wash that follows the active
-          step roughly. Uses CSS transition so the move is smooth. */}
+      {/* Atmospheric backdrop — radial wash that follows the active phase. */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-0 transition-all duration-1000 ease-out"
@@ -147,197 +146,327 @@ export default function FineTuningPipelineSection() {
       />
 
       <Container className="relative z-10">
-        {/* Section header */}
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            How it works
-          </p>
-          <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
+        {/* ─── Section header ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto max-w-3xl text-center"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
+            <span
+              aria-hidden
+              className="block h-1.5 w-1.5 rounded-full bg-[#33adff]"
+              style={{ boxShadow: "0 0 8px rgba(0,149,255,0.7)" }}
+            />
+            The pipeline
+          </div>
+          <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
             Six phases.{" "}
             <span className="text-[#8ecaff]">Zero infra to run.</span>
           </h2>
-          <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
+          <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
             From a JSONL file to a callable model id. Scroll the phases — the visual on the right tracks where you are.
           </p>
-        </div>
+        </motion.div>
 
         {/* ─── Scroll-pinned narrative ───────────────────────────
-            LEFT  ⇣ scrolling phase narrative
-            RIGHT ⇣ sticky viz that swaps with active phase
-            (and a 2px vertical progress rail in between). */}
-        <div className="relative mt-20 grid gap-x-12 gap-y-16 lg:grid-cols-[minmax(0,0.85fr)_2px_minmax(0,1.05fr)]">
-          {/* ── LEFT COLUMN: phase narrative ── */}
-          <div className="space-y-28 sm:space-y-32">
-            {PHASES.map((p, i) => {
-              const Icon = p.icon;
-              const isActive = active === i;
-              return (
-                <div key={p.num} className="relative">
-                  {/* Numbered chip + icon badge */}
-                  <div className="flex items-center gap-4">
-                    <motion.span
-                      animate={{
-                        color: isActive ? "#8ecaff" : "rgba(255,255,255,0.25)",
-                      }}
-                      transition={{ duration: 0.5 }}
-                      className="text-[44px] font-semibold leading-none tracking-tight tabular-nums sm:text-[52px]"
-                    >
-                      {p.num}
-                    </motion.span>
-                    <motion.div
-                      animate={{
-                        opacity: isActive ? 1 : 0.35,
-                        scale: isActive ? 1 : 0.92,
-                      }}
-                      transition={{ duration: 0.5 }}
-                      className="relative"
-                    >
-                      <span
-                        aria-hidden
-                        className="absolute -inset-2 rounded-[10px] opacity-70 blur-md transition-opacity duration-500"
-                        style={{
-                          opacity: isActive ? 0.7 : 0,
-                          background:
-                            "radial-gradient(50% 50% at 50% 50%, rgba(0,149,255,0.55), transparent 70%)",
-                        }}
-                      />
-                      <div
-                        className="relative flex h-11 w-11 items-center justify-center rounded-[8px] border text-white transition-colors duration-500"
-                        style={
-                          isActive
+            LEFT  ⇣ scrolling phase narrative threaded onto a rail
+            RIGHT ⇣ sticky viz, vertically centered against the viewport */}
+        <div className="relative mt-24 grid gap-x-16 gap-y-24 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-x-20">
+          {/* ── LEFT COLUMN: phase narrative threaded onto a vertical rail ── */}
+          <div className="relative pl-8 sm:pl-10">
+            {/* Static background rail */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-2 top-3 bottom-3 w-px sm:left-3"
+              style={{
+                background:
+                  "linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.07) 8%, rgba(255,255,255,0.07) 92%, transparent 100%)",
+              }}
+            />
+            {/* Filled rail that grows with scroll */}
+            <motion.div
+              aria-hidden
+              style={{ height: progressHeight }}
+              className="pointer-events-none absolute left-2 top-3 w-px origin-top sm:left-3"
+            >
+              <div
+                className="h-full w-full"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(0,149,255,0) 0%, rgba(51,173,255,0.95) 35%, rgba(51,173,255,0.95) 65%, rgba(0,149,255,0) 100%)",
+                  boxShadow: "0 0 14px rgba(0,149,255,0.55)",
+                }}
+              />
+            </motion.div>
+
+            <div className="space-y-28 sm:space-y-32">
+              {PHASES.map((p, i) => {
+                const Icon = p.icon;
+                const isActive = active === i;
+                const isPast = active > i;
+                return (
+                  <motion.div
+                    key={p.num}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.35 }}
+                    transition={{
+                      duration: 0.55,
+                      ease: [0.16, 1, 0.3, 1],
+                      delay: 0.05,
+                    }}
+                    className="relative"
+                  >
+                    {/* Rail dot */}
+                    <span
+                      aria-hidden
+                      className="absolute -left-[26px] top-5 block h-2.5 w-2.5 rounded-full border transition-all duration-500 sm:-left-[30px]"
+                      style={
+                        isActive
+                          ? {
+                              background: "#33adff",
+                              borderColor: "#33adff",
+                              boxShadow:
+                                "0 0 14px rgba(0,149,255,0.85), 0 0 0 5px rgba(0,149,255,0.10)",
+                            }
+                          : isPast
                             ? {
-                                background:
-                                  "linear-gradient(135deg, rgba(0,149,255,0.35), rgba(0,149,255,0.10))",
-                                borderColor: "rgba(51,173,255,0.55)",
-                                boxShadow:
-                                  "inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 18px rgba(0,149,255,0.30)",
+                                background: "rgba(51,173,255,0.50)",
+                                borderColor: "rgba(51,173,255,0.50)",
                               }
                             : {
-                                background: "rgba(255,255,255,0.02)",
-                                borderColor: "rgba(255,255,255,0.08)",
+                                background: "#0E0F0F",
+                                borderColor: "rgba(255,255,255,0.18)",
                               }
-                        }
+                      }
+                    />
+
+                    {/* Icon badge + step meta */}
+                    <div className="flex items-center gap-4">
+                      <motion.div
+                        animate={{
+                          scale: isActive ? 1.04 : 0.94,
+                          opacity: isActive ? 1 : 0.55,
+                        }}
+                        transition={{
+                          duration: 0.5,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        className="relative"
                       >
-                        <Icon className="h-5 w-5" strokeWidth={1.6} />
+                        {/* Outer glow */}
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute -inset-3 rounded-2xl blur-xl transition-opacity duration-500"
+                          style={{
+                            opacity: isActive ? 0.9 : 0,
+                            background:
+                              "radial-gradient(50% 50% at 50% 50%, rgba(0,149,255,0.50), transparent 70%)",
+                          }}
+                        />
+                        {/* Soft outer ring */}
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute -inset-[3px] rounded-[14px] transition-opacity duration-500"
+                          style={{
+                            opacity: isActive ? 1 : 0,
+                            background:
+                              "conic-gradient(from 140deg at 50% 50%, rgba(51,173,255,0.55), rgba(0,149,255,0.05), rgba(51,173,255,0.55))",
+                          }}
+                        />
+                        <div
+                          className="relative flex h-12 w-12 items-center justify-center rounded-[12px] border text-white transition-colors duration-500"
+                          style={
+                            isActive
+                              ? {
+                                  background:
+                                    "linear-gradient(135deg, rgba(0,149,255,0.32), rgba(0,149,255,0.08))",
+                                  borderColor: "rgba(51,173,255,0.55)",
+                                  boxShadow:
+                                    "inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -8px 16px rgba(0,149,255,0.18), 0 6px 20px rgba(0,149,255,0.35)",
+                                }
+                              : {
+                                  background: "rgba(255,255,255,0.025)",
+                                  borderColor: "rgba(255,255,255,0.08)",
+                                  boxShadow:
+                                    "inset 0 1px 0 rgba(255,255,255,0.05)",
+                                }
+                          }
+                        >
+                          <Icon
+                            className="h-5 w-5 transition-colors duration-500"
+                            strokeWidth={1.6}
+                            style={{
+                              color: isActive ? "#bfe0ff" : "rgba(255,255,255,0.55)",
+                            }}
+                          />
+                        </div>
+                      </motion.div>
+
+                      <div className="min-w-0">
+                        <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-white/35">
+                          Phase{" "}
+                          <span className="tabular-nums text-white/55">
+                            {p.num}
+                          </span>{" "}
+                          / 06
+                        </p>
+                        <motion.p
+                          animate={{
+                            color: isActive
+                              ? "#8ecaff"
+                              : "rgba(255,255,255,0.62)",
+                          }}
+                          transition={{ duration: 0.5 }}
+                          className="mt-1 font-mono text-[12px] uppercase tracking-[0.20em]"
+                        >
+                          {p.label}
+                        </motion.p>
                       </div>
-                    </motion.div>
-                    <motion.span
-                      animate={{
-                        color: isActive ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.35)",
-                      }}
+                    </div>
+
+                    {/* Title + body */}
+                    <motion.h3
+                      animate={{ opacity: isActive ? 1 : 0.50 }}
                       transition={{ duration: 0.5 }}
-                      className="font-mono text-[10.5px] uppercase tracking-[0.18em]"
+                      className="mt-7 max-w-xl text-[26px] font-medium leading-[1.12] tracking-tight text-white sm:text-[30px]"
                     >
-                      {p.label}
-                    </motion.span>
-                  </div>
-
-                  {/* Title + body */}
-                  <motion.h3
-                    animate={{
-                      opacity: isActive ? 1 : 0.45,
-                    }}
-                    transition={{ duration: 0.5 }}
-                    className="mt-6 max-w-md text-[22px] font-semibold leading-tight tracking-tight text-white sm:text-[26px]"
-                  >
-                    {p.title}
-                  </motion.h3>
-                  <motion.p
-                    animate={{
-                      opacity: isActive ? 0.65 : 0.32,
-                    }}
-                    transition={{ duration: 0.5 }}
-                    className="mt-4 max-w-md text-[13.5px] leading-[1.7] text-white/55 sm:text-[14.5px]"
-                  >
-                    {p.body}
-                  </motion.p>
-                </div>
-              );
-            })}
+                      {p.title}
+                    </motion.h3>
+                    <motion.p
+                      animate={{ opacity: isActive ? 0.72 : 0.38 }}
+                      transition={{ duration: 0.5 }}
+                      className="mt-4 max-w-md text-[14px] leading-[1.75] text-white/60 sm:text-[15px]"
+                    >
+                      {p.body}
+                    </motion.p>
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* ── MIDDLE: vertical progress rail (desktop only) ── */}
-          <div className="relative hidden lg:block">
-            <div className="absolute inset-y-0 left-0 w-px overflow-hidden bg-white/[0.06]">
+          {/* ── RIGHT: sticky viz, vertically centered against viewport ──
+              Plain CSS sticky. NO transform (Chrome/Safari unpin sticky
+              elements that carry one). The `top: max(...)` keeps the
+              card centered on tall screens but never crashes into the
+              navbar on short ones. */}
+          <div className="relative">
+            <div
+              className="lg:sticky"
+              style={{ top: "max(7rem, calc(50vh - 280px))" }}
+            >
               <motion.div
-                style={{ height: progressHeight }}
-                className="absolute inset-x-0 top-0 origin-top"
+                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                className="relative"
               >
-                <div
-                  className="h-full w-full"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(0,149,255,0.0), rgba(51,173,255,0.95) 30%, rgba(51,173,255,0.95) 70%, rgba(0,149,255,0.0))",
-                    boxShadow: "0 0 12px rgba(0,149,255,0.55)",
-                  }}
-                />
-              </motion.div>
-            </div>
-            {/* Step dots along the rail */}
-            <div className="absolute inset-y-0 left-0 -translate-x-1/2 flex flex-col justify-around py-12">
-              {PHASES.map((_, i) => (
-                <span
-                  key={i}
-                  className="block h-2 w-2 rounded-full border border-white/[0.12] bg-[#0E0F0F] transition-all duration-500"
-                  style={
-                    active >= i
-                      ? {
-                          background: "#33adff",
-                          borderColor: "#33adff",
-                          boxShadow: "0 0 8px rgba(51,173,255,0.7)",
-                        }
-                      : {}
-                  }
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* ── RIGHT: sticky visualization that swaps with active phase ──
-              NOTE: no transform on the sticky element. Chrome / Safari
-              break `position: sticky` if the element also has a CSS
-              transform (parallax y), which is what caused the right
-              panel to go blank after mid-scroll. Pure sticky now. */}
-          <div className="lg:relative">
-            <div className="lg:sticky lg:top-28">
-              <div className="relative">
-                {/* Soft outer glow that intensifies on active phase */}
+                {/* Soft outer glow */}
                 <div
                   aria-hidden
-                  className="absolute -inset-6 rounded-3xl opacity-50 blur-2xl"
+                  className="absolute -inset-8 rounded-[28px] opacity-60 blur-3xl"
                   style={{
                     background:
-                      "radial-gradient(60% 50% at 50% 40%, rgba(0,149,255,0.45), transparent 70%)",
+                      "radial-gradient(55% 50% at 50% 40%, rgba(0,149,255,0.50), transparent 70%)",
                   }}
                 />
-                <div className="relative h-[460px] sm:h-[500px] overflow-hidden rounded-xl border border-white/[0.10] bg-[#0b0d12] shadow-[0_24px_64px_rgba(0,0,0,0.55)]">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={active}
-                      initial={{ opacity: 0, y: 14, scale: 0.985 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -14, scale: 0.985 }}
-                      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute inset-0"
-                    >
-                      <PhaseVisualization phase={active} />
-                    </motion.div>
-                  </AnimatePresence>
 
-                  {/* Footer label that always shows the current phase */}
-                  <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between border-t border-white/[0.06] bg-[#0b0d12]/95 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] backdrop-blur-md">
-                    <span className="text-white/55">
-                      <span className="text-white/35">phase</span>{" "}
-                      <span className="text-[#33adff]">{PHASES[active]?.num}</span>{" "}
-                      <span className="text-white/35">·</span>{" "}
-                      <span className="text-white/85">{PHASES[active]?.label}</span>
+                {/* Card */}
+                <div className="relative overflow-hidden rounded-[16px] border border-white/[0.10] bg-[#0b0d12] shadow-[0_28px_72px_rgba(0,0,0,0.6)]">
+                  {/* Top accent stripe */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, transparent, rgba(51,173,255,0.85), transparent)",
+                      boxShadow: "0 0 16px rgba(0,149,255,0.55)",
+                    }}
+                  />
+
+                  {/* Header bar: phase nav dots */}
+                  <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+                    <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">
+                      <span
+                        aria-hidden
+                        className="relative flex h-1.5 w-1.5"
+                      >
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#33adff] opacity-60" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#33adff]" />
+                      </span>
+                      <span className="text-[#33adff] tabular-nums">
+                        {PHASES[active]?.num}
+                      </span>
+                      <span className="text-white/30">·</span>
+                      <span className="text-white/80">
+                        {PHASES[active]?.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {PHASES.map((_, i) => (
+                        <span
+                          key={i}
+                          className="block h-1 rounded-full transition-all duration-500"
+                          style={
+                            active === i
+                              ? {
+                                  width: "16px",
+                                  background: "#33adff",
+                                  boxShadow:
+                                    "0 0 6px rgba(0,149,255,0.7)",
+                                }
+                              : active > i
+                                ? {
+                                    width: "8px",
+                                    background: "rgba(51,173,255,0.40)",
+                                  }
+                                : {
+                                    width: "8px",
+                                    background: "rgba(255,255,255,0.10)",
+                                  }
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Viz panel */}
+                  <div className="relative h-[460px] sm:h-[500px] overflow-hidden">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={active}
+                        initial={{ opacity: 0, y: 18, filter: "blur(6px)" }}
+                        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                        exit={{ opacity: 0, y: -18, filter: "blur(6px)" }}
+                        transition={{
+                          duration: 0.5,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
+                        className="absolute inset-0"
+                      >
+                        <PhaseVisualization phase={active} />
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between border-t border-white/[0.06] bg-[#0b0d12]/95 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.16em] backdrop-blur-md">
+                    <span className="text-white/45">
+                      live in your dashboard
                     </span>
-                    <span className="font-mono text-white/40 tabular-nums">
-                      {active + 1} / {PHASES.length}
+                    <span className="font-mono text-white/55 tabular-nums">
+                      {String(active + 1).padStart(2, "0")}
+                      <span className="text-white/30"> / </span>
+                      {String(PHASES.length).padStart(2, "0")}
                     </span>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
