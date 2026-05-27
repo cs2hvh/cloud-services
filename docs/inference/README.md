@@ -1,55 +1,97 @@
-# Inference Platform — Module Docs
+# A.I. Labs — Documentation Index
 
-The AhuraCloud Inference platform is a four-product AI services suite added in the `ai` branch:
+AhuraCloud A.I. Labs is a serverless AI platform with four products under
+one OpenAI-compatible gateway:
 
-1. **Serverless Inference** — OpenAI-compatible API proxying every frontier and open-source model via OpenRouter
-2. **Fine-Tuning** — LoRA training on our RunPod GPU fleet, auto-deployed to the inference catalog
-3. **Embeddings + Vector Store** — managed embedding endpoints + pgvector collections
-4. **Model Hosting** — BYO container deploys on RunPod serverless workers
+1. **Inference** — OpenAI- and Anthropic-compatible API across 50+ frontier
+   and open-source models. Streaming, tool calling, JSON mode.
+2. **Fine-Tuning** — LoRA training on managed GPUs. Self-serve docker OR
+   one-click managed hosting.
+3. **Embeddings + Vector Store** — managed embedding endpoints + per-org
+   pgvector collections.
+4. **BYO Model Deploy** — bring any docker image or HuggingFace model id;
+   we provision a dedicated GPU endpoint and route via the same gateway.
 
-## Where to look
+---
+
+## For customers
+
+| Doc | Read when |
+|---|---|
+| **[user-guide.md](./user-guide.md)** | First read. End-to-end conceptual guide with working code samples for every feature. ~20 min cover-to-cover. |
+| **[api-reference.md](./api-reference.md)** | Formal endpoint specs. Use as a reference once you've read the user guide. |
+| **[security.md](./security.md)** | Procurement / security review. TLS / AES-GCM / RLS / ZDR / audit log / subprocessor list / SOC 2 readiness gap analysis. Honest about what we are NOT (not certified yet). |
+
+---
+
+## For operators (us)
 
 | Doc | What's in it |
 |---|---|
-| **[STATUS.md](./STATUS.md)** | **Live build state + session handoff. Read first.** Captures what's deployed, what works, what's pending, all decisions made, file map, known gotchas, instructions for continuing in a new session. |
+| **[STATUS.md](./STATUS.md)** | **Live build state. Read first when picking up a fresh session.** What's deployed, what works, what's pending, all decisions made, file map, known gotchas. |
 | [architecture.md](./architecture.md) | System design, components, data model, key tradeoffs |
-| [setup.md](./setup.md) | Operator runbook — apply migration, configure Cloudflare, deploy Workers, verify |
-| [phases.md](./phases.md) | 8-phase delivery roadmap with scope, durations, ship signals (planning view) |
-| [migration-ahurasense.md](./migration-ahurasense.md) | How to switch the gateway domain from `cs2hvh.com` (current) to `ahurasense.com` once permissions land |
-| [load-testing.md](./load-testing.md) | How to run the k6 load test and interpret results — Phase 1 ship signal |
-| [fine-tuning-runner.md](./fine-tuning-runner.md) | Phase 5.B operator contract: what the BullMQ FT runner reads/writes and how to wire RunPod orchestration |
-| **[phase-5b-build-guide.md](./phase-5b-build-guide.md)** | **Phase 5.B canonical implementation guide** — validated against Together AI, Fireworks, OpenAI, Baseten, Modal, RunPod 2026 architectures. Includes Dockerfiles, BullMQ runner code, webhook + eval gate, k8s deployment YAML, pricing model. |
+| [setup.md](./setup.md) | Operator runbook — apply migrations, configure Cloudflare, deploy Workers, verify |
+| [phases.md](./phases.md) | Original 8-phase delivery roadmap with scope, durations, ship signals |
+| [migration-ahurasense.md](./migration-ahurasense.md) | Domain switch runbook: `cs2hvh.com` (current) → `ahurasense.com` (target, pending CF perms) |
+| [managed-serving.md](./managed-serving.md) | Operator notes on the Phase 11 managed serving path |
+| [fine-tuning-runner.md](./fine-tuning-runner.md) | FT runner operator contract — env vars, BullMQ wiring, RunPod orchestration |
+| [phase-5b-build-guide.md](./phase-5b-build-guide.md) | Phase 5.B canonical implementation guide — Dockerfiles, BullMQ runner code, webhook + eval gate, k8s YAML, pricing model |
+| [template-precache.md](./template-precache.md) | RunPod template pre-cache (Phase 9.G, deferred — eliminates 5-10 min cold image pull) |
+| [load-testing.md](./load-testing.md) | k6 load test scenarios + interpretation |
 
-## Code locations
+---
+
+## Code map
 
 | Path | Purpose |
 |---|---|
-| `workers/inference/` | Cloudflare Workers edge gateway (Hono, OpenAI-compat /v1) |
-| `supabase/migrations/20260523000001_create_inference_schema.sql` | `inference.*` schema: orgs, members, keys, models, usage, audit, finetunes, deployments, vector collections |
-| `app/(marketing)/services/inference/page.tsx` | Public landing page |
-| `app/(marketing)/services/fine-tuning/page.tsx` | Public landing page |
-| `app/(marketing)/services/embeddings/page.tsx` | Public landing page |
-| `app/(marketing)/services/model-hosting/page.tsx` | Public landing page |
-| `components/navbar-client.tsx` | Top nav — 4 new AI services added to PRODUCTS list |
+| `app/dashboard/services/inference/` | Customer dashboard — overview, models, playground, presets, vectors, batches, fine-tuning, deployments, api-keys, byok-keys, usage, members, audit, notifications, diagnostics, settings |
+| `app/api/inference/` | Control plane — every dashboard route's REST backend |
+| `app/(marketing)/services/inference/` etc. | Public marketing landing pages |
+| `workers/inference/` | Cloudflare Workers edge gateway (Hono, `api.cs2hvh.com/v1/*`) |
+| `workers/ft-runner/` | LKE BullMQ runner — claims FT jobs, provisions GPUs, monitors training |
+| `workers/deploy-runner/` | LKE BullMQ runner — claims BYO Deploy jobs, provisions endpoints |
+| `lib/inference/` | Shared server-side helpers: crypto (BYOK + HF tokens), error sanitizer, notifications fan-out, semantic cache, audit, branding, serving-pod abstraction |
+| `lib/email/` | Resend-backed email templates (transactional + inference event notifications) |
+| `components/dashboard/inference/` | Editorial-chrome React components (FT, batches, deployments, vectors, model-catalog, playground, notifications, diagnostics, service-health) |
+| `supabase/migrations/2026052*` | The `inference.*` schema + all subsequent migrations |
+| `infra/runpod/training-images/axolotl/` | FT training image (axolotl 0.16 + transformers 5.5 + peft 0.19 + accelerate 1.13 + torch 2.9 + CUDA 12.8) |
+| `infra/runpod/serving-images/vllm-lora/` | FT serving image (vllm/vllm-openai:v0.7.3 + R2 adapter loader) |
 
-## Key design decisions (captured 2026-05-23)
+---
 
-- **OpenRouter is the single upstream for all inference.** No self-hosted vLLM workers. RunPod is used only for Fine-Tuning and BYO model deploys.
-- **0% markup on inference.** Pass-through OpenRouter rates. Revenue comes from Fine-Tuning, BYO Deploy, Vector Store, and bundled AhuraCloud compute spend.
-- **Separate `inference_*` schema** — does NOT reuse the existing `ai_agents.*` schema. The two products coexist; AI Agents may eventually call the new gateway internally.
-- **No "AI" sub-brand.** Each capability is a sibling `/services/*` page like `/services/compute` or `/services/database`.
-- **Enterprise-grade from day 0** — multi-tenant orgs, per-key budgets + IP allowlists + ZDR toggle, audit log, response caching, edge gateway, OTel observability. Compliance certifications (SOC 2 / GDPR / HIPAA) deferred but architecture is ready.
-- **Scale target:** 100k requests/hour (~500 RPS burst). Single-region MVP; multi-region designed-for but not shipped at launch.
+## Locked-in design decisions
 
-## Current status
+- **OpenRouter is the single upstream for chat / messages / embeddings.**
+  No self-hosted vLLM at the gateway layer.
+- **0% markup on inference.** Pass-through upstream rates. Revenue comes
+  from Fine-Tuning training compute, hosted serving instance-hours, BYO
+  Deploy endpoint-hours, Vector Store, and bundled AhuraCloud compute spend.
+- **Per-customer dedicated managed serving (Tier 1)** for fine-tunes — NOT
+  shared multi-LoRA pool. Per-hour pricing, customer picks GPU SKU,
+  auto-stop after idle window. Shared pool deferred.
+- **Brand-scrub discipline.** Customer-facing surfaces never name upstream
+  providers (RunPod, OpenRouter, Cloudflare, Supabase, Upstash, R2, LKE).
+  The deliberate exception is `security.md §11` (subprocessor list,
+  procurement-only). Single sanitizer source of truth at
+  `lib/inference/error-messages.ts::customerSafeErrorMessage()`, applied
+  at write-time, read-time, and notifications fan-out time.
+- **Enterprise-grade from day 0** — multi-tenant orgs, per-key budgets +
+  rate-limits + IP allowlists + ZDR toggle, per-org spend caps + alerts,
+  RLS on every customer-data table, AES-GCM BYOK, append-only audit log,
+  edge gateway, semantic cache, observability across the board.
+  SOC 2 audit is on the roadmap — gap list in `security.md §15`.
+- **Scale target:** 100k requests/hour (~500 RPS burst), single-region MVP,
+  multi-region designed-for but not shipped at launch.
+- **`api.cs2hvh.com/v1` is the current temporary gateway.** Migrates to
+  `api.ahurasense.com/v1` when CF perms land on that account — runbook in
+  `migration-ahurasense.md`. All customer-visible URLs are env-driven
+  (`lib/inference/branding.ts`); the switch is 6 env vars + redeploy.
 
-**Phase 1 SHIPPED 2026-05-24** on the `ai` branch — public beta ready.
+---
 
-- ✅ Phase 0 — foundation deployed end-to-end on `api.cs2hvh.com` (Supabase schema, Cloudflare Workers + KV + DO + Queues, secrets, DNS, marketing pages, sidebar nav)
-- ✅ Phase 1.A–G — real inference (`/v1/chat/completions`, `/v1/messages`, `/v1/embeddings` stub, `/v1/models`, `/v1/key`, `/v1/health`), 52-model catalog, BYOK with AES-GCM, usage + audit queue consumers, full dashboard (overview / api-keys / byok-keys / usage / audit / members / settings)
-- ✅ Phase 1.H — k6 load test passed: 84,811 reqs in 3.5min, 0.25% HTTP failure rate, p95 latencies well under thresholds (health 15ms, key 279ms, models 293ms)
-- ⏳ Phase 2 — Catalog curation UI + response caching + off-peak pricing (next)
+## Current status (one-liner)
 
-**For full live state — what's deployed where, what works end-to-end, all decisions, known gaps, file map, and instructions for continuing in a new session — see [STATUS.md](./STATUS.md).**
-
-See [phases.md](./phases.md) for the full 8-phase roadmap.
+**Customer-facing feature surface is complete.** Phases 0–11 all shipped
+end-to-end. Truss source builder is the only deferred first-class item.
+Full live state in [STATUS.md](./STATUS.md).
