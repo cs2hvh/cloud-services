@@ -81,6 +81,7 @@ export const authMiddleware: MiddlewareHandler<{
     orgMonthlyBudgetCents: resolved.orgMonthlyBudgetCents,
     orgHardCapCents: resolved.orgHardCapCents,
     semanticCacheEnabled: resolved.semanticCacheEnabled,
+    orgSemanticCacheThreshold: resolved.orgSemanticCacheThreshold,
     billing,
     byokProvider,
   };
@@ -103,6 +104,7 @@ interface CachedKey {
   orgMonthlyBudgetCents: number | null;
   orgHardCapCents: number | null;
   semanticCacheEnabled: boolean;
+  orgSemanticCacheThreshold: number | null;
   expiresAt: string | null;
 }
 
@@ -139,10 +141,21 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       org_monthly_budget_cents: number | null;
       org_hard_cap_cents: number | null;
       semantic_cache_enabled: boolean;
+      org_semantic_cache_threshold: number | string | null;
       expires_at: string | null;
     }>();
 
   if (error || !data) return null;
+
+  // pg NUMERIC comes back as string in PostgREST JSON — coerce here
+  // so the worker can treat it as a plain number downstream.
+  const rawThreshold = data.org_semantic_cache_threshold;
+  const orgSemanticCacheThreshold =
+    rawThreshold === null || rawThreshold === undefined
+      ? null
+      : typeof rawThreshold === "number"
+        ? rawThreshold
+        : Number.parseFloat(String(rawThreshold));
 
   return {
     keyId: data.key_id,
@@ -155,6 +168,9 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
     orgMonthlyBudgetCents: data.org_monthly_budget_cents,
     orgHardCapCents: data.org_hard_cap_cents,
     semanticCacheEnabled: data.semantic_cache_enabled ?? false,
+    orgSemanticCacheThreshold: Number.isFinite(orgSemanticCacheThreshold)
+      ? orgSemanticCacheThreshold
+      : null,
     expiresAt: data.expires_at,
   };
 }

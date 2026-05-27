@@ -42,6 +42,7 @@ interface OrgResponse {
     owner_user_id: string | null;
     monthly_budget_cents: number | null;
     hard_cap_cents: number | null;
+    semantic_cache_threshold: number | null;
     created_at: string | null;
     updated_at: string | null;
   };
@@ -51,6 +52,10 @@ interface OrgResponse {
     byok_keys: number;
   };
 }
+
+const SEMANTIC_CACHE_DEFAULT_THRESHOLD = 0.95;
+const SEMANTIC_CACHE_MIN = 0.85;
+const SEMANTIC_CACHE_MAX = 0.99;
 
 // Parse a "$1,234.56" / "1234.56" / "1234" input string into integer
 // cents. Returns null for empty input, NaN for invalid. Negative -> NaN.
@@ -85,12 +90,22 @@ export default function SettingsPage() {
     region_pin: string;
     monthly_budget_usd: string;
     hard_cap_usd: string;
+    /** Slider position 0.85..0.99 (snapped to .01). Always present —
+     *  if the org has no override saved, we initialize to the platform
+     *  default (0.95) but only PATCH when the value actually drifts
+     *  from the saved org value. */
+    semantic_cache_threshold: number;
+    /** True iff the org has a non-null override saved. Drives the
+     *  "Reset to default" affordance + the save dirty-check. */
+    semantic_cache_threshold_overridden: boolean;
   }>({
     name: '',
     zdr_default: false,
     region_pin: '__any__',
     monthly_budget_usd: '',
     hard_cap_usd: '',
+    semantic_cache_threshold: SEMANTIC_CACHE_DEFAULT_THRESHOLD,
+    semantic_cache_threshold_overridden: false,
   });
 
   const load = async () => {
@@ -106,6 +121,9 @@ export default function SettingsPage() {
         region_pin: json.org.region_pin ?? '__any__',
         monthly_budget_usd: centsToUsdInput(json.org.monthly_budget_cents),
         hard_cap_usd: centsToUsdInput(json.org.hard_cap_cents),
+        semantic_cache_threshold:
+          json.org.semantic_cache_threshold ?? SEMANTIC_CACHE_DEFAULT_THRESHOLD,
+        semantic_cache_threshold_overridden: json.org.semantic_cache_threshold !== null,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load');
@@ -127,13 +145,25 @@ export default function SettingsPage() {
     parsedHardCapCents !== null &&
     (parsedBudgetCents as number) > (parsedHardCapCents as number);
 
+  // The threshold field has a slight wrinkle: a user can have NEVER
+  // saved a value (dashboard shows default 0.95, server stores null),
+  // and the dirty check should only fire if they intentionally tweak
+  // the slider. Track the "did the user touch it" via the overridden
+  // flag — set to true on any slider move or Reset action.
+  const savedThreshold = data?.org.semantic_cache_threshold ?? null;
+  const thresholdDirty =
+    form.semantic_cache_threshold_overridden !== (savedThreshold !== null) ||
+    (form.semantic_cache_threshold_overridden &&
+      Math.abs(form.semantic_cache_threshold - (savedThreshold ?? 0)) > 0.0001);
+
   const dirty =
     data &&
     (form.name.trim() !== data.org.name ||
       form.zdr_default !== data.org.zdr_default ||
       (form.region_pin === '__any__' ? null : form.region_pin) !== data.org.region_pin ||
       (capsValid && parsedBudgetCents !== data.org.monthly_budget_cents) ||
-      (capsValid && parsedHardCapCents !== data.org.hard_cap_cents));
+      (capsValid && parsedHardCapCents !== data.org.hard_cap_cents) ||
+      thresholdDirty);
 
   const save = async () => {
     if (!data || !form.name.trim()) return;
@@ -157,6 +187,12 @@ export default function SettingsPage() {
       }
       if (parsedHardCapCents !== data.org.hard_cap_cents) {
         payload.hard_cap_cents = parsedHardCapCents;
+      }
+      if (thresholdDirty) {
+        payload.semantic_cache_threshold = form.semantic_cache_threshold_overridden
+          ? // Snap to 2 decimals — the DB column is NUMERIC(3,2).
+            Math.round(form.semantic_cache_threshold * 100) / 100
+          : null;
       }
 
       const r = await fetch('/api/inference/orgs/current', {
@@ -379,6 +415,79 @@ export default function SettingsPage() {
               Per-API-key caps still apply on top. Whichever cap (key or org) is reached first wins.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Semantic cache tuning */}
+      <section className="mb-14">
+        <SectionHead eyebrow="Semantic cache" title="Match" accent="threshold" />
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
+          <p className={`${MONO} text-[11px] text-white/55 leading-relaxed max-w-2xl`}>
+            Cosine similarity required for a cached response to be served on a near-duplicate
+            prompt. Only applies to API keys that have Semantic cache turned on individually.
+          </p>
+          <div className="flex items-baseline justify-between gap-4 max-w-2xl">
+            <div className="min-w-0">
+              <Label className={`${MONO} block mb-1 text-[11px] uppercase tracking-[0.12em] text-white/80`}>
+                Threshold
+              </Label>
+              <p className={`${MONO} text-[10.5px] text-white/45`}>
+                Stricter (right) → fewer hits, higher accuracy. Looser (left) → more hits, more
+                tolerance for paraphrased prompts. Platform default is 0.95.
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <div
+                style={SERIF_STYLE}
+                className="text-[24px] font-bold text-white tabular-nums"
+              >
+                {form.semantic_cache_threshold.toFixed(2)}
+              </div>
+              <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>
+                {form.semantic_cache_threshold_overridden ? 'custom' : 'platform default'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 max-w-2xl">
+            <span className={`${MONO} text-[10.5px] text-white/45 tabular-nums w-10`}>
+              {SEMANTIC_CACHE_MIN.toFixed(2)}
+            </span>
+            <input
+              type="range"
+              min={SEMANTIC_CACHE_MIN}
+              max={SEMANTIC_CACHE_MAX}
+              step={0.01}
+              value={form.semantic_cache_threshold}
+              disabled={!isAdminish || loading}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  semantic_cache_threshold: Number(e.target.value),
+                  semantic_cache_threshold_overridden: true,
+                })
+              }
+              className="flex-1 accent-[#0095FF] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ accentColor: ACCENT }}
+            />
+            <span className={`${MONO} text-[10.5px] text-white/45 tabular-nums w-10 text-right`}>
+              {SEMANTIC_CACHE_MAX.toFixed(2)}
+            </span>
+          </div>
+          {form.semantic_cache_threshold_overridden && isAdminish && (
+            <button
+              type="button"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  semantic_cache_threshold: SEMANTIC_CACHE_DEFAULT_THRESHOLD,
+                  semantic_cache_threshold_overridden: false,
+                })
+              }
+              className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-[#33adff] hover:text-white transition-colors`}
+            >
+              Reset to platform default
+            </button>
+          )}
         </div>
       </section>
 

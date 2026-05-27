@@ -29,6 +29,15 @@ const patchSchema = z.object({
     .max(100_000_000)
     .nullable()
     .optional(),
+  // Phase 7.C — cosine similarity threshold for the semantic cache.
+  // Bounded to the same range as the DB CHECK constraint so a bad
+  // value never reaches Postgres.
+  semantic_cache_threshold: z
+    .number()
+    .min(0.5)
+    .max(0.99)
+    .nullable()
+    .optional(),
 });
 
 export async function GET() {
@@ -67,7 +76,7 @@ export async function GET() {
         .schema("inference")
         .from("orgs")
         .select(
-          "id, slug, name, zdr_default, region_pin, owner_user_id, monthly_budget_cents, hard_cap_cents, created_at, updated_at"
+          "id, slug, name, zdr_default, region_pin, owner_user_id, monthly_budget_cents, hard_cap_cents, semantic_cache_threshold, created_at, updated_at"
         )
         .eq("id", org.org_id)
         .maybeSingle(),
@@ -93,8 +102,18 @@ export async function GET() {
   type OrgRow = {
     monthly_budget_cents: number | null;
     hard_cap_cents: number | null;
+    semantic_cache_threshold: number | string | null;
   } | null;
   const row = orgRow as (typeof orgRow & OrgRow) | null;
+  // pg NUMERIC arrives as string in PostgREST; coerce so the dashboard
+  // can render it as a real number without a parse step on the client.
+  const rawThreshold = row?.semantic_cache_threshold ?? null;
+  const semanticCacheThreshold =
+    rawThreshold === null
+      ? null
+      : typeof rawThreshold === "number"
+        ? rawThreshold
+        : Number.parseFloat(String(rawThreshold));
 
   return NextResponse.json({
     success: true,
@@ -108,6 +127,8 @@ export async function GET() {
       owner_user_id: row?.owner_user_id ?? null,
       monthly_budget_cents: row?.monthly_budget_cents ?? null,
       hard_cap_cents: row?.hard_cap_cents ?? null,
+      semantic_cache_threshold:
+        Number.isFinite(semanticCacheThreshold) ? semanticCacheThreshold : null,
       created_at: row?.created_at ?? null,
       updated_at: row?.updated_at ?? null,
     },
@@ -173,7 +194,7 @@ export async function PATCH(request: NextRequest) {
     .update(parsed.data)
     .eq("id", org.org_id)
     .select(
-      "id, slug, name, zdr_default, region_pin, monthly_budget_cents, hard_cap_cents, updated_at"
+      "id, slug, name, zdr_default, region_pin, monthly_budget_cents, hard_cap_cents, semantic_cache_threshold, updated_at"
     )
     .single();
 

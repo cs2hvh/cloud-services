@@ -53,6 +53,11 @@ export interface SemanticCacheLookupInput {
   /** Upstream API key (OpenRouter platform key, or BYOK). The embed
    *  call goes to OpenRouter; cost is on whoever's billing applies. */
   upstreamKey: string;
+  /** Optional per-org override for the cosine similarity threshold.
+   *  Null/undefined → use SIMILARITY_THRESHOLD. Bracketed at call time
+   *  to [0.50, 0.99] for safety even if a misconfigured value reaches
+   *  here. */
+  thresholdOverride?: number | null;
 }
 
 export interface SemanticCacheWriteInput {
@@ -165,6 +170,14 @@ export async function lookupSemanticCache(
         global: { headers: { "X-Client-Info": "ahura-inference-semantic-cache" } },
       }
     );
+    // Clamp the optional override into a safe band before passing
+    // to the RPC — gives the per-org tuning meaningful range while
+    // preventing pathological values (e.g. 0.0) from effectively
+    // returning every entry.
+    const threshold =
+      typeof input.thresholdOverride === "number" && Number.isFinite(input.thresholdOverride)
+        ? Math.min(0.99, Math.max(0.5, input.thresholdOverride))
+        : SIMILARITY_THRESHOLD;
     const rpcResult = await supabase
       .schema("inference")
       .rpc("lookup_semantic_cache", {
@@ -172,7 +185,7 @@ export async function lookupSemanticCache(
         p_model_id: input.modelId,
         p_temp_bucket: temperatureBucket(input.temperature),
         p_embedding: embedding,
-        p_threshold: SIMILARITY_THRESHOLD,
+        p_threshold: threshold,
         p_ttl_seconds: TTL_SECONDS,
       });
     if (rpcResult.error) {

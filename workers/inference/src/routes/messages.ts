@@ -288,6 +288,7 @@ export const messagesShim: Handler<{
         temperature: req.temperature,
         promptText: semanticPromptText,
         upstreamKey,
+        thresholdOverride: auth.orgSemanticCacheThreshold,
       });
       if (semanticHit) {
         c.executionCtx.waitUntil(

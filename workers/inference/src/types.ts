@@ -66,6 +66,9 @@ export interface AuthContext {
   // Phase 7.C — per-key opt-in to semantic cache. ZDR keys always
   // skip cache regardless of this flag (privacy guarantee).
   semanticCacheEnabled: boolean;
+  // Optional org-tuned cosine threshold (0.50..0.99). Null = use the
+  // worker's baked-in default (SIMILARITY_THRESHOLD in lib/semantic-cache).
+  orgSemanticCacheThreshold: number | null;
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";
