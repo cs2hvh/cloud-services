@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { ArrowRight, Terminal } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
