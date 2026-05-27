@@ -35,6 +35,21 @@ export interface RunnerEnv {
    *  inserted on registered models so the inference gateway can route. */
   loraServingEndpointId: string | null;
 
+  /** AES-256-GCM data encryption key — base64-encoded 32 bytes. Must
+   *  match the value set on the Next.js dashboard process; sharing
+   *  the same DEK lets the runner decrypt HF tokens that the
+   *  dashboard encrypted at create time. Optional because deployments
+   *  with no hf_token_encrypted don't need it; required at use site
+   *  for HF deploys with a token. */
+  byokDek: string | null;
+
+  /** Worker image used to materialize a HuggingFace deploy at runtime.
+   *  Today we use runpod's published vLLM worker which accepts MODEL_NAME
+   *  + HF_TOKEN at boot and exposes OpenAI-compatible HTTP on port 8000.
+   *  Pinned to a specific tag in env so we don't get surprise behavior
+   *  changes on `:latest`. */
+  hfWorkerImage: string;
+
   maxConcurrentJobs: number;
   claimPollIntervalMs: number;
   readyPollIntervalMs: number;
@@ -51,6 +66,8 @@ export function loadEnv(): RunnerEnv {
     runpodApiKey: required("RUNPOD_API_KEY"),
     runpodRestUrl: optional("RUNPOD_REST_URL", "https://rest.runpod.io/v1"),
     loraServingEndpointId: process.env.LORA_SERVING_ENDPOINT_ID?.trim() || null,
+    byokDek: process.env.BYOK_DEK?.trim() || null,
+    hfWorkerImage: optional("HF_WORKER_IMAGE", "runpod/worker-v1-vllm:stable"),
 
     maxConcurrentJobs: optionalInt("MAX_CONCURRENT_JOBS", 4),
     claimPollIntervalMs: optionalInt("CLAIM_POLL_INTERVAL_MS", 5_000),

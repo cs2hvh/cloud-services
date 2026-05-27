@@ -17,6 +17,7 @@ import type { Job } from "bullmq";
 import type { RunnerEnv } from "./env.js";
 import type { Logger } from "./logger.js";
 import type { RunPod } from "./runpod.js";
+import { decryptAesGcm } from "./crypto.js";
 
 export type DeployAction = "create" | "scale" | "delete";
 
@@ -38,6 +39,7 @@ interface DeploymentRow {
   runpod_endpoint_id: string | null;
   image_uri: string | null;
   model_id: string | null;
+  hf_token_encrypted: string | null;
 }
 
 export interface LifecycleDeps {
@@ -82,7 +84,7 @@ async function handleCreate(deps: LifecycleDeps, id: string, log: Logger): Promi
     .eq("id", id)
     .eq("status", "building")
     .select(
-      "id, org_id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, runpod_endpoint_id, image_uri, model_id"
+      "id, org_id, name, source, source_ref, source_revision, gpu_sku, autoscale, status, runpod_endpoint_id, image_uri, model_id, hf_token_encrypted"
     )
     .maybeSingle<DeploymentRow>();
 
@@ -96,37 +98,46 @@ async function handleCreate(deps: LifecycleDeps, id: string, log: Logger): Promi
     return;
   }
 
-  // 2. Resolve image URI per source type
-  const imageUri = resolveImageUri(claimed);
-  if (!imageUri) {
-    await markFailed(
-      supabase,
-      id,
-      `Unsupported source "${claimed.source}" — only Docker images are deployable in v1. ` +
-        `HF and Truss sources need a build step (Phase 7).`
-    );
+  // 2. Resolve image URI + extra env per source type
+  let resolved: ResolvedSource;
+  try {
+    resolved = await resolveSource(claimed, env);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error({ err: msg, source: claimed.source }, "source resolution failed");
+    await markFailed(supabase, id, msg);
     return;
   }
 
-  // 3. Provision RunPod endpoint
+  // 3. Provision the compute endpoint
   let endpointId: string;
   try {
     const endpoint = await runpod.createEndpoint({
       name: `ahura-byo-${id.slice(0, 8)}`,
-      imageUri,
+      imageUri: resolved.imageUri,
       gpuSku: claimed.gpu_sku,
       autoscale: claimed.autoscale,
       env: {
         DEPLOYMENT_ID: id,
         ORG_ID: claimed.org_id,
+        ...resolved.extraEnv,
       },
     });
     endpointId = endpoint.id;
-    log.info({ endpointId, workersMin: endpoint.workersMin, workersMax: endpoint.workersMax }, "endpoint created");
+    log.info(
+      { endpointId, workersMin: endpoint.workersMin, workersMax: endpoint.workersMax, source: claimed.source },
+      "endpoint created"
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, "endpoint create failed");
-    await markFailed(supabase, id, `RunPod endpoint create failed: ${msg.slice(0, 400)}`);
+    // Customer-facing copy: don't leak the upstream provider name. The
+    // operator can find the real error in the structured log above.
+    await markFailed(
+      supabase,
+      id,
+      "Could not start the compute endpoint. Check your image / model id is reachable from the platform, or retry in a moment."
+    );
     return;
   }
 
@@ -365,16 +376,84 @@ async function handleDelete(deps: LifecycleDeps, id: string, log: Logger): Promi
 
 // ── helpers ────────────────────────────────────────────────────────
 
-function resolveImageUri(row: DeploymentRow): string | null {
+/** What the create-endpoint call needs to know about the source. */
+interface ResolvedSource {
+  imageUri: string;
+  extraEnv: Record<string, string>;
+}
+
+/**
+ * Source-type → (image, env vars) resolver.
+ *
+ *   docker      — image URI is whatever the user gave us (preflight
+ *                 resolved + stored in image_uri).
+ *   huggingface — runtime materialization via a pre-built vLLM worker.
+ *                 No build step on our side: the worker downloads the
+ *                 model weights from HF at container startup using the
+ *                 customer's HF token (decrypted from
+ *                 deployments.hf_token_encrypted with BYOK_DEK). Cold
+ *                 start is slow on first download (5-30 min depending on
+ *                 model size); subsequent cold starts on the same node
+ *                 are fast.
+ *   truss       — rejected at the API layer; never reaches here. We
+ *                 still gate to fail loudly if it ever does.
+ */
+async function resolveSource(row: DeploymentRow, env: RunnerEnv): Promise<ResolvedSource> {
   if (row.source === "docker") {
-    if (row.image_uri) return row.image_uri;
-    const tag = row.source_revision || "";
-    return tag ? `${row.source_ref}:${tag}` : row.source_ref;
+    let imageUri = row.image_uri;
+    if (!imageUri) {
+      const tag = row.source_revision || "";
+      imageUri = tag ? `${row.source_ref}:${tag}` : row.source_ref;
+    }
+    return { imageUri, extraEnv: {} };
   }
-  // HF + Truss need a build step that turns the model/repo into an OCI image.
-  // That ships in Phase 7 (separate builder worker). For now, reject in this
-  // runner — the API already accepts these sources so users can queue them.
-  return null;
+
+  if (row.source === "huggingface") {
+    if (!env.hfWorkerImage) {
+      throw new Error("Platform misconfigured: HF worker image not set");
+    }
+    const extraEnv: Record<string, string> = {
+      MODEL_NAME: row.source_ref,
+    };
+    if (row.source_revision) {
+      // vLLM accepts a revision (commit / branch / tag) via this env.
+      extraEnv.MODEL_REVISION = row.source_revision;
+    }
+    // Decrypt the customer-supplied HF token if present. Most gated
+    // bases will fail with HF 403 without it, so we surface a clearer
+    // hint than the upstream error in that case (the runner's
+    // markFailed copy below).
+    if (row.hf_token_encrypted) {
+      if (!env.byokDek) {
+        throw new Error(
+          "Platform misconfigured: cannot decrypt the HF token — " +
+            "BYOK_DEK env var is not set on this runner."
+        );
+      }
+      try {
+        const cipher = Buffer.from(row.hf_token_encrypted, "base64");
+        const token = await decryptAesGcm(cipher, env.byokDek);
+        extraEnv.HF_TOKEN = token;
+        // Some workers look at HUGGING_FACE_HUB_TOKEN instead — set both
+        // so we don't depend on a specific worker image's convention.
+        extraEnv.HUGGING_FACE_HUB_TOKEN = token;
+      } catch {
+        throw new Error(
+          "Could not decrypt the saved HF token. Re-add the token in the deployment settings."
+        );
+      }
+    }
+    return { imageUri: env.hfWorkerImage, extraEnv };
+  }
+
+  if (row.source === "truss") {
+    throw new Error(
+      "Truss source not yet supported in the deploy-runner. Build your Truss " +
+        "bundle locally and deploy with source = 'docker'."
+    );
+  }
+
+  throw new Error(`Unknown source type "${row.source}"`);
 }
 
 async function markFailed(supabase: SupabaseClient, id: string, reason: string): Promise<void> {

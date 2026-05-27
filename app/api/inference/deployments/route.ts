@@ -22,6 +22,7 @@ import { preflightDeployment } from "@/lib/inference/deploy-validate";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
 import { internalError } from "@/lib/inference/api-errors";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { encryptAesGcm } from "@/lib/inference/crypto";
 
 const createSchema = z.object({
   name: z
@@ -46,6 +47,11 @@ const createSchema = z.object({
       (v) => v.min_workers <= v.max_workers,
       "min_workers must be <= max_workers"
     ),
+  /** Optional Hugging Face token — only meaningful when source =
+   *  'huggingface'. Required in practice for gated bases (most Meta +
+   *  Google models). Encrypted server-side before persisting; never
+   *  echoed back in any list/get response. */
+  hf_token: z.string().min(1).max(200).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -139,6 +145,55 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Source-specific gating ─────────────────────────────────────────
+  //
+  // docker     → fully supported by the deploy-runner.
+  // huggingface → supported via the runtime-materialization shortcut
+  //               (runpod/worker-vllm + MODEL_NAME + HF_TOKEN env);
+  //               token optional at API layer but practically required
+  //               for gated bases.
+  // truss      → DEFERRED — needs a real OCI builder. Reject at the
+  //               API boundary so the row never enters 'building' and
+  //               then sits in 'failed' for the user.
+  if (parsed.data.source === "truss") {
+    return NextResponse.json(
+      {
+        error:
+          "Truss source not yet supported. Build your Truss bundle locally with " +
+          "`truss build`, push the resulting image to a public registry, then " +
+          "deploy here with source = 'docker'. Native Truss support is on the roadmap.",
+      },
+      { status: 400 }
+    );
+  }
+  if (parsed.data.source !== "huggingface" && parsed.data.hf_token) {
+    return NextResponse.json(
+      { error: "hf_token is only meaningful when source = 'huggingface'" },
+      { status: 400 }
+    );
+  }
+
+  // Encrypt the HF token at create time so the plaintext never sits in
+  // the BullMQ payload. The deploy-runner decrypts with the shared
+  // BYOK_DEK at endpoint-provision time.
+  let hfTokenEncrypted: string | null = null;
+  if (parsed.data.source === "huggingface" && parsed.data.hf_token) {
+    const dek = process.env.BYOK_DEK;
+    if (!dek) {
+      return internalError(
+        "BYOK_DEK not configured on the dashboard process",
+        new Error("BYOK_DEK missing"),
+        "byok_dek_missing"
+      );
+    }
+    try {
+      const cipher = await encryptAesGcm(parsed.data.hf_token, dek);
+      hfTokenEncrypted = Buffer.from(cipher).toString("base64");
+    } catch (err) {
+      return internalError("Could not encrypt HF token", err, "hf_token_encrypt_failed");
+    }
+  }
+
   // ── Pre-flight ─────────────────────────────────────────────────
   const preflight = await preflightDeployment({
     source: parsed.data.source,
@@ -173,6 +228,7 @@ export async function POST(request: NextRequest) {
       autoscale: parsed.data.autoscale,
       image_uri: preflight.resolved_image_uri,
       status: "building",
+      hf_token_encrypted: hfTokenEncrypted,
     })
     .select(
       "id, name, source, source_ref, gpu_sku, autoscale, status, image_uri, created_at"

@@ -11,13 +11,13 @@ Serverless AI inference platform for AhuraCloud — an OpenAI-compatible gateway
 
 **Branch:** `ai`, head **`401366de`**. **API domain (temp):** `api.cs2hvh.com` for `/v1/*` gateway, `wao.cs2hvh.com` for the dashboard + webhook receiver (via Cloudflare Tunnel to a dev server). Final domain `api.ahurasense.com` pending CF perms.
 
-**State:** Phases **0, 1, 1.5, 2, 3, 4, 5, 6, 7 (A/B/C/D/E), 8, 9, 10, 11 (A/B/C/D/E/E.2/F.3)** SHIPPED end-to-end (validated with real money-spending jobs). The only remaining first-class item is **Phase 6** HF + Truss source builders (today's BYO Deploy ships docker source only). Phase 7.E SOC 2 readiness docs live at [`security.md`](./security.md) for procurement review.
+**State:** Phases **0, 1, 1.5, 2, 3, 4, 5, 6 (docker + HF), 7 (A/B/C/D/E), 8, 9, 10, 11 (A/B/C/D/E/E.2/F.3)** SHIPPED end-to-end (validated with real money-spending jobs). BYO Deploy now supports docker source AND HuggingFace source (runtime-materialization via a pre-built vLLM worker, encrypted HF token storage). Truss source remains deferred — needs a real OCI builder. Phase 7.E SOC 2 readiness docs live at [`security.md`](./security.md) for procurement review.
 
 **What works right now (verified live):**
 - `/v1/chat/completions` against 52 models, BYOK or platform-billed, streaming or not (Phase 1)
 - Click "New job" in dashboard → LoRA fine-tune runs on an A40/A100 → adapter uploads to R2 → completion webhook → model registered in catalog as a `runpod_ft` row → cost computed and shown (`$0.10` for a 4-min phi-4 run). First successful e2e run verified 2026-05-25 (Phase 5).
 - After completion: row expands inline in the dashboard with a "How to serve" 3-step flow. **"Copy serve command" mints a 6-hour presigned URL for `adapter.tar.gz` and copies a credential-free `docker run` command** — user pastes it on any GPU pod (ours or theirs), the serving image (`ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3`) curls the URL, unpacks, and launches vLLM with `--enable-lora` on port 8000 (OpenAI-compatible). No R2 creds anywhere on the user's side. (Phase 10)
-- BYO Model Deploy API + dashboard wired; deploy-runner ships docker source end-to-end (HF + Truss sources need a builder, Phase 7).
+- BYO Model Deploy API + dashboard wired; deploy-runner ships docker source AND HuggingFace source end-to-end (HF uses the pre-built `runpod/worker-v1-vllm:stable` image + customer HF token encrypted at rest with the BYOK_DEK; no build step needed). Truss source still rejected at the API boundary — needs a real OCI builder.
 - Live job progress (current step / epoch / loss) streams from training pods into Postgres → dashboard updates without poll, no provider-naming.
 - Inline expandable job rows with hyperparams, sample generations, presigned R2 log link, presigned adapter download.
 

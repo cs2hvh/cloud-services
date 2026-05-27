@@ -91,7 +91,11 @@ const GPU_OPTIONS = [
 const SOURCE_OPTIONS = [
   { value: "docker" as const, label: "Docker image" },
   { value: "huggingface" as const, label: "HuggingFace repo" },
-  { value: "truss" as const, label: "Truss git repo" },
+  {
+    value: "truss" as const,
+    label: "Truss git repo (coming soon)",
+    disabled: true,
+  },
 ];
 
 function statusMeta(status: Deployment["status"]): { color: string; label: string; pulse?: boolean } {
@@ -136,6 +140,9 @@ export function Deployments({
     source: "docker" as Deployment["source"],
     source_ref: "",
     source_revision: "",
+    /** Only meaningful when source === 'huggingface'. Stored once,
+     *  encrypted server-side, never returned to the client after that. */
+    hf_token: "",
     gpu_sku: "A100-80GB",
     min_workers: 0,
     max_workers: 4,
@@ -190,6 +197,9 @@ export function Deployments({
             max_workers: form.max_workers,
             idle_timeout_s: form.idle_timeout_s,
           },
+          ...(form.source === "huggingface" && form.hf_token.trim()
+            ? { hf_token: form.hf_token.trim() }
+            : {}),
         }),
       });
       const data = await r.json();
@@ -200,7 +210,7 @@ export function Deployments({
       const warnings: string[] = data?.preflight?.warnings ?? [];
       toast.success(`Created "${form.name}"`);
       warnings.forEach((w) => toast.warning(w, { duration: 8000 }));
-      setForm({ ...form, name: "", source_ref: "", source_revision: "" });
+      setForm({ ...form, name: "", source_ref: "", source_revision: "", hf_token: "" });
       setCreateOpen(false);
       await reload();
     } catch (err) {
@@ -504,7 +514,11 @@ export function Deployments({
                 </SelectTrigger>
                 <SelectContent>
                   {SOURCE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
+                    <SelectItem
+                      key={o.value}
+                      value={o.value}
+                      disabled={"disabled" in o && o.disabled === true}
+                    >
                       {o.label}
                     </SelectItem>
                   ))}
@@ -559,6 +573,24 @@ export function Deployments({
                 placeholder={form.source === "docker" ? "Defaults to tag in ref" : "git sha or branch"}
               />
             </div>
+
+            {form.source === "huggingface" && (
+              <div className="md:col-span-2">
+                <Label htmlFor="dep-hf-token">HF token (required for gated models)</Label>
+                <Input
+                  id="dep-hf-token"
+                  type="password"
+                  autoComplete="off"
+                  value={form.hf_token}
+                  onChange={(e) => setForm({ ...form, hf_token: e.target.value })}
+                  placeholder="hf_xxxxxxxx (paste once; encrypted at rest)"
+                />
+                <p className={`${MONO} text-[10px] text-white/40 mt-1 leading-relaxed`}>
+                  Stored encrypted with the platform DEK. Used only at endpoint start-up to
+                  pull weights. Skip if the model is fully public.
+                </p>
+              </div>
+            )}
 
             <div>
               <Label>Min workers</Label>
