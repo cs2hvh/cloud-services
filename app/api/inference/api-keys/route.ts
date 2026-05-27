@@ -26,6 +26,7 @@ const createSchema = z.object({
   semantic_cache_enabled: z.boolean().optional(),
   monthly_budget_cents: z.number().int().nonnegative().optional().nullable(),
   hard_cap_cents: z.number().int().nonnegative().optional().nullable(),
+  rate_limit_rpm: z.number().int().min(1).max(10000).optional().nullable(),
   expires_at: z.string().datetime().optional().nullable(),
 });
 
@@ -65,7 +66,7 @@ export async function GET() {
     .schema("inference")
     .from("api_keys")
     .select(
-      "id, name, key_prefix, key_last_four, allowed_models, allowed_ip_cidrs, zdr_enabled, semantic_cache_enabled, monthly_budget_cents, hard_cap_cents, expires_at, last_used_at, revoked_at, created_at"
+      "id, name, key_prefix, key_last_four, allowed_models, allowed_ip_cidrs, zdr_enabled, semantic_cache_enabled, monthly_budget_cents, hard_cap_cents, rate_limit_rpm, expires_at, last_used_at, revoked_at, created_at"
     )
     .eq("org_id", org.org_id)
     .is("revoked_at", null)
@@ -87,6 +88,7 @@ export async function GET() {
       allowed_ip_cidrs: k.allowed_ip_cidrs,
       zdr_enabled: k.zdr_enabled,
       semantic_cache_enabled: k.semantic_cache_enabled,
+      rate_limit_rpm: k.rate_limit_rpm,
       monthly_budget_cents: k.monthly_budget_cents,
       hard_cap_cents: k.hard_cap_cents,
       expires_at: k.expires_at,
@@ -160,6 +162,7 @@ export async function POST(request: NextRequest) {
       semantic_cache_enabled: parsed.data.semantic_cache_enabled ?? false,
       monthly_budget_cents: parsed.data.monthly_budget_cents ?? null,
       hard_cap_cents: parsed.data.hard_cap_cents ?? null,
+      rate_limit_rpm: parsed.data.rate_limit_rpm ?? null,
       expires_at: parsed.data.expires_at ?? null,
     })
     .select("id, name, key_prefix, key_last_four, created_at")

@@ -62,10 +62,13 @@ interface ApiKey {
   semantic_cache_enabled: boolean;
   monthly_budget_cents: number | null;
   hard_cap_cents: number | null;
+  rate_limit_rpm: number | null;
   expires_at: string | null;
   last_used_at: string | null;
   created_at: string;
 }
+
+const DEFAULT_RPM = 600;
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -83,6 +86,7 @@ export default function ApiKeysPage() {
     semantic_cache_enabled: false,
     monthly_budget_cents: '',
     hard_cap_cents: '',
+    rate_limit_rpm: '',
   });
   const [creating, setCreating] = useState(false);
 
@@ -116,6 +120,15 @@ export default function ApiKeysPage() {
       };
       if (form.monthly_budget_cents) body.monthly_budget_cents = Math.round(Number(form.monthly_budget_cents) * 100);
       if (form.hard_cap_cents) body.hard_cap_cents = Math.round(Number(form.hard_cap_cents) * 100);
+      if (form.rate_limit_rpm) {
+        const n = Math.round(Number(form.rate_limit_rpm));
+        if (!Number.isFinite(n) || n < 1 || n > 10000) {
+          toast.error('Rate limit must be between 1 and 10,000 RPM');
+          setCreating(false);
+          return;
+        }
+        body.rate_limit_rpm = n;
+      }
 
       const r = await fetch('/api/inference/api-keys', {
         method: 'POST',
@@ -128,7 +141,7 @@ export default function ApiKeysPage() {
 
       setCreatedKey(data.data.api_key);
       setKeyVisible(false);
-      setForm({ name: '', zdr_enabled: false, semantic_cache_enabled: false, monthly_budget_cents: '', hard_cap_cents: '' });
+      setForm({ name: '', zdr_enabled: false, semantic_cache_enabled: false, monthly_budget_cents: '', hard_cap_cents: '', rate_limit_rpm: '' });
       setCreateOpen(false);
       await load();
     } catch (err) {
@@ -352,6 +365,21 @@ export default function ApiKeysPage() {
                 />
               </Field>
             </div>
+            <Field label="Rate limit (requests / minute)">
+              <Input
+                type="number"
+                step="1"
+                min="1"
+                max="10000"
+                value={form.rate_limit_rpm}
+                onChange={(e) => setForm({ ...form, rate_limit_rpm: e.target.value })}
+                placeholder={`${DEFAULT_RPM} (platform default)`}
+                className="bg-white/[0.02] border-white/[0.08]"
+              />
+              <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>
+                Leave blank to use the platform default ({DEFAULT_RPM} RPM ≈ {DEFAULT_RPM / 60} RPS). Range 1–10,000.
+              </p>
+            </Field>
             <div className="flex items-center justify-between rounded-[5px] border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
               <div>
                 <Label htmlFor="zdr" className={`${MONO} text-[11px] uppercase tracking-[0.12em] text-white/80`}>

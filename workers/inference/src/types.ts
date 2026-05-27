@@ -69,6 +69,10 @@ export interface AuthContext {
   // Optional org-tuned cosine threshold (0.50..0.99). Null = use the
   // worker's baked-in default (SIMILARITY_THRESHOLD in lib/semantic-cache).
   orgSemanticCacheThreshold: number | null;
+  // Phase 1.5 — per-key requests-per-minute override. Null = use the
+  // worker's DEFAULT_RPM in rate-limit middleware. Validated in
+  // [1, 10000] by the DB CHECK so the middleware can trust the value.
+  rateLimitRpm: number | null;
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";

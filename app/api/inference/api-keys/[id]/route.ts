@@ -18,6 +18,7 @@ const patchSchema = z.object({
   semantic_cache_enabled: z.boolean().optional(),
   monthly_budget_cents: z.number().int().nonnegative().optional().nullable(),
   hard_cap_cents: z.number().int().nonnegative().optional().nullable(),
+  rate_limit_rpm: z.number().int().min(1).max(10000).optional().nullable(),
 });
 
 function isUuid(s: string): boolean {
@@ -90,6 +91,7 @@ export async function PATCH(
       k === "allowed_ip_cidrs" ||
       k === "zdr_enabled" ||
       k === "semantic_cache_enabled" ||
+      k === "rate_limit_rpm" ||
       k === "name"
   );
   const ctx = auditContextFrom(request);

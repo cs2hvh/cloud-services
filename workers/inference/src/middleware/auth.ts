@@ -82,6 +82,7 @@ export const authMiddleware: MiddlewareHandler<{
     orgHardCapCents: resolved.orgHardCapCents,
     semanticCacheEnabled: resolved.semanticCacheEnabled,
     orgSemanticCacheThreshold: resolved.orgSemanticCacheThreshold,
+    rateLimitRpm: resolved.rateLimitRpm,
     billing,
     byokProvider,
   };
@@ -105,6 +106,7 @@ interface CachedKey {
   orgHardCapCents: number | null;
   semanticCacheEnabled: boolean;
   orgSemanticCacheThreshold: number | null;
+  rateLimitRpm: number | null;
   expiresAt: string | null;
 }
 
@@ -142,6 +144,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       org_hard_cap_cents: number | null;
       semantic_cache_enabled: boolean;
       org_semantic_cache_threshold: number | string | null;
+      rate_limit_rpm: number | null;
       expires_at: string | null;
     }>();
 
@@ -171,6 +174,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
     orgSemanticCacheThreshold: Number.isFinite(orgSemanticCacheThreshold)
       ? orgSemanticCacheThreshold
       : null,
+    rateLimitRpm: data.rate_limit_rpm ?? null,
     expiresAt: data.expires_at,
   };
 }
