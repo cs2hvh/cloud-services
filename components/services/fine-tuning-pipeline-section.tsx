@@ -120,7 +120,7 @@ export default function FineTuningPipelineSection() {
   return (
     <section
       ref={sectionRef}
-      className="relative isolate overflow-hidden bg-[#0E0F0F] py-28 sm:py-36"
+      className="relative isolate overflow-clip bg-[#0E0F0F] py-28 sm:py-36"
     >
       {/* Atmospheric backdrop — radial wash that follows the active
           step roughly. Uses CSS transition so the move is smooth. */}
