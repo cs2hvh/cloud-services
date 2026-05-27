@@ -3,10 +3,11 @@
 import {
   AnimatePresence,
   motion,
+  useMotionValueEvent,
   useScroll,
   useTransform,
 } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Cpu,
   FileJson,
@@ -84,50 +85,37 @@ const PHASES: Phase[] = [
 export default function FineTuningPipelineSection() {
   const sectionRef = useRef<HTMLDivElement | null>(null);
 
-  // Track which phase is currently in the viewport center — drives the
-  // sticky-right visualization swap + the left rail's active highlight.
+  // Active phase + progress rail are both driven directly from the
+  // section's scroll position. Single source of truth, no
+  // IntersectionObserver race conditions.
   const [active, setActive] = useState(0);
-  const phaseRefs = useRef<Array<HTMLDivElement | null>>([]);
 
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => {
-        // Pick the most-visible phase as "active". rootMargin pulls the
-        // detection zone to the visual middle of the viewport so an
-        // entry-into-view feels like activation, not an early flash.
-        let bestIdx = active;
-        let bestRatio = 0;
-        for (const e of entries) {
-          if (e.intersectionRatio > bestRatio) {
-            bestRatio = e.intersectionRatio;
-            bestIdx = Number(
-              (e.target as HTMLElement).dataset.phaseIdx ?? 0
-            );
-          }
-        }
-        if (bestRatio > 0) setActive(bestIdx);
-      },
-      {
-        threshold: [0.25, 0.5, 0.75],
-        rootMargin: "-30% 0px -30% 0px",
-      }
-    );
-    phaseRefs.current.forEach((el) => el && obs.observe(el));
-    return () => obs.disconnect();
-    // active intentionally excluded — we update it from inside the
-    // observer; including would re-attach observer on every change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Scroll progress for the section — used to (a) fill the vertical
-  // progress line on the left and (b) softly parallax the sticky viz
-  // so it feels less locked-in-place.
   const { scrollYProgress } = useScroll({
     target: sectionRef,
+    // Start filling once the section header reaches ~60% of viewport;
+    // finish when the last phase reaches ~40% from the top.
     offset: ["start 60%", "end 40%"],
   });
+
+  // Map 0..1 progress → which phase is active. With 6 phases each
+  // phase "owns" 1/6 of the scroll. The +0.04 nudge means active
+  // flips slightly BEFORE the next phase reaches viewport center,
+  // so the right-side viz feels responsive rather than lagging.
+  useMotionValueEvent(scrollYProgress, "change", (p) => {
+    const stepSize = 1 / PHASES.length;
+    const idx = Math.min(
+      PHASES.length - 1,
+      Math.max(0, Math.floor((p + 0.04) / stepSize))
+    );
+    setActive((cur) => (cur === idx ? cur : idx));
+  });
+
+  // Progress rail fills from 0% → 100% as the user scrolls through.
   const progressHeight = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
-  const stickyParallax = useTransform(scrollYProgress, [0, 1], [16, -16]);
+  // NOTE: we deliberately do NOT apply a `y` transform to the sticky
+  // visualization. Chrome / Safari unpin `position: sticky` elements
+  // that also carry a transform once the parent ends; the earlier
+  // parallax was killing the sticky behavior past the mid-section.
 
   return (
     <section
@@ -184,25 +172,15 @@ export default function FineTuningPipelineSection() {
               const Icon = p.icon;
               const isActive = active === i;
               return (
-                <div
-                  key={p.num}
-                  ref={(el) => {
-                    phaseRefs.current[i] = el;
-                  }}
-                  data-phase-idx={i}
-                  className="relative"
-                >
+                <div key={p.num} className="relative">
                   {/* Numbered chip + icon badge */}
                   <div className="flex items-center gap-4">
                     <motion.span
-                      style={{
-                        fontFamily: "var(--font-serif), Georgia, serif",
-                      }}
                       animate={{
                         color: isActive ? "#8ecaff" : "rgba(255,255,255,0.25)",
                       }}
                       transition={{ duration: 0.5 }}
-                      className="text-[44px] font-bold leading-none tracking-tight tabular-nums sm:text-[52px]"
+                      className="text-[44px] font-semibold leading-none tracking-tight tabular-nums sm:text-[52px]"
                     >
                       {p.num}
                     </motion.span>
@@ -315,12 +293,13 @@ export default function FineTuningPipelineSection() {
             </div>
           </div>
 
-          {/* ── RIGHT: sticky visualization that swaps with active phase ── */}
+          {/* ── RIGHT: sticky visualization that swaps with active phase ──
+              NOTE: no transform on the sticky element. Chrome / Safari
+              break `position: sticky` if the element also has a CSS
+              transform (parallax y), which is what caused the right
+              panel to go blank after mid-scroll. Pure sticky now. */}
           <div className="lg:relative">
-            <motion.div
-              style={{ y: stickyParallax }}
-              className="lg:sticky lg:top-32"
-            >
+            <div className="lg:sticky lg:top-28">
               <div className="relative">
                 {/* Soft outer glow that intensifies on active phase */}
                 <div
@@ -359,7 +338,7 @@ export default function FineTuningPipelineSection() {
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </Container>
