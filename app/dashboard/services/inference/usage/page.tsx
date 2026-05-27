@@ -52,6 +52,9 @@ interface UsageData {
     latency_ms_p50: number | null;
     latency_ms_p95: number | null;
     latency_ms_p99: number | null;
+    cache_l1_hits: number;
+    cache_semantic_hits: number;
+    cache_hit_rate: number | null;
   };
   day_series: Array<{ day: string; spent_cents: number; requests: number }>;
   top_models: Array<{ model_id: string; spent_cents: number; requests: number }>;
@@ -72,6 +75,7 @@ interface UsageData {
     latency_ms: number | null;
     status: string;
     billed_to: string;
+    cache_kind: 'none' | 'l1' | 'semantic';
   }>;
 }
 
@@ -212,6 +216,26 @@ export default function UsagePage() {
               ? data.summary.success_count / (data.summary.success_count + data.summary.error_count) > 0.99
                 ? '#4ade80'
                 : '#fbbf24'
+              : undefined
+          }
+        />
+        <StatCell
+          label="Cache hit rate"
+          value={
+            loading
+              ? '—'
+              : data && data.summary.cache_hit_rate !== null
+                ? `${(data.summary.cache_hit_rate * 100).toFixed(1)}%`
+                : '—'
+          }
+          hint={
+            data
+              ? `${(data.summary.cache_l1_hits + data.summary.cache_semantic_hits).toLocaleString()} hits · L1 ${data.summary.cache_l1_hits.toLocaleString()} / sem ${data.summary.cache_semantic_hits.toLocaleString()}`
+              : ''
+          }
+          accent={
+            data && (data.summary.cache_l1_hits > 0 || data.summary.cache_semantic_hits > 0)
+              ? '#4ade80'
               : undefined
           }
         />
@@ -439,6 +463,24 @@ export default function UsagePage() {
                   {r.billed_to === 'byok' && (
                     <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-[#0095FF] ml-1`}>
                       BYOK
+                    </span>
+                  )}
+                  {r.cache_kind === 'l1' && (
+                    <span
+                      className={`${MONO} text-[10px] uppercase tracking-[0.12em] ml-1`}
+                      style={{ color: '#a78bfa' }}
+                      title="Served from L1 exact-match cache"
+                    >
+                      L1
+                    </span>
+                  )}
+                  {r.cache_kind === 'semantic' && (
+                    <span
+                      className={`${MONO} text-[10px] uppercase tracking-[0.12em] ml-1`}
+                      style={{ color: '#22d3ee' }}
+                      title="Served from semantic (vector-similarity) cache"
+                    >
+                      SEM
                     </span>
                   )}
                 </div>

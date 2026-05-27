@@ -96,6 +96,7 @@ export async function handleUsageBatch(
       ttft_ms: event.ttftMs,
       status: event.status,
       error_code: event.errorCode,
+      cache_kind: event.cacheKind ?? "none",
       created_at: event.occurredAt,
     };
   });

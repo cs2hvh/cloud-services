@@ -25,6 +25,7 @@ interface UsageRow {
   latency_ms: number | null;
   status: string;
   billed_to: string;
+  cache_kind: "none" | "l1" | "semantic" | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("usage")
     .select(
-      "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to"
+      "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to, cache_kind"
     )
     .eq("org_id", org.org_id)
     .gte("created_at", since.toISOString())
@@ -92,6 +93,8 @@ export async function GET(request: NextRequest) {
   let errorCount = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let l1HitCount = 0;
+  let semanticHitCount = 0;
   const latencies: number[] = [];
 
   for (const row of rows) {
@@ -122,6 +125,8 @@ export async function GET(request: NextRequest) {
     if (row.input_tokens) inputTokens += row.input_tokens;
     if (row.output_tokens) outputTokens += row.output_tokens;
     if (row.latency_ms) latencies.push(row.latency_ms);
+    if (row.cache_kind === "l1") l1HitCount += 1;
+    else if (row.cache_kind === "semantic") semanticHitCount += 1;
   }
 
   // Build the day series even for days with zero traffic so charts plot evenly
@@ -208,6 +213,9 @@ export async function GET(request: NextRequest) {
       latency_ms_p50: pct(0.5),
       latency_ms_p95: pct(0.95),
       latency_ms_p99: pct(0.99),
+      cache_l1_hits: l1HitCount,
+      cache_semantic_hits: semanticHitCount,
+      cache_hit_rate: rows.length > 0 ? (l1HitCount + semanticHitCount) / rows.length : null,
     },
     day_series: daySeries,
     top_models: topModels,
@@ -222,6 +230,7 @@ export async function GET(request: NextRequest) {
       latency_ms: r.latency_ms,
       status: r.status,
       billed_to: r.billed_to,
+      cache_kind: r.cache_kind ?? "none",
     })),
   });
 }

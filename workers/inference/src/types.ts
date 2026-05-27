@@ -113,6 +113,11 @@ export interface UsageEvent {
     | "error_internal"
     | "cancelled";
   errorCode: string | null;
+  /** Which cache served this request, if any. 'none' for upstream
+   *  calls and error paths; 'l1' for the CF KV exact-match cache;
+   *  'semantic' for the pgvector similarity cache (Phase 7.C).
+   *  Drives the cache-hit-rate aggregation in the usage dashboard. */
+  cacheKind: "none" | "l1" | "semantic";
   occurredAt: string;
 }
 

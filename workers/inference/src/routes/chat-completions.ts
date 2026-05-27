@@ -419,6 +419,7 @@ export const chatCompletions: Handler<{
           // Account cache hits at the cached_tokens rate (consumer applies this)
           cachedTokens: cached.usage?.prompt_tokens ?? null,
           status: "success",
+          cacheKind: "l1",
         })
       );
       return new Response(cached.body, {
@@ -481,6 +482,7 @@ export const chatCompletions: Handler<{
             // the cached-input rate, matching the L1 path.
             cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
             status: "success",
+            cacheKind: "semantic",
           })
         );
         return new Response(semanticHit.responseBody, {
@@ -674,6 +676,9 @@ function baseUsageEvent(
     ttftMs: null,
     status: "success",
     errorCode: null,
+    // Default: assume no cache served this request. Cache-hit paths
+    // override below; the consumer falls back to 'none' anyway.
+    cacheKind: "none",
     occurredAt: new Date().toISOString(),
   };
 }

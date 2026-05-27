@@ -255,6 +255,7 @@ function baseUsageEvent(
     ttftMs: null,
     status: "success",
     errorCode: null,
+    cacheKind: "none",
     occurredAt: new Date().toISOString(),
   };
 }

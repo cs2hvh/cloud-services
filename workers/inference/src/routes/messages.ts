@@ -224,6 +224,21 @@ export const messagesShim: Handler<{
     if (hit) {
       c.header("X-Ahura-Cache", "hit");
       c.header("X-Ahura-Cache-Age", String(Math.round((Date.now() - hit.cachedAt) / 1000)));
+      // Pre-existing bug: this branch returned the cached body without
+      // emitting a usage event, so messages L1 hits were invisible in
+      // /usage AND skipped the cached_tokens-rate billing path that
+      // chat-completions takes. Fixed as part of cache-hit
+      // observability so the new cache_kind aggregation matches reality.
+      c.executionCtx.waitUntil(
+        sendUsage(c.env, {
+          ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
+          inputTokens: hit.usage?.prompt_tokens ?? null,
+          outputTokens: hit.usage?.completion_tokens ?? null,
+          cachedTokens: hit.usage?.prompt_tokens ?? null,
+          status: "success",
+          cacheKind: "l1",
+        })
+      );
       return new Response(hit.body, {
         status: 200,
         headers: {
@@ -282,6 +297,7 @@ export const messagesShim: Handler<{
             outputTokens: semanticHit.usage?.completion_tokens ?? null,
             cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
             status: "success",
+            cacheKind: "semantic",
           })
         );
         return new Response(semanticHit.responseBody, {
@@ -710,6 +726,7 @@ function baseUsageEvent(
     ttftMs: null,
     status: "success",
     errorCode: null,
+    cacheKind: "none",
     occurredAt: new Date().toISOString(),
   };
 }

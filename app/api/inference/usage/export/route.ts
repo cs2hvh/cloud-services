@@ -39,6 +39,7 @@ interface UsageRow {
   status: string;
   error_code: string | null;
   billed_to: string;
+  cache_kind: "none" | "l1" | "semantic" | null;
 }
 
 const MAX_ROWS = 100_000;
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("usage")
     .select(
-      "created_at, request_id, api_key_id, model_id, modality, input_tokens, output_tokens, cached_tokens, cost_cents, upstream_cost_cents, is_off_peak, latency_ms, ttft_ms, status, error_code, billed_to"
+      "created_at, request_id, api_key_id, model_id, modality, input_tokens, output_tokens, cached_tokens, cost_cents, upstream_cost_cents, is_off_peak, latency_ms, ttft_ms, status, error_code, billed_to, cache_kind"
     )
     .eq("org_id", org.org_id)
     .gte("created_at", since.toISOString())
@@ -161,6 +162,7 @@ export async function GET(request: NextRequest) {
     "status",
     "error_code",
     "billed_to",
+    "cache_kind",
   ].join(",");
 
   const lines: string[] = [header];
@@ -187,6 +189,7 @@ export async function GET(request: NextRequest) {
         r.status,
         r.error_code,
         r.billed_to,
+        r.cache_kind ?? "none",
       ]
         .map(csvEscape)
         .join(",")
