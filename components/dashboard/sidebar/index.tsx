@@ -16,12 +16,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+    Atom,
     Bell,
     ChevronDown,
     LogOut,
     Menu,
     Search,
-    Sparkles,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -403,8 +403,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     };
 
     const inferenceGroup: NavGroup = {
-        label: "AI/ML labs",
-        icon: Sparkles,
+        label: "A.I. Labs",
+        icon: Atom,
         href: "/dashboard/services/inference",
         children: [
             // Overview always lives at the very top — it's the "home" of
