@@ -8,6 +8,7 @@ import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 export async function PUT(req: NextRequest) {
   const auth = await authenticateUser();
@@ -65,6 +66,29 @@ export async function PUT(req: NextRequest) {
         user_agent: auditContext.userAgent,
         request_id: auditContext.requestId,
       });
+    }
+
+    // Confirmation email — notify the app owner, not the requester (admin may differ)
+    try {
+      const appName = beforeState.data.protocol || "spectrum-app";
+      const recipient =
+        auth.user?.email && beforeState.data.owner_id === auth.user.id
+          ? auth.user.email
+          : await resolveUserEmail(String(beforeState.data.owner_id));
+      await sendServiceAlertEmail({
+        serviceType: "spectrum",
+        userEmail: recipient,
+        serviceName: appName,
+        alertTitle: "DDoS protection app updated",
+        summary: `Your network DDoS protection app "${appName}" was updated.`,
+        severity: "info",
+        metadata: {
+          Operation: "Update network DDoS app",
+          Protocol: appName,
+        },
+      });
+    } catch (emailErr) {
+      console.warn("[services/spectrum/apps/update] Email failed:", emailErr);
     }
 
     return NextResponse.json(result);
