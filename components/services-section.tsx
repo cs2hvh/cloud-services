@@ -22,10 +22,10 @@ const figmaServices = [
  
  {
     logoSrc: "/images/Features/ai-agent.png",
-    logoAlt: "AI Agents",
-    title: "AI Agents",
+    logoAlt: "A.I. Labs",
+    title: "A.I. Labs",
     description:
-      "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
+      "OpenAI-compatible inference for 50+ models. Fine-tune, embed, and host your own on dedicated GPUs — one API key for everything.",
   },
    {
     logoSrc: "/images/Features/database.png",
@@ -139,7 +139,7 @@ export function ServicesSection() {
                   { ...figmaServices[0], left: "44.0%", topVar: "--service-top-1" },
                   { ...figmaServices[1], left: "65.3%", topVar: "--service-top-2" },
                   { ...figmaServices[5], left: "86.6%", topVar: "--service-top-3" },
-                  // { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
+                  { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
                   { ...figmaServices[4], left: "65.3%", topVar: "--service-top-5" },
                   { ...figmaServices[6], left: "86.6%", topVar: "--service-top-6" },
                 ].map((service, i) => (
