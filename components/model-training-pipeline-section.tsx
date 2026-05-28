@@ -1521,11 +1521,15 @@ function Card({
           font-size: 13.5px;
           font-weight: 600;
           margin: 4px 0 0;
-          color: rgba(255, 255, 255, 0.95);
+          color: #8ecaff;
           line-height: 1.2;
           text-align: center;
           letter-spacing: -0.005em;
           max-width: 18ch;
+          transition: color 0.5s ease;
+        }
+        .mt-card.mt-revealed h3 {
+          color: #33adff;
         }
         .mt-sub {
           position: relative;
