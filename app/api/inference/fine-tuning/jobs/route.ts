@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { BillingCredits } from "@/lib/billing/credits";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
@@ -53,6 +54,12 @@ const createSchema = z.object({
     .passthrough()
     .default({}),
 });
+
+// Fair-use + cost-safety guards for GPU-backed fine-tuning. A customer org
+// can't saturate the fleet (or its own bill) with unbounded concurrent jobs,
+// and can't launch a job it has no credits to pay for.
+const MAX_CONCURRENT_FT_JOBS_PER_ORG = 3;
+const MIN_FT_BALANCE_USD = 1;
 
 const DEFAULT_HYPERPARAMS = {
   rank: 16,
@@ -183,6 +190,29 @@ export async function POST(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
+  // ── Per-org concurrency quota ─────────────────────────────────────
+  // Fair-use guard: one org can't tie up the GPU fleet (or run up its bill)
+  // with unbounded concurrent jobs. Counts jobs still consuming, or about to
+  // consume, a GPU.
+  const { count: activeJobs, error: countErr } = await supabase
+    .schema("inference")
+    .from("finetunes")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", org.org_id)
+    .in("status", ["queued", "preparing", "running"]);
+  if (countErr) {
+    return internalError("Could not check job quota", countErr, "ft_quota_check_failed");
+  }
+  if ((activeJobs ?? 0) >= MAX_CONCURRENT_FT_JOBS_PER_ORG) {
+    return NextResponse.json(
+      {
+        error: `You already have ${activeJobs} fine-tuning jobs queued or running (limit ${MAX_CONCURRENT_FT_JOBS_PER_ORG}). Wait for one to finish, or contact support to raise your limit.`,
+        code: "ft_concurrency_limit",
+      },
+      { status: 429 }
+    );
+  }
+
   const mergedHyperparams: Record<string, unknown> = {
     ...DEFAULT_HYPERPARAMS,
     ...parsed.data.hyperparams,
@@ -203,6 +233,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "Dataset failed pre-flight checks", preflight },
       { status: 400 }
+    );
+  }
+
+  // ── Balance gate ──────────────────────────────────────────────────
+  // A fine-tune burns real GPU time, so require the org's billing account to
+  // hold at least the estimated job cost before launch. Stops a job starting
+  // against an empty balance and surfacing later as a surprise debt. Billed
+  // to the org payer (billing_user_id), not necessarily the member launching.
+  const requiredUsd = Math.max(
+    (preflight.estimated_cost_cents ?? 0) / 100,
+    MIN_FT_BALANCE_USD
+  );
+  let payerUserId = auth.user!.id;
+  {
+    const { data: orgRow } = await supabase
+      .schema("inference")
+      .from("orgs")
+      .select("billing_user_id, owner_user_id")
+      .eq("id", org.org_id)
+      .maybeSingle();
+    payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+  }
+  const funded = await BillingCredits.hasSufficientBalance(payerUserId, requiredUsd);
+  if (!funded) {
+    return NextResponse.json(
+      {
+        error: `Insufficient credits to start this job. Estimated cost is about $${requiredUsd.toFixed(2)} — please top up and try again.`,
+        code: "insufficient_credits",
+        required_usd: Number(requiredUsd.toFixed(2)),
+      },
+      { status: 402 }
     );
   }
 

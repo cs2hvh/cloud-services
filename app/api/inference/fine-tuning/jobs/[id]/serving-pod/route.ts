@@ -24,6 +24,7 @@ import { z } from "zod";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { BillingCredits } from "@/lib/billing/credits";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import {
@@ -45,6 +46,10 @@ const provisionSchema = z.object({
   /** Optional override for auto-stop window (hours, 1-72). Defaults to 6h. */
   auto_stop_hours: z.number().int().min(1).max(72).optional(),
 });
+
+// Minimum credits (USD) required to start a dedicated serving instance —
+// roughly an hour of a serving GPU. Auto-stop + metering bound the rest.
+const MIN_SERVING_BALANCE_USD = 2;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Sb = any;
@@ -232,6 +237,31 @@ export async function POST(
       { error: `A serving instance is already ${ft.serving_pod_state}. Stop it before starting a new one.` },
       { status: 409 }
     );
+  }
+
+  // ── Balance gate ──────────────────────────────────────────────────
+  // Serving runs a dedicated GPU by the hour. Require the org's billing
+  // account to hold a starting minimum before we provision, so a pod can't
+  // spin up against an empty balance. Auto-stop bounds the ongoing spend.
+  {
+    const { data: orgRow } = await supabase
+      .schema("inference")
+      .from("orgs")
+      .select("billing_user_id, owner_user_id")
+      .eq("id", org.org_id)
+      .maybeSingle();
+    const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+    const funded = await BillingCredits.hasSufficientBalance(payerUserId, MIN_SERVING_BALANCE_USD);
+    if (!funded) {
+      return NextResponse.json(
+        {
+          error: `You need at least $${MIN_SERVING_BALANCE_USD.toFixed(2)} in credits to start a serving instance. Please top up and try again.`,
+          code: "insufficient_credits",
+          required_usd: MIN_SERVING_BALANCE_USD,
+        },
+        { status: 402 }
+      );
+    }
   }
 
   // Mark provisioning BEFORE the upstream call so dashboard polls see the
