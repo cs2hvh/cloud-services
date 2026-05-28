@@ -13,7 +13,7 @@ When hourly billing hits insufficient balance for a service:
 
 ## 2) Current System Facts (Validated in Code)
 
-- `credit-system-cron/cron-worker.ts` runs every 5 minutes.
+- Standalone repo `deep-aghera-001/credit-system-cron` runs every 5 minutes.
 - Billing source tables:
   - `billing.active_kubernetes`
   - `billing.active_database`
@@ -21,9 +21,9 @@ When hourly billing hits insufficient balance for a service:
   - `billing.active_spectrum`
   - `billing.active_platform_apps`
 - Atomic RPC used by cron: `billing.bill_service_cycle_atomic(...)`.
-- Important behavior: RPC updates `last_billed_at` before balance deduction check.
-  - On `insufficient_credit`, timestamp still advances.
-  - Meaning: no unbounded debt accrual while user is underfunded.
+- Important behavior: RPC deducts credits before advancing `last_billed_at`.
+  - On `insufficient_credit`, timestamp does not advance.
+  - Meaning: unpaid usage is not skipped while user is underfunded.
 - Existing deletion services already include billing close + notifications:
   - `DatabaseService.deleteCluster(...)`
   - `KubernetesService.deleteCluster(...)`

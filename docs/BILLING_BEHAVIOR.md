@@ -1,7 +1,7 @@
 # Billing System — Complete Behavior Reference
 
 > Last verified against real Supabase: **8 April 2026**
-> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, `credit-system-cron/cron-worker.ts`
+> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, standalone repo `deep-aghera-001/credit-system-cron`
 
 ---
 
@@ -42,9 +42,9 @@
 
 ### ISSUE-001 — Kubernetes Cluster Not Being Billed (CRITICAL)
 - **What:** Cluster `6873d186-...` has `last_billed_at` = 337+ minutes ago
-- **Why:** The cron worker (`credit-system-cron/cron-worker.ts`) was not running
+- **Why:** The standalone cron worker was not running
 - **Impact:** User is getting hours of Kubernetes for free; billing gap in DB
-- **Fix:** Start the cron worker: `cd credit-system-cron && npm run start`
+- **Fix:** Start/deploy the standalone cron worker repo: `deep-aghera-001/credit-system-cron`
 - **Detection:** Run `node scripts/smoke-billing.mjs` — will flag any table with rows older than 30 min
 
 ### ISSUE-002 — Float Precision at Very Large Balances (LOW)
@@ -151,9 +151,10 @@ Kubernetes is the only service that scales rate by node count. A 3-node cluster 
    - Applies security caps (see below)  
    - Computes `cost = hoursUsed × hourly_rate`, rounded to 2 decimals
    - If `cost < $0.001` → skips (dust prevention)
-   - **Updates `last_billed_at = now` BEFORE deducting** (timestamp first = safer; failed deduction = free period, not double-bill)
-   - Calls `deduct_user_credit_atomic` RPC to deduct from `billing.user_credits`
-   - If deduction fails → logs error, continues to next service (user not charged)
+   - Calls `billing.bill_service_cycle_atomic` RPC
+   - The RPC locks the active service row and user credit row
+   - If balance is insufficient → does not update `last_billed_at`, records failure/grace state, continues to next service
+   - If deduction succeeds → deducts from `billing.user_credits`, then updates `last_billed_at = now`
 
 **Security caps applied by cron:**
 | Cap | Value | Reason |
@@ -207,7 +208,7 @@ Kubernetes is the only service that scales rate by node count. A 3-node cluster 
 ## 6. How the Cron Worker Works
 
 ### Location
-`credit-system-cron/cron-worker.ts` — separate Node.js process, NOT part of Next.js
+Standalone repo `deep-aghera-001/credit-system-cron` — separate Node.js process, NOT part of Next.js.
 
 ### Schedule
 ```
@@ -217,9 +218,10 @@ Runs 288 times per day. Each run bills all 5 service tables in parallel (`Promis
 
 ### How to Run
 ```bash
+git clone https://github.com/deep-aghera-001/credit-system-cron.git
 cd credit-system-cron
-# Copy .env from root or set vars manually
-SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... npm run start
+npm install
+npm start
 ```
 
 ### How It Decides What to Charge
@@ -232,8 +234,8 @@ It does NOT re-read the Products table. The `hourly_rate` is locked into the `bi
 ### Failure Modes
 | Failure | Behavior |
 |---|---|
-| `last_billed_at` timestamp update fails | Skips billing entirely for that service |
-| `deduct_user_credit_atomic` RPC fails | Logs error, does NOT retry, continues to next service |
+| `bill_service_cycle_atomic` RPC fails | Logs error, does NOT finalize billing, continues to next service |
+| Insufficient credit | Does not advance `last_billed_at`; starts/updates grace lifecycle |
 | Service row has missing/invalid UUID | Skips with security error log |
 | Rate is NaN or negative | Skips with security error log |
 | Rate > $1000/hr | Caps to $1000, logs warning |
