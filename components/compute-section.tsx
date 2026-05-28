@@ -33,7 +33,7 @@ const TIERS: Tier[] = [
         index: "01",
         label: "Shared",
         title: "General purpose",
-        desc: "Balanced CPU + memory on shared hosts. Provisions in under 60 seconds — perfect for web apps, APIs, dev, and staging.",
+        desc: "Balanced CPU and memory on shared hosts. Sub-minute provisioning.",
         specs: [
             ["vCPU", "1 – 128"],
             ["Memory", "1 GB – 1 TB"],
@@ -49,7 +49,7 @@ const TIERS: Tier[] = [
         index: "02",
         label: "Dedicated",
         title: "Compute optimized",
-        desc: "Pinned CPU cores with no noisy neighbours. Consistent latency and throughput for production traffic and CPU-bound services.",
+        desc: "Pinned CPU cores. Consistent latency for production traffic.",
         specs: [
             ["vCPU", "2 – 128 dedicated"],
             ["Memory", "4 GB – 1 TB"],
@@ -65,8 +65,8 @@ const TIERS: Tier[] = [
     {
         index: "03",
         label: "Bare metal",
-        title: "Single-tenant servers",
-        desc: "Full physical server, no hypervisor. Run your own kernel, HPC simulations, or regulated workloads directly on the metal.",
+        title: "Dedicated Server",
+        desc: "Full physical server, no hypervisor. Run your own kernel for HPC or regulated workloads.",
         specs: [
             ["CPU", "32 – 192 cores"],
             ["Memory", "128 GB – 2 TB DDR5"],
@@ -229,10 +229,8 @@ export function ComputeSection() {
                             <span style={{ color: BRAND }}>way</span>
                             <span className="text-white/85">.</span>
                         </h2>
-                        <p className="mt-6 max-w-[540px] text-[15px] leading-[1.65] text-white/65 sm:text-[16px]">
-                            Shared, dedicated, or full bare metal — pick the right
-                            shape for the workload. Provisioned in seconds, billed by
-                            the second, with managed networking and snapshots baked in.
+                        <p className="mt-6 max-w-[480px] text-[15px] leading-[1.65] text-white/60 sm:text-[16px]">
+                            Shared, dedicated, or bare metal. Provisioned in seconds, billed by the second.
                         </p>
 
                         {/* Powered-by silicon strip */}
