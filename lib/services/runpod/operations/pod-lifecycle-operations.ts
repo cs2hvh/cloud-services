@@ -9,6 +9,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
 import { computeResalePerHour } from "../helpers";
+import { templateOperations } from "./template-operations";
 import type {
     CloudType,
     PodStatus,
@@ -141,7 +142,33 @@ export const podLifecycleOperations = {
             if (req.gpuCount < 1 || req.gpuCount > 8) {
                 return { success: false, error: "gpuCount must be 1–8", errorCode: "INVALID" };
             }
-            if (!req.imageName || req.imageName.length > 256) {
+            // Resolve the image. Non-custom deploys MUST match an active
+            // catalog template, and we trust the catalog's image — never the
+            // client-supplied string — so a known template can't be used to
+            // smuggle in an arbitrary image. A custom deploy (no templateId)
+            // still accepts any caller-supplied public image.
+            let imageName = req.imageName;
+            if (req.templateId) {
+                let template;
+                try {
+                    template = await templateOperations.getActiveTemplate(req.templateId);
+                } catch (e) {
+                    return {
+                        success: false,
+                        error: e instanceof Error ? e.message : "Could not validate template",
+                        errorCode: "SERVER",
+                    };
+                }
+                if (!template) {
+                    return {
+                        success: false,
+                        error: "Unknown or inactive template",
+                        errorCode: "INVALID",
+                    };
+                }
+                imageName = template.imageName;
+            }
+            if (!imageName || imageName.length > 256) {
                 return { success: false, error: "imageName is required", errorCode: "INVALID" };
             }
             const containerDiskGb = req.containerDiskGb ?? 50;
@@ -284,7 +311,7 @@ export const podLifecycleOperations = {
                     gpu_count: req.gpuCount,
                     cloud_type: req.cloudType,
                     interruptible: req.interruptible,
-                    image_name: req.imageName,
+                    image_name: imageName,
                     template_id: req.templateId || null,
                     container_disk_gb: containerDiskGb,
                     volume_gb: volumeGb,
@@ -328,7 +355,7 @@ export const podLifecycleOperations = {
             try {
                 const runpodReq: RunPodCreatePodRequest = {
                     name: nameToHostname(podId, req.name),
-                    imageName: req.imageName,
+                    imageName,
                     computeType: "GPU",
                     cloudType: req.cloudType,
                     interruptible: req.interruptible,

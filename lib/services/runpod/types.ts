@@ -167,6 +167,22 @@ export interface InventoryRow {
     observedAt: string;
 }
 
+// ─── Pod templates (company image catalog) ──────────────────────────────────
+
+export type TemplateCategory = "base" | "frameworks" | "llm-serving" | "image-gen";
+
+export interface GpuTemplate {
+    id: string;
+    name: string;
+    imageName: string;
+    description: string | null;
+    category: TemplateCategory;
+    ports: string[];
+    defaultContainerDiskGb: number;
+    envHints: Record<string, string> | null;
+    sortOrder: number;
+}
+
 // ─── Network volumes ────────────────────────────────────────────────────────
 
 export type VolumeStatus =

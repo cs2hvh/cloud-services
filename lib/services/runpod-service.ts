@@ -9,12 +9,14 @@
 import { inventoryOperations } from "./runpod/operations/inventory-operations";
 import { podLifecycleOperations } from "./runpod/operations/pod-lifecycle-operations";
 import { podReadOperations } from "./runpod/operations/pod-read-operations";
+import { templateOperations } from "./runpod/operations/template-operations";
 import { volumeOperations } from "./runpod/operations/volume-operations";
 
 export const RunPodService = {
     ...inventoryOperations,
     ...podLifecycleOperations,
     ...podReadOperations,
+    ...templateOperations,
     ...volumeOperations,
 };
 
@@ -34,6 +36,8 @@ export type {
 export type {
     CloudType,
     CreateNetworkVolumeRequest,
+    GpuTemplate,
+    TemplateCategory,
     InventoryRow,
     NetworkVolumeSummary,
     PodStatus,

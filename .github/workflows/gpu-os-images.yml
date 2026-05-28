@@ -1,0 +1,89 @@
+name: gpu os images
+
+# Builds and pushes the consumer GPU-pod OS images to GHCR. These are the
+# images the deploy wizard offers (Ubuntu base / PyTorch / vLLM / ComfyUI).
+# Build context is infra/runpod/os-images so each Dockerfile can COPY the
+# shared _shared/start.sh bootstrap.
+#
+# After the first successful push, make each package PUBLIC in GHCR so the
+# compute provider can pull without credentials (Package → Settings →
+# Change visibility → Public). Otherwise wire containerRegistryAuthId.
+
+on:
+  push:
+    branches: [master, dev, ai]
+    paths:
+      - "infra/runpod/os-images/**"
+      - ".github/workflows/gpu-os-images.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  ORG: cs2hvh
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ubuntu-22.04-base
+            image: gpu-ubuntu-22.04-base
+          - id: cuda-12.4-dev
+            image: gpu-cuda-12.4-dev
+          - id: pytorch-cuda-12
+            image: gpu-pytorch-cuda-12
+          - id: pytorch-cuda-12.6
+            image: gpu-pytorch-cuda-12.6
+          - id: tensorflow
+            image: gpu-tensorflow
+          - id: vllm
+            image: gpu-vllm
+          - id: comfyui
+            image: gpu-comfyui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # CUDA + torch layers are large; reclaim runner disk before building.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.ORG }}/${{ matrix.image }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/dev' }}
+
+      - name: Build + push
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/runpod/os-images
+          file: infra/runpod/os-images/${{ matrix.id }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=gpu-${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=gpu-${{ matrix.id }}

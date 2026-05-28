@@ -46,43 +46,34 @@ const BORDER_ACCENT = "rgba(0,149,255,0.4)";
 
 // ─── Container image templates ─────────────────────────────────────────
 
-const TEMPLATES: Array<{
+// Catalog templates are fetched live from /api/services/gpu/templates
+// (admin-managed, company-owned images). The "custom" option is appended
+// client-side so users can still bring any public image.
+
+type WizardTemplate = {
     id: string;
     name: string;
     image: string;
     description: string;
-}> = [
-    {
-        id: "ubuntu-22-base",
-        name: "Ubuntu 22.04 — base",
-        image: "samatva-gpu/ubuntu-22.04-base:latest",
-        description: "Minimal Ubuntu with SSH. Build your own stack.",
-    },
-    {
-        id: "pytorch-cuda-12",
-        name: "PyTorch + CUDA 12.1",
-        image: "samatva-gpu/pytorch-cuda-12:latest",
-        description: "PyTorch 2.x, CUDA 12.1, Python 3.11, common ML packages.",
-    },
-    {
-        id: "vllm",
-        name: "vLLM inference",
-        image: "samatva-gpu/vllm:latest",
-        description: "vLLM with OpenAI-compatible HTTP API on port 8000.",
-    },
-    {
-        id: "comfyui",
-        name: "ComfyUI",
-        image: "samatva-gpu/comfyui:latest",
-        description: "ComfyUI for image generation; web UI on port 8188.",
-    },
-    {
-        id: "custom",
-        name: "Custom image",
-        image: "",
-        description: "Any public Docker image URL.",
-    },
-];
+    ports?: string[];
+    defaultContainerDiskGb?: number;
+};
+
+interface ApiTemplate {
+    id: string;
+    name: string;
+    imageName: string;
+    description: string | null;
+    ports?: string[];
+    defaultContainerDiskGb?: number;
+}
+
+const CUSTOM_TEMPLATE: WizardTemplate = {
+    id: "custom",
+    name: "Custom image",
+    image: "",
+    description: "Any public Docker image URL.",
+};
 
 interface VolumeOption {
     id: number;
@@ -156,7 +147,8 @@ export default function DeployWizard({
     const [gpuCount, setGpuCount] = useState(1);
     const [interruptible, setInterruptible] = useState(false);
 
-    const [templateId, setTemplateId] = useState<string>("pytorch-cuda-12");
+    const [templates, setTemplates] = useState<WizardTemplate[]>([CUSTOM_TEMPLATE]);
+    const [templateId, setTemplateId] = useState<string>("");
     const [customImage, setCustomImage] = useState("");
 
     const [containerDiskGb, setContainerDiskGb] = useState(50);
@@ -202,6 +194,37 @@ export default function DeployWizard({
         };
     }, []);
 
+    // ── Load image templates once ─────────────────────────────────────
+    useEffect(() => {
+        let alive = true;
+        fetch("/api/services/gpu/templates", { cache: "no-store" })
+            .then((r) => r.json())
+            .then((json) => {
+                if (!alive) return;
+                const rows: WizardTemplate[] =
+                    json?.ok && Array.isArray(json.templates)
+                        ? (json.templates as ApiTemplate[]).map((t) => ({
+                              id: t.id,
+                              name: t.name,
+                              image: t.imageName,
+                              description: t.description ?? "",
+                              ports: t.ports,
+                              defaultContainerDiskGb: t.defaultContainerDiskGb,
+                          }))
+                        : [];
+                setTemplates([...rows, CUSTOM_TEMPLATE]);
+                setTemplateId((cur) => cur || rows[0]?.id || "custom");
+            })
+            .catch(() => {
+                if (!alive) return;
+                setTemplates([CUSTOM_TEMPLATE]);
+                setTemplateId((cur) => cur || "custom");
+            });
+        return () => {
+            alive = false;
+        };
+    }, []);
+
     // ── Derived ───────────────────────────────────────────────────────
     const selectedRow = useMemo(
         () => secureInventory.find((r) => r.gpuCatalogId === gpuCatalogId),
@@ -220,11 +243,23 @@ export default function DeployWizard({
         if (!availableCounts.includes(gpuCount)) setGpuCount(availableCounts[0]);
     }, [availableCounts, gpuCount]);
 
-    const selectedTemplate = TEMPLATES.find((t) => t.id === templateId);
+    const selectedTemplate = templates.find((t) => t.id === templateId);
     const effectiveImage =
         templateId === "custom"
             ? customImage.trim()
             : selectedTemplate?.image || "";
+
+    // Selecting a catalog template seeds its recommended ports + disk.
+    useEffect(() => {
+        if (!selectedTemplate || selectedTemplate.id === "custom") return;
+        if (selectedTemplate.ports && selectedTemplate.ports.length > 0) {
+            setPortsRaw(selectedTemplate.ports.join(", "));
+        }
+        if (selectedTemplate.defaultContainerDiskGb) {
+            setContainerDiskGb(selectedTemplate.defaultContainerDiskGb);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [templateId]);
 
     const selectedVolume = volumeOptions.find(
         (v) => String(v.id) === networkVolumeId
@@ -669,7 +704,7 @@ export default function DeployWizard({
                                 Container image
                             </Label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {TEMPLATES.map((t) => {
+                                {templates.map((t) => {
                                     const isSelected = templateId === t.id;
                                     const initial = t.id === "custom" ? "+" : t.name.charAt(0).toUpperCase();
                                     return (
