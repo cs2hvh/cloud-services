@@ -503,8 +503,20 @@ export function ModelTrainingPipelineSection() {
               await playEdge(edge);
               await new Promise((r) => setTimeout(r, 180));
             }
-            // Fade orb
-            setTimeout(() => moveOrb(0, 0, 0), 400);
+            // Keep the orb glowing at the final node (c7) instead of
+            // fading — anchors the eye to the pipeline's destination.
+            const c7 = nodeRefs.current["c7"];
+            const stage2 = stageRef.current;
+            if (c7 && stage2 && orbRef.current) {
+              const sb = stage2.getBoundingClientRect();
+              const r = c7.getBoundingClientRect();
+              moveOrb(
+                r.left - sb.left + r.width / 2,
+                r.top - sb.top + r.height / 2,
+                0.85
+              );
+              orbRef.current.classList.add("mt-orb-resting");
+            }
           }, 350);
         }
       },
@@ -529,23 +541,33 @@ export function ModelTrainingPipelineSection() {
       {/* Section top divider — homepage convention */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      {/* Background layers */}
+      {/* Background layers — adds depth without color */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-black" />
+        {/* Architectural blueprint grid */}
         <div
           aria-hidden
-          className="absolute inset-0 opacity-[0.08]"
-          style={{
-            background:
-              "radial-gradient(45% 35% at 20% 30%, rgba(51,173,255,0.22), transparent 70%)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.04]"
+          className="absolute inset-0 opacity-[0.6]"
           style={{
             backgroundImage:
-              "radial-gradient(rgba(255,255,255,0.4) 1px, transparent 1px)",
+              "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+            maskImage:
+              "radial-gradient(ellipse 100% 70% at 50% 50%, black 30%, transparent 100%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 100% 70% at 50% 50%, black 30%, transparent 100%)",
+          }}
+        />
+        {/* Breathing radial washes */}
+        <div aria-hidden className="mt-bg-wash mt-bg-wash--left" />
+        <div aria-hidden className="mt-bg-wash mt-bg-wash--right" />
+        {/* Fine dot grid on top */}
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)",
             backgroundSize: "32px 32px",
             maskImage:
               "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
@@ -574,6 +596,10 @@ export function ModelTrainingPipelineSection() {
         <div className="mt-stage" ref={stageRef}>
           {/* Phase 1 */}
           <section className="mt-phase">
+            {/* Giant phase watermark — anchors the section visually */}
+            <span aria-hidden className="mt-phase-watermark mt-phase-watermark--left">
+              01
+            </span>
             <div className="mt-phase__head">
               <div className="mt-phase__num-block">
                 <span className="mt-phase__pre">Phase</span>
@@ -634,6 +660,9 @@ export function ModelTrainingPipelineSection() {
 
           {/* Phase 2 */}
           <section className="mt-phase">
+            <span aria-hidden className="mt-phase-watermark mt-phase-watermark--right">
+              02
+            </span>
             <div className="mt-phase__head mt-phase__head--right">
               <div className="mt-phase__tag">Modeling</div>
               <div>
@@ -654,6 +683,31 @@ export function ModelTrainingPipelineSection() {
               {PHASE_2.map((c) => (
                 <Card key={c.id} card={c} setRef={setRef(c.id)} revealed={revealed.has(c.id)} />
               ))}
+            </div>
+
+            {/* Outcome anchor — gives the pipeline a destination */}
+            <div
+              className={`mt-outcome ${revealed.has("c7") ? "mt-revealed" : ""}`}
+            >
+              <div className="mt-outcome__row">
+                <span className="mt-outcome__col">
+                  <span className="mt-outcome__pre">Model ID</span>
+                  <span className="mt-outcome__val">
+                    ahura/llama-4-scout<span className="mt-outcome__dim">:ft-a1b2c3</span>
+                  </span>
+                </span>
+                <span className="mt-outcome__col">
+                  <span className="mt-outcome__pre">Endpoint</span>
+                  <span className="mt-outcome__val mt-outcome__mono">api.cs2hvh.com/v1</span>
+                </span>
+                <span className="mt-outcome__col">
+                  <span className="mt-outcome__pre">Status</span>
+                  <span className="mt-outcome__live">
+                    <span aria-hidden className="mt-outcome__dot" />
+                    Live
+                  </span>
+                </span>
+              </div>
             </div>
           </section>
 
@@ -774,8 +828,166 @@ export function ModelTrainingPipelineSection() {
         .mt-stage {
           position: relative;
         }
+        .mt-phase {
+          position: relative;
+          isolation: isolate;
+        }
         .mt-phase + .mt-phase {
           margin-top: 200px;
+        }
+        /* Giant phase number watermark — sits behind the rail */
+        .mt-phase-watermark {
+          position: absolute;
+          font-weight: 200;
+          font-size: clamp(220px, 38vw, 480px);
+          line-height: 0.85;
+          letter-spacing: -0.06em;
+          color: transparent;
+          -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
+          font-feature-settings: "tnum";
+          top: -40px;
+          z-index: 0;
+          pointer-events: none;
+          user-select: none;
+          opacity: 0.85;
+        }
+        .mt-phase-watermark--left {
+          left: -2vw;
+        }
+        .mt-phase-watermark--right {
+          right: -2vw;
+        }
+        @media (max-width: 1024px) {
+          .mt-phase-watermark {
+            display: none;
+          }
+        }
+        /* Breathing radial washes in the section background */
+        .mt-bg-wash {
+          position: absolute;
+          width: 60%;
+          height: 60%;
+          border-radius: 50%;
+          filter: blur(120px);
+          pointer-events: none;
+        }
+        .mt-bg-wash--left {
+          left: -10%;
+          top: 8%;
+          background: rgba(51, 173, 255, 0.10);
+          animation: mt-breathe 12s ease-in-out infinite;
+        }
+        .mt-bg-wash--right {
+          right: -10%;
+          bottom: 8%;
+          background: rgba(51, 173, 255, 0.07);
+          animation: mt-breathe 14s ease-in-out infinite reverse;
+        }
+        @keyframes mt-breathe {
+          0%, 100% { opacity: 0.65; transform: scale(1); }
+          50%      { opacity: 1.0;  transform: scale(1.08); }
+        }
+        /* Outcome anchor below Phase 2 */
+        .mt-outcome {
+          margin-top: 80px;
+          padding-top: 36px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          position: relative;
+          opacity: 0;
+          transform: translateY(8px);
+          transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .mt-outcome.mt-revealed {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .mt-outcome::before {
+          content: "";
+          position: absolute;
+          left: 50%;
+          top: -1px;
+          transform: translateX(-50%);
+          width: 120px;
+          height: 1px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(51, 173, 255, 0.7),
+            transparent
+          );
+        }
+        .mt-outcome__row {
+          display: grid;
+          grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+          gap: 32px;
+          padding: 18px 24px;
+          background: linear-gradient(180deg, #08090c 0%, #050709 100%);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 32px rgba(0, 0, 0, 0.55);
+        }
+        @media (max-width: 768px) {
+          .mt-outcome__row {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 14px;
+          }
+        }
+        .mt-outcome__col {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+        }
+        .mt-outcome__pre {
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 9px;
+          font-weight: 500;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.40);
+        }
+        .mt-outcome__val {
+          font-size: 14px;
+          color: rgba(255, 255, 255, 0.92);
+          font-weight: 600;
+          letter-spacing: -0.005em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .mt-outcome__mono {
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 13px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.85);
+        }
+        .mt-outcome__dim {
+          color: rgba(255, 255, 255, 0.42);
+          font-weight: 500;
+        }
+        .mt-outcome__live {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 11px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.85);
+        }
+        .mt-outcome__dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #33adff;
+          box-shadow: 0 0 0 3px rgba(51, 173, 255, 0.15),
+            0 0 12px rgba(51, 173, 255, 0.7);
+          animation: mt-pulse 2.4s ease-in-out infinite;
+        }
+        @keyframes mt-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(51,173,255,0.15), 0 0 12px rgba(51,173,255,0.7); }
+          50%      { box-shadow: 0 0 0 5px rgba(51,173,255,0.05), 0 0 18px rgba(51,173,255,0.9); }
         }
         .mt-phase__head {
           display: grid;
@@ -1157,6 +1369,21 @@ export function ModelTrainingPipelineSection() {
           fill: #ffffff;
           opacity: 0;
         }
+        .mt-pipeline .mt-orb.mt-orb-resting {
+          animation: mt-orb-rest 2.6s ease-in-out infinite;
+        }
+        @keyframes mt-orb-rest {
+          0%, 100% {
+            opacity: 0.85;
+            filter: drop-shadow(0 0 8px rgba(51,173,255,1))
+              drop-shadow(0 0 22px rgba(51,173,255,0.75));
+          }
+          50% {
+            opacity: 1;
+            filter: drop-shadow(0 0 12px rgba(51,173,255,1))
+              drop-shadow(0 0 32px rgba(51,173,255,0.95));
+          }
+        }
       `}</style>
     </section>
   );
@@ -1288,6 +1515,11 @@ function Card({
         }
         .mt-card.mt-revealed .mt-aura {
           opacity: 1;
+          animation: mt-aura-breathe 5s ease-in-out infinite;
+        }
+        @keyframes mt-aura-breathe {
+          0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+          50%      { opacity: 1.0; transform: translateX(-50%) scale(1.06); }
         }
         .mt-corner {
           position: absolute;
