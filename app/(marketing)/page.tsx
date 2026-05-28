@@ -8,6 +8,7 @@ import { ComplianceCta } from "@/components/compliance-cta";
 import { EverythingSection } from "@/components/everything-section";
 import { ClustersSection } from "@/components/clusters-section";
 import { ComputeSection } from "@/components/compute-section";
+import { ModelTrainingPipelineSection } from "@/components/model-training-pipeline-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 // import FeatureSection from "@/components/feature-section";
 
@@ -130,6 +131,9 @@ export default function Home() {
 
         {/* Figma Services Section */}
         <ServicesSection />
+
+        {/* AI Model Training Pipeline */}
+        <ModelTrainingPipelineSection />
 
         {/* Everything you build */}
         <EverythingSection />
