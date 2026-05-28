@@ -333,16 +333,16 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
 
         {/* Desktop nav links */}
         <div className="hidden lg:flex items-center gap-6 ml-auto">
-          {/* Solutions with dropdown */}
+          {/* A.I. Labs with dropdown */}
           <div
             className="relative"
-            onMouseEnter={handleSolutionsEnter}
-            onMouseLeave={handleSolutionsLeave}
+            onMouseEnter={handleAiLabsEnter}
+            onMouseLeave={handleAiLabsLeave}
           >
             <button className="group relative flex cursor-pointer items-center gap-1 py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white">
-              Solutions
-              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`} />
-              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${solutionsOpen ? "scale-x-100" : ""}`} />
+              A.I. Labs
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${aiLabsOpen ? "rotate-180" : ""}`} />
+              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${aiLabsOpen ? "scale-x-100" : ""}`} />
             </button>
           </div>
 
@@ -359,16 +359,16 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             </button>
           </div>
 
-          {/* A.I. Labs with dropdown */}
+          {/* Solutions with dropdown */}
           <div
             className="relative"
-            onMouseEnter={handleAiLabsEnter}
-            onMouseLeave={handleAiLabsLeave}
+            onMouseEnter={handleSolutionsEnter}
+            onMouseLeave={handleSolutionsLeave}
           >
             <button className="group relative flex cursor-pointer items-center gap-1 py-1 text-[13px] font-medium text-white/65 transition-colors duration-200 hover:text-white">
-              A.I. Labs
-              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${aiLabsOpen ? "rotate-180" : ""}`} />
-              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${aiLabsOpen ? "scale-x-100" : ""}`} />
+              Solutions
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`} />
+              <span className={`pointer-events-none absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-white transition-transform duration-200 group-hover:scale-x-100 ${solutionsOpen ? "scale-x-100" : ""}`} />
             </button>
           </div>
 
@@ -649,14 +649,14 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             className="lg:hidden mx-5 sm:mx-8 mt-0 border border-white/[0.08] bg-[#08080a]/95 backdrop-blur-[14px] overflow-hidden"
           >
             <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
-              {/* Solutions accordion in mobile */}
-              <MobileSolutionsAccordion onNavigate={() => setIsOpen(false)} />
+              {/* A.I. Labs accordion in mobile */}
+              <MobileAiLabsAccordion onNavigate={() => setIsOpen(false)} />
 
               {/* Products accordion in mobile */}
               <MobileProductsAccordion onNavigate={() => setIsOpen(false)} />
 
-              {/* A.I. Labs accordion in mobile */}
-              <MobileAiLabsAccordion onNavigate={() => setIsOpen(false)} />
+              {/* Solutions accordion in mobile */}
+              <MobileSolutionsAccordion onNavigate={() => setIsOpen(false)} />
 
               {navLinks.map((link) => (
                 <Link
