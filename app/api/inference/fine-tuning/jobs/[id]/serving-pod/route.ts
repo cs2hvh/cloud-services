@@ -33,6 +33,7 @@ import {
   terminateServingPod,
   sanitizeProvisionError,
 } from "@/lib/inference/serving-pod";
+import { settleServingPod } from "@/lib/inference/serving-pod-billing";
 import { GPU_SKU_TO_RUNPOD_TYPE } from "@/lib/inference/finetune-runpod";
 
 function isUuid(s: string): boolean {
@@ -381,31 +382,16 @@ export async function DELETE(
     return NextResponse.json({ error: "No serving instance to stop" }, { status: 409 });
   }
 
-  // Fire the upstream tear-down. Don't await — return fast and let the
-  // background termination complete. The next GET will refresh state.
+  // Settle billing + flip state atomically. Idempotent: the auto-stop
+  // watchdog may race us; whoever wins the transition charges for the
+  // uptime, and clears the gateway routing.
+  const settled = await settleServingPod(supabase, id);
+
+  // Tear down upstream (best-effort; idempotent — a 404 means already gone).
   try {
     await terminateServingPod(ft.serving_pod_id);
   } catch (err) {
     console.warn("[serving-pod DELETE] tear-down failed (will retry on next GET):", err);
-  }
-
-  await supabase
-    .schema("inference")
-    .from("finetunes")
-    .update({
-      serving_pod_state: "stopped",
-      serving_pod_stopped_at: new Date().toISOString(),
-      serving_url: null,
-      is_managed: false,
-    })
-    .eq("id", id);
-
-  if (ft.output_model_id) {
-    await supabase
-      .schema("inference")
-      .from("models")
-      .update({ serving_url: null, is_managed: false })
-      .eq("id", ft.output_model_id);
   }
 
   console.log(
@@ -415,10 +401,11 @@ export async function DELETE(
       orgId: org.org_id,
       userId: auth.user!.id,
       ftId: id,
+      chargedUsd: settled.chargedUsd,
     })
   );
 
-  return NextResponse.json({ success: true, state: "stopped" });
+  return NextResponse.json({ success: true, state: "stopped", charged_usd: settled.chargedUsd });
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

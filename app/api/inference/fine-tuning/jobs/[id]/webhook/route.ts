@@ -13,12 +13,71 @@
  * the only auth. It's only ever called from inside our training pods.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { emitInferenceEvent } from "@/lib/inference/notifications";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
+
+/**
+ * Charge the org's billing account for a finished fine-tune.
+ *
+ * Called once per job (the handler is idempotent — it returns early if the
+ * job is already terminal — so this runs at most once after the status flips
+ * to completed/failed). Deducts atomically and records a usage ledger entry
+ * that shows in the customer's billing history. Bills the org payer
+ * (billing_user_id), not the member who launched. Best-effort: a billing
+ * error is logged but never fails the pod's webhook call (that would strand
+ * the job) — worst case is an undercharge, never a double charge.
+ */
+async function chargeFinetune(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any, any, any>,
+  orgId: string,
+  jobId: string,
+  jobName: string,
+  costCents: number,
+  elapsedSeconds: number
+): Promise<void> {
+  if (!costCents || costCents <= 0) return;
+  const usd = costCents / 100;
+  try {
+    const { data: orgRow } = await supabase
+      .schema("inference")
+      .from("orgs")
+      .select("billing_user_id, owner_user_id")
+      .eq("id", orgId)
+      .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
+    const payer = orgRow?.billing_user_id || orgRow?.owner_user_id;
+    if (!payer) {
+      console.error(`[FT charge] no payer for org ${orgId}, job ${jobId} — $${usd.toFixed(2)} not charged`);
+      return;
+    }
+    const newBalance = await Billing.deduct(payer, usd);
+    const end = new Date();
+    const start = new Date(end.getTime() - Math.max(0, elapsedSeconds) * 1000);
+    await Billing.save_transaction({
+      userId: payer,
+      amount: usd,
+      status: "completed",
+      type: "usage",
+      balanceAfter: typeof newBalance === "number" ? newBalance : null,
+      serviceId: jobId,
+      serviceType: "inference_finetune",
+      periodStart: start.toISOString(),
+      periodEnd: end.toISOString(),
+      description: `Fine-tuning: ${jobName}`,
+      metadata: { hours: Number((Math.max(0, elapsedSeconds) / 3600).toFixed(4)) },
+    });
+  } catch (e) {
+    console.error(
+      `[FT charge] failed to bill org ${orgId} job ${jobId} ($${usd.toFixed(2)}):`,
+      e instanceof Error ? e.message : e
+    );
+  }
+}
 
 interface WebhookPayload {
   job_id: string;
@@ -147,6 +206,10 @@ export async function POST(
       })
       .eq("id", id);
 
+    // Charge for the GPU time the (failed) run consumed — the pod was up and
+    // billed to us regardless of outcome.
+    await chargeFinetune(supabase, existing.org_id, id, existing.name, costCents, payload.elapsed_seconds);
+
     // Fan out to org's configured notification channels (in-app + email
     // + customer webhook). Fire-and-forget — failures here never bubble
     // up to the FT pod's webhook call.
@@ -252,6 +315,9 @@ export async function POST(
       error_message: null,
     })
     .eq("id", id);
+
+  // Charge the org for the GPU time this run consumed.
+  await chargeFinetune(supabase, existing.org_id, id, existing.name, costCents, payload.elapsed_seconds);
 
   // Fan out to org's configured notification channels.
   void emitInferenceEvent({

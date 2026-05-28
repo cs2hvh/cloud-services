@@ -27,6 +27,7 @@ import {
   terminateServingPod,
   sanitizeProvisionError,
 } from "@/lib/inference/serving-pod";
+import { settleServingPod } from "@/lib/inference/serving-pod-billing";
 
 export const dynamic = "force-dynamic";
 // Defensive: don't let the watchdog be cached.
@@ -78,33 +79,15 @@ export async function POST(request: NextRequest) {
 
   for (const row of rows ?? []) {
     try {
-      // Flip local state BEFORE upstream call so a concurrent sweep
-      // skips this row. If the upstream tear-down later fails, we'll
-      // retry it via the row's stopped-but-pod-still-running state on
-      // the next sweep — see "leaked pod reconciliation" comment below.
-      await supabase
-        .schema("inference")
-        .from("finetunes")
-        .update({
-          serving_pod_state: "stopped",
-          serving_pod_stopped_at: new Date().toISOString(),
-          serving_url: null,
-          is_managed: false,
-        })
-        .eq("id", row.id)
-        .eq("serving_pod_state", "running"); // re-check inside the update
-
-      if (row.output_model_id) {
-        await supabase
-          .schema("inference")
-          .from("models")
-          .update({ serving_url: null, is_managed: false })
-          .eq("id", row.output_model_id);
-      }
+      // Settle billing + flip state atomically, and clear gateway routing.
+      // Winning the transition is the idempotency gate — a concurrent sweep
+      // (or a manual stop) that loses it skips the row, so the uptime is
+      // charged exactly once.
+      const settled = await settleServingPod(supabase, row.id);
+      if (!settled.settled) continue;
 
       // Fire the upstream tear-down. If the pod is already gone (404),
-      // sanitizeProvisionError-like guard inside terminateServingPod
-      // swallows it.
+      // terminateServingPod swallows it.
       if (row.serving_pod_id) {
         await terminateServingPod(row.serving_pod_id);
       }
