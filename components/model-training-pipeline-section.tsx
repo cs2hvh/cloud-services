@@ -563,7 +563,8 @@ export function ModelTrainingPipelineSection() {
             A.I. Labs · End-to-end pipeline
           </div>
           <h2>
-            The Complete <span className="mt-accent">Model Training</span> Pipeline
+            The Complete Model Training{" "}
+            <span className="mt-accent">Pipeline</span>
           </h2>
           <p>
             From data collection to fine-tuning — every step on AhuraCloud A.I. Labs.
@@ -600,15 +601,18 @@ export function ModelTrainingPipelineSection() {
                 ref={setRef("ready")}
                 className={`mt-ready ${revealed.has("ready") ? "mt-revealed" : ""}`}
               >
-                <div>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M7 18a5 5 0 1 1 .9-9.92A6 6 0 0 1 20 11a4 4 0 0 1 0 7H7z" />
-                    <path d="M9 14l2 2 4-4" />
-                  </svg>
-                  <div className="mt-ready-lbl">
-                    Ready to
-                    <br />
-                    Train
+                {/* Inner ring */}
+                <span aria-hidden className="mt-ready-ring" />
+                <div className="mt-ready-inner">
+                  <span className="mt-ready-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8 12l3 3 5-6" />
+                    </svg>
+                  </span>
+                  <div className="mt-ready-meta">
+                    <p className="mt-ready-eyebrow">Status</p>
+                    <p className="mt-ready-lbl">Ready to train</p>
                   </div>
                 </div>
               </div>
@@ -619,10 +623,10 @@ export function ModelTrainingPipelineSection() {
                 ref={setRef("diamond")}
                 className={`mt-diamond ${revealed.has("diamond") ? "mt-revealed" : ""}`}
               >
-                <span>
-                  MEETS
-                  <br />
-                  CRITERIA?
+                <span aria-hidden className="mt-diamond-dot" />
+                <span className="mt-diamond-label">
+                  <span className="mt-diamond-q">?</span>
+                  Meets criteria
                 </span>
               </div>
             </div>
@@ -758,7 +762,7 @@ export function ModelTrainingPipelineSection() {
           color: var(--mt-text);
         }
         .mt-accent {
-          color: rgba(142, 202, 255, 0.85);
+          color: #33adff;
         }
         .mt-hero p {
           margin: 0 auto;
@@ -842,9 +846,9 @@ export function ModelTrainingPipelineSection() {
         }
         .mt-phase__title em {
           font-style: normal;
-          color: var(--mt-muted);
-          font-weight: 400;
-          letter-spacing: 0.02em;
+          color: #33adff;
+          font-weight: 600;
+          letter-spacing: 0.04em;
         }
         .mt-phase__sub {
           color: var(--mt-muted);
@@ -915,25 +919,51 @@ export function ModelTrainingPipelineSection() {
         }
         .mt-diamond {
           position: relative;
-          width: 110px;
-          height: 110px;
+          width: 118px;
+          height: 118px;
           transform: rotate(45deg);
           border: 1px solid rgba(255, 255, 255, 0.10);
-          border-radius: 12px;
-          background: linear-gradient(180deg, #07090d 0%, #050709 100%);
+          border-radius: 10px;
+          background: linear-gradient(180deg, #08090c 0%, #050709 100%);
           display: grid;
           place-items: center;
           opacity: 0;
           visibility: hidden;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
-            0 10px 30px rgba(0, 0, 0, 0.6);
+            0 12px 32px rgba(0, 0, 0, 0.65);
         }
         .mt-diamond.mt-revealed {
           visibility: visible;
           animation: mt-diamondReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
           border-color: rgba(255, 255, 255, 0.18);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
-            0 10px 30px rgba(0, 0, 0, 0.6);
+            inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+            0 12px 32px rgba(0, 0, 0, 0.65),
+            0 0 24px rgba(51, 173, 255, 0.06);
+        }
+        /* Inner accent square — gives the diamond more depth */
+        .mt-diamond::after {
+          content: "";
+          position: absolute;
+          inset: 6px;
+          border-radius: 6px;
+          border: 1px dashed rgba(255, 255, 255, 0.05);
+          pointer-events: none;
+        }
+        .mt-diamond-dot {
+          position: absolute;
+          left: 6px;
+          top: 6px;
+          width: 6px;
+          height: 6px;
+          border-radius: 1px;
+          background: #33adff;
+          box-shadow: 0 0 8px rgba(51, 173, 255, 0.6);
+          opacity: 0;
+          transition: opacity 0.5s ease;
+        }
+        .mt-diamond.mt-revealed .mt-diamond-dot {
+          opacity: 1;
         }
         @keyframes mt-diamondReveal {
           0% {
@@ -949,15 +979,24 @@ export function ModelTrainingPipelineSection() {
             transform: rotate(45deg) scale(1);
           }
         }
-        .mt-diamond > span {
+        .mt-diamond-label {
           transform: rotate(-45deg);
+          display: inline-flex;
+          align-items: baseline;
+          gap: 4px;
           text-align: center;
-          color: rgba(255, 255, 255, 0.80);
+          color: rgba(255, 255, 255, 0.85);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
           font-weight: 500;
-          font-size: 9.5px;
-          letter-spacing: 0.16em;
-          line-height: 1.25;
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          line-height: 1;
+          text-transform: uppercase;
+        }
+        .mt-diamond-q {
+          color: #33adff;
+          font-weight: 700;
+          font-size: 12px;
         }
         .mt-yes-arrow {
           position: relative;
@@ -979,26 +1018,75 @@ export function ModelTrainingPipelineSection() {
           letter-spacing: 0.24em;
         }
         .mt-ready {
-          width: 130px;
-          height: 130px;
+          position: relative;
+          width: 144px;
+          height: 144px;
           border-radius: 50%;
           border: 1px solid rgba(255, 255, 255, 0.10);
-          background: linear-gradient(180deg, #07090d 0%, #050709 100%);
+          background: radial-gradient(
+              circle at 50% 0%,
+              rgba(51, 173, 255, 0.08) 0%,
+              transparent 60%
+            ),
+            linear-gradient(180deg, #08090c 0%, #050709 100%);
           display: grid;
           place-items: center;
           text-align: center;
-          padding: 12px;
+          padding: 14px;
           opacity: 0;
           visibility: hidden;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
-            0 10px 30px rgba(0, 0, 0, 0.6);
+            0 12px 32px rgba(0, 0, 0, 0.65);
         }
         .mt-ready.mt-revealed {
           visibility: visible;
           animation: mt-readyReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
-          border-color: rgba(255, 255, 255, 0.18);
+          border-color: rgba(255, 255, 255, 0.20);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
-            0 10px 30px rgba(0, 0, 0, 0.6);
+            inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+            0 12px 32px rgba(0, 0, 0, 0.65),
+            0 0 24px rgba(51, 173, 255, 0.08);
+        }
+        /* Inner ring — dashed, for engineered look */
+        .mt-ready-ring {
+          position: absolute;
+          inset: 8px;
+          border-radius: 50%;
+          border: 1px dashed rgba(255, 255, 255, 0.06);
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.5s ease;
+        }
+        .mt-ready.mt-revealed .mt-ready-ring {
+          opacity: 1;
+        }
+        .mt-ready-inner {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+        }
+        .mt-ready-icon {
+          display: grid;
+          place-items: center;
+          width: 30px;
+          height: 30px;
+          color: #33adff;
+        }
+        .mt-ready-meta {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+        }
+        .mt-ready-eyebrow {
+          margin: 0;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 8.5px;
+          font-weight: 500;
+          letter-spacing: 0.20em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.40);
         }
         @keyframes mt-readyReveal {
           0% {
@@ -1014,21 +1102,20 @@ export function ModelTrainingPipelineSection() {
             transform: scale(1);
           }
         }
-        .mt-ready svg {
-          width: 30px;
-          height: 30px;
-          color: rgba(255, 255, 255, 0.85);
+        .mt-ready-icon :global(svg) {
+          width: 28px;
+          height: 28px;
           stroke-width: 1.5;
         }
         .mt-ready-lbl {
-          color: rgba(255, 255, 255, 0.80);
+          color: rgba(255, 255, 255, 0.90);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-weight: 500;
+          font-weight: 600;
           font-size: 10px;
-          letter-spacing: 0.16em;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           line-height: 1.25;
-          margin-top: 6px;
+          margin: 0;
         }
         .mt-flow-svg {
           position: absolute;
