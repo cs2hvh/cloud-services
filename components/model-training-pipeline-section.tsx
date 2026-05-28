@@ -290,6 +290,10 @@ export function ModelTrainingPipelineSection() {
   const [stageHeight, setStageHeight] = useState(0);
   const [stageWidth, setStageWidth] = useState(0);
 
+  // pathsRef mirrors `paths` so animation callbacks always read the latest
+  // path data without being recreated (and without re-binding the observer).
+  const pathsRef = useRef<Record<string, { d: string; len: number }>>({});
+
   const arrowRefs = useRef<Record<string, SVGPathElement | null>>({});
   const glowRefs = useRef<Record<string, SVGPathElement | null>>({});
   const orbRef = useRef<SVGCircleElement | null>(null);
@@ -326,6 +330,7 @@ export function ModelTrainingPipelineSection() {
       const d = buildPath(e, R);
       next[`${e.from}-${e.to}`] = { d, len: 0 };
     });
+    pathsRef.current = next;
     setPaths(next);
   }, []);
 
@@ -340,7 +345,9 @@ export function ModelTrainingPipelineSection() {
     };
   }, [measure]);
 
-  // After paths render, compute their lengths and prime the dasharray
+  // After paths render, compute their lengths and prime the dasharray.
+  // We update both the React state (so re-renders see the latest len) and the
+  // ref (so the animation callbacks read the latest len without closures).
   useEffect(() => {
     const next = { ...paths };
     let changed = false;
@@ -363,7 +370,10 @@ export function ModelTrainingPipelineSection() {
         }
       }
     });
-    if (changed) setPaths(next);
+    if (changed) {
+      pathsRef.current = next;
+      setPaths(next);
+    }
   }, [paths]);
 
   // Helpers for the animation
@@ -385,7 +395,7 @@ export function ModelTrainingPipelineSection() {
       const key = `${edge.from}-${edge.to}`;
       const arrow = arrowRefs.current[key];
       const glow = glowRefs.current[key];
-      const meta = paths[key];
+      const meta = pathsRef.current[key];
       if (!arrow || !meta || meta.len === 0) {
         resolve();
         return;
@@ -442,18 +452,34 @@ export function ModelTrainingPipelineSection() {
       };
       animRef.current = requestAnimationFrame(frame);
     });
-  }, [moveOrb, paths]);
+  }, [moveOrb]);
 
-  // Auto-play sequence when in view
+  // Wait until every edge has a measured length (the length-priming effect
+  // has run). Polls pathsRef so the loop always sees the latest values.
+  const waitForPathsReady = useCallback(async (): Promise<boolean> => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const ready = EDGES.every((e) => {
+        const meta = pathsRef.current[`${e.from}-${e.to}`];
+        return !!meta && meta.len > 0;
+      });
+      if (ready) return true;
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    return false;
+  }, []);
+
+  // Auto-play sequence when in view. Deps intentionally stable so the
+  // observer is only created once (it would otherwise tear down/rebuild on
+  // every paths update and risk re-firing or missing the trigger).
   useEffect(() => {
     if (!sectionRef.current) return;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && !playedRef.current) {
           playedRef.current = true;
-          // Make sure paths are measured before playing
+          // Force a fresh measure on entry so positions reflect any layout
+          // shifts since mount.
           measure();
-          // Small delay so the user sees the section settle before it kicks off
           setTimeout(async () => {
             // Reveal c1 first
             setRevealed(new Set(["c1"]));
@@ -469,7 +495,10 @@ export function ModelTrainingPipelineSection() {
                 0.9
               );
             }
-            await new Promise((r) => setTimeout(r, 700));
+            // Make sure the SVG path lengths have been primed before we start
+            // traversing them — otherwise every edge skips with len=0.
+            await waitForPathsReady();
+            await new Promise((r) => setTimeout(r, 500));
             for (const edge of EDGES) {
               await playEdge(edge);
               await new Promise((r) => setTimeout(r, 180));
@@ -483,7 +512,8 @@ export function ModelTrainingPipelineSection() {
     );
     obs.observe(sectionRef.current);
     return () => obs.disconnect();
-  }, [measure, moveOrb, playEdge]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return () => {
