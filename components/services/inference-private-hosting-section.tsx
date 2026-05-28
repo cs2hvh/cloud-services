@@ -2,63 +2,67 @@
 
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import {
-  Cpu,
-  Gauge,
-  Lock,
-  ShieldCheck,
-  Timer,
-  Zap,
-} from "lucide-react";
+import { Cpu, Lock, ShieldCheck, Timer, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
-// ─── Static highlights (right column) ────────────────────────────────
-const HIGHLIGHTS: Array<{ icon: typeof Cpu; title: string; body: string }> = [
+// ─── Tenants for the routing diagram ───────────────────────────────
+// Eight tenants in the visual; only "your-org" is highlighted. The
+// model id on the highlighted lane matches the live demo card below.
+type Tenant = {
+  id: string;
+  org: string;
+  model: string;
+  status: "live" | "idle" | "warming";
+  highlight?: boolean;
+};
+
+const TENANTS: Tenant[] = [
+  { id: "t1", org: "acme-co",    model: "phi-4",            status: "live" },
+  { id: "t2", org: "blue-labs",  model: "llama-3.3-8b",    status: "live" },
+  { id: "t3", org: "your-org",   model: "llama-4-maverick", status: "live", highlight: true },
+  { id: "t4", org: "northstar",  model: "qwen-3-32b",       status: "idle" },
+  { id: "t5", org: "atlas-dev",  model: "deepseek-v3",      status: "warming" },
+  { id: "t6", org: "kindred",    model: "mistral-7b",       status: "live" },
+];
+
+const FEATURES: { icon: LucideIcon; label: string; body: string }[] = [
   {
     icon: Cpu,
-    title: "Single-tenant GPU",
-    body:
-      "One pod per customer — never shared. Pick your SKU (A40 / A100 / H100). Routed only on your API key.",
+    label: "Single-tenant pod",
+    body: "One GPU instance per customer — never shared. Pick A40, A100, or H100.",
   },
   {
     icon: Zap,
-    title: "Bring HuggingFace or Docker",
-    body:
-      "Paste a HuggingFace model id (we materialize at boot with your token, encrypted at rest) or point at any OCI image. Truss coming soon.",
+    label: "Bring your model",
+    body: "Paste a HuggingFace id or point at a Docker image. Boot with your token, encrypted at rest.",
   },
   {
     icon: Timer,
-    title: "Auto-stop when idle",
-    body:
-      "Idle past your configured window? We tear the pod down so you stop being billed. Cold-start handled with a clean 503 + Retry-After.",
+    label: "Auto-stop when idle",
+    body: "Idle past your configured window? Pod tears down. Spend stops. Cold-start returns a clean 503.",
   },
   {
     icon: Lock,
-    title: "Encrypted boundary",
-    body:
-      "HF tokens + provider keys stored with AES-256-GCM, decrypted only at provision. Optional ZDR keys never have prompts logged.",
+    label: "Encrypted boundary",
+    body: "AES-256-GCM at rest. Routed only on your API key. ZDR-compatible — prompts never logged.",
   },
 ];
 
-// ─── Section ────────────────────────────────────────────────────────
 export default function InferencePrivateHostingSection() {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
 
-  // Live-feel metrics that tick up while the section is in view. Stops
-  // ticking when the section leaves the viewport (saves cycles +
-  // matches what a real metrics dashboard does).
-  const [elapsedSec, setElapsedSec] = useState(15_120); // ~4h 12m
+  // Live-feel ticker for the highlighted lane only
+  const [elapsedSec, setElapsedSec] = useState(15_120);
   const [requests, setRequests] = useState(14_238);
   const [costCents, setCostCents] = useState(168);
 
   useEffect(() => {
     if (!ref.current || inView) return;
     const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) setInView(true);
-      },
+      (e) => { if (e[0]?.isIntersecting) setInView(true); },
       { threshold: 0.15 }
     );
     obs.observe(ref.current);
@@ -67,12 +71,9 @@ export default function InferencePrivateHostingSection() {
 
   useEffect(() => {
     if (!inView) return;
-    // Tick every 1.5s — fast enough to feel alive, slow enough that
-    // the cost number doesn't look like a slot machine.
     const t = window.setInterval(() => {
       setElapsedSec((s) => s + 2);
       setRequests((r) => r + Math.floor(2 + Math.random() * 5));
-      // Cost ~$0.40/hr on the H100 demo = ~0.011¢/sec
       setCostCents((c) => c + (Math.random() < 0.3 ? 1 : 0));
     }, 1500);
     return () => window.clearInterval(t);
@@ -86,250 +87,116 @@ export default function InferencePrivateHostingSection() {
   return (
     <section
       ref={ref}
-      className="relative isolate overflow-hidden bg-[#04060a] py-24 sm:py-32"
+      className="relative z-10 overflow-clip bg-[#04060a] py-16 lg:py-24"
     >
-      {/* Atmospheric backdrop — concentric soft rings + faint grid */}
+      {/* Section divider matching homepage */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+      {/* Subtle backdrop */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.25]"
+        className="pointer-events-none absolute inset-0 opacity-[0.15]"
         style={{
           background:
-            "radial-gradient(45% 35% at 78% 50%, rgba(0,149,255,0.30), transparent 70%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.05]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-          maskImage:
-            "radial-gradient(ellipse 70% 50% at 75% 50%, black, transparent 70%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 70% 50% at 75% 50%, black, transparent 70%)",
+            "radial-gradient(45% 35% at 25% 50%, rgba(0,149,255,0.30), transparent 70%)",
         }}
       />
 
       <Container className="relative z-10">
-        <div className="grid gap-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-20 lg:items-center">
-          {/* ─── LEFT: the dedicated-endpoint diagram ─────────── */}
+        <div className="grid gap-14 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16 lg:items-center">
+          {/* ─── LEFT: Routing diagram ─── */}
           <div className="relative">
-            {/* Inbound request lanes — three diagonal lines coming in
-                from the upper-left, sliding into the card. Suggests
-                "your API key's traffic, routed to your pod". */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -left-12 -top-10 h-44 w-44 opacity-60"
+            <RoutingDiagram
+              tenants={TENANTS}
+              inView={inView}
+              uptime={uptime}
+              cost={cost}
+              requests={requests}
+            />
+          </div>
+
+          {/* ─── RIGHT: Editorial typography + inline feature list ─── */}
+          <div>
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.5 }}
+              className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[11px] uppercase tracking-[0.22em] text-white/40"
             >
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -40, y: -40 }}
-                  animate={inView ? { opacity: [0, 1, 0], x: 80, y: 80 } : {}}
-                  transition={{
-                    duration: 2.4,
-                    delay: i * 0.8,
-                    repeat: Infinity,
-                    repeatDelay: 1.2,
-                    ease: "easeOut",
-                  }}
-                  className="absolute h-px w-32 origin-left"
-                  style={{
-                    top: `${20 + i * 18}px`,
-                    background: `linear-gradient(90deg, rgba(0,149,255,0.0), rgba(0,149,255,0.9), rgba(0,149,255,0.0))`,
-                    transform: "rotate(35deg)",
-                  }}
-                />
-              ))}
-            </div>
+              Private hosting · single-tenant
+            </motion.p>
 
-            {/* The endpoint card itself */}
-            <motion.div
-              initial={{ opacity: 0, y: 28, scale: 0.96 }}
-              animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="relative mx-auto max-w-[480px]"
+            <motion.h2
+              initial={{ opacity: 0, y: 14 }}
+              animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-5 text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-white sm:text-5xl lg:text-[56px]"
             >
-              {/* Outer glow */}
-              <div
-                aria-hidden
-                className="absolute -inset-6 rounded-3xl opacity-60 blur-2xl"
-                style={{
-                  background:
-                    "radial-gradient(50% 50% at 50% 50%, rgba(0,149,255,0.40), transparent 70%)",
-                }}
-              />
+              Your model.{" "}
+              <span className="text-white/35">/</span>{" "}
+              <span className="text-[#33adff]">Your GPU.</span>{" "}
+              <span className="text-white/35">/</span>{" "}
+              <span className="block sm:inline">Your data path.</span>
+            </motion.h2>
 
-              <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-[#0b0d12] shadow-[0_24px_64px_rgba(0,0,0,0.55)]">
-                {/* Card chrome — status header */}
-                <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                    </span>
-                    <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.16em] text-emerald-300/90">
-                      Live
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
-                    <span>H100 80GB</span>
-                    <span className="text-white/15">·</span>
-                    <span>bom-01</span>
-                  </div>
-                </div>
-
-                {/* Model id + dedicated-instance label */}
-                <div className="px-5 py-5">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
-                    Model id
-                  </p>
-                  <p className="mt-1.5 break-all font-mono text-[14px] font-semibold text-white">
-                    ahura/llama-4-maverick:byo-a1b2c3d4
-                  </p>
-
-                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-[3px] border border-[#0095FF]/30 bg-[#0095FF]/[0.10] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-[#33adff]">
-                    <ShieldCheck className="h-3 w-3" />
-                    Dedicated · single tenant
-                  </div>
-
-                  {/* Live metrics — 4 cells */}
-                  <div className="mt-5 grid grid-cols-2 gap-3 rounded-[6px] border border-white/[0.06] bg-black/30 p-4">
-                    <MetricCell label="Uptime" value={uptime} />
-                    <MetricCell
-                      label="Spend"
-                      value={cost}
-                      accent="#4ade80"
-                    />
-                    <MetricCell
-                      label="Requests"
-                      value={requests.toLocaleString()}
-                    />
-                    <MetricCell label="p95 latency" value="412 ms" />
-                  </div>
-
-                  {/* Utilization bar — gently breathing */}
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
-                      <span>GPU utilization</span>
-                      <span className="text-white/55">68%</span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                      <motion.div
-                        initial={{ width: "0%" }}
-                        animate={inView ? { width: ["62%", "74%", "62%"] } : {}}
-                        transition={{
-                          duration: 4,
-                          repeat: Infinity,
-                          ease: "easeInOut",
-                        }}
-                        className="h-full rounded-full"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #0095FF 0%, #33adff 50%, #0095FF 100%)",
-                          boxShadow: "0 0 12px rgba(0,149,255,0.6)",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Action row */}
-                  <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-white/45">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Timer className="h-3 w-3" />
-                      Auto-stops after 6h idle
-                    </span>
-                    <span className="text-emerald-400/80">$0.40/hr</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Footer caption under the card */}
             <motion.p
               initial={{ opacity: 0 }}
               animate={inView ? { opacity: 1 } : {}}
-              transition={{ duration: 0.6, delay: 0.6 }}
-              className="mx-auto mt-6 max-w-[480px] text-center font-mono text-[10.5px] uppercase tracking-[0.14em] text-white/35"
+              transition={{ duration: 0.5, delay: 0.18 }}
+              className="mt-6 max-w-md text-[15px] leading-7 text-white/55"
             >
-              A real endpoint, your model, your GPU
-              <span className="mx-2 text-white/15">·</span>
-              isolated by org, billed by the hour
+              One pod per customer. Same gateway, same key. Billed by the hour,
+              auto-stopped when idle.
             </motion.p>
-          </div>
 
-          {/* ─── RIGHT: copy + highlight grid ─────────────────── */}
-          <div>
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Private hosting
-              </p>
-              <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
-                Your model.
-                <span className="block text-[#8ecaff]">Your GPU.</span>
-                Your data path.
-              </h2>
-              <p className="mt-6 max-w-lg text-[15px] leading-7 text-white/55 sm:text-[16px]">
-                Fine-tunes and bring-your-own models get a dedicated GPU — one instance per customer, never shared. Same gateway, same key. Billed by the hour, auto-stopped when idle.
-              </p>
-
-              <div className="mt-10 grid gap-3 sm:grid-cols-2">
-                {HIGHLIGHTS.map((h, i) => {
-                  const Icon = h.icon;
-                  return (
-                    <motion.div
-                      key={h.title}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={inView ? { opacity: 1, y: 0 } : {}}
-                      transition={{
-                        duration: 0.5,
-                        ease: [0.16, 1, 0.3, 1],
-                        delay: 0.3 + i * 0.07,
-                      }}
-                      className="group/h relative rounded-[6px] border border-white/[0.06] bg-white/[0.015] p-4 transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.04]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-[5px] border border-white/[0.08] bg-white/[0.03] text-[#33adff] transition-colors group-hover/h:border-[#33adff]/40 group-hover/h:bg-[#0095FF]/[0.08]">
-                          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        </div>
-                        <p className="text-[13px] font-semibold text-white">
-                          {h.title}
-                        </p>
-                      </div>
-                      <p className="mt-2 text-[11.5px] leading-relaxed text-white/55">
-                        {h.body}
+            {/* Inline feature list — hairline-divided, not boxed */}
+            <div className="mt-10 border-t border-white/[0.06]">
+              {FEATURES.map((f, i) => {
+                const Icon = f.icon;
+                return (
+                  <motion.div
+                    key={f.label}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={inView ? { opacity: 1, x: 0 } : {}}
+                    transition={{
+                      duration: 0.5,
+                      ease: [0.16, 1, 0.3, 1],
+                      delay: 0.25 + i * 0.08,
+                    }}
+                    className="group flex items-start gap-4 border-b border-white/[0.06] py-4 transition-colors hover:bg-white/[0.015]"
+                  >
+                    <Icon
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[#33adff] transition-colors group-hover:text-white"
+                      strokeWidth={1.5}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-semibold text-white">
+                        {f.label}
                       </p>
-                    </motion.div>
-                  );
-                })}
-              </div>
+                      <p className="mt-1 text-[12.5px] leading-[1.6] text-white/50">
+                        {f.body}
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
 
-              {/* Inline secondary CTA — light, doesn't compete with the
-                  hero's primary button */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={inView ? { opacity: 1 } : {}}
-                transition={{ duration: 0.5, delay: 0.7 }}
-                className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.14em] text-white/45"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Gauge className="h-3.5 w-3.5 text-white/40" />
-                  Per-second billing
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-white/40" />
-                  RLS-isolated
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Lock className="h-3.5 w-3.5 text-white/40" />
-                  ZDR-compatible
-                </span>
-              </motion.div>
+            {/* Compliance row */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={inView ? { opacity: 1 } : {}}
+              transition={{ duration: 0.5, delay: 0.6 }}
+              className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] uppercase tracking-[0.16em] text-white/35"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldCheck className="h-3 w-3" />
+                RLS-isolated
+              </span>
+              <span>·</span>
+              <span>Per-second billing</span>
+              <span>·</span>
+              <span>ZDR-compatible</span>
             </motion.div>
           </div>
         </div>
@@ -338,11 +205,321 @@ export default function InferencePrivateHostingSection() {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Live-metric cell — used inside the endpoint card. Static label +
-// big value, tabular-nums so ticking numbers don't shift width.
-// ────────────────────────────────────────────────────────────────────
-function MetricCell({
+// ─── Routing Diagram ───────────────────────────────────────────────
+// SVG composition showing API keys → gateway → dedicated pods. Only the
+// highlighted lane (your-org) is animated bright; others are dim. Below
+// the diagram, a compact live-metric strip for the highlighted pod.
+function RoutingDiagram({
+  tenants,
+  inView,
+  uptime,
+  cost,
+  requests,
+}: {
+  tenants: Tenant[];
+  inView: boolean;
+  uptime: string;
+  cost: string;
+  requests: number;
+}) {
+  // Layout geometry
+  const W = 560;
+  const ROW_H = 44;
+  const TOP = 24;
+  const H = TOP + tenants.length * ROW_H + 36;
+
+  const keyX = 18;          // left rail (API keys)
+  const keyW = 130;
+  const gatewayX = W / 2;   // center gateway
+  const gatewayR = 18;
+  const podX = W - 18 - 150;
+  const podW = 150;
+
+  // Helpers
+  const rowY = (i: number) => TOP + i * ROW_H + ROW_H / 2;
+
+  return (
+    <div className="relative">
+      {/* Outer glow */}
+      <div
+        aria-hidden
+        className="absolute -inset-4 opacity-50 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(55% 50% at 50% 50%, rgba(0,149,255,0.30), transparent 70%)",
+        }}
+      />
+
+      {/* Card */}
+      <div className="relative border border-white/[0.08] bg-[#0a0a0a] shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]">
+        {/* Card chrome */}
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+          <div className="flex items-center gap-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] uppercase tracking-[0.16em] text-white/45">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" style={{ animationDuration: "2.5s" }} />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            api.cs2hvh.com · gateway
+          </div>
+          <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] uppercase tracking-[0.16em] text-white/25">
+            {tenants.length} tenants · isolated
+          </span>
+        </div>
+
+        {/* SVG diagram */}
+        <div className="relative">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="block h-auto w-full"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <defs>
+              <radialGradient id="gatewayGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#33adff" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#0095FF" stopOpacity="0.1" />
+              </radialGradient>
+              <linearGradient id="lineHi" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="rgba(51,173,255,0.1)" />
+                <stop offset="50%" stopColor="rgba(51,173,255,0.9)" />
+                <stop offset="100%" stopColor="rgba(51,173,255,0.1)" />
+              </linearGradient>
+              {/* Packet motion path uses these for each highlighted lane */}
+            </defs>
+
+            {/* Gateway hub */}
+            <motion.circle
+              cx={gatewayX}
+              cy={H / 2}
+              r={gatewayR}
+              fill="url(#gatewayGrad)"
+              stroke="rgba(51,173,255,0.55)"
+              strokeWidth="1"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={inView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              style={{ filter: "drop-shadow(0 0 14px rgba(0,149,255,0.6))" }}
+            />
+            <motion.circle
+              cx={gatewayX}
+              cy={H / 2}
+              r={gatewayR + 6}
+              fill="none"
+              stroke="rgba(51,173,255,0.25)"
+              strokeWidth="0.5"
+              initial={{ opacity: 0 }}
+              animate={inView ? { opacity: 1, scale: [1, 1.15, 1] } : {}}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            />
+
+            {/* Per-tenant lanes */}
+            {tenants.map((t, i) => {
+              const y = rowY(i);
+              const isHi = t.highlight;
+              const keyMidX = keyX + keyW;
+              const podMidX = podX;
+
+              // Two-segment polyline from key → gateway → pod
+              const path = `M ${keyMidX} ${y} L ${gatewayX - gatewayR} ${H / 2} M ${gatewayX + gatewayR} ${H / 2} L ${podMidX} ${y}`;
+
+              return (
+                <g key={t.id}>
+                  {/* Routing lines */}
+                  <motion.path
+                    d={path}
+                    fill="none"
+                    stroke={isHi ? "url(#lineHi)" : "rgba(255,255,255,0.08)"}
+                    strokeWidth={isHi ? 1.4 : 1}
+                    strokeDasharray={isHi ? "0" : "3 3"}
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={inView ? { pathLength: 1, opacity: 1 } : {}}
+                    transition={{
+                      duration: 0.8,
+                      delay: 0.5 + i * 0.08,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                  />
+
+                  {/* Packet (only on highlighted lane) */}
+                  {isHi && inView && (
+                    <>
+                      <motion.circle
+                        r="3"
+                        fill="#33adff"
+                        style={{ filter: "drop-shadow(0 0 6px rgba(51,173,255,0.95))" }}
+                        animate={{
+                          cx: [keyMidX, gatewayX, podMidX],
+                          cy: [y, H / 2, y],
+                        }}
+                        transition={{
+                          duration: 1.8,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                          times: [0, 0.5, 1],
+                        }}
+                      />
+                      <motion.circle
+                        r="3"
+                        fill="#33adff"
+                        opacity="0.55"
+                        style={{ filter: "drop-shadow(0 0 6px rgba(51,173,255,0.85))" }}
+                        animate={{
+                          cx: [keyMidX, gatewayX, podMidX],
+                          cy: [y, H / 2, y],
+                        }}
+                        transition={{
+                          duration: 1.8,
+                          repeat: Infinity,
+                          delay: 0.9,
+                          ease: "easeInOut",
+                          times: [0, 0.5, 1],
+                        }}
+                      />
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* HTML overlays for tenant chips + pod chips — easier to style than SVG <foreignObject> */}
+          <div className="pointer-events-none absolute inset-0">
+            {tenants.map((t, i) => {
+              const y = rowY(i);
+              const yPct = (y / H) * 100;
+              const isHi = t.highlight;
+              return (
+                <div key={`html-${t.id}`}>
+                  {/* API key chip — left */}
+                  <div
+                    className="absolute -translate-y-1/2"
+                    style={{
+                      left: `${(keyX / W) * 100}%`,
+                      top: `${yPct}%`,
+                      width: `${(keyW / W) * 100}%`,
+                    }}
+                  >
+                    <div
+                      className="flex items-center gap-2 border px-2.5 py-1.5 transition-colors"
+                      style={
+                        isHi
+                          ? {
+                              borderColor: "rgba(51,173,255,0.45)",
+                              background: "rgba(0,149,255,0.06)",
+                            }
+                          : {
+                              borderColor: "rgba(255,255,255,0.06)",
+                              background: "#0a0a0a",
+                            }
+                      }
+                    >
+                      <span
+                        className="block h-1 w-1 rounded-full"
+                        style={{
+                          background: isHi
+                            ? "#33adff"
+                            : "rgba(255,255,255,0.18)",
+                          boxShadow: isHi
+                            ? "0 0 6px rgba(51,173,255,0.7)"
+                            : "none",
+                        }}
+                      />
+                      <span
+                        className="truncate font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] tracking-[0.10em]"
+                        style={{
+                          color: isHi
+                            ? "rgba(255,255,255,0.92)"
+                            : "rgba(255,255,255,0.40)",
+                        }}
+                      >
+                        {t.org}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Pod chip — right */}
+                  <div
+                    className="absolute -translate-y-1/2"
+                    style={{
+                      left: `${(podX / W) * 100}%`,
+                      top: `${yPct}%`,
+                      width: `${(podW / W) * 100}%`,
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-between border px-2.5 py-1.5 transition-colors"
+                      style={
+                        isHi
+                          ? {
+                              borderColor: "rgba(51,173,255,0.45)",
+                              background: "rgba(0,149,255,0.06)",
+                              boxShadow:
+                                "0 0 0 1px rgba(51,173,255,0.10), 0 6px 20px rgba(0,149,255,0.20)",
+                            }
+                          : {
+                              borderColor: "rgba(255,255,255,0.06)",
+                              background: "#0a0a0a",
+                            }
+                      }
+                    >
+                      <span
+                        className="truncate font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] tracking-[0.10em]"
+                        style={{
+                          color: isHi
+                            ? "rgba(255,255,255,0.92)"
+                            : "rgba(255,255,255,0.40)",
+                        }}
+                      >
+                        {t.model}
+                      </span>
+                      <StatusDot status={t.status} dim={!isHi} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Gateway label */}
+            <div
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{
+                left: `${(gatewayX / W) * 100}%`,
+                top: "50%",
+              }}
+            >
+              <div className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[8px] uppercase tracking-[0.18em] text-white/60">
+                <div className="mt-7 text-center">router</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live metric strip for the highlighted lane */}
+        <div className="grid grid-cols-4 border-t border-white/[0.06]">
+          <Metric label="Tenant" value="your-org" />
+          <Metric label="Uptime" value={uptime} />
+          <Metric label="Requests" value={requests.toLocaleString()} />
+          <Metric label="Spend" value={cost} accent="#4ade80" />
+        </div>
+
+        {/* Footer caption */}
+        <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-2.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9.5px] uppercase tracking-[0.14em] text-white/30">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3 w-3" />
+            Routed only on your API key
+          </span>
+          <span>$0.40/hr · H100 80GB</span>
+        </div>
+      </div>
+
+      {/* Caption under card */}
+      <p className="mt-4 text-center font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.16em] text-white/30">
+        Your traffic stays in your lane · neighbors never see your weights
+      </p>
+    </div>
+  );
+}
+
+function Metric({
   label,
   value,
   accent,
@@ -352,16 +529,43 @@ function MetricCell({
   accent?: string;
 }) {
   return (
-    <div>
-      <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">
+    <div className="border-r border-white/[0.04] px-4 py-3 last:border-r-0">
+      <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[8.5px] uppercase tracking-[0.16em] text-white/30">
         {label}
       </p>
       <p
-        className="mt-1 font-mono text-[15px] font-semibold tabular-nums"
+        className="mt-1 font-[var(--font-geist-mono),ui-monospace,monospace] text-[12.5px] font-semibold tabular-nums"
         style={{ color: accent ?? "rgba(255,255,255,0.92)" }}
       >
         {value}
       </p>
     </div>
+  );
+}
+
+function StatusDot({
+  status,
+  dim,
+}: {
+  status: "live" | "idle" | "warming";
+  dim?: boolean;
+}) {
+  const color =
+    status === "live"
+      ? "#22c55e"
+      : status === "warming"
+        ? "#f59e0b"
+        : "rgba(255,255,255,0.25)";
+  return (
+    <span
+      className="block h-1.5 w-1.5 rounded-full"
+      style={{
+        background: dim ? color.replace(/[\d.]+\)$/, "0.35)") : color,
+        boxShadow:
+          !dim && status === "live"
+            ? "0 0 5px rgba(34,197,94,0.6)"
+            : undefined,
+      }}
+    />
   );
 }
