@@ -7,35 +7,44 @@ import ObjectStorageFeaturesSection from "@/components/services/object-storage-f
 import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
 import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
 import { getStorageCategories } from "@/lib/helpers/storage-categories";
-import { Archive, Database, Film, Layers } from "lucide-react";
+import {
+  IconArchiveFilled,
+  IconReportAnalyticsFilled,
+  IconStackFilled,
+  IconVideoFilled,
+} from "@tabler/icons-react";
 
 const GpuHome = async () => {
   const categories = await getStorageCategories();
 
   const cases: UseCase[] = [
     {
-      icon: Film,
+      iconNode: <IconVideoFilled size={20} />,
+      accent: "#8B5CF6",
       metric: "Media",
       title: "Media & content delivery",
       description:
         "Origin storage for images, video, audio, and static assets — with CDN cache egress free and signed URLs for paid content.",
     },
     {
-      icon: Archive,
+      iconNode: <IconArchiveFilled size={20} />,
+      accent: "#F59E0B",
       metric: "Backup & DR",
       title: "Backups and disaster recovery",
       description:
         "Versioned snapshots, lifecycle transitions to Archive, cross-region replication, and object lock for compliance.",
     },
     {
-      icon: Database,
+      iconNode: <IconReportAnalyticsFilled size={20} />,
+      accent: "#0095FF",
       metric: "Analytics",
       title: "Data lakes and analytics",
       description:
         "S3-compatible object store for log aggregation, training datasets, and analytics pipelines. Works with every S3 tool.",
     },
     {
-      icon: Layers,
+      iconNode: <IconStackFilled size={20} />,
+      accent: "#10B981",
       metric: "App data",
       title: "Application storage",
       description:

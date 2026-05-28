@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Lock } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { ProviderLogo } from "@/components/services/provider-logos";
 
 // ─── Supported base catalog ──────────────────────────────────────────
 //
@@ -25,14 +26,14 @@ type Base = {
 const BASES: Base[] = [
   { family: "Microsoft", model: "phi-4",                 size: "14B",  gpu: "A40",       costBand: "~$0.10",  accent: "#0078d4" },
   { family: "Meta",      model: "llama-3.3-8B-instruct", size: "8B",   gpu: "A40",       costBand: "~$0.20",  gated: true, accent: "#0866ff" },
-  { family: "Meta",      model: "llama-4-scout",         size: "17B",  gpu: "A100 80GB", costBand: "~$0.80",  gated: true, accent: "#0866ff" },
+  { family: "Meta",      model: "llama-4-scout",         size: "17B",  gpu: "B200 80GB", costBand: "~$0.80",  gated: true, accent: "#0866ff" },
   { family: "Meta",      model: "llama-4-maverick",      size: "128B", gpu: "H100 80GB", costBand: "~$3-5",   gated: true, accent: "#0866ff" },
-  { family: "DeepSeek",  model: "deepseek-v3",           size: "37B",  gpu: "A100 80GB", costBand: "~$1.20",  accent: "#7c3aed" },
-  { family: "DeepSeek",  model: "deepseek-coder-v3",     size: "33B",  gpu: "A100 80GB", costBand: "~$1.00",  accent: "#7c3aed" },
-  { family: "Qwen",      model: "qwen-3-32b",            size: "32B",  gpu: "A100 80GB", costBand: "~$1.00",  accent: "#615ced" },
-  { family: "Qwen",      model: "qwen-coder-32b",        size: "32B",  gpu: "A100 80GB", costBand: "~$1.00",  accent: "#615ced" },
+  { family: "DeepSeek",  model: "deepseek-v3",           size: "37B",  gpu: "B200 80GB", costBand: "~$1.20",  accent: "#7c3aed" },
+  { family: "DeepSeek",  model: "deepseek-coder-v3",     size: "33B",  gpu: "B300 80GB", costBand: "~$1.00",  accent: "#7c3aed" },
+  { family: "Qwen",      model: "qwen-3-32b",            size: "32B",  gpu: "B300 80GB", costBand: "~$1.00",  accent: "#615ced" },
+  { family: "Qwen",      model: "qwen-coder-32b",        size: "32B",  gpu: "B300 80GB", costBand: "~$1.00",  accent: "#615ced" },
   { family: "Mistral",   model: "mistral-7b-instruct",   size: "7B",   gpu: "A40",       costBand: "~$0.15",  accent: "#fa520f" },
-  { family: "Google",    model: "gemma-3-27b-it",        size: "27B",  gpu: "A100 80GB", costBand: "~$0.80",  gated: true, accent: "#4285f4" },
+  { family: "Google",    model: "gemma-3-27b-it",        size: "27B",  gpu: "B200 80GB", costBand: "~$0.80",  gated: true, accent: "#4285f4" },
 ];
 
 export default function FineTuningBasesSection() {
@@ -145,24 +146,39 @@ export default function FineTuningBasesSection() {
 
                 <div className="grid items-center gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,0.5fr)_minmax(0,0.8fr)_minmax(0,0.6fr)] sm:gap-3">
                   {/* Base + family */}
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <p className="truncate font-mono text-[13px] font-semibold text-white">
-                        {b.model}
-                      </p>
-                      {b.gated && (
-                        <span
-                          className="inline-flex items-center gap-0.5 rounded-[3px] border border-amber-300/25 bg-amber-300/[0.06] px-1 py-px font-mono text-[8.5px] uppercase tracking-[0.14em] text-amber-300/85"
-                          title="HF-gated base — your token required"
-                        >
-                          <Lock className="h-2 w-2" />
-                          Gated
-                        </span>
-                      )}
+                  <div className="flex min-w-0 items-center gap-3">
+                    {/* Family brand mark — tinted via accent (currentColor),
+                        glyph fallback when no logo exists. */}
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border font-mono text-[9px] font-semibold tracking-[0.04em]"
+                      style={{
+                        background: `linear-gradient(135deg, ${b.accent}22, ${b.accent}08)`,
+                        borderColor: `${b.accent}40`,
+                        color: b.accent,
+                      }}
+                    >
+                      <ProviderLogo provider={b.family} size={15} />
                     </div>
-                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
-                      {b.family}
-                    </p>
+
+                    <div className="min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <p className="truncate font-mono text-[13px] font-semibold text-white">
+                          {b.model}
+                        </p>
+                        {b.gated && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-[3px] border border-amber-300/25 bg-amber-300/[0.06] px-1 py-px font-mono text-[8.5px] uppercase tracking-[0.14em] text-amber-300/85"
+                            title="HF-gated base — your token required"
+                          >
+                            <Lock className="h-2 w-2" />
+                            Gated
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+                        {b.family}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Size pill */}

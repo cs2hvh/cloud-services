@@ -19,26 +19,27 @@ const figmaServices = [
     description:
       "High-performance NVIDIA GPUs on demand. Train models, run inference, and accelerate compute-heavy workloads with bare-metal speed.",
   },
-  {
+ 
+ {
+    logoSrc: "/images/Features/ai-agent.png",
+    logoAlt: "AI Agents",
+    title: "AI Agents",
+    description:
+      "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
+  },
+   {
     logoSrc: "/images/Features/database.png",
     logoAlt: "Managed Database",
     title: "Managed Database",
     description:
       "Fully managed PostgreSQL, MySQL, and Redis clusters with automated backups, failover, and point-in-time recovery built in.",
   },
-  {
+   {
     logoSrc: "/images/Features/protection.png",
     logoAlt: "DDoS Protection",
     title: "DDoS Protection",
     description:
       "Enterprise-grade threat mitigation at the edge. Always-on L3/L4/L7 protection that absorbs attacks before they reach your stack.",
-  },
-  {
-    logoSrc: "/images/Features/ai-agent.png",
-    logoAlt: "AI Agents",
-    title: "AI Agents",
-    description:
-      "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
   },
   {
     logoSrc: "/images/main-page/kubernetes.png",
@@ -54,6 +55,13 @@ const figmaServices = [
     description:
       "S3-compatible storage with 11 nines durability. Store, serve, and manage petabytes of data with predictable, low-cost pricing.",
   },
+  //  {
+  //   logoSrc: "/images/main-page/kubernetes.png",
+  //   logoAlt: "Kubernetes",
+  //   title: "Kubernetes",
+  //   description:
+  //     "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
+  // },
 ];
 
 const cardEntrance = {
@@ -131,7 +139,7 @@ export function ServicesSection() {
                   { ...figmaServices[0], left: "44.0%", topVar: "--service-top-1" },
                   { ...figmaServices[1], left: "65.3%", topVar: "--service-top-2" },
                   { ...figmaServices[5], left: "86.6%", topVar: "--service-top-3" },
-                  { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
+                  // { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
                   { ...figmaServices[4], left: "65.3%", topVar: "--service-top-5" },
                   { ...figmaServices[6], left: "86.6%", topVar: "--service-top-6" },
                 ].map((service, i) => (

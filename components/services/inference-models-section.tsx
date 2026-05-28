@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { ProviderLogo } from "@/components/services/provider-logos";
 
 // ─── Provider catalog (visible in the marquee columns) ───────────────
 //
 // Each entry is rendered as a card flowing through one of three vertical
-// columns. We don't ship real provider logos (IP / legal); the avatar
-// is a brand-tinted initial. Tags are a single-line capability line.
+// columns. The avatar shows the provider's brand mark (see provider-logos),
+// brand-tinted via the accent. Tags are a single-line capability line.
 type ModelCard = {
   provider: string;
   model: string;
@@ -273,9 +274,6 @@ function MarqueeColumn({
 }
 
 function ModelTile({ card }: { card: ModelCard }) {
-  // First two characters of the provider name, used as the avatar glyph.
-  const glyph = card.provider.slice(0, 2).toUpperCase();
-
   return (
     <div
       className="group/tile relative flex items-center gap-3 overflow-hidden rounded-[6px] border border-white/[0.06] bg-white/[0.015] px-3.5 py-3 backdrop-blur-sm transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.05]"
@@ -290,8 +288,8 @@ function ModelTile({ card }: { card: ModelCard }) {
         }}
       />
 
-      {/* Avatar — brand-tinted initial. Looks like a logo without
-          shipping any real third-party marks. */}
+      {/* Avatar — brand-tinted provider logo, glyph fallback when no
+          mark exists. Inherits the accent via currentColor. */}
       <div
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] border font-mono text-[10px] font-semibold tracking-[0.04em]"
         style={{
@@ -300,7 +298,7 @@ function ModelTile({ card }: { card: ModelCard }) {
           color: card.accent,
         }}
       >
-        {glyph}
+        <ProviderLogo provider={card.provider} />
       </div>
 
       <div className="min-w-0 flex-1">

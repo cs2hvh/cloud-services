@@ -1,64 +1,15 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LucideRoute } from "lucide-react";
+import {
+    IconBookFilled,
+    IconAbc,
+    IconArrowsExchange,
+    IconSitemapFilled,
+} from "@tabler/icons-react";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
-
-/* ──────────────────────────────────────────────────────────────
-   Custom inline glyphs (32×32 — layered + blue accent fills)
-   ────────────────────────────────────────────────────────────── */
-
-function FundamentalsGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
-            <path d="M5 6h9a3 3 0 0 1 3 3v18a3 3 0 0 0-3-3H5V6z" fill="currentColor" fillOpacity="0.10" />
-            <path d="M27 6h-9a3 3 0 0 0-3 3v18a3 3 0 0 1 3-3h9V6z" fill="#0095FF" fillOpacity="0.15" stroke="#0095FF" />
-            <path d="M8 11h5M8 14h4M19 11h5M19 14h5M19 17h4" strokeOpacity="0.55" strokeLinecap="round" />
-        </svg>
-    );
-}
-
-function NamingGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
-            <rect x="4" y="11" width="24" height="10" rx="1.5" fill="currentColor" fillOpacity="0.08" />
-            <path d="M4 11h24" strokeOpacity="0.4" />
-            <text x="8" y="18.5" fill="currentColor" fillOpacity="0.85" fontSize="6" fontFamily="var(--font-geist-mono),ui-monospace,monospace" fontWeight="600">brand</text>
-            <text x="18" y="18.5" fill="#0095FF" fontSize="6" fontFamily="var(--font-geist-mono),ui-monospace,monospace" fontWeight="700">.com</text>
-            <path d="M22 8l1 2 2 0.5-2 0.5-1 2-1-2-2-0.5 2-0.5 1-2z" fill="#0095FF" />
-            <circle cx="6" cy="25" r="0.7" fill="currentColor" fillOpacity="0.5" />
-            <circle cx="10" cy="25" r="0.7" fill="currentColor" fillOpacity="0.5" />
-            <circle cx="14" cy="25" r="0.7" fill="#0095FF" />
-        </svg>
-    );
-}
-
-function TransferGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="5" width="10" height="10" rx="1.2" fill="currentColor" fillOpacity="0.15" />
-            <rect x="19" y="17" width="10" height="10" rx="1.2" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
-            <path d="M14 9h11M22 6l3 3-3 3" />
-            <path d="M18 23H7M10 26l-3-3 3-3" />
-        </svg>
-    );
-}
-
-function PortfolioGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <rect x="4" y="4" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="17" y="4" width="11" height="7" rx="1" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
-            <rect x="4" y="13" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="17" y="13" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="4" y="22" width="24" height="6" rx="1" fill="currentColor" fillOpacity="0.10" />
-            <circle cx="7" cy="7.5" r="0.7" fill="#0095FF" />
-            <path d="M9.5 7.5h4M6.5 25h6M14 25h4" strokeOpacity="0.55" strokeLinecap="round" />
-            <path d="M22 16l-2 2-1-1" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
 
 type Guide = {
     index: string;
@@ -66,8 +17,9 @@ type Guide = {
     title: string;
     description: string;
     href: string;
-    glyph: React.ReactNode;
+    icon: React.ReactNode;
     readTime: string;
+    accent: string;
 };
 
 const GUIDES: Guide[] = [
@@ -78,8 +30,9 @@ const GUIDES: Guide[] = [
         description:
             "How registration, registries, and DNS actually work — written for engineers, not marketers.",
         href: "/signup",
-        glyph: <FundamentalsGlyph />,
+        icon: <IconBookFilled size={24} />,
         readTime: "6 min read",
+        accent: "#0095FF",
     },
     {
         index: "02",
@@ -88,8 +41,9 @@ const GUIDES: Guide[] = [
         description:
             "Practical guidance for choosing names that are memorable, defensible, and available.",
         href: "/services/domain#search",
-        glyph: <NamingGlyph />,
+        icon: <LucideRoute size={24} />,
         readTime: "5 min read",
+        accent: "#8B5CF6",
     },
     {
         index: "03",
@@ -98,8 +52,9 @@ const GUIDES: Guide[] = [
         description:
             "Step-by-step transfer playbook with zero-downtime DNS pre-staging and rollback safeguards.",
         href: "/dashboard/domains/transfer",
-        glyph: <TransferGlyph />,
+        icon: <IconArrowsExchange size={24} />,
         readTime: "8 min read",
+        accent: "#06B6D4",
     },
     {
         index: "04",
@@ -108,8 +63,9 @@ const GUIDES: Guide[] = [
         description:
             "DNS records, DNSSEC, WHOIS privacy, registrar lock, auto-renew, and bulk management at scale.",
         href: "/dashboard/domains",
-        glyph: <PortfolioGlyph />,
+        icon: <IconSitemapFilled size={24} />,
         readTime: "10 min read",
+        accent: "#10B981",
     },
 ];
 
@@ -135,8 +91,11 @@ function GuideCard({ guide }: { guide: Guide }) {
 
             {/* Top — icon + role pill + index */}
             <div className="relative flex items-start justify-between">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/[0.12] bg-white/[0.03] text-white/85 transition-colors group-hover:border-white/[0.25] group-hover:text-white">
-                    <div className="h-[26px] w-[26px]">{guide.glyph}</div>
+                <div
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border transition-all group-hover:brightness-110"
+                    style={{ background: `${guide.accent}18`, borderColor: `${guide.accent}40`, color: guide.accent }}
+                >
+                    {guide.icon}
                 </div>
                 <div className="flex items-center gap-2">
                     <span

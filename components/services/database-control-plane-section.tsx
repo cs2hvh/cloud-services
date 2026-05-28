@@ -206,10 +206,10 @@ function CapabilityCard({ c, index }: { c: Capability; index: number }) {
     const Icon = c.icon;
     return (
         <article
-            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#13161B]"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[linear-gradient(180deg,rgba(0,149,255,0.08),rgba(0,149,255,0.03))] p-7 transition-colors hover:border-white/[0.22] hover:bg-[linear-gradient(180deg,rgba(0,149,255,0.12),rgba(0,149,255,0.05))]"
             style={{
                 boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)",
+                    "inset 0 1px 0 rgba(0,149,255,0.12), 0 12px 32px -14px rgba(0,149,255,0.25)",
             }}
         >
             <div className="flex items-start justify-between">

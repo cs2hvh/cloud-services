@@ -1,83 +1,21 @@
 "use client";
 
+import {
+    IconDeviceDesktopFilled,
+    IconSparklesFilled,
+    IconShoppingCartFilled,
+    IconHexagonFilled,
+    IconBoltFilled,
+    IconShieldCheckFilled,
+} from "@tabler/icons-react";
+
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
-/* ─── Custom stroke-based glyphs (24x24) ───----------------- */
-
-function SaasGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
-            <rect x="3" y="4" width="18" height="16" rx="1.5" />
-            <path d="M3 8h18" />
-            <circle cx="5.5" cy="6" r="0.5" fill="currentColor" />
-            <circle cx="7.5" cy="6" r="0.5" fill="currentColor" />
-            <circle cx="9.5" cy="6" r="0.5" fill="currentColor" />
-            <path d="M6 12h6M6 15h9M6 18h4" />
-            <path d="M17 14l2 2-2 2" />
-        </svg>
-    );
-}
-
-function AIGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
-            {/* neural network */}
-            <circle cx="5" cy="6" r="1.4" />
-            <circle cx="5" cy="12" r="1.4" />
-            <circle cx="5" cy="18" r="1.4" />
-            <circle cx="12" cy="9" r="1.4" />
-            <circle cx="12" cy="15" r="1.4" />
-            <circle cx="19" cy="12" r="1.4" fill="currentColor" fillOpacity="0.25" />
-            <path d="M6.3 6.6L10.7 8.4M6.3 11.5L10.7 9.4M6.3 12.6L10.7 14.4M6.3 17.4L10.7 15.6M13.3 9.6L17.7 11.4M13.3 14.4L17.7 12.6" />
-        </svg>
-    );
-}
-
-function CommerceGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
-            <path d="M3 5h2.5l1.7 10.4a1 1 0 001 .85h9.4a1 1 0 001-.78L20.5 8H7" />
-            <circle cx="9" cy="20" r="1.4" />
-            <circle cx="17" cy="20" r="1.4" />
-            <path d="M10.5 11.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
-
-function ApiGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor">
-            {/* cube with sockets */}
-            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
-            <path d="M12 3v9m0 0L4 7.5m8 4.5l8-4.5M12 12v9" />
-            <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-        </svg>
-    );
-}
-
-function RealtimeGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-            {/* waveform pulse */}
-            <path d="M2 12h3l2-6 3 12 3-9 2 6 2-3h5" />
-            <circle cx="20" cy="9" r="0.8" fill="currentColor" />
-        </svg>
-    );
-}
-
-function RegulatedGlyph() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" className="h-full w-full" strokeWidth={1.4} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3l8 3v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-3z" />
-            <path d="M9 12l2.2 2.2L15.5 10" />
-        </svg>
-    );
-}
-
 type Workload = {
-    glyph: React.ReactNode;
+    icon: React.ReactNode;
+    accent: string;
     metric: string;
     title: string;
     description: string;
@@ -85,42 +23,48 @@ type Workload = {
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <SaasGlyph />,
+        icon: <IconDeviceDesktopFilled size={22} />,
+        accent: "#0095FF",
         metric: "Web & SaaS",
         title: "Customer-facing web applications",
         description:
             "Server-rendered and static frameworks deployed to the edge, with preview environments for every pull request and zero-downtime releases.",
     },
     {
-        glyph: <AIGlyph />,
+        icon: <IconSparklesFilled size={22} />,
+        accent: "#8B5CF6",
         metric: "AI / ML",
         title: "Model inference services",
         description:
             "GPU-backed runtimes with request-rate autoscaling and warm pools to keep cold-start and first-token latency within target.",
     },
     {
-        glyph: <CommerceGlyph />,
+        icon: <IconShoppingCartFilled size={22} />,
+        accent: "#10B981",
         metric: "Commerce",
         title: "High-traffic storefronts",
         description:
             "Burst capacity for promotional events, integrated CDN, and signed checkout sessions — engineered for peak retail throughput.",
     },
     {
-        glyph: <ApiGlyph />,
+        icon: <IconHexagonFilled size={22} />,
+        accent: "#06B6D4",
         metric: "APIs",
         title: "Backends and microservices",
         description:
             "REST and gRPC services with health checks, structured logging, and managed connections to Postgres, Redis, and Mongo.",
     },
     {
-        glyph: <RealtimeGlyph />,
+        icon: <IconBoltFilled size={22} />,
+        accent: "#F59E0B",
         metric: "Realtime",
         title: "Realtime and WebSocket services",
         description:
             "Long-lived connections with sticky routing across regional pools, deployed through the same release pipeline as the rest of the stack.",
     },
     {
-        glyph: <RegulatedGlyph />,
+        icon: <IconShieldCheckFilled size={22} />,
+        accent: "#E11D48",
         metric: "Regulated",
         title: "Compliance-bound workloads",
         description:
@@ -157,8 +101,11 @@ export default function AppDeployWorkloadsSection() {
                             className="group relative flex flex-col gap-4 bg-[#EEECE4] p-7 transition-colors hover:bg-[#F2EDDD]"
                         >
                             <div className="flex items-start justify-between">
-                                <div className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-black/[0.12] bg-[#1A1814] text-[#EEECE4]/95">
-                                    <div className="h-[22px] w-[22px]">{w.glyph}</div>
+                                <div
+                                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
+                                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                                >
+                                    {w.icon}
                                 </div>
                                 <span
                                     className={`${MONO} text-[10.5px] tabular-nums text-black/30`}

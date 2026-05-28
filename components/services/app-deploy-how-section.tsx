@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { GitBranch, Hammer, Globe, type LucideIcon } from "lucide-react";
+import { GitBranch, Hammer } from "lucide-react";
+import { IconGlobeFilled } from "@tabler/icons-react";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 type Step = {
-    icon: LucideIcon;
+    icon: React.ReactNode;
+    accent: string;
     label: string;
     title: string;
     description: string;
@@ -17,7 +19,8 @@ type Step = {
 
 const STEPS: Step[] = [
     {
-        icon: GitBranch,
+        icon: <GitBranch className="h-[18px] w-[18px]" strokeWidth={1.7} />,
+        accent: "#0095FF",
         label: "01",
         title: "Connect a repository",
         description:
@@ -25,7 +28,8 @@ const STEPS: Step[] = [
         line: "$ git push origin main",
     },
     {
-        icon: Hammer,
+        icon: <Hammer className="h-[18px] w-[18px]" strokeWidth={1.7} />,
+        accent: "#F59E0B",
         label: "02",
         title: "Managed build pipeline",
         description:
@@ -33,7 +37,8 @@ const STEPS: Step[] = [
         line: "→ build · next.js detected · cache hit 87%",
     },
     {
-        icon: Globe,
+        icon: <IconGlobeFilled size={18} />,
+        accent: "#10B981",
         label: "03",
         title: "Released to the edge",
         description:
@@ -122,7 +127,6 @@ export default function AppDeployHowSection() {
                     {/* Steps */}
                     <ol className="relative flex flex-col">
                         {STEPS.map((step, i) => {
-                            const Icon = step.icon;
                             const isLast = i === STEPS.length - 1;
                             return (
                                 <li
@@ -138,9 +142,15 @@ export default function AppDeployHowSection() {
                                     )}
 
                                     {/* Icon tile */}
-                                    <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.14] bg-[#111316] text-white/85">
-                                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.7} />
-                                        <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                                    <div
+                                        className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border"
+                                        style={{ background: `${step.accent}18`, borderColor: `${step.accent}40`, color: step.accent }}
+                                    >
+                                        {step.icon}
+                                        <span
+                                            className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full"
+                                            style={{ background: step.accent }}
+                                        />
                                     </div>
 
                                     {/* Content */}
