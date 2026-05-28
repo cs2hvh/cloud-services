@@ -6,9 +6,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard, CreditCard,
-  ArrowRight,
+  ArrowRight, Activity, LifeBuoy, ExternalLink,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -224,6 +224,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const productsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiLabsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
@@ -406,32 +407,95 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
               <AnimatePresence>
                 {dropdownOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-52 rounded-lg bg-black/90 backdrop-blur-[48px] border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden z-50"
+                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 mt-2 w-[260px] rounded-lg bg-[#0a0a0a]/95 backdrop-blur-[48px] border border-white/[0.08] shadow-[0_18px_48px_rgba(0,0,0,0.65)] overflow-hidden z-50"
                   >
-                    <div className="px-4 py-3 border-b border-white/[0.06]">
-                      <p className="text-sm font-medium text-white truncate">{user.email}</p>
+                    {/* Identity header */}
+                    <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-4">
+                      <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-[#33adff] to-[#0066CC] flex items-center justify-center text-white font-semibold text-[15px] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_14px_rgba(0,149,255,0.35)]">
+                        {user.email?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-white truncate">{user.email}</p>
+                        <p className="mt-0.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9.5px] uppercase tracking-[0.16em] text-white/40">
+                          Personal account
+                        </p>
+                      </div>
                     </div>
-                    <div className="py-1">
-                      <button onClick={() => router.push("/dashboard")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
-                        <LayoutDashboard className="w-4 h-4 text-red-100" /><span>Dashboard</span>
-                      </button>
-                      <button onClick={() => router.push("/dashboard/nav/profile")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
-                        <User className="w-4 h-4" /><span>Profile</span>
-                      </button>
-                      <button onClick={() => router.push("/dashboard/settings")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
-                        <Settings className="w-4 h-4" /><span>Settings</span>
-                      </button>
-                      <button onClick={() => router.push("/dashboard/nav/billing")} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] flex items-center gap-3 transition-colors duration-200">
-                        <CreditCard className="w-4 h-4" /><span>Billing</span>
-                      </button>
+
+                    {/* Workspace */}
+                    <div className="px-1 py-1">
+                      <p className="px-3 pt-2 pb-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] uppercase tracking-[0.18em] text-white/30">
+                        Workspace
+                      </p>
+                      <UserMenuItem
+                        icon={LayoutDashboard}
+                        label="Dashboard"
+                        active={pathname === "/dashboard"}
+                        onClick={() => { router.push("/dashboard"); setDropdownOpen(false); }}
+                      />
+                      <UserMenuItem
+                        icon={Activity}
+                        label="Activity & usage"
+                        active={pathname?.startsWith("/dashboard/activity")}
+                        onClick={() => { router.push("/dashboard/activity"); setDropdownOpen(false); }}
+                      />
+                      <UserMenuItem
+                        icon={CreditCard}
+                        label="Billing"
+                        active={pathname?.startsWith("/dashboard/nav/billing")}
+                        onClick={() => { router.push("/dashboard/nav/billing"); setDropdownOpen(false); }}
+                      />
                     </div>
-                    <div className="border-t border-white/[0.06] py-1">
-                      <button onClick={handleSignOut} className="cursor-pointer w-full px-4 py-2 text-left text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-3 transition-colors duration-200">
-                        <LogOut className="w-4 h-4" /><span>Sign out</span>
+
+                    {/* Personal */}
+                    <div className="px-1 pb-1 pt-0 border-t border-white/[0.06]">
+                      <p className="px-3 pt-2 pb-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] uppercase tracking-[0.18em] text-white/30">
+                        Personal
+                      </p>
+                      <UserMenuItem
+                        icon={User}
+                        label="Profile"
+                        active={pathname?.startsWith("/dashboard/nav/profile")}
+                        onClick={() => { router.push("/dashboard/nav/profile"); setDropdownOpen(false); }}
+                      />
+                      <UserMenuItem
+                        icon={Settings}
+                        label="Settings"
+                        active={pathname?.startsWith("/dashboard/settings")}
+                        onClick={() => { router.push("/dashboard/settings"); setDropdownOpen(false); }}
+                      />
+                      <UserMenuItem
+                        icon={LifeBuoy}
+                        label="Support"
+                        active={pathname?.startsWith("/dashboard/support")}
+                        onClick={() => { router.push("/dashboard/support"); setDropdownOpen(false); }}
+                      />
+                    </div>
+
+                    {/* External: docs */}
+                    <div className="px-1 pb-1 pt-0 border-t border-white/[0.06]">
+                      <Link
+                        href="/api-docs"
+                        onClick={() => setDropdownOpen(false)}
+                        className="group flex w-full items-center gap-2.5 rounded-[5px] px-3 py-2 text-[13px] text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 text-white/40 transition-colors group-hover:text-white/70" strokeWidth={1.75} />
+                        <span>API documentation</span>
+                      </Link>
+                    </div>
+
+                    {/* Sign out */}
+                    <div className="border-t border-white/[0.06] p-1">
+                      <button
+                        onClick={handleSignOut}
+                        className="group flex w-full cursor-pointer items-center gap-2.5 rounded-[5px] px-3 py-2 text-[13px] text-red-400 transition-colors hover:bg-red-500/[0.08] hover:text-red-300"
+                      >
+                        <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Sign out</span>
                       </button>
                     </div>
                   </motion.div>
@@ -851,5 +915,46 @@ function MobileAiLabsAccordion({ onNavigate }: { onNavigate: () => void }) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── User dropdown menu item ────────────────────────────────────────
+function UserMenuItem({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group flex w-full cursor-pointer items-center justify-between gap-2.5 rounded-[5px] px-3 py-2 text-[13px] transition-colors ${
+        active
+          ? "bg-white/[0.05] text-white"
+          : "text-white/55 hover:bg-white/[0.04] hover:text-white"
+      }`}
+    >
+      <span className="flex items-center gap-2.5">
+        <Icon
+          className={`h-3.5 w-3.5 transition-colors ${
+            active ? "text-[#33adff]" : "text-white/40 group-hover:text-white/70"
+          }`}
+          strokeWidth={1.75}
+        />
+        <span>{label}</span>
+      </span>
+      {active && (
+        <span
+          aria-hidden
+          className="block h-1 w-1 rounded-full bg-[#33adff]"
+          style={{ boxShadow: "0 0 6px rgba(0,149,255,0.7)" }}
+        />
+      )}
+    </button>
   );
 }
