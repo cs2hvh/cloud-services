@@ -573,10 +573,6 @@ export function ModelTrainingPipelineSection() {
       <Container className="relative z-10">
         {/* Hero */}
         <header className="mt-hero">
-          <div className="mt-eyebrow">
-            <span className="mt-eyebrow-dot" />
-            A.I. Labs · End-to-end pipeline
-          </div>
           <h2>
             The Complete Model Training{" "}
             <span className="mt-accent">Pipeline</span>
