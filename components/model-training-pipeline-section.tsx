@@ -539,6 +539,10 @@ export function ModelTrainingPipelineSection() {
     <section
       ref={sectionRef}
       className="mt-pipeline relative z-10 overflow-clip py-20 lg:py-28"
+      style={{
+        opacity: mounted ? 1 : 0,
+        transition: "opacity 0.45s ease",
+      }}
     >
       {/* Section top divider — homepage convention */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -785,12 +789,12 @@ export function ModelTrainingPipelineSection() {
           background: rgba(255, 255, 255, 0.6);
         }
         .mt-hero h2 {
-          font-weight: 700;
-          font-size: clamp(28px, 3.4vw, 52px);
+          font-weight: 400;
+          font-size: clamp(30px, 3.6vw, 56px);
           letter-spacing: -0.025em;
-          line-height: 1.04;
+          line-height: 1.05;
           margin: 0 0 16px;
-          color: var(--mt-text);
+          color: #ffffff;
         }
         .mt-accent {
           color: #33adff;
