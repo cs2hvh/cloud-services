@@ -15,6 +15,7 @@ import type {
   UpsizeStorageRequest,
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 
 export const scalingResourceOperations = {
   async updateStorage(
@@ -139,6 +140,25 @@ export const scalingResourceOperations = {
         console.error("[updateStorage] Failed to create notification:", notifErr);
       }
 
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Database plan changed",
+          summary: `The plan for your database cluster "${clusterData.name}" was changed to "${requestedSize}".`,
+          severity: "info",
+          metadata: {
+            Operation: "Change database plan",
+            Cluster: String(clusterData.name),
+            "Previous plan": String(clusterData.size),
+            "New plan": requestedSize,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[updateStorage] Failed to send email:", emailErr);
+      }
+
       return { success: true };
     } catch (err: unknown) {
       if (err instanceof Error && "response" in err) {
@@ -258,6 +278,25 @@ export const scalingResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[updateStorageInternal] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient = await resolveUserEmail(String(clusterData.owner_id));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.name),
+            alertTitle: "Database plan changed",
+            summary: `The plan for your database cluster "${clusterData.name}" was changed to "${requestedSize}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Change database plan",
+              Cluster: String(clusterData.name),
+              "Previous plan": String(clusterData.size),
+              "New plan": requestedSize,
+            },
+          });
+        } catch (emailErr) {
+          console.error("[updateStorageInternal] Failed to send email:", emailErr);
         }
         return { success: true, statusCode: 200 };
       }
@@ -388,6 +427,25 @@ export const scalingResourceOperations = {
         console.error("[updateRegion] Failed to create notification:", notifErr);
       }
 
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Database migration started",
+          summary: `Your database cluster "${clusterData.name}" is migrating to the region "${region}". We'll let you know once the migration is complete.`,
+          severity: "info",
+          metadata: {
+            Operation: "Migrate database region",
+            Cluster: String(clusterData.name),
+            "Previous region": String(clusterData.region),
+            "New region": region,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[updateRegion] Failed to send email:", emailErr);
+      }
+
       return { success: true };
     } catch (err: unknown) {
       if (err instanceof Error && "response" in err) {
@@ -463,6 +521,23 @@ export const scalingResourceOperations = {
             console.error("[readMigrationStatus] Failed to create notification:", notifErr);
           }
 
+          try {
+            const recipient = await resolveUserEmail(String(access.cluster.owner_id));
+            await sendDatabaseAlertEmail({
+              userEmail: recipient,
+              serviceName: String(access.cluster.name),
+              alertTitle: "Database migration completed",
+              summary: `Your database cluster "${access.cluster.name}" has finished migrating to the region "${request.targetRegion}" and is now online.`,
+              severity: "info",
+              metadata: {
+                Operation: "Migrate database region",
+                Cluster: String(access.cluster.name),
+                Region: request.targetRegion,
+              },
+            });
+          } catch (emailErr) {
+            console.error("[readMigrationStatus] Failed to send email:", emailErr);
+          }
         }
       }
 
@@ -634,6 +709,25 @@ export const scalingResourceOperations = {
         );
       } catch (notifErr) {
         console.error("[upsizeStorage] Failed to create notification:", notifErr);
+      }
+
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Database storage upsized",
+          summary: `The storage for your database cluster "${clusterData.name}" was increased to ${(request.storageSizeMib / 1024).toFixed(0)} GiB.`,
+          severity: "info",
+          metadata: {
+            Operation: "Upsize database storage",
+            Cluster: String(clusterData.name),
+            "Previous storage": `${(currentStorageMib / 1024).toFixed(0)} GiB`,
+            "New storage": `${(request.storageSizeMib / 1024).toFixed(0)} GiB`,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[upsizeStorage] Failed to send email:", emailErr);
       }
 
       return { success: true };

@@ -14,7 +14,7 @@ const ModelHostingPage = () => {
     {
       question: "Which GPUs are available?",
       answer:
-        "A40 (48GB), L40S (48GB), A100 80GB, and H100 80GB at per-second metered pricing. You pick the SKU at deploy time and set min/max worker bounds. Multi-GPU and B200 / MI300X land as customer demand justifies — typically days to plumb, not quarters.",
+        "A40 (48GB), B200 (48GB), B300 80GB, and H100 80GB at per-second metered pricing. You pick the SKU at deploy time and set min/max worker bounds. Multi-GPU and B200 / MI300X land as customer demand justifies — typically days to plumb, not quarters.",
     },
     {
       question: "How does autoscale work?",

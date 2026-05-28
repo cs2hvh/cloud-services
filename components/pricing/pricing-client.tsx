@@ -12,7 +12,6 @@ interface PricingClientProps {
 export default function PricingClient({ categories }: PricingClientProps) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id || "compute");
-  const [expandedTierId, setExpandedTierId] = useState<string>("performance");
 
   // Track active section based on scroll position
   useEffect(() => {
@@ -141,8 +140,6 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 <PricingContent
                   category={category}
                   billingCycle={billingCycle}
-                  expandedTierId={expandedTierId}
-                  setExpandedTierId={setExpandedTierId}
                 />
               </div>
             ))}

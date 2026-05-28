@@ -15,6 +15,7 @@ import { ensureBalance } from "@/config/billing-flow";
 import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
 import { DatabaseIntegrationService } from "@/lib/services/database-integration";
 import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 export interface CreateAppRequest {
   name: string;
@@ -514,6 +515,29 @@ export class PlatformAppService {
         console.error('[PlatformAppService.createApp] Notification failed:', notifErr);
       }
 
+      // 9b. Send confirmation email
+      try {
+        const recipient =
+          request.userEmail || (await resolveUserEmail(request.userId));
+        await sendServiceAlertEmail({
+          serviceType: "app",
+          userEmail: recipient,
+          serviceName: request.name,
+          alertTitle: "Application deployment started",
+          summary: `Your application "${request.name}" has been created and the initial deployment is in progress. Billing activates after the first successful deployment.`,
+          severity: "info",
+          metadata: {
+            Operation: "Create application",
+            Application: request.name,
+            Framework: request.framework,
+            Repository: request.repository_name,
+            Branch: request.branch || 'main',
+          },
+        });
+      } catch (emailErr) {
+        console.error('[PlatformAppService.createApp] Email failed:', emailErr);
+      }
+
       // 10. Register webhook if auto_deploy enabled
       if (request.auto_deploy) {
         try {
@@ -816,6 +840,27 @@ export class PlatformAppService {
         console.error('[PlatformAppService.deleteApp] Failed to create notification:', notifError);
       }
 
+      // 7. Send confirmation email
+      try {
+        const recipient =
+          audit_context?.user_email || (await resolveUserEmail(userId));
+        await sendServiceAlertEmail({
+          serviceType: "app",
+          userEmail: recipient,
+          serviceName: appName ?? "Application",
+          alertTitle: "Application deleted",
+          summary: `Your application "${appName ?? "Application"}" was deleted successfully along with its deployments.`,
+          severity: "warning",
+          metadata: {
+            Operation: "Delete application",
+            Application: appName ?? "Application",
+            Repository: repoName ?? "Unknown",
+          },
+        });
+      } catch (emailErr) {
+        console.error('[PlatformAppService.deleteApp] Email failed:', emailErr);
+      }
+
       const warning = [deploymentDeletion.warning, billingWarning].filter(Boolean).join("; ") || undefined;
       return { success: true, appName, warning };
 
@@ -922,6 +967,28 @@ export class PlatformAppService {
       } catch (auditErr) {
         console.warn('[PlatformAppService.resizeApp] Audit log failed:', auditErr);
       }
+    }
+
+    // Confirmation email
+    try {
+      const recipient =
+        audit_context?.user_email || (await resolveUserEmail(userId));
+      await sendServiceAlertEmail({
+        serviceType: "app",
+        userEmail: recipient,
+        serviceName: app.name,
+        alertTitle: "Application resized",
+        summary: `Your application "${app.name}" was resized from ${currentSize} to ${newSize}.`,
+        severity: "info",
+        metadata: {
+          Operation: "Resize application",
+          Application: app.name,
+          "Previous size": currentSize,
+          "New size": newSize,
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[PlatformAppService.resizeApp] Email failed:', emailErr);
     }
 
     return {

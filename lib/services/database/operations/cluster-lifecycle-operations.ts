@@ -25,7 +25,7 @@ import type {
   DeleteDatabaseClusterResult,
   UpdateDatabaseClusterProjectRequest,
 } from "../types";
-import { sendDatabaseAlertEmail } from "./database-alert-email";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
 export const clusterLifecycleOperations = {
@@ -191,6 +191,28 @@ export const clusterLifecycleOperations = {
         metadata: { serviceName: request.name },
       });
 
+      try {
+        const recipient =
+          request.user_email || (await resolveUserEmail(request.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: request.name,
+          alertTitle: "Database cluster created",
+          summary: `Your database cluster "${request.name}" has been created and is now being provisioned. We'll let you know as soon as it is online and ready to use.`,
+          severity: "info",
+          metadata: {
+            Operation: "Create database cluster",
+            Cluster: request.name,
+            Engine: request.engine,
+            Version: request.version,
+            Region: request.region,
+            Plan: request.size,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[createCluster] Failed to send email:", emailErr);
+      }
+
       return {
         success: true,
         clusterId: providerClusterId,
@@ -323,6 +345,25 @@ export const clusterLifecycleOperations = {
           );
         } catch (notifErr) {
           console.error("[updateClusterProject] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient =
+            userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database cluster moved",
+            summary: `Your database cluster "${clusterData.data.name}" was moved to the project "${projectData?.name ?? "Unknown"}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Move database cluster to project",
+              Cluster: String(clusterData.data.name),
+              Project: projectData?.name ?? "Unknown",
+            },
+          });
+        } catch (emailErr) {
+          console.error("[updateClusterProject] Failed to send email:", emailErr);
         }
       }
 

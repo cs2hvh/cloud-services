@@ -1,23 +1,21 @@
 "use client";
 
 // GpuServicePage — marketing page for the GPU cloud service.
-// Built around our real GPU lineup (B200, H200, H100, A100, L40S) with
+// Built around our real GPU lineup (B200, B200, H100, A100, L40S) with
 // per-hour pricing, a cream contrast section for workloads, and a
 // multi-node cluster CTA for enterprise.
 
 import Link from "next/link";
+import { ArrowRight, Brain } from "lucide-react";
 import {
-    ArrowRight,
-    Brain,
-    Cpu,
-    HardDrive,
-    Image as ImageIcon,
-    Network,
-    Server,
-    Sparkles,
-    Zap,
-    type LucideIcon,
-} from "lucide-react";
+    IconSparklesFilled,
+    IconBoltFilled,
+    IconPhotoFilled,
+    IconReceiptFilled,
+    IconCloudDataConnectionFilled,
+    IconStackFilled,
+    IconCloudComputingFilled,
+} from "@tabler/icons-react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
@@ -65,8 +63,8 @@ const GPUS: GpuRow[] = [
         featured: true,
     },
     {
-        id: "h200",
-        name: "H200 SXM",
+        id: "b200 sxm",
+        name: "B200 SXM",
         arch: "Hopper",
         archTier: "hopper",
         memory: "141 GB",
@@ -75,7 +73,7 @@ const GPUS: GpuRow[] = [
         bandwidth: "4.8 TB/s",
         pricePerHour: 3.99,
         stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
+        href: "/dashboard/services/gpu/deploy?gpu=b200-141",
         description: "Big-memory Hopper for retrieval-heavy training and long-context inference.",
     },
     {
@@ -154,7 +152,8 @@ const STOCK_META: Record<
 
 // ─── Workload categories (for the cream section) ──────────────
 type Workload = {
-    icon: LucideIcon;
+    icon: React.ReactNode;
+    accent: string;
     title: string;
     description: string;
     recommended: string[];
@@ -162,28 +161,32 @@ type Workload = {
 
 const WORKLOADS: Workload[] = [
     {
-        icon: Brain,
+        icon: <Brain className="h-5 w-5" strokeWidth={1.7} />,
+        accent: "#8B5CF6",
         title: "LLM training & pretraining",
         description:
             "Frontier model training, full fine-tunes, and large-scale pretraining on multi-node clusters with NVLink fabric.",
-        recommended: ["B200", "H200 SXM"],
+        recommended: ["B200", "B200 SXM"],
     },
     {
-        icon: Sparkles,
+        icon: <IconSparklesFilled size={20} />,
+        accent: "#0095FF",
         title: "Fine-tuning & adaptation",
         description:
             "LoRA, QLoRA, full-parameter tunes, and RLHF on 7B → 70B+ models with shared NVMe checkpoint volumes.",
         recommended: ["H100 SXM", "H100 NVL"],
     },
     {
-        icon: Zap,
+        icon: <IconBoltFilled size={20} />,
+        accent: "#F59E0B",
         title: "Production inference",
         description:
             "High-throughput LLM serving with vLLM, TGI, or TensorRT-LLM. Sub-100ms first-token latency at scale.",
-        recommended: ["L40S", "H100 NVL", "H200 SXM"],
+        recommended: ["L40S", "H100 NVL", "B200 SXM"],
     },
     {
-        icon: ImageIcon,
+        icon: <IconPhotoFilled size={20} />,
+        accent: "#10B981",
         title: "Diffusion, vision & multimodal",
         description:
             "SDXL, FLUX, SVD, vision encoders, and embedding pipelines on memory-flexible Ada and Hopper class GPUs.",
@@ -193,30 +196,35 @@ const WORKLOADS: Workload[] = [
 
 // ─── Platform features ────────────────────────────────────────
 const PLATFORM_FEATURES: Array<{
-    icon: LucideIcon;
+    icon: React.ReactNode;
+    accent: string;
     title: string;
     description: string;
 }> = [
     {
-        icon: Cpu,
+        icon: <IconReceiptFilled size={20} />,
+        accent: "#10B981",
         title: "Per-second billing",
         description:
             "Pay only for time the GPU is up. Stop a pod, billing stops within the second.",
     },
     {
-        icon: Network,
+        icon: <IconCloudDataConnectionFilled size={20} />,
+        accent: "#0095FF",
         title: "NVLink + InfiniBand fabric",
         description:
             "900 GB/s GPU-to-GPU bandwidth on SXM nodes, 3.2 Tbps east-west on reserved clusters.",
     },
     {
-        icon: HardDrive,
+        icon: <IconStackFilled size={20} />,
+        accent: "#F59E0B",
         title: "Persistent NVMe volumes",
         description:
             "Checkpoint, dataset, and weight volumes that survive pod restarts and follow your jobs.",
     },
     {
-        icon: Server,
+        icon: <IconCloudComputingFilled size={20} />,
+        accent: "#8B5CF6",
         title: "Single pod to 1,000+ GPUs",
         description:
             "Start with a single accelerator, scale into reserved multi-node clusters when you need to.",
@@ -228,7 +236,7 @@ const FAQS = [
     {
         question: "How fast can I get a GPU?",
         answer:
-            "On-demand pods provision in under 90 seconds for available capacity (H100, A100, L40S). Limited-stock SKUs like B200 and H200 typically provision in a few minutes. Reserved multi-node clusters are provisioned in under 24 hours after sales handoff.",
+            "On-demand pods provision in under 90 seconds for available capacity (H100, A100, L40S). Limited-stock SKUs like B200 and B200 typically provision in a few minutes. Reserved multi-node clusters are provisioned in under 24 hours after sales handoff.",
     },
     {
         question: "What's included in the per-hour price?",
@@ -263,138 +271,150 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
     const tone = ARCH_TONE[gpu.archTier];
     const stock = STOCK_META[gpu.stock];
     return (
-        <article
-            className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
-                gpu.featured
-                    ? "border-white/[0.18] bg-[#13161B]"
-                    : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
-            }`}
-            style={{
-                boxShadow: gpu.featured
-                    ? "inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 32px -12px rgba(0,0,0,0.75)"
-                    : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
-            }}
+      <article
+        className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
+          gpu.featured
+            ? "border-white/[0.18] bg-[#13161B]"
+            : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
+        }`}
+        style={{
+          boxShadow: gpu.featured
+            ? "inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 32px -12px rgba(0,0,0,0.75)"
+            : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
+        }}
+      >
+        {gpu.featured && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
+            style={{ background: BRAND, opacity: 0.55 }}
+          />
+        )}
+
+        {/* Header — index + NVIDIA mark + arch dot */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+            >
+              {String(index + 1).padStart(2, "0")}
+            </span>
+
+            <NvidiaLogo width={42} height={17} className="opacity-95" />
+          </div>
+
+          <h3 className="text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
+            {gpu.name}
+          </h3>
+        </div>
+
+        <p
+          className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}
         >
-            {gpu.featured && (
-                <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
-                    style={{ background: BRAND, opacity: 0.55 }}
-                />
-            )}
+          {gpu.memory} {gpu.memoryType}
+        </p>
 
-            {/* Header — index + NVIDIA mark + arch dot */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
-                        {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <NvidiaLogo width={22} height={16} className="opacity-95" />
-                </div>
-                <span
-                    className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.12em] font-semibold`}
-                    style={{ color: tone }}
-                >
-                    <span
-                        className="h-1 w-1 rounded-full"
-                        style={{ background: tone, boxShadow: `0 0 5px ${tone}` }}
-                    />
-                    {gpu.arch}
-                </span>
-            </div>
+        <p className="mt-4 text-[13px] leading-[1.6] text-white/60">
+          {gpu.description}
+        </p>
 
-            {/* Name */}
-            <h3 className="mt-5 text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
-                {gpu.name}
-            </h3>
-            <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}>
-                {gpu.memory} {gpu.memoryType}
+        {/* Spec rows */}
+        <ul className="mt-5 space-y-2 border-t border-white/[0.06] pt-4">
+          <li className="flex items-baseline justify-between">
+            <span
+              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
+            >
+              Performance
+            </span>
+            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
+              {gpu.perfFp8}
+            </span>
+          </li>
+          <li className="flex items-baseline justify-between">
+            <span
+              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
+            >
+              Bandwidth
+            </span>
+            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
+              {gpu.bandwidth}
+            </span>
+          </li>
+        </ul>
+
+        {/* Footer — price + stock + CTA */}
+        <div className="mt-6 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-5">
+          <div>
+            <p
+              className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/45`}
+            >
+              From
             </p>
-
-            <p className="mt-4 text-[13px] leading-[1.6] text-white/60">
-                {gpu.description}
+            <p
+              className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}
+            >
+              ${gpu.pricePerHour.toFixed(2)}
+              <span className="ml-1 text-[11px] font-normal text-white/55">
+                /GPU·hr
+              </span>
             </p>
-
-            {/* Spec rows */}
-            <ul className="mt-5 space-y-2 border-t border-white/[0.06] pt-4">
-                <li className="flex items-baseline justify-between">
-                    <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}>
-                        Performance
-                    </span>
-                    <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
-                        {gpu.perfFp8}
-                    </span>
-                </li>
-                <li className="flex items-baseline justify-between">
-                    <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}>
-                        Bandwidth
-                    </span>
-                    <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
-                        {gpu.bandwidth}
-                    </span>
-                </li>
-            </ul>
-
-            {/* Footer — price + stock + CTA */}
-            <div className="mt-6 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-5">
-                <div>
-                    <p
-                        className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/45`}
-                    >
-                        From
-                    </p>
-                    <p
-                        className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}
-                    >
-                        ${gpu.pricePerHour.toFixed(2)}
-                        <span className="ml-1 text-[11px] font-normal text-white/55">
-                            /GPU·hr
-                        </span>
-                    </p>
-                    <p
-                        className={`${MONO} mt-2 inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em]`}
-                        style={{ color: stock.color }}
-                    >
-                        <span
-                            className="h-1 w-1 rounded-full"
-                            style={{ background: stock.color, boxShadow: `0 0 4px ${stock.color}` }}
-                        />
-                        {stock.label}
-                    </p>
-                </div>
-                <Link
-                    href={gpu.href}
-                    className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
-                        gpu.featured
-                            ? "border border-white bg-white text-black hover:bg-white/90"
-                            : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white/[0.04]"
-                    }`}
-                >
-                    Deploy
-                    <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-            </div>
-        </article>
+            <p
+              className={`${MONO} mt-2 inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em]`}
+              style={{ color: stock.color }}
+            >
+              <span
+                className="h-1 w-1 rounded-full"
+                style={{
+                  background: stock.color,
+                  boxShadow: `0 0 4px ${stock.color}`,
+                }}
+              />
+              {stock.label}
+            </p>
+          </div>
+          <Link
+            href={gpu.href}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
+              gpu.featured
+                ? "border border-white bg-white text-black hover:bg-white/90"
+                : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white hover:text-black"
+            }`}
+          >
+            Deploy
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </article>
     );
 }
 
 function WorkloadCard({ w, index }: { w: Workload; index: number }) {
-    const Icon = w.icon;
     return (
         <article
-            className="relative flex flex-col gap-5 rounded-[10px] border border-black/10 bg-[#EEECE4] p-7 transition-colors hover:border-black/25"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-black/10 bg-[#EEECE4] p-7 transition-colors hover:border-black/20"
         >
-            <div className="flex items-start justify-between">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-black/10 bg-black/[0.03] text-black/75">
-                    <Icon className="h-5 w-5" strokeWidth={1.7} />
+            {/* Accent hover glow */}
+            <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                style={{ background: `radial-gradient(circle at 30% 0%, ${w.accent}12, transparent 60%)` }}
+            />
+
+            <div className="relative flex items-start justify-between">
+                <div
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all group-hover:brightness-110"
+                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                >
+                    {w.icon}
                 </div>
                 <span
-                    className={`${MONO} text-[10.5px] tabular-nums text-black/30`}
+                    className={`${MONO} text-[10.5px] tabular-nums`}
+                    style={{ color: `${w.accent}70` }}
                 >
                     {String(index + 1).padStart(2, "0")}
                 </span>
             </div>
-            <div>
+            <div className="relative">
                 <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814]">
                     {w.title}
                 </h3>
@@ -402,7 +422,7 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
                     {w.description}
                 </p>
             </div>
-            <div className="mt-auto flex items-center gap-2 border-t border-black/10 pt-4">
+            <div className="relative mt-auto flex items-center gap-2 border-t border-black/10 pt-4">
                 <span
                     className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}
                 >
@@ -426,11 +446,14 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
 
 // ─── Main page ────────────────────────────────────────────────
 
-export function GpuServicePage({
-    featuredProducts: _featuredProducts,
-}: {
-    featuredProducts?: Product[];
-}) {
+export function GpuServicePage(
+//     {
+//     featuredProducts: _featuredProducts,
+// }: {
+//     featuredProducts?: Product[];
+// }
+) {
+    //commented out featuredProducts for now since the GPU lineup is curated from real SKUs and doesn't need to be overridden from the database. Can re-add as a prop if we want to do limited-time promotions or highlight specific SKUs in the future, but for now it's simpler to keep the source of truth for the lineup in this component.
     // featuredProducts kept in signature for backwards-compat with the page route;
     // current lineup is curated from real GPU presets shipped in the dashboard.
 
@@ -467,15 +490,15 @@ export function GpuServicePage({
                         <h1 className="text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
                             The AI developer
                             <br />
-                            <span className="text-white/55">cloud, on demand.</span>
+                            <span className="text-white/55">cloud, <span className="text-blue-500">on demand.</span></span>
                         </h1>
                         <p className="mx-auto mt-7 max-w-[660px] text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
                             Pods for building. Clusters for scaling. Reserved capacity for
-                            shipping. B200, H200, H100, A100, and L40S — billed by the
+                            shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
                             second, NVLink-ready, in 12 regions.
                         </p>
 
-                        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+                        <div className="cursor-pointer mt-10 flex flex-wrap items-center justify-center gap-3">
                             <AuthAwareServiceCta
                                 service="gpu"
                                 intent="new"
@@ -592,7 +615,7 @@ export function GpuServicePage({
                         </p>
                     </div>
 
-                    <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-white/[0.10] bg-white/[0.08] md:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-white/[0.10] bg-white/[0.08] md:grid-cols-2 lg:grid-cols-4">
                         {[
                             {
                                 step: "01",
@@ -636,7 +659,8 @@ export function GpuServicePage({
                                 </p>
                             </article>
                         ))}
-                    </div>
+                    </div> 
+                    {/* <ProcessFlow/> */}
                 </Container>
             </section>
 
@@ -668,17 +692,17 @@ export function GpuServicePage({
 
                     {/* Inline platform features strip on cream bg */}
                     <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[10px] border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-4">
-                        {PLATFORM_FEATURES.map((f) => {
-                            const Icon = f.icon;
-                            return (
+                        {PLATFORM_FEATURES.map((f) => (
                                 <div
                                     key={f.title}
                                     className="flex flex-col gap-3 bg-[#EEECE4] p-6"
                                 >
-                                    <Icon
-                                        className="h-5 w-5 text-black/70"
-                                        strokeWidth={1.7}
-                                    />
+                                    <div
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border"
+                                        style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
+                                    >
+                                        {f.icon}
+                                    </div>
                                     <h4 className="text-[15px] font-semibold leading-tight tracking-[-0.01em] text-black">
                                         {f.title}
                                     </h4>
@@ -686,8 +710,7 @@ export function GpuServicePage({
                                         {f.description}
                                     </p>
                                 </div>
-                            );
-                        })}
+                        ))}
                     </div>
                 </Container>
             </section>

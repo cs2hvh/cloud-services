@@ -8,6 +8,7 @@ import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -84,6 +85,30 @@ export async function POST(req: NextRequest) {
       } catch (logError) {
         console.warn('[platform-apps/update] Failed to add project log:', logError);
       }
+    }
+
+    // Send confirmation email
+    try {
+      const changedFields = Object.keys(updateData)
+        .filter((k) => k !== "app_id")
+        .join(", ");
+      const recipient =
+        auth.user?.email || (await resolveUserEmail(String(existing.data.user_id)));
+      await sendServiceAlertEmail({
+        serviceType: "app",
+        userEmail: recipient,
+        serviceName: existing.data.name,
+        alertTitle: "Application updated",
+        summary: `The settings for your application "${existing.data.name}" were updated.`,
+        severity: "info",
+        metadata: {
+          Operation: "Update application",
+          Application: existing.data.name,
+          "Updated settings": changedFields || "settings",
+        },
+      });
+    } catch (emailErr) {
+      console.warn("[platform-apps/update] Email failed:", emailErr);
     }
 
     return NextResponse.json(result.data);

@@ -1396,8 +1396,8 @@ export async function processServiceTable(tableName) {
   }
 }
 
-// Run every 5 minutes
-cron.schedule("*/5 * * * *", async () => {
+// Run every 1 hr minutes
+cron.schedule("0 * * * *", async () => {
   try {
     console.log("Billing cycle started:", new Date().toISOString());
 

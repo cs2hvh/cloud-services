@@ -15,6 +15,7 @@ import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { Encryption } from "@/config/functions";
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
 import { updateBucketACL, updateBucketCORS, updateBucketVersioning } from "@/lib/aws/s3-operations";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 // ====================================
 // TYPE DEFINITIONS
@@ -251,6 +252,28 @@ export class ObjectStorageService {
         console.error(`[ObjectStorageService.createBucket] Notification failed:`, notifErr);
       }
 
+      // 7. Send confirmation email
+      try {
+        const recipient =
+          audit_context?.user_email || (await resolveUserEmail(owner_id));
+        await sendServiceAlertEmail({
+          serviceType: "object-storage",
+          userEmail: recipient,
+          serviceName: name,
+          alertTitle: "Object storage bucket created",
+          summary: `Your object storage bucket "${name}" has been created and is ready to use.`,
+          severity: "info",
+          metadata: {
+            Operation: "Create object storage bucket",
+            Bucket: name,
+            Region: region,
+            Access: acl,
+          },
+        });
+      } catch (emailErr) {
+        console.error(`[ObjectStorageService.createBucket] Email failed:`, emailErr);
+      }
+
       return {
         success: true,
         // Preserve legacy internal API behavior by returning the full stored row.
@@ -373,6 +396,26 @@ export class ObjectStorageService {
         );
       } catch (notifErr) {
         console.error(`[ObjectStorageService.deleteBucket] Notification failed:`, notifErr);
+      }
+
+      // 6. Send confirmation email
+      try {
+        const recipient =
+          audit_context?.user_email || (await resolveUserEmail(user_id));
+        await sendServiceAlertEmail({
+          serviceType: "object-storage",
+          userEmail: recipient,
+          serviceName: bucketName,
+          alertTitle: "Object storage bucket deleted",
+          summary: `Your object storage bucket "${bucketName}" was deleted successfully.`,
+          severity: "warning",
+          metadata: {
+            Operation: "Delete object storage bucket",
+            Bucket: bucketName,
+          },
+        });
+      } catch (emailErr) {
+        console.error(`[ObjectStorageService.deleteBucket] Email failed:`, emailErr);
       }
 
       return {
@@ -604,6 +647,27 @@ export class ObjectStorageService {
           );
         } catch (notifErr) {
           console.error(`[ObjectStorageService.updateBucketSettings] Notification failed:`, notifErr);
+        }
+
+        // 8. Send confirmation email
+        try {
+          const recipient =
+            audit_context?.user_email || (await resolveUserEmail(user_id));
+          await sendServiceAlertEmail({
+            serviceType: "object-storage",
+            userEmail: recipient,
+            serviceName: bucket.name,
+            alertTitle: "Object storage bucket updated",
+            summary: `The settings for your object storage bucket "${bucket.name}" were updated.`,
+            severity: "info",
+            metadata: {
+              Operation: "Update object storage bucket settings",
+              Bucket: bucket.name,
+              "Updated settings": updatedFields.join(", "),
+            },
+          });
+        } catch (emailErr) {
+          console.error(`[ObjectStorageService.updateBucketSettings] Email failed:`, emailErr);
         }
       }
 

@@ -11,6 +11,7 @@ import { Billing } from "@/lib/supabase/queries/billing";
 import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { AuditLogService } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 import type {
   CreateSpectrumAppPayload,
   UpdateSpectrumAppPayload,
@@ -169,6 +170,27 @@ export class SpectrumService {
       console.warn('[SpectrumService.createApp] Notification failed:', notifErr);
     }
 
+    // Confirmation email
+    try {
+      const appName = payload.protocol || 'spectrum-app';
+      const recipient =
+        audit_context?.user_email || (await resolveUserEmail(userId));
+      await sendServiceAlertEmail({
+        serviceType: "spectrum",
+        userEmail: recipient,
+        serviceName: appName,
+        alertTitle: "DDoS protection app created",
+        summary: `Your network DDoS protection app "${appName}" has been created and is now active.`,
+        severity: "info",
+        metadata: {
+          Operation: "Create network DDoS app",
+          Protocol: payload.protocol || 'spectrum-app',
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[SpectrumService.createApp] Email failed:', emailErr);
+    }
+
     return result; // { app: Supabase row, cloudflare: Cloudflare response }
   }
 
@@ -201,10 +223,32 @@ export class SpectrumService {
       throw makeError("FORBIDDEN", "Access denied");
     }
 
-    return updateSpectrumApp({
+    const result = await updateSpectrumApp({
       ...payload,
       app_id: appId,
     });
+
+    // Confirmation email
+    try {
+      const appName = existing.data.protocol || 'spectrum-app';
+      const recipient = await resolveUserEmail(userId);
+      await sendServiceAlertEmail({
+        serviceType: "spectrum",
+        userEmail: recipient,
+        serviceName: appName,
+        alertTitle: "DDoS protection app updated",
+        summary: `Your network DDoS protection app "${appName}" was updated.`,
+        severity: "info",
+        metadata: {
+          Operation: "Update network DDoS app",
+          Protocol: appName,
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[SpectrumService.updateApp] Email failed:', emailErr);
+    }
+
+    return result;
   }
 
   static async deleteApp(input: { appId: string; userId: string; isAdmin?: boolean; audit_context?: AuditContext }) {
@@ -273,6 +317,28 @@ export class SpectrumService {
       );
     } catch (notifErr) {
       console.warn('[SpectrumService.deleteApp] Notification failed:', notifErr);
+    }
+
+    // Confirmation email — notify the app owner, not the requester (admin may differ)
+    try {
+      const appName = existing.data.protocol || 'spectrum-app';
+      const recipient =
+        audit_context?.user_email ||
+        (await resolveUserEmail(String(existing.data.owner_id)));
+      await sendServiceAlertEmail({
+        serviceType: "spectrum",
+        userEmail: recipient,
+        serviceName: appName,
+        alertTitle: "DDoS protection app deleted",
+        summary: `Your network DDoS protection app "${appName}" was deleted successfully.`,
+        severity: "warning",
+        metadata: {
+          Operation: "Delete network DDoS app",
+          Protocol: appName,
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[SpectrumService.deleteApp] Email failed:', emailErr);
     }
 
     return result;

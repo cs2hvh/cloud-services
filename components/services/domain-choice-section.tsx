@@ -1,98 +1,22 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import {
+    IconShieldLockFilled,
+    IconGlobeFilled,
+    IconArrowsExchange,
+    IconTagsFilled,
+    IconLockFilled,
+    IconLayoutGridFilled,
+} from "@tabler/icons-react";
 
 import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
-/* ──────────────────────────────────────────────────────────────
-   Custom inline glyphs (32×32 — layered + blue accent fills)
-   ────────────────────────────────────────────────────────────── */
-
-function PrivacyGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
-            <path d="M16 3l11 4v8c0 6.5-4.5 11.5-11 13.5C9.5 26.5 5 21.5 5 15V7l11-4z" fill="currentColor" fillOpacity="0.10" />
-            <circle cx="16" cy="14" r="3.2" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
-            <path d="M11 22c1.2-2.5 3-3.8 5-3.8s3.8 1.3 5 3.8" strokeLinecap="round" />
-            <path d="M11.5 14.5h2M18.5 14.5h2" strokeLinecap="round" strokeOpacity="0.7" />
-        </svg>
-    );
-}
-
-function AnycastDnsGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <circle cx="16" cy="16" r="11" strokeOpacity="0.30" />
-            <circle cx="16" cy="16" r="7" strokeOpacity="0.55" />
-            <circle cx="16" cy="16" r="3.4" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
-            <path d="M16 5c2.2 3 3.3 6 3.3 11s-1.1 8-3.3 11c-2.2-3-3.3-6-3.3-11s1.1-8 3.3-11z" strokeOpacity="0.55" />
-            <circle cx="6" cy="9" r="1.3" fill="currentColor" />
-            <circle cx="26" cy="9" r="1.3" fill="currentColor" />
-            <circle cx="6" cy="23" r="1.3" fill="currentColor" />
-            <circle cx="26" cy="23" r="1.3" fill="currentColor" />
-            <circle cx="16" cy="3.5" r="0.9" fill="#0095FF" />
-            <circle cx="16" cy="28.5" r="0.9" fill="#0095FF" />
-        </svg>
-    );
-}
-
-function TransferGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="5" width="10" height="10" rx="1.2" fill="currentColor" fillOpacity="0.15" />
-            <rect x="19" y="17" width="10" height="10" rx="1.2" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
-            <path d="M14 9h11M22 6l3 3-3 3" />
-            <path d="M18 23H7M10 26l-3-3 3-3" />
-        </svg>
-    );
-}
-
-function TldsGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
-            <path d="M5 8h22l-3.5 4 3.5 4-3.5 4 3.5 4H5z" fill="currentColor" fillOpacity="0.08" />
-            <path d="M5 8v16" />
-            <circle cx="9" cy="12" r="0.9" fill="#0095FF" />
-            <circle cx="9" cy="16" r="0.9" fill="currentColor" />
-            <circle cx="9" cy="20" r="0.9" fill="currentColor" />
-            <path d="M12 12h6M12 16h8M12 20h6" strokeOpacity="0.55" />
-            <text x="22.5" y="17" fill="#0095FF" fontSize="4" fontFamily="var(--font-geist-mono),ui-monospace,monospace" textAnchor="middle" fontWeight="700">200+</text>
-        </svg>
-    );
-}
-
-function RegistrarLockGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <rect x="6" y="13" width="20" height="14" rx="1.5" fill="currentColor" fillOpacity="0.10" />
-            <path d="M11 13v-3a5 5 0 0 1 10 0v3" />
-            <circle cx="16" cy="19" r="1.8" fill="#0095FF" fillOpacity="0.40" stroke="#0095FF" />
-            <path d="M16 20.5v2.5" strokeLinecap="round" />
-            <path d="M22 5l3 1-0.5 3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M25 6a8 8 0 0 1 1 4" strokeOpacity="0.5" strokeLinecap="round" />
-        </svg>
-    );
-}
-
-function PortfolioGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <rect x="4" y="4" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="17" y="4" width="11" height="7" rx="1" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
-            <rect x="4" y="13" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="17" y="13" width="11" height="7" rx="1" fill="currentColor" fillOpacity="0.15" />
-            <rect x="4" y="22" width="24" height="6" rx="1" fill="currentColor" fillOpacity="0.10" />
-            <circle cx="7" cy="7.5" r="0.7" fill="#0095FF" />
-            <path d="M9.5 7.5h4M6.5 25h6M14 25h4" strokeOpacity="0.55" strokeLinecap="round" />
-            <path d="M22 16l-2 2-1-1" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
-
 type Feature = {
-    glyph: React.ReactNode;
+    icon: React.ReactNode;
+    accent: string;
     role: string;
     title: string;
     description: string;
@@ -100,42 +24,48 @@ type Feature = {
 
 const FEATURES: Feature[] = [
     {
-        glyph: <PrivacyGlyph />,
+        icon: <IconShieldLockFilled size={24} />,
+        accent: "#0095FF",
         role: "Privacy",
         title: "WHOIS privacy, free forever",
         description:
             "Your real contact details stay out of public WHOIS records — on every supported TLD, on every domain, without an upcharge.",
     },
     {
-        glyph: <AnycastDnsGlyph />,
+        icon: <IconGlobeFilled size={24} />,
+        accent: "#06B6D4",
         role: "DNS",
         title: "Anycast DNS, 200+ edge locations",
         description:
             "Sub-30ms authoritative resolution worldwide, with templated records for AhuraCloud apps, compute, and storage.",
     },
     {
-        glyph: <TransferGlyph />,
+        icon: <IconArrowsExchange size={24} />,
+        accent: "#8B5CF6",
         role: "Transfer",
         title: "Lossless transfers in under an hour",
         description:
             "Inbound transfers from any ICANN-accredited registrar with pre-flight validation, DNS pre-staging, and zero downtime.",
     },
     {
-        glyph: <TldsGlyph />,
+        icon: <IconTagsFilled size={24} />,
+        accent: "#10B981",
         role: "TLDs",
         title: "200+ TLDs under one invoice",
         description:
             "Generic, premium, and country-code extensions — register, renew, and transfer across your portfolio from one billing relationship.",
     },
     {
-        glyph: <RegistrarLockGlyph />,
+        icon: <IconLockFilled size={24} />,
+        accent: "#F59E0B",
         role: "Safety",
         title: "Registrar lock and auto-renew",
         description:
             "Block unauthorized transfers by default and never lose a domain to a missed renewal — with reminders 90, 30, and 7 days out.",
     },
     {
-        glyph: <PortfolioGlyph />,
+        icon: <IconLayoutGridFilled size={24} />,
+        accent: "#3B82F6",
         role: "Operations",
         title: "Portfolio-grade operations",
         description:
@@ -163,8 +93,11 @@ function FeatureCard({ f, index }: { f: Feature; index: number }) {
             />
 
             <div className="relative flex items-start justify-between">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/[0.12] bg-white/[0.03] text-white/85">
-                    <div className="h-[26px] w-[26px]">{f.glyph}</div>
+                <div
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border transition-all group-hover:brightness-110"
+                    style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
+                >
+                    {f.icon}
                 </div>
                 <div className="flex items-center gap-2">
                     <span
@@ -229,7 +162,15 @@ export default function DomainChoiceSection() {
                 </div>
 
                 {/* Trust strip + CTA */}
-                <div className="mt-14 flex flex-col items-center gap-6 border-t border-white/[0.08] pt-9 sm:flex-row sm:justify-between">
+               <div
+                    className="mt-14 flex flex-col items-center gap-6 rounded-[12px] border px-6 py-7 sm:flex-row sm:justify-between"
+                    style={{
+                        background:
+                            "linear-gradient(135deg, rgba(0,149,255,0.08) 0%, rgba(5,14,26,0.75) 55%, rgba(0,149,255,0.05) 100%)",
+                        borderColor: "rgba(0,149,255,0.20)",
+                        boxShadow: "inset 0 1px 0 rgba(0,149,255,0.08)",
+                    }}
+                >
                     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:justify-start">
                         <span
                             className={`${MONO} text-[11px] font-medium uppercase tracking-[0.18em] text-white/65`}

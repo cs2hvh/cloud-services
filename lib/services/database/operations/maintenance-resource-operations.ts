@@ -6,6 +6,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import { resolveOwnedCluster } from "./cluster-access";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 
 export const maintenanceResourceOperations = {
   async updateMaintenanceWindow(
@@ -63,6 +64,25 @@ export const maintenanceResourceOperations = {
         );
       } catch (notifErr) {
         console.error("[updateMaintenanceWindow] Failed to create notification:", notifErr);
+      }
+
+      try {
+        const recipient = await resolveUserEmail(String(clusterData.owner_id));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterData.name),
+          alertTitle: "Maintenance window updated",
+          summary: `The maintenance window for your database cluster "${clusterData.name}" was updated to ${day} at ${hour}.`,
+          severity: "info",
+          metadata: {
+            Operation: "Update maintenance window",
+            Cluster: String(clusterData.name),
+            Day: day,
+            Hour: hour,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[updateMaintenanceWindow] Failed to send email:", emailErr);
       }
 
       return { success: true };
