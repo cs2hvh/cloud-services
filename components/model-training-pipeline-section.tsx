@@ -531,21 +531,21 @@ export function ModelTrainingPipelineSection() {
 
       {/* Background layers */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[#04060a]" />
+        <div className="absolute inset-0 bg-black" />
         <div
           aria-hidden
-          className="absolute inset-0 opacity-[0.18]"
+          className="absolute inset-0 opacity-[0.08]"
           style={{
             background:
-              "radial-gradient(45% 35% at 25% 30%, rgba(0,149,255,0.28), transparent 70%), radial-gradient(45% 40% at 80% 70%, rgba(51,173,255,0.18), transparent 70%)",
+              "radial-gradient(45% 35% at 20% 30%, rgba(51,173,255,0.22), transparent 70%)",
           }}
         />
         <div
           aria-hidden
-          className="absolute inset-0 opacity-[0.05]"
+          className="absolute inset-0 opacity-[0.04]"
           style={{
             backgroundImage:
-              "radial-gradient(rgba(255,255,255,0.45) 1px, transparent 1px)",
+              "radial-gradient(rgba(255,255,255,0.4) 1px, transparent 1px)",
             backgroundSize: "32px 32px",
             maskImage:
               "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
@@ -744,11 +744,10 @@ export function ModelTrainingPipelineSection() {
           color: rgba(255, 255, 255, 0.55);
         }
         .mt-eyebrow-dot {
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
-          background: var(--mt-blue);
-          box-shadow: 0 0 8px rgba(0, 149, 255, 0.75);
+          background: rgba(255, 255, 255, 0.6);
         }
         .mt-hero h2 {
           font-weight: 700;
@@ -759,7 +758,7 @@ export function ModelTrainingPipelineSection() {
           color: var(--mt-text);
         }
         .mt-accent {
-          color: var(--mt-blue-soft);
+          color: rgba(142, 202, 255, 0.85);
         }
         .mt-hero p {
           margin: 0 auto;
@@ -792,10 +791,10 @@ export function ModelTrainingPipelineSection() {
           height: 1px;
           background: linear-gradient(
             to right,
-            rgba(51, 173, 255, 0.65) 0%,
-            rgba(51, 173, 255, 0.65) 76px,
-            rgba(255, 255, 255, 0.06) 76px,
-            rgba(255, 255, 255, 0.06) 100%
+            rgba(255, 255, 255, 0.45) 0%,
+            rgba(255, 255, 255, 0.45) 76px,
+            rgba(255, 255, 255, 0.05) 76px,
+            rgba(255, 255, 255, 0.05) 100%
           );
         }
         .mt-phase__head--right {
@@ -804,10 +803,10 @@ export function ModelTrainingPipelineSection() {
         .mt-phase__head--right::after {
           background: linear-gradient(
             to right,
-            rgba(255, 255, 255, 0.06) 0%,
-            rgba(255, 255, 255, 0.06) calc(100% - 76px),
-            rgba(51, 173, 255, 0.65) calc(100% - 76px),
-            rgba(51, 173, 255, 0.65) 100%
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.05) calc(100% - 76px),
+            rgba(255, 255, 255, 0.45) calc(100% - 76px),
+            rgba(255, 255, 255, 0.45) 100%
           );
         }
         .mt-phase__num-block {
@@ -827,11 +826,10 @@ export function ModelTrainingPipelineSection() {
         .mt-phase__num {
           font-size: 52px;
           font-weight: 200;
-          color: var(--mt-blue);
+          color: rgba(255, 255, 255, 0.92);
           line-height: 0.9;
           font-feature-settings: "tnum";
           letter-spacing: -0.03em;
-          text-shadow: 0 0 24px rgba(0, 149, 255, 0.35);
         }
         .mt-phase__title {
           font-weight: 700;
@@ -860,13 +858,13 @@ export function ModelTrainingPipelineSection() {
         .mt-phase__tag {
           font-family: var(--font-geist-mono), ui-monospace, monospace;
           font-size: 10px;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: 0.22em;
-          color: var(--mt-blue);
+          color: rgba(255, 255, 255, 0.55);
           text-transform: uppercase;
-          padding: 7px 14px;
-          border: 1px solid rgba(51, 173, 255, 0.35);
-          background: rgba(0, 149, 255, 0.06);
+          padding: 6px 14px;
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          background: rgba(255, 255, 255, 0.025);
           border-radius: 999px;
           white-space: nowrap;
           align-self: end;
@@ -920,24 +918,22 @@ export function ModelTrainingPipelineSection() {
           width: 110px;
           height: 110px;
           transform: rotate(45deg);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.10);
           border-radius: 12px;
-          background: linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
+          background: linear-gradient(180deg, #07090d 0%, #050709 100%);
           display: grid;
           place-items: center;
           opacity: 0;
           visibility: hidden;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
-            0 8px 28px rgba(0, 0, 0, 0.5);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 10px 30px rgba(0, 0, 0, 0.6);
         }
         .mt-diamond.mt-revealed {
           visibility: visible;
           animation: mt-diamondReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
-          border-color: rgba(51, 173, 255, 0.45);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
-            0 0 0 1px rgba(51, 173, 255, 0.1),
-            0 8px 28px rgba(0, 0, 0, 0.55),
-            0 0 28px rgba(0, 149, 255, 0.25);
+          border-color: rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            0 10px 30px rgba(0, 0, 0, 0.6);
         }
         @keyframes mt-diamondReveal {
           0% {
@@ -956,12 +952,12 @@ export function ModelTrainingPipelineSection() {
         .mt-diamond > span {
           transform: rotate(-45deg);
           text-align: center;
-          color: var(--mt-text);
+          color: rgba(255, 255, 255, 0.80);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-weight: 600;
-          font-size: 10px;
-          letter-spacing: 0.14em;
-          line-height: 1.2;
+          font-weight: 500;
+          font-size: 9.5px;
+          letter-spacing: 0.16em;
+          line-height: 1.25;
         }
         .mt-yes-arrow {
           position: relative;
@@ -976,36 +972,33 @@ export function ModelTrainingPipelineSection() {
           opacity: 1;
         }
         .mt-yes-label {
-          color: var(--mt-blue);
+          color: rgba(255, 255, 255, 0.55);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-weight: 700;
-          font-size: 12px;
-          letter-spacing: 0.18em;
-          text-shadow: 0 0 14px rgba(0, 149, 255, 0.4);
+          font-weight: 500;
+          font-size: 11px;
+          letter-spacing: 0.24em;
         }
         .mt-ready {
           width: 130px;
           height: 130px;
           border-radius: 50%;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          background: linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          background: linear-gradient(180deg, #07090d 0%, #050709 100%);
           display: grid;
           place-items: center;
           text-align: center;
           padding: 12px;
           opacity: 0;
           visibility: hidden;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
-            0 8px 28px rgba(0, 0, 0, 0.5);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 10px 30px rgba(0, 0, 0, 0.6);
         }
         .mt-ready.mt-revealed {
           visibility: visible;
           animation: mt-readyReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
-          border-color: rgba(51, 173, 255, 0.45);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
-            0 0 0 1px rgba(51, 173, 255, 0.1),
-            0 8px 28px rgba(0, 0, 0, 0.55),
-            0 0 28px rgba(0, 149, 255, 0.25);
+          border-color: rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            0 10px 30px rgba(0, 0, 0, 0.6);
         }
         @keyframes mt-readyReveal {
           0% {
@@ -1022,20 +1015,19 @@ export function ModelTrainingPipelineSection() {
           }
         }
         .mt-ready svg {
-          width: 32px;
-          height: 32px;
-          color: var(--mt-blue);
-          stroke-width: 1.6;
-          filter: drop-shadow(0 0 6px rgba(0, 149, 255, 0.55));
+          width: 30px;
+          height: 30px;
+          color: rgba(255, 255, 255, 0.85);
+          stroke-width: 1.5;
         }
         .mt-ready-lbl {
-          color: var(--mt-text);
+          color: rgba(255, 255, 255, 0.80);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-weight: 600;
-          font-size: 10.5px;
-          letter-spacing: 0.14em;
+          font-weight: 500;
+          font-size: 10px;
+          letter-spacing: 0.16em;
           text-transform: uppercase;
-          line-height: 1.2;
+          line-height: 1.25;
           margin-top: 6px;
         }
         .mt-flow-svg {
@@ -1131,26 +1123,16 @@ function Card({
       <style jsx>{`
         .mt-card {
           position: relative;
-          background: radial-gradient(
-              circle at 18% 88%,
-              rgba(0, 149, 255, 0.08) 0%,
-              transparent 28%
-            ),
-            radial-gradient(
-              circle at 82% 18%,
-              rgba(0, 149, 255, 0.06) 0%,
-              transparent 28%
-            ),
-            linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 14px;
+          background: linear-gradient(180deg, #08090c 0%, #050709 100%);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 12px;
           padding: 18px 14px 14px;
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 8px;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
-            0 10px 32px rgba(0, 0, 0, 0.55);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 36px rgba(0, 0, 0, 0.6);
           opacity: 0;
           visibility: hidden;
           overflow: hidden;
@@ -1160,11 +1142,9 @@ function Card({
         .mt-card.mt-revealed {
           visibility: visible;
           animation: mt-cardReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
-          border-color: rgba(51, 173, 255, 0.30);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
-            inset 0 -28px 50px -28px rgba(0, 149, 255, 0.18),
-            0 14px 36px rgba(0, 0, 0, 0.6),
-            0 0 28px rgba(0, 149, 255, 0.18);
+          border-color: rgba(255, 255, 255, 0.14);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+            0 14px 36px rgba(0, 0, 0, 0.65);
         }
         @keyframes mt-cardReveal {
           0% {
@@ -1180,19 +1160,18 @@ function Card({
             transform: translateY(0) scale(1);
           }
         }
-        /* Top accent stripe — appears only when revealed */
+        /* Top accent stripe — white, very subtle, appears only when revealed */
         .mt-card::before {
           content: "";
           position: absolute;
           inset: 0 0 auto 0;
-          height: 2px;
+          height: 1px;
           background: linear-gradient(
             90deg,
             transparent,
-            rgba(51, 173, 255, 0.85),
+            rgba(255, 255, 255, 0.20),
             transparent
           );
-          box-shadow: 0 0 14px rgba(0, 149, 255, 0.5);
           opacity: 0;
           transition: opacity 0.6s ease;
           z-index: 4;
@@ -1203,16 +1182,16 @@ function Card({
         }
         .mt-aura {
           position: absolute;
-          top: 28px;
+          top: 30px;
           left: 50%;
-          width: 140px;
-          height: 140px;
+          width: 130px;
+          height: 130px;
           transform: translateX(-50%);
           background: radial-gradient(
             closest-side,
-            rgba(0, 149, 255, 0.32) 0%,
-            rgba(0, 149, 255, 0.12) 40%,
-            rgba(0, 149, 255, 0) 75%
+            rgba(51, 173, 255, 0.14) 0%,
+            rgba(51, 173, 255, 0.05) 45%,
+            rgba(51, 173, 255, 0) 75%
           );
           border-radius: 50%;
           z-index: 0;
@@ -1227,8 +1206,8 @@ function Card({
           position: absolute;
           top: 0;
           right: 0;
-          width: 48px;
-          height: 48px;
+          width: 44px;
+          height: 44px;
           pointer-events: none;
           z-index: 1;
         }
@@ -1237,7 +1216,7 @@ function Card({
           height: 100%;
         }
         .mt-corner path {
-          stroke: #33adff;
+          stroke: rgba(255, 255, 255, 0.35);
           stroke-width: 1;
           fill: none;
           stroke-linecap: round;
@@ -1245,22 +1224,22 @@ function Card({
           transition: opacity 0.55s ease;
         }
         .mt-card.mt-revealed .mt-corner path {
-          opacity: 0.55;
+          opacity: 0.45;
         }
         .mt-badge {
           position: relative;
           z-index: 2;
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          padding: 4px 11px 4px 14px;
-          background: rgba(255, 255, 255, 0.04);
+          gap: 6px;
+          padding: 3px 10px 3px 12px;
+          background: transparent;
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 999px;
-          color: rgba(255, 255, 255, 0.65);
+          color: rgba(255, 255, 255, 0.50);
           font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-weight: 600;
-          font-size: 10px;
+          font-weight: 500;
+          font-size: 9.5px;
           letter-spacing: 0.18em;
           line-height: 1;
           text-transform: uppercase;
@@ -1268,11 +1247,10 @@ function Card({
         .mt-badge::before {
           content: "";
           display: inline-block;
-          width: 6px;
-          height: 6px;
+          width: 4px;
+          height: 4px;
           border-radius: 50%;
-          background: #33adff;
-          box-shadow: 0 0 10px rgba(0, 149, 255, 0.85);
+          background: rgba(255, 255, 255, 0.45);
         }
         .mt-icn {
           position: relative;
@@ -1286,8 +1264,8 @@ function Card({
           width: 100%;
           height: 100%;
           object-fit: contain;
-          filter: drop-shadow(0 6px 14px rgba(0, 149, 255, 0.45))
-            drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.55))
+            drop-shadow(0 0 8px rgba(51, 173, 255, 0.18));
         }
         .mt-card h3 {
           position: relative;
@@ -1317,66 +1295,60 @@ function Card({
           z-index: 2;
           margin-top: auto;
           padding-top: 12px;
-          border-top: 1px dashed rgba(51, 173, 255, 0.18);
+          border-top: 1px solid rgba(255, 255, 255, 0.05);
           width: 100%;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 6px;
+          gap: 1px;
+          background: rgba(255, 255, 255, 0.04);
         }
         .mt-feat {
           display: flex;
           align-items: center;
-          gap: 7px;
-          padding: 6px;
-          border-radius: 7px;
-          background: rgba(0, 149, 255, 0.05);
-          border: 1px solid rgba(51, 173, 255, 0.12);
+          gap: 8px;
+          padding: 8px 9px;
+          background: #050709;
+        }
+        .mt-feat--alt,
+        .mt-feat--warn {
+          /* All variants render the same — no candy colors */
         }
         .mt-ficon {
-          width: 22px;
-          height: 22px;
+          width: 14px;
+          height: 14px;
           flex-shrink: 0;
-          border-radius: 6px;
           display: grid;
           place-items: center;
-          background: linear-gradient(135deg, #33adff 0%, #0095FF 100%);
-          color: #fff;
-          box-shadow: 0 4px 12px -3px rgba(0, 149, 255, 0.65),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25);
-        }
-        .mt-feat--alt .mt-ficon {
-          background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-          box-shadow: 0 4px 12px -3px rgba(16, 185, 129, 0.65),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25);
-        }
-        .mt-feat--warn .mt-ficon {
-          background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
-          box-shadow: 0 4px 12px -3px rgba(139, 92, 246, 0.65),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+          background: transparent;
+          color: rgba(255, 255, 255, 0.45);
+          box-shadow: none;
         }
         .mt-ficon :global(svg) {
           width: 12px;
           height: 12px;
-          stroke-width: 2;
+          stroke-width: 1.5;
         }
         .mt-ftxt {
           display: flex;
           flex-direction: column;
-          line-height: 1.1;
+          line-height: 1.15;
           min-width: 0;
+          gap: 1px;
         }
         .mt-ftxt :global(b) {
           font-size: 10px;
           font-weight: 600;
-          color: rgba(255, 255, 255, 0.92);
+          color: rgba(255, 255, 255, 0.88);
           letter-spacing: 0.01em;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .mt-ftxt :global(span) {
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
           font-size: 9px;
-          color: rgba(255, 255, 255, 0.45);
+          color: rgba(255, 255, 255, 0.38);
+          letter-spacing: 0.04em;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
