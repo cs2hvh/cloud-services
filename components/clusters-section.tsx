@@ -54,7 +54,7 @@ const SAMPLE_CONFIG: Array<{ label: string; value: React.ReactNode }> = [
             </span>
         ),
     },
-    { label: "GPU memory", value: "8 TB (141 GB / GPU)" },
+    { label: "GPU memory", value: "12 TB (192 GB / GPU)" },
     { label: "Interconnect", value: "NVLink Switch System" },
     { label: "vCPUs / node", value: "96 vCPUs" },
     { label: "Networking", value: "400 Gbps · RDMA" },
