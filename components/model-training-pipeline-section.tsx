@@ -539,10 +539,6 @@ export function ModelTrainingPipelineSection() {
     <section
       ref={sectionRef}
       className="mt-pipeline relative z-10 overflow-clip py-20 lg:py-28"
-      style={{
-        opacity: mounted ? 1 : 0,
-        transition: "opacity 0.45s ease",
-      }}
     >
       {/* Section top divider — homepage convention */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -767,34 +763,26 @@ export function ModelTrainingPipelineSection() {
           text-align: center;
           margin-bottom: 48px;
         }
-        .mt-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 14px;
-          margin-bottom: 22px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background: rgba(255, 255, 255, 0.025);
-          border-radius: 999px;
-          font-family: var(--font-geist-mono), ui-monospace, monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.22em;
-          text-transform: uppercase;
-          color: rgba(255, 255, 255, 0.55);
-        }
-        .mt-eyebrow-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: rgba(255, 255, 255, 0.6);
-        }
+        /* Match the homepage section-title scale: "Everything You Need to
+           Build and Scale" / "Our Core Services" — text-4xl→6xl, font-[400],
+           tracking-tight, leading-tight. */
         .mt-hero h2 {
           font-weight: 400;
-          font-size: clamp(30px, 3.6vw, 56px);
-          letter-spacing: -0.025em;
-          line-height: 1.05;
+          font-size: 2.25rem; /* text-4xl */
+          letter-spacing: -0.025em; /* tracking-tight */
+          line-height: 1.25; /* leading-tight */
           margin: 0 0 16px;
           color: #ffffff;
+        }
+        @media (min-width: 640px) {
+          .mt-hero h2 {
+            font-size: 3rem; /* sm:text-5xl */
+          }
+        }
+        @media (min-width: 1024px) {
+          .mt-hero h2 {
+            font-size: 3.75rem; /* lg:text-6xl */
+          }
         }
         .mt-accent {
           color: #33adff;

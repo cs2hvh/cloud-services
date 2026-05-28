@@ -42,7 +42,7 @@ const TABS = [
       "Per-token billing · zero markup · spend caps + alerts",
       "Streaming · tool calling · structured outputs · batches",
     ],
-    imageSrc: "/images/Features/ai-agent.png",
+    imageSrc: "/ailabs/ai-labs.png",
     imageAlt: "A.I. Labs platform illustration",
   },
   {

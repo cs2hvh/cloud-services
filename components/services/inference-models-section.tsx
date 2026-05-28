@@ -60,7 +60,7 @@ const STATS = [
   { value: "50+",   label: "Models" },
   { value: "12",    label: "Providers" },
   { value: "0%",    label: "Markup" },
-  { value: "1 key", label: "All of it" },
+  { value: "1",     label: "API key" },
 ];
 
 export default function InferenceModelsSection() {
@@ -113,16 +113,16 @@ export default function InferenceModelsSection() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                One catalog
+                Model catalog
               </p>
               <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
-                Every model{" "}
-                <span className="text-[#8ecaff]">worth calling.</span>
+                One catalog.{" "}
+                <span className="text-[#8ecaff]">One key.</span>
                 <br />
-                One key. One bill.
+                One bill.
               </h2>
               <p className="mt-6 max-w-md text-[15px] leading-7 text-white/55 sm:text-[16px]">
-                50+ models, 12 providers, one OpenAI- and Anthropic-compatible endpoint. Switch providers with a string change — no rewrite, no new SDK, no new contract.
+                50+ models, 12 providers, one OpenAI- and Anthropic-compatible endpoint. Switch providers with a string change.
               </p>
 
               {/* Stat strip with hairline dividers — matches the hero's strip */}

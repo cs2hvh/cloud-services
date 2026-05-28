@@ -1,0 +1,1381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Model Training Pipeline — Data to Fine-Tuning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink:        #0a0f1a;
+    --ink-2:      #1f2738;
+    --muted:      #5a6478;
+    --line:       #1a2030;     /* lines now black-ish */
+    --line-soft:  #d7dce6;     /* card borders */
+    --card:       #ffffff;
+    --bg:         #ffffff;
+    --bg-tint:    #f7f8fb;
+
+    --blue:       #1d5cff;     /* emphasis only */
+    --blue-deep:  #0a3bc4;
+    --blue-soft:  #eaf1ff;
+    --blue-ink:   #0b2a7a;
+
+    --glow:       #4d8bff;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: "Manrope", system-ui, -apple-system, Segoe UI, sans-serif; -webkit-font-smoothing: antialiased; }
+
+  .page {
+    max-width: 1760px;
+    margin: 0 auto;
+    padding: 56px 48px 80px;
+  }
+
+  /* ----------------- Hero ----------------- */
+  header.hero { text-align: center; margin-bottom: 40px; }
+  header.hero h1 {
+    font-weight: 800;
+    font-size: clamp(28px, 3.4vw, 50px);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 12px;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+  header.hero h1 .accent { color: var(--blue); }
+  header.hero p {
+    margin: 0 auto;
+    max-width: 980px;
+    color: var(--muted);
+    font-size: clamp(15px, 1.05vw, 18px);
+    line-height: 1.5;
+  }
+
+  /* ----------------- Phase shells ----------------- */
+  .phase {
+    position: relative;
+    padding: 0;
+  }
+  .phase + .phase { margin-top: 220px; }
+
+  .phase__head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 28px;
+    margin-bottom: 36px;
+    padding-bottom: 16px;
+    position: relative;
+  }
+  .phase__head::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0; height: 1px;
+    background: linear-gradient(to right, var(--ink) 0%, var(--ink) 76px, var(--line-soft) 76px, var(--line-soft) 100%);
+  }
+  .phase__head.right { grid-template-columns: auto 1fr auto; text-align: right; }
+  .phase__head.right::after {
+    background: linear-gradient(to right, var(--line-soft) 0%, var(--line-soft) calc(100% - 76px), var(--ink) calc(100% - 76px), var(--ink) 100%);
+  }
+
+  .phase__num-block {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    line-height: 1;
+  }
+  .phase__pre {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .phase__num {
+    font-size: 48px;
+    font-weight: 200;
+    color: var(--blue);
+    line-height: 0.9;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.02em;
+  }
+  .phase__title {
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: 0.05em;
+    font-size: clamp(15px, 1.1vw, 19px);
+    text-transform: uppercase;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .phase__title em { font-style: normal; color: var(--muted); font-weight: 500; letter-spacing: 0.02em; }
+  .phase__sub {
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.45;
+    max-width: 620px;
+  }
+  .phase__head.right .phase__sub { margin-left: auto; }
+  .phase__tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--ink);
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    white-space: nowrap;
+    align-self: end;
+  }
+
+  /* ----------------- Step rail ----------------- */
+  .rail {
+    display: grid;
+    gap: 22px;
+    align-items: stretch;
+  }
+  .rail--3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .rail--4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+
+  .card {
+    position: relative;
+    background:
+      radial-gradient(circle at 18% 88%, rgba(29,92,255,0.045) 0%, transparent 22%),
+      radial-gradient(circle at 82% 18%, rgba(29,92,255,0.04) 0%, transparent 26%),
+      linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
+    border: 1px solid var(--line-soft);
+    border-radius: 18px;
+    padding: 18px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    box-shadow:
+      0 1px 0 rgba(8,15,30,0.02),
+      0 22px 44px -28px rgba(8,15,30,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.9);
+    opacity: 0;
+    visibility: hidden;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  /* soft radial aura behind the icon */
+  .card .aura {
+    position: absolute;
+    top: 36px; left: 50%;
+    width: 120px; height: 120px;
+    transform: translateX(-50%);
+    background: radial-gradient(closest-side,
+      rgba(29,92,255,0.18) 0%,
+      rgba(29,92,255,0.07) 40%,
+      rgba(29,92,255,0) 75%);
+    border-radius: 50%;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.55s ease;
+    pointer-events: none;
+  }
+  .card.revealed .aura { opacity: 1; }
+
+  /* Looper / pattern decorations — placed via SVG */
+  .card .looper {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+  .card.revealed .looper { opacity: 1; }
+  .card .looper .dots { fill: rgba(29,92,255,0.18); }
+  .card .looper .ring { fill: none; stroke: rgba(29,92,255,0.16); stroke-width: 1; }
+  .card .looper .curve { fill: none; stroke: rgba(29,92,255,0.10); stroke-width: 1; stroke-dasharray: 2 3; }
+  .card .looper .spark { fill: rgba(29,92,255,0.55); }
+
+  /* Corner accent line — subtle ribbon top-right */
+  .card .corner {
+    position: absolute;
+    top: 0; right: 0;
+    width: 48px; height: 48px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .card .corner svg { width: 100%; height: 100%; }
+  .card .corner path {
+    stroke: var(--blue);
+    stroke-width: 1;
+    fill: none;
+    stroke-linecap: round;
+    opacity: 0.4;
+  }
+
+  /* Feature strip at the bottom */
+  .card .features {
+    position: relative;
+    z-index: 2;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(29,92,255,0.14);
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .card .feat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 6px;
+    border-radius: 8px;
+    background: rgba(29,92,255,0.04);
+    border: 1px solid rgba(29,92,255,0.08);
+  }
+  .card .feat .ficon {
+    width: 22px; height: 22px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    background: var(--blue);
+    color: #fff;
+    box-shadow: 0 4px 10px -3px rgba(29,92,255,0.55);
+  }
+  .card .feat.alt .ficon { background: #10b981; box-shadow: 0 4px 10px -3px rgba(16,185,129,0.55); }
+  .card .feat.warn .ficon { background: #8b5cf6; box-shadow: 0 4px 10px -3px rgba(139,92,246,0.55); }
+  .card .feat .ficon svg { width: 12px; height: 12px; stroke-width: 2; }
+  .card .feat .ftxt { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+  .card .feat .ftxt b { font-size: 10px; font-weight: 700; color: var(--ink); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .feat .ftxt span { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.revealed {
+    visibility: visible;
+    animation: cardReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+  }
+  @keyframes cardReveal {
+    0%   { opacity: 0; transform: translateY(12px) scale(0.92); }
+    60%  { opacity: 1; transform: translateY(-4px) scale(1.04); }
+    100% { opacity: 1; transform: translateY(0)   scale(1); }
+  }
+      18%  { transform: translateY(-4px) translateX(-2px) scale(1.025); }
+    36%  { transform: translateY(-7px) translateX(2px)  scale(1.045); }
+    55%  { transform: translateY(-3px) translateX(-1px) scale(1.022); }
+    78%  { transform: translateY(-1px) translateX(1px)  scale(1.010); }
+    100% { transform: translateY(0) translateX(0) scale(1); }
+  }
+
+  .badge {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px 4px 8px;
+    background: #ffffff;
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    text-transform: uppercase;
+    font-feature-settings: "tnum";
+    box-shadow: 0 2px 6px -3px rgba(8,15,30,0.18);
+  }
+  .badge::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    box-shadow: 0 0 8px rgba(29,92,255,0.7);
+  }
+
+  .icn {
+    position: relative;
+    z-index: 2;
+    height: 90px;
+    width: 90px;
+    display: grid; place-items: center;
+    color: var(--ink);
+  }
+  .icn img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 4px 8px rgba(29, 92, 255, 0.18))
+            drop-shadow(0 2px 4px rgba(8, 15, 30, 0.10));
+  }
+  .card.is-active .icn { color: var(--blue); }
+
+  .card h3 {
+    position: relative;
+    z-index: 2;
+    font-size: 15px;
+    font-weight: 800;
+    margin: 6px 0 0;
+    color: var(--ink);
+    line-height: 1.2;
+    text-align: center;
+    letter-spacing: -0.01em;
+    max-width: 18ch;
+  }
+  .card .sub {
+    position: relative;
+    z-index: 2;
+    margin: 0 0 4px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.4;
+    max-width: 22ch;
+    font-weight: 500;
+  }
+  /* ----------------- Tail (decision + ready) ----------------- */
+  .tail {
+    margin-top: 44px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
+    align-items: center;
+  }
+  .tail .ready    { grid-column: 1; justify-self: center; }
+  .tail .yes-arrow{ grid-column: 2; justify-self: center; }
+  .tail .diamond  { grid-column: 3; justify-self: center; }
+  .diamond {
+    position: relative;
+    width: 110px; height: 110px;
+    transform: rotate(45deg);
+    border: 1.5px solid var(--ink);
+    border-radius: 12px;
+    background: #fff;
+    display: grid; place-items: center;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .diamond.revealed {
+    visibility: visible;
+    animation: diamondReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+  }
+  @keyframes diamondReveal {
+    0%   { opacity: 0; transform: rotate(45deg) scale(0.85); }
+    60%  { opacity: 1; transform: rotate(45deg) scale(1.08); }
+    100% { opacity: 1; transform: rotate(45deg) scale(1); }
+  }
+      36%  { transform: rotate(45deg) scale(1.06); }
+    55%  { transform: rotate(45deg) scale(1.03); }
+    100% { transform: rotate(45deg) scale(1); }
+  }
+  .diamond > span {
+    transform: rotate(-45deg);
+    text-align: center;
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+  }
+  .diamond.is-active > span { color: var(--blue); }
+  .yes-arrow {
+    position: relative;
+    width: 110px; height: 60px;
+    display: grid; place-items: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .yes-arrow.revealed { opacity: 1; }
+  .yes-arrow .label {
+    position: absolute;
+    top: 2px;
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+  }
+  .ready {
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink);
+    background: #fff;
+    display: grid; place-items: center;
+    text-align: center;
+    padding: 10px;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .ready.revealed {
+    visibility: visible;
+    animation: readyReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+  }
+  @keyframes readyReveal {
+    0%   { opacity: 0; transform: scale(0.85); }
+    60%  { opacity: 1; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+      36%  { transform: scale(1.06); }
+    55%  { transform: scale(1.03); }
+    100% { transform: scale(1); }
+  }
+  .ready .lbl { color: var(--ink); font-weight: 700; font-size: 13px; line-height: 1.15; margin-top: 4px; }
+  .ready.is-active .lbl { color: var(--blue); }
+  .ready svg { width: 32px; height: 32px; color: var(--ink); stroke-width: 1.6; }
+  .ready.is-active svg { color: var(--blue); }
+
+  /* ----------------- Overlay SVG ----------------- */
+  .stage { position: relative; }
+  .flow-svg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    overflow: visible;
+  }
+  .flow-svg .arrow {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: opacity 0.45s ease;
+  }
+  .flow-svg .arrow.dashed {
+    stroke-dasharray: 5 6;
+    stroke: #6b7388;
+  }
+  .flow-svg .arrow-head { fill: var(--line); }
+  .flow-svg .arrow-head-soft { fill: #6b7388; }
+
+  /* the moving bright trail behind the orb */
+  .flow-svg .glow-line {
+    fill: none;
+    stroke: var(--glow);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 4px rgba(77,139,255,0.95))
+            drop-shadow(0 0 12px rgba(77,139,255,0.55));
+    opacity: 0;
+  }
+  .flow-svg .orb {
+    fill: url(#orbGrad);
+    filter: drop-shadow(0 0 6px rgba(77,139,255,0.95))
+            drop-shadow(0 0 16px rgba(77,139,255,0.7));
+    opacity: 0;
+  }
+  .flow-svg .orb-core {
+    fill: #ffffff;
+    opacity: 0;
+  }
+
+  .flow-label {
+    fill: var(--muted);
+    font-family: "Manrope", sans-serif;
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  /* ----------------- Loop pill ----------------- */
+  .loop-wrap {
+    position: relative;
+    margin-top: 50px;
+    display: flex;
+    justify-content: center;
+    z-index: 4;
+  }
+  .loop-pill {
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    padding: 10px 22px 10px 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 14.5px;
+    letter-spacing: 0.02em;
+    position: relative;
+  }
+  .loop-pill .infi { color: var(--blue); display: inline-flex; }
+  .loop-pill svg { width: 22px; height: 22px; }  /* ----------------- Scroll hint ----------------- */
+  .scroll-hint {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(8,15,30,0.85);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .scroll-hint.visible { opacity: 1; }
+  .scroll-hint .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--blue);
+    border-radius: 50%;
+    animation: hintPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes hintPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.4); opacity: 0.55; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1>The Complete <span class="accent">Model Training</span> Pipeline: From Data to Fine-Tuning</h1>
+      <p>End-to-end workflow for preparing language data and training a high-performing model — from collection through fine-tuning.</p>
+    </header>
+
+    <div class="stage" id="stage">
+
+      <!-- ================= PHASE 1 ================= -->
+      <section class="phase" id="phase1">
+        <div class="phase__head">
+          <div class="phase__num-block">
+            <span class="phase__pre">Phase</span>
+            <span class="phase__num">01</span>
+          </div>
+          <div>
+            <div class="phase__title">Data Pipeline <em>· Preparation</em></div>
+            <div class="phase__sub">Collect, clean, and tokenize raw language data to prepare it for model training.</div>
+          </div>
+          <div class="phase__tag">Data</div>
+        </div>
+
+        <div class="rail rail--3" id="rail1">
+          <!-- 1: Data Collection -->
+          <div class="card" data-step="1" id="c1">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- bottom-left dot grid -->
+              <g class="dots">
+                <circle cx="14" cy="178" r="1.3"/><circle cx="24" cy="178" r="1.3"/><circle cx="34" cy="178" r="1.3"/><circle cx="44" cy="178" r="1.3"/>
+                <circle cx="14" cy="188" r="1.3"/><circle cx="24" cy="188" r="1.3"/><circle cx="34" cy="188" r="1.3"/>
+                <circle cx="14" cy="198" r="1.3"/><circle cx="24" cy="198" r="1.3"/>
+                <circle cx="14" cy="208" r="1.3"/>
+              </g>
+              <!-- top-right small ring + curve -->
+              <circle class="ring" cx="244" cy="42" r="14"/>
+              <path class="curve" d="M240 188 Q258 196 260 220"/>
+              <circle class="spark" cx="60" cy="60" r="1.6"/>
+              <circle class="spark" cx="240" cy="120" r="1.8"/>
+            </svg>
+            <div class="badge">Step 01</div>
+            <div class="icn"><img src="icons/01-data-collection.png" alt="Data Collection" /></div>
+            <h3>Data Collection</h3>
+            <p class="sub">Gather raw text from varied sources</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></span>
+                <div class="ftxt"><b>Multi-Source</b><span>Text · Web · APIs</span></div>
+              </div>
+              <div class="feat alt">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span>
+                <div class="ftxt"><b>Real-Time</b><span>Streaming ingest</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2: Data Cleaning -->
+          <div class="card" data-step="2" id="c2">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- top-right dots -->
+              <g class="dots">
+                <circle cx="246" cy="20" r="1.3"/><circle cx="256" cy="20" r="1.3"/>
+                <circle cx="236" cy="30" r="1.3"/><circle cx="246" cy="30" r="1.3"/><circle cx="256" cy="30" r="1.3"/>
+                <circle cx="226" cy="40" r="1.3"/><circle cx="236" cy="40" r="1.3"/><circle cx="246" cy="40" r="1.3"/>
+              </g>
+              <circle class="ring" cx="36" cy="200" r="12"/>
+              <path class="curve" d="M20 240 Q60 230 90 240"/>
+              <circle class="spark" cx="220" cy="200" r="1.6"/>
+              <circle class="spark" cx="40" cy="60" r="1.8"/>
+            </svg>
+            <div class="badge">Step 02</div>
+            <div class="icn"><img src="icons/02-preprocessing.png" alt="Data Cleaning" /></div>
+            <h3>Data Cleaning</h3>
+            <p class="sub">Strip noise, duplicates, and PII</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 9v6l-4-2v-4z"/></svg></span>
+                <div class="ftxt"><b>Noise Removal</b><span>Dedup · Filter</span></div>
+              </div>
+              <div class="feat warn">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                <div class="ftxt"><b>PII-Safe</b><span>GDPR compliant</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3: Tokenization -->
+          <div class="card" data-step="3" id="c3">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- left-center vertical arc -->
+              <path class="curve" d="M14 100 Q4 140 14 180"/>
+              <!-- bottom-right dot wedge -->
+              <g class="dots">
+                <circle cx="232" cy="208" r="1.3"/><circle cx="242" cy="208" r="1.3"/><circle cx="252" cy="208" r="1.3"/><circle cx="262" cy="208" r="1.3"/>
+                <circle cx="242" cy="218" r="1.3"/><circle cx="252" cy="218" r="1.3"/><circle cx="262" cy="218" r="1.3"/>
+                <circle cx="252" cy="228" r="1.3"/><circle cx="262" cy="228" r="1.3"/>
+                <circle cx="262" cy="238" r="1.3"/>
+              </g>
+              <circle class="ring" cx="246" cy="78" r="10"/>
+              <circle class="spark" cx="40" cy="220" r="1.6"/>
+              <circle class="spark" cx="160" cy="40" r="1.8"/>
+            </svg>
+            <div class="badge">Step 03</div>
+            <div class="icn"><img src="icons/03-feature-engineering.png" alt="Tokenization" /></div>
+            <h3>Tokenization</h3>
+            <p class="sub">Encode text into model tokens</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+                <div class="ftxt"><b>BPE Encoding</b><span>Subword tokens</span></div>
+              </div>
+              <div class="feat alt">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></span>
+                <div class="ftxt"><b>50k+ Vocab</b><span>Multilingual</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tail">
+          <div class="ready" id="ready">
+            <div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 18a5 5 0 1 1 .9-9.92A6 6 0 0 1 20 11a4 4 0 0 1 0 7H7z"/>
+                <path d="M9 14l2 2 4-4"/>
+              </svg>
+              <div class="lbl">Ready to<br/>Train</div>
+            </div>
+          </div>
+          <div class="yes-arrow" id="yesArrow"><span class="label">YES</span></div>
+          <div class="diamond" id="diamond"><span>MEETS<br/>CRITERIA?</span></div>
+        </div>
+      </section>
+
+      <!-- ================= PHASE 2 ================= -->
+      <section class="phase" id="phase2">
+        <div class="phase__head right">
+          <div class="phase__tag">Modeling</div>
+          <div>
+            <div class="phase__title">Model Training <em>· Development</em></div>
+            <div class="phase__sub">Select an architecture, set up training infrastructure, monitor runs, and fine-tune the model.</div>
+          </div>
+          <div class="phase__num-block">
+            <span class="phase__pre">Phase</span>
+            <span class="phase__num">02</span>
+          </div>
+        </div>
+
+        <div class="rail rail--4" id="rail2">
+          <!-- 4: Architecture Selection -->
+          <div class="card" data-step="4" id="c4">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- bottom-left dot grid -->
+              <g class="dots">
+                <circle cx="14" cy="178" r="1.3"/><circle cx="24" cy="178" r="1.3"/><circle cx="34" cy="178" r="1.3"/><circle cx="44" cy="178" r="1.3"/>
+                <circle cx="14" cy="188" r="1.3"/><circle cx="24" cy="188" r="1.3"/><circle cx="34" cy="188" r="1.3"/>
+                <circle cx="14" cy="198" r="1.3"/><circle cx="24" cy="198" r="1.3"/>
+                <circle cx="14" cy="208" r="1.3"/>
+              </g>
+              <!-- top-right small ring + curve -->
+              <circle class="ring" cx="244" cy="42" r="14"/>
+              <path class="curve" d="M240 188 Q258 196 260 220"/>
+              <circle class="spark" cx="60" cy="60" r="1.6"/>
+              <circle class="spark" cx="240" cy="120" r="1.8"/>
+            </svg>
+            <div class="badge">Step 04</div>
+            <div class="icn"><img src="icons/04-architecture-selection.png" alt="Architecture Selection" /></div>
+            <h3>Architecture Selection</h3>
+            <p class="sub">Pick the right model design</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M3 9h2M3 15h2M19 9h2M19 15h2M9 3v2M15 3v2M9 19v2M15 19v2"/></svg></span>
+                <div class="ftxt"><b>Transformer</b><span>Decoder stack</span></div>
+              </div>
+              <div class="feat warn">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="20" cy="14" r="2"/></svg></span>
+                <div class="ftxt"><b>Configurable</b><span>Layers · Heads</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5: Training Environment Setup -->
+          <div class="card" data-step="5" id="c5">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- top-right dots -->
+              <g class="dots">
+                <circle cx="246" cy="20" r="1.3"/><circle cx="256" cy="20" r="1.3"/>
+                <circle cx="236" cy="30" r="1.3"/><circle cx="246" cy="30" r="1.3"/><circle cx="256" cy="30" r="1.3"/>
+                <circle cx="226" cy="40" r="1.3"/><circle cx="236" cy="40" r="1.3"/><circle cx="246" cy="40" r="1.3"/>
+              </g>
+              <circle class="ring" cx="36" cy="200" r="12"/>
+              <path class="curve" d="M20 240 Q60 230 90 240"/>
+              <circle class="spark" cx="220" cy="200" r="1.6"/>
+              <circle class="spark" cx="40" cy="60" r="1.8"/>
+            </svg>
+            <div class="badge">Step 05</div>
+            <div class="icn"><img src="icons/05-training-env.png" alt="Training Environment Setup" /></div>
+            <h3>Training Environment Setup</h3>
+            <p class="sub">Provision GPUs and data pipelines</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z" fill="currentColor"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg></span>
+                <div class="ftxt"><b>GPU Cluster</b><span>H100 · A100</span></div>
+              </div>
+              <div class="feat alt">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><path d="M6 6L10 11M18 6L14 11M6 18L10 13M18 18L14 13"/></svg></span>
+                <div class="ftxt"><b>Distributed</b><span>Multi-node</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6: Training Monitoring -->
+          <div class="card" data-step="6" id="c6">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- left-center vertical arc -->
+              <path class="curve" d="M14 100 Q4 140 14 180"/>
+              <!-- bottom-right dot wedge -->
+              <g class="dots">
+                <circle cx="232" cy="208" r="1.3"/><circle cx="242" cy="208" r="1.3"/><circle cx="252" cy="208" r="1.3"/><circle cx="262" cy="208" r="1.3"/>
+                <circle cx="242" cy="218" r="1.3"/><circle cx="252" cy="218" r="1.3"/><circle cx="262" cy="218" r="1.3"/>
+                <circle cx="252" cy="228" r="1.3"/><circle cx="262" cy="228" r="1.3"/>
+                <circle cx="262" cy="238" r="1.3"/>
+              </g>
+              <circle class="ring" cx="246" cy="78" r="10"/>
+              <circle class="spark" cx="40" cy="220" r="1.6"/>
+              <circle class="spark" cx="160" cy="40" r="1.8"/>
+            </svg>
+            <div class="badge">Step 06</div>
+            <div class="icn"><img src="icons/06-training-monitoring.png" alt="Training Monitoring" /></div>
+            <h3>Training Monitoring</h3>
+            <p class="sub">Track loss, gradients, and metrics</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>
+                <div class="ftxt"><b>Loss Tracking</b><span>Per-step metrics</span></div>
+              </div>
+              <div class="feat alt">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+                <div class="ftxt"><b>Live Dashboard</b><span>Real-time</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7: Fine-Tuning -->
+          <div class="card" data-step="7" id="c7">
+            <span class="corner"><svg viewBox="0 0 56 56"><path d="M56 0 L20 0 M56 0 L56 36 M48 0 L48 28 M56 8 L36 8"/></svg></span>
+            <span class="aura"></span>
+            <svg class="looper" viewBox="0 0 280 280" preserveAspectRatio="none">
+              <!-- bottom-left dot grid -->
+              <g class="dots">
+                <circle cx="14" cy="178" r="1.3"/><circle cx="24" cy="178" r="1.3"/><circle cx="34" cy="178" r="1.3"/><circle cx="44" cy="178" r="1.3"/>
+                <circle cx="14" cy="188" r="1.3"/><circle cx="24" cy="188" r="1.3"/><circle cx="34" cy="188" r="1.3"/>
+                <circle cx="14" cy="198" r="1.3"/><circle cx="24" cy="198" r="1.3"/>
+                <circle cx="14" cy="208" r="1.3"/>
+              </g>
+              <!-- top-right small ring + curve -->
+              <circle class="ring" cx="244" cy="42" r="14"/>
+              <path class="curve" d="M240 188 Q258 196 260 220"/>
+              <circle class="spark" cx="60" cy="60" r="1.6"/>
+              <circle class="spark" cx="240" cy="120" r="1.8"/>
+            </svg>
+            <div class="badge">Step 07</div>
+            <div class="icn"><img src="icons/07-fine-tuning.png" alt="Fine-Tuning" /></div>
+            <h3>Fine-Tuning</h3>
+            <p class="sub">Refine on task-specific data</p>
+            <div class="features">
+              <div class="feat">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3h0a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7v0a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>
+                <div class="ftxt"><b>LoRA Adapters</b><span>Param-efficient</span></div>
+              </div>
+              <div class="feat warn">
+                <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg></span>
+                <div class="ftxt"><b>Task-Specific</b><span>Domain tuning</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ FLOW SVG ============ -->
+      <svg class="flow-svg" id="flowSvg" preserveAspectRatio="none">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,4.5 L0,9 Z" class="arrow-head"/>
+          </marker>
+          <marker id="ah-soft" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,4.5 L0,9 Z" class="arrow-head-soft"/>
+          </marker>
+          <radialGradient id="orbGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+            <stop offset="35%"  stop-color="#9ec2ff" stop-opacity="0.95"/>
+            <stop offset="75%"  stop-color="#4d8bff" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="#1d5cff" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+<script>
+/* =========================================================================
+ * Smooth, sequenced light-flow animation.
+ *   - Arrows render as static black/dark lines.
+ *   - A glowing orb travels along each forward edge with ease-in-out timing.
+ *   - A short, fading trail follows the orb to read as "light flowing".
+ *   - Destination cards softly light up while the orb crosses into them, then
+ *     gently fade once the next edge starts.
+ * ========================================================================= */
+(function(){
+  const stage = document.getElementById('stage');
+  const svg   = document.getElementById('flowSvg');
+  const NS    = 'http://www.w3.org/2000/svg';
+
+  const ids = ['c1','c2','c3','diamond','ready','c4','c5','c6','c7'];
+  const nodes = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+
+  function rectOf(el){
+    const sb = stage.getBoundingClientRect();
+    const r  = el.getBoundingClientRect();
+    return {
+      x: r.left - sb.left, y: r.top - sb.top, w: r.width, h: r.height,
+      cx: r.left - sb.left + r.width/2,
+      cy: r.top  - sb.top  + r.height/2,
+      left:  r.left - sb.left,
+      right: r.left - sb.left + r.width,
+      top:   r.top  - sb.top,
+      bot:   r.top  - sb.top + r.height
+    };
+  }
+
+  // Edge definitions ------------------------------------------------------
+  // No ready->c7 edge: the orb jumps invisibly between phases (see 'sequence').
+  const edgeSpecs = [
+    // Phase 1 (3 cards): data pipeline
+    { from:'c1',      to:'c2',      kind:'h',         type:'solid' },
+    { from:'c2',      to:'c3',      kind:'h',         type:'solid' },
+    // Phase 1 -> tail
+    { from:'c3',      to:'diamond', kind:'c6-to-d',   type:'solid' },
+    { from:'diamond', to:'ready',   kind:'d-to-r',    type:'solid' },
+    // tail -> Phase 2
+    { from:'ready',   to:'c4',      kind:'r-to-c7',   type:'solid' },
+    // Phase 2 (4 cards): model training
+    { from:'c4',      to:'c5',      kind:'h',         type:'solid' },
+    { from:'c5',      to:'c6',      kind:'h',         type:'solid' },
+    { from:'c6',      to:'c7',      kind:'h',         type:'solid' },
+  ];
+
+  function buildPath(spec, R){
+    const a = R[spec.from], b = R[spec.to];
+    const k = spec.kind;
+
+    if (k === 'h') {
+      const y = (a.cy + b.cy) / 2;
+      return `M ${a.right + 1} ${y} L ${b.left - 8} ${y}`;
+    }
+    if (k === 'c6-to-d') {
+      // c6 at right of card row -> diamond at right of tail row (same column).
+      // Mostly a vertical drop, with a tiny horizontal correction.
+      const sx = a.cx, sy = a.bot + 1;
+      const ex = b.cx, ey = b.top + 2; // top tip of rotated diamond
+      const midY = sy + Math.max(18, (ey - sy) * 0.55);
+      return `M ${sx} ${sy} L ${sx} ${midY} L ${ex} ${midY} L ${ex} ${ey}`;
+    }
+    if (k === 'd-to-r') {
+      // Diamond LEFT tip -> Ready RIGHT edge, horizontal across tail row (right to left).
+      const y = (a.cy + b.cy) / 2;
+      const sx = a.left + 4;          // diamond's left visual tip
+      const ex = b.right + 2;         // ready's right edge
+      return `M ${sx} ${y} L ${ex} ${y}`;
+    }
+    if (k === 'r-to-c7') {
+      // Ready (left of tail) -> c7 (left of phase 2). Mostly vertical with a soft curve.
+      const sx = a.cx, sy = a.bot - 2;
+      const ex = b.cx, ey = b.top + 2;
+      const c1y = sy + (ey - sy) * 0.45;
+      const c2y = ey - (ey - sy) * 0.45;
+      return `M ${sx} ${sy} C ${sx} ${c1y}, ${ex} ${c2y}, ${ex} ${ey}`;
+    }
+    if (k === 'refine') {
+      // up-over from c6 top to c4 top — runs in the gap between phase header and cards
+      const sx = a.cx, sy = a.top - 2;
+      const ex = b.cx, ey = b.top - 2;
+      const upY = Math.min(sy, ey) - 26;
+      return `M ${sx} ${sy} L ${sx} ${upY} L ${ex} ${upY} L ${ex} ${ey}`;
+    }
+    return '';
+  }
+
+  function makeEl(tag, attrs){
+    const el = document.createElementNS(NS, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  // Built scene state
+  let edges = []; // {arrow, glow, len, spec}
+  let orb, orbCore;
+
+  function render(){
+    // Clear and rebuild
+    Array.from(svg.querySelectorAll('path, text, circle')).forEach(n => n.remove());
+    edges = [];
+
+    const sRect = stage.getBoundingClientRect();
+    svg.setAttribute('width',  sRect.width);
+    svg.setAttribute('height', sRect.height + 80);
+    svg.setAttribute('viewBox', `0 0 ${sRect.width} ${sRect.height + 80}`);
+
+    const R = {};
+    for (const id of ids) R[id] = rectOf(nodes[id]);
+
+    edgeSpecs.forEach(spec => {
+      const d = buildPath(spec, R);
+      if (!d) return;
+      const arrow = makeEl('path', {
+        d,
+        class: 'arrow' + (spec.type === 'dashed' ? ' dashed' : '')
+      });
+      svg.appendChild(arrow);
+      const len = arrow.getTotalLength();
+
+      let glow = null;
+      if (spec.type === 'dashed') {
+        // dashed feedback edges are reference lines: drawn from start
+        arrow.setAttribute('marker-end', 'url(#ah-soft)');
+      } else {
+        // solid edges: initially HIDDEN, drawn progressively as orb traverses
+        arrow.style.strokeDasharray = `${len}`;
+        arrow.style.strokeDashoffset = `${len}`;
+        // marker-end will be set the moment the line finishes drawing
+
+        glow = makeEl('path', { d, class: 'glow-line' });
+        svg.appendChild(glow);
+        glow.style.strokeDasharray = `0 ${len + 10}`;
+        glow.style.strokeDashoffset = '0';
+      }
+
+      if (spec.label) {
+        // label sits centered on the top segment
+        const mid = arrow.getPointAtLength(len * 0.5);
+        const txt = makeEl('text', {
+          x: mid.x, y: mid.y - 8, 'text-anchor': 'middle', class: 'flow-label'
+        });
+        txt.textContent = spec.label;
+        svg.appendChild(txt);
+      }
+
+      edges.push({ arrow, glow, len, spec });
+    });
+
+    // create orb on top
+    orb = makeEl('circle', { r: 9, class: 'orb', cx: 0, cy: 0 });
+    orbCore = makeEl('circle', { r: 2.6, class: 'orb-core', cx: 0, cy: 0 });
+    svg.appendChild(orb);
+    svg.appendChild(orbCore);
+  }
+
+  /* Reset all solid edges back to invisible (used on loop restart). */
+  function resetSolidEdges(){
+    edges.forEach(e => {
+      if (e.spec.type !== 'solid') return;
+      e.arrow.style.transition = 'none';
+      e.arrow.style.opacity = '1';
+      e.arrow.style.strokeDashoffset = `${e.len}`;
+      e.arrow.removeAttribute('marker-end');
+      if (e.glow) {
+        e.glow.style.opacity = '0';
+        e.glow.style.strokeDasharray = `0 ${e.len + 10}`;
+      }
+      // force reflow before re-enabling transitions next frame
+      // (kept simple; transitions get re-enabled when next setProperty runs)
+    });
+  }
+
+  // Sequence of steps. Each step is either:
+  //   - 'edge': orb traverses an edge while the line draws itself behind it
+  //   - 'jump': orb fades out at a node, pauses, then fades in at another node
+  //             (used for ready -> c7 so we don't draw a line across phase 2 header)
+  const sequence = [
+    {k:'edge', from:'c1', to:'c2'},
+    {k:'edge', from:'c2', to:'c3'},
+    {k:'edge', from:'c3', to:'diamond'},
+    {k:'edge', from:'diamond', to:'ready'},
+    {k:'pan',  to:'phase2'},
+    {k:'edge', from:'ready', to:'c4'},
+    {k:'edge', from:'c4', to:'c5'},
+    {k:'edge', from:'c5', to:'c6'},
+    {k:'edge', from:'c6', to:'c7'},
+  ];
+
+  function findEdge(a,b){ return edges.find(e => e.spec.from === a && e.spec.to === b); }
+
+  function moveOrb(x, y, opacity, coreOpacity){
+    if (!orb || !orbCore) return;
+    orb.setAttribute('cx', x);
+    orb.setAttribute('cy', y);
+    orbCore.setAttribute('cx', x);
+    orbCore.setAttribute('cy', y);
+    orb.style.opacity = opacity;
+    orbCore.style.opacity = coreOpacity;
+  }
+  function nodeCenter(id){
+    const el = nodes[id];
+    if (!el) return { x: 0, y: 0 };
+    const r = rectOf(el);
+    return { x: r.cx, y: r.cy };
+  }
+
+  // Smoothly scroll the window to a target Y over duration ms.
+  function smoothScrollTo(targetY, dur, onDone){
+    targetY = Math.max(0, Math.round(targetY));
+    const startY = window.scrollY;
+    const delta = targetY - startY;
+    if (Math.abs(delta) < 2) { onDone?.(); return; }
+    const startT = performance.now();
+    function frame(now){
+      const t = Math.min(1, (now - startT) / dur);
+      const eased = easeInOut(t);
+      window.scrollTo(0, startY + delta * eased);
+      if (t < 1) requestAnimationFrame(frame);
+      else onDone?.();
+    }
+    requestAnimationFrame(frame);
+  }
+  function scrollTargetFor(name){
+    if (name === 'phase2') {
+      const ph2 = document.getElementById('phase2');
+      if (!ph2) return 0;
+      return ph2.getBoundingClientRect().top + window.scrollY - 60;
+    }
+    return 0;
+  }
+
+  /* easing: smooth in/out cubic */
+  function easeInOut(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
+
+  // Per-edge duration tuned for path length so visual speed feels constant
+  function durationFor(edge){
+    const base = 0.55;            // ms per pixel
+    const min  = 700;
+    const max  = 2600;
+    const px = edge.len || 240;
+    return Math.max(min, Math.min(max, px * base));
+  }
+
+  const activeNodes = new Set();
+  function activate(id){
+    const el = nodes[id];
+    if (!el) return;
+    el.classList.add('is-active');
+    activeNodes.add(id);
+  }
+  function deactivate(id){
+    const el = nodes[id];
+    if (!el) return;
+    el.classList.remove('is-active');
+    activeNodes.delete(id);
+  }
+  function clearAll(){
+    activeNodes.forEach(id => nodes[id]?.classList.remove('is-active'));
+    activeNodes.clear();
+  }
+
+  // ----------------------------------------------------------------
+  // Scroll-driven step machine.
+  //   Step 0  = reveal c1 (no edge)
+  //   Step N  = animate sequence[N-1] (which reveals its 'to' node)
+  //   Last step is sequence.length (reveals c7).
+  //   Each wheel/touch gesture advances or retreats one step.
+  // ----------------------------------------------------------------
+  const totalSteps = sequence.length + 1;
+  let stepIdx = -1;            // -1 = nothing revealed yet
+  let animating = false;
+  let rafId = null;
+
+  function reveal(id){ nodes[id]?.classList.add('revealed'); }
+  function unreveal(id){ nodes[id]?.classList.remove('revealed'); }
+
+  function setOrbAt(id){
+    if (!nodes[id]) { moveOrb(0,0,0,0); return; }
+    const c = nodeCenter(id);
+    moveOrb(c.x, c.y, 0.9, 0.85);
+  }
+
+  function clearEdgeVisual(edge){
+    if (!edge) return;
+    edge.arrow.style.transition = 'none';
+    edge.arrow.style.strokeDashoffset = String(edge.len);
+    edge.arrow.removeAttribute('marker-end');
+    if (edge.glow) {
+      edge.glow.style.transition = 'none';
+      edge.glow.style.opacity = '0';
+      edge.glow.setAttribute('stroke-dasharray', `0 ${edge.len + 10}`);
+    }
+  }
+
+  function playEdge(step, onDone){
+    const edge = findEdge(step.from, step.to);
+    if (!edge) { animating = false; onDone?.(); return; }
+    const dur = durationFor(edge);
+
+
+    let start = null;
+
+    function frame(now){
+      if (start === null) start = now;
+      const tRaw = Math.min(1, (now - start) / dur);
+      const t = easeInOut(tRaw);
+      const len = edge.len;
+      const head = len * t;
+
+      // Progressive line reveal
+      edge.arrow.style.transition = 'none';
+      edge.arrow.style.strokeDashoffset = String(len - head);
+
+      // Bright glow trail
+      if (edge.glow) {
+        const trailLen = Math.min(len * 0.45, 75);
+        const tail = Math.max(0, head - trailLen);
+        const visible = head - tail;
+        edge.glow.style.opacity = '1';
+        edge.glow.setAttribute('stroke-dasharray',
+          `0 ${tail} ${visible} ${Math.max(0, len - head + 10)}`);
+        edge.glow.setAttribute('stroke-dashoffset', '0');
+      }
+
+      // Orb position
+      const pt = edge.arrow.getPointAtLength(head);
+      const visEnv = Math.sin(Math.min(Math.PI, tRaw * Math.PI));
+      moveOrb(pt.x, pt.y, 0.9 + 0.1 * visEnv, 0.85 + 0.15 * visEnv);
+
+      // Reveal destination as orb arrives
+      if (tRaw > 0.7) reveal(step.to);
+
+      if (tRaw >= 1) {
+        edge.arrow.style.strokeDashoffset = '0';
+        edge.arrow.setAttribute('marker-end', 'url(#ah)');
+        if (edge.glow) {
+          edge.glow.style.transition = 'opacity 0.4s ease';
+          edge.glow.style.opacity = '0';
+        }
+        // Orb rests at the destination
+        const c = nodeCenter(step.to);
+        moveOrb(c.x, c.y, 0.9, 0.85);
+        animating = false;
+        onDone?.();
+      } else {
+        rafId = requestAnimationFrame(frame);
+      }
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function playStep(idx){
+    animating = true;
+    if (idx === 0) {
+      // Initial reveal of c1 only.
+      reveal('c1');
+      setOrbAt('c1');
+      setTimeout(() => { animating = false; }, 760);
+      return;
+    }
+    const step = sequence[idx - 1];
+
+    // Window pan step: smoothly scroll the page so the named section is visible.
+    if (step.k === 'pan') {
+      // Hide the orb briefly while the page pans so it doesn't fly across the screen.
+      const wasOrbOpacity = orb.style.opacity;
+      orb.style.opacity = '0';
+      orbCore.style.opacity = '0';
+      const targetY = scrollTargetFor(step.to);
+      smoothScrollTo(targetY, 900, () => {
+        // Place orb back at last source (ready) so it's ready to take off when the next step runs.
+        setOrbAt('ready');
+        animating = false;
+      });
+      return;
+    }
+
+    // Otherwise: animate the edge.
+    playEdge(step, () => {});
+  }
+
+  function advance(){
+    if (animating) return false;
+    if (stepIdx + 1 >= totalSteps) return false;
+    stepIdx++;
+    playStep(stepIdx);
+    return true;
+  }
+
+  function retreat(){
+    if (animating) return false;
+    if (stepIdx < 0) return false;
+
+    if (stepIdx === 0) {
+      unreveal('c1');
+      moveOrb(0, 0, 0, 0);
+    } else {
+      const step = sequence[stepIdx - 1];
+      if (step.k === 'pan') {
+        // Reverse the pan: scroll back to the top
+        animating = true;
+        const wasOrbOpacity = orb.style.opacity;
+        orb.style.opacity = '0';
+        orbCore.style.opacity = '0';
+        smoothScrollTo(0, 800, () => {
+          setOrbAt('ready');
+          animating = false;
+        });
+      } else if (step.k === 'edge') {
+        unreveal(step.to);
+        const edge = findEdge(step.from, step.to);
+        clearEdgeVisual(edge);
+        setOrbAt(step.from);
+      }
+    }
+    stepIdx--;
+    return true;
+  }
+
+  // ---------- Scroll-hint helpers ----------
+  const scrollHint = document.getElementById('scrollHint');
+  let hintTimer = null;
+  function showHint(){
+    if (!scrollHint) return;
+    scrollHint.classList.add('visible');
+  }
+  function hideHint(){
+    if (!scrollHint) return;
+    scrollHint.classList.remove('visible');
+  }
+
+  // ---------- Wheel / touch / key listeners ----------
+  // Gesture-based: locks on first wheel event of a gesture,
+  // unlocks after 160ms of no scroll. So each gesture = exactly one step.
+  let gestureLocked = false;
+  let gestureTimer = null;
+
+  function onWheel(e){
+    // Reset gesture lock once user pauses scrolling
+    clearTimeout(gestureTimer);
+    gestureTimer = setTimeout(() => { gestureLocked = false; }, 160);
+
+    // Block native page scroll while we have steps to traverse
+    const canAdvance = stepIdx + 1 < totalSteps;
+    const canRetreat = stepIdx >= 0;
+    const wantAdvance = e.deltaY > 0;
+    const wantRetreat = e.deltaY < 0;
+    if ((wantAdvance && canAdvance) || (wantRetreat && canRetreat)) {
+      e.preventDefault();
+    }
+
+    if (gestureLocked) return;
+    if (animating) return;
+    if (Math.abs(e.deltaY) < 1) return;
+
+    gestureLocked = true;
+    if (wantAdvance) {
+      if (advance()) hideHint();
+    } else if (wantRetreat) {
+      retreat();
+    }
+  }
+  window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+
+  let touchStartY = null;
+  window.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (touchStartY === null || animating || gestureLocked) return;
+    const dy = touchStartY - e.touches[0].clientY;
+    if (Math.abs(dy) > 36) {
+      gestureLocked = true;
+      clearTimeout(gestureTimer);
+      gestureTimer = setTimeout(() => { gestureLocked = false; }, 220);
+      if (dy > 0) { advance(); hideHint(); }
+      else retreat();
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      if (!animating && !gestureLocked) {
+        gestureLocked = true;
+        clearTimeout(gestureTimer);
+        gestureTimer = setTimeout(() => { gestureLocked = false; }, 160);
+        if (advance()) hideHint();
+      }
+    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      if (!animating && !gestureLocked) {
+        gestureLocked = true;
+        clearTimeout(gestureTimer);
+        gestureTimer = setTimeout(() => { gestureLocked = false; }, 160);
+        retreat();
+      }
+    }
+  });
+
+  function init(){
+    render();
+    // Make sure the SVG is in the rendered DOM but no animations play.
+    // Show the scroll hint after a brief moment.
+    setTimeout(showHint, 400);
+    // Auto-hide the hint after a few seconds in case user is still figuring it out.
+    setTimeout(() => { if (stepIdx === -1) showHint(); }, 1500);
+  }
+
+  let rzTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(rzTimer);
+    rzTimer = setTimeout(render, 90);
+  });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(init);
+  } else {
+    window.addEventListener('load', init);
+  }
+})();
+</script>
+<div class="scroll-hint" id="scrollHint"><span class="dot"></span><span>Scroll to reveal each step</span></div>
+</body>
+</html>

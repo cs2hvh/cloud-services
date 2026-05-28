@@ -1,10 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import PixelBlast from "./pixel-blast";
-import { ServicesConstellation } from "./services-constellation";
 
 const BRAND = "#0095FF";
 
@@ -425,9 +425,30 @@ export default function HeroClient() {
 
                     </div>
 
-                    {/* RIGHT — Free-floating service icon constellation */}
+                    {/* RIGHT — hero illustration */}
                     <div className="relative h-[280px] w-full sm:h-[420px] md:h-[480px] lg:h-full lg:min-h-[520px]">
-                        <ServicesConstellation className="absolute inset-0" />
+                        {/* Soft brand-blue halo behind the illustration */}
+                        <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                                background:
+                                    "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,149,255,0.18), transparent 70%)",
+                                filter: "blur(48px)",
+                            }}
+                        />
+                        <Image
+                            src="/herof.png"
+                            alt="Ahura Cloud infrastructure"
+                            fill
+                            priority
+                            className="object-contain"
+                            style={{
+                                filter:
+                                    "drop-shadow(0 30px 50px rgba(0,0,0,0.55)) drop-shadow(0 0 32px rgba(0,149,255,0.16))",
+                            }}
+                            sizes="(min-width: 1024px) 50vw, 90vw"
+                        />
                     </div>
                 </div>
             </div>

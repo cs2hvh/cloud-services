@@ -222,15 +222,15 @@ export function ComputeSection() {
                 <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_minmax(0,1fr)] lg:gap-16">
                     {/* LEFT — copy */}
                     <div>
-                        <h2 className="text-5xl font-semibold leading-[0.95] tracking-[-0.025em] text-white sm:text-6xl lg:text-[60px]">
-                            Compute,
+                        <h2 className="text-4xl font-[400] leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+                            Compute that scales
                             <br />
-                            <span className="text-white/55">your </span>
-                            <span style={{ color: BRAND }}>way</span>
+                            <span className="text-white/55">to your </span>
+                            <span style={{ color: BRAND }}>workload</span>
                             <span className="text-white/85">.</span>
                         </h2>
                         <p className="mt-6 max-w-[480px] text-[15px] leading-[1.65] text-white/60 sm:text-[16px]">
-                            Shared, dedicated, or bare metal. Provisioned in seconds, billed by the second.
+                            Shared, dedicated, or bare metal — provisioned in seconds and billed by the second.
                         </p>
 
                         {/* Powered-by silicon strip */}
@@ -279,7 +279,7 @@ export function ComputeSection() {
                         />
                         <div className="cs-float relative h-full w-full">
                             <Image
-                                src="/images/compute-page/compute-hero.png"
+                                src="/COMPUTE_YOUR_WAY.png"
                                 alt="Compute infrastructure"
                                 fill
                                 className="object-contain"

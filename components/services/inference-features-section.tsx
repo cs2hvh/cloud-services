@@ -148,7 +148,7 @@ export default function InferenceFeaturesSection() {
             <span className="text-[#8ecaff]">Day one.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
-            Spend caps, BYOK, ZDR, semantic cache, audit log — table-stakes for real traffic, working out of the box.
+            Spend caps, BYOK, ZDR, semantic cache, and audit logs — working out of the box.
           </p>
         </div>
 
@@ -168,7 +168,7 @@ export default function InferenceFeaturesSection() {
               OpenAI &amp; Anthropic SDK compatible
             </h3>
             <p className="mt-2 max-w-md text-[12.5px] leading-relaxed text-white/55">
-              Change one line. Your existing SDK code keeps working — streaming, tools, JSON mode, multi-modal, all of it.
+              Change one line. Streaming, tools, JSON mode, and multi-modal all keep working.
             </p>
 
             {/* Code preview — diff-style highlight on the changed line */}
@@ -219,7 +219,7 @@ export default function InferenceFeaturesSection() {
               Semantic cache
             </h3>
             <p className="mt-2 text-[12px] leading-relaxed text-white/55">
-              Embeds your prompt and serves cached responses for near-duplicates above your tunable similarity threshold.
+              Serves cached responses for near-duplicate prompts above your similarity threshold.
             </p>
 
             {/* Similarity gauge — concentric arcs */}
@@ -291,7 +291,7 @@ export default function InferenceFeaturesSection() {
               Bring your own key
             </h3>
             <p className="mt-2 text-[12px] leading-relaxed text-white/55">
-              Run requests through your own provider account. Stored encrypted at rest, decrypted at the edge per request.
+              Bill to your own provider account. Encrypted at rest, decrypted at the edge per request.
             </p>
 
             {/* Cipher line visual — looks like an encrypted payload */}
@@ -330,7 +330,7 @@ export default function InferenceFeaturesSection() {
                   </span>
                 </div>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-white/55">
-                  Whichever cap is reached first wins. Automatic alerts at 80% / 90% / 100% via in-app, email, or signed webhook.
+                  Tightest cap wins. Alerts at 80 / 90 / 100% via in-app, email, or signed webhook.
                 </p>
 
                 {/* Spend bar — 68% with 80/100 markers */}
@@ -423,7 +423,7 @@ export default function InferenceFeaturesSection() {
                   <Bell className="h-3.5 w-3.5 text-white/40" />
                 </div>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-white/55">
-                  Named routing configs with fallback chains via one header. Outbound HMAC-SHA256 webhooks for every inference event.
+                  Named fallback chains via one header. HMAC-SHA256 webhooks on every inference event.
                 </p>
 
                 {/* Two inline pills showing the value props */}
