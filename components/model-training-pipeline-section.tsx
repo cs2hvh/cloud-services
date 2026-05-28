@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Container } from "@/components/ui/container";
+
 // ────────────────────────────────────────────────────────────────────
 // Model Training Pipeline — port of the standalone HTML/CSS/JS in
 // /public/new-ai-section/Model Training Flow.html.
@@ -541,43 +543,34 @@ export function ModelTrainingPipelineSection() {
       {/* Section top divider — homepage convention */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      {/* Background layers — adds depth without color */}
+      {/* Background — very minimal: solid black + one soft brand-blue
+          wash at the top + a faint dot grid */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-black" />
-        {/* Architectural blueprint grid */}
         <div
           aria-hidden
-          className="absolute inset-0 opacity-[0.6]"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
-            backgroundSize: "44px 44px",
-            maskImage:
-              "radial-gradient(ellipse 100% 70% at 50% 50%, black 30%, transparent 100%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 100% 70% at 50% 50%, black 30%, transparent 100%)",
+            background:
+              "radial-gradient(60% 35% at 50% 0%, rgba(51,173,255,0.08), transparent 70%)",
           }}
         />
-        {/* Breathing radial washes */}
-        <div aria-hidden className="mt-bg-wash mt-bg-wash--left" />
-        <div aria-hidden className="mt-bg-wash mt-bg-wash--right" />
-        {/* Fine dot grid on top */}
         <div
           aria-hidden
-          className="absolute inset-0 opacity-[0.05]"
+          className="absolute inset-0 opacity-[0.035]"
           style={{
             backgroundImage:
               "radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)",
             backgroundSize: "32px 32px",
             maskImage:
-              "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
+              "radial-gradient(ellipse 70% 50% at 50% 50%, black, transparent 85%)",
             WebkitMaskImage:
-              "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
+              "radial-gradient(ellipse 70% 50% at 50% 50%, black, transparent 85%)",
           }}
         />
       </div>
 
-      <div className="mt-page">
+      <Container className="relative z-10">
         {/* Hero */}
         <header className="mt-hero">
           <div className="mt-eyebrow">
@@ -596,10 +589,6 @@ export function ModelTrainingPipelineSection() {
         <div className="mt-stage" ref={stageRef}>
           {/* Phase 1 */}
           <section className="mt-phase">
-            {/* Giant phase watermark — anchors the section visually */}
-            <span aria-hidden className="mt-phase-watermark mt-phase-watermark--left">
-              01
-            </span>
             <div className="mt-phase__head">
               <div className="mt-phase__num-block">
                 <span className="mt-phase__pre">Phase</span>
@@ -660,9 +649,6 @@ export function ModelTrainingPipelineSection() {
 
           {/* Phase 2 */}
           <section className="mt-phase">
-            <span aria-hidden className="mt-phase-watermark mt-phase-watermark--right">
-              02
-            </span>
             <div className="mt-phase__head mt-phase__head--right">
               <div className="mt-phase__tag">Modeling</div>
               <div>
@@ -767,7 +753,7 @@ export function ModelTrainingPipelineSection() {
             <circle ref={orbCoreRef} r={2.6} className="mt-orb-core" cx={0} cy={0} />
           </svg>
         </div>
-      </div>
+      </Container>
 
       <style jsx>{`
         .mt-pipeline {
@@ -777,14 +763,9 @@ export function ModelTrainingPipelineSection() {
           --mt-blue: #33adff;
           --mt-blue-soft: #8ecaff;
         }
-        .mt-page {
-          max-width: 1760px;
-          margin: 0 auto;
-          padding: 0 clamp(16px, 4vw, 80px);
-        }
         .mt-hero {
           text-align: center;
-          margin-bottom: 64px;
+          margin-bottom: 48px;
         }
         .mt-eyebrow {
           display: inline-flex;
@@ -833,59 +814,7 @@ export function ModelTrainingPipelineSection() {
           isolation: isolate;
         }
         .mt-phase + .mt-phase {
-          margin-top: 200px;
-        }
-        /* Giant phase number watermark — sits behind the rail */
-        .mt-phase-watermark {
-          position: absolute;
-          font-weight: 200;
-          font-size: clamp(220px, 38vw, 480px);
-          line-height: 0.85;
-          letter-spacing: -0.06em;
-          color: transparent;
-          -webkit-text-stroke: 1px rgba(255, 255, 255, 0.06);
-          font-feature-settings: "tnum";
-          top: -40px;
-          z-index: 0;
-          pointer-events: none;
-          user-select: none;
-          opacity: 0.85;
-        }
-        .mt-phase-watermark--left {
-          left: -2vw;
-        }
-        .mt-phase-watermark--right {
-          right: -2vw;
-        }
-        @media (max-width: 1024px) {
-          .mt-phase-watermark {
-            display: none;
-          }
-        }
-        /* Breathing radial washes in the section background */
-        .mt-bg-wash {
-          position: absolute;
-          width: 60%;
-          height: 60%;
-          border-radius: 50%;
-          filter: blur(120px);
-          pointer-events: none;
-        }
-        .mt-bg-wash--left {
-          left: -10%;
-          top: 8%;
-          background: rgba(51, 173, 255, 0.10);
-          animation: mt-breathe 12s ease-in-out infinite;
-        }
-        .mt-bg-wash--right {
-          right: -10%;
-          bottom: 8%;
-          background: rgba(51, 173, 255, 0.07);
-          animation: mt-breathe 14s ease-in-out infinite reverse;
-        }
-        @keyframes mt-breathe {
-          0%, 100% { opacity: 0.65; transform: scale(1); }
-          50%      { opacity: 1.0;  transform: scale(1.08); }
+          margin-top: 120px;
         }
         /* Outcome anchor below Phase 2 */
         .mt-outcome {
@@ -1439,14 +1368,14 @@ function Card({
           position: relative;
           background: linear-gradient(180deg, #08090c 0%, #050709 100%);
           border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 12px;
-          padding: 18px 14px 14px;
+          border-radius: 8px;
+          padding: 14px 12px 12px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
-            0 12px 36px rgba(0, 0, 0, 0.6);
+            0 8px 24px rgba(0, 0, 0, 0.55);
           opacity: 0;
           visibility: hidden;
           overflow: hidden;
@@ -1496,15 +1425,15 @@ function Card({
         }
         .mt-aura {
           position: absolute;
-          top: 30px;
+          top: 24px;
           left: 50%;
-          width: 130px;
-          height: 130px;
+          width: 100px;
+          height: 100px;
           transform: translateX(-50%);
           background: radial-gradient(
             closest-side,
-            rgba(51, 173, 255, 0.14) 0%,
-            rgba(51, 173, 255, 0.05) 45%,
+            rgba(51, 173, 255, 0.12) 0%,
+            rgba(51, 173, 255, 0.04) 50%,
             rgba(51, 173, 255, 0) 75%
           );
           border-radius: 50%;
@@ -1574,8 +1503,8 @@ function Card({
         .mt-icn {
           position: relative;
           z-index: 2;
-          height: 84px;
-          width: 84px;
+          height: 64px;
+          width: 64px;
           display: grid;
           place-items: center;
         }
@@ -1589,13 +1518,13 @@ function Card({
         .mt-card h3 {
           position: relative;
           z-index: 2;
-          font-size: 15px;
-          font-weight: 700;
-          margin: 6px 0 0;
+          font-size: 13.5px;
+          font-weight: 600;
+          margin: 4px 0 0;
           color: rgba(255, 255, 255, 0.95);
           line-height: 1.2;
           text-align: center;
-          letter-spacing: -0.01em;
+          letter-spacing: -0.005em;
           max-width: 18ch;
         }
         .mt-sub {
@@ -1603,9 +1532,9 @@ function Card({
           z-index: 2;
           margin: 0 0 4px;
           text-align: center;
-          font-size: 11.5px;
-          color: rgba(255, 255, 255, 0.50);
-          line-height: 1.4;
+          font-size: 10.5px;
+          color: rgba(255, 255, 255, 0.48);
+          line-height: 1.35;
           max-width: 22ch;
           font-weight: 400;
         }
