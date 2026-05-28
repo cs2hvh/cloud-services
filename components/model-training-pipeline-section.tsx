@@ -494,11 +494,44 @@ export function ModelTrainingPipelineSection() {
   return (
     <section
       ref={sectionRef}
-      className="mt-pipeline relative z-10 bg-white py-16 lg:py-24"
+      className="mt-pipeline relative z-10 overflow-clip py-20 lg:py-28"
     >
+      {/* Section top divider — homepage convention */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+      {/* Background layers */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[#04060a]" />
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.18]"
+          style={{
+            background:
+              "radial-gradient(45% 35% at 25% 30%, rgba(0,149,255,0.28), transparent 70%), radial-gradient(45% 40% at 80% 70%, rgba(51,173,255,0.18), transparent 70%)",
+          }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(255,255,255,0.45) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+            maskImage:
+              "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent 80%)",
+          }}
+        />
+      </div>
+
       <div className="mt-page">
         {/* Hero */}
         <header className="mt-hero">
+          <div className="mt-eyebrow">
+            <span className="mt-eyebrow-dot" />
+            A.I. Labs · End-to-end pipeline
+          </div>
           <h2>
             The Complete <span className="mt-accent">Model Training</span> Pipeline
           </h2>
@@ -650,12 +683,11 @@ export function ModelTrainingPipelineSection() {
 
       <style jsx>{`
         .mt-pipeline {
-          --mt-ink: #0a0f1a;
-          --mt-muted: #5a6478;
-          --mt-line: #1a2030;
-          --mt-line-soft: #d7dce6;
-          --mt-blue: #1d5cff;
-          --mt-glow: #4d8bff;
+          --mt-text: rgba(255, 255, 255, 0.92);
+          --mt-muted: rgba(255, 255, 255, 0.55);
+          --mt-line: rgba(255, 255, 255, 0.10);
+          --mt-blue: #33adff;
+          --mt-blue-soft: #8ecaff;
         }
         .mt-page {
           max-width: 1760px;
@@ -664,26 +696,47 @@ export function ModelTrainingPipelineSection() {
         }
         .mt-hero {
           text-align: center;
-          margin-bottom: 56px;
+          margin-bottom: 64px;
+        }
+        .mt-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 14px;
+          margin-bottom: 22px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.025);
+          border-radius: 999px;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 10.5px;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.55);
+        }
+        .mt-eyebrow-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--mt-blue);
+          box-shadow: 0 0 8px rgba(0, 149, 255, 0.75);
         }
         .mt-hero h2 {
-          font-weight: 800;
-          font-size: clamp(28px, 3.4vw, 50px);
-          letter-spacing: -0.02em;
-          line-height: 1.05;
-          margin: 0 0 14px;
-          color: var(--mt-ink);
-          text-transform: uppercase;
+          font-weight: 700;
+          font-size: clamp(28px, 3.4vw, 52px);
+          letter-spacing: -0.025em;
+          line-height: 1.04;
+          margin: 0 0 16px;
+          color: var(--mt-text);
         }
         .mt-accent {
-          color: var(--mt-blue);
+          color: var(--mt-blue-soft);
         }
         .mt-hero p {
           margin: 0 auto;
-          max-width: 720px;
+          max-width: 640px;
           color: var(--mt-muted);
-          font-size: clamp(14px, 1vw, 17px);
-          line-height: 1.5;
+          font-size: clamp(14px, 1vw, 16.5px);
+          line-height: 1.55;
         }
         .mt-stage {
           position: relative;
@@ -696,8 +749,8 @@ export function ModelTrainingPipelineSection() {
           grid-template-columns: auto 1fr auto;
           align-items: end;
           gap: 28px;
-          margin-bottom: 36px;
-          padding-bottom: 16px;
+          margin-bottom: 40px;
+          padding-bottom: 18px;
           position: relative;
         }
         .mt-phase__head::after {
@@ -709,10 +762,10 @@ export function ModelTrainingPipelineSection() {
           height: 1px;
           background: linear-gradient(
             to right,
-            var(--mt-ink) 0%,
-            var(--mt-ink) 76px,
-            var(--mt-line-soft) 76px,
-            var(--mt-line-soft) 100%
+            rgba(51, 173, 255, 0.65) 0%,
+            rgba(51, 173, 255, 0.65) 76px,
+            rgba(255, 255, 255, 0.06) 76px,
+            rgba(255, 255, 255, 0.06) 100%
           );
         }
         .mt-phase__head--right {
@@ -721,10 +774,10 @@ export function ModelTrainingPipelineSection() {
         .mt-phase__head--right::after {
           background: linear-gradient(
             to right,
-            var(--mt-line-soft) 0%,
-            var(--mt-line-soft) calc(100% - 76px),
-            var(--mt-ink) calc(100% - 76px),
-            var(--mt-ink) 100%
+            rgba(255, 255, 255, 0.06) 0%,
+            rgba(255, 255, 255, 0.06) calc(100% - 76px),
+            rgba(51, 173, 255, 0.65) calc(100% - 76px),
+            rgba(51, 173, 255, 0.65) 100%
           );
         }
         .mt-phase__num-block {
@@ -734,59 +787,63 @@ export function ModelTrainingPipelineSection() {
           line-height: 1;
         }
         .mt-phase__pre {
-          font-size: 11px;
-          font-weight: 700;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 10.5px;
+          font-weight: 600;
           letter-spacing: 0.22em;
           color: var(--mt-muted);
           text-transform: uppercase;
         }
         .mt-phase__num {
-          font-size: 48px;
+          font-size: 52px;
           font-weight: 200;
           color: var(--mt-blue);
           line-height: 0.9;
           font-feature-settings: "tnum";
-          letter-spacing: -0.02em;
+          letter-spacing: -0.03em;
+          text-shadow: 0 0 24px rgba(0, 149, 255, 0.35);
         }
         .mt-phase__title {
-          font-weight: 800;
-          color: var(--mt-ink);
-          letter-spacing: 0.05em;
-          font-size: clamp(14px, 1.05vw, 18px);
+          font-weight: 700;
+          color: var(--mt-text);
+          letter-spacing: 0.04em;
+          font-size: clamp(14px, 1.05vw, 17px);
           text-transform: uppercase;
-          line-height: 1.1;
-          margin-bottom: 4px;
+          line-height: 1.15;
+          margin-bottom: 6px;
         }
         .mt-phase__title em {
           font-style: normal;
           color: var(--mt-muted);
-          font-weight: 500;
+          font-weight: 400;
           letter-spacing: 0.02em;
         }
         .mt-phase__sub {
           color: var(--mt-muted);
           font-size: 13px;
-          line-height: 1.45;
+          line-height: 1.5;
           max-width: 520px;
         }
         .mt-phase__head--right .mt-phase__sub {
           margin-left: auto;
         }
         .mt-phase__tag {
-          font-size: 11px;
-          font-weight: 700;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 10px;
+          font-weight: 600;
           letter-spacing: 0.22em;
-          color: var(--mt-ink);
+          color: var(--mt-blue);
           text-transform: uppercase;
-          padding: 6px 12px;
-          border: 1px solid var(--mt-ink);
+          padding: 7px 14px;
+          border: 1px solid rgba(51, 173, 255, 0.35);
+          background: rgba(0, 149, 255, 0.06);
           border-radius: 999px;
           white-space: nowrap;
           align-self: end;
         }
         .mt-rail {
           display: grid;
-          gap: 20px;
+          gap: 18px;
           align-items: stretch;
         }
         .mt-rail--3 {
@@ -811,7 +868,7 @@ export function ModelTrainingPipelineSection() {
           }
         }
         .mt-tail {
-          margin-top: 44px;
+          margin-top: 56px;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 22px;
@@ -823,12 +880,8 @@ export function ModelTrainingPipelineSection() {
             justify-items: center;
           }
         }
-        .mt-tail > div:nth-child(1) {
-          justify-self: center;
-        }
-        .mt-tail > div:nth-child(2) {
-          justify-self: center;
-        }
+        .mt-tail > div:nth-child(1),
+        .mt-tail > div:nth-child(2),
         .mt-tail > div:nth-child(3) {
           justify-self: center;
         }
@@ -837,17 +890,24 @@ export function ModelTrainingPipelineSection() {
           width: 110px;
           height: 110px;
           transform: rotate(45deg);
-          border: 1.5px solid var(--mt-ink);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 12px;
-          background: #fff;
+          background: linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
           display: grid;
           place-items: center;
           opacity: 0;
           visibility: hidden;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+            0 8px 28px rgba(0, 0, 0, 0.5);
         }
         .mt-diamond.mt-revealed {
           visibility: visible;
           animation: mt-diamondReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+          border-color: rgba(51, 173, 255, 0.45);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 0 0 1px rgba(51, 173, 255, 0.1),
+            0 8px 28px rgba(0, 0, 0, 0.55),
+            0 0 28px rgba(0, 149, 255, 0.25);
         }
         @keyframes mt-diamondReveal {
           0% {
@@ -866,11 +926,12 @@ export function ModelTrainingPipelineSection() {
         .mt-diamond > span {
           transform: rotate(-45deg);
           text-align: center;
-          color: var(--mt-ink);
-          font-weight: 800;
-          font-size: 10.5px;
-          letter-spacing: 0.04em;
-          line-height: 1.1;
+          color: var(--mt-text);
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-weight: 600;
+          font-size: 10px;
+          letter-spacing: 0.14em;
+          line-height: 1.2;
         }
         .mt-yes-arrow {
           position: relative;
@@ -885,27 +946,36 @@ export function ModelTrainingPipelineSection() {
           opacity: 1;
         }
         .mt-yes-label {
-          color: var(--mt-ink);
-          font-weight: 800;
-          font-size: 12.5px;
-          letter-spacing: 0.08em;
+          color: var(--mt-blue);
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-weight: 700;
+          font-size: 12px;
+          letter-spacing: 0.18em;
+          text-shadow: 0 0 14px rgba(0, 149, 255, 0.4);
         }
         .mt-ready {
           width: 130px;
           height: 130px;
           border-radius: 50%;
-          border: 1.5px solid var(--mt-ink);
-          background: #fff;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
           display: grid;
           place-items: center;
           text-align: center;
-          padding: 10px;
+          padding: 12px;
           opacity: 0;
           visibility: hidden;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+            0 8px 28px rgba(0, 0, 0, 0.5);
         }
         .mt-ready.mt-revealed {
           visibility: visible;
           animation: mt-readyReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+          border-color: rgba(51, 173, 255, 0.45);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 0 0 1px rgba(51, 173, 255, 0.1),
+            0 8px 28px rgba(0, 0, 0, 0.55),
+            0 0 28px rgba(0, 149, 255, 0.25);
         }
         @keyframes mt-readyReveal {
           0% {
@@ -924,15 +994,19 @@ export function ModelTrainingPipelineSection() {
         .mt-ready svg {
           width: 32px;
           height: 32px;
-          color: var(--mt-ink);
+          color: var(--mt-blue);
           stroke-width: 1.6;
+          filter: drop-shadow(0 0 6px rgba(0, 149, 255, 0.55));
         }
         .mt-ready-lbl {
-          color: var(--mt-ink);
-          font-weight: 700;
-          font-size: 12px;
-          line-height: 1.15;
-          margin-top: 4px;
+          color: var(--mt-text);
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-weight: 600;
+          font-size: 10.5px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          line-height: 1.2;
+          margin-top: 6px;
         }
         .mt-flow-svg {
           position: absolute;
@@ -946,28 +1020,28 @@ export function ModelTrainingPipelineSection() {
       <style jsx global>{`
         .mt-pipeline .mt-arrow {
           fill: none;
-          stroke: #1a2030;
-          stroke-width: 1.6;
+          stroke: rgba(255, 255, 255, 0.16);
+          stroke-width: 1.5;
           stroke-linecap: round;
           stroke-linejoin: round;
         }
         .mt-pipeline .mt-arrow-head {
-          fill: #1a2030;
+          fill: rgba(255, 255, 255, 0.35);
         }
         .mt-pipeline .mt-glow-line {
           fill: none;
-          stroke: #4d8bff;
-          stroke-width: 2.4;
+          stroke: #33adff;
+          stroke-width: 2.6;
           stroke-linecap: round;
           stroke-linejoin: round;
-          filter: drop-shadow(0 0 4px rgba(77, 139, 255, 0.95))
-            drop-shadow(0 0 12px rgba(77, 139, 255, 0.55));
+          filter: drop-shadow(0 0 6px rgba(51, 173, 255, 1))
+            drop-shadow(0 0 16px rgba(51, 173, 255, 0.7));
           opacity: 0;
         }
         .mt-pipeline .mt-orb {
           fill: url(#mt-orb-grad);
-          filter: drop-shadow(0 0 6px rgba(77, 139, 255, 0.95))
-            drop-shadow(0 0 16px rgba(77, 139, 255, 0.7));
+          filter: drop-shadow(0 0 8px rgba(51, 173, 255, 1))
+            drop-shadow(0 0 22px rgba(51, 173, 255, 0.75));
           opacity: 0;
         }
         .mt-pipeline .mt-orb-core {
@@ -1027,26 +1101,40 @@ function Card({
       <style jsx>{`
         .mt-card {
           position: relative;
-          background: radial-gradient(circle at 18% 88%, rgba(29, 92, 255, 0.045) 0%, transparent 22%),
-            radial-gradient(circle at 82% 18%, rgba(29, 92, 255, 0.04) 0%, transparent 26%),
-            linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
-          border: 1px solid #d7dce6;
-          border-radius: 16px;
+          background: radial-gradient(
+              circle at 18% 88%,
+              rgba(0, 149, 255, 0.08) 0%,
+              transparent 28%
+            ),
+            radial-gradient(
+              circle at 82% 18%,
+              rgba(0, 149, 255, 0.06) 0%,
+              transparent 28%
+            ),
+            linear-gradient(180deg, #0c0e13 0%, #0a0c10 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
           padding: 18px 14px 14px;
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 8px;
-          box-shadow: 0 1px 0 rgba(8, 15, 30, 0.02), 0 22px 44px -28px rgba(8, 15, 30, 0.22),
-            inset 0 1px 0 rgba(255, 255, 255, 0.9);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 10px 32px rgba(0, 0, 0, 0.55);
           opacity: 0;
           visibility: hidden;
           overflow: hidden;
           isolation: isolate;
+          transition: border-color 0.5s ease, box-shadow 0.5s ease;
         }
         .mt-card.mt-revealed {
           visibility: visible;
           animation: mt-cardReveal 720ms cubic-bezier(0.34, 1.56, 0.55, 1) forwards;
+          border-color: rgba(51, 173, 255, 0.30);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            inset 0 -28px 50px -28px rgba(0, 149, 255, 0.18),
+            0 14px 36px rgba(0, 0, 0, 0.6),
+            0 0 28px rgba(0, 149, 255, 0.18);
         }
         @keyframes mt-cardReveal {
           0% {
@@ -1062,18 +1150,39 @@ function Card({
             transform: translateY(0) scale(1);
           }
         }
+        /* Top accent stripe — appears only when revealed */
+        .mt-card::before {
+          content: "";
+          position: absolute;
+          inset: 0 0 auto 0;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(51, 173, 255, 0.85),
+            transparent
+          );
+          box-shadow: 0 0 14px rgba(0, 149, 255, 0.5);
+          opacity: 0;
+          transition: opacity 0.6s ease;
+          z-index: 4;
+          pointer-events: none;
+        }
+        .mt-card.mt-revealed::before {
+          opacity: 1;
+        }
         .mt-aura {
           position: absolute;
-          top: 36px;
+          top: 28px;
           left: 50%;
-          width: 120px;
-          height: 120px;
+          width: 140px;
+          height: 140px;
           transform: translateX(-50%);
           background: radial-gradient(
             closest-side,
-            rgba(29, 92, 255, 0.18) 0%,
-            rgba(29, 92, 255, 0.07) 40%,
-            rgba(29, 92, 255, 0) 75%
+            rgba(0, 149, 255, 0.32) 0%,
+            rgba(0, 149, 255, 0.12) 40%,
+            rgba(0, 149, 255, 0) 75%
           );
           border-radius: 50%;
           z-index: 0;
@@ -1098,11 +1207,15 @@ function Card({
           height: 100%;
         }
         .mt-corner path {
-          stroke: #1d5cff;
+          stroke: #33adff;
           stroke-width: 1;
           fill: none;
           stroke-linecap: round;
-          opacity: 0.4;
+          opacity: 0;
+          transition: opacity 0.55s ease;
+        }
+        .mt-card.mt-revealed .mt-corner path {
+          opacity: 0.55;
         }
         .mt-badge {
           position: relative;
@@ -1110,17 +1223,17 @@ function Card({
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          padding: 4px 10px 4px 12px;
-          background: #ffffff;
-          border: 1px solid #d7dce6;
+          padding: 4px 11px 4px 14px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 999px;
-          color: #5a6478;
-          font-weight: 700;
-          font-size: 10.5px;
-          letter-spacing: 0.14em;
+          color: rgba(255, 255, 255, 0.65);
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-weight: 600;
+          font-size: 10px;
+          letter-spacing: 0.18em;
           line-height: 1;
           text-transform: uppercase;
-          box-shadow: 0 2px 6px -3px rgba(8, 15, 30, 0.18);
         }
         .mt-badge::before {
           content: "";
@@ -1128,8 +1241,8 @@ function Card({
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: #1d5cff;
-          box-shadow: 0 0 8px rgba(29, 92, 255, 0.7);
+          background: #33adff;
+          box-shadow: 0 0 10px rgba(0, 149, 255, 0.85);
         }
         .mt-icn {
           position: relative;
@@ -1143,16 +1256,16 @@ function Card({
           width: 100%;
           height: 100%;
           object-fit: contain;
-          filter: drop-shadow(0 4px 8px rgba(29, 92, 255, 0.18))
-            drop-shadow(0 2px 4px rgba(8, 15, 30, 0.1));
+          filter: drop-shadow(0 6px 14px rgba(0, 149, 255, 0.45))
+            drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
         }
         .mt-card h3 {
           position: relative;
           z-index: 2;
           font-size: 15px;
-          font-weight: 800;
+          font-weight: 700;
           margin: 6px 0 0;
-          color: #0a0f1a;
+          color: rgba(255, 255, 255, 0.95);
           line-height: 1.2;
           text-align: center;
           letter-spacing: -0.01em;
@@ -1164,17 +1277,17 @@ function Card({
           margin: 0 0 4px;
           text-align: center;
           font-size: 11.5px;
-          color: #5a6478;
+          color: rgba(255, 255, 255, 0.50);
           line-height: 1.4;
           max-width: 22ch;
-          font-weight: 500;
+          font-weight: 400;
         }
         .mt-features {
           position: relative;
           z-index: 2;
           margin-top: auto;
           padding-top: 12px;
-          border-top: 1px dashed rgba(29, 92, 255, 0.14);
+          border-top: 1px dashed rgba(51, 173, 255, 0.18);
           width: 100%;
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -1185,9 +1298,9 @@ function Card({
           align-items: center;
           gap: 7px;
           padding: 6px;
-          border-radius: 8px;
-          background: rgba(29, 92, 255, 0.04);
-          border: 1px solid rgba(29, 92, 255, 0.08);
+          border-radius: 7px;
+          background: rgba(0, 149, 255, 0.05);
+          border: 1px solid rgba(51, 173, 255, 0.12);
         }
         .mt-ficon {
           width: 22px;
@@ -1196,17 +1309,20 @@ function Card({
           border-radius: 6px;
           display: grid;
           place-items: center;
-          background: #1d5cff;
+          background: linear-gradient(135deg, #33adff 0%, #0095FF 100%);
           color: #fff;
-          box-shadow: 0 4px 10px -3px rgba(29, 92, 255, 0.55);
+          box-shadow: 0 4px 12px -3px rgba(0, 149, 255, 0.65),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
         }
         .mt-feat--alt .mt-ficon {
-          background: #10b981;
-          box-shadow: 0 4px 10px -3px rgba(16, 185, 129, 0.55);
+          background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+          box-shadow: 0 4px 12px -3px rgba(16, 185, 129, 0.65),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
         }
         .mt-feat--warn .mt-ficon {
-          background: #8b5cf6;
-          box-shadow: 0 4px 10px -3px rgba(139, 92, 246, 0.55);
+          background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+          box-shadow: 0 4px 12px -3px rgba(139, 92, 246, 0.65),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
         }
         .mt-ficon :global(svg) {
           width: 12px;
@@ -1221,8 +1337,8 @@ function Card({
         }
         .mt-ftxt :global(b) {
           font-size: 10px;
-          font-weight: 700;
-          color: #0a0f1a;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.92);
           letter-spacing: 0.01em;
           white-space: nowrap;
           overflow: hidden;
@@ -1230,7 +1346,7 @@ function Card({
         }
         .mt-ftxt :global(span) {
           font-size: 9px;
-          color: #5a6478;
+          color: rgba(255, 255, 255, 0.45);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
