@@ -28,6 +28,24 @@ const TABS = [
     imageAlt: "GPU server stack",
   },
   {
+    id: "inference",
+    label: "A.I. Labs",
+    title: "A.I. Labs",
+    heading: "Frontier models, your data, one API",
+    description:
+      "OpenAI-compatible inference for 50+ frontier and open-source models. Fine-tune Llama, DeepSeek, or Qwen with LoRA, store vectors in managed pgvector, and deploy your own model — all behind one API key.",
+    bullets: [
+      "50+ models · OpenAI- and Anthropic-compatible · BYOK keys",
+      "LoRA fine-tuning on Llama, DeepSeek, Qwen, Mistral, Phi",
+      "Hosted embeddings + managed pgvector collections",
+      "Private model hosting on dedicated single-tenant GPUs",
+      "Per-token billing · zero markup · spend caps + alerts",
+      "Streaming · tool calling · structured outputs · batches",
+    ],
+    imageSrc: "/images/Features/ai-agent.png",
+    imageAlt: "A.I. Labs platform illustration",
+  },
+  {
     id: "compute",
     label: "Compute",
     title: "Compute",
