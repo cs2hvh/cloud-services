@@ -1,6 +1,6 @@
 # Session Progress — May 2026 (UI / Marketing / Dashboard)
 
-**Window:** 2026-05-26 → 2026-05-28
+**Window:** 2026-05-26 → 2026-05-29
 **Branch:** `dev` (AI platform work merged in from `ai`)
 **API surface:** `api.cs2hvh.com/v1` (OpenAI-compatible)
 **Author:** Harshit
@@ -218,11 +218,140 @@ These landed earlier in the window (2026-05-26) and underpin the surfaces above.
 
 ---
 
-## 7. In progress / next
+## 7. In progress / next (as of 2026-05-28)
 
-- **The Complete Model Training Pipeline** — continuing homepage UI refinement
-  on this section (current focus).
+- **The Complete Model Training Pipeline** — homepage UI refinement (was the
+  focus at 2026-05-28; superseded by the v1 service productionization below).
 
 ---
 
-*Generated from the `dev` branch commit log for 2026-05-26 → 2026-05-28.*
+## 8. Compute / VPS · GPU · Custom Images — v1 productionization (2026-05-29)
+
+A service-by-service "make it production-ready for v1 launch" pass, focused on
+**Compute (VPS)**, **GPU deploy**, **custom OS images**, and the **dashboard top
+bar**. Full Compute reference doc written: **[docs/COMPUTE_SERVICE.md](COMPUTE_SERVICE.md)**.
+
+> ⚠️ **Migrations another session/operator must apply** (in order):
+> `20260615000002_compute_billing.sql` → `20260615000003_fix_compute_meter_rates.sql`
+> → `20260615000004_custom_images.sql`. After applying, redeploy the app **and**
+> the `credit-system-cron` worker (cron table-name lists changed).
+
+### Compute / VPS billing (was the P0 — VPS ran completely unbilled)
+- VPS were balance-gated at create but **never charged** (no meter row, not in
+  the cron, delete only stamped `billing_end`). Wired into the same metered-cron
+  + 7-day-grace→auto-delete lifecycle as Database/Kubernetes. Commit `c2302618`.
+- Mechanism: the cron RPC is **UUID-keyed** but `servers.id` is bigint → added
+  `servers.billing_service_id UUID` + `billing.active_compute` meter
+  (`20260615000002`). `lib/services/compute/server-lifecycle.ts` `destroyServer()`
+  is shared by user-delete + grace-expiry.
+- **Plan billing bug fixed (was ~4× overbill):** create billed
+  `calculateHourlyCost(specs)` (spec formula) even when a plan was chosen — e.g.
+  `s-2` advertised $10/mo was metered ~$43/mo. Now plan-based servers bill the
+  **advertised** `instance_plans.hourly_usd`; the formula only remains for the
+  legacy free-form custom-specs path. Migration `20260615000003` re-rates +
+  **backfills** meters for servers that predated metering (they had no meter at
+  all). Commit `5cebdf7b`.
+
+### Compute security + cleanup (commit `7b9303af`)
+- `/api/services/compute/options` was fully unauthenticated (ran ~5 capacity
+  queries + leaked per-region sold-out intel) → now auth + rate-limited.
+- Deleted the dead `components/dashboard/compute/vps/new.tsx` form (live form is
+  `simple.tsx` via `form-loader.tsx`).
+- **cipassword (VNC/SSH password) isolation verified (accepted for v1):** never
+  stored in our DB, never returned by any API (flows only request→Proxmox);
+  every VM endpoint enforces `owner_id`. Residual plaintext is Proxmox-layer only
+  (cloud-init ISO/metadata) — insider, not cross-tenant. Fast-follow: SSH-key
+  auth + rotation.
+
+### Compute UI
+- **Real OS icons** everywhere via shared `OsImg` in
+  `components/dashboard/compute/vps/os-icons.tsx` (brand PNG from `public/os/`,
+  monochrome glyph fallback): create-form dropdown, list avatars, detail header.
+  PNGs: Ubuntu/Debian/CentOS/Windows/AlmaLinux/Rocky.
+- VPS list: **plan table split** into separate vCPU / RAM columns; **region/flag
+  column fixed** — it read the `proxmox_host_regions` view client-side (returned
+  nothing); now resolves server-side via **`GET /api/services/compute/host-regions`**.
+- **Post-create UX:** removed the in-form "deploying" transition screen; create
+  now redirects to the all-servers list, which shows live per-row provisioning
+  progress (realtime). Deleted `deployment-progress.tsx`.
+
+### VPS resize — Linode-style plan change (commits `5cebdf7b`, `32da3024`, `990f73b0`)
+- Detail page → Settings → "Resize". In-place (no host migration) →
+  capacity-checked on the current host (`lib/services/compute/resize.ts`); **disk
+  grow-only** (Proxmox limit). **Power-off required** (changed from initial
+  auto-power-cycle decision): rejects running/suspended, UI shows a "Power off to
+  resize" prompt. Background: grow disk (`resizeDisk` PUT) → `configureVM`
+  cores/memory → persist → `rerateActiveCompute`. Plans grouped by Shared/Dedicated
+  tier toggle.
+
+### Custom OS images (full feature; see COMPUTE_SERVICE.md §14)
+6 slices. Migration `20260615000004` (custom_images catalog +
+`proxmox_templates.owner_id`/`custom_image_id` + `billing.active_custom_image`).
+- A custom image = an **owner-scoped `proxmox_templates` row**, so the existing
+  clone + networking path works unchanged. `options`/`create` scope built-in OS
+  to `owner_id IS NULL`.
+- **URL import (LIVE):** `POST /api/services/compute/images` (https/SSRF-screened,
+  quota, size probe). **Not staged in our storage** — the Proxmox host pulls the
+  URL directly. Lazy per-host build on first deploy in a region
+  (`lib/services/compute/custom-images.ts` `ensureCustomTemplateOnHost` →
+  `buildCustomImageTemplate` in proxmox-utils: SSH download → `qm importdisk` →
+  cloud-init drive → `qm template`). Images require **cloud-init + guest-agent**.
+- Billing **$0.05/GB-mo** (`active_custom_image`), metered once per image when it
+  first builds (never-deployed URL image = free).
+- UI: `/dashboard/services/compute/images` (list/import/delete) + "Images" link
+  in VPS hero + "Custom image…" CTA in the deploy OS picker.
+- **Snapshot-from-server is DISABLED** (commit `66edbf52`): route returns 503,
+  "Create image" Settings section removed. Full impl preserved in git
+  (`67cdef63`) — R2 staging via `exportVmDiskToUrl` (`pvesm path` + `qemu-img
+  convert` + presigned PUT to `R2_CUSTOM_IMAGES_BUCKET`/`ahura-custom-images`).
+  Re-enable needs that bucket created. (qcow2 export is sparse ≈ used space.)
+
+### Dashboard top bar (commit `da83061c`)
+- Removed breadcrumbs. Left is now a **command palette** search
+  (`components/dashboard/command-palette.tsx`, ⌘K/Ctrl+K) — keyboard-nav across
+  every service/page + quick actions. Right cluster keeps notifications + billing
+  + profile. `components/dashboard/header.tsx` rewritten.
+
+### GPU deploy page (commits `1e48c6ec`, `559af585`)
+- **Storage now affects price.** Billed pod rate previously was GPU-only even
+  though RunPod charges for disk. Added `GPU_STORAGE_USD_PER_GB_MONTH` ($0.10) +
+  `storagePerHour()` in `lib/services/runpod/helpers.ts`; the billed rate
+  (pod-lifecycle-operations) **and** the deploy estimate both add local disk
+  (container + pod volume; network volumes excluded — metered separately) so
+  quote == billed. Default GPU markup is `1.250` (matches the UI's ×1.25).
+- **Validation errors surfaced inline** on the left next to each field (GPU,
+  name, image, disk, access); Launch is always clickable and on click reveals
+  errors + smooth-scrolls to the first one (was silently disabled).
+- **Known GPU gap (not fixed):** GPU cards show the raw RunPod (pre-markup)
+  price while the summary/billed rate is the marked-up resale — cards under-quote.
+  Clean fix = inventory endpoint returns resale prices (per-GPU `markup_pct`).
+
+### Key gotchas / notes for future sessions
+- **Billing cron is UUID-keyed** (`bill_service_cycle_atomic`): any new metered
+  service needs a UUID `service_id`; add the table to `credit-system-cron`
+  `VALID_TABLE_NAMES` + `TABLE_TO_SERVICE_TYPE` **and** `lib/billing/grace/constants.ts`
+  + a `deletion-executor.ts` case. (Pattern: active_compute, active_custom_image.)
+- **Supabase query builder is a thenable without `.catch`** — use `try/await`,
+  not `.then().catch()` (TS2339).
+- **Proxmox storage-backend agnostic disk path:** use `pvesm path <volid>` over
+  SSH; don't assume LVM vs dir layout.
+- **Proxmox helper duplication persists:** `vms/create` + `admin/proxmox/vms/create`
+  carry inline `proxmoxAuth`; control-plane routes use `lib/proxmox-utils`. De-dupe
+  post-v1 (risky on the provisioning critical path pre-launch).
+- **Lazy custom-image build runs inside provisioning `after()`** (long; first
+  deploy per region slow) — move to a dedicated worker post-v1.
+- JSX apostrophes need escaping (`react/no-unescaped-entities`) — rephrase or use
+  `&apos;`.
+
+### Open / next
+- GPU: inventory endpoint should return **resale** prices (cards vs summary).
+- Compute fast-follows: SSH-key-primary VPS auth + password rotation; Proxmox
+  helper de-dup; move custom-image lazy build to a worker.
+- Re-enable snapshot-from-server (create the R2 bucket first; add free-space
+  pre-check + optional compression).
+- Continue the service-by-service v1 sweep (next recommended: **Inference** —
+  see the inference billing gaps: cron doesn't meter GPU pods for FT/serving).
+
+---
+
+*Generated from the `dev` branch commit log for 2026-05-26 → 2026-05-29.*
