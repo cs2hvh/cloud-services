@@ -149,6 +149,8 @@ const OS_PNG: { match: string; src: string }[] = [
     { match: "ubuntu", src: "/os/ubuntu.png" },
     { match: "debian", src: "/os/Debian.png" },
     { match: "centos", src: "/os/icons8-centos-96.png" },
+    { match: "alma", src: "/os/alma-linux.png" },
+    { match: "rocky", src: "/os/rocky-linux.png" },
     { match: "windows", src: "/os/Windows%2011.png" },
 ];
 
