@@ -805,6 +805,69 @@ export async function buildCustomImageTemplate(
 }
 
 /**
+ * Export a (stopped) VM's boot disk to qcow2 and upload it to a presigned URL
+ * — used to stage a snapshot to R2 so other hosts/regions can pull + build it.
+ *
+ * Storage‑backend agnostic: the real disk path is resolved with `pvesm path`
+ * (works for LVM‑thin block devices and dir/qcow2 files alike), so callers
+ * never need to know the host's storage layout. Returns the exported size in
+ * bytes. Best‑effort temp‑file cleanup. Requires SSH credentials.
+ *
+ * SECURITY: `putUrl` is validated to be a clean https URL (no shell
+ * metacharacters) and single‑quoted in the SSH command.
+ */
+export async function exportVmDiskToUrl(
+  host: ProxmoxHost,
+  vmid: number,
+  putUrl: string,
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<{ sizeBytes: number }> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to export a VM disk");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(putUrl);
+  } catch {
+    throw new Error("Invalid upload URL");
+  }
+  if (parsed.protocol !== "https:") throw new Error("Upload URL must be https");
+  if (/['"`\\\n\r]/.test(putUrl)) throw new Error("Upload URL contains unsafe characters");
+
+  // Resolve the boot disk volume id from the VM config.
+  const cfg = await getVMConfig(host, vmid, auth, dispatcher);
+  const boot = findVMBootDisk(cfg);
+  if (!boot) throw new Error("Could not locate the VM's boot disk");
+  const volid = String(cfg[boot.disk]).split(",")[0].trim();
+  if (!/^[a-zA-Z0-9._:\-\/]+$/.test(volid)) throw new Error("Unexpected disk volume id");
+
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const ssh = (cmd: string, timeoutMs: number) => sshExec(sshHost, username, host.password as string, cmd, timeoutMs);
+  const tmpFile = `/var/tmp/snap-${vmid}.qcow2`;
+
+  try {
+    // Resolve the real on-disk path (works for any storage backend).
+    const realPath = (await ssh(`pvesm path '${volid}'`, 30_000)).trim();
+    if (!realPath.startsWith("/")) throw new Error("Could not resolve disk path on host");
+
+    // Convert to a compact qcow2, upload to R2, measure, clean up.
+    await ssh(`qemu-img convert -O qcow2 '${realPath}' '${tmpFile}'`, 30 * 60_000);
+    const sizeStr = await ssh(`stat -c %s '${tmpFile}' 2>/dev/null || echo 0`, 30_000);
+    const sizeBytes = Number(String(sizeStr).trim()) || 0;
+    if (sizeBytes <= 0) throw new Error("Exported disk is empty");
+
+    await ssh(`curl -fSL -X PUT -T '${tmpFile}' '${putUrl}'`, 30 * 60_000);
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    return { sizeBytes };
+  } catch (err) {
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    throw err;
+  }
+}
+
+/**
  * Create a VNC proxy connection for web console access.
  * Returns a ticket and port for noVNC WebSocket connection.
  */

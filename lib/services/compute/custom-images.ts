@@ -6,9 +6,16 @@ import {
   proxmoxAuth,
   getDispatcher,
   buildCustomImageTemplate,
+  exportVmDiskToUrl,
   deleteVM,
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
+import {
+  snapshotKey,
+  presignSnapshotUpload,
+  presignSnapshotDownload,
+  deleteSnapshotObject,
+} from "@/lib/services/compute/image-storage";
 
 export interface CustomImageRow {
   id: string;
@@ -16,6 +23,7 @@ export interface CustomImageRow {
   name: string;
   os_family: string;
   default_user: string;
+  source_type: string;
   source_ref: string | null;
   cloud_init: boolean;
   status: string;
@@ -24,7 +32,7 @@ export interface CustomImageRow {
 }
 
 const IMAGE_COLS =
-  "id, owner_id, name, os_family, default_user, source_ref, cloud_init, status, size_gb, billing_service_id";
+  "id, owner_id, name, os_family, default_user, source_type, source_ref, cloud_init, status, size_gb, billing_service_id";
 
 /** Storage price for a stored custom image. */
 export const CUSTOM_IMAGE_USD_PER_GB_MONTH = 0.05;
@@ -136,10 +144,17 @@ export async function ensureCustomTemplateOnHost(params: {
     const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
     const auth = await proxmoxAuth(cfg, dispatcher);
 
+    // Snapshots store an R2 object key in source_ref → sign a fresh GET URL so
+    // this host can pull it. URL imports store the https URL directly.
+    const sourceUrl =
+      image.source_type === "snapshot"
+        ? await presignSnapshotDownload(image.source_ref)
+        : image.source_ref;
+
     const { vmid, sizeBytes } = await buildCustomImageTemplate(
       cfg,
       {
-        sourceUrl: image.source_ref,
+        sourceUrl,
         name: image.name,
         osType: image.os_family.toLowerCase().includes("windows") ? "win11" : "l26",
       },
@@ -205,7 +220,7 @@ export async function deleteCustomImage(params: {
 
   const { data: image } = await supabase
     .from("custom_images")
-    .select("id, owner_id, billing_service_id")
+    .select("id, owner_id, billing_service_id, source_type, source_ref")
     .eq("id", params.imageId)
     .eq("owner_id", params.ownerId)
     .maybeSingle();
@@ -240,6 +255,15 @@ export async function deleteCustomImage(params: {
     await supabase.from("proxmox_templates").delete().eq("id", t.id);
   }
 
+  // Remove the staged R2 object for snapshots (best effort).
+  if (image.source_type === "snapshot" && image.source_ref) {
+    try {
+      await deleteSnapshotObject(image.source_ref);
+    } catch (e) {
+      console.error("[custom-image delete] R2 object cleanup failed:", e);
+    }
+  }
+
   // Drop the storage meter (best effort) + the catalog row.
   try {
     await supabase
@@ -252,4 +276,69 @@ export async function deleteCustomImage(params: {
   }
 
   await supabase.from("custom_images").delete().eq("id", params.imageId);
+}
+
+/**
+ * Background: export a (stopped) server's disk to R2 and finalize the snapshot
+ * image. Sets source_ref to the R2 key, records size, marks it available, and
+ * starts the storage meter. On failure the image is marked `failed`.
+ */
+export async function runSnapshotExport(params: {
+  imageId: string;
+  serverId: number;
+}): Promise<void> {
+  const supabase = await createServiceClient();
+
+  const { data: image } = await supabase
+    .from("custom_images")
+    .select("id, owner_id, billing_service_id")
+    .eq("id", params.imageId)
+    .maybeSingle();
+  if (!image) return;
+
+  try {
+    const { data: srv } = await supabase
+      .from("servers")
+      .select("vmid, location")
+      .eq("id", params.serverId)
+      .maybeSingle();
+    if (!srv?.vmid || !srv.location) throw new Error("Server not found");
+
+    const { data: host } = await supabase
+      .from("proxmox_hosts")
+      .select(
+        "id, host_url, allow_insecure_tls, node, storage, bridge, token_id, token_secret, username, password"
+      )
+      .eq("id", srv.location)
+      .maybeSingle();
+    if (!host) throw new Error("Host not found");
+
+    const cfg = host as unknown as ProxmoxHost;
+    const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
+    const auth = await proxmoxAuth(cfg, dispatcher);
+
+    const key = snapshotKey(image.owner_id, image.id);
+    const putUrl = await presignSnapshotUpload(key);
+    const { sizeBytes } = await exportVmDiskToUrl(cfg, Number(srv.vmid), putUrl, auth, dispatcher);
+    const sizeGb = Math.max(0.01, Math.round((sizeBytes / 1024 ** 3) * 100) / 100);
+
+    await supabase
+      .from("custom_images")
+      .update({ source_ref: key, size_gb: sizeGb, status: "available" })
+      .eq("id", image.id);
+
+    const hourlyRate = Math.max(0.0001, (sizeGb * CUSTOM_IMAGE_USD_PER_GB_MONTH) / 730);
+    await BillingCredits.addActiveCustomImage({
+      userId: image.owner_id,
+      serviceId: image.billing_service_id,
+      hourlyRate,
+    }).catch((e) => console.error("[snapshot] meter register failed:", e));
+  } catch (err) {
+    console.error("[snapshot] export failed:", err);
+    const msg = err instanceof Error ? err.message : "Snapshot failed";
+    await supabase
+      .from("custom_images")
+      .update({ status: "failed", error: msg.slice(0, 300) })
+      .eq("id", image.id);
+  }
 }

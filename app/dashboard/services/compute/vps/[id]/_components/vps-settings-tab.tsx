@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { type ServerData } from './types';
 import { VpsResizeSection } from './vps-resize-section';
+import { VpsSnapshotSection } from './vps-snapshot-section';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const ACCENT = '#0095FF';
@@ -210,10 +211,20 @@ export function VpsSettingsTab({
         <VpsResizeSection server={server} onRefresh={onRefresh} />
       </section>
 
-      {/* ── 04 · Danger zone ─────────────────────────────── */}
+      {/* ── 04 · Custom image ────────────────────────────── */}
       <section>
         <SectionHead
           num="04"
+          title="Create image"
+          description="Capture this server as a reusable custom image (requires power off)."
+        />
+        <VpsSnapshotSection server={server} />
+      </section>
+
+      {/* ── 05 · Danger zone ─────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="05"
           title="Danger zone"
           description="Destructive actions cannot be undone."
           danger
