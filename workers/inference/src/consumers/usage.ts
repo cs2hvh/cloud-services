@@ -377,6 +377,11 @@ async function maybeFireOne(
           threshold: input.threshold,
         })
       );
+      // Roll back the dedup mark so a later batch retries delivery. We marked
+      // BEFORE sending to avoid double-fire; without this rollback a failed
+      // delivery would suppress the alert for the whole month (org owner never
+      // learns they crossed the cap). A retry risks at most one duplicate.
+      await env.SPEND.delete(dedupKey);
     }
   } catch (err) {
     console.warn(
@@ -384,9 +389,13 @@ async function maybeFireOne(
         level: "warn",
         scope: "spend-alert",
         message: "Spend alert POST failed",
+        org_id: input.orgId,
+        threshold: input.threshold,
         err: err instanceof Error ? err.message : String(err),
       })
     );
+    // Roll back the dedup mark so the alert is retried next batch (see above).
+    await env.SPEND.delete(dedupKey);
   }
 }
 

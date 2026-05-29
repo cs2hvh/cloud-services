@@ -52,4 +52,13 @@ export async function handleAuditBatch(
   }
 
   batch.ackAll();
+
+  console.log(
+    JSON.stringify({
+      level: "info",
+      scope: "audit-consumer",
+      message: "Flushed audit batch",
+      count: rows.length,
+    })
+  );
 }

@@ -39,19 +39,52 @@ export const rateLimitMiddleware: MiddlewareHandler<{
       : DEFAULT_RPM;
   const { rps, burst } = bucketFromRpm(effectiveRpm);
 
-  const response = await stub.fetch("https://ratelimit.internal/take", {
-    method: "POST",
-    body: JSON.stringify({ rps, burst, cost: 1 }),
-  });
-  const result = (await response.json()) as {
-    allowed: boolean;
-    retryAfterMs: number;
-    remaining: number;
-  };
+  let result: { allowed: boolean; retryAfterMs: number; remaining: number };
+  try {
+    const response = await stub.fetch("https://ratelimit.internal/take", {
+      method: "POST",
+      body: JSON.stringify({ rps, burst, cost: 1 }),
+    });
+    result = (await response.json()) as {
+      allowed: boolean;
+      retryAfterMs: number;
+      remaining: number;
+    };
+  } catch (err) {
+    // Fail OPEN: a rate-limiter (Durable Object) outage must not take the API
+    // down. Log it as an error so the outage is visible instead of silently
+    // un-enforced.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        scope: "rate-limit",
+        message: "Rate limiter unavailable; failing open",
+        keyId: auth.keyId,
+        orgId: auth.orgId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    );
+    await next();
+    return;
+  }
 
   c.header("X-Ahura-RateLimit-Remaining", String(result.remaining));
 
   if (!result.allowed) {
+    // Visibility: a 429 is otherwise invisible to ops. Log who/what was
+    // limited so legitimate denials can be told apart from a misconfigured
+    // (too-low) cap.
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "rate-limit",
+        message: "Rate limit exceeded",
+        keyId: auth.keyId,
+        orgId: auth.orgId,
+        rpm: effectiveRpm,
+        retryAfterMs: result.retryAfterMs,
+      })
+    );
     c.header("Retry-After", String(Math.ceil(result.retryAfterMs / 1000)));
     return c.json(
       {

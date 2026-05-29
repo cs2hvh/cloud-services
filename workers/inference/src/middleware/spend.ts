@@ -37,7 +37,26 @@ export const spendCheckMiddleware: MiddlewareHandler<{
 
   const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
   const counterKey = `org:${auth.orgId}:month:${month}`;
-  const currentRaw = await c.env.SPEND.get(counterKey);
+  let currentRaw: string | null;
+  try {
+    currentRaw = await c.env.SPEND.get(counterKey);
+  } catch (err) {
+    // Fail OPEN on a KV outage: the usage consumer still enforces the cap
+    // eventually, and we'd rather serve than hard-fail every request on an
+    // infra blip. Log it so the outage is visible.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        scope: "spend",
+        message: "Spend counter unavailable; failing open",
+        orgId: auth.orgId,
+        keyId: auth.keyId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    );
+    await next();
+    return;
+  }
   const current = currentRaw ? Number.parseInt(currentRaw, 10) : 0;
   if (!Number.isFinite(current)) {
     await next();
@@ -61,6 +80,20 @@ export const spendCheckMiddleware: MiddlewareHandler<{
       scope === "org"
         ? "the organization's monthly hard cap"
         : "this API key's monthly hard cap";
+    // Visibility: a 402 hard-cap rejection is otherwise invisible to ops.
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "spend",
+        message: "Hard cap reached",
+        orgId: auth.orgId,
+        keyId: auth.keyId,
+        capScope: scope,
+        spentCents: current,
+        hardCapCents: cap,
+        month,
+      })
+    );
     return c.json(
       {
         error: {
