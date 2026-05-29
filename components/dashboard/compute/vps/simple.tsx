@@ -27,6 +27,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import DeploymentProgress from "./deployment-progress";
+import { osIconFor } from "./os-icons";
 
 // ─── Design tokens ───────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = {
@@ -97,6 +98,47 @@ function FlagImg({ id, size = 22 }: { id: string; size?: number }) {
             className="object-cover"
             style={{ width: w, height: h }}
             unoptimized
+        />
+    );
+}
+
+// OS name → brand PNG in /public/os. Only a handful ship as PNGs; every
+// other distro (Alma, Rocky, Fedora, generic Linux) falls back to the
+// monochrome glyph from os-icons. Space in the Windows filename is encoded.
+const OS_PNG: { match: string; src: string }[] = [
+    { match: "ubuntu", src: "/os/ubuntu.png" },
+    { match: "debian", src: "/os/Debian.png" },
+    { match: "centos", src: "/os/icons8-centos-96.png" },
+    { match: "windows", src: "/os/Windows%2011.png" },
+];
+
+function OsImg({
+    name,
+    size = 20,
+}: {
+    name: string | null | undefined;
+    size?: number;
+}) {
+    const n = (name ?? "").toLowerCase();
+    const png = OS_PNG.find((o) => n.includes(o.match));
+    if (png) {
+        return (
+            <Image
+                src={png.src}
+                alt=""
+                width={size}
+                height={size}
+                className="object-contain shrink-0"
+                style={{ width: size, height: size }}
+                unoptimized
+            />
+        );
+    }
+    const Glyph = osIconFor(name);
+    return (
+        <Glyph
+            className="text-white/70 shrink-0"
+            style={{ width: size, height: size }}
         />
     );
 }
@@ -456,12 +498,26 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                                     <SelectTrigger
                                         className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px]`}
                                     >
-                                        <SelectValue placeholder="Select an OS" />
+                                        <span className="flex items-center gap-2.5 min-w-0">
+                                            {selectedOS && (
+                                                <OsImg
+                                                    name={selectedOS}
+                                                    size={18}
+                                                />
+                                            )}
+                                            <SelectValue placeholder="Select an OS" />
+                                        </span>
                                     </SelectTrigger>
                                     <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
                                         {availableOS.map((os) => (
                                             <SelectItem key={os.id} value={os.id}>
-                                                {os.name}
+                                                <span className="flex items-center gap-2.5">
+                                                    <OsImg
+                                                        name={os.name}
+                                                        size={18}
+                                                    />
+                                                    {os.name}
+                                                </span>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1274,11 +1330,12 @@ function PlanPicker({
             ) : (
                 <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
                     {/* Column header */}
-                    <div className="hidden md:grid grid-cols-[26px_minmax(64px,86px)_minmax(0,1.4fr)_minmax(120px,1fr)_minmax(120px,1fr)_160px] gap-3 px-4 py-2.5 border-b border-white/[0.06]">
+                    <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.015]">
                         <span />
                         <ColHead>Slug</ColHead>
                         <ColHead>Name</ColHead>
-                        <ColHead align="right">vCPU / RAM</ColHead>
+                        <ColHead align="right">vCPU</ColHead>
+                        <ColHead align="right">RAM</ColHead>
                         <ColHead align="right">Storage</ColHead>
                         <ColHead align="right">Monthly</ColHead>
                     </div>
@@ -1320,7 +1377,7 @@ function PlanPicker({
                                 )}
 
                                 {/* Desktop row */}
-                                <div className="hidden md:grid grid-cols-[26px_minmax(64px,86px)_minmax(0,1.4fr)_minmax(120px,1fr)_minmax(120px,1fr)_160px] gap-3 px-4 py-2.5 items-center">
+                                <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 items-center">
                                     <span
                                         aria-hidden
                                         className="relative h-[15px] w-[15px] rounded-full shrink-0"
@@ -1339,7 +1396,8 @@ function PlanPicker({
                                         )}
                                     </span>
                                     <span
-                                        className={`${MONO} text-[11.5px] text-white/85`}
+                                        className={`${MONO} text-[11.5px] ${sel ? "text-white" : "text-white/55"}`}
+                                        style={sel ? { color: ACCENT_BRIGHT } : undefined}
                                     >
                                         {p.slug}
                                     </span>
@@ -1361,18 +1419,28 @@ function PlanPicker({
                                         )}
                                     </span>
                                     <span
-                                        className={`${MONO} text-right text-[11.5px] text-white/85 tabular-nums`}
+                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
                                     >
-                                        {p.vcpu} vCPU
-                                        <span className="text-white/25">
-                                            {" · "}
+                                        {p.vcpu}
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
+                                    >
+                                        {ramGB}
+                                        <span className="text-white/35 text-[10.5px]">
+                                            {" GB"}
                                         </span>
-                                        {ramGB} GB
                                     </span>
                                     <span
                                         className={`${MONO} text-right text-[11.5px] text-white/65 tabular-nums`}
                                     >
-                                        {p.diskGB} GB NVMe
+                                        {p.diskGB}
+                                        <span className="text-white/35 text-[10.5px]">
+                                            {" GB "}
+                                        </span>
+                                        <span className="text-white/30 text-[10px] uppercase tracking-[0.06em]">
+                                            NVMe
+                                        </span>
                                     </span>
                                     <span className="text-right flex items-baseline justify-end gap-1.5">
                                         <span
