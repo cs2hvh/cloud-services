@@ -10,15 +10,14 @@
  */
 
 import { RunPodClient } from "@/lib/services/runpod/client";
+import { GPU_SKU_TO_RUNPOD_TYPE } from "@/lib/inference/finetune-runpod";
 
-export const GPU_SKU_TO_RUNPOD_TYPE: Record<string, string> = {
-  A40: "NVIDIA A40",
-  L40S: "NVIDIA L40S",
-  "RTX-6000-Ada": "NVIDIA RTX 6000 Ada Generation",
-  "A100-40GB": "NVIDIA A100-PCIE-40GB",
-  "A100-80GB": "NVIDIA A100 80GB PCIe",
-  "H100-80GB": "NVIDIA H100 80GB HBM3",
-};
+// Single source of truth for the SKU → provider-type map lives in
+// finetune-runpod.ts. Re-exported here so a SKU added for training is
+// automatically valid for BYO deploy — no drift between the two code paths.
+// (The workers/* copies are separate npm packages that can't import from lib/;
+// consolidating those needs a shared package and is tracked separately.)
+export { GPU_SKU_TO_RUNPOD_TYPE };
 
 // Cold-start cost prediction: networking, container start, model load.
 // We pre-warm by setting min_workers ≥ 1 if the customer pays the always-on tier.
