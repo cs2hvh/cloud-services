@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       // Update the DB row to clear restricted state
       if (restrictionLifted) {
         const supabase = await createServiceClient();
-        await (supabase as any)
+        await supabase
           .from("platform_app_bandwidth_usage_monthly")
           .update({ lifecycle_status: "ok", restored_at: new Date().toISOString(), restricted_at: null })
           .eq("app_id", app_id)

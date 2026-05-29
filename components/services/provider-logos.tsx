@@ -13,7 +13,7 @@ import { FaMicrosoft } from "react-icons/fa6";
 
 import { DeepseekIcon, QwenIcon,GrokIcon } from "hugeicons-react";
 
-type LogoComponent = ComponentType<any>;
+type LogoComponent = ComponentType<Record<string, unknown>>;
 
 const PROVIDER_LOGOS: Record<string, LogoComponent> = {
   OpenAI: SiOpenai,

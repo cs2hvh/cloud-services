@@ -66,7 +66,7 @@ export async function findAppsWithoutBandwidthRecord(
   const supabase = await createServiceClient();
 
   // 1. Resolve K8s names → DB rows (this rejects non-platform Deployments).
-  const { data: platformApps, error: appsError } = await (supabase as any)
+  const { data: platformApps, error: appsError } = await supabase
     .from("platform_apps")
     .select("id, name, user_id, size")
     .in("name", k8sAppNames)
@@ -81,7 +81,7 @@ export async function findAppsWithoutBandwidthRecord(
 
   // 2. Check which of those already have a bandwidth record this month.
   const appIds = (platformApps as DiscoveredApp[]).map((a) => a.id);
-  const { data: existingRecords, error: recordError } = await (supabase as any)
+  const { data: existingRecords, error: recordError } = await supabase
     .from("platform_app_bandwidth_usage_monthly")
     .select("app_id")
     .in("app_id", appIds)

@@ -116,7 +116,7 @@ export async function emitLifecycleEvents(args: EmitArgs): Promise<void> {
   for (const eventType of events) {
     // Insert the event record. The unique constraint (app_id, period_start, event_type)
     // guarantees each event is recorded at most once per billing month.
-    const { data: event, error } = await (supabase as any)
+    const { data: event, error } = await supabase
       .from("platform_app_bandwidth_events")
       .insert({
         app_id: args.appId,
@@ -159,7 +159,7 @@ export async function emitLifecycleEvents(args: EmitArgs): Promise<void> {
     });
 
     if (notification.success && notification.id && event?.id) {
-      await (supabase as any)
+      await supabase
         .from("platform_app_bandwidth_events")
         .update({ notification_id: notification.id })
         .eq("id", event.id);

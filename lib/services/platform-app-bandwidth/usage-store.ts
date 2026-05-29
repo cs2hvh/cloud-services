@@ -7,7 +7,7 @@ import type { BandwidthLifecycleStatus, BandwidthUsageRow, PodCounterRow } from 
 export async function loadCurrentUsage(appId: string): Promise<BandwidthUsageRow | null> {
   const { start } = monthBounds();
   const supabase = await createServiceClient();
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("platform_app_bandwidth_usage_monthly")
     .select("id, app_id, user_id, period_start, period_end, ingress_bytes, egress_bytes, total_bytes, purchased_bytes, lifecycle_status, source, last_sampled_at, restricted_at, restored_at, metadata, created_at, updated_at")
     .eq("app_id", appId)
@@ -35,7 +35,7 @@ export type UpsertUsagePayload = {
 
 export async function upsertUsage(payload: UpsertUsagePayload): Promise<BandwidthUsageRow> {
   const supabase = await createServiceClient();
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("platform_app_bandwidth_usage_monthly")
     .upsert(payload, { onConflict: "app_id,period_start" })
     .select("*")
@@ -56,7 +56,7 @@ export async function updateUsageLifecycleAndMetadata(
   }
 ): Promise<BandwidthUsageRow> {
   const supabase = await createServiceClient();
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("platform_app_bandwidth_usage_monthly")
     .update(updates)
     .eq("app_id", appId)
@@ -86,7 +86,7 @@ export async function updateUsageLifecycleAndMetadata(
  */
 export async function loadPodCounters(appId: string): Promise<Map<string, PodCounterRow>> {
   const supabase = await createServiceClient();
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("platform_app_bandwidth_pod_counters")
     .select("pod_name, receive_counter, transmit_counter, sampled_at")
     .eq("app_id", appId);
@@ -116,7 +116,7 @@ export async function savePodCounters(
     sampled_at: sampledAt,
   }));
 
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("platform_app_bandwidth_pod_counters")
     .upsert(rows, { onConflict: "app_id,pod_name" });
 
@@ -136,7 +136,7 @@ export async function addPurchasedBytes(
   const { start, end } = monthBounds();
   const supabase = await createServiceClient();
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .rpc("increment_platform_app_bandwidth_purchased_bytes", {
       p_app_id: appId,
       p_user_id: userId,
@@ -163,7 +163,7 @@ export async function pruneStalePodCounters(
   if (activePodNames.length === 0) return;
 
   const supabase = await createServiceClient();
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from("platform_app_bandwidth_pod_counters")
     .delete()
     .eq("app_id", appId)

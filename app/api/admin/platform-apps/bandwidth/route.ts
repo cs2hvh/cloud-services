@@ -19,7 +19,7 @@ export type AdminBandwidthRow = {
   quota_included_bytes: number;
   purchased_bytes: number;
   quota_total_bytes: number;
-  remaining_bytes: number;
+  remaining_bytes: number | null;
   percent_used: number | null;
   lifecycle_status: string;
   policy_action: string;
@@ -32,7 +32,7 @@ export type AdminBandwidthRow = {
  * GET /api/admin/platform-apps/bandwidth
  * Returns current-month bandwidth usage for all apps, sorted by total_bytes desc.
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const auth = await checkAdminAuth();
   if (!auth.authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     const periodStart = dateOnly(start);
 
     // Bandwidth rows for current month
-    const { data: bwRows, error: bwError } = await (supabase as any)
+    const { data: bwRows, error: bwError } = await supabase
       .from("platform_app_bandwidth_usage_monthly")
       .select("id, app_id, user_id, period_start, period_end, ingress_bytes, egress_bytes, total_bytes, purchased_bytes, lifecycle_status, source, last_sampled_at, restricted_at, restored_at, metadata, created_at, updated_at")
       .eq("period_start", periodStart)
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Enrich with app metadata
-    const appIds = bwRows.map((r: any) => r.app_id as string);
-    const { data: apps } = await (supabase as any)
+    const appIds = bwRows.map((r) => r.app_id as string);
+    const { data: apps } = await supabase
       .from("platform_apps")
       .select("id, name, size, status")
       .in("id", appIds);
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       appMap.set(app.id as string, { name: app.name, size: app.size, status: app.status });
     }
 
-    const rows: AdminBandwidthRow[] = await Promise.all(bwRows.map(async (r: any) => {
+    const rows: AdminBandwidthRow[] = await Promise.all(bwRows.map(async (r) => {
       const app = appMap.get(r.app_id as string);
       const quota = await PlatformAppBandwidthService.getQuotaForSize(app?.size);
       const summary = PlatformAppBandwidthService.summarizeStoredUsage(r, quota, {
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       // Update the DB row to mark as restored so the next sync doesn't immediately re-restrict
       const supabase = await createServiceClient();
       const { start } = monthBounds();
-      await (supabase as any)
+      await supabase
         .from("platform_app_bandwidth_usage_monthly")
         .update({
           lifecycle_status: "ok",
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
 
     if (action === "force_sync") {
       const supabase = await createServiceClient();
-      const { data: app } = await (supabase as any)
+      const { data: app } = await supabase
         .from("platform_apps")
         .select("id, name, size, user_id")
         .eq("id", app_id)

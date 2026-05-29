@@ -69,9 +69,8 @@ async function patchIngress(
 }
 
 function getIngressAnnotations(ingress: Record<string, unknown>): Record<string, string> {
-  return (
-    ((ingress as any)?.metadata?.annotations as Record<string, string>) ?? {}
-  );
+  const metadata = ingress.metadata as Record<string, unknown> | undefined;
+  return (metadata?.annotations as Record<string, string>) ?? {};
 }
 
 function withRestrictionSnippet(currentSnippet: string): string {

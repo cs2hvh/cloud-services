@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createServiceClient();
 
   // ── Step 1: Load apps from Supabase ─────────────────────────────────────────
-  let query = (supabase as any)
+  let query = supabase
     .from("platform_apps")
     .select("id, name, user_id, size, status")
     .in("status", ["running", "degraded", "building"])
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     const prevMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
     const prevPeriodStart = prevMonthDate.toISOString().slice(0, 10);
 
-    const { data: prevStates } = await (supabase as any)
+    const { data: prevStates } = await supabase
       .from("platform_app_bandwidth_usage_monthly")
       .select("app_id")
       .in("app_id", appIds)

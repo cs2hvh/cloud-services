@@ -95,7 +95,7 @@ export class AppBuildSideEffectsService {
               if (liftResult.removed) {
                 const supabase = await createServiceClient();
                 const { start } = monthBounds();
-                await (supabase as any)
+                await supabase
                   .from("platform_app_bandwidth_usage_monthly")
                   .update({ lifecycle_status: "ok", restored_at: new Date().toISOString(), restricted_at: null })
                   .eq("app_id", params.appId)
