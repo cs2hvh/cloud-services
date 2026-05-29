@@ -425,6 +425,10 @@ export async function POST(req: NextRequest) {
   let diskGB: number | undefined;
   let planTier: "shared" | "dedicated" | null = null;
   let planAllowedHostIds: string[] | null = null; // set when plan has a host whitelist
+  // When a plan is selected we bill the plan's ADVERTISED price (what the
+  // customer sees + agrees to), not the legacy spec formula. Only the
+  // free-form custom-specs path falls back to calculateHourlyCost().
+  let planHourlyUSD: number | null = null;
 
   if (planSlug) {
     const plan = await findPlanBySlug(supabase, planSlug);
@@ -445,6 +449,7 @@ export async function POST(req: NextRequest) {
     memoryMB = plan.memoryMB;
     diskGB = plan.diskGB;
     planTier = plan.tier;
+    planHourlyUSD = plan.defaultHourlyUSD;
     if (plan.allowedHostIds && plan.allowedHostIds.length > 0) {
       planAllowedHostIds = plan.allowedHostIds;
     }
@@ -760,7 +765,10 @@ export async function POST(req: NextRequest) {
     location: region,
   };
 
-  const hourlyCost = calculateHourlyCost(serverSpecs);
+  // Plan-based servers bill the advertised catalog price; free-form custom
+  // specs fall back to the spec formula.
+  const hourlyCost =
+    planHourlyUSD != null ? planHourlyUSD : calculateHourlyCost(serverSpecs);
   const minimumHours = 1;
 
   // Balance check — user must have at least 1 hour of credit before provisioning

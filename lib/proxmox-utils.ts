@@ -595,6 +595,76 @@ export async function getVMConfig(
 }
 
 /**
+ * Identify the VM's primary OS/boot disk from a config object and parse its
+ * current size in GB. Skips cdrom + cloudinit drives. Prefers the configured
+ * `bootdisk`, then the usual bus order.
+ */
+export function findVMBootDisk(
+  config: Record<string, any>
+): { disk: string; sizeGb: number } | null {
+  const candidates = ['scsi0', 'virtio0', 'sata0', 'ide0', 'scsi1', 'virtio1'];
+  const bootdisk = typeof config.bootdisk === 'string' ? config.bootdisk : null;
+  const order = bootdisk
+    ? [bootdisk, ...candidates.filter((c) => c !== bootdisk)]
+    : candidates;
+
+  for (const key of order) {
+    const val = config[key];
+    if (typeof val !== 'string') continue;
+    if (/media=cdrom/i.test(val) || /cloudinit/i.test(val)) continue;
+    const m = val.match(/size=(\d+(?:\.\d+)?)([KMGT])/i);
+    if (!m) continue;
+    let sizeGb = parseFloat(m[1]);
+    const unit = m[2].toUpperCase();
+    if (unit === 'T') sizeGb *= 1024;
+    else if (unit === 'M') sizeGb /= 1024;
+    else if (unit === 'K') sizeGb /= 1024 * 1024;
+    return { disk: key, sizeGb };
+  }
+  return null;
+}
+
+/**
+ * Grow a VM disk to an absolute size (in GB). Proxmox can only ever GROW a
+ * disk — passing a size smaller than the current size errors out — so callers
+ * must validate target >= current first. Uses PUT (the resize endpoint is not
+ * a POST). The guest filesystem still has to be expanded inside the VM; cloud
+ * images do this automatically via cloud-init growpart on the next boot.
+ */
+export async function resizeDisk(
+  host: ProxmoxHost,
+  vmid: number,
+  disk: string,
+  sizeGb: number,
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<void> {
+  const apiBase = host.host_url.replace(/\/$/, '');
+  const url = `${apiBase}/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/resize`;
+  const formData = new URLSearchParams();
+  formData.append('disk', disk);
+  formData.append('size', `${Math.round(sizeGb)}G`);
+
+  const res = await withTimeout(
+    fetch(url, {
+      method: 'PUT',
+      body: formData,
+      redirect: 'follow',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(auth.headers as any),
+      },
+      dispatcher,
+    } as any)
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Proxmox resize error: ${res.status} ${text}`);
+  }
+}
+
+/**
  * Get VM RRD (time-series) metrics data.
  * Proxmox stores RRD data at various timeframes.
  * @param timeframe - "hour" | "day" | "week" | "month" | "year"

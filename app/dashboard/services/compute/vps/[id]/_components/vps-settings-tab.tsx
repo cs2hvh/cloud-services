@@ -9,6 +9,7 @@ import {
   AlertTriangle, Loader2, Pencil, Trash2,
 } from 'lucide-react';
 import { type ServerData } from './types';
+import { VpsResizeSection } from './vps-resize-section';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const ACCENT = '#0095FF';
@@ -197,10 +198,20 @@ export function VpsSettingsTab({
         </div>
       </section>
 
-      {/* ── 03 · Danger zone ─────────────────────────────── */}
+      {/* ── 03 · Resize ──────────────────────────────────── */}
       <section>
         <SectionHead
           num="03"
+          title="Resize"
+          description="Move to a larger or different plan. Reboots the server; storage can only grow."
+        />
+        <VpsResizeSection server={server} />
+      </section>
+
+      {/* ── 04 · Danger zone ─────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="04"
           title="Danger zone"
           description="Destructive actions cannot be undone."
           danger

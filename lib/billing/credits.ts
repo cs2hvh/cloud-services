@@ -203,4 +203,27 @@ export const BillingCredits = {
 
     return { finalCharge };
   },
+
+  /**
+   * Re-rate an active compute meter after a resize. Sets the new hourly rate
+   * and advances last_billed_at to now so the new rate applies from the resize
+   * moment. The cron meters continuously (rate x elapsed since last_billed_at)
+   * and advances last_billed_at every run, so the un-charged pre-resize sliver
+   * is at most one cron interval — immaterial. No-op if no active row exists.
+   */
+  rerateActiveCompute: async (params: {
+    serviceId: string;
+    hourlyRate: number;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_compute")
+      .update({
+        hourly_rate: params.hourlyRate,
+        last_billed_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId);
+    if (error) throw new Error(`Failed to re-rate active_compute: ${error.message}`);
+  },
 };
