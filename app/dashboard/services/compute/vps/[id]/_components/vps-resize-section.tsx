@@ -47,6 +47,7 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [tier, setTier] = useState<'shared' | 'dedicated'>('shared');
   const [supabase] = useState(() => createClient());
 
   const busy = server.status === 'provisioning';
@@ -77,6 +78,12 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
     load();
   }, [load]);
 
+  // Default the tier toggle to the server's current tier once plans load.
+  const currentTier = data?.current.tier;
+  useEffect(() => {
+    if (currentTier === 'shared' || currentTier === 'dedicated') setTier(currentTier);
+  }, [currentTier]);
+
   const selectedPlan = data?.plans.find((p) => p.slug === selected) ?? null;
 
   const submit = async () => {
@@ -100,9 +107,11 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
     }
   };
 
-  // Non-current plans, sorted with fitting ones first (API already size-sorts).
-  const plans = (data?.plans ?? []).filter((p) => !p.isCurrent);
-  const visible = [...plans].sort((a, b) => Number(b.fits) - Number(a.fits));
+  // Non-current plans of the selected tier, laddered by size (matches the
+  // create form). Non-fitting plans stay visible but greyed, with a reason.
+  const visible = (data?.plans ?? [])
+    .filter((p) => !p.isCurrent && p.tier === tier)
+    .sort((a, b) => a.vcpu - b.vcpu || a.memoryMB - b.memoryMB);
 
   return (
     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
@@ -144,9 +153,36 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
             </span>
           </div>
 
+          {/* Tier toggle — keep shared and dedicated plans separate */}
+          <div className="flex items-center gap-0.5 px-5 py-2.5 border-b border-white/[0.06]">
+            {(['shared', 'dedicated'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setTier(t);
+                  setSelected('');
+                }}
+                className={`${MONO} text-[10px] uppercase tracking-[0.12em] font-semibold px-3 h-7 rounded-[4px] transition-colors`}
+                style={
+                  tier === t
+                    ? { color: ACCENT, background: ACCENT_DIM, border: '1px solid rgba(0,149,255,0.25)' }
+                    : { color: 'rgba(255,255,255,0.5)', border: '1px solid transparent' }
+                }
+              >
+                {t === 'shared' ? 'Shared CPU' : 'Dedicated CPU'}
+              </button>
+            ))}
+          </div>
+
           {/* Plan rows */}
           <div className="max-h-[360px] overflow-y-auto">
-            {visible.map((p) => {
+            {visible.length === 0 ? (
+              <div className={`${MONO} px-5 py-6 text-[11px] text-white/40`}>
+                No {tier === 'shared' ? 'shared' : 'dedicated'} plans available to switch to.
+              </div>
+            ) : (
+              visible.map((p) => {
               const sel = selected === p.slug;
               const disabled = !p.fits;
               return (
@@ -213,7 +249,8 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
                   </span>
                 </button>
               );
-            })}
+              })
+            )}
           </div>
 
           {/* Confirm bar */}

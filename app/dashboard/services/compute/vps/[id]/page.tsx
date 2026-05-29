@@ -351,6 +351,7 @@ export default function VMDetailPage() {
               monthlyCost={monthlyCost}
               dailyCost={dailyCost}
               copyToClipboard={copyToClipboard}
+              onResize={() => setActiveTab('settings')}
             />
           </TabsContent>
 

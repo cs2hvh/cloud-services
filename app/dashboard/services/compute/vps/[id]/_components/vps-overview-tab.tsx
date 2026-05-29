@@ -20,6 +20,8 @@ interface VpsOverviewTabProps extends ServerActions {
   memGB: number;
   monthlyCost: number;
   dailyCost: number;
+  /** Jump to the Settings tab (where the resize section lives). */
+  onResize?: () => void;
 }
 
 // ─── Section header ────────────────────────────────────────────────
@@ -69,6 +71,7 @@ export function VpsOverviewTab({
   monthlyCost,
   dailyCost,
   copyToClipboard,
+  onResize,
 }: VpsOverviewTabProps) {
   // Parse the SSH command into prompt + cmd + arg pieces
   const sshParts = (() => {
@@ -135,7 +138,7 @@ export function VpsOverviewTab({
           num="02"
           title="Instance profile"
           description="Capacity, placement, and hardware allocation."
-          action={{ label: 'Resize', icon: <RefreshCw className="h-3 w-3" /> }}
+          action={{ label: 'Resize', icon: <RefreshCw className="h-3 w-3" />, onClick: onResize }}
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
