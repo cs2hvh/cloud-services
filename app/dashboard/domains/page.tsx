@@ -1,22 +1,30 @@
 'use client';
 
+// Domains dashboard — editorial dark surface matching the VPS / GPU / custom-
+// images pages: aurora + dotted-grid canvas, Nunito accent title, mono labels,
+// brand-blue accent, stat tiles, filter chips, and a styled inventory table
+// (root + subdomain grouping, status pills, ICANN-email note). Logic unchanged.
+
 import { useCallback, useEffect, useMemo, useState, Fragment } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowUpRight,
-  Clock,
   Copy,
   Globe,
-  Loader2,
   Mail,
+  Plus,
   RefreshCw,
   Search,
 } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+
+// ─── Design tokens ─────────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = { fontFamily: 'var(--font-nunito), system-ui, sans-serif' };
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
+const ACCENT_BRIGHT = '#33adff';
+const ACCENT_DIM = 'rgba(0,149,255,0.08)';
 
 interface DomainPurchase {
   id: string;
@@ -51,6 +59,14 @@ interface DomainInventoryItem {
 
 type DomainStatus = 'active' | 'pending' | 'attention' | 'purchased' | 'unknown';
 
+const STATUS_COLOR: Record<DomainStatus, string> = {
+  active: '#4ade80',
+  pending: '#fbbf24',
+  attention: '#f87171',
+  purchased: ACCENT,
+  unknown: 'rgba(255,255,255,0.45)',
+};
+
 function getDomainStatus(item: DomainInventoryItem): { status: DomainStatus; label: string } {
   const purchaseStatus = item.purchase?.status;
   const hasActive = item.connections.some((c) => c.status === 'active');
@@ -58,7 +74,7 @@ function getDomainStatus(item: DomainInventoryItem): { status: DomainStatus; lab
   const hasPendingPurchase = purchaseStatus === 'requested' || purchaseStatus === 'processing';
   const hasPendingSetup = item.connections.some((c) => c.status === 'pending' || c.status === 'verified');
 
-  if (hasFailed) return { status: 'attention', label: 'Needs Attention' };
+  if (hasFailed) return { status: 'attention', label: 'Needs attention' };
   if (hasPendingPurchase || hasPendingSetup) return { status: 'pending', label: 'Pending' };
   if (hasActive) return { status: 'active', label: 'Active' };
   if (purchaseStatus === 'completed') {
@@ -69,28 +85,15 @@ function getDomainStatus(item: DomainInventoryItem): { status: DomainStatus; lab
   return { status: 'unknown', label: 'Unknown' };
 }
 
-function StatusDot({ status }: { status: DomainStatus }) {
-  const colors: Record<DomainStatus, string> = {
-    active: 'bg-emerald-400',
-    pending: 'bg-amber-400',
-    attention: 'bg-red-400',
-    purchased: 'bg-cyan-400',
-    unknown: 'bg-white/40',
-  };
-  return <span className={`inline-block h-2 w-2 rounded-full ${colors[status]}`} />;
-}
-
-function StatusLabel({ status, label }: { status: DomainStatus; label: string }) {
-  const colors: Record<DomainStatus, string> = {
-    active: 'text-emerald-300',
-    pending: 'text-amber-300',
-    attention: 'text-red-300',
-    purchased: 'text-cyan-300',
-    unknown: 'text-white/50',
-  };
+function StatusPill({ status, label }: { status: DomainStatus; label: string }) {
+  const color = STATUS_COLOR[status];
+  const pulse = status === 'pending';
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${colors[status]}`}>
-      <StatusDot status={status} />
+    <span className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold`} style={{ color }}>
+      <span
+        className={`h-1.5 w-1.5 rounded-full shrink-0 ${pulse ? 'animate-pulse' : ''}`}
+        style={{ background: color, boxShadow: status === 'unknown' ? 'none' : `0 0 5px ${color}` }}
+      />
       {label}
     </span>
   );
@@ -116,7 +119,7 @@ function copyDomain(domain: string) {
   toast.success('Domain copied');
 }
 
-/* ── Domain grouping ── */
+/* ── Domain grouping (root + subdomains) ── */
 type DomainGroup = {
   rootDomain: string;
   root: DomainInventoryItem | null;
@@ -136,8 +139,6 @@ function groupDomains(items: DomainInventoryItem[]): DomainGroup[] {
   }
 
   const groupMap = new Map<string, DomainGroup>();
-
-  // First pass: establish parent relationships
   const parentOf = new Map<string, string>();
   for (const item of items) {
     const parent = findParent(item.domain);
@@ -154,7 +155,6 @@ function groupDomains(items: DomainInventoryItem[]): DomainGroup[] {
         groupMap.set(item.domain, { rootDomain: item.domain, root: item, children: [] });
       }
     } else {
-      // Walk up to the true root (top-most ancestor that has no parent)
       let rootKey = parent;
       while (parentOf.has(rootKey)) rootKey = parentOf.get(rootKey)!;
       if (!groupMap.has(rootKey)) {
@@ -169,25 +169,26 @@ function groupDomains(items: DomainInventoryItem[]): DomainGroup[] {
     .map((g) => ({ ...g, children: [...g.children].sort((a, b) => a.domain.localeCompare(b.domain)) }));
 }
 
-/* ── Skeleton rows for loading state ── */
+const COLS = 6;
+
+/* ── Skeleton ── */
 function TableSkeleton() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <tr key={i} className="border-t border-white/[0.04]">
-          <td className="px-4 py-3"><div className="h-4 w-40 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-8 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3 hidden xl:table-cell"><div className="h-4 w-12 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3"><div className="h-4 w-6 animate-pulse rounded bg-white/[0.06]" /></td>
+          {Array.from({ length: COLS }).map((__, j) => (
+            <td key={j} className="px-5 py-3.5">
+              <div className="h-3.5 animate-pulse rounded bg-white/[0.05]" style={{ width: j === 0 ? 160 : 60 }} />
+            </td>
+          ))}
         </tr>
       ))}
     </>
   );
 }
 
-/* ── Domain table row ── */
+/* ── Row ── */
 function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDomain?: string }) {
   const { status, label } = getDomainStatus(item);
   const activeConns = item.connections.filter((c) => c.status === 'active').length;
@@ -198,16 +199,20 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
       : null;
 
   return (
-    <tr className={`group border-t border-white/[0.04] transition-colors hover:bg-white/[0.02]${isChild ? ' bg-white/[0.005]' : ''}`}>
+    <tr className={`group border-t border-white/[0.04] transition-colors hover:bg-white/[0.02]${isChild ? ' bg-white/[0.01]' : ''}`}>
       {/* Domain */}
-      <td className="px-4 py-3">
+      <td className="px-5 py-3">
         <div className={`flex items-center gap-2 min-w-0${isChild ? ' pl-5' : ''}`}>
-          {isChild && (
+          {isChild ? (
             <span className="shrink-0 text-white/20 text-xs select-none leading-none">└</span>
+          ) : (
+            <span className="h-7 w-7 shrink-0 inline-flex items-center justify-center border border-white/[0.08] bg-[#0d0e11] rounded-[6px] text-white/45">
+              <Globe className="h-3.5 w-3.5" />
+            </span>
           )}
           <Link
             href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}
-            className="text-sm font-medium font-mono text-white hover:text-cyan-300 transition-colors truncate"
+            className={`${MONO} text-[12.5px] font-medium text-white hover:text-[#33adff] transition-colors truncate`}
           >
             {subPrefix ? (
               <>
@@ -221,7 +226,8 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); copyDomain(item.domain); }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-white/30 hover:text-white/60"
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-white/30 hover:text-white/65"
+            title="Copy domain"
           >
             <Copy className="h-3 w-3" />
           </button>
@@ -234,14 +240,14 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
           const displayEmail = isSandboxSentinel ? null : item.purchase.registrant_email;
           if (!displayEmail && !withinIcannWindow) return null;
           return (
-            <div className="mt-1 flex items-center gap-1.5 pl-0">
+            <div className={`mt-1 flex items-center gap-1.5 ${isChild ? 'pl-10' : 'pl-9'}`}>
               <Mail className="h-2.5 w-2.5 shrink-0 text-white/25" />
               {displayEmail ? (
-                <span className="text-[10px] text-white/35" title="ICANN verification email sent to this address">
-                  ICANN email → <span className="font-mono text-white/50">{displayEmail}</span>
+                <span className={`${MONO} text-[10px] text-white/35`} title="ICANN verification email sent to this address">
+                  ICANN → <span className="text-white/55">{displayEmail}</span>
                 </span>
               ) : (
-                <span className="text-[10px] text-amber-400/70" title="Verification email routing pending — retries automatically">
+                <span className={`${MONO} text-[10px] text-amber-400/70`} title="Verification email routing pending — retries automatically">
                   ICANN email routing pending…
                 </span>
               )}
@@ -251,55 +257,45 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
       </td>
 
       {/* Status */}
-      <td className="px-4 py-3">
-        <StatusLabel status={status} label={label} />
-      </td>
+      <td className="px-5 py-3"><StatusPill status={status} label={label} /></td>
 
       {/* Connections */}
-      <td className="px-4 py-3 hidden lg:table-cell">
-        <span className="text-xs tabular-nums text-white/60">
-          {item.connections.length > 0 ? (
-            <>
-              {activeConns}/{item.connections.length}
-            </>
-          ) : (
-            <span className="text-white/30">—</span>
-          )}
+      <td className="px-5 py-3 hidden lg:table-cell">
+        <span className={`${MONO} text-[11.5px] tabular-nums text-white/60`}>
+          {item.connections.length > 0 ? `${activeConns}/${item.connections.length}` : <span className="text-white/25">—</span>}
         </span>
       </td>
 
       {/* Expires */}
-      <td className="px-4 py-3 hidden lg:table-cell">
+      <td className="px-5 py-3 hidden lg:table-cell">
         {item.expires_at ? (
-          <span className={`text-xs tabular-nums ${isExpiringSoon(item.expires_at, 30) ? 'text-amber-300' : 'text-white/50'}`}>
+          <span className={`${MONO} text-[11.5px] tabular-nums ${isExpiringSoon(item.expires_at, 30) ? 'text-amber-300' : 'text-white/55'}`}>
             {new Date(item.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         ) : (
-          <span className="text-xs text-white/25">—</span>
+          <span className="text-[11.5px] text-white/25">—</span>
         )}
       </td>
 
       {/* Auto-renew */}
-      <td className="px-4 py-3 hidden xl:table-cell">
+      <td className="px-5 py-3 hidden xl:table-cell">
         {item.auto_renew !== null ? (
-          <span className={`text-xs ${item.auto_renew ? 'text-emerald-400' : 'text-white/35'}`}>
+          <span className={`${MONO} text-[11px] uppercase tracking-[0.08em] ${item.auto_renew ? 'text-emerald-400' : 'text-white/35'}`}>
             {item.auto_renew ? 'On' : 'Off'}
           </span>
         ) : (
-          <span className="text-xs text-white/25">—</span>
+          <span className="text-[11px] text-white/25">—</span>
         )}
       </td>
 
       {/* Actions */}
-      <td className="px-4 py-3">
-        <Link href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-white/40 hover:text-white hover:bg-white/[0.06]"
-          >
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Button>
+      <td className="px-5 py-3 text-right">
+        <Link
+          href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}
+          className="inline-flex h-7 w-7 items-center justify-center text-white/25 hover:text-[#0095FF] transition-colors"
+          title="Manage"
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </td>
     </tr>
@@ -310,47 +306,46 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
 function EmptyState({ message, isFiltered }: { message: string; isFiltered?: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] mb-4">
-        <Globe className="h-5 w-5 text-white/30" />
+      <div className="h-12 w-12 mb-4 inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]" style={{ color: ACCENT }}>
+        <Globe className="h-5 w-5" />
       </div>
-      <p className="text-sm font-medium text-white/60 mb-1">{message}</p>
+      <p className="text-[15px] font-semibold text-white">{message}</p>
       {!isFiltered && (
-        <p className="text-xs text-white/35 max-w-sm">
-          Register a new domain or connect one you already own.
-        </p>
-      )}
-      {!isFiltered && (
-        <Link href="/dashboard/domains/marketplace" className="mt-4">
-          <Button size="sm" className="bg-white/[0.08] text-white/80 hover:bg-white/[0.12] border border-white/[0.08]">
-            Search Domains
-          </Button>
-        </Link>
+        <>
+          <p className={`${MONO} mt-2 max-w-sm text-[11.5px] text-white/45 leading-relaxed`}>
+            Register a new domain or connect one you already own.
+          </p>
+          <Link
+            href="/dashboard/domains/marketplace"
+            className={`${MONO} mt-5 inline-flex items-center gap-2 h-9 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px]`}
+            style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: '#fff', boxShadow: '0 8px 20px rgba(0,149,255,0.20)' }}
+          >
+            <Search className="h-3.5 w-3.5" /> Search domains
+          </Link>
+        </>
       )}
     </div>
   );
 }
 
-/* ── Main page ── */
+/* ── Main ── */
+type FilterKey = 'all' | 'attention' | 'expiring';
+
 export default function DomainsDashboardPage() {
   const [items, setItems] = useState<DomainInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const loadDomains = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch('/api/domains/inventory');
       const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data?.message || data?.error || 'Failed to load domains');
-        }
-
-      const domains = (data?.data?.domains || []) as DomainInventoryItem[];
-      setItems(domains);
+      if (!res.ok) throw new Error(data?.message || data?.error || 'Failed to load domains');
+      setItems((data?.data?.domains || []) as DomainInventoryItem[]);
     } catch (err) {
       console.error('Failed to load domains dashboard:', err);
       setError(err instanceof Error ? err.message : 'Failed to load domains dashboard');
@@ -368,197 +363,183 @@ export default function DomainsDashboardPage() {
   const expiringSoonItems = useMemo(() => items.filter((item) => isExpiringSoon(item.expires_at, 30)), [items]);
   const activeCount = useMemo(() => items.filter((item) => item.connections.some((c) => c.status === 'active')).length, [items]);
 
-  // Filter items by search
-  const filterBySearch = useCallback((list: DomainInventoryItem[]) => {
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase();
-    return list.filter((item) => item.domain.toLowerCase().includes(q));
-  }, [searchQuery]);
+  const rows = filter === 'attention' ? attentionItems : filter === 'expiring' ? expiringSoonItems : items;
+  const emptyMessage =
+    filter === 'attention' ? 'No domains need attention' : filter === 'expiring' ? 'No domains expiring in the next 30 days' : 'No domains yet';
 
-  const renderTable = (rows: DomainInventoryItem[], emptyMessage: string) => {
-    const filtered = filterBySearch(rows);
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-white/35">
-              <th className="px-4 py-3">Domain</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 hidden lg:table-cell">Connections</th>
-              <th className="px-4 py-3 hidden lg:table-cell">Expires</th>
-              <th className="px-4 py-3 hidden xl:table-cell">Auto-renew</th>
-              <th className="px-4 py-3 w-12" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <TableSkeleton />
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6}>
-                  <EmptyState
-                    message={searchQuery ? 'No domains match your search' : emptyMessage}
-                    isFiltered={!!searchQuery}
-                  />
-                </td>
-              </tr>
-            ) : (
-              groupDomains(filtered).map((group) => (
-                <Fragment key={group.rootDomain}>
-                  {group.root ? (
-                    <DomainRow item={group.root} />
-                  ) : (
-                    <tr className="border-t border-white/[0.04]">
-                      <td className="px-4 py-2.5">
-                        <span className="text-[11px] font-mono text-white/30 uppercase tracking-wider">{group.rootDomain}</span>
-                      </td>
-                      <td colSpan={5} />
-                    </tr>
-                  )}
-                  {group.children.map((child) => (
-                    <DomainRow key={child.domain} item={child} parentDomain={group.rootDomain} />
-                  ))}
-                </Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((item) => item.domain.toLowerCase().includes(q));
+  }, [rows, searchQuery]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Domains</h1>
-          <p className="mt-1 text-sm text-white/50">
-            Manage purchased and connected domains across your account.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white/50 hover:text-white hover:bg-white/[0.06]"
-            onClick={() => void loadDomains()}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          </Button>
-          <Link href="/dashboard/domains/marketplace">
-            <Button size="sm" className="bg-white text-black hover:bg-white/90 font-medium">
-              Register Domain
-            </Button>
-          </Link>
-        </div>
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]" style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)' }} />
+        <div className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]" style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)' }} />
+        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)', backgroundSize: '28px 28px' }} />
       </div>
 
-      {/* Stats bar */}
-      {!loading && items.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-white/40">Total</span>
-            <span className="font-semibold tabular-nums text-white">{items.length}</span>
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+        {/* Hero */}
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-9">
+          <div className="max-w-3xl">
+            <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+              <span className="h-px w-4 bg-white/45" /> Account · Domains
+            </div>
+            <h1 className="text-[34px] sm:text-[42px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+              Your <span style={SERIF_STYLE} className="text-white/55 font-normal">domains</span>.
+            </h1>
+            <p className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}>
+              Manage purchased and connected domains, DNS, and SSL across your account.
+            </p>
           </div>
-          <div className="h-4 w-px bg-white/[0.08]" />
-          <div className="flex items-center gap-2">
-            <StatusDot status="active" />
-            <span className="text-white/40">Active</span>
-            <span className="font-semibold tabular-nums text-white">{activeCount}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void loadDomains()}
+              disabled={loading}
+              className={`${MONO} inline-flex h-10 items-center gap-2 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50`}
+            >
+              <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+            <Link
+              href="/dashboard/domains/transfer"
+              className={`${MONO} inline-flex h-10 items-center gap-2 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            >
+              Transfer
+            </Link>
+            <Link
+              href="/dashboard/domains/marketplace"
+              className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+              style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: '#fff', boxShadow: '0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`; e.currentTarget.style.transform = 'none'; }}
+            >
+              <Plus className="h-3.5 w-3.5" /> Register domain
+            </Link>
           </div>
-          {attentionItems.length > 0 && (
-            <>
-              <div className="h-4 w-px bg-white/[0.08]" />
-              <div className="flex items-center gap-2">
-                <StatusDot status="attention" />
-                <span className="text-white/40">Needs Attention</span>
-                <span className="font-semibold tabular-nums text-red-300">{attentionItems.length}</span>
-              </div>
-            </>
-          )}
-          {expiringSoonItems.length > 0 && (
-            <>
-              <div className="h-4 w-px bg-white/[0.08]" />
-              <div className="flex items-center gap-2">
-                <Clock className="h-3 w-3 text-amber-400" />
-                <span className="text-white/40">Expiring</span>
-                <span className="font-semibold tabular-nums text-amber-300">{expiringSoonItems.length}</span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+        </header>
 
-      {/* Error */}
-      {error && (
-        <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </div>
-      )}
+        {/* Stats */}
+        {!loading && items.length > 0 && (
+          <section className="mb-7 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile label="Total" value={String(items.length)} hint={`${items.length} in your account`} />
+            <StatTile label="Active" value={String(activeCount)} hint="Serving traffic" tone="green" />
+            <StatTile label="Needs attention" value={String(attentionItems.length)} hint={attentionItems.length ? 'Action required' : 'All healthy'} tone={attentionItems.length ? 'red' : undefined} />
+            <StatTile label="Expiring" value={String(expiringSoonItems.length)} hint="Within 30 days" tone={expiringSoonItems.length ? 'amber' : undefined} />
+          </section>
+        )}
 
-      {/* Search + Table */}
-      <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] overflow-hidden">
-        {/* Toolbar: search + tabs */}
-        <div className="border-b border-white/[0.06] px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Search */}
-          <div className="relative max-w-xs w-full">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+        {/* Error */}
+        {error && (
+          <div className="mb-5 flex items-center gap-2.5 border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[12.5px] text-red-200 rounded-[6px]">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )}
+
+        {/* Filter chips + search */}
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} count={items.length}>All</FilterChip>
+            <FilterChip active={filter === 'attention'} onClick={() => setFilter('attention')} count={attentionItems.length} dot={STATUS_COLOR.attention}>Needs attention</FilterChip>
+            <FilterChip active={filter === 'expiring'} onClick={() => setFilter('expiring')} count={expiringSoonItems.length} dot={STATUS_COLOR.pending}>Expiring</FilterChip>
+          </div>
+          <div className="flex w-full sm:w-72 items-center gap-2 border border-white/[0.08] bg-[#0d0e11] px-3 h-9 rounded-[5px]">
+            <Search className="h-3.5 w-3.5 text-white/40 shrink-0" />
             <input
-              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter domains..."
-              className="h-8 w-full rounded-md border border-white/[0.08] bg-white/[0.03] pl-8 pr-3 text-sm text-white placeholder:text-white/30 focus:border-white/[0.15] focus:outline-none focus:ring-0"
+              placeholder="Filter domains…"
+              className={`${MONO} flex-1 bg-transparent text-[12px] text-white placeholder:text-white/30 outline-none`}
             />
-          </div>
-
-          {/* Tab counts */}
-          <div className="text-xs text-white/35">
-            {items.length} domain{items.length !== 1 ? 's' : ''}
           </div>
         </div>
 
-        <Tabs defaultValue="all">
-          <div className="border-b border-white/[0.06]">
-            <TabsList className="bg-transparent border-0 h-auto p-0 px-4 gap-0 rounded-none">
-              <TabsTrigger
-                value="all"
-                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-white data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
-              >
-                All{!loading && ` (${items.length})`}
-              </TabsTrigger>
-              <TabsTrigger
-                value="attention"
-                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-red-400 data-[state=active]:text-red-300 data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
-              >
-                Needs Attention{!loading && attentionItems.length > 0 && ` (${attentionItems.length})`}
-              </TabsTrigger>
-              <TabsTrigger
-                value="expiring"
-                className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs font-medium text-white/45 data-[state=active]:border-amber-400 data-[state=active]:text-amber-300 data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
-              >
-                Expiring{!loading && expiringSoonItems.length > 0 && ` (${expiringSoonItems.length})`}
-              </TabsTrigger>
-            </TabsList>
+        {/* Table */}
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className={`${MONO} text-left text-[10px] uppercase tracking-[0.14em] text-white/40 bg-white/[0.015]`}>
+                  <th className="px-5 py-2.5 font-semibold">Domain</th>
+                  <th className="px-5 py-2.5 font-semibold">Status</th>
+                  <th className="px-5 py-2.5 font-semibold hidden lg:table-cell">Connections</th>
+                  <th className="px-5 py-2.5 font-semibold hidden lg:table-cell">Expires</th>
+                  <th className="px-5 py-2.5 font-semibold hidden xl:table-cell">Auto-renew</th>
+                  <th className="px-5 py-2.5 w-12" />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <TableSkeleton />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLS}>
+                      <EmptyState message={searchQuery ? 'No domains match your search' : emptyMessage} isFiltered={!!searchQuery} />
+                    </td>
+                  </tr>
+                ) : (
+                  groupDomains(filtered).map((group) => (
+                    <Fragment key={group.rootDomain}>
+                      {group.root ? (
+                        <DomainRow item={group.root} />
+                      ) : (
+                        <tr className="border-t border-white/[0.04]">
+                          <td className="px-5 py-2.5">
+                            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/30`}>{group.rootDomain}</span>
+                          </td>
+                          <td colSpan={COLS - 1} />
+                        </tr>
+                      )}
+                      {group.children.map((child) => (
+                        <DomainRow key={child.domain} item={child} parentDomain={group.rootDomain} />
+                      ))}
+                    </Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-
-          <TabsContent value="all" className="mt-0">
-            {renderTable(items, 'No domains yet')}
-          </TabsContent>
-
-          <TabsContent value="attention" className="mt-0">
-            {renderTable(attentionItems, 'No domains need attention')}
-          </TabsContent>
-
-          <TabsContent value="expiring" className="mt-0">
-            {renderTable(expiringSoonItems, 'No domains expiring in the next 30 days')}
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
     </div>
+  );
+}
+
+// ─── Subcomponents ─────────────────────────────────────────────────
+
+function StatTile({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'green' | 'amber' | 'red' }) {
+  const dot = tone === 'green' ? '#4ade80' : tone === 'amber' ? '#fbbf24' : tone === 'red' ? '#f87171' : 'rgba(255,255,255,0.55)';
+  return (
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <span className="h-1 w-1 rounded-full shrink-0" style={{ background: dot, boxShadow: dot.startsWith('rgba') ? 'none' : `0 0 5px ${dot}` }} />
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>{label}</span>
+      </div>
+      <span style={SERIF_STYLE} className="text-[34px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white">{value}</span>
+      {hint && <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>}
+    </div>
+  );
+}
+
+function FilterChip({ active, onClick, count, children, dot }: { active?: boolean; onClick: () => void; count: number; children: React.ReactNode; dot?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${MONO} inline-flex items-center gap-1.5 h-8 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold rounded-[4px] border transition-colors`}
+      style={
+        active
+          ? { color: ACCENT, borderColor: 'rgba(0,149,255,0.4)', background: ACCENT_DIM }
+          : { color: 'rgba(255,255,255,0.55)', borderColor: 'rgba(255,255,255,0.08)', background: '#111216' }
+      }
+    >
+      {dot && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: dot, boxShadow: `0 0 5px ${dot}` }} />}
+      <span>{children}</span>
+      <span className="tabular-nums" style={{ color: active ? ACCENT : 'rgba(255,255,255,0.35)' }}>{count}</span>
+    </button>
   );
 }
