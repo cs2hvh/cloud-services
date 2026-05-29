@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Rocket, Server, DollarSign } from "lucide-react";
+import { Rocket, Server, DollarSign, Activity } from "lucide-react";
 import { Admin_PlatformApp } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AppsListTab from "@/components/admin/platform-apps/apps-list-tab";
 import ClusterUsageTab from "@/components/admin/cluster-monitor/cluster-usage-tab";
 import PricingTab from "@/components/admin/platform-apps/pricing-tab";
+import BandwidthTab from "@/components/admin/platform-apps/bandwidth-tab";
 
 interface PageProps {
   all_apps: Admin_PlatformApp[];
@@ -42,7 +43,7 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
+          <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
             <TabsTrigger
               value="deployed-apps"
               className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -64,6 +65,13 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
               <DollarSign className="h-4 w-4 mr-2" />
               Pricing
             </TabsTrigger>
+            <TabsTrigger
+              value="bandwidth"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Activity className="h-4 w-4 mr-2" />
+              Bandwidth
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="deployed-apps" className="mt-0">
@@ -76,6 +84,10 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
 
           <TabsContent value="pricing" className="mt-0">
             <PricingTab />
+          </TabsContent>
+
+          <TabsContent value="bandwidth" className="mt-0">
+            <BandwidthTab />
           </TabsContent>
         </Tabs>
       </motion.div>
