@@ -119,6 +119,9 @@ export const clusterLifecycleOperations = {
         users: encryptedUsers || [],
         dbs: database.data.database.db_names || [],
         storage_size_mib: database.data.database.storage_size_mib,
+        // Opt-in pgvector (PG only) — actually enabled once the cluster is
+        // online, by the status-check path (see operations/pgvector.ts).
+        pgvector_enabled: request.engine === "pg" ? !!request.enable_pgvector : false,
       };
 
       const supabaseData = await Database_Clusters.create(sendData);

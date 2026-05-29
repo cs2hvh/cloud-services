@@ -13,6 +13,8 @@ export interface CreateDatabaseClusterRequest {
   owner_id: string;
   project_id: string;
   user_email?: string;
+  // Opt-in: enable the pgvector extension on the cluster once online (PG only).
+  enable_pgvector?: boolean;
 }
 
 export interface CreateDatabaseClusterResult {
