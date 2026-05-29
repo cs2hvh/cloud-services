@@ -1,15 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
-import {
-  proxmoxAuth,
-  getDispatcher,
-  deleteVM,
-  postForm,
-  removeHostRoute,
-  type ProxmoxHost,
-} from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { releaseOnDemandVmac } from "@/lib/proxmox/on-demand-vmac";
+import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -165,94 +157,13 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     return Response.json({ ok: false, error: "Not authorized" }, { status: 403 });
   }
 
-  const vmid = server.vmid as number | undefined;
-  const node = server.node as string | undefined;
-  const hostId = server.location as string | undefined;
-
-  // If VM was fully provisioned, destroy it on Proxmox
-  if (vmid && vmid > 0 && node && hostId) {
-    const { data: host } = await supabase
-      .from("proxmox_hosts")
-      .select(
-        "id, name, host_url, allow_insecure_tls, token_id, token_secret, username, password, node, storage, bridge, gateway_ip, dns_primary, dns_secondary, network_mode"
-      )
-      .eq("id", hostId)
-      .maybeSingle();
-
-    if (host) {
-      const cfg = host as unknown as ProxmoxHost;
-      const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
-
-      try {
-        const auth = await proxmoxAuth(cfg, dispatcher);
-
-        // Stop VM first if running
-        if (server.status === "running") {
-          try {
-            await postForm(
-              cfg,
-              `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
-              {},
-              auth,
-              dispatcher
-            );
-            // Brief wait for stop
-            await new Promise((r) => setTimeout(r, 3000));
-          } catch {}
-        }
-
-        // Delete VM from Proxmox
-        await deleteVM(cfg, vmid, auth, dispatcher);
-
-        // Clean up host route
-        if (server.ip) {
-          const routeModes = new Set(["legacy_public_gateway", "ovh_hg_scale_routed", "ovh_advance_gen3_routed"]);
-          if (routeModes.has(String((cfg as { network_mode?: string | null }).network_mode || "legacy_public_gateway"))) {
-            await removeHostRoute(cfg, server.ip, cfg.bridge || "vmbr0");
-          }
-        }
-
-        // Release the on-demand vMAC (OVH side + DB pool row) so the
-        // IP can be reallocated cleanly to a future VM.
-        if (
-          server.ip &&
-          (cfg as { network_mode?: string | null }).network_mode === "ovh_failover_vmac"
-        ) {
-          try {
-            const result = await releaseOnDemandVmac({
-              supabase,
-              host: { id: cfg.id, host_url: cfg.host_url, provider: (cfg as { provider?: string | null }).provider },
-              ip: server.ip,
-            });
-            if (result.released) {
-              console.log(
-                `[VM Delete] Released vMAC ${result.mac} for ${server.ip} (ovh deleted: ${result.ovhDeleted ?? false})`
-              );
-            }
-          } catch (e) {
-            console.warn(
-              `[VM Delete] vMAC release failed for ${server.ip}: ${e instanceof Error ? e.message : e} — DB cleanup may need manual attention`
-            );
-          }
-        }
-      } catch (e) {
-        console.error("[VM Delete] Proxmox cleanup failed:", e instanceof Error ? e.message : e);
-        // Continue with DB deletion even if Proxmox cleanup fails
-      }
-    }
-  }
-
-  // Record billing end before deletion for accurate invoicing
-  await supabase
-    .from("servers")
-    .update({ status: "destroyed", billing_end: new Date().toISOString() })
-    .eq("id", serverId);
-
-  // Remove from database
-  const { error: deleteErr } = await supabase.from("servers").delete().eq("id", serverId);
-  if (deleteErr) {
-    console.error("[VM Delete] DB delete failed:", deleteErr.message);
-    return Response.json({ ok: false, error: "Failed to delete server record" }, { status: 500 });
+  // Tear down the VM, settle billing (prorate the final hour + remove the
+  // active_compute meter), and delete the record. Shared with the billing
+  // grace-expiry path (lib/services/compute/server-lifecycle.ts).
+  const result = await destroyServer(serverId);
+  if (!result.success) {
+    console.error("[VM Delete] teardown failed:", result.message);
+    return Response.json({ ok: false, error: "Failed to delete server" }, { status: 500 });
   }
 
   return Response.json({ ok: true });

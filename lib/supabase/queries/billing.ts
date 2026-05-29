@@ -123,7 +123,8 @@ type BillableServiceType =
   | "gpu_pod"
   | "inference_finetune"
   | "inference_serving"
-  | "inference_vector";
+  | "inference_vector"
+  | "compute";
 
 type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;

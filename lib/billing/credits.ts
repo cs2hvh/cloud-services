@@ -152,4 +152,55 @@ export const BillingCredits = {
 
     return { finalCharge };
   },
+
+  // ── Compute / virtual servers (service_id = servers.billing_service_id) ────
+  addActiveCompute: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_compute")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_compute: ${error.message}`);
+  },
+
+  closeActiveCompute: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+    const supabase = await createServiceClient();
+    const { data: row, error: getErr } = await supabase
+      .schema("billing")
+      .from("active_compute")
+      .select("hourly_rate, last_billed_at")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+
+    if (getErr) throw new Error(`Failed to fetch active_compute: ${getErr.message}`);
+
+    let finalCharge = 0;
+    if (row) {
+      const rate = parseFloat(String(row.hourly_rate));
+      if (rate > 0) {
+        const lastBilledAt = row.last_billed_at as string | undefined;
+        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
+        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
+        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
+      }
+    }
+
+    await supabase
+      .schema("billing")
+      .from("active_compute")
+      .delete()
+      .eq("service_id", params.serviceId);
+
+    return { finalCharge };
+  },
 };

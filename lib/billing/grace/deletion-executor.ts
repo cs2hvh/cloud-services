@@ -5,6 +5,7 @@ import { KubernetesService } from "@/lib/services/kubernetes-service";
 import { ObjectStorageService } from "@/lib/services/object-storage-service";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { SpectrumService } from "@/lib/services/spectrum-service";
+import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 
 type ServiceDeletionOutcome = {
   success: boolean;
@@ -224,6 +225,30 @@ export async function executeGraceDeletion(params: {
           success: true,
           alreadyDeleted: !count,
           message: count ? "Vector collection deleted" : "Vector collection already deleted",
+        };
+      }
+
+      case "active_compute": {
+        // service_id is servers.billing_service_id. Resolve the server and
+        // tear it down (Proxmox + billing close + DB delete) via the shared
+        // helper used by the user-initiated delete.
+        const supabase = await createServiceClient();
+        const { data: srv } = await supabase
+          .from("servers")
+          .select("id")
+          .eq("billing_service_id", params.serviceId)
+          .maybeSingle();
+        if (!srv) {
+          return { success: true, alreadyDeleted: true, message: "Server already deleted" };
+        }
+        const result = await destroyServer(Number(srv.id));
+        if (!result.success) {
+          return { success: false, message: result.message ?? "Server deletion failed" };
+        }
+        return {
+          success: true,
+          alreadyDeleted: result.alreadyGone,
+          message: "Server deleted",
         };
       }
 

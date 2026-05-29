@@ -8,6 +8,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
+import { postProvisionBilling } from "@/config/billing-flow";
 import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
 import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
@@ -801,6 +802,7 @@ export async function POST(req: NextRequest) {
 
   // Reserve DB record to avoid reuse
   let reservationId: number | null = null;
+  let billingServiceId: string | null = null;
   const db: DbReservation = { saved: false, id: null, error: null };
 
   try {
@@ -846,7 +848,7 @@ export async function POST(req: NextRequest) {
         hourly_cost: hourlyCost,
         billing_start: billingStart.toISOString(),
       })
-      .select("id")
+      .select("id, billing_service_id")
       .single();
 
     if (insertErr) {
@@ -859,6 +861,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
     }
     reservationId = (inserted as Record<string, unknown>)?.id as number ?? null;
+    billingServiceId = ((inserted as Record<string, unknown>)?.billing_service_id as string) ?? null;
     db.saved = true;
     db.id = reservationId;
     // IP is now tracked in the servers table — release the Redis lock
@@ -1132,6 +1135,27 @@ export async function POST(req: NextRequest) {
           },
         })
         .eq("id", reservationId);
+    }
+
+    // Start metered billing now that the VM is live. The 5-min cron meters
+    // active_compute hourly (prorated) with the standard grace lifecycle.
+    // Best-effort: a failure here is logged but never tears down a live VM.
+    if (billingServiceId) {
+      try {
+        await postProvisionBilling({
+          userId: user.id,
+          initialCost: 0,
+          hourlyRate: hourlyCost,
+          serviceId: billingServiceId,
+          serviceType: "compute",
+          addActive: BillingCredits.addActiveCompute,
+        });
+      } catch (billingErr) {
+        console.error(
+          "[VM Create] failed to register compute billing meter:",
+          billingErr instanceof Error ? billingErr.message : billingErr
+        );
+      }
     }
   } catch (e: unknown) {
     const failureMessage = errorMessage(e);
