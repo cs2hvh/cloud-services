@@ -34,8 +34,12 @@ import {
   RotateCcw,
   FolderOpen,
   Edit2,
+  ShoppingCart,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
+import { BANDWIDTH_PACKS, BANDWIDTH_PACK_LIST, type BandwidthPackId } from '@/lib/services/platform-app-bandwidth/packs';
+import { useBandwidth } from '@/hooks/use-app-bandwidth';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,6 +64,7 @@ import { OperationLogsPanel } from '@/components/dashboard/apps/operation-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
+import { AppBandwidthCard } from '@/components/dashboard/apps/app-bandwidth-card';
 import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
@@ -114,6 +119,10 @@ type PlatformAppRates = {
   initialCost: number;
   hourlyRate: number;
   price: number;
+  quota?: {
+    totalBytes: number | null;
+    maxRequestBodyBytes: number | null;
+  };
 };
 
 const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
@@ -128,6 +137,20 @@ const PLATFORM_APP_SIZE_SPECS: Record<
   xlarge:    { cpu: '2 CPU',    memory: '2 GB',   replicas: 4 },
   'xxlarge': { cpu: '4 CPU',    memory: '4 GB',   replicas: 6 },
 };
+
+function formatBytes(bytes?: number | null): string {
+  if (bytes === undefined) return '—';
+  if (bytes === null) return 'Unlimited';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit <= 1 ? 0 : 1)} ${units[unit]}`;
+}
 
 const SECTION_META: Array<{
   value: string;
@@ -304,6 +327,13 @@ export default function AppDetailPage() {
   const [operationLogs, setOperationLogs] = useState('');
   const [operationLogsLoading, setOperationLogsLoading] = useState(false);
   const [platformPricing, setPlatformPricing] = useState<Partial<Record<SizeKey, PlatformAppRates>>>({});
+
+  // Bandwidth pack purchase state (Settings tab)
+  const [selectedPack, setSelectedPack] = useState<BandwidthPackId | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
+  const [packSuccess, setPackSuccess] = useState<string | null>(null);
+  const { data: bandwidthData, refetch: refetchBandwidth } = useBandwidth(appId, !!app);
 
   // Project assignment state
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -558,7 +588,16 @@ export default function AppDetailPage() {
 
         const data = await res.json();
         if (!cancelled && data?.rates) {
-          setPlatformPricing(data.rates);
+          const ratesWithQuota = Object.fromEntries(
+            Object.entries(data.rates).map(([size, rate]) => [
+              size,
+              {
+                ...(rate as PlatformAppRates),
+                quota: data.quotas?.[size],
+              },
+            ])
+          ) as Partial<Record<SizeKey, PlatformAppRates>>;
+          setPlatformPricing(ratesWithQuota);
         }
       } catch (error) {
         console.error('Error fetching platform pricing:', error);
@@ -731,8 +770,9 @@ export default function AppDetailPage() {
       setPendingResizeSize(null);
       // Refresh on both success and failure: failure reason and status are updated server-side
       fetchApp();
+      refetchBandwidth();
     }
-  }, [operationDeployments, fetchApp]);
+  }, [operationDeployments, fetchApp, refetchBandwidth]);
 
   useEffect(() => {
     if (operationDeployments.length === 0) {
@@ -1082,6 +1122,30 @@ export default function AppDetailPage() {
       setResizeError(message);
     } finally {
       setResizing(false);
+    }
+  };
+
+  const handlePurchasePack = async () => {
+    if (!app || !selectedPack) return;
+    setPurchasing(true);
+    setPackError(null);
+    setPackSuccess(null);
+    try {
+      const res = await fetch('/api/services/platform-apps/bandwidth/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, pack: selectedPack }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Purchase failed');
+      const pack = BANDWIDTH_PACKS[selectedPack];
+      setPackSuccess(`${pack.label} bandwidth added${data.restriction_lifted ? ' — traffic restored' : ''}`);
+      setSelectedPack(null);
+      refetchBandwidth();
+    } catch (err) {
+      setPackError(err instanceof Error ? err.message : 'Purchase failed');
+    } finally {
+      setPurchasing(false);
     }
   };
 
@@ -1791,6 +1855,11 @@ export default function AppDetailPage() {
               </Card>
             )}
 
+            {/* Bandwidth */}
+            {app.status === 'running' && (
+              <AppBandwidthCard appId={app.id} onManage={() => setActiveTab('settings')} />
+            )}
+
             {/* Repository Info */}
             <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
               <CardHeader className="border-b border-white/[0.06]">
@@ -1832,6 +1901,7 @@ export default function AppDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
           </TabsContent>
 
           {/* Integrations Tab */}
@@ -2106,6 +2176,7 @@ export default function AppDetailPage() {
                     {PLATFORM_APP_SIZE_ORDER.map((size) => {
                       const specs = PLATFORM_APP_SIZE_SPECS[size];
                       const monthlyPrice = platformPricing[size]?.price ?? 0;
+                      const quota = platformPricing[size]?.quota;
                       const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
                       const isCurrent = size === currentSize;
                       const isUpgrade =
@@ -2155,6 +2226,14 @@ export default function AppDetailPage() {
                               <Layers className="w-3 h-3" />
                               <span>{specs.replicas} instance{specs.replicas > 1 ? 's' : ''}</span>
                             </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Activity className="w-3 h-3" />
+                              <span>{formatBytes(quota?.totalBytes)} transfer</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Upload className="w-3 h-3" />
+                              <span>{formatBytes(quota?.maxRequestBodyBytes)} request body</span>
+                            </div>
                           </div>
 
                           <p className="mt-3 text-sm font-medium text-white/90">
@@ -2193,6 +2272,90 @@ export default function AppDetailPage() {
                       </Button>
                       <span className="text-xs text-white/50">
                         Your app will be redeployed with new resources.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bandwidth Packs */}
+                <div className="border-t border-white/10 pt-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="w-4 h-4 text-blue-400" />
+                    <p className="text-sm font-medium text-white">Bandwidth Packs</p>
+                  </div>
+                  {bandwidthData && (
+                    <p className="text-xs text-white/40 mb-3">
+                      {bandwidthData.quota.totalBytes
+                        ? `${((bandwidthData.totalBytes / bandwidthData.quota.totalBytes) * 100).toFixed(1)}% of quota used this period`
+                        : 'No quota configured'}
+                      {bandwidthData.purchasedBytes > 0 && ` · ${(bandwidthData.purchasedBytes / 1073741824).toFixed(0)} GB purchased`}
+                    </p>
+                  )}
+
+                  {packError && (
+                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      {packError}
+                    </div>
+                  )}
+                  {packSuccess && (
+                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
+                      <CheckCircle2 className="w-4 h-4" />
+                      {packSuccess}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {BANDWIDTH_PACK_LIST.map((pack) => {
+                      const isSelected = selectedPack === pack.id;
+                      return (
+                        <div
+                          key={pack.id}
+                          onClick={() => { setSelectedPack(isSelected ? null : pack.id); setPackError(null); setPackSuccess(null); }}
+                          className={`relative border px-4 py-4 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-green-500/40 bg-white/[0.05]'
+                              : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
+                          }`}
+                        >
+                          <h4 className="text-base font-semibold text-white mb-1">{pack.label}</h4>
+                          <p className="text-xs text-white/50">One-time for this billing period</p>
+                          <p className="mt-3 text-sm font-medium text-white/90">${pack.price.toFixed(2)}</p>
+                          {isSelected && (
+                            <Check className="absolute top-3 right-3 w-4 h-4 text-green-400" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedPack && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={handlePurchasePack}
+                        disabled={purchasing}
+                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {purchasing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Purchasing...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-4 h-4 mr-2" />
+                            Buy {BANDWIDTH_PACKS[selectedPack].label}
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { setSelectedPack(null); setPackError(null); }}
+                        className="rounded-none border-white/20 text-white hover:bg-white/10"
+                      >
+                        Cancel
+                      </Button>
+                      <span className="text-xs text-white/50">
+                        Deducted from your credit balance.
                       </span>
                     </div>
                   )}

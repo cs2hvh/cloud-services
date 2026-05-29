@@ -2,6 +2,13 @@ import { getRatesForPlatformApp } from "@/config/pricing";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { PlatformAppBillingService } from "@/lib/services/platform-app-billing";
+import {
+  PlatformAppBandwidthService,
+  syncMaxRequestBodySize,
+  removeBandwidthRestriction,
+} from "@/lib/services/platform-app-bandwidth";
+import { createServiceClient } from "@/lib/supabase/server";
+import { monthBounds, dateOnly } from "@/lib/services/platform-app-bandwidth/utils";
 import { AppOperationLogger } from "@/lib/app-operations/application/app-operation-logger";
 import type {
   AppDeploymentRecord,
@@ -65,6 +72,44 @@ export class AppBuildSideEffectsService {
           });
         }
 
+        // Sync NGINX proxy-body-size and lift any active bandwidth restriction.
+        try {
+          const quota = await PlatformAppBandwidthService.getQuotaForSize(targetSize);
+          const bodyResult = await syncMaxRequestBodySize(params.appName, quota.maxRequestBodyBytes);
+          if (!bodyResult.synced) {
+            logger.warn("Failed to sync proxy-body-size after resize", {
+              target_size: targetSize,
+              error: bodyResult.error,
+            });
+          }
+
+          // If the app was bandwidth-restricted on the old plan, check whether the
+          // new (larger) quota resolves the restriction. Lift immediately so the user
+          // doesn't have to wait for the next cron sync after upgrading.
+          const currentUsage = await PlatformAppBandwidthService.getCurrentUsage(params.appId);
+          if (currentUsage?.lifecycle_status === "restricted" && quota.totalBytes !== null) {
+            const purchasedBytes = Number(currentUsage.purchased_bytes) || 0;
+            const effectiveQuota = quota.totalBytes + purchasedBytes;
+            if (Number(currentUsage.total_bytes) < effectiveQuota) {
+              const liftResult = await removeBandwidthRestriction(params.appName);
+              if (liftResult.removed) {
+                const supabase = await createServiceClient();
+                const { start } = monthBounds();
+                await (supabase as any)
+                  .from("platform_app_bandwidth_usage_monthly")
+                  .update({ lifecycle_status: "ok", restored_at: new Date().toISOString(), restricted_at: null })
+                  .eq("app_id", params.appId)
+                  .eq("period_start", dateOnly(start));
+                logger.info("Lifted bandwidth restriction after resize", { target_size: targetSize });
+              }
+            }
+          }
+        } catch (err) {
+          logger.warn("Error syncing bandwidth/proxy-body-size after resize", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+
         logger.info("Applied resize success side effects", { target_size: targetSize });
         return warnings;
       }
@@ -115,6 +160,26 @@ export class AppBuildSideEffectsService {
       warnings.push(billingActivation.error || "Failed to activate initial billing");
       logger.error("Failed to activate initial billing", {
         error: billingActivation.error,
+      });
+    }
+
+    // Sync NGINX proxy-body-size to match the plan quota for this app's size.
+    // Non-critical: runs fire-and-forget style so a K8s error never fails the deploy.
+    try {
+      const appResult = await Platform_Apps.get(params.appId);
+      if (appResult.success && appResult.data?.size) {
+        const quota = await PlatformAppBandwidthService.getQuotaForSize(appResult.data.size);
+        const bodyResult = await syncMaxRequestBodySize(params.appName, quota.maxRequestBodyBytes);
+        if (!bodyResult.synced) {
+          logger.warn("Failed to sync proxy-body-size after deploy", {
+            app_size: appResult.data.size,
+            error: bodyResult.error,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn("Error syncing proxy-body-size after deploy", {
+        error: err instanceof Error ? err.message : String(err),
       });
     }
 
