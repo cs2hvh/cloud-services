@@ -10,10 +10,6 @@ import {
 import {
   proxmoxAuth,
   getDispatcher,
-  postForm,
-  waitTask,
-  stopVM,
-  startVM,
   configureVM,
   getVMConfig,
   findVMBootDisk,
@@ -176,9 +172,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   }
 
   const status = String(server.status);
-  if (status !== "running" && status !== "stopped") {
+  if (status === "running" || status === "suspended") {
     return Response.json(
-      { ok: false, error: "Server must be running or stopped to resize. Please try again shortly." },
+      { ok: false, error: "Power off the server before resizing." },
+      { status: 409 }
+    );
+  }
+  if (status !== "stopped") {
+    return Response.json(
+      { ok: false, error: "Server must be powered off to resize. Please try again shortly." },
       { status: 409 }
     );
   }
@@ -294,27 +296,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
       const auth = await proxmoxAuth(cfg, dispatcher);
 
-      // 1. Power down (graceful, Proxmox force-stops after the timeout).
-      if (priorStatus === "running") {
-        await setProgress(25, "Powering down for resize…");
-        try {
-          const task = await postForm(
-            cfg,
-            `/api2/json/nodes/${encodeURIComponent(cfg.node)}/qemu/${vmid}/status/shutdown`,
-            { timeout: 90, forceStop: 1 },
-            auth,
-            dispatcher
-          );
-          await waitTask(cfg, task, auth, dispatcher, 120000, 2000);
-        } catch {
-          const task = await stopVM(cfg, vmid, auth, dispatcher);
-          await waitTask(cfg, task, auth, dispatcher, 60000, 2000).catch(() => {});
-        }
-      }
+      // Resize is only permitted on a STOPPED server (validated above), so no
+      // power-cycle is needed here — we apply config to the powered-off VM and
+      // leave it stopped for the customer to start when ready.
 
-      // 2. Grow the disk first (the only irreversible op) if the plan is larger.
+      // 1. Grow the disk first (the only irreversible op) if the plan is larger.
       if (plan.diskGB > currentDiskGb) {
-        await setProgress(50, "Expanding storage…");
+        await setProgress(40, "Expanding storage…");
         const vmConfig = await getVMConfig(cfg, vmid, auth, dispatcher);
         const boot = findVMBootDisk(vmConfig);
         if (boot && plan.diskGB > boot.sizeGb) {
@@ -322,17 +310,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
       }
 
-      // 3. Apply new CPU + RAM.
-      await setProgress(70, "Applying CPU and memory…");
+      // 2. Apply new CPU + RAM.
+      await setProgress(75, "Applying CPU and memory…");
       await configureVM(cfg, vmid, { cores: plan.vcpu, memory: plan.memoryMB }, auth, dispatcher);
 
-      // 4. Power back up if it was running.
-      if (priorStatus === "running") {
-        await setProgress(90, "Starting server…");
-        await startVM(cfg, vmid, auth, dispatcher).catch(() => {});
-      }
-
-      // 5. Persist new specs + restore power state.
+      // 3. Persist new specs; the server stays stopped.
       await svc
         .from("servers")
         .update({
@@ -354,7 +336,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         })
         .eq("id", serverId);
 
-      // 6. Re-rate the billing meter to the new plan price.
+      // 4. Re-rate the billing meter to the new plan price.
       if (billingServiceId) {
         await BillingCredits.rerateActiveCompute({
           serviceId: billingServiceId,

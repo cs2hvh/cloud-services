@@ -5,7 +5,7 @@
 // disk can only grow), and on confirm power-cycles + re-rates billing.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Check, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2, Check, AlertTriangle, RefreshCw, PowerOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { type ServerData } from './types';
@@ -47,10 +47,13 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [powering, setPowering] = useState(false);
   const [tier, setTier] = useState<'shared' | 'dedicated'>('shared');
   const [supabase] = useState(() => createClient());
 
   const busy = server.status === 'provisioning';
+  const needsPowerOff = server.status === 'running' || server.status === 'suspended';
+  const isStopped = server.status === 'stopped';
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const { data: s } = await supabase.auth.getSession();
@@ -107,6 +110,25 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
     }
   };
 
+  const powerOff = async () => {
+    setPowering(true);
+    try {
+      const headers = await authHeaders();
+      const res = await fetch('/api/services/compute/vms/power', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ serverId: server.id, action: 'stop' }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to power off');
+      toast.success('Powering off — plans will appear once the server stops.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to power off');
+    } finally {
+      setPowering(false);
+    }
+  };
+
   // Non-current plans of the selected tier, laddered by size (matches the
   // create form). Non-fitting plans stay visible but greyed, with a reason.
   const visible = (data?.plans ?? [])
@@ -120,6 +142,33 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
           <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: ACCENT }} />
           A resize or provisioning operation is in progress. Plans will be
           available again once it finishes.
+        </div>
+      ) : needsPowerOff ? (
+        <div className="px-5 py-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="h-9 w-9 shrink-0 flex items-center justify-center border border-white/[0.08] bg-[#0d0e11] rounded-[6px]">
+              <PowerOff className="h-4 w-4 text-white/55" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-white">Power off to resize</p>
+              <p className={`${MONO} mt-1 text-[11px] text-white/55 leading-relaxed`}>
+                Changing CPU, memory, or storage requires the server to be
+                powered off. Stop it first, then choose a new plan.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={powerOff}
+            disabled={powering}
+            className={`${MONO} inline-flex h-9 items-center gap-2 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
+            style={{ background: ACCENT, color: '#001930' }}
+            onMouseEnter={(e) => { if (!powering) e.currentTarget.style.background = ACCENT_BRIGHT; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = ACCENT; }}
+          >
+            {powering ? <Loader2 className="h-3 w-3 animate-spin" /> : <PowerOff className="h-3.5 w-3.5" />}
+            Power off server
+          </button>
         </div>
       ) : loading ? (
         <div className={`${MONO} flex items-center gap-2.5 px-5 py-6 text-[12px] text-white/45`}>
@@ -135,6 +184,10 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
           >
             <RefreshCw className="h-3 w-3" /> Retry
           </button>
+        </div>
+      ) : !isStopped ? (
+        <div className={`${MONO} px-5 py-6 text-[12px] text-white/45`}>
+          Resize is unavailable while the server is {server.status}.
         </div>
       ) : (
         <>
@@ -264,8 +317,8 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
                 <p className={`${MONO} text-[11px] text-white/70 leading-relaxed`}>
                   Resizing to <span className="text-white font-semibold">{selectedPlan.name}</span>{' '}
                   ({selectedPlan.vcpu} vCPU · {ramGb(selectedPlan.memoryMB)} GB ·{' '}
-                  {selectedPlan.diskGB} GB) reboots your server — expect ~1–2 minutes of
-                  downtime. Billing changes to{' '}
+                  {selectedPlan.diskGB} GB). Your server stays powered off — start it
+                  again when ready. Billing changes to{' '}
                   <span className="text-white font-semibold">${money(selectedPlan.monthlyUSD)}/mo</span>.
                   Storage can only grow, never shrink.
                 </p>
