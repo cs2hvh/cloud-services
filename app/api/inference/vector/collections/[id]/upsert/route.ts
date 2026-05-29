@@ -86,7 +86,7 @@ export async function POST(
     .select("id, dimensions, embedding_model_id")
     .eq("id", id)
     .eq("org_id", org.org_id)
-    .maybeSingle<{ id: string; dimensions: number; embedding_model_id: string }>();
+    .maybeSingle<{ id: string; dimensions: number; embedding_model_id: string | null }>();
 
   if (cErr || !collection) {
     return NextResponse.json({ error: "Collection not found" }, { status: 404 });
@@ -129,6 +129,14 @@ export async function POST(
   for (const r of parsed.data.rows) {
     let embedding = r.embedding;
     if (!embedding) {
+      if (!collection.embedding_model_id) {
+        return NextResponse.json(
+          {
+            error: `This is a bring-your-own-embeddings collection (no embedding model). Provide a pre-computed \`embedding\` array for row "${r.external_id}".`,
+          },
+          { status: 400 }
+        );
+      }
       if (!r.content) {
         return NextResponse.json(
           {

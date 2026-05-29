@@ -30,7 +30,10 @@ const createSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   dimensions: z.number().int().positive().max(4096),
   distance_metric: z.enum(["cosine", "l2", "inner_product"]).default("cosine"),
-  embedding_model_id: z.string().min(1),
+  // Optional: omit for a bring-your-own-embeddings collection (you always pass
+  // pre-computed vectors; the server never auto-embeds). Set it to enable
+  // server-side auto-embed with that catalog model.
+  embedding_model_id: z.string().min(1).optional().nullable(),
   index_type: z.enum(["hnsw", "ivfflat", "none"]).default("hnsw"),
   index_params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
@@ -132,30 +135,33 @@ export async function POST(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
-  // Sanity: confirm the embedding_model_id exists in the catalog
-  const { data: modelRow } = await supabase
-    .schema("inference")
-    .from("models")
-    .select("modality, capabilities")
-    .eq("model_id", parsed.data.embedding_model_id)
-    .eq("is_active", true)
-    .maybeSingle<{ modality: string; capabilities: { dimensions?: number } | null }>();
+  // Auto-embed collections must reference a real embedding model. A null model
+  // is a bring-your-own-embeddings collection — skip the catalog check.
+  if (parsed.data.embedding_model_id) {
+    const { data: modelRow } = await supabase
+      .schema("inference")
+      .from("models")
+      .select("modality, capabilities")
+      .eq("model_id", parsed.data.embedding_model_id)
+      .eq("is_active", true)
+      .maybeSingle<{ modality: string; capabilities: { dimensions?: number } | null }>();
 
-  if (!modelRow) {
-    return NextResponse.json(
-      {
-        error: `Embedding model "${parsed.data.embedding_model_id}" not found in catalog. List embedding models with GET /api/inference/models?modality=embedding (or pick a different model_id).`,
-      },
-      { status: 400 }
-    );
-  }
-  if (modelRow.modality !== "embedding") {
-    return NextResponse.json(
-      {
-        error: `"${parsed.data.embedding_model_id}" has modality "${modelRow.modality}" — must be "embedding".`,
-      },
-      { status: 400 }
-    );
+    if (!modelRow) {
+      return NextResponse.json(
+        {
+          error: `Embedding model "${parsed.data.embedding_model_id}" not found in catalog. List embedding models with GET /api/inference/models?modality=embedding, omit it for a bring-your-own-embeddings collection, or pick a different model_id.`,
+        },
+        { status: 400 }
+      );
+    }
+    if (modelRow.modality !== "embedding") {
+      return NextResponse.json(
+        {
+          error: `"${parsed.data.embedding_model_id}" has modality "${modelRow.modality}" — must be "embedding".`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   // ── Billing: resolve org payer + starting-balance gate ────────────
@@ -187,7 +193,7 @@ export async function POST(request: NextRequest) {
       description: parsed.data.description ?? null,
       dimensions: parsed.data.dimensions,
       distance_metric: parsed.data.distance_metric,
-      embedding_model_id: parsed.data.embedding_model_id,
+      embedding_model_id: parsed.data.embedding_model_id ?? null,
       index_type: parsed.data.index_type,
       index_params: parsed.data.index_params ?? { m: 16, ef_construction: 64 },
     })

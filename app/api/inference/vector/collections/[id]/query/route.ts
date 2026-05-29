@@ -97,7 +97,7 @@ export async function POST(
       id: string;
       dimensions: number;
       distance_metric: string;
-      embedding_model_id: string;
+      embedding_model_id: string | null;
     }>();
 
   if (cErr || !collection) {
@@ -107,6 +107,15 @@ export async function POST(
   // Resolve query embedding
   let queryEmbedding = parsed.data.embedding;
   if (!queryEmbedding && parsed.data.text) {
+    if (!collection.embedding_model_id) {
+      return NextResponse.json(
+        {
+          error:
+            "This is a bring-your-own-embeddings collection (no embedding model). Pass a pre-computed `embedding` array instead of `text`.",
+        },
+        { status: 400 }
+      );
+    }
     try {
       const result = await embedText(parsed.data.text, collection.embedding_model_id);
       queryEmbedding = result.embedding;
