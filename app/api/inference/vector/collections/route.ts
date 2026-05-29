@@ -28,7 +28,9 @@ const createSchema = z.object({
     .max(60)
     .regex(/^[a-z0-9][a-z0-9_-]*$/i, "Use letters, digits, hyphens, underscores"),
   description: z.string().max(500).optional().nullable(),
-  dimensions: z.number().int().positive().max(4096),
+  // Required only for bring-your-own-embeddings (no model). When a model is
+  // chosen, the dimensions are derived from the model's catalog entry.
+  dimensions: z.number().int().positive().max(4096).optional(),
   distance_metric: z.enum(["cosine", "l2", "inner_product"]).default("cosine"),
   // Optional: omit for a bring-your-own-embeddings collection (you always pass
   // pre-computed vectors; the server never auto-embeds). Set it to enable
@@ -135,8 +137,12 @@ export async function POST(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
-  // Auto-embed collections must reference a real embedding model. A null model
-  // is a bring-your-own-embeddings collection — skip the catalog check.
+  // Resolve the collection's vector dimensions:
+  //  - Auto-embed (model chosen): derive from the model's catalog entry, so the
+  //    stored size always matches what the model produces (the caller doesn't
+  //    need to know it, and an auto-embed size mismatch can't happen).
+  //  - BYO (no model): the caller's vectors define the size, so it's required.
+  let effectiveDimensions: number;
   if (parsed.data.embedding_model_id) {
     const { data: modelRow } = await supabase
       .schema("inference")
@@ -162,6 +168,27 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const modelDims = modelRow.capabilities?.dimensions;
+    if (!modelDims) {
+      return NextResponse.json(
+        {
+          error: `Embedding model "${parsed.data.embedding_model_id}" has no declared dimensions in the catalog. Pick another model or contact support.`,
+        },
+        { status: 400 }
+      );
+    }
+    effectiveDimensions = modelDims;
+  } else {
+    if (!parsed.data.dimensions) {
+      return NextResponse.json(
+        {
+          error:
+            "`dimensions` is required for a bring-your-own-embeddings collection (omit it only when you choose an embedding model).",
+        },
+        { status: 400 }
+      );
+    }
+    effectiveDimensions = parsed.data.dimensions;
   }
 
   // ── Billing: resolve org payer + starting-balance gate ────────────
@@ -191,7 +218,7 @@ export async function POST(request: NextRequest) {
       org_id: org.org_id,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
-      dimensions: parsed.data.dimensions,
+      dimensions: effectiveDimensions,
       distance_metric: parsed.data.distance_metric,
       embedding_model_id: parsed.data.embedding_model_id ?? null,
       index_type: parsed.data.index_type,
