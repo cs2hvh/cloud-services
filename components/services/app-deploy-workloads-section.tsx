@@ -103,7 +103,10 @@ export default function AppDeployWorkloadsSection() {
                             <div className="flex items-start justify-between">
                                 <div
                                     className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
-                                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                                    // style={{ 
+                                    //     background: `${w.accent}18`, 
+                                    //     borderColor: `${w.accent}40`, 
+                                    //     color: w.accent }}
                                 >
                                     {w.icon}
                                 </div>

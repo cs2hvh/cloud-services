@@ -48,11 +48,18 @@ export default function PricingClient({ categories }: PricingClientProps) {
   };
 
   return (
-    <main className="min-h-screen bg-[#191919] text-white pt-20">
+    <main className="min-h-screen bg-[#04060a] text-white pt-20">
       {/* Header Section */}
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
         <div className="text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold mb-4">
+          <div className="mb-5 inline-flex items-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/55">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#0095FF] opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#0095FF] shadow-[0_0_6px_#0095FF]" />
+            </span>
+            <span>Transparent pricing</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-[-0.03em] mb-4">
             Pricing
           </h1>
           <p className="text-white/60 text-sm md:text-base mb-3">
@@ -80,7 +87,12 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 setBillingCycle((prev) => (prev === "monthly" ? "yearly" : "monthly"))
               }
               aria-pressed={billingCycle === "yearly"}
-              className="relative h-6 w-12 rounded-full border border-white/20 bg-white/10 transition-colors duration-200"
+              className={cn(
+                "relative h-6 w-12 rounded-full border transition-colors duration-200",
+                billingCycle === "yearly"
+                  ? "border-[#0095FF] bg-[#0095FF]"
+                  : "border-white/20 bg-white/10"
+              )}
             >
               <span
                 className={cn(
@@ -96,7 +108,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 billingCycle === "yearly" ? "text-white" : "text-white/50 hover:text-white"
               )}
             >
-              Pay annually get 20%
+              Pay annually get <span className="text-[#0095FF]">20%</span>
             </button>
           </div>
         </div>
@@ -106,7 +118,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
           {/* Left Side - Category Tabs */}
-          <aside className="lg:w-60 shrink-0 border-r border-white pr-4">
+          <aside className="lg:w-60 shrink-0 border-r border-white/[0.08] pr-4">
             <div className="lg:sticky lg:top-24">
               <div className="space-y-1 font-[family-name:var(--font-sansation)]">
                 {categories.map((category) => (
@@ -114,10 +126,10 @@ export default function PricingClient({ categories }: PricingClientProps) {
                     key={category.id}
                     onClick={() => handleCategoryClick(category.id)}
                     className={cn(
-                      "cursor-pointer w-full text-left px-3 py-2 text-sm font-medium transition-all duration-200",
+                      "cursor-pointer w-full text-left px-3 py-2 text-sm font-medium transition-colors duration-200",
                       activeCategory === category.id
-                        ? "bg-white text-black"
-                        : "text-white/50 hover:text-white"
+                        ? "bg-[#0095FF] text-white"
+                        : "text-white/50 hover:text-white hover:bg-white/[0.04]"
                     )}
                   >
                     {category.label}
@@ -134,7 +146,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 id={category.id}
                 className={cn(
                   "scroll-mt-24",
-                  index > 0 && "border-t border-white pt-8"
+                  index > 0 && "border-t border-white/[0.08] pt-8"
                 )}
               >
                 <PricingContent

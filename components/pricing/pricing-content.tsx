@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
 
@@ -89,7 +89,7 @@ function FilterTabs({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">{label}</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/40">{label}</p>
       <div className="flex flex-wrap gap-2">
         {tabs.map((tab) => {
           const isActive = tab.value === activeValue;
@@ -101,12 +101,12 @@ function FilterTabs({
               className={cn(
                 "cursor-pointer inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors",
                 isActive
-                  ? "border-white bg-white text-black"
-                  : "border-white/20 bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
+                  ? "border-[#0095FF] bg-[#0095FF] text-white"
+                  : "border-white/[0.12] bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
               )}
             >
               {tab.nvidia && (
-                <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0")} />
+                <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0 invert")} />
               )}
               {tab.label}
             </button>
@@ -213,6 +213,9 @@ export function PricingContent({
 }: PricingContentProps) {
   const [databaseTypeFilter, setDatabaseTypeFilter] = useState("all");
   const [cpuTypeFilter, setCpuTypeFilter] = useState("all");
+  // Kubernetes is priced per node; the user picks worker nodes and we always
+  // add 1 control plane on top of that (1 worker selected => 2 billable nodes).
+  const [workerNodes, setWorkerNodes] = useState(1);
 
   const categoryId = normalizeValue(category?.id);
   const isDatabaseCategory = categoryId === "database";
@@ -295,8 +298,12 @@ export function PricingContent({
     return hourly < 1 ? hourly.toFixed(3) : hourly.toFixed(2);
   };
 
+  // Control plane is billed alongside the selected workers.
+  const billableNodes = workerNodes + 1;
+  const nodeMultiplier = isKubernetesCategory ? billableNodes : 1;
+
   const getEffectiveMonthly = (tier: PricingTier) =>
-    billingCycle === "monthly" ? tier.price.monthly : tier.price.yearly / 12;
+    (billingCycle === "monthly" ? tier.price.monthly : tier.price.yearly / 12) * nodeMultiplier;
 
   const getTierId = (tier: PricingTier) =>
     tier.id ?? tier.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -312,7 +319,7 @@ export function PricingContent({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-white">{tier.name}</span>
           {tier.isFeatured && (
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-black">
+            <span className="rounded-full bg-[#0095FF] px-2 py-0.5 text-[10px] font-semibold text-white">
               Most popular
             </span>
           )}
@@ -391,6 +398,7 @@ export function PricingContent({
           ${formatPrice(getEffectiveMonthly(tier))}
         </div>
         <div className="text-[10px] text-white/40">
+          {isKubernetesCategory && `${billableNodes} nodes · `}
           {billingCycle === "monthly" ? "billed monthly" : "billed yearly"}
         </div>
       </div>
@@ -404,7 +412,7 @@ export function PricingContent({
     render: (tier) => (
       <a
         href={tier.ctaLink}
-        className="inline-flex items-center justify-center whitespace-nowrap bg-white/10 px-3 py-2 text-xs text-white transition-colors hover:bg-white/15"
+        className="group inline-flex items-center justify-center gap-1.5 whitespace-nowrap border border-white/15 bg-white px-3 py-2 text-xs font-semibold text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
       >
         {tier.ctaText || tier.summary?.buttonText || "Get Started"}
       </a>
@@ -449,10 +457,10 @@ export function PricingContent({
             {category.promos.map((promo) => (
               <div
                 key={promo.title}
-                className="border border-white/10 bg-[radial-gradient(74.51%_74.08%_at_50%_50%,_#303030_0%,_#0D0D0D_100%)] p-5 md:p-6"
+                className="border border-white/[0.08] bg-[radial-gradient(74.51%_74.08%_at_50%_50%,_#0c1622_0%,_#070a0f_100%)] p-5 md:p-6"
               >
                 <div className="flex items-center gap-2 text-xs text-white mb-2">
-                  <span className="flex h-6 w-[90px] items-center justify-center rounded-full bg-white text-[11px] font-semibold text-black">
+                  <span className="flex h-6 items-center justify-center rounded-full bg-[#0095FF] px-3 text-[11px] font-semibold text-white">
                     {promo.badge}
                   </span>
                   {promo.badgeNote && <span>{promo.badgeNote}</span>}
@@ -495,7 +503,7 @@ export function PricingContent({
         )}
 
         {(isDatabaseCategory || isKubernetesCategory || isGpuCategory) && (
-          <div className="space-y-4 border border-white/10 bg-white/[0.02] p-4">
+          <div className="space-y-4 border border-white/[0.08] bg-white/[0.02] p-4">
             {isDatabaseCategory && (
               <FilterTabs
                 label="Database Type"
@@ -524,20 +532,62 @@ export function PricingContent({
           </p>
         </div>
 
+        {isKubernetesCategory && (
+          <div className="flex flex-col gap-4 border border-white/[0.08] bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/40">
+                Cluster size
+              </p>
+              <p className="mt-1.5 text-xs text-white/55">
+                1 control plane + {workerNodes} worker{workerNodes === 1 ? "" : "s"} ={" "}
+                <span className="font-semibold text-white">
+                  {billableNodes} billable node{billableNodes === 1 ? "" : "s"}
+                </span>
+              </p>
+              <p className="mt-1 text-[10px] text-white/35">
+                Prices below are per node × billable nodes. The control plane is always billed.
+              </p>
+            </div>
+            <div className="inline-flex items-center self-start border border-white/15 sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setWorkerNodes((n) => Math.max(1, n - 1))}
+                disabled={workerNodes <= 1}
+                aria-label="Decrease worker nodes"
+                className="flex h-9 w-9 cursor-pointer items-center justify-center text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="flex h-9 min-w-[3.25rem] items-center justify-center border-x border-white/15 px-3 text-sm font-semibold tabular-nums text-white">
+                {workerNodes}
+              </span>
+              <button
+                type="button"
+                onClick={() => setWorkerNodes((n) => Math.min(99, n + 1))}
+                disabled={workerNodes >= 99}
+                aria-label="Increase worker nodes"
+                className="flex h-9 w-9 cursor-pointer items-center justify-center text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {orderedTiers.length === 0 ? (
-          <div className="border border-white/10 bg-white/[0.02] px-5 py-4 text-sm text-white/70">
+          <div className="border border-white/[0.08] bg-white/[0.02] px-5 py-4 text-sm text-white/70">
             No plans match the selected filters.
           </div>
         ) : (
-          <div className="overflow-x-auto border border-white/10">
+          <div className="overflow-x-auto border border-white/[0.08]">
             <table className="w-full min-w-[640px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-white/10 bg-white/[0.02]">
+                <tr className="border-b border-white/[0.08] bg-white/[0.02]">
                   {columns.map((column) => (
                     <th
                       key={column.key}
                       className={cn(
-                        "px-4 py-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40",
+                        "px-4 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-white/40",
                         column.align === "right" && "text-right"
                       )}
                     >
@@ -551,8 +601,8 @@ export function PricingContent({
                   <tr
                     key={getTierId(tier)}
                     className={cn(
-                      "border-b border-white/[0.06] last:border-0",
-                      tier.isFeatured && "bg-white/[0.03]"
+                      "border-b border-white/[0.06] transition-colors last:border-0 hover:bg-white/[0.02]",
+                      tier.isFeatured && "bg-[#0095FF]/[0.06] hover:bg-[#0095FF]/[0.08]"
                     )}
                   >
                     {columns.map((column) => (

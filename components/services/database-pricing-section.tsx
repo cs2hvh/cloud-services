@@ -74,7 +74,7 @@ const ENGINE_PRICING: EnginePricingProfile[] = [
     monthly: 12,
     yearly: 10,
     summary: "For sessions, queues, and low-latency cache paths.",
-    note: "Fast dev cache, then high-availability memory nodes for live traffic.",
+    note: "Fast dev cache, high-availability memory nodes for live traffic.",
     highlights: ["256 MB free", "AOF or snapshot", "Sub-ms reads"],
   },
 ];
@@ -212,7 +212,7 @@ export default function DatabasePricingSection({
                           Start
                         </div>
                         <div className="mt-1.5 text-[24px] font-semibold leading-none tracking-[-0.01em] text-black">
-                          Free
+                          From
                         </div>
                       </div>
                       <div className="text-right">
@@ -258,7 +258,7 @@ export default function DatabasePricingSection({
                   <AuthAwareServiceCta
                     service="database"
                     intent="new"
-                    className={`${MONO} mt-5 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-black`}
+                    className={`${MONO} mt-2 cursor-pointer mt-5 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-black`}
                   >
                     <span className="flex items-center gap-1.5">
                       Deploy {engine.name}

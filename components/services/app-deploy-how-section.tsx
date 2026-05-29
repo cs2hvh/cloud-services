@@ -144,7 +144,7 @@ export default function AppDeployHowSection() {
                                     {/* Icon tile */}
                                     <div
                                         className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border"
-                                        style={{ background: `${step.accent}18`, borderColor: `${step.accent}40`, color: step.accent }}
+                                        style={{ borderColor: `${step.accent}40`, color: step.accent }}
                                     >
                                         {step.icon}
                                         <span

@@ -157,14 +157,14 @@ export default function AppDeployFrameworksSection() {
                             key={fw.name}
                             className="group flex flex-col items-center gap-3.5 rounded-[10px] border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110"
                             style={{
-                                background: `${fw.color}0D`,
+                               // background: `${fw.color}0D`,
                                 borderColor: `${fw.color}25`,
                             }}
                         >
                             <div
                                 className="flex h-11 w-11 items-center justify-center rounded-[8px] border"
                                 style={{
-                                    background: `${fw.color}18`,
+                                   // background: `${fw.color}18`,
                                     borderColor: `${fw.color}35`,
                                     color: fw.color,
                                 }}

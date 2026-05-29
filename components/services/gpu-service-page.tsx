@@ -403,7 +403,7 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
             <div className="relative flex items-start justify-between">
                 <div
                     className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all group-hover:brightness-110"
-                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                   // style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
                 >
                     {w.icon}
                 </div>
@@ -699,7 +699,7 @@ export function GpuServicePage(
                                 >
                                     <div
                                         className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border"
-                                        style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
+                                      //  style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
                                     >
                                         {f.icon}
                                     </div>

@@ -600,7 +600,7 @@ export default function ComputePricingSection({
                       className="flex h-10 w-10 shrink-0 items-center justify-center border transition-all group-hover:brightness-110"
                       style={{
                         borderColor: `${highlight.accent}40`,
-                        background: `${highlight.accent}18`,
+                        //background: `${highlight.accent}18`,
                         color: highlight.accent,
                       }}
                     >

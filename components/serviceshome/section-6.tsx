@@ -60,8 +60,8 @@ function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
                     <div
                         className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
                         style={accent
-                            ? { background: `${accent}18`, borderColor: `${accent}40`, color: accent }
-                            : { borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)" }
+                            ? {   color: accent }
+                            : {  color: "rgba(255,255,255,0.8)" }
                         }
                     >
                         {item.iconNode ?? (Icon ? <Icon className="h-5 w-5" strokeWidth={1.6} /> : null)}
