@@ -30,6 +30,7 @@ import { generateIdempotencyKey } from "@/lib/idempotency";
 import { storagePerHour } from "@/lib/services/runpod/helpers";
 
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
+import { SoftwareIcon } from "./software-icons";
 import type { InventoryRowClient, StockStatus } from "./types";
 
 // ─── Design tokens (scoped to the deploy page) ─────────────────────────
@@ -755,7 +756,6 @@ export default function DeployWizard({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {templates.map((t) => {
                                     const isSelected = templateId === t.id;
-                                    const initial = t.id === "custom" ? "+" : t.name.charAt(0).toUpperCase();
                                     return (
                                         <button
                                             key={t.id}
@@ -776,14 +776,14 @@ export default function DeployWizard({
                                             }
                                         >
                                             <span
-                                                className={`${MONO} mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center border text-[14px] font-semibold`}
+                                                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center border"
                                                 style={
                                                     isSelected
-                                                        ? { borderColor: BORDER_ACCENT, color: "#ffffff", background: "rgba(0,149,255,0.18)" }
-                                                        : { borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.65)", background: "rgba(255,255,255,0.02)" }
+                                                        ? { borderColor: BORDER_ACCENT, background: "rgba(0,149,255,0.18)" }
+                                                        : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }
                                                 }
                                             >
-                                                {initial}
+                                                <SoftwareIcon name={t.name} image={t.image} size={20} />
                                             </span>
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-[13px] font-semibold text-white truncate">{t.name}</p>
