@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
     ArrowRight,
     Check,
@@ -26,7 +27,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import DeploymentProgress from "./deployment-progress";
 import { OsImg } from "./os-icons";
 
 // ─── Design tokens ───────────────────────────────────────────────
@@ -145,11 +145,8 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
     const [sshPasswordConfirm, setSshPasswordConfirm] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<Record<string, unknown> | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [deploymentServerId, setDeploymentServerId] = useState<number | null>(
-        null,
-    );
+    const router = useRouter();
 
     const regions = computeOptions.regions;
     const allPlans = computeOptions.plans ?? [];
@@ -294,9 +291,11 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                         "Something went wrong while creating your server.",
                 );
             }
-            setDeploymentServerId(json.serverId);
-            setResult(json);
-            toast.success(`Deploying "${hostname}"...`);
+            toast.success(`Deploying "${hostname}"…`);
+            // Hand off to the all-servers list, which shows live per-row
+            // provisioning progress via realtime — no separate transition view.
+            router.push("/dashboard/services/compute/vps");
+            return;
         } catch (err) {
             const raw = err instanceof Error ? err.message : "";
             const friendly =
@@ -327,30 +326,6 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                   ? "almalinux"
                   : "rocky"
             : "ubuntu";
-
-    // ─── Deployment progress view ───────────────────────────────
-    if (result?.ok && deploymentServerId) {
-        const resultIp = (result as { ip?: string }).ip ?? "";
-        return (
-            <div className="relative min-h-full bg-[#08090b] text-white px-6 sm:px-10 py-8">
-                <DeploymentProgress
-                    serverId={deploymentServerId}
-                    serverName={hostname}
-                    serverIp={resultIp}
-                    serverOs={selectedOSName}
-                    connectionType={usesRDP ? "rdp" : "ssh"}
-                    username={defaultUser}
-                    onCreateAnother={() => {
-                        setResult(null);
-                        setDeploymentServerId(null);
-                        setHostname("");
-                        setSshPassword("");
-                        setSshPasswordConfirm("");
-                    }}
-                />
-            </div>
-        );
-    }
 
     const selectedRegionName =
         regions.find((r) => r.id === selectedRegion)?.name ?? "—";
