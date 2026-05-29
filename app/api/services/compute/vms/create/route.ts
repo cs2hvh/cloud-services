@@ -13,6 +13,10 @@ import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
 import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
 import { computeHostAvailability } from "@/lib/pricing/instance-plans";
+import {
+  findAvailableCustomImageByName,
+  ensureCustomTemplateOnHost,
+} from "@/lib/services/compute/custom-images";
 
 export const dynamic = "force-dynamic";
 
@@ -501,19 +505,32 @@ export async function POST(req: NextRequest) {
   //   2) Available IPs
   //   3) Enough CPU/RAM/disk capacity
 
-  // Get templates that match the requested OS across all region hosts
+  // Get PUBLIC templates that match the requested OS across all region hosts.
+  // Custom images (owner_id set) are resolved separately below (lazy per‑host
+  // build), so the built‑in OS path only considers public templates.
   const regionHostIds = regionHosts.map(h => h.id);
   const { data: matchingTemplates } = await supabase
     .from("proxmox_templates")
     .select("vmid, name, host_id, os_type, os_display_name")
     .in("host_id", regionHostIds)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .is("owner_id", null);
 
   const templatesByHost = new Map<string, { vmid: number; name: string }>();
   for (const t of matchingTemplates || []) {
     const displayName = t.os_display_name || t.name;
     if (displayName === os) {
       templatesByHost.set(t.host_id, { vmid: t.vmid, name: t.name });
+    }
+  }
+
+  // Custom OS image? If the chosen "OS" is one of the user's available custom
+  // images, every region host becomes a candidate — the per‑host template is
+  // built lazily on the selected host right before cloning (vmid 0 = to build).
+  const customImage = await findAvailableCustomImageByName(supabase, user.id, String(os));
+  if (customImage) {
+    for (const h of regionHosts) {
+      templatesByHost.set(h.id, { vmid: 0, name: customImage.name });
     }
   }
 
@@ -886,7 +903,9 @@ export async function POST(req: NextRequest) {
   // Determine connection type for immediate response
   const isDebian = osLower.includes("debian");
   const isCentos = osLower.includes("centos");
-  const ciuser = isWindows ? "admin" : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+  const ciuser = customImage
+    ? customImage.default_user
+    : isWindows ? "admin" : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
   const provisioningStarted = new Date().toISOString();
 
   // Helper to update provisioning stage (triggers Supabase realtime events)
@@ -904,11 +923,20 @@ export async function POST(req: NextRequest) {
   // Schedule background provisioning — runs after response is sent
   after(async () => {
   try {
+    // For a custom image, lazily build the per‑host template (first use in this
+    // region) and clone from it; built‑in OSes use the selected template vmid.
+    let templateVmid = selectedTemplate.vmid;
+    if (customImage) {
+      await updateStage(
+        'preparing',
+        15,
+        'Preparing your custom image — first use in this region can take a few minutes...'
+      );
+      templateVmid = await ensureCustomTemplateOnHost({ image: customImage, hostId: cfg.id });
+    }
+
     await updateStage('cloning', 25, 'Creating disk image...');
     const auth = await proxmoxAuthCookie(apiBase, dispatcher, cfg);
-
-    // Use the template VMID from smart selection
-    const templateVmid = selectedTemplate.vmid;
 
     // Next VMID
     const nextIdJson = await fetchJson(apiBase, "/api2/json/cluster/nextid", auth, dispatcher);
@@ -980,7 +1008,9 @@ export async function POST(req: NextRequest) {
     if (isWindows) {
       configPayload.ciuser = "admin";
     } else {
-      configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+      configPayload.ciuser = customImage
+        ? customImage.default_user
+        : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
       const vendorSnippet = networkPlan.cicustomVendor || `vendor=${networkPlan.snippetStorage}:snippets/linux-cloud-init.yml`;
       const cicustom = buildCiCustomValue({
         networkSnippet: networkPlan.cicustomNetwork,

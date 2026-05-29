@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { createWorkerClient } from "@/lib/supabase/server";
+import { createClient, createWorkerClient } from "@/lib/supabase/server";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActivePlans, type CatalogPlan } from "@/lib/pricing/plan-catalog";
+import { listAvailableCustomImages } from "@/lib/services/compute/custom-images";
 import {
   DEFAULT_SHARED_OVERSUBSCRIPTION,
   canFitPlan,
@@ -72,6 +74,28 @@ interface ComputeOptions {
 
 export async function GET() {
   try {
+    // Require an authenticated session: this endpoint runs several capacity
+    // queries and exposes per-region plan availability (sold-out / free-IP
+    // intel). The deploy form that consumes it lives behind login, so there
+    // is no reason to serve it to anonymous callers.
+    const supabaseAuth = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ ok: false, error: "Authentication required" }, { status: 401 });
+    }
+
+    // Light rate limit — the handler fans out into ~5 DB queries.
+    const rl = await limitByUser(user.id, { prefix: "rl:compute-options", limit: 60, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Too many requests. Try again shortly.", retryAfterSec: rl.retryAfterSec },
+        { status: 429 }
+      );
+    }
+
     const supabase = await createWorkerClient();
 
     // 1. Get active hosts with capacity info
@@ -92,11 +116,14 @@ export async function GET() {
       });
     }
 
-    // 2. Get all active templates across all hosts
+    // 2. Get all active PUBLIC templates across all hosts. Custom images
+    //    (owner_id set) are added per‑user separately below — they must never
+    //    appear in another customer's catalog.
     const { data: templates, error: templatesErr } = await supabase
       .from("proxmox_templates")
       .select("vmid, name, host_id, os_type, os_display_name")
       .eq("is_active", true)
+      .is("owner_id", null)
       .order("name");
 
     if (templatesErr) {
@@ -242,6 +269,16 @@ export async function GET() {
       osOptions = [
         { id: "Ubuntu 24.04 LTS", name: "Ubuntu 24.04 LTS", regions: regions.map(r => r.id) },
       ];
+    }
+
+    // Append this customer's available custom images. They're offered in every
+    // region (the per‑host template is built lazily on first deploy there).
+    const customImages = await listAvailableCustomImages(supabase, user.id);
+    if (customImages.length > 0) {
+      const allRegionIds = regions.map((r) => r.id);
+      for (const ci of customImages) {
+        osOptions.push({ id: ci.name, name: ci.name, regions: allRegionIds });
+      }
     }
 
     // 7. Plan catalog + per-region availability.

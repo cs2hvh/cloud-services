@@ -688,6 +688,123 @@ export async function getVMRRDData(
 }
 
 /**
+ * Build a Proxmox VM template from a downloadable cloud image (qcow2/raw) for
+ * the custom‑OS‑images feature. Runs entirely against ONE host: downloads the
+ * image over SSH, imports the disk, attaches a cloud‑init drive + guest agent +
+ * serial console, and converts the VM to a template. Returns the new template
+ * vmid + the source image size in bytes (for storage billing).
+ *
+ * The resulting template behaves exactly like a built‑in OS template, so the
+ * normal clone + cloud‑init networking path works unchanged. Best‑effort cleanup
+ * (destroy the half‑built VM + remove the temp file) on failure.
+ *
+ * SECURITY: `sourceUrl` is validated to be a clean https URL (no shell
+ * metacharacters) and single‑quoted in the SSH command.
+ */
+export async function buildCustomImageTemplate(
+  host: ProxmoxHost,
+  opts: { sourceUrl: string; name: string; osType?: string },
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<{ vmid: number; sizeBytes: number }> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to build a custom image template");
+  }
+  // Validate the source URL: https only, and reject anything that could break
+  // out of the single‑quoted shell argument.
+  let parsed: URL;
+  try {
+    parsed = new URL(opts.sourceUrl);
+  } catch {
+    throw new Error("Invalid image URL");
+  }
+  if (parsed.protocol !== "https:") throw new Error("Image URL must be https");
+  if (/['"`$\\\n\r;|&<>(){}]/.test(opts.sourceUrl)) {
+    throw new Error("Image URL contains unsafe characters");
+  }
+
+  const node = host.node;
+  const storage = host.storage || "local";
+  const bridge = isValidBridgeName(host.bridge) ? host.bridge : "vmbr0";
+  const ostype = opts.osType || "l26";
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const ssh = (cmd: string, timeoutMs: number) => sshExec(sshHost, username, host.password as string, cmd, timeoutMs);
+
+  const vmid = await getNextVMID(host, auth, dispatcher);
+  const tmpFile = `/var/tmp/ci-${vmid}.img`;
+  let created = false;
+
+  try {
+    // 1. Download the image to a temp file (up to 30 min for large images).
+    await ssh(
+      `curl -fSL --connect-timeout 30 -o '${tmpFile}' '${opts.sourceUrl}' || wget -q -O '${tmpFile}' '${opts.sourceUrl}'`,
+      30 * 60_000
+    );
+    const sizeStr = await ssh(`stat -c %s '${tmpFile}' 2>/dev/null || echo 0`, 30_000);
+    const sizeBytes = Number(String(sizeStr).trim()) || 0;
+    if (sizeBytes <= 0) throw new Error("Downloaded image is empty or unreadable");
+
+    // 2. Create the VM shell via the API.
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu`,
+      {
+        vmid,
+        name: opts.name.slice(0, 60).replace(/[^a-zA-Z0-9-]/g, "-") || `custom-${vmid}`,
+        memory: 1024,
+        cores: 1,
+        ostype,
+        scsihw: "virtio-scsi-pci",
+        net0: `virtio,bridge=${bridge}`,
+        serial0: "socket",
+        vga: "serial0",
+        agent: "enabled=1",
+      },
+      auth,
+      dispatcher
+    );
+    created = true;
+
+    // 3. Import the downloaded disk (CLI only — no API equivalent). Shows up as unusedN.
+    await ssh(`qm importdisk ${vmid} '${tmpFile}' ${storage}`, 20 * 60_000);
+
+    // 4. Find the imported disk in the config and attach it as the boot disk.
+    const cfg = await getVMConfig(host, vmid, auth, dispatcher);
+    const unusedKey = Object.keys(cfg).find((k) => /^unused\d+$/.test(k));
+    const importedDisk = unusedKey ? String(cfg[unusedKey]) : `${storage}:vm-${vmid}-disk-0`;
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`,
+      { scsi0: `${importedDisk},discard=on`, boot: "order=scsi0", ide2: `${storage}:cloudinit` },
+      auth,
+      dispatcher
+    );
+
+    // 5. Convert to a template.
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/template`,
+      {},
+      auth,
+      dispatcher
+    );
+
+    // 6. Clean up the temp file (best effort).
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+
+    return { vmid, sizeBytes };
+  } catch (err) {
+    // Best‑effort cleanup so a failed build doesn't leave an orphan VM/file.
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    if (created) {
+      await deleteVM(host, vmid, auth, dispatcher).catch(() => {});
+    }
+    throw err;
+  }
+}
+
+/**
  * Create a VNC proxy connection for web console access.
  * Returns a ticket and port for noVNC WebSocket connection.
  */

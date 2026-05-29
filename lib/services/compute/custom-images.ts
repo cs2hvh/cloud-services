@@ -1,0 +1,168 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/server";
+import { redis } from "@/lib/redis";
+import {
+  proxmoxAuth,
+  getDispatcher,
+  buildCustomImageTemplate,
+  type ProxmoxHost,
+} from "@/lib/proxmox-utils";
+
+export interface CustomImageRow {
+  id: string;
+  owner_id: string;
+  name: string;
+  os_family: string;
+  default_user: string;
+  source_ref: string | null;
+  cloud_init: boolean;
+  status: string;
+  size_gb: number;
+  billing_service_id: string;
+}
+
+const IMAGE_COLS =
+  "id, owner_id, name, os_family, default_user, source_ref, cloud_init, status, size_gb, billing_service_id";
+
+/**
+ * Resolve a customer's AVAILABLE custom image by display name. Used by the
+ * deploy flow to detect that a chosen "OS" is actually one of the user's custom
+ * images (and to verify ownership before provisioning from it).
+ */
+export async function findAvailableCustomImageByName(
+  supabase: SupabaseClient,
+  ownerId: string,
+  name: string
+): Promise<CustomImageRow | null> {
+  const { data } = await supabase
+    .from("custom_images")
+    .select(IMAGE_COLS)
+    .eq("owner_id", ownerId)
+    .eq("status", "available")
+    .eq("name", name)
+    .maybeSingle();
+  return (data as CustomImageRow) ?? null;
+}
+
+/** List a customer's available custom images (for the deploy OS picker). */
+export async function listAvailableCustomImages(
+  supabase: SupabaseClient,
+  ownerId: string
+): Promise<CustomImageRow[]> {
+  const { data } = await supabase
+    .from("custom_images")
+    .select(IMAGE_COLS)
+    .eq("owner_id", ownerId)
+    .eq("status", "available")
+    .order("created_at", { ascending: false });
+  return (data as CustomImageRow[]) ?? [];
+}
+
+async function existingTemplateVmid(
+  supabase: SupabaseClient,
+  customImageId: string,
+  hostId: string
+): Promise<number | null> {
+  const { data } = await supabase
+    .from("proxmox_templates")
+    .select("vmid")
+    .eq("custom_image_id", customImageId)
+    .eq("host_id", hostId)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data ? Number(data.vmid) : null;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * LAZY per‑host build: ensure `image` exists as an active Proxmox template on
+ * `hostId`, building it on first use, and return the template vmid to clone.
+ *
+ * - Fast path: a template row already exists → return its vmid.
+ * - Build path: acquire a per‑(image,host) Redis lock, download + import +
+ *   templatize via `buildCustomImageTemplate`, register the proxmox_templates
+ *   row, and (on first ever build) record the measured image size for billing.
+ * - Contended path: another deploy is already building the same image on the
+ *   same host → poll for the template row to appear.
+ *
+ * This can take several minutes on first use in a region; callers run it inside
+ * the provisioning background task and surface progress to the customer.
+ */
+export async function ensureCustomTemplateOnHost(params: {
+  image: CustomImageRow;
+  hostId: string;
+}): Promise<number> {
+  const supabase = await createServiceClient();
+  const { image, hostId } = params;
+
+  // Fast path.
+  const existing = await existingTemplateVmid(supabase, image.id, hostId);
+  if (existing) return existing;
+
+  if (!image.source_ref) {
+    throw new Error("Custom image has no source to build from");
+  }
+
+  const lockKey = `customimg:build:${image.id}:${hostId}`;
+  const locked = await redis.set(lockKey, `build:${Date.now()}`, { nx: true, ex: 3600 });
+
+  if (!locked) {
+    // Someone else is building it — poll for the template row (up to ~30 min).
+    for (let i = 0; i < 180; i++) {
+      await sleep(10_000);
+      const vmid = await existingTemplateVmid(supabase, image.id, hostId);
+      if (vmid) return vmid;
+    }
+    throw new Error("Timed out waiting for the custom image to finish building");
+  }
+
+  try {
+    const { data: host } = await supabase
+      .from("proxmox_hosts")
+      .select(
+        "id, name, host_url, allow_insecure_tls, node, storage, bridge, token_id, token_secret, username, password"
+      )
+      .eq("id", hostId)
+      .maybeSingle();
+    if (!host) throw new Error("Host not found");
+
+    const cfg = host as unknown as ProxmoxHost;
+    const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
+    const auth = await proxmoxAuth(cfg, dispatcher);
+
+    const { vmid, sizeBytes } = await buildCustomImageTemplate(
+      cfg,
+      {
+        sourceUrl: image.source_ref,
+        name: image.name,
+        osType: image.os_family.toLowerCase().includes("windows") ? "win11" : "l26",
+      },
+      auth,
+      dispatcher
+    );
+
+    // Register the template so future deploys to this host are instant and the
+    // normal clone/host-selection path can find it.
+    await supabase.from("proxmox_templates").insert({
+      host_id: hostId,
+      vmid,
+      name: image.name,
+      os_type: image.os_family,
+      os_display_name: image.name,
+      is_active: true,
+      owner_id: image.owner_id,
+      custom_image_id: image.id,
+    });
+
+    // Record measured size on the first ever build (drives storage billing).
+    if ((!image.size_gb || image.size_gb <= 0) && sizeBytes > 0) {
+      const sizeGb = Math.max(0.01, Math.round((sizeBytes / 1024 ** 3) * 100) / 100);
+      await supabase.from("custom_images").update({ size_gb: sizeGb }).eq("id", image.id);
+    }
+
+    return vmid;
+  } finally {
+    await redis.del(lockKey).catch(() => {});
+  }
+}
