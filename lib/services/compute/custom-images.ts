@@ -5,6 +5,7 @@ import {
   proxmoxAuth,
   getDispatcher,
   buildCustomImageTemplate,
+  deleteVM,
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
 
@@ -165,4 +166,66 @@ export async function ensureCustomTemplateOnHost(params: {
   } finally {
     await redis.del(lockKey).catch(() => {});
   }
+}
+
+/**
+ * Delete a custom image: destroy its per‑host template VMs, remove the template
+ * rows, drop the storage billing meter, and delete the catalog row. Running VMs
+ * already cloned from it are independent and unaffected. Owner‑verified.
+ */
+export async function deleteCustomImage(params: {
+  imageId: string;
+  ownerId: string;
+}): Promise<void> {
+  const supabase = await createServiceClient();
+
+  const { data: image } = await supabase
+    .from("custom_images")
+    .select("id, owner_id, billing_service_id")
+    .eq("id", params.imageId)
+    .eq("owner_id", params.ownerId)
+    .maybeSingle();
+  if (!image) throw new Error("Image not found");
+
+  await supabase.from("custom_images").update({ status: "deleting" }).eq("id", params.imageId);
+
+  // Destroy the template VM on every host it was built on.
+  const { data: tmpls } = await supabase
+    .from("proxmox_templates")
+    .select("id, host_id, vmid")
+    .eq("custom_image_id", params.imageId);
+
+  for (const t of tmpls || []) {
+    try {
+      const { data: host } = await supabase
+        .from("proxmox_hosts")
+        .select(
+          "id, host_url, allow_insecure_tls, node, storage, bridge, token_id, token_secret, username, password"
+        )
+        .eq("id", t.host_id)
+        .maybeSingle();
+      if (host) {
+        const cfg = host as unknown as ProxmoxHost;
+        const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
+        const auth = await proxmoxAuth(cfg, dispatcher);
+        await deleteVM(cfg, Number(t.vmid), auth, dispatcher);
+      }
+    } catch (e) {
+      console.error("[custom-image delete] template VM destroy failed:", e);
+    }
+    await supabase.from("proxmox_templates").delete().eq("id", t.id);
+  }
+
+  // Drop the storage meter (best effort) + the catalog row.
+  try {
+    await supabase
+      .schema("billing")
+      .from("active_custom_image")
+      .delete()
+      .eq("service_id", image.billing_service_id);
+  } catch {
+    /* best-effort meter cleanup */
+  }
+
+  await supabase.from("custom_images").delete().eq("id", params.imageId);
 }
