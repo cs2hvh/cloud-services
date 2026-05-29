@@ -6,6 +6,7 @@ export const GRACE_SERVICE_TABLES = [
   "active_platform_apps",
   "active_inference_vector",
   "active_compute",
+  "active_custom_image",
 ] as const;
 
 export type GraceServiceTable = (typeof GRACE_SERVICE_TABLES)[number];

@@ -46,6 +46,7 @@ export const VALID_TABLE_NAMES = [
   "active_platform_apps",
   "active_inference_vector",
   "active_compute",
+  "active_custom_image",
 ];
 
 const TABLE_TO_SERVICE_TYPE = {
@@ -56,6 +57,7 @@ const TABLE_TO_SERVICE_TYPE = {
   active_platform_apps: "platform_apps",
   active_inference_vector: "inference_vector",
   active_compute: "compute",
+  active_custom_image: "custom_image",
 };
 
 const BILLING_SERVICE_TABLES = Object.keys(TABLE_TO_SERVICE_TYPE);

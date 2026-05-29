@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
+import { BillingCredits } from "@/lib/billing/credits";
 import {
   proxmoxAuth,
   getDispatcher,
@@ -24,6 +25,9 @@ export interface CustomImageRow {
 
 const IMAGE_COLS =
   "id, owner_id, name, os_family, default_user, source_ref, cloud_init, status, size_gb, billing_service_id";
+
+/** Storage price for a stored custom image. */
+export const CUSTOM_IMAGE_USD_PER_GB_MONTH = 0.05;
 
 /**
  * Resolve a customer's AVAILABLE custom image by display name. Used by the
@@ -156,10 +160,30 @@ export async function ensureCustomTemplateOnHost(params: {
       custom_image_id: image.id,
     });
 
-    // Record measured size on the first ever build (drives storage billing).
-    if ((!image.size_gb || image.size_gb <= 0) && sizeBytes > 0) {
-      const sizeGb = Math.max(0.01, Math.round((sizeBytes / 1024 ** 3) * 100) / 100);
-      await supabase.from("custom_images").update({ size_gb: sizeGb }).eq("id", image.id);
+    // On first materialization, settle the billed size and start the storage
+    // meter. The meter is keyed per image (UNIQUE service_id), so it's billed
+    // ONCE regardless of how many hosts the image is later replicated to.
+    const measuredGb =
+      sizeBytes > 0 ? Math.max(0.01, Math.round((sizeBytes / 1024 ** 3) * 100) / 100) : 0;
+    const billedGb = image.size_gb && image.size_gb > 0 ? image.size_gb : measuredGb;
+    if ((!image.size_gb || image.size_gb <= 0) && measuredGb > 0) {
+      await supabase.from("custom_images").update({ size_gb: measuredGb }).eq("id", image.id);
+    }
+    if (billedGb > 0) {
+      const { data: meter } = await supabase
+        .schema("billing")
+        .from("active_custom_image")
+        .select("id")
+        .eq("service_id", image.billing_service_id)
+        .maybeSingle();
+      if (!meter) {
+        const hourlyRate = Math.max(0.0001, (billedGb * CUSTOM_IMAGE_USD_PER_GB_MONTH) / 730);
+        await BillingCredits.addActiveCustomImage({
+          userId: image.owner_id,
+          serviceId: image.billing_service_id,
+          hourlyRate,
+        }).catch((e) => console.error("[custom-image] meter register failed:", e));
+      }
     }
 
     return vmid;

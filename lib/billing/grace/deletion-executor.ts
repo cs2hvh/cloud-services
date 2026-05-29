@@ -6,6 +6,7 @@ import { ObjectStorageService } from "@/lib/services/object-storage-service";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { SpectrumService } from "@/lib/services/spectrum-service";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
+import { deleteCustomImage } from "@/lib/services/compute/custom-images";
 
 type ServiceDeletionOutcome = {
   success: boolean;
@@ -250,6 +251,22 @@ export async function executeGraceDeletion(params: {
           alreadyDeleted: result.alreadyGone,
           message: "Server deleted",
         };
+      }
+
+      case "active_custom_image": {
+        // service_id is custom_images.billing_service_id. Resolve the image and
+        // delete it (per-host templates + meter + row) via the shared helper.
+        const supabase = await createServiceClient();
+        const { data: img } = await supabase
+          .from("custom_images")
+          .select("id, owner_id")
+          .eq("billing_service_id", params.serviceId)
+          .maybeSingle();
+        if (!img) {
+          return { success: true, alreadyDeleted: true, message: "Custom image already deleted" };
+        }
+        await deleteCustomImage({ imageId: String(img.id), ownerId: String(img.owner_id) });
+        return { success: true, message: "Custom image deleted" };
       }
 
       default:

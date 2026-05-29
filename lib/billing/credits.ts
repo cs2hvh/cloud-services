@@ -226,4 +226,24 @@ export const BillingCredits = {
       .eq("service_id", params.serviceId);
     if (error) throw new Error(`Failed to re-rate active_compute: ${error.message}`);
   },
+
+  // ── Custom OS image storage ($/GB-month, metered hourly) ───────────────────
+  addActiveCustomImage: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_custom_image")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_custom_image: ${error.message}`);
+  },
 };

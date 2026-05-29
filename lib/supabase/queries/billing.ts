@@ -124,7 +124,8 @@ type BillableServiceType =
   | "inference_finetune"
   | "inference_serving"
   | "inference_vector"
-  | "compute";
+  | "compute"
+  | "custom_image";
 
 type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
