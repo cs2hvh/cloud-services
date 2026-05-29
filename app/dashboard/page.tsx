@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
-import { ErrorMessage } from "@/components/dashboard/utils/error";
 import Dashboard from "@/components/dashboard/main/dashboard";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
@@ -37,19 +36,16 @@ const DashboardSuspense = async () => {
     RunPodService.listUserPods(user.id),
   ]);
 
-  if (!gameservers) {
-    return (
-      <ErrorMessage message="Unable to load game servers. Please try again later." />
-    );
-  }
-
+  // Don't fail the whole overview if one resource list comes back empty/null —
+  // each section renders its own empty state. (Previously a null game_servers
+  // result blanked the entire dashboard.)
   const gpu_pods = gpuResult.success ? (gpuResult.data ?? []) : [];
   const logs = logsRaw || [];
 
   return (
     <Dashboard
       data={{
-        game_servers: gameservers,
+        game_servers: gameservers ?? [],
         database_clusters,
         kubernetes_clusters,
         spectrum_apps,

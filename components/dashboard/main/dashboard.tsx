@@ -7,7 +7,9 @@
 
 import { ArrowUpRight, MoreVertical, Plus } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
+import { SERVICE_ICONS } from "@/lib/services/service-icons";
 import { ObjectSpaceBucket, PlatformApp, Tables } from "@/lib/supabase/types";
 import { dbLocations } from "@/config/locations";
 import { useSession } from "@/app/dashboard/provider";
@@ -301,7 +303,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-12">
                 <SpotlightCard
                     eyebrow="App Platform"
-                    icon={<div className="h-3.5 w-3.5"><GitFlowGlyph /></div>}
+                    iconSrc={SERVICE_ICONS.appDeployment.src}
                     title="Deploy from Git"
                     desc="Push to deploy. Connect GitHub, GitLab, or Bitbucket and ship with zero config."
                     cta="Get started"
@@ -309,7 +311,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                 />
                 <SpotlightCard
                     eyebrow="GPU Cloud"
-                    icon={<div className="h-3.5 w-3.5"><GpuGlyph /></div>}
+                    iconSrc={SERVICE_ICONS.gpu.src}
                     title="GPU instances"
                     desc="B200, H200, H100, and L40S on demand. Pay by the second."
                     cta="View GPUs"
@@ -317,11 +319,48 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                 />
                 <SpotlightCard
                     eyebrow="Domains"
-                    icon={<div className="h-3.5 w-3.5"><GlobeGlyph /></div>}
+                    iconSrc={SERVICE_ICONS.domain.src}
                     title="Domain marketplace"
                     desc="Search availability, submit managed purchase requests, and connect to apps."
                     cta="Open marketplace"
                     href="/dashboard/domains/marketplace"
+                />
+            </div>
+
+            {/* A.I. Labs — surface the AI platform on the overview */}
+            <SectionHead eyebrow="A.I. Labs" title="Build with" accent="AI" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-12">
+                <SpotlightCard
+                    eyebrow="Inference"
+                    iconSrc={SERVICE_ICONS.inference.src}
+                    title="Inference gateway"
+                    desc="OpenAI-compatible API across frontier and open models. One key, one bill."
+                    cta="Open inference"
+                    href="/dashboard/services/inference"
+                />
+                <SpotlightCard
+                    eyebrow="Fine-Tuning"
+                    iconSrc={SERVICE_ICONS.fineTuning.src}
+                    title="Fine-tune a model"
+                    desc="LoRA fine-tunes on managed GPUs. Bring a dataset, get a served model."
+                    cta="Start a job"
+                    href="/dashboard/services/inference/fine-tuning"
+                />
+                <SpotlightCard
+                    eyebrow="Embeddings"
+                    iconSrc={SERVICE_ICONS.embeddings.src}
+                    title="Embeddings & vector"
+                    desc="Managed vector collections with auto-embed and similarity search."
+                    cta="Open vectors"
+                    href="/dashboard/services/inference/vectors"
+                />
+                <SpotlightCard
+                    eyebrow="Model Hosting"
+                    iconSrc={SERVICE_ICONS.modelHosting.src}
+                    title="Deploy your model"
+                    desc="Bring your own container or HuggingFace model and serve it on a GPU."
+                    cta="Deploy a model"
+                    href="/dashboard/services/inference/deployments"
                 />
             </div>
 
@@ -655,14 +694,14 @@ function SectionHead({
 
 function SpotlightCard({
     eyebrow,
-    icon,
+    iconSrc,
     title,
     desc,
     cta,
     href,
 }: {
     eyebrow: string;
-    icon: React.ReactNode;
+    iconSrc: string;
     title: string;
     desc: string;
     cta: string;
@@ -674,12 +713,20 @@ function SpotlightCard({
             className="group border border-white/[0.06] bg-[#111216] hover:bg-[#16181d] hover:border-white/[0.14] rounded-[6px] p-5 transition-all flex flex-col gap-3"
         >
             <div className="flex items-center justify-between">
-                <span
-                    className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] font-semibold`}
-                    style={{ color: ACCENT }}
-                >
-                    {icon}
-                    {eyebrow}
+                <span className="inline-flex items-center gap-2.5">
+                    <Image
+                        src={iconSrc}
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="object-contain"
+                    />
+                    <span
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold`}
+                        style={{ color: ACCENT }}
+                    >
+                        {eyebrow}
+                    </span>
                 </span>
                 <ArrowUpRight className="h-3.5 w-3.5 text-white/25 group-hover:text-[#0095FF] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
             </div>
