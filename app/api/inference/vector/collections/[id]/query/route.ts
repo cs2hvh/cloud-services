@@ -10,7 +10,10 @@
  *     embedding?: number[],
  *     text?: string,
  *     top_k?: number (1-100, default 10),
- *     min_similarity?: number (0-1, default 0)
+ *     min_similarity?: number (0-1, default 0),
+ *     filter?: object  — JSONB containment filter on row metadata, e.g.
+ *                        { "tenant": "acme", "lang": "en" } returns only rows
+ *                        whose metadata contains those pairs (multi-tenant RAG)
  *   }
  *
  * Returns top-k most similar rows ordered by similarity descending.
@@ -30,6 +33,8 @@ const querySchema = z
     text: z.string().optional(),
     top_k: z.number().int().positive().max(100).default(10),
     min_similarity: z.number().min(0).max(1).default(0),
+    // Optional JSONB containment filter on row metadata (multi-tenant RAG).
+    filter: z.record(z.string(), z.unknown()).optional(),
   })
   .refine((d) => !!d.embedding || !!d.text, {
     message: "Must provide either `embedding` or `text`",
@@ -137,6 +142,10 @@ export async function POST(
       p_distance_metric: collection.distance_metric,
       p_limit: parsed.data.top_k,
       p_min_similarity: parsed.data.min_similarity,
+      // Only pass the filter when present, so unfiltered queries still match
+      // the pre-migration 5-arg function — safe to deploy before the migration
+      // is applied; only the filter feature itself needs the new 6-arg version.
+      ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
     });
 
   if (error) {
