@@ -8,7 +8,7 @@ import { BillingCredits } from "@/lib/billing/credits";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
-import { computeResalePerHour } from "../helpers";
+import { computeResalePerHour, storagePerHour } from "../helpers";
 import { templateOperations } from "./template-operations";
 import type {
     CloudType,
@@ -260,12 +260,19 @@ export const podLifecycleOperations = {
                 };
             }
 
-            const hourlyCostUsd = computeResalePerHour({
+            // GPU compute resale + local-disk storage (container disk + pod
+            // volume). Network volumes bill via their own meter, so they're
+            // excluded here. The deploy UI uses the same formula so the quoted
+            // and billed rates match.
+            const gpuCostUsd = computeResalePerHour({
                 observedPerHr,
                 markupPct: Number(pricing.markup_pct),
                 floorPerHour: Number(pricing.floor_per_hour_usd),
                 gpuCount: req.gpuCount,
             });
+            const storageCostUsd = storagePerHour({ containerDiskGb, volumeGb });
+            const hourlyCostUsd =
+                Math.round((gpuCostUsd + storageCostUsd) * 10000) / 10000;
             if (hourlyCostUsd > MAX_HOURLY_RATE_PER_POD_USD) {
                 return {
                     success: false,

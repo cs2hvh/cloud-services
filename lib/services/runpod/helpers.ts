@@ -42,6 +42,24 @@ export function computeResalePerHour(args: {
 }
 
 /**
+ * Storage price for a pod's local disk (container disk + pod volume) in $/GB
+ * per month. Network volumes are billed separately by their own meter, so
+ * they are NOT included here. Used by both the deploy estimate and the billed
+ * hourly rate so they always agree.
+ */
+export const GPU_STORAGE_USD_PER_GB_MONTH = 0.1;
+
+/** Hourly storage cost for a pod's local disk (container disk + pod volume). */
+export function storagePerHour(args: {
+    containerDiskGb: number;
+    volumeGb: number;
+}): number {
+    const gb = Math.max(0, args.containerDiskGb) + Math.max(0, args.volumeGb);
+    const perHour = (gb * GPU_STORAGE_USD_PER_GB_MONTH) / 730;
+    return Math.round(perHour * 10000) / 10000;
+}
+
+/**
  * GraphQL gpuTypes query for stock + price across the standard pod sizes
  * RunPod offers (1, 2, 4, 8). One query per cloudType per worker tick;
  * aliased so we can detect which counts are actually available — RunPod's

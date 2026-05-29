@@ -27,6 +27,7 @@ import {
     Loader2,
 } from "lucide-react";
 import { generateIdempotencyKey } from "@/lib/idempotency";
+import { storagePerHour } from "@/lib/services/runpod/helpers";
 
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { InventoryRowClient, StockStatus } from "./types";
@@ -268,9 +269,16 @@ export default function DeployWizard({
     const observedRate = interruptible
         ? selectedRow?.spotPerHr
         : selectedRow?.onDemandPerHr;
-    const estimatedHourly =
+    // GPU compute (observed × default markup × count) + local-disk storage.
+    // Mirrors the billed rate in pod-lifecycle-operations so the quote matches.
+    const gpuHourly =
         observedRate !== null && observedRate !== undefined
             ? Math.round(observedRate * 1.25 * gpuCount * 10000) / 10000
+            : null;
+    const storageHourly = storagePerHour({ containerDiskGb, volumeGb });
+    const estimatedHourly =
+        gpuHourly !== null
+            ? Math.round((gpuHourly + storageHourly) * 10000) / 10000
             : null;
 
     const dailyCost = estimatedHourly !== null ? estimatedHourly * 24 : null;
@@ -457,10 +465,9 @@ export default function DeployWizard({
                     {/* Page title */}
                     <h1 className="text-[56px] sm:text-[64px] leading-[0.95] tracking-[-0.025em] text-white font-semibold">
                         Launch{" "}
-                        <span style={SERIF_STYLE} className="text-white/55 font-normal">
-                            a GPU
+                        <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
+                            GPU
                         </span>
-                        .
                     </h1>
 
                     {/* Stepper */}
@@ -964,6 +971,17 @@ export default function DeployWizard({
                                 </p>
                             </div>
                         </div>
+
+                        {/* Compute vs storage split — so adjusting disk changes the price */}
+                        {estimatedHourly !== null && (
+                            <div className={`${MONO} mt-3 flex items-center justify-between text-[10.5px] text-white/40 tabular-nums`}>
+                                <span>Compute ${gpuHourly?.toFixed(3)}/hr</span>
+                                <span>
+                                    Storage ${storageHourly.toFixed(3)}/hr
+                                    <span className="text-white/25"> · {containerDiskGb + volumeGb} GB</span>
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Detail rows */}
@@ -994,6 +1012,24 @@ export default function DeployWizard({
                             />
                         )}
                     </div>
+
+                    {/* Missing-requirement checklist — tells the user exactly
+                        what's blocking deploy instead of just disabling it. */}
+                    {issues.length > 0 && (
+                        <div className="mt-5 border border-amber-400/20 bg-amber-400/[0.04] rounded-[6px] p-3.5">
+                            <p className={`${MONO} flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-amber-200/80`}>
+                                <AlertTriangle className="h-3 w-3" /> Complete to deploy
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                                {issues.map((it) => (
+                                    <li key={it} className={`${MONO} flex items-start gap-2 text-[11.5px] text-white/65`}>
+                                        <span className="text-amber-300/70 leading-[1.4]">•</span>
+                                        <span>{it}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
 
                     {/* Deploy button */}
                     <button
