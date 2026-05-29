@@ -10,6 +10,16 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { BillingCredits } from "@/lib/billing/credits";
+
+// Managed vector collection pricing: flat $8/month, billed hourly by the credit
+// cron (hourly_rate = monthly / 720). See migration 20260614000005.
+const VECTOR_COLLECTION_MONTHLY_USD = 8;
+const VECTOR_COLLECTION_HOURLY_USD = VECTOR_COLLECTION_MONTHLY_USD / 720;
+// Small starting-balance floor so $0 accounts can't spin up collections; the
+// cron's 7-day grace handles running low afterward.
+const MIN_VECTOR_BALANCE_USD = 1;
 
 const createSchema = z.object({
   name: z
@@ -148,6 +158,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── Billing: resolve org payer + starting-balance gate ────────────
+  const { data: orgRow } = await supabase
+    .schema("inference")
+    .from("orgs")
+    .select("billing_user_id, owner_user_id")
+    .eq("id", org.org_id)
+    .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
+  const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+
+  const bal = await ensureBalance(payerUserId, MIN_VECTOR_BALANCE_USD);
+  if (!bal.ok) {
+    return NextResponse.json(
+      {
+        error: `A managed vector collection is $${VECTOR_COLLECTION_MONTHLY_USD}/month. Add at least $${MIN_VECTOR_BALANCE_USD} in credits to create one.`,
+        code: "insufficient_credits",
+      },
+      { status: 402 }
+    );
+  }
+
   const { data, error } = await supabase
     .schema("inference")
     .from("vector_collections")
@@ -190,6 +220,27 @@ export async function POST(request: NextRequest) {
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
   });
+
+  // Register in the metered billing flow ($8/mo, billed hourly by the cron).
+  // If billing registration fails, roll the collection back so we never run an
+  // unmetered (free) collection.
+  try {
+    await postProvisionBilling({
+      userId: payerUserId,
+      initialCost: 0,
+      hourlyRate: VECTOR_COLLECTION_HOURLY_USD,
+      serviceId: data.id,
+      serviceType: "inference_vector",
+      addActive: BillingCredits.addActiveVectorCollection,
+    });
+  } catch (billingErr) {
+    console.error("[Inference Vector] billing wire-up failed, rolling back collection:", billingErr);
+    await supabase.schema("inference").from("vector_collections").delete().eq("id", data.id);
+    return NextResponse.json(
+      { error: "Could not set up billing for the collection. Please try again." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ success: true, data }, { status: 201 });
 }

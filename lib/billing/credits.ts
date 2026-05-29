@@ -101,4 +101,55 @@ export const BillingCredits = {
 
     return { finalCharge };
   },
+
+  // ── Managed vector collections (service_id = collection UUID) ──────────────
+  addActiveVectorCollection: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_inference_vector")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_inference_vector: ${error.message}`);
+  },
+
+  closeActiveVectorCollection: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+    const supabase = await createServiceClient();
+    const { data: row, error: getErr } = await supabase
+      .schema("billing")
+      .from("active_inference_vector")
+      .select("hourly_rate, last_billed_at")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+
+    if (getErr) throw new Error(`Failed to fetch active_inference_vector: ${getErr.message}`);
+
+    let finalCharge = 0;
+    if (row) {
+      const rate = parseFloat(String(row.hourly_rate));
+      if (rate > 0) {
+        const lastBilledAt = row.last_billed_at as string | undefined;
+        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
+        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
+        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
+      }
+    }
+
+    await supabase
+      .schema("billing")
+      .from("active_inference_vector")
+      .delete()
+      .eq("service_id", params.serviceId);
+
+    return { finalCharge };
+  },
 };

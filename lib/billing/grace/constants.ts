@@ -4,6 +4,7 @@ export const GRACE_SERVICE_TABLES = [
   "active_objectspace",
   "active_spectrum",
   "active_platform_apps",
+  "active_inference_vector",
 ] as const;
 
 export type GraceServiceTable = (typeof GRACE_SERVICE_TABLES)[number];

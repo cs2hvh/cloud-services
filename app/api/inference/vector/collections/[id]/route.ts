@@ -8,6 +8,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { closeActiveBilling } from "@/config/billing-flow";
+import { BillingCredits } from "@/lib/billing/credits";
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
@@ -112,6 +114,26 @@ export async function DELETE(
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
   });
+
+  // Stop billing: prorate the final partial period and remove the meter row.
+  // Best-effort — a billing hiccup shouldn't fail the delete the user asked for.
+  try {
+    const { data: orgRow } = await supabase
+      .schema("inference")
+      .from("orgs")
+      .select("billing_user_id, owner_user_id")
+      .eq("id", org.org_id)
+      .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
+    const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+    await closeActiveBilling({
+      userId: payerUserId,
+      serviceId: id,
+      serviceType: "inference_vector",
+      closeActive: () => BillingCredits.closeActiveVectorCollection({ serviceId: id }),
+    });
+  } catch (billingErr) {
+    console.warn("[Inference Vector] billing close failed on delete:", billingErr);
+  }
 
   return NextResponse.json({ success: true, deleted_id: id });
 }

@@ -207,6 +207,26 @@ export async function executeGraceDeletion(params: {
         };
       }
 
+      case "active_inference_vector": {
+        // service_id is the vector collection id. Deleting the collection
+        // cascades to its rows (vector_rows FK ON DELETE CASCADE).
+        const supabase = await createServiceClient();
+        const { error, count } = await supabase
+          .schema("inference")
+          .from("vector_collections")
+          .delete({ count: "exact" })
+          .eq("id", params.serviceId);
+
+        if (error) {
+          return { success: false, message: `Vector collection deletion failed: ${error.message}` };
+        }
+        return {
+          success: true,
+          alreadyDeleted: !count,
+          message: count ? "Vector collection deleted" : "Vector collection already deleted",
+        };
+      }
+
       default:
         return { success: false, message: `Unsupported service table: ${params.serviceTable}` };
     }
