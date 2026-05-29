@@ -949,20 +949,22 @@ function ServerRow({
                 </div>
             </div>
 
-            {/* Region */}
-            <div className="hidden md:flex items-center gap-2 min-w-0">
-                <FlagImg code={region.countryCode} size={16} />
-                <div className="min-w-0">
-                    <p className="text-[12px] text-white/85 truncate">
+            {/* Region — fixed two-line block so the flag + city align
+                consistently across rows whether or not a country sub-label
+                is shown (single-line rows keep the same height). */}
+            <div className="hidden md:flex items-center gap-2.5 min-w-0">
+                <FlagImg code={region.countryCode} size={18} />
+                <div className="min-w-0 leading-tight">
+                    <p className="text-[12px] text-white/85 truncate leading-[1.25]">
                         {region.city}
                     </p>
-                    {region.country !== region.city && region.country !== '—' && (
-                        <p
-                            className={`${MONO} text-[9.5px] text-white/40 truncate uppercase tracking-[0.06em]`}
-                        >
-                            {region.country}
-                        </p>
-                    )}
+                    <p
+                        className={`${MONO} text-[9.5px] text-white/40 truncate uppercase tracking-[0.08em] leading-[1.25]`}
+                    >
+                        {region.country !== region.city && region.country !== '—'
+                            ? region.country
+                            : ' '}
+                    </p>
                 </div>
             </div>
 
