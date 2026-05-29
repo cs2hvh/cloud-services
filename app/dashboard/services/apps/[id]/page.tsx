@@ -1336,8 +1336,10 @@ export default function AppDetailPage() {
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
   const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
-  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
-  const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
+  // During an in-flight resize, show the target size in the header; otherwise show the running size.
+  const displaySize = (resizeInProgress && pendingResizeSize) ? pendingResizeSize : currentSize;
+  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[displaySize];
+  const currentSizePrice = platformPricing[displaySize]?.price ?? 0;
 
   return (
     <AppCanvas>
@@ -1536,11 +1538,11 @@ export default function AppDetailPage() {
 
         <div className="px-5 py-5 flex flex-col gap-2">
           <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-            {resizeInProgress ? 'Requested Size' : 'Runtime Size'}
+            {resizeInProgress ? 'Upgrading to' : 'Runtime Size'}
           </span>
           <div className="flex items-baseline gap-1.5">
             <span style={APP_SERIF_STYLE} className="text-[22px] leading-none font-bold tracking-[-0.025em] text-white capitalize">
-              {currentSize}
+              {displaySize}
             </span>
             <span className={`${APP_MONO} text-[10.5px] text-white/45`}>
               {currentSizePrice > 0 ? `$${currentSizePrice.toFixed(2)}/mo` : 'Free'}
@@ -2178,10 +2180,11 @@ export default function AppDetailPage() {
                       const monthlyPrice = platformPricing[size]?.price ?? 0;
                       const quota = platformPricing[size]?.quota;
                       const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
-                      const isCurrent = size === currentSize;
+                      const isPendingUpgrade = resizeInProgress && size === pendingResizeSize;
+                      const isCurrent = size === currentSize && !resizeInProgress;
                       const isUpgrade =
                         PLATFORM_APP_SIZE_ORDER.indexOf(size) >
-                        PLATFORM_APP_SIZE_ORDER.indexOf(currentSize);
+                        PLATFORM_APP_SIZE_ORDER.indexOf(resizeInProgress && pendingResizeSize ? pendingResizeSize : currentSize);
                       const isSelected = selectedSize === size;
                       const isDisabled = !isUpgrade || deploymentMutationBlocked;
 
@@ -2190,7 +2193,9 @@ export default function AppDetailPage() {
                           key={size}
                           onClick={() => !isDisabled && setSelectedSize(isSelected ? null : size)}
                           className={`relative border px-4 py-4 transition-all cursor-pointer ${
-                            isCurrent
+                            isPendingUpgrade
+                              ? 'border-amber-500/40 bg-white/[0.05]'
+                              : isCurrent
                               ? 'border-blue-500/40 bg-white/[0.05]'
                               : isSelected
                               ? 'border-green-500/40 bg-white/[0.05]'
@@ -2199,12 +2204,17 @@ export default function AppDetailPage() {
                               : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
                           }`}
                         >
+                          {isPendingUpgrade && (
+                            <Badge className="absolute -top-2 -right-2 rounded-none bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
+                              Upgrading…
+                            </Badge>
+                          )}
                           {isCurrent && (
                             <Badge className="absolute -top-2 -right-2 rounded-none bg-blue-500 text-white text-xs">
                               Current
                             </Badge>
                           )}
-                          {isUpgrade && !isCurrent && (
+                          {isUpgrade && !isCurrent && !isPendingUpgrade && (
                             <Badge className="absolute -top-2 -right-2 rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
                               <ArrowUpCircle className="w-3 h-3 mr-1" />
                               Upgrade
@@ -2286,9 +2296,12 @@ export default function AppDetailPage() {
                   {bandwidthData && (
                     <p className="text-xs text-white/40 mb-3">
                       {bandwidthData.quota.totalBytes
-                        ? `${((bandwidthData.totalBytes / bandwidthData.quota.totalBytes) * 100).toFixed(1)}% of quota used this period`
+                        ? `${bandwidthData.percentUsed !== null ? bandwidthData.percentUsed.toFixed(1) : '0.0'}% of quota used this period`
                         : 'No quota configured'}
                       {bandwidthData.purchasedBytes > 0 && ` · ${(bandwidthData.purchasedBytes / 1073741824).toFixed(0)} GB purchased`}
+                      {resizeInProgress && pendingResizeSize && (
+                        <span className="text-amber-400/70"> · quota updates when upgrade completes</span>
+                      )}
                     </p>
                   )}
 
