@@ -194,7 +194,10 @@ export async function POST(
     const safeError =
       customerSafeErrorMessage(payload.error) ||
       "Training did not complete. Re-run the job; if it fails again, try a different GPU size or contact support.";
-    await supabase
+    // Win the terminal transition atomically. Only the call that flips the
+    // job out of a non-terminal state charges — a concurrent webhook retry
+    // matches zero rows here and skips, so the customer is billed exactly once.
+    const { data: won } = await supabase
       .schema("inference")
       .from("finetunes")
       .update({
@@ -204,7 +207,13 @@ export async function POST(
         cost_cents: costCents,
         completed_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .in("status", ["queued", "preparing", "running"])
+      .select("id")
+      .maybeSingle();
+    if (!won) {
+      return NextResponse.json({ ok: true, idempotent: true });
+    }
 
     // Charge for the GPU time the (failed) run consumed — the pod was up and
     // billed to us regardless of outcome.
@@ -302,7 +311,10 @@ export async function POST(
   // Until then, the inference gateway never routes for FT outputs.
   const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
 
-  await supabase
+  // Win the terminal transition atomically — see the failure path. Charge
+  // only if we flipped the job to completed, so a retried webhook can't
+  // double-bill.
+  const { data: wonSuccess } = await supabase
     .schema("inference")
     .from("finetunes")
     .update({
@@ -314,7 +326,13 @@ export async function POST(
       completed_at: new Date().toISOString(),
       error_message: null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .in("status", ["queued", "preparing", "running"])
+    .select("id")
+    .maybeSingle();
+  if (!wonSuccess) {
+    return NextResponse.json({ ok: true, idempotent: true });
+  }
 
   // Charge the org for the GPU time this run consumed.
   await chargeFinetune(supabase, existing.org_id, id, existing.name, costCents, payload.elapsed_seconds);
