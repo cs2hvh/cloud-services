@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { createClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
+import { sendSupportTicketCreatedEmail } from "@/lib/support/email";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,6 @@ function describeBody(body: InquiryBody, userEmail: string | null): string {
         `**Duration:** ${body.duration}`,
         body.region ? `**Region preference:** ${body.region}` : null,
         body.budget ? `**Budget:** ${body.budget}` : null,
-        `**Contact preference:** ${body.contactPref}`,
         `**Submitted by:** ${userEmail || "unknown"}`,
         "",
         "---",
@@ -119,7 +119,9 @@ export async function POST(req: NextRequest) {
             { status: 400 }
         );
     }
-    const contactPref = safeString(raw.contactPref, 16);
+    // Contact preference was removed from the form; default to email and stay
+    // tolerant of older clients that still send it.
+    const contactPref = safeString(raw.contactPref, 16) || "email";
     if (!ALLOWED_CONTACT_PREFS.has(contactPref)) {
         return NextResponse.json(
             { ok: false, error: "Invalid contact preference" },
@@ -179,6 +181,33 @@ export async function POST(req: NextRequest) {
                 { ok: false, error: "Failed to record inquiry" },
                 { status: 500 }
             );
+        }
+
+        // Fire the confirmation email (best-effort — never block the inquiry).
+        if (user.email) {
+            try {
+                const detail = await SupportTickets.getByIdForUser(user.id, created.ticket.id);
+                const customerName =
+                    (user.user_metadata?.username as string | undefined) ||
+                    (user.user_metadata?.display_name as string | undefined) ||
+                    user.email.split("@")[0] ||
+                    "there";
+                const emailResult = await sendSupportTicketCreatedEmail({
+                    to: user.email,
+                    customerName,
+                    ticketId: created.ticket.id,
+                    ticketNumber: created.ticket.ticket_number,
+                    ticketSubject: created.ticket.subject,
+                    ticketBody: description,
+                    createdAt: created.ticket.created_at,
+                    messages: detail?.messages || [],
+                });
+                if (!emailResult.success) {
+                    console.error("[gpu-inquiry] confirmation email failed:", emailResult.error);
+                }
+            } catch (mailErr) {
+                console.error("[gpu-inquiry] confirmation email threw:", mailErr);
+            }
         }
 
         return NextResponse.json({

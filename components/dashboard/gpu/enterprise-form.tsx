@@ -18,8 +18,6 @@ import {
     type LucideIcon,
 } from "lucide-react";
 
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
-
 // ─── Design tokens ────────────────────────────────────────────────
 const SERIF_STYLE: CSSProperties = {
     fontFamily: "var(--font-nunito), system-ui, sans-serif",
@@ -102,7 +100,6 @@ export default function EnterpriseInquiryForm() {
     const [duration, setDuration] = useState("1-month");
     const [workload, setWorkload] = useState("");
     const [region, setRegion] = useState("");
-    const [contactPref, setContactPref] = useState("email");
     const [extra, setExtra] = useState("");
 
     function toggleGpu(g: string) {
@@ -132,7 +129,6 @@ export default function EnterpriseInquiryForm() {
                     duration,
                     workload: workload.trim(),
                     region: region.trim() || null,
-                    contactPref,
                     extra: extra.trim() || null,
                 }),
             });
@@ -200,9 +196,9 @@ export default function EnterpriseInquiryForm() {
     }
 
     return (
-        <div className="mx-auto max-w-[1100px] text-white">
+        <div className="mx-auto max-w-[1280px] text-white">
             {/* ── Hero ─────────────────────────────────────────── */}
-            <header className="mb-10">
+            <header className="mb-9">
                 <Link
                     href="/dashboard/services/gpu"
                     className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
@@ -219,37 +215,21 @@ export default function EnterpriseInquiryForm() {
 
                 <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold max-w-3xl">
                     Talk to our{" "}
-                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                    <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
                         sales team
                     </span>
-                    .
                 </h1>
                 <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
                     For reserved capacity, multi-node training clusters, or long-term
                     savings plans — our team works with you directly. Self-serve pods stay
                     on the main page.
                 </p>
-
-                <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden">
-                    {HERO_BULLETS.map((bullet) => (
-                        <div
-                            key={bullet}
-                            className="bg-[#0d0e11] px-3 py-3 flex items-center gap-2"
-                        >
-                            <span
-                                className="h-1 w-1 rounded-full shrink-0"
-                                style={{ background: ACCENT, boxShadow: `0 0 5px ${ACCENT}` }}
-                            />
-                            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.08em] text-white/65 font-medium leading-tight`}>
-                                {bullet}
-                            </span>
-                        </div>
-                    ))}
-                </div>
             </header>
 
-            {/* ── 01 Plan ─────────────────────────────────────── */}
-            <div className="space-y-12">
+            {/* Two-column: form on the left, sticky summary on the right. */}
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+                {/* ── 01 Plan ─────────────────────────────────────── */}
+                <div className="space-y-10 min-w-0">
                 <section>
                     <SectionHead
                         index="01"
@@ -356,13 +336,12 @@ export default function EnterpriseInquiryForm() {
                     <div className="flex flex-wrap gap-2">
                         {GPU_CHOICES.map((g) => {
                             const selected = gpus.includes(g);
-                            const isNvidia = g !== "Mixed / not sure";
                             return (
                                 <button
                                     key={g}
                                     type="button"
                                     onClick={() => toggleGpu(g)}
-                                    className={`${MONO} inline-flex items-center gap-1.5 border px-3 py-2 text-[12px] uppercase tracking-[0.08em] font-semibold rounded-[20px] transition-all ${
+                                    className={`${MONO} inline-flex items-center gap-1.5 border px-3.5 py-2 text-[12px] uppercase tracking-[0.08em] font-semibold rounded-[20px] transition-all ${
                                         selected
                                             ? "text-white"
                                             : "border-white/[0.08] bg-[#111216] text-white/65 hover:bg-[#16181d] hover:border-white/[0.14]"
@@ -377,8 +356,11 @@ export default function EnterpriseInquiryForm() {
                                             : undefined
                                     }
                                 >
-                                    {isNvidia && (
-                                        <NvidiaLogo width={14} height={10} className="opacity-95" />
+                                    {selected && (
+                                        <span
+                                            className="h-1.5 w-1.5 rounded-full"
+                                            style={{ background: ACCENT, boxShadow: `0 0 5px ${ACCENT}` }}
+                                        />
                                     )}
                                     {g}
                                 </button>
@@ -447,50 +429,6 @@ export default function EnterpriseInquiryForm() {
                             />
                         </FieldWrap>
 
-                        <FieldWrap label="Contact preference">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                {[
-                                    { value: "email", label: "Email" },
-                                    { value: "call", label: "Phone / video" },
-                                    { value: "slack", label: "Slack channel" },
-                                ].map((opt) => {
-                                    const selected = contactPref === opt.value;
-                                    return (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            onClick={() => setContactPref(opt.value)}
-                                            className={`${MONO} h-10 inline-flex items-center justify-center gap-1.5 px-3 border text-[11px] uppercase tracking-[0.12em] rounded-[5px] transition-all ${
-                                                selected
-                                                    ? "text-white"
-                                                    : "border-white/[0.08] bg-[#0d0e11] text-white/55 hover:text-white hover:bg-white/[0.04]"
-                                            }`}
-                                            style={
-                                                selected
-                                                    ? {
-                                                          borderColor: `${ACCENT}55`,
-                                                          background: "rgba(0,149,255,0.08)",
-                                                          boxShadow: `0 0 0 1px ${ACCENT}33`,
-                                                      }
-                                                    : undefined
-                                            }
-                                        >
-                                            {selected && (
-                                                <span
-                                                    className="h-1.5 w-1.5 rounded-full"
-                                                    style={{
-                                                        background: ACCENT,
-                                                        boxShadow: `0 0 5px ${ACCENT}`,
-                                                    }}
-                                                />
-                                            )}
-                                            {opt.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </FieldWrap>
-
                         <FieldWrap label="Anything else? (optional)">
                             <textarea
                                 value={extra}
@@ -552,6 +490,36 @@ export default function EnterpriseInquiryForm() {
                     </button>
                     </div>
                 </div>
+                </div>
+
+                {/* ── Sticky summary ─────────────────────────── */}
+                <aside className="lg:sticky lg:top-6 space-y-3">
+                    <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[8px] p-5">
+                        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+                            Your request
+                        </p>
+                        <div className="flex flex-col">
+                            <DetailRow label="Plan" value={PLAN_TYPES.find((p) => p.value === planType)?.label ?? "—"} />
+                            <DetailRow label="GPUs" value={gpus.length ? gpus.join(", ") : "—"} />
+                            <DetailRow label="Count" value={`${gpuCount}×`} />
+                            <DetailRow label="Duration" value={DURATIONS.find((d) => d.value === duration)?.label ?? "—"} />
+                            {region.trim() && <DetailRow label="Region" value={region.trim()} />}
+                        </div>
+                    </div>
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[8px] p-5">
+                        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+                            Enterprise includes
+                        </p>
+                        <ul className="space-y-2.5">
+                            {HERO_BULLETS.map((b) => (
+                                <li key={b} className="flex items-start gap-2.5 text-[12px] text-white/70 leading-snug">
+                                    <CheckCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: ACCENT }} />
+                                    {b}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </aside>
             </div>
         </div>
     );
@@ -585,6 +553,17 @@ function SectionHead({
             {meta && (
                 <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>{meta}</span>
             )}
+        </div>
+    );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-center justify-between gap-3 border-b border-dashed border-white/[0.06] py-2 last:border-b-0">
+            <span className={`${MONO} shrink-0 text-[10px] uppercase tracking-[0.08em] text-white/40`}>
+                {label}
+            </span>
+            <span className="text-right text-[12px] text-white/90 truncate">{value}</span>
         </div>
     );
 }
