@@ -496,17 +496,13 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                                     onValueChange={setSelectedOS}
                                 >
                                     <SelectTrigger
-                                        className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px]`}
+                                        className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px] [&_img]:shrink-0`}
                                     >
-                                        <span className="flex items-center gap-2.5 min-w-0">
-                                            {selectedOS && (
-                                                <OsImg
-                                                    name={selectedOS}
-                                                    size={18}
-                                                />
-                                            )}
-                                            <SelectValue placeholder="Select an OS" />
-                                        </span>
+                                        {/* SelectValue mirrors the selected
+                                            item's content (icon + name), so we
+                                            do NOT add a separate icon here —
+                                            that would render it twice. */}
+                                        <SelectValue placeholder="Select an OS" />
                                     </SelectTrigger>
                                     <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
                                         {availableOS.map((os) => (
