@@ -252,20 +252,24 @@ export default function VPSPage() {
 
     useEffect(() => {
         let alive = true;
-        supabase
-            .from('proxmox_host_regions')
-            .select('id, name, region, display_region')
-            .then(({ data, error }) => {
+        // Region/flag data is resolved server-side (proxmox_hosts is admin-only
+        // under RLS; the API exposes just id/name/region/display_region).
+        fetch('/api/services/compute/host-regions')
+            .then((r) => r.json())
+            .then((json) => {
                 if (!alive) return;
-                if (error || !data) return;
+                if (!json?.ok || !Array.isArray(json.regions)) return;
                 const m = new Map<string, HostRegionRow>();
-                for (const row of data as HostRegionRow[]) m.set(row.id, row);
+                for (const row of json.regions as HostRegionRow[]) {
+                    m.set(String(row.id), row);
+                }
                 setHostRegions(m);
-            });
+            })
+            .catch(() => {});
         return () => {
             alive = false;
         };
-    }, [supabase]);
+    }, []);
 
     const loadServers = useCallback(async () => {
         setLoading(true);
