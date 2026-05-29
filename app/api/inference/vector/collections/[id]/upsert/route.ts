@@ -34,6 +34,10 @@ const upsertSchema = z.object({
     .max(100),
 });
 
+// Cap on total stored vectors per org — fair-use + cost control until
+// per-GB metered storage billing lands. Tunable.
+const MAX_VECTORS_PER_ORG = 1_000_000;
+
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
 }
@@ -86,6 +90,32 @@ export async function POST(
 
   if (cErr || !collection) {
     return NextResponse.json({ error: "Collection not found" }, { status: 404 });
+  }
+
+  // ── Per-org storage quota ─────────────────────────────────────────
+  // Cap total stored vectors per org so storage can't grow unbounded and
+  // uncharged. Checked before embedding so we fail fast without spending on
+  // embed calls. Conservative: treats the whole incoming batch as new rows.
+  const { data: orgCollections, error: quotaErr } = await supabase
+    .schema("inference")
+    .from("vector_collections")
+    .select("row_count")
+    .eq("org_id", org.org_id);
+  if (quotaErr) {
+    return NextResponse.json({ error: "Could not verify storage quota" }, { status: 500 });
+  }
+  const currentVectors = (orgCollections ?? []).reduce(
+    (sum, c) => sum + (Number((c as { row_count: number | null }).row_count) || 0),
+    0
+  );
+  if (currentVectors + parsed.data.rows.length > MAX_VECTORS_PER_ORG) {
+    return NextResponse.json(
+      {
+        error: `Vector storage limit reached (${MAX_VECTORS_PER_ORG.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`,
+        code: "vector_quota_exceeded",
+      },
+      { status: 403 }
+    );
   }
 
   // Resolve embeddings — pre-computed or auto-embed
