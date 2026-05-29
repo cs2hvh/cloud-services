@@ -17,6 +17,7 @@ const ACCENT_BRIGHT = '#33adff';
 
 interface VpsSettingsTabProps {
   server: ServerData;
+  onRefresh?: () => void;
   editName: string;
   setEditName: (v: string) => void;
   showRenameInput: boolean;
@@ -77,6 +78,7 @@ function SectionHead({
 
 export function VpsSettingsTab({
   server,
+  onRefresh,
   editName,
   setEditName,
   showRenameInput,
@@ -205,7 +207,7 @@ export function VpsSettingsTab({
           title="Resize"
           description="Move to a larger or different plan. Reboots the server; storage can only grow."
         />
-        <VpsResizeSection server={server} />
+        <VpsResizeSection server={server} onRefresh={onRefresh} />
       </section>
 
       {/* ── 04 · Danger zone ─────────────────────────────── */}

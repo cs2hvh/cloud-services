@@ -41,7 +41,13 @@ function money(n: number) {
   return n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
 }
 
-export function VpsResizeSection({ server }: { server: ServerData }) {
+export function VpsResizeSection({
+  server,
+  onRefresh,
+}: {
+  server: ServerData;
+  onRefresh?: () => void;
+}) {
   const [data, setData] = useState<ResizeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,8 +107,9 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error || 'Resize failed');
-      toast.success('Resize started — your server will reboot and come back on the new plan.');
+      toast.success('Resize started — your server will update on the new plan.');
       setSelected('');
+      onRefresh?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Resize failed');
     } finally {
@@ -122,6 +129,9 @@ export function VpsResizeSection({ server }: { server: ServerData }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to power off');
       toast.success('Powering off — plans will appear once the server stops.');
+      // Refresh the parent so the header + this section reflect 'stopped'
+      // immediately, without waiting on a realtime event.
+      onRefresh?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to power off');
     } finally {

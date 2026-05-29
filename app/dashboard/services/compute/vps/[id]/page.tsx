@@ -393,6 +393,7 @@ export default function VMDetailPage() {
           <TabsContent value="settings" className="mt-0">
             <VpsSettingsTab
               server={server}
+              onRefresh={fetchServer}
               editName={editName}
               setEditName={setEditName}
               showRenameInput={showRenameInput}
