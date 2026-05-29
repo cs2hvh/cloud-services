@@ -14,6 +14,7 @@ import {
     AlertTriangle,
     ArrowUpRight,
     Copy,
+    HardDrive,
     Loader2,
     MapPin,
     MoreHorizontal,
@@ -452,6 +453,13 @@ export default function VPSPage() {
                             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </button>
+                        <Link
+                            href="/dashboard/services/compute/images"
+                            className={`${MONO} inline-flex h-10 items-center gap-2 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                        >
+                            <HardDrive className="h-3 w-3" />
+                            Images
+                        </Link>
                         <Link
                             href="/dashboard/services/compute/vps/new"
                             className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
