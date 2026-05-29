@@ -4,6 +4,7 @@ import {
   APP_NAMESPACE,
   K8S_FIELD_MANAGER,
   BANDWIDTH_RESTRICTION_SNIPPET,
+  RESTRICTION_BEGIN_MARKER,
   RESTRICTION_END_MARKER,
   RESTRICTION_ANNOTATION_KEY,
   RESTRICTION_SENTINEL,
@@ -78,6 +79,21 @@ function withRestrictionSnippet(currentSnippet: string): string {
   return `${currentSnippet.trimEnd()}\n\n${BANDWIDTH_RESTRICTION_SNIPPET}`;
 }
 
+// Guard: the final snippet value written to Ingress must contain both markers
+// and the 429 return directive. Prevents any code path from injecting arbitrary
+// NGINX config (e.g. if BANDWIDTH_RESTRICTION_SNIPPET is somehow misconfigured).
+function assertSafeSnippet(snippet: string): void {
+  const hasBoundary =
+    snippet.includes(RESTRICTION_BEGIN_MARKER) &&
+    snippet.includes(RESTRICTION_END_MARKER);
+  const has429 = snippet.includes("return 429");
+  if (!hasBoundary || !has429) {
+    throw new Error(
+      `[k8s-ingress] Refusing to write unsafe server-snippet — must contain both markers and 'return 429'. Got: ${snippet.slice(0, 120)}`
+    );
+  }
+}
+
 function withoutRestrictionSnippet(currentSnippet: string): string {
   const start = currentSnippet.indexOf(RESTRICTION_SENTINEL);
   if (start === -1) return currentSnippet;
@@ -125,17 +141,20 @@ export async function applyBandwidthRestriction(
     return { applied: true }; // already restricted
   }
 
+  const snippetValue = withRestrictionSnippet(currentSnippet);
+  assertSafeSnippet(snippetValue);
+
   const patch: JsonPatchOperation[] = [
     {
       op: currentSnippet ? "replace" : "add",
       path: RESTRICTION_PATCH_PATH,
-      value: withRestrictionSnippet(currentSnippet),
+      value: snippetValue,
     },
   ];
 
   try {
     await patchIngress(networking, ingressName, patch);
-    console.log(`[k8s-ingress] Restriction applied to ${ingressName}`);
+    console.log(`[k8s-ingress] Restriction applied to ${ingressName} — audit: actor=system`);
     return { applied: true };
   } catch (error) {
     const msg = k8sErrorMessage(error);
@@ -180,7 +199,7 @@ export async function removeBandwidthRestriction(
 
   try {
     await patchIngress(networking, ingressName, patch);
-    console.log(`[k8s-ingress] Restriction removed from ${ingressName}`);
+    console.log(`[k8s-ingress] Restriction removed from ${ingressName} — audit: actor=system`);
     return { removed: true };
   } catch (error) {
     const msg = k8sErrorMessage(error);
