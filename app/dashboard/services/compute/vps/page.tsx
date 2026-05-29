@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 
 import { createClient } from '@/lib/supabase/client';
 import { ServerStackIcon } from '@/components/dashboard/compute/vps/section-icons';
-import { osIconFor } from '@/components/dashboard/compute/vps/os-icons';
+import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
 
 // ─── Design tokens ─────────────────────────────────────────────────
 
@@ -870,7 +870,6 @@ function ServerRow({
         router.push(`/dashboard/services/compute/vps/${server.id}#console`);
     };
 
-    const OsIcon = osIconFor(server.os);
     const region = regionFor({
         region: host?.region,
         displayRegion: host?.display_region,
@@ -887,7 +886,7 @@ function ServerRow({
                 <div
                     className="h-9 w-9 shrink-0 inline-flex items-center justify-center border border-white/[0.08] bg-[#0d0e11] rounded-[6px] text-white/70"
                 >
-                    <OsIcon className="h-4 w-4" />
+                    <OsImg name={server.os} size={18} className="h-[18px] w-[18px]" />
                 </div>
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

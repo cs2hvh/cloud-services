@@ -4,11 +4,11 @@
 // name + meta strip + monochrome action buttons. Provisioning + failed
 // banners stack underneath.
 
-import { AlertTriangle, Clock, Copy, Globe, HardDrive, Loader2, MapPin, Play, Power, RotateCw, Server, Terminal } from 'lucide-react';
+import { AlertTriangle, Clock, Copy, Globe, HardDrive, Loader2, MapPin, Play, Power, RotateCw, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-import { osIconFor } from '@/components/dashboard/compute/vps/os-icons';
+import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
 import { type ServerData } from './types';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
@@ -59,7 +59,6 @@ export function VpsHeader({
     const provisioning = server.details?.provisioning;
     const progress = provisioning?.progress || 10;
 
-    const OsIcon = osIconFor(server.os);
     const status = statusMeta(server.status);
 
     return (
@@ -85,7 +84,7 @@ export function VpsHeader({
                                 color: ACCENT,
                             }}
                         >
-                            <OsIcon className="h-7 w-7" />
+                            <OsImg name={server.os} size={28} className="h-7 w-7" />
                         </div>
                         {/* Status indicator dot */}
                         <span
@@ -124,7 +123,7 @@ export function VpsHeader({
 
                         <div className={`${MONO} flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-white/45`}>
                             <span className="inline-flex items-center gap-1.5 text-white/65">
-                                <Server className="h-3 w-3 opacity-70" />
+                                <OsImg name={server.os} size={13} className="h-[13px] w-[13px] opacity-90" />
                                 {server.os}
                             </span>
                             {(server.displayRegion || server.region) && (

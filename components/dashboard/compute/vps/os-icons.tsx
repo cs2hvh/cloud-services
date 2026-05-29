@@ -13,6 +13,7 @@
 // Server 22.04 LTS") to the right glyph.
 
 import type { SVGProps } from "react";
+import Image from "next/image";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -139,4 +140,56 @@ export function osIconFor(osName: string | null | undefined) {
     if (n.includes("fedora")) return FedoraIcon;
     if (n.includes("windows") || n.includes("win ")) return WindowsIcon;
     return LinuxIcon;
+}
+
+// Brand OS artwork in /public/os. Only a handful ship as PNGs; every other
+// distro falls back to the monochrome glyph above. The space in the Windows
+// filename is URL-encoded.
+const OS_PNG: { match: string; src: string }[] = [
+    { match: "ubuntu", src: "/os/ubuntu.png" },
+    { match: "debian", src: "/os/Debian.png" },
+    { match: "centos", src: "/os/icons8-centos-96.png" },
+    { match: "windows", src: "/os/Windows%2011.png" },
+];
+
+/**
+ * OS icon that prefers the brand PNG (where one exists in /public/os) and
+ * falls back to the monochrome distro glyph. Single source of truth for OS
+ * iconography across the VPS create form, list, and detail pages.
+ *
+ * The fallback glyph inherits text color (currentColor) unless `className`
+ * sets one, so it adopts the surrounding tile's color like before.
+ */
+export function OsImg({
+    name,
+    size = 20,
+    className = "",
+}: {
+    name?: string | null;
+    size?: number;
+    className?: string;
+}) {
+    const n = (name ?? "").toLowerCase();
+    const png = OS_PNG.find((o) => n.includes(o.match));
+    if (png) {
+        return (
+            <Image
+                src={png.src}
+                alt=""
+                width={size}
+                height={size}
+                unoptimized
+                className={`object-contain shrink-0 ${className}`}
+                style={{ width: size, height: size }}
+            />
+        );
+    }
+    const Glyph = osIconFor(name);
+    const hasColor = /(^|\s)text-/.test(className);
+    return (
+        <Glyph
+            className={`shrink-0 ${hasColor ? "" : "text-current"} ${className}`}
+            style={{ width: size, height: size }}
+        />
+    );
 }

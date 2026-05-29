@@ -27,7 +27,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import DeploymentProgress from "./deployment-progress";
-import { osIconFor } from "./os-icons";
+import { OsImg } from "./os-icons";
 
 // ─── Design tokens ───────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = {
@@ -98,47 +98,6 @@ function FlagImg({ id, size = 22 }: { id: string; size?: number }) {
             className="object-cover"
             style={{ width: w, height: h }}
             unoptimized
-        />
-    );
-}
-
-// OS name → brand PNG in /public/os. Only a handful ship as PNGs; every
-// other distro (Alma, Rocky, Fedora, generic Linux) falls back to the
-// monochrome glyph from os-icons. Space in the Windows filename is encoded.
-const OS_PNG: { match: string; src: string }[] = [
-    { match: "ubuntu", src: "/os/ubuntu.png" },
-    { match: "debian", src: "/os/Debian.png" },
-    { match: "centos", src: "/os/icons8-centos-96.png" },
-    { match: "windows", src: "/os/Windows%2011.png" },
-];
-
-function OsImg({
-    name,
-    size = 20,
-}: {
-    name: string | null | undefined;
-    size?: number;
-}) {
-    const n = (name ?? "").toLowerCase();
-    const png = OS_PNG.find((o) => n.includes(o.match));
-    if (png) {
-        return (
-            <Image
-                src={png.src}
-                alt=""
-                width={size}
-                height={size}
-                className="object-contain shrink-0"
-                style={{ width: size, height: size }}
-                unoptimized
-            />
-        );
-    }
-    const Glyph = osIconFor(name);
-    return (
-        <Glyph
-            className="text-white/70 shrink-0"
-            style={{ width: size, height: size }}
         />
     );
 }
