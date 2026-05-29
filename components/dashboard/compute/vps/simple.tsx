@@ -13,6 +13,7 @@ import {
     ArrowRight,
     Check,
     ChevronLeft,
+    HardDrive,
     Loader2,
     MapPin,
 } from "lucide-react";
@@ -37,6 +38,10 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
 const ACCENT_DIM = "rgba(0,149,255,0.08)";
+
+// Sentinel OS value: a CTA row that navigates to the custom-images page
+// instead of selecting an OS.
+const CUSTOM_IMAGE_CTA = "__custom_image_cta__";
 
 const PASSWORD_PATTERNS = {
     hasUpperCase: /[A-Z]/,
@@ -427,7 +432,15 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                                 </FieldLabel>
                                 <Select
                                     value={selectedOS}
-                                    onValueChange={setSelectedOS}
+                                    onValueChange={(value) => {
+                                        if (value === CUSTOM_IMAGE_CTA) {
+                                            router.push(
+                                                "/dashboard/services/compute/images",
+                                            );
+                                            return;
+                                        }
+                                        setSelectedOS(value);
+                                    }}
                                 >
                                     <SelectTrigger
                                         className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px] [&_img]:shrink-0`}
@@ -450,6 +463,19 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                                                 </span>
                                             </SelectItem>
                                         ))}
+                                        {/* CTA → manage / import custom images */}
+                                        <SelectItem
+                                            value={CUSTOM_IMAGE_CTA}
+                                            className="mt-1 border-t border-white/[0.08]"
+                                        >
+                                            <span
+                                                className="flex items-center gap-2.5 font-medium"
+                                                style={{ color: ACCENT_BRIGHT }}
+                                            >
+                                                <HardDrive className="h-[18px] w-[18px]" />
+                                                Custom image…
+                                            </span>
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <p

@@ -434,10 +434,69 @@ Template prep reference: `docs/WINDOWS_SERVER_2025_TEMPLATE_SETUP.md`.
   `proxmoxAuth`. De‑dupe post‑v1 (risky to refactor the provisioning critical
   path right before launch).
 - **Resize is single‑host** (no live migration) and **disk grow‑only**.
+- **Snapshot‑from‑server is disabled** for v1 (503 stub; URL‑import custom images
+  are live — see §14).
 
 ---
 
-## 14. Key files
+## 14. Custom OS images
+
+Customers can bring their own OS image. **URL import is live; snapshot‑from‑
+server is built but currently disabled** (503 stub — re‑enable from git
+`67cdef63`).
+
+**Model.** A custom image is just an *owner‑scoped `proxmox_templates` row*, so
+the normal clone + host‑selection + cloud‑init networking path works unchanged.
+Tables: `public.custom_images` (catalog — name, `source_type` url|snapshot,
+`source_ref`, `os_family`, `default_user`, `size_gb`, `cloud_init`, `status`,
+`billing_service_id`), `proxmox_templates.owner_id` + `custom_image_id`
+(NULL owner = public/built‑in), `billing.active_custom_image` (storage meter).
+Owner‑scoping: the `options` + `create` queries filter built‑in templates to
+`owner_id IS NULL`; a customer only ever sees their own custom images.
+
+**URL import (active).** `POST /api/services/compute/images` with an `https` URL
+to a cloud qcow2/raw — validated (public‑only / SSRF‑screened, quota 25,
+dup‑name, 100 GB cap), recorded `available` immediately. **The image is never
+staged in our storage** — the Proxmox host downloads it directly from the
+customer URL at first deploy.
+
+**Lazy per‑host build.** Replication is lazy: `ensureCustomTemplateOnHost`
+(`lib/services/compute/custom-images.ts`) builds the template the first time a
+customer deploys the image to a host's region — `buildCustomImageTemplate`
+(`lib/proxmox-utils.ts`) SSH‑downloads → `qm create` → `qm importdisk` →
+attaches a cloud‑init drive + guest agent + serial → `qm template` → registers
+the row (behind a Redis lock; later deploys are instant). Available across all
+regions/hosts. Networking auto‑applies via the existing per‑mode cloud‑init path,
+so images must be **cloud‑init + guest‑agent enabled** (declared on import;
+non‑conforming images deploy but won't auto‑network).
+
+**Deploy UX.** A customer's available images appear in the deploy OS picker
+(via the `options` route) alongside built‑in OSes, plus a **"Custom image…"**
+CTA that links to the management page. Management page:
+`/dashboard/services/compute/images` (list / import‑by‑URL / delete), reachable
+from the **Images** link in the VPS list hero.
+
+**Billing.** Stored images bill **$0.05/GB‑month** (`CUSTOM_IMAGE_USD_PER_GB_MONTH`),
+metered hourly via the same cron + grace as everything else
+(`active_custom_image`). The meter starts when the image first *materializes on a
+host* (size measured) and is billed **once per image** regardless of how many
+hosts it replicates to — so an imported‑but‑never‑deployed URL image (zero host
+storage) is free. Delete removes the per‑host template VMs + meter; servers
+already cloned from it are unaffected.
+
+**Snapshot (disabled).** `POST vms/[id]/snapshot-image`, a "Create image"
+Settings section, and R2 staging (`lib/services/compute/image-storage.ts`,
+`exportVmDiskToUrl` using `pvesm path` + `qemu-img convert` + a presigned PUT)
+are implemented but turned off (503). Re‑enable: restore the route from
+`67cdef63`, re‑add `VpsSnapshotSection` to the Settings tab, and ensure the R2
+bucket (`R2_CUSTOM_IMAGES_BUCKET` / `ahura-custom-images`) exists. The export
+produces a **sparse qcow2 ≈ used space** (not the provisioned size). Open
+hardening before re‑enable: host free‑space pre‑check, optional `-c` compression,
+size cap.
+
+---
+
+## 15. Key files
 
 | Path | Purpose |
 |---|---|
@@ -455,6 +514,10 @@ Template prep reference: `docs/WINDOWS_SERVER_2025_TEMPLATE_SETUP.md`.
 | `lib/proxmox/storage-picker.ts` | best‑fit storage |
 | `lib/services/compute/server-lifecycle.ts` | `destroyServer` teardown |
 | `lib/services/compute/resize.ts` | host‑capacity + plan‑fit for resize |
+| `lib/services/compute/custom-images.ts` | custom‑image catalog + lazy build + delete |
+| `lib/services/compute/image-storage.ts` | R2 staging for snapshots (disabled) |
+| `app/api/services/compute/images/**` | custom image list / import / delete |
+| `app/dashboard/services/compute/images/page.tsx` | custom images UI |
 | `lib/pricing.ts` | spec‑formula pricing (free‑form path) |
 | `lib/pricing/plan-catalog.ts` / `instance-plans.ts` | plan catalog (DB + seed) |
 | `config/billing-flow.ts` | post‑provision / close / ensure‑balance |
@@ -465,7 +528,7 @@ Template prep reference: `docs/WINDOWS_SERVER_2025_TEMPLATE_SETUP.md`.
 | `app/dashboard/services/compute/vps/[id]/**` | detail UI (tabs) |
 | `components/dashboard/compute/vps/**` | create form + shared UI |
 
-## 15. Relevant migrations
+## 16. Relevant migrations
 - `20251115073910_add_proxmox_tables.sql` — core schema.
 - `20260323000001_enable_servers_realtime.sql` — realtime on `servers`.
 - `20260521000000_add_instance_tier_and_plan.sql` — `instance_plans` + tier/plan.
@@ -473,6 +536,8 @@ Template prep reference: `docs/WINDOWS_SERVER_2025_TEMPLATE_SETUP.md`.
 - `20260612000000_add_proxmox_host_regions_view.sql` — safe region view.
 - `20260615000002_compute_billing.sql` — `billing_service_id` + `active_compute`.
 - `20260615000003_fix_compute_meter_rates.sql` — re‑rate + backfill existing meters.
+- `20260615000004_custom_images.sql` — custom‑image catalog + template owner/link
+  columns + `active_custom_image` storage meter.
 
 ---
 

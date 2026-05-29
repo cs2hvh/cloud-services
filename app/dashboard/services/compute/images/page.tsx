@@ -65,6 +65,10 @@ export default function CustomImagesPage() {
     load();
   }, [load]);
 
+  const totalGb = images.reduce((s, i) => s + (i.size_gb || 0), 0);
+  const monthly = (totalGb * 0.05).toFixed(2);
+  const available = images.filter((i) => i.status === 'available').length;
+
   const onDelete = async (img: CustomImage) => {
     if (!confirm(`Delete image "${img.name}"?\n\nThe image and its prepared templates are removed. Servers already created from it keep running.`)) {
       return;
@@ -125,6 +129,15 @@ export default function CustomImagesPage() {
             </button>
           </div>
         </header>
+
+        {/* Stats */}
+        {images.length > 0 && (
+          <section className="mb-7 grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <StatTile label="Images" value={String(images.length)} hint={`${available} ready`} />
+            <StatTile label="Storage" value={totalGb.toFixed(totalGb % 1 === 0 ? 0 : 1)} suffix="GB" hint="Across all images" tone="blue" />
+            <StatTile label="Est. monthly" value={`$${monthly}`} hint="$0.05/GB · stored images" tone="green" />
+          </section>
+        )}
 
         {showImport && <ImportPanel onClose={() => setShowImport(false)} onDone={() => { setShowImport(false); load(); }} />}
 
@@ -285,6 +298,23 @@ function Field({ label, children, full }: { label: string; children: React.React
     <div className={full ? 'sm:col-span-2' : ''}>
       <label className={`${MONO} block mb-1.5 text-[10px] uppercase tracking-[0.12em] text-white/45`}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+function StatTile({ label, value, suffix, hint, tone }: { label: string; value: string; suffix?: string; hint?: string; tone?: 'blue' | 'green' }) {
+  const dot = tone === 'blue' ? ACCENT : tone === 'green' ? '#4ade80' : 'rgba(255,255,255,0.55)';
+  return (
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <span className="h-1 w-1 rounded-full shrink-0" style={{ background: dot, boxShadow: dot.startsWith('rgba') ? 'none' : `0 0 5px ${dot}` }} />
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>{label}</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span style={SERIF_STYLE} className="text-[32px] leading-none font-bold tabular-nums tracking-[-0.035em] text-white">{value}</span>
+        {suffix && <span style={SERIF_STYLE} className="text-[14px] text-white/40 font-medium">{suffix}</span>}
+      </div>
+      {hint && <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>}
     </div>
   );
 }
