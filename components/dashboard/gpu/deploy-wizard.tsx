@@ -166,6 +166,7 @@ export default function DeployWizard({
 
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [attempted, setAttempted] = useState(false);
 
     const [stockFilter, setStockFilter] = useState<"all" | "available" | "limited" | "very-limited" | "out">("all");
     const [query, setQuery] = useState("");
@@ -304,6 +305,44 @@ export default function DeployWizard({
     if (!hasAuth) issues.push("SSH key or 12+ character root password");
 
     const canSubmit = issues.length === 0 && !isLoading;
+
+    // ── Per-field errors (revealed after a Launch attempt) ─────────────
+    const nameError =
+        attempted && !hasName
+            ? "Pod name is required"
+            : attempted &&
+                name.trim().length > 0 &&
+                !/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?$/.test(name.trim())
+              ? "1–64 characters · letters, numbers, hyphens"
+              : null;
+    const gpuError = attempted && (!gpuCatalogId || !hasGpu) ? "Select an in-stock GPU above" : null;
+    const imageError =
+        attempted && !hasImage
+            ? templateId === "custom"
+                ? "Enter a container image URL"
+                : "Select a container image"
+            : null;
+    const diskError =
+        attempted && (containerDiskGb < 10 || containerDiskGb > 2000)
+            ? "Container disk must be 10–2000 GB"
+            : null;
+    const authError = attempted && !hasAuth ? "Add an SSH key or a root password (12+ characters)" : null;
+
+    // Launch click: if anything's missing, reveal inline errors + jump to the
+    // first one instead of silently doing nothing.
+    function handleLaunch() {
+        if (issues.length > 0) {
+            setAttempted(true);
+            toast.error("Please complete the highlighted fields");
+            requestAnimationFrame(() => {
+                document
+                    .querySelector('[data-deploy-error="true"]')
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            });
+            return;
+        }
+        onSubmit();
+    }
 
     // ── Filter + sort GPU cards ───────────────────────────────────────
     const filteredCards = useMemo(() => {
@@ -601,6 +640,8 @@ export default function DeployWizard({
                         );
                     })()}
 
+                    {gpuError && <ErrorMsg>{gpuError}</ErrorMsg>}
+
                     {/* Count + mode */}
                     {selectedRow && (
                         <div className="mt-8 grid gap-5 sm:grid-cols-2">
@@ -704,6 +745,7 @@ export default function DeployWizard({
                             <p className="mt-1.5 text-[11.5px] text-white/40">
                                 1–64 chars · alphanumeric + hyphens.
                             </p>
+                            {nameError && <ErrorMsg>{nameError}</ErrorMsg>}
                         </div>
 
                         <div>
@@ -764,6 +806,7 @@ export default function DeployWizard({
                                     </p>
                                 </div>
                             )}
+                            {imageError && <ErrorMsg>{imageError}</ErrorMsg>}
                         </div>
                     </div>
 
@@ -788,6 +831,8 @@ export default function DeployWizard({
                                 onChange={(n) => setVolumeGb(Math.max(0, Math.min(2000, n)))}
                             />
                         </div>
+
+                        {diskError && <ErrorMsg>{diskError}</ErrorMsg>}
 
                         <div className="flex items-center justify-between border-t border-white/[0.06] pt-3.5">
                             <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
@@ -861,6 +906,8 @@ export default function DeployWizard({
                                 {hasAuth ? "Ready" : "Required"}
                             </span>
                         </div>
+
+                        {authError && <ErrorMsg>{authError}</ErrorMsg>}
 
                         <div>
                             <Label className={`${MONO} mb-2 block text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
@@ -1013,32 +1060,14 @@ export default function DeployWizard({
                         )}
                     </div>
 
-                    {/* Missing-requirement checklist — tells the user exactly
-                        what's blocking deploy instead of just disabling it. */}
-                    {issues.length > 0 && (
-                        <div className="mt-5 border border-amber-400/20 bg-amber-400/[0.04] rounded-[6px] p-3.5">
-                            <p className={`${MONO} flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-amber-200/80`}>
-                                <AlertTriangle className="h-3 w-3" /> Complete to deploy
-                            </p>
-                            <ul className="mt-2 space-y-1">
-                                {issues.map((it) => (
-                                    <li key={it} className={`${MONO} flex items-start gap-2 text-[11.5px] text-white/65`}>
-                                        <span className="text-amber-300/70 leading-[1.4]">•</span>
-                                        <span>{it}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
                     {/* Deploy button */}
                     <button
                         type="button"
-                        onClick={onSubmit}
-                        disabled={!canSubmit}
+                        onClick={handleLaunch}
+                        disabled={isLoading}
                         className="mt-5 flex w-full items-center justify-center gap-2 px-5 py-3.5 text-[13.5px] font-semibold transition-all disabled:cursor-not-allowed disabled:bg-[#111216] disabled:text-white/30"
                         style={
-                            canSubmit
+                            !isLoading
                                 ? {
                                       background: ACCENT,
                                       color: "#001930",
@@ -1046,8 +1075,8 @@ export default function DeployWizard({
                                   }
                                 : {}
                         }
-                        onMouseEnter={(e) => canSubmit && (e.currentTarget.style.background = ACCENT_BRIGHT)}
-                        onMouseLeave={(e) => canSubmit && (e.currentTarget.style.background = ACCENT)}
+                        onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = ACCENT_BRIGHT)}
+                        onMouseLeave={(e) => !isLoading && (e.currentTarget.style.background = ACCENT)}
                     >
                         {isLoading ? (
                             <>
@@ -1484,6 +1513,18 @@ function SortControl({
             {/* Hidden label only used to size the select with the current option visible */}
             <span className="sr-only">{current.label}</span>
         </div>
+    );
+}
+
+function ErrorMsg({ children }: { children: React.ReactNode }) {
+    return (
+        <p
+            data-deploy-error="true"
+            className={`${MONO} mt-2 flex items-center gap-1.5 text-[11.5px] text-red-400`}
+        >
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            {children}
+        </p>
     );
 }
 
