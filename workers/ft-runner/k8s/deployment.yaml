@@ -1,13 +1,15 @@
 # ahura-ft-runner Deployment
 #
-# Single replica is fine for v1: concurrency is per-process (MAX_CONCURRENT_JOBS,
-# default 4). Scaling means more parallel pod provisions, not more throughput per
-# pod — and we're rate-limited by RunPod's API + total GPU quota anyway.
+# HA: 2 replicas remove the single-point-of-failure. Concurrency is safe across
+# replicas because (1) the BullMQ queue (shared Redis) delivers each job to one
+# worker, (2) the claim is an atomic conditional transition
+# (UPDATE ... SET status='preparing' WHERE status='queued'), and (3) jobIds are
+# deterministic, so a duplicate enqueue is rejected. The finetune-watchdog
+# backstops any pod orphaned by a replica dying mid-job.
 #
-# When we need >4 concurrent jobs:
-#   - bump MAX_CONCURRENT_JOBS in the secret
-#   - then horizontal scale to 2 replicas
-#   - BullMQ + deterministic jobIds handle the dedup naturally
+# To raise per-replica concurrency, bump MAX_CONCURRENT_JOBS in the secret;
+# total parallel jobs = replicas × MAX_CONCURRENT_JOBS (bounded per-org by the
+# inference FT concurrency quota + balance gate).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,9 +19,14 @@ metadata:
     app: ahura-ft-runner
     tier: backend
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
-    type: Recreate # Avoid two replicas racing during rollout
+    # Zero-downtime rollout: keep both replicas available, surge a 3rd while
+    # retiring old ones. Safe because claims are atomic + BullMQ-coordinated.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: ahura-ft-runner

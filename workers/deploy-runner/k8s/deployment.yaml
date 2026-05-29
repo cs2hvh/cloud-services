@@ -7,9 +7,16 @@ metadata:
     app: ahura-deploy-runner
     tier: backend
 spec:
-  replicas: 1
+  # HA: 2 replicas remove the SPOF. Safe across replicas — the BullMQ queue
+  # delivers each job to one worker and the claim is an atomic conditional
+  # transition (UPDATE ... SET status='deploying' WHERE status='building').
+  replicas: 2
   strategy:
-    type: Recreate
+    # Zero-downtime rollout; safe because claims are atomic + BullMQ-coordinated.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: ahura-deploy-runner
