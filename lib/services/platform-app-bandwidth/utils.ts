@@ -182,8 +182,17 @@ export function computeDeltas(
 
   for (const pod of currentPods) {
     const saved = savedCounters.get(pod.pod);
-    const lastReceive = saved?.receive_counter ?? 0;
-    const lastTransmit = saved?.transmit_counter ?? 0;
+
+    // First time we've seen this pod: seed only, contribute no delta. We can't
+    // attribute its pre-existing counter to the current period — it may include
+    // traffic from before tracking began (the first sync after rollout, or a pod
+    // that started in a prior month) — and counting the full value would
+    // massively over-count and over-bill. The caller's savePodCounters records
+    // this pod's baseline, so the next sync measures a real delta from here.
+    if (!saved) continue;
+
+    const lastReceive = saved.receive_counter;
+    const lastTransmit = saved.transmit_counter;
 
     // Counter reset detection: if current < last the pod restarted.
     // Treat the full current value as this sync's delta (bytes accumulated since restart).
