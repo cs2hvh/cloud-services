@@ -135,6 +135,7 @@ const DatabaseSelect = ({
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [selectedCpuType, setSelectedCpuType] = useState<CpuType>("basic");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [pgvectorEnabled, setPgvectorEnabled] = useState(false);
   const [state, setState] = useState({
     selectedDb: "",
     selectedName: "",
@@ -274,6 +275,7 @@ const DatabaseSelect = ({
         region: state.selectedLocation,
         project_id: state.selectedProject,
         owner_id: userId,
+        enable_pgvector: state.selectedDbType === "pg" ? pgvectorEnabled : false,
       };
 
       try {
@@ -504,6 +506,27 @@ const DatabaseSelect = ({
                         ))}
                       </select>
                     </div>
+                  )}
+                  {state.selectedDbType === "pg" && (
+                    <label className="flex items-center gap-3 max-w-[520px] px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pgvectorEnabled}
+                        onChange={(e) => setPgvectorEnabled(e.target.checked)}
+                        className="h-4 w-4 accent-[#0095ff]"
+                      />
+                      <span className="flex-1">
+                        <span className="block text-[12px] text-white/85">
+                          Enable pgvector
+                        </span>
+                        <span
+                          className={`${MONO} block text-[10.5px] text-white/40`}
+                        >
+                          Adds the vector extension for storing and
+                          similarity-searching embeddings in this database.
+                        </span>
+                      </span>
+                    </label>
                   )}
                 </>
               )}
