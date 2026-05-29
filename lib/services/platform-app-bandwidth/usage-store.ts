@@ -150,6 +150,45 @@ export async function addPurchasedBytes(
 }
 
 /**
+ * Atomically claim overage bytes for billing. Sets the period's
+ * overage_billed_bytes to p_target (under a row lock) and returns how many
+ * NEW bytes this call claimed (target − previously-billed, clamped ≥ 0).
+ * Concurrent callers can't claim the same bytes, so each byte is billed once.
+ */
+export async function claimOverageBytes(
+  appId: string,
+  periodStart: string,
+  targetBilledBytes: number
+): Promise<number> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase.rpc(
+    "claim_platform_app_bandwidth_overage_bytes",
+    { p_app_id: appId, p_period_start: periodStart, p_target_billed_bytes: targetBilledBytes }
+  );
+  if (error) throw new Error(`Failed to claim overage bytes: ${error.message}`);
+  return Number(data) || 0;
+}
+
+/**
+ * Release a previously-claimed overage byte amount (e.g. when the charge
+ * failed) so it gets billed on a later run instead of being dropped.
+ */
+export async function releaseOverageBytes(
+  appId: string,
+  periodStart: string,
+  bytes: number
+): Promise<void> {
+  const supabase = await createServiceClient();
+  const { error } = await supabase.rpc(
+    "release_platform_app_bandwidth_overage_bytes",
+    { p_app_id: appId, p_period_start: periodStart, p_bytes: bytes }
+  );
+  if (error) {
+    console.warn(`[usage-store] Failed to release overage bytes for ${appId}:`, error.message);
+  }
+}
+
+/**
  * Remove counter rows for pods that no longer exist in the current Prometheus sample.
  *
  * Pods are replaced on every deployment (new random suffix), so the counter table
