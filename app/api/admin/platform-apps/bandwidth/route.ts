@@ -147,24 +147,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "force_sync") {
-      // Trigger a fresh bandwidth sync for this app via the internal sync endpoint
-      const syncUrl = new URL("/api/internal/platform-apps/bandwidth/sync", req.url);
-      const cronSecret = process.env.CRON_SECRET;
-      if (!cronSecret) {
-        return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 });
+      const supabase = await createServiceClient();
+      const { data: app } = await (supabase as any)
+        .from("platform_apps")
+        .select("id, name, size, user_id")
+        .eq("id", app_id)
+        .single();
+
+      if (!app) {
+        return NextResponse.json({ error: "App not found" }, { status: 404 });
       }
 
-      const syncRes = await fetch(syncUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cronSecret}`,
-        },
-        body: JSON.stringify({ app_id }),
+      const usage = await PlatformAppBandwidthService.refreshCurrentUsage({
+        appId: app.id,
+        appName: app.name,
+        userId: app.user_id,
+        size: app.size,
       });
 
-      const syncData = await syncRes.json();
-      return NextResponse.json({ ok: syncRes.ok, sync: syncData });
+      return NextResponse.json({ ok: true, sync: { usage } });
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
