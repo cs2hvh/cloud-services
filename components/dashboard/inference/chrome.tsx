@@ -97,12 +97,11 @@ export function Hero({
             {accent && (
               <>
                 {" "}
-                <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                   {accent}
                 </span>
               </>
             )}
-            <span className="text-white/55 font-normal">.</span>
           </h1>
           {caption && (
             <p
