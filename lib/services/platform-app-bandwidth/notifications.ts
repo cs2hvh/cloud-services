@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { NotificationService } from "@/lib/notifications/service";
+import { BANDWIDTH_PACKS_ENABLED } from "@/lib/features";
 import { bytesToDisplay } from "./utils";
 import type {
   BandwidthEventType,
@@ -55,6 +56,9 @@ export function notificationCopy(
   const limit = bytesToDisplay(summary.quota.totalBytes);
   const pct = summary.percentUsed !== null ? `${summary.percentUsed}%` : "";
   const suffix = pct ? `${used} of ${limit} (${pct})` : used;
+  const recoveryAction = BANDWIDTH_PACKS_ENABLED
+    ? "Buy a bandwidth pack"
+    : "Upgrade your compute plan";
 
   switch (eventType) {
     case "warning_80":
@@ -73,7 +77,7 @@ export function notificationCopy(
       return {
         type: "error",
         title: "Bandwidth limit reached",
-        message: `"${appName}" has reached its monthly limit (${suffix}). Buy a bandwidth pack now to avoid traffic being blocked.`,
+        message: `"${appName}" has reached its monthly limit (${suffix}). ${recoveryAction} now to avoid traffic being blocked.`,
       };
     case "overage_started":
       return {
@@ -85,7 +89,7 @@ export function notificationCopy(
       return {
         type: "error",
         title: "Application traffic restricted",
-        message: `"${appName}" exceeded its monthly bandwidth limit. Traffic is blocked. Buy a bandwidth pack to restore access immediately, or wait for the next billing period.`,
+        message: `"${appName}" exceeded its monthly bandwidth limit. Traffic is blocked. ${recoveryAction} to restore access, or wait for the next billing period.`,
       };
     case "traffic_restored":
       return {
