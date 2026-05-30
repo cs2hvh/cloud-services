@@ -28,6 +28,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// Premium surface shared by the workspace cards — softer radius + a faint top
+// inset highlight so panels read as raised glass rather than flat boxes.
+const CARD = "border border-white/[0.07] bg-[#111216] rounded-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 
 import {
   ACCENT,
@@ -646,8 +657,8 @@ ${streamOn
         <div className="space-y-4">
           {/* Preset picker — applies to all routes via X-Ahura-Preset header */}
           {presets.length > 0 && (
-            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-              <div className="flex items-baseline justify-between mb-2">
+            <div className={`${CARD} p-4`}>
+              <div className="flex items-baseline justify-between mb-2.5">
                 <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
                   Routing preset
                 </p>
@@ -661,23 +672,27 @@ ${streamOn
                   </button>
                 )}
               </div>
-              <div className="relative">
-                <Rocket className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/35" />
-                <select
-                  value={presetId}
-                  onChange={(e) => setPresetId(e.target.value)}
-                  className={`${MONO} h-9 w-full pl-8 pr-3 text-[11.5px] text-white bg-white/[0.02] border border-white/[0.08] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 appearance-none cursor-pointer`}
-                >
-                  <option value="">— none —</option>
+              <Select
+                value={presetId || "__none__"}
+                onValueChange={(v) => setPresetId(v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger className="h-9 bg-white/[0.02] border-white/[0.08] text-[11.5px]">
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <Rocket className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                    <SelectValue placeholder="No preset" />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No preset</SelectItem>
                   {presets.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-[#111216]">
+                    <SelectItem key={p.id} value={p.id}>
                       {p.name}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
+                </SelectContent>
+              </Select>
               {selectedPreset && (
-                <p className={`${MONO} mt-1.5 text-[10px] text-white/45 leading-relaxed`}>
+                <p className={`${MONO} mt-2 text-[10px] text-white/45 leading-relaxed`}>
                   {selectedPreset.description ??
                     `Fallback chain: ${selectedPreset.fallback_models.slice(0, 3).join(" → ")}${selectedPreset.fallback_models.length > 3 ? "…" : ""}`}
                 </p>
@@ -689,35 +704,51 @@ ${streamOn
             <>
           {/* Single-mode-only blocks below */}
           {/* Model picker */}
-          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-            <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}>
+          <div className={`${CARD} p-4`}>
+            <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2.5`}>
               Model
             </p>
             <button
               type="button"
               onClick={() => setModelPickerOpen(true)}
-              className="w-full flex items-center justify-between gap-2 h-10 px-3 border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] rounded-[5px] transition-colors text-left"
+              className="group w-full rounded-[8px] border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-left transition-all hover:border-[#0095FF]/40 hover:bg-white/[0.04]"
             >
-              <span className="min-w-0">
-                {selectedModel ? (
-                  <>
-                    <span className="block text-[12.5px] text-white truncate">
+              {selectedModel ? (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[13px] font-medium text-white">
                       {selectedModel.display_name}
                     </span>
-                    <span className={`${MONO} block text-[10px] text-white/45 truncate`}>
-                      {selectedModel.model_id}
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/80" />
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className={`${MONO} rounded-[4px] bg-white/[0.05] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-white/55`}>
+                      {selectedModel.provider}
                     </span>
-                  </>
-                ) : (
-                  <span className="text-[12.5px] text-white/45">Pick a model…</span>
-                )}
-              </span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                    {selectedModel.supports_vision && (
+                      <span className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-amber-300/70`}>Vision</span>
+                    )}
+                    {selectedModel.supports_tools && (
+                      <span className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-emerald-300/70`}>Tools</span>
+                    )}
+                    {selectedModel.context_window && (
+                      <span className={`${MONO} text-[9.5px] text-white/40`}>
+                        {Math.round(selectedModel.context_window / 1000)}K ctx
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <span className="flex items-center justify-between">
+                  <span className="text-[13px] text-white/45">Pick a model…</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+                </span>
+              )}
             </button>
           </div>
 
           {/* Parameters */}
-          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4 space-y-4">
+          <div className="border border-white/[0.07] bg-[#111216] rounded-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] p-4 space-y-4">
             <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
               Parameters
             </p>
@@ -769,7 +800,7 @@ ${streamOn
           </div>
 
           {/* System prompt */}
-          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
+          <div className="border border-white/[0.07] bg-[#111216] rounded-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] p-4">
             <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}>
               System prompt
             </p>
@@ -785,7 +816,7 @@ ${streamOn
           )}
 
           {mode === "compare" && (
-            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4 space-y-3">
+            <div className="border border-white/[0.07] bg-[#111216] rounded-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] p-4 space-y-3">
               <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
                 Compare params
               </p>
@@ -832,9 +863,10 @@ ${streamOn
               {/* Conversation (above input). Minimal chrome — no busy header,
                   no per-turn footers, no decorative icons. Action labels
                   surface on row hover. */}
-              <div className="border border-white/[0.06] bg-[#0b0c10] rounded-[6px] overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] min-h-[36px]">
-                  <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}>
+              <div className="border border-white/[0.07] bg-[#0b0c10] rounded-[10px] overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] min-h-[40px] bg-white/[0.015]">
+                  <span className={`${MONO} inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-white/45`}>
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }} />
                     {selectedModel?.display_name ?? "—"}
                   </span>
                   <div className="flex items-center gap-4">
@@ -860,15 +892,21 @@ ${streamOn
                 >
                   {turns.length === 0 ? (
                     <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto">
-                      <p className="text-[15px] text-white/65 mb-2 tracking-[-0.01em]">
+                      <div
+                        className="mb-4 flex h-12 w-12 items-center justify-center rounded-[12px] border border-[#0095FF]/25 bg-[#0095FF]/[0.08]"
+                        style={{ boxShadow: "0 0 30px rgba(0,149,255,0.15)" }}
+                      >
+                        <MessageSquare className="h-5 w-5" style={{ color: ACCENT_BRIGHT }} />
+                      </div>
+                      <p style={SERIF_STYLE} className="text-[18px] text-white/85 mb-1.5 tracking-[-0.01em]">
                         How can I help you today?
                       </p>
-                      <p className={`${MONO} text-[10.5px] text-white/30 leading-relaxed`}>
-                        Conversation history is sent on every turn — follow-ups are context-aware.
+                      <p className={`${MONO} text-[10.5px] text-white/35 leading-relaxed`}>
+                        Conversation history is sent on every turn — follow-ups stay context-aware.
                       </p>
                     </div>
                   ) : (
-                    <div>
+                    <div className="space-y-1 py-3">
                       {turns.map((turn) => (
                         <TurnRow
                           key={turn.id}
@@ -896,35 +934,36 @@ ${streamOn
                 </div>
               </div>
 
-              {/* Input box — below conversation, like ChatGPT/Claude. */}
-              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={userPrompt}
-                    onChange={(e) => setUserPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        sendPrompt();
-                      }
-                    }}
-                    placeholder="Message the model… (Cmd/Ctrl + Enter to send)"
-                    rows={3}
-                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
-                  />
-                  <div className="shrink-0">{sendButton}</div>
-                </div>
-                <div className="flex items-center justify-between mt-2 px-0.5">
+              {/* Composer — borderless textarea in a glass card, send in footer. */}
+              <div className={`${CARD} p-2.5 transition-all focus-within:border-[#0095FF]/40 focus-within:ring-1 focus-within:ring-[#0095FF]/25`}>
+                <textarea
+                  value={userPrompt}
+                  onChange={(e) => setUserPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                      e.preventDefault();
+                      sendPrompt();
+                    }
+                  }}
+                  placeholder="Message the model…"
+                  rows={3}
+                  className="w-full resize-none border-0 bg-transparent px-2 py-1.5 text-[13.5px] text-white placeholder:text-white/30 focus:outline-none focus:ring-0 min-h-[64px]"
+                  style={{ fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" }}
+                />
+                <div className="flex items-center justify-between gap-2 px-1.5 pt-1.5">
                   <span className={`${MONO} text-[10px] text-white/35`}>
                     {userPrompt.trim().length > 0
                       ? `${userPrompt.trim().length.toLocaleString()} chars`
-                      : "Conversation history is sent on every turn"}
+                      : "⌘ / Ctrl + Enter to send"}
                   </span>
-                  {selectedModel && (
-                    <span className={`${MONO} text-[10px] text-white/35`}>
-                      → {selectedModel.display_name}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2.5">
+                    {selectedModel && (
+                      <span className={`${MONO} hidden sm:inline text-[10px] text-white/35`}>
+                        → {selectedModel.display_name}
+                      </span>
+                    )}
+                    {sendButton}
+                  </div>
                 </div>
               </div>
             </>
@@ -950,29 +989,28 @@ ${streamOn
                 onRunningChange={setCompareRunning}
               />
 
-              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-3">
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={userPrompt}
-                    onChange={(e) => setUserPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        sendPrompt();
-                      }
-                    }}
-                    placeholder="Compare across models… (Cmd/Ctrl + Enter to run all)"
-                    rows={3}
-                    className={`${MONO} flex-1 text-[13px] text-white placeholder:text-white/30 bg-white/[0.02] border border-white/[0.08] rounded-[5px] px-3 py-2.5 focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 resize-y min-h-[68px]`}
-                  />
-                  <div className="shrink-0">{sendButton}</div>
-                </div>
-                <div className="flex items-center justify-between mt-2 px-0.5">
+              <div className={`${CARD} p-2.5 transition-all focus-within:border-[#0095FF]/40 focus-within:ring-1 focus-within:ring-[#0095FF]/25`}>
+                <textarea
+                  value={userPrompt}
+                  onChange={(e) => setUserPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                      e.preventDefault();
+                      sendPrompt();
+                    }
+                  }}
+                  placeholder="Compare across models…"
+                  rows={3}
+                  className="w-full resize-none border-0 bg-transparent px-2 py-1.5 text-[13.5px] text-white placeholder:text-white/30 focus:outline-none focus:ring-0 min-h-[64px]"
+                  style={{ fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" }}
+                />
+                <div className="flex items-center justify-between gap-2 px-1.5 pt-1.5">
                   <span className={`${MONO} text-[10px] text-white/35`}>
                     {userPrompt.trim().length > 0
                       ? `${userPrompt.trim().length.toLocaleString()} chars`
                       : "All selected models receive this prompt in parallel"}
                   </span>
+                  {sendButton}
                 </div>
               </div>
             </>
@@ -988,7 +1026,7 @@ ${streamOn
           accent="code"
           rightMeta={`org: ${orgName}`}
         />
-        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        <div className="border border-white/[0.07] bg-[#111216] rounded-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] overflow-hidden">
           <div className="flex items-center justify-between border-b border-white/[0.06] px-2">
             <div className="flex">
               {(["curl", "python", "typescript"] as const).map((lang) => (
@@ -1203,26 +1241,45 @@ function Slider({
   integer?: boolean;
   onChange: (v: number) => void;
 }) {
+  const pct = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0;
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1.5">
-        <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/80`}>
+      <div className="flex items-baseline justify-between mb-2">
+        <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/65`}>
           {label}
         </span>
-        <span style={SERIF_STYLE} className="text-[14px] text-white font-bold tabular-nums">
+        <span
+          style={SERIF_STYLE}
+          className="rounded-[6px] border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[12.5px] text-white font-semibold tabular-nums"
+        >
           {integer ? value : value.toFixed(2)}
         </span>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[#0095FF] h-1"
-      />
-      {hint && <p className={`${MONO} text-[10px] text-white/40 mt-1`}>{hint}</p>}
+      <div className="relative flex h-4 items-center">
+        {/* track */}
+        <div className="absolute inset-x-0 h-[5px] rounded-full bg-white/[0.07]" />
+        {/* fill */}
+        <div
+          className="absolute h-[5px] rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_BRIGHT})`,
+            boxShadow: `0 0 10px ${ACCENT}66`,
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="relative z-10 h-4 w-full cursor-pointer appearance-none bg-transparent
+            [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_0_4px_rgba(0,149,255,0.22),0_1px_4px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110
+            [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_0_0_4px_rgba(0,149,255,0.22)]"
+        />
+      </div>
+      {hint && <p className={`${MONO} text-[10px] text-white/40 mt-1.5`}>{hint}</p>}
     </div>
   );
 }
@@ -1279,7 +1336,7 @@ function TurnRow({
 }) {
   const isUser = turn.role === "user";
   return (
-    <div className="group flex gap-3 px-1 py-3 border-b border-white/[0.04] last:border-b-0">
+    <div className={`group flex gap-3 rounded-[8px] px-3 py-3.5 ${isUser ? "" : "bg-white/[0.022]"}`}>
       {/* Letter avatar — restrained, no cartoon icons */}
       <div
         className="h-7 w-7 shrink-0 rounded-[4px] flex items-center justify-center"
