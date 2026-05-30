@@ -359,6 +359,8 @@ export function Deployments({
     }
   };
 
+  const selectedGpu = gpuOptions.find((r) => r.runpodGpuId === form.gpu_sku);
+
   // Aggregates
   const active = items.filter((d) => d.status === "active").length;
   const inFlight = items.filter((d) => ["building", "deploying"].includes(d.status)).length;
@@ -624,6 +626,16 @@ export function Deployments({
                     {gpuInventory === null ? (
                       <span className="inline-flex items-center gap-2 text-white/40">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedGpu ? (
+                      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-left">
+                        <span className="truncate font-medium">{gpuLabel(selectedGpu.displayName)}</span>
+                        <span className="shrink-0 text-white/40 text-[11px] tabular-nums">{selectedGpu.memoryGb}GB</span>
+                        {gpuPriceLabel(selectedGpu) && (
+                          <span className="shrink-0 text-white/60 text-[11px] tabular-nums">
+                            {gpuPriceLabel(selectedGpu)}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <SelectValue placeholder="Select a GPU" />

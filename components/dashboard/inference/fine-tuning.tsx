@@ -283,6 +283,8 @@ export function FineTuning({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gpuOptions]);
 
+  const selectedGpu = gpuOptions.find((r) => r.runpodGpuId === form.gpu_sku);
+
   useEffect(() => {
     const inFlightTraining = jobs.some((j) =>
       ["queued", "preparing", "running"].includes(j.status)
@@ -745,6 +747,16 @@ export function FineTuning({
                   {gpuInventory === null ? (
                     <span className="inline-flex items-center gap-2 text-white/40">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    </span>
+                  ) : selectedGpu ? (
+                    <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-left">
+                      <span className="truncate font-medium">{gpuLabel(selectedGpu.displayName)}</span>
+                      <span className="shrink-0 text-white/40 text-[11px] tabular-nums">{selectedGpu.memoryGb}GB</span>
+                      {gpuPriceLabel(selectedGpu) && (
+                        <span className="shrink-0 text-white/60 text-[11px] tabular-nums">
+                          {gpuPriceLabel(selectedGpu)}
+                        </span>
+                      )}
                     </span>
                   ) : (
                     <SelectValue placeholder="Select a GPU" />
