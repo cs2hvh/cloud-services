@@ -56,6 +56,19 @@ function StateCacheIcon() {
     );
 }
 
+function GpuAiIcon() {
+    return (
+        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+            <rect x="8" y="8" width="16" height="16" rx="2.5" />
+            <rect x="12.5" y="12.5" width="7" height="7" rx="1" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
+            <path
+                d="M12 8V5.5M16 8V5.5M20 8V5.5M12 24v2.5M16 24v2.5M20 24v2.5M8 12H5.5M8 16H5.5M8 20H5.5M24 12h2.5M24 16h2.5M24 20h2.5"
+                strokeWidth={1.1}
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
 function AssetBucketIcon() {
     return (
         <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
@@ -426,6 +439,13 @@ const STACK: StackPiece[] = [
         role: "Delivery",
         capabilities: ["150+ POPs", "L3–L7 scrub", "Brotli · HTTP/3", "Image optimization"],
     },
+    {
+        icon: <GpuAiIcon />,
+        title: "GPU & AI inference",
+        description: "Serverless GPU and an OpenAI-compatible inference gateway power in-game AI — NPC behaviour, matchmaking ranking, anti-cheat ML, voice and chat moderation, and generative content. Fine-tune open-weight models on your own telemetry, in the same private network.",
+        role: "Intelligence",
+        capabilities: ["Serverless GPU", "Inference API", "Fine-tuning", "Anti-cheat ML"],
+    },
 ];
 
 type Workload = { glyph: React.ReactNode; metric: string; title: string; description: string };
@@ -499,6 +519,11 @@ const FAQS = [
         question: "How do you ship patches and builds?",
         answer:
             "Builds and delta patches sit in versioned object buckets, served from 150+ CDN POPs. Signed URLs gate distribution. Background pre-warm on POPs avoids cold-cache spikes on patch day.",
+    },
+    {
+        question: "Can I run AI or ML workloads for my game?",
+        answer:
+            "Yes. Serverless GPU plus an OpenAI-compatible inference gateway power in-game AI — NPC behaviour, matchmaking ranking, anti-cheat models, and voice/chat moderation — and generative content pipelines. Fine-tune open-weight models on your own player telemetry and call them from the same private network as your game servers.",
     },
 ];
 
@@ -763,7 +788,7 @@ function Stack() {
                             Platform layers
                         </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
-                            Six layers.{" "}
+                            Seven layers.{" "}
                             <span style={ACCENT_FONT} className="text-[#82adfb]">
                                 One private network.
                             </span>
@@ -897,7 +922,7 @@ export function GameDevLanding() {
             <ServiceHeroSection
                 badge="Game Hosting"
                 title="Infrastructure for titles that stay online."
-                description="Dedicated game servers, matchmaker, state cache, asset CDN, and L3–L7 DDoS shield — sized for sub-10 ms ticks."
+                description="Dedicated game servers, matchmaker, state cache, asset CDN, L3–L7 DDoS shield, and GPU for in-game AI — sized for sub-10 ms ticks."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
                 backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
