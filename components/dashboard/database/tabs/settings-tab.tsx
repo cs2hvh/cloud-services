@@ -532,7 +532,7 @@ export const SettingsTab = ({
           {/* Update Project */}
           <div className="rounded-[8px] border border-white/[0.08] bg-white/[0.03]">
             <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-[#33adff]">
                 <FolderKanban className="h-4 w-4" />
               </div>
               <div className="min-w-0">

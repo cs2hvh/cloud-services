@@ -228,7 +228,7 @@ export const NetworkTab = ({
         <div className="border-b border-white/[0.06] px-5 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
                 Access Policy
               </div>
               <h2 className="mt-1 text-lg font-semibold text-white">
@@ -298,7 +298,7 @@ export const NetworkTab = ({
 
             <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-4 py-3">
               <div className="flex items-start gap-2 text-sm leading-6 text-white/48">
-                <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-300" />
+                <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#33adff]" />
                 <span>
                   Add the IPs used by operators, application servers, CI jobs,
                   or VPN egress points. Avoid broad exposure unless it is
@@ -347,7 +347,7 @@ export const NetworkTab = ({
       >
         <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
               Inventory
             </div>
             <h2 className="mt-1 text-lg font-semibold text-white">
@@ -404,7 +404,7 @@ export const NetworkTab = ({
                   >
                     <div className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.4fr)_140px_180px_88px] md:items-center">
                       <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
+                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-[#33adff]">
                           <Globe className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">

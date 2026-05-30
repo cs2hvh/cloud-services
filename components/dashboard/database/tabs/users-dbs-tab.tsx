@@ -352,11 +352,11 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
                 Identities
               </div>
               <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-                <Users className="h-5 w-5 text-blue-300" />
+                <Users className="h-5 w-5 text-[#33adff]" />
                 Database Users
               </h2>
               <p className="mt-1 text-sm leading-6 text-white/45">
@@ -377,7 +377,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
           <div className="px-5 py-5">
             {loadingUsers ? (
               <div className="flex items-center justify-center py-14">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#33adff]" />
               </div>
             ) : users.length === 0 ? (
               <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
@@ -546,11 +546,11 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
                 Logical Databases
               </div>
               <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-                <Database className="h-5 w-5 text-blue-300" />
+                <Database className="h-5 w-5 text-[#33adff]" />
                 Databases
               </h2>
               <p className="mt-1 text-sm leading-6 text-white/45">
@@ -583,7 +583,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
               </div>
             ) : loadingDatabases ? (
               <div className="flex items-center justify-center py-14">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#33adff]" />
               </div>
             ) : databases.length === 0 ? (
               <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-14 text-center">

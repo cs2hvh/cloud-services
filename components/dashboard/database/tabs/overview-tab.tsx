@@ -205,7 +205,7 @@ export const OverviewTab = ({
         <div className="border-b border-white/[0.06] px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
                 Access
               </div>
               <h2 className="mt-1 text-lg font-semibold text-white">
@@ -362,11 +362,11 @@ export const OverviewTab = ({
           <div className="border-b border-white/[0.06] px-5 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
                   Capacity
                 </div>
                 <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
-                  <Server className="h-5 w-5 text-blue-300" />
+                  <Server className="h-5 w-5 text-[#33adff]" />
                   Service Profile
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-white/45">
@@ -417,7 +417,7 @@ export const OverviewTab = ({
               icon={Cpu}
               label="vCPU"
               value={extractCpu(database.size)}
-              color="text-blue-300"
+              color="text-[#33adff]"
             />
             <ConfigCard
               icon={Server}
