@@ -269,10 +269,10 @@ function NodeAudit() {
    ────────────────────────────────────────────────────────────── */
 
 const HERO_STATS = [
-    { value: "99.99%", label: "HA SLA" },
-    { value: "<1s", label: "RPO replication" },
-    { value: "35d", label: "PITR window" },
-    { value: "12", label: "Regions" },
+    { value: "99.99%", label: "HA SLA", sub: "Synchronous standby, multi-AZ" },
+    { value: "<1s", label: "Replica lag", sub: "Async streaming replication" },
+    { value: "35d", label: "PITR window", sub: "Continuous WAL to object storage" },
+    { value: "8", label: "Regions", sub: "Sub-20ms latency, globally" },
 ];
 
 type Scenario = {
