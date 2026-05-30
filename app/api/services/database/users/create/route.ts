@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (result.error === "User created in DigitalOcean but failed to sync with database") {
+      if (result.error === "User created in the database provider but failed to sync with database") {
         return NextResponse.json(
           {
-            error: "User created in DigitalOcean but failed to sync with database",
+            error: "User created in the database provider but failed to sync with database",
             details: result.error,
           },
           { status: 500 }

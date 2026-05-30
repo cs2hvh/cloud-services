@@ -81,7 +81,7 @@ export const scalingResourceOperations = {
         return {
           success: false,
           error: "Failed to resize database cluster",
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
         };
       }
 
@@ -178,7 +178,7 @@ export const scalingResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
         };
       }
 
@@ -372,7 +372,7 @@ export const scalingResourceOperations = {
         return {
           success: false,
           error: "Failed to migrate database cluster",
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
           statusCode: response.status,
         };
       }
@@ -455,7 +455,7 @@ export const scalingResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
           statusCode: axiosError?.response?.status || 500,
         };
       }
@@ -651,7 +651,7 @@ export const scalingResourceOperations = {
         return {
           success: false,
           error: "Failed to upsize database storage",
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
           statusCode: response.status,
         };
       }
@@ -750,7 +750,7 @@ export const scalingResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
           statusCode: axiosError?.response?.status || 500,
         };
       }

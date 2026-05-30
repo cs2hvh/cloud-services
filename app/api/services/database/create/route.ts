@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
       if (result.errorCode === "SERVER_BUSY") {
         return NextResponse.json(
           {
-            error: "DigitalOcean API error",
-            message: "our server is busy. please try again later",
+            error: "Service is temporarily busy. Please try again shortly.",
+            message: "Service is temporarily busy. Please try again shortly.",
           },
           { status: 503 }
         );

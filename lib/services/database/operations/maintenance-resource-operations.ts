@@ -148,7 +148,7 @@ export const maintenanceResourceOperations = {
 
         return { success: true, data: response.data.database?.maintenance_window || null };
       } catch (doError) {
-        console.error("[readMaintenanceWindow] DigitalOcean API error:", doError);
+        console.error("[readMaintenanceWindow] the database provider API error:", doError);
         return { success: true, data: null };
       }
     } catch (err: unknown) {

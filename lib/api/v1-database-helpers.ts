@@ -86,7 +86,7 @@ export function v1DatabaseServiceError(
         linked_apps_count: failure.linkedAppsCount ?? 0,
         linked_app_names: failure.linkedAppNames ?? [],
       });
-    case "DIGITALOCEAN_API_ERROR":
+    case "PROVIDER_API_ERROR":
       return v1Error("INVALID_PARAMETER", 400, message);
     case "UNSUPPORTED_OPERATION":
       return v1Error("UNSUPPORTED_OPERATION", 422, message);

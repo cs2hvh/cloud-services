@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (result.error === "User deleted from DigitalOcean but failed to sync with database") {
+      if (result.error === "User deleted from the database provider but failed to sync with database") {
         return NextResponse.json(
           {
             error: "User deletion failed. Kindly contact support",

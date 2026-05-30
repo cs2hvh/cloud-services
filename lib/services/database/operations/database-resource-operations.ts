@@ -38,7 +38,7 @@ async function listDatabasesFromProvider(
     );
 
     if (response.status !== 200) {
-      return { success: false, error: "Failed to fetch databases from DigitalOcean" };
+      return { success: false, error: "Failed to fetch databases from the database provider" };
     }
 
     const databases = response.data.dbs as DatabaseInstance[];
@@ -173,7 +173,7 @@ export const databaseResourceOperations = {
       );
 
       if (response.status !== 201) {
-        return { success: false, error: "Failed to create database in DigitalOcean" };
+        return { success: false, error: "Failed to create database in the database provider" };
       }
 
       const database = response.data.db;
@@ -187,7 +187,7 @@ export const databaseResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database created in DigitalOcean but failed to sync with database",
+          error: "Database created in the database provider but failed to sync with database",
         };
       }
 
@@ -276,7 +276,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async createDatabaseInternal(
     request: InternalCreateDatabaseRequest,
     req?: NextRequest,
@@ -311,7 +311,7 @@ export const databaseResourceOperations = {
       if (response.status !== 201) {
         return {
           success: false,
-          error: "Failed to create database in DigitalOcean",
+          error: "Failed to create database in the database provider",
           statusCode: 500,
         };
       }
@@ -439,14 +439,14 @@ export const databaseResourceOperations = {
       );
 
       if (response.status !== 204) {
-        return { success: false, error: "Failed to delete database from DigitalOcean" };
+        return { success: false, error: "Failed to delete database from the database provider" };
       }
 
       const supabaseResult = await Database_Clusters.remove_db(request.clusterId, request.dbName);
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database deleted from DigitalOcean but failed to sync with database",
+          error: "Database deleted from the database provider but failed to sync with database",
         };
       }
 
@@ -515,7 +515,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async deleteDatabaseInternal(
     request: InternalDeleteDatabaseRequest
   ): Promise<{ success: boolean; error?: string; details?: string; statusCode?: number }> {
@@ -542,7 +542,7 @@ export const databaseResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database deleted from DigitalOcean but failed to sync with database",
+          error: "Database deleted from the database provider but failed to sync with database",
           details: supabaseResult.error,
           statusCode: 500,
         };
@@ -636,7 +636,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async listDatabasesInternal(
     request: InternalListDatabasesRequest
   ): Promise<ListDatabasesResult> {
@@ -683,7 +683,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async retrieveDatabaseInternal(
     request: InternalRetrieveDatabaseRequest
   ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {

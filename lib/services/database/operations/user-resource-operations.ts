@@ -57,7 +57,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 201) {
-        return { success: false, error: "Failed to create user in DigitalOcean" };
+        return { success: false, error: "Failed to create user in the database provider" };
       }
 
       const user = response.data.user;
@@ -78,7 +78,7 @@ export const userResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "User created in DigitalOcean but failed to sync with database",
+          error: "User created in the database provider but failed to sync with database",
         };
       }
 
@@ -182,7 +182,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 200) {
-        return { success: false, error: "Failed to fetch users from DigitalOcean" };
+        return { success: false, error: "Failed to fetch users from the database provider" };
       }
 
       const users = response.data.users as DatabaseUser[];
@@ -271,14 +271,14 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 204) {
-        return { success: false, error: "Failed to delete user from DigitalOcean" };
+        return { success: false, error: "Failed to delete user from the database provider" };
       }
 
       const supabaseResult = await Database_Clusters.remove_user(request.clusterId, request.username);
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "User deleted from DigitalOcean but failed to sync with database",
+          error: "User deleted from the database provider but failed to sync with database",
         };
       }
 
@@ -403,7 +403,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 200) {
-        return { success: false, error: "Failed to reset password in DigitalOcean" };
+        return { success: false, error: "Failed to reset password in the database provider" };
       }
 
       const user = response.data.user;

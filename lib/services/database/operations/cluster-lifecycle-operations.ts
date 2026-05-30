@@ -70,8 +70,8 @@ export const clusterLifecycleOperations = {
       if (database.status !== 201) {
         return {
           success: false,
-          error: "Failed to create database cluster in DigitalOcean",
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          error: "Failed to create database cluster in the database provider",
+          errorCode: "PROVIDER_API_ERROR",
         };
       }
 
@@ -261,7 +261,7 @@ export const clusterLifecycleOperations = {
         return {
           success: false,
           error: message ?? "Invalid request",
-          errorCode: "DIGITALOCEAN_API_ERROR",
+          errorCode: "PROVIDER_API_ERROR",
         };
       }
 

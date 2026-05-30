@@ -20,6 +20,20 @@ const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
   503: "Service is temporarily busy. Please try again shortly.",
 };
 
+/**
+ * Read-time brand scrub — last line of defence so a provider name from an
+ * upstream/legacy error string can never reach the customer, even if a source
+ * message was missed. Mirrors the inference customerSafeErrorMessage approach.
+ */
+function scrubProvider(message: string): string {
+  return message
+    .replace(/\bdigital ?ocean\b/gi, "the database provider")
+    .replace(/\bdroplets?\b/gi, "nodes")
+    .replace(/\bdoadmin\b/gi, "the admin user")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function isTechnicalMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
@@ -99,18 +113,18 @@ export function getDatabaseErrorMessage(
     }
 
     if (payload.message && !isTechnicalMessage(payload.message)) {
-      return payload.message;
+      return scrubProvider(payload.message);
     }
 
     if (payload.error && !isTechnicalMessage(payload.error)) {
-      return payload.error;
+      return scrubProvider(payload.error);
     }
 
     return defaultMessage;
   }
 
   if (error instanceof Error && !isTechnicalMessage(error.message)) {
-    return error.message;
+    return scrubProvider(error.message);
   }
 
   return defaultMessage;
