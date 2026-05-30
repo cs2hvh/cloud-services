@@ -27,7 +27,7 @@ export const ConnectionField = ({
   multiline,
 }: ConnectionFieldProps) => {
   return (
-    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+    <div className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-4">
       <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
         {label}
       </label>
@@ -44,7 +44,7 @@ export const ConnectionField = ({
           {isPassword && onTogglePassword && (
             <button
               onClick={onTogglePassword}
-              className="border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
+              className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
             >
               {showPassword ? (
                 <EyeOff className="h-4 w-4 text-white/55" />
@@ -56,7 +56,7 @@ export const ConnectionField = ({
           {onCopy && (
             <button
               onClick={onCopy}
-              className="border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
+              className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
             >
               <Copy className="h-4 w-4 text-white/55" />
             </button>
@@ -76,7 +76,7 @@ interface ConfigCardProps {
 
 export const ConfigCard = ({ icon: Icon, label, value, color }: ConfigCardProps) => {
   return (
-    <div className="border border-white/[0.08] bg-white/[0.03] p-4 text-center">
+    <div className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-4 text-center">
       <Icon className={`h-6 w-6 ${color} mx-auto mb-2`} />
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">{label}</p>
       <p className="text-lg font-semibold text-white">{value}</p>

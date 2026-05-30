@@ -205,7 +205,7 @@ export const NetworkTab = ({
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center"
+        className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center"
       >
         <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-400" />
         <p className="text-lg font-medium text-white">Loading network rules...</p>
@@ -223,7 +223,7 @@ export const NetworkTab = ({
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="border border-white/[0.08] bg-white/[0.03]"
+        className="rounded-[8px] border border-white/[0.08] bg-white/[0.03]"
       >
         <div className="border-b border-white/[0.06] px-5 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -296,7 +296,7 @@ export const NetworkTab = ({
               </Button>
             </div>
 
-            <div className="border border-white/[0.08] bg-black/20 px-4 py-3">
+            <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-4 py-3">
               <div className="flex items-start gap-2 text-sm leading-6 text-white/48">
                 <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-300" />
                 <span>
@@ -343,7 +343,7 @@ export const NetworkTab = ({
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="border border-white/[0.08] bg-white/[0.03]"
+        className="rounded-[8px] border border-white/[0.08] bg-white/[0.03]"
       >
         <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -361,7 +361,7 @@ export const NetworkTab = ({
           <Button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+            className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
             size="sm"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -371,8 +371,8 @@ export const NetworkTab = ({
 
         <div className="px-5 py-5">
           {rules.length === 0 ? (
-            <div className="border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center border border-white/[0.08] bg-white/[0.03] text-white/45">
+            <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white/45">
                 <Network className="h-6 w-6" />
               </div>
               <h3 className="mt-5 text-lg font-semibold text-white">
@@ -504,7 +504,7 @@ export const NetworkTab = ({
                     setDeleteModal({ show: false, rule: null, confirmText: "" })
                   }
                   disabled={deletingRule}
-                  className="flex-1 border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+                  className="flex-1 rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
                 >
                   Cancel
                 </Button>

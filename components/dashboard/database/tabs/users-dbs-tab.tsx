@@ -348,7 +348,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
         <motion.section
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0 }}
-          className="border border-white/[0.08] bg-white/[0.03]"
+          className="rounded-[8px] border border-white/[0.08] bg-white/[0.03]"
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
             <div>
@@ -367,7 +367,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
             <Button
               onClick={fetchUsers}
               disabled={loadingUsers}
-              className="rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              className="rounded-none rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
               size="sm"
             >
               <RefreshCw className={`h-4 w-4 ${loadingUsers ? "animate-spin" : ""}`} />
@@ -380,7 +380,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                 <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
               </div>
             ) : users.length === 0 ? (
-              <div className="border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
+              <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
                 <Users className="mx-auto mb-4 h-10 w-10 text-white/30" />
                 <h3 className="text-lg font-semibold text-white">No users yet</h3>
                 <p className="mt-2 text-sm leading-6 text-white/45">
@@ -408,7 +408,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
-                    className="border border-white/[0.08] bg-black/20 p-4"
+                    className="rounded-[8px] border border-white/[0.08] bg-black/20 p-4"
                   >
                     <div className="space-y-4">
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -421,13 +421,13 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                               className={`px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] ${
                                 isPrimaryUser(user)
                                   ? "border border-amber-400/20 bg-amber-500/10 text-amber-200/80"
-                                  : "border border-white/[0.08] bg-white/[0.03] text-white/40"
+                                  : "rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white/40"
                               }`}
                             >
                               {isPrimaryUser(user) ? "Primary account" : "Managed identity"}
                             </span>
                             {user.role && (
-                              <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-white/45">
+                              <span className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-white/45">
                                 {getProviderRoleLabel(user.role)}
                               </span>
                             )}
@@ -450,7 +450,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                           <button
                             onClick={() => handleResetPassword(user.name)}
                             disabled={Boolean(resettingUser)}
-                            className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {resettingUser === user.name ? (
                               <>
@@ -481,7 +481,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                       </div>
 
                       {user.password && (
-                        <div className="border border-white/[0.08] bg-white/[0.03] p-3">
+                        <div className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-3">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
                               Saved Password
@@ -489,7 +489,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                             <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={() => togglePasswordVisibility(user.name)}
-                                className="inline-flex items-center gap-2 border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
+                                className="inline-flex items-center gap-2 rounded-[8px] border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
                                 title={
                                   showPasswords[user.name]
                                     ? "Hide password"
@@ -505,7 +505,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                               </button>
                               <button
                                 onClick={() => copyToClipboard(user.password ?? "", "Password")}
-                                className="inline-flex items-center gap-2 border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
+                                className="inline-flex items-center gap-2 rounded-[8px] border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
                                 title="Copy password"
                               >
                                 <Copy className="h-4 w-4" />
@@ -542,7 +542,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
         <motion.section
           initial={{ opacity: 0, x: 12 }}
           animate={{ opacity: 1, x: 0 }}
-          className="border border-white/[0.08] bg-white/[0.03]"
+          className="rounded-[8px] border border-white/[0.08] bg-white/[0.03]"
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
             <div>
@@ -561,7 +561,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
             <Button
               onClick={fetchDatabases}
               disabled={loadingDatabases}
-              className="rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              className="rounded-none rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
               size="sm"
             >
               <RefreshCw className={`h-4 w-4 ${loadingDatabases ? "animate-spin" : ""}`} />
@@ -570,7 +570,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
 
           <div className="px-5 py-5">
             {!logicalDatabasesSupported ? (
-              <div className="border border-white/[0.08] bg-black/20 px-6 py-10">
+              <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-10">
                 <Database className="mb-4 h-10 w-10 text-white/30" />
                 <h3 className="text-lg font-semibold text-white">
                   Logical databases are not available for this engine
@@ -586,7 +586,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                 <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
               </div>
             ) : databases.length === 0 ? (
-              <div className="border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
+              <div className="rounded-[8px] border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
                 <Database className="mx-auto mb-4 h-10 w-10 text-white/30" />
                 <h3 className="text-lg font-semibold text-white">
                   No logical databases yet
@@ -604,7 +604,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
-                    className="border border-white/[0.08] bg-black/20 p-4"
+                    className="rounded-[8px] border border-white/[0.08] bg-black/20 p-4"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
@@ -613,7 +613,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                             {db.name}
                           </div>
                           {(db.name === "defaultdb" || db.name === "admin") && (
-                            <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
+                            <span className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
                               System
                             </span>
                           )}
@@ -720,7 +720,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     })
                   }
                   disabled={deletingUser}
-                  className="flex-1 rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+                  className="flex-1 rounded-none rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
                 >
                   Cancel
                 </Button>
@@ -815,7 +815,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     })
                   }
                   disabled={deletingDb}
-                  className="flex-1 rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+                  className="flex-1 rounded-none rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
                 >
                   Cancel
                 </Button>
@@ -890,7 +890,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                 </p>
               </div>
 
-              <div className="mt-6 border border-white/[0.08] bg-white/[0.03] p-4">
+              <div className="mt-6 rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
                   {credentialModal.mode === "created"
                     ? "Generated Password"
@@ -904,7 +904,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     onClick={() =>
                       copyToClipboard(credentialModal.password, "Password")
                     }
-                    className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
+                    className="rounded-[8px] border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
                     title="Copy password"
                   >
                     <Copy className="h-4 w-4" />
@@ -921,7 +921,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
                     mode: "reset",
                   })
                 }
-                className="mt-6 w-full rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+                className="mt-6 w-full rounded-none rounded-[8px] border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
               >
                 Close
               </Button>
