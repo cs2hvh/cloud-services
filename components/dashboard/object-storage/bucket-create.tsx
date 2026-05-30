@@ -272,7 +272,7 @@ const BucketCreate = ({
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 max-w-[1560px] mx-auto">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -292,21 +292,20 @@ const BucketCreate = ({
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Create{" "}
                     <span
-                        style={SERIF_STYLE}
-                        className="text-white/55 font-normal"
+                        style={{ ...SERIF_STYLE, color: ACCENT }}
+                        className="font-normal"
                     >
                         a bucket
                     </span>
-                    .
                 </h1>
                 <p
-                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                    className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
                 >
                     Pick a name, choose a region, set access. S3-compatible
                     endpoints provisioned in seconds.
                 </p>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
                     {/* ─── LEFT: Sections ──────────────────────── */}
                     <div className="min-w-0">
                         {/* Admin-only: 00 Owner */}
@@ -457,7 +456,7 @@ const BucketCreate = ({
                                       : "Required"
                             }
                         >
-                            <div className="max-w-[520px]">
+                            <div className="max-w-[680px]">
                                 <FieldLabel hint="3–63 chars · lowercase">
                                     Bucket name
                                 </FieldLabel>
@@ -729,7 +728,7 @@ const BucketCreate = ({
                                 selectedProject?.name ?? "Required"
                             }
                         >
-                            <div className="max-w-[520px]">
+                            <div className="max-w-[680px]">
                                 <FieldLabel hint="required">Project</FieldLabel>
                                 {filteredProjects.length === 0 ? (
                                     <div
@@ -1078,7 +1077,7 @@ function Section({
                             {title}
                         </h2>
                         <p
-                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[680px]`}
                         >
                             {desc}
                         </p>

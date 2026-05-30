@@ -111,10 +111,9 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           <div className="max-w-2xl">
             <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Object storage{" "}
-              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                 for files, assets, and data
               </span>
-              .
             </h1>
             <p
               className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
@@ -183,6 +182,21 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           />
         </section>
 
+        {/* Inventory (front and centre) */}
+        <div id="inventory" className="mb-16">
+          <SectionHead
+            eyebrow="Bucket inventory"
+            title="Your"
+            accent="buckets"
+            rightMeta={
+              stats.totalBuckets > 0
+                ? `${stats.activeBuckets} active · ${stats.totalBuckets} total`
+                : undefined
+            }
+          />
+          <BucketsTable buckets={buckets} />
+        </div>
+
         {/* Platform features */}
         <SectionHead
           eyebrow="Why object storage"
@@ -203,20 +217,6 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           }
         `}</style>
 
-        {/* Inventory */}
-        <div id="inventory">
-          <SectionHead
-            eyebrow="Bucket inventory"
-            title="Your"
-            accent="buckets"
-            rightMeta={
-              stats.totalBuckets > 0
-                ? `${stats.activeBuckets} active · ${stats.totalBuckets} total`
-                : undefined
-            }
-          />
-          <BucketsTable buckets={buckets} />
-        </div>
       </div>
     </div>
   );
@@ -249,10 +249,9 @@ function SectionHead({
         </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             {accent}
           </span>
-          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
       <div className="flex items-center gap-4">
