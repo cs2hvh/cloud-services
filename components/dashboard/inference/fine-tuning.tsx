@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   CheckCircle2,
@@ -62,8 +62,7 @@ import {
   approvalUrlFor,
   formatCents,
   formatDuration,
-  SKU_BLURB,
-  SKU_TO_RUNPOD_DISPLAY_NAME,
+  gpuLabel,
 } from "@/components/dashboard/inference/fine-tuning-utils";
 import {
   Field,
@@ -137,11 +136,25 @@ const GATED_BASES = new Set([
 ]);
 
 interface InventoryRow {
+  gpuCatalogId: string;
+  runpodGpuId: string;
   displayName: string;
+  memoryGb: number;
   cloudType: "SECURE" | "COMMUNITY";
   stockStatus: "high" | "medium" | "low" | "none";
   onDemandPerHr: number | null;
   spotPerHr: number | null;
+}
+
+// GPU compute markup applied to the raw observed rate for display — mirrors
+// the billed rate in pod-lifecycle-operations and the deploy wizard quote.
+const GPU_DISPLAY_MARKUP = 1.25;
+
+/** Marked-up "$X.XX/hr" for an inventory row, or null when price is unknown. */
+function gpuPriceLabel(row: InventoryRow): string | null {
+  if (row.onDemandPerHr === null || row.onDemandPerHr === undefined) return null;
+  const perHr = row.onDemandPerHr * GPU_DISPLAY_MARKUP;
+  return `$${perHr.toFixed(2)}/hr`;
 }
 
 
@@ -188,7 +201,7 @@ export function FineTuning({
     base_model_id: bases[0]?.model_id ?? "",
     method: "lora" as "lora" | "qlora" | "full",
     dataset_url: "",
-    gpu_sku: "A40",
+    gpu_sku: "", // set to the first in-stock GPU once live inventory loads
     rank: 16,
     alpha: 32,
     lr: 0.0002,
@@ -224,18 +237,51 @@ export function FineTuning({
         if (cancelled) return;
         if (!r.ok || !data.ok) {
           setGpuInventoryError(data.error ?? "inventory fetch failed");
+          setForm((f) => (f.gpu_sku ? f : { ...f, gpu_sku: "A100-80GB" }));
           return;
         }
         setGpuInventory(data.inventory ?? []);
         setGpuInventoryError(null);
       } catch (err) {
-        if (!cancelled) setGpuInventoryError(err instanceof Error ? err.message : "fetch failed");
+        if (!cancelled) {
+          setGpuInventoryError(err instanceof Error ? err.message : "fetch failed");
+          setForm((f) => (f.gpu_sku ? f : { ...f, gpu_sku: "A100-80GB" }));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [createOpen]);
+
+  // SECURE GPUs from the live catalog, in-stock first then cheapest first —
+  // the same source + ordering the GPU cloud deploy picker uses.
+  const gpuOptions = useMemo(() => {
+    const rows = (gpuInventory ?? []).filter((r) => r.cloudType === "SECURE");
+    return [...rows].sort((a, b) => {
+      const aOut = a.stockStatus === "none" ? 1 : 0;
+      const bOut = b.stockStatus === "none" ? 1 : 0;
+      if (aOut !== bOut) return aOut - bOut;
+      const ap = a.onDemandPerHr ?? Infinity;
+      const bp = b.onDemandPerHr ?? Infinity;
+      if (ap !== bp) return ap - bp;
+      return gpuLabel(a.displayName).localeCompare(gpuLabel(b.displayName));
+    });
+  }, [gpuInventory]);
+
+  // Auto-select the first in-stock GPU once inventory arrives (or if the
+  // current choice fell out of stock / isn't in the catalog).
+  useEffect(() => {
+    if (gpuOptions.length === 0) return;
+    const current = gpuOptions.find((r) => r.runpodGpuId === form.gpu_sku);
+    if (current && current.stockStatus !== "none") return;
+    const firstInStock = gpuOptions.find((r) => r.stockStatus !== "none");
+    const pick = firstInStock ?? gpuOptions[0];
+    if (pick && pick.runpodGpuId !== form.gpu_sku) {
+      setForm((f) => ({ ...f, gpu_sku: pick.runpodGpuId }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpuOptions]);
 
   useEffect(() => {
     const inFlightTraining = jobs.some((j) =>
@@ -256,6 +302,10 @@ export function FineTuning({
   const create = async () => {
     if (!form.name.trim() || !form.dataset_url.trim()) {
       toast.error("Name and dataset URL are required");
+      return;
+    }
+    if (!form.gpu_sku) {
+      toast.error("Select a GPU");
       return;
     }
     setCreating(true);
@@ -438,7 +488,7 @@ export function FineTuning({
                       className={`${MONO} inline-flex items-center gap-1 text-[10px] text-white/55`}
                     >
                       <Cpu className="h-2.5 w-2.5" />
-                      {j.gpu_sku}
+                      {gpuLabel(j.gpu_sku)}
                     </span>
                     <span className="text-white/20">·</span>
                     <span
@@ -685,54 +735,68 @@ export function FineTuning({
               />
             </Field>
 
-            <Field label="GPU SKU">
+            <Field label="GPU">
               <Select
                 value={form.gpu_sku}
                 onValueChange={(v) => setForm({ ...form, gpu_sku: v })}
+                disabled={gpuOptions.length === 0}
               >
                 <SelectTrigger className="bg-white/[0.02] border-white/[0.08]">
-                  <SelectValue />
+                  <SelectValue
+                    placeholder={
+                      gpuInventory === null
+                        ? "Loading live GPU prices…"
+                        : "Select a GPU"
+                    }
+                  />
                 </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(SKU_TO_RUNPOD_DISPLAY_NAME).map((sku) => {
-                    const row = gpuInventory?.find(
-                      (r) =>
-                        r.cloudType === "SECURE" &&
-                        r.displayName === SKU_TO_RUNPOD_DISPLAY_NAME[sku]
-                    );
-                    const outOfStock = row?.stockStatus === "none";
+                <SelectContent className="max-h-[320px]">
+                  {gpuOptions.map((row) => {
+                    const outOfStock = row.stockStatus === "none";
+                    const price = gpuPriceLabel(row);
                     return (
                       <SelectItem
-                        key={sku}
-                        value={sku}
+                        key={row.runpodGpuId}
+                        value={row.runpodGpuId}
                         disabled={outOfStock || undefined}
                       >
-                        <span className="inline-flex items-center gap-2">
-                          <span className="font-medium">{sku}</span>
-                          <span className="text-white/45 text-[11px]">
-                            — {SKU_BLURB[sku]}
+                        <span className="flex items-center gap-2 w-full pr-1">
+                          <span className="font-medium">{gpuLabel(row.displayName)}</span>
+                          <span className="text-white/40 text-[11px] tabular-nums">
+                            {row.memoryGb}GB
                           </span>
-                          {outOfStock && (
-                            <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
-                              unavailable
-                            </span>
-                          )}
-                          {row?.stockStatus === "low" && (
-                            <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
-                              limited
-                            </span>
-                          )}
+                          <span className="ml-auto inline-flex items-center gap-2">
+                            {price && (
+                              <span className="text-white/70 text-[11px] tabular-nums">
+                                {price}
+                              </span>
+                            )}
+                            {outOfStock ? (
+                              <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
+                                out of stock
+                              </span>
+                            ) : row.stockStatus === "low" ? (
+                              <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
+                                limited
+                              </span>
+                            ) : (
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: "#4ade80" }}
+                              />
+                            )}
+                          </span>
                         </span>
                       </SelectItem>
                     );
                   })}
                 </SelectContent>
               </Select>
-              {gpuInventoryError && (
-                <p className={`${MONO} mt-1 text-[10px] text-amber-300/60`}>
-                  live capacity status unavailable
-                </p>
-              )}
+              <p className={`${MONO} mt-1 text-[10px] text-white/40`}>
+                {gpuInventoryError
+                  ? "Live capacity unavailable — defaulting to standard GPUs."
+                  : "Live on-demand rate per GPU. Fine-tuning is billed per token; the GPU sets training speed."}
+              </p>
             </Field>
 
             <div className="border-t border-white/[0.05] pt-3">

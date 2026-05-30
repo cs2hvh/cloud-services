@@ -36,6 +36,7 @@ import { INFERENCE_API_BASE, SERVING_IMAGE_URI } from "@/lib/inference/branding"
 import {
   formatCents,
   formatDuration,
+  gpuLabel,
 } from "@/components/dashboard/inference/fine-tuning-utils";
 import {
   PodStat,
@@ -159,7 +160,7 @@ export function ExpandedRow({
         <InfoRow k="Method" v={j.method.toUpperCase()} />
         <InfoRow
           k="GPU"
-          v={`${j.gpu_sku}${j.hourly_cost_cents ? ` · $${(j.hourly_cost_cents / 100).toFixed(2)}/hr at provision` : ""}`}
+          v={`${gpuLabel(j.gpu_sku)}${j.hourly_cost_cents ? ` · $${(j.hourly_cost_cents / 100).toFixed(2)}/hr at provision` : ""}`}
         />
         <InfoRow k="Duration" v={formatDuration(j.training_seconds)} />
         <InfoRow k="Cost" v={formatCents(j.cost_cents)} />

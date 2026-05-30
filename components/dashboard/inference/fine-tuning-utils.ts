@@ -8,28 +8,14 @@
  */
 
 /**
- * Internal SKU → upstream catalog display name. Kept in sync with
- * lib/inference/finetune-runpod.ts GPU_SKU_TO_RUNPOD_TYPE; used by the
- * create-FT dialog to cross-reference live inventory rows.
+ * Clean a GPU identifier for the customer. `gpu_sku` now carries the verbatim
+ * RunPod gpuTypeId (e.g. "NVIDIA H100 80GB HBM3"); drop the vendor prefix so
+ * the UI shows "H100 80GB HBM3". Legacy short SKUs ("A100-80GB") pass through.
  */
-export const SKU_TO_RUNPOD_DISPLAY_NAME: Record<string, string> = {
-  "A40": "NVIDIA A40",
-  "L40S": "NVIDIA L40S",
-  "RTX-6000-Ada": "NVIDIA RTX 6000 Ada Generation",
-  "A100-40GB": "NVIDIA A100-PCIE-40GB",
-  "A100-80GB": "NVIDIA A100 80GB PCIe",
-  "H100-80GB": "NVIDIA H100 80GB HBM3",
-};
-
-/** Short workload hint shown next to each SKU in the picker. */
-export const SKU_BLURB: Record<string, string> = {
-  "A40": "budget tier",
-  "L40S": "small qLoRA",
-  "RTX-6000-Ada": "small jobs",
-  "A100-40GB": "small LoRA, qLoRA",
-  "A100-80GB": "large LoRA workhorse",
-  "H100-80GB": "fastest, premium",
-};
+export function gpuLabel(gpu: string | null | undefined): string {
+  if (!gpu) return "—";
+  return gpu.replace(/^NVIDIA\s+/i, "").trim() || gpu;
+}
 
 /** Where to request access for gated base models. We don't display the
  *  upstream brand name; just provide the link. */

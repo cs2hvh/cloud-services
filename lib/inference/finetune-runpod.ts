@@ -29,16 +29,45 @@ export const GPU_SKU_TO_RUNPOD_TYPE: Record<string, string> = {
   "H100-80GB": "NVIDIA H100 80GB HBM3",
 };
 
-// Suggested per-GPU container disk size (GB). Bigger for jobs that
-// store multiple checkpoints + base model weights + dataset.
+// Suggested per-GPU container disk size (GB). Bigger for jobs that store
+// multiple checkpoints + base model weights + dataset. Keyed by both the
+// legacy short SKU and the verbatim RunPod gpuTypeId (gpu_catalog.runpod_gpu_id);
+// anything unknown falls back to a memory heuristic via containerDiskGbFor().
 const CONTAINER_DISK_GB: Record<string, number> = {
-  "A40": 100,
-  "L40S": 100,
-  "RTX-6000-Ada": 100,
+  "A40": 150,
+  "L40S": 150,
+  "RTX-6000-Ada": 150,
   "A100-40GB": 200,
   "A100-80GB": 300,
   "H100-80GB": 400,
+  "NVIDIA A40": 150,
+  "NVIDIA L40": 150,
+  "NVIDIA L40S": 150,
+  "NVIDIA RTX 6000 Ada Generation": 150,
+  "NVIDIA RTX A6000": 150,
+  "NVIDIA A100-PCIE-40GB": 200,
+  "NVIDIA A100 80GB PCIe": 300,
+  "NVIDIA A100-SXM4-80GB": 300,
+  "NVIDIA H100 80GB HBM3": 400,
+  "NVIDIA H100 PCIe": 400,
+  "NVIDIA H100 NVL": 450,
+  "NVIDIA H200": 500,
+  "NVIDIA B200": 600,
 };
+
+/** Disk size for a GPU: explicit map first, then a memory heuristic parsed
+ *  from the gpuTypeId (e.g. "…80GB…"), else a safe middle ground. */
+function containerDiskGbFor(gpuSku: string): number {
+  const known = CONTAINER_DISK_GB[gpuSku];
+  if (known) return known;
+  const m = /(\d{2,3})\s*GB/i.exec(gpuSku);
+  const mem = m ? parseInt(m[1], 10) : 0;
+  if (mem >= 140) return 500;
+  if (mem >= 80) return 400;
+  if (mem >= 40) return 250;
+  if (mem >= 20) return 150;
+  return 200;
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -89,18 +118,18 @@ interface RunPodPodStatusResponse {
 export async function provisionFineTunePod(
   input: ProvisionFineTunePodInput
 ): Promise<ProvisionFineTunePodResult> {
-  const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku];
+  // gpu_sku now carries the verbatim RunPod gpuTypeId (gpu_catalog.runpod_gpu_id),
+  // so pass it through directly. Legacy rows hold a short SKU — map those.
+  const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku] ?? input.gpuSku;
   if (!gpuTypeId) {
-    throw new Error(
-      `Unknown GPU SKU "${input.gpuSku}". Known: ${Object.keys(GPU_SKU_TO_RUNPOD_TYPE).join(", ")}`
-    );
+    throw new Error("Fine-tuning job is missing a GPU type");
   }
 
   const imageName =
     process.env.AHURA_FT_AXOLOTL_IMAGE_URI ??
     "ghcr.io/hav0ky/ahura-ft-axolotl:axolotl-0.29.0";
 
-  const containerDiskGb = CONTAINER_DISK_GB[input.gpuSku] ?? 100;
+  const containerDiskGb = containerDiskGbFor(input.gpuSku);
 
   const body = {
     name: `ahura-ft-${input.jobId.slice(0, 8)}`,

@@ -22,15 +22,46 @@ export const GPU_SKU_TO_RUNPOD_TYPE: Record<string, string> = {
 };
 
 // Per-GPU container disk size (GB). Bigger GPUs train bigger bases that need
-// more room for weights + checkpoints + dataset cache.
+// more room for weights + checkpoints + dataset cache. Keyed by both the
+// legacy short SKU (pre-catalog jobs) and the verbatim RunPod gpuTypeId
+// (catalog-driven jobs). Anything unknown falls back to a memory heuristic.
 const CONTAINER_DISK_GB: Record<string, number> = {
-  A40: 100,
-  L40S: 100,
-  "RTX-6000-Ada": 100,
+  // legacy short SKUs
+  A40: 150,
+  L40S: 150,
+  "RTX-6000-Ada": 150,
   "A100-40GB": 200,
   "A100-80GB": 300,
   "H100-80GB": 400,
+  // verbatim RunPod gpuTypeIds (gpu_catalog.runpod_gpu_id)
+  "NVIDIA A40": 150,
+  "NVIDIA L40": 150,
+  "NVIDIA L40S": 150,
+  "NVIDIA RTX 6000 Ada Generation": 150,
+  "NVIDIA RTX A6000": 150,
+  "NVIDIA A100-PCIE-40GB": 200,
+  "NVIDIA A100 80GB PCIe": 300,
+  "NVIDIA A100-SXM4-80GB": 300,
+  "NVIDIA H100 80GB HBM3": 400,
+  "NVIDIA H100 PCIe": 400,
+  "NVIDIA H100 NVL": 450,
+  "NVIDIA H200": 500,
+  "NVIDIA B200": 600,
 };
+
+/** Disk size for a GPU: explicit map first, then a memory heuristic parsed
+ *  from the gpuTypeId (e.g. "…80GB…"), else a safe middle ground. */
+function containerDiskGbFor(gpuSku: string): number {
+  const known = CONTAINER_DISK_GB[gpuSku];
+  if (known) return known;
+  const m = /(\d{2,3})\s*GB/i.exec(gpuSku);
+  const mem = m ? parseInt(m[1], 10) : 0;
+  if (mem >= 140) return 500;
+  if (mem >= 80) return 400;
+  if (mem >= 40) return 250;
+  if (mem >= 20) return 150;
+  return 200;
+}
 
 export type PodStatus =
   | "PROVISIONING"
@@ -93,11 +124,11 @@ export class RunPod {
   }
 
   async createPod(input: ProvisionInput): Promise<ProvisionResult> {
-    const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku];
+    // gpu_sku now carries the verbatim RunPod gpuTypeId (gpu_catalog.runpod_gpu_id),
+    // so pass it through directly. Legacy rows hold a short SKU — map those.
+    const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku] ?? input.gpuSku;
     if (!gpuTypeId) {
-      throw new Error(
-        `Unknown GPU SKU "${input.gpuSku}". Known: ${Object.keys(GPU_SKU_TO_RUNPOD_TYPE).join(", ")}`
-      );
+      throw new Error("Fine-tuning job is missing a GPU type");
     }
 
     // Template path: image + disk + base env all live in the template;
@@ -120,7 +151,7 @@ export class RunPod {
       body.templateId = input.templateId;
     } else {
       body.imageName = input.imageUri;
-      body.containerDiskInGb = CONTAINER_DISK_GB[input.gpuSku] ?? 100;
+      body.containerDiskInGb = containerDiskGbFor(input.gpuSku);
       body.volumeInGb = 100;
       body.volumeMountPath = "/workspace/cache";
     }
