@@ -185,7 +185,6 @@ function SingleCluster({
   const [clusterFailed, setClusterFailed] = useState(false);
   const [nodesData, setNodesData] = useState<NodeInfo | null>(null);
   const [ready, setReady] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [clusterLifecycleStatus, setClusterLifecycleStatus] =
     useState<Row["status"] | null>(null);
 
@@ -617,7 +616,6 @@ function SingleCluster({
         setNodesData(nodes);
         setReady(true);
       }
-      setLastUpdated(new Date());
     } catch (err: unknown) {
       console.log(err, ".........98");
       if (err instanceof Error) {
@@ -962,10 +960,9 @@ function SingleCluster({
 
           <h1 className="text-[32px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
             {ready ? "Cluster" : "Provisioning"}{" "}
-            <span style={SERIF_STYLE} className="text-white/55 font-normal">
+            <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
               {ready ? "operations" : "infrastructure"}
             </span>
-            <span className="text-white/55 font-normal">.</span>
           </h1>
           <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
             {ready
@@ -1065,22 +1062,19 @@ function SingleCluster({
               );
             })}
 
-            <div className="pt-3 border-t border-white/[0.04] flex flex-wrap items-center justify-between gap-3">
-              <span className={`${MONO} inline-flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em]`}>
-                {!allDone ? (
-                  <>
-                    <Spinner />
-                    <span className="text-white/55">Checking every minute</span>
-                  </>
-                ) : (
-                  <span className="text-emerald-300">All steps complete</span>
-                )}
-              </span>
-              <span className={`${MONO} text-[10.5px] text-white/40 tabular-nums`}>
-                {lastUpdated
-                  ? `Last update · ${lastUpdated.toLocaleTimeString()}`
-                  : "Waiting for first update"}
-              </span>
+            <div className="pt-3 border-t border-white/[0.04] flex items-center gap-2">
+              {!allDone ? (
+                <>
+                  <Spinner />
+                  <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+                    Provisioning
+                  </span>
+                </>
+              ) : (
+                <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-emerald-300`}>
+                  All steps complete
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1486,10 +1480,9 @@ function SectionHead({
         <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>{index}</span>
         <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             {accent}
           </span>
-          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
       {meta && (
