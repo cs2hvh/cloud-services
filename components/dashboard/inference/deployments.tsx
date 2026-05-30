@@ -16,7 +16,6 @@ import {
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +58,12 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { Field } from "@/components/dashboard/inference/fine-tuning-cells";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+
+// Editorial dark input styling, shared by every field in the create dialog so
+// the form matches the fine-tuning dialog + the rest of the dashboard.
+const FIELD_INPUT = `${MONO} bg-white/[0.02] border-white/[0.08] text-[12px]`;
 
 export interface Deployment {
   id: string;
@@ -570,85 +574,93 @@ export function Deployments({
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
             <div className="md:col-span-2">
-              <Label htmlFor="dep-name">Name *</Label>
-              <Input
-                id="dep-name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="prod-llama-3-8b"
-                maxLength={64}
-              />
+              <Field label="Name *">
+                <Input
+                  id="dep-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="prod-llama-3-8b"
+                  maxLength={64}
+                  className={FIELD_INPUT}
+                />
+              </Field>
               <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
                 Lowercase letters, digits, underscores, hyphens. Must be unique in your org.
               </p>
             </div>
 
             <div>
-              <Label>Source type *</Label>
-              <Select
-                value={form.source}
-                onValueChange={(v) => setForm({ ...form, source: v as Deployment["source"] })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SOURCE_OPTIONS.map((o) => (
-                    <SelectItem
-                      key={o.value}
-                      value={o.value}
-                      disabled={"disabled" in o && o.disabled === true}
-                    >
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Field label="Source type *">
+                <Select
+                  value={form.source}
+                  onValueChange={(v) => setForm({ ...form, source: v as Deployment["source"] })}
+                >
+                  <SelectTrigger className={FIELD_INPUT}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        disabled={"disabled" in o && o.disabled === true}
+                      >
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
             </div>
 
             <div>
-              <Label>GPU</Label>
-              <Select
-                value={form.gpu_sku}
-                onValueChange={(v) => setForm({ ...form, gpu_sku: v })}
-                disabled={gpuOptions.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={gpuInventory === null ? "Loading live GPU prices…" : "Select a GPU"}
-                  />
-                </SelectTrigger>
-                <SelectContent className="max-h-[320px]">
-                  {gpuOptions.map((row) => {
-                    const outOfStock = row.stockStatus === "none";
-                    const price = gpuPriceLabel(row);
-                    return (
-                      <SelectItem key={row.runpodGpuId} value={row.runpodGpuId} disabled={outOfStock || undefined}>
-                        <span className="flex items-center gap-2 w-full pr-1">
-                          <span className="font-medium">{gpuLabel(row.displayName)}</span>
-                          <span className="text-white/40 text-[11px] tabular-nums">{row.memoryGb}GB</span>
-                          <span className="ml-auto inline-flex items-center gap-2">
-                            {price && (
-                              <span className="text-white/70 text-[11px] tabular-nums">{price}</span>
-                            )}
-                            {outOfStock ? (
-                              <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
-                                out of stock
-                              </span>
-                            ) : row.stockStatus === "low" ? (
-                              <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
-                                limited
-                              </span>
-                            ) : (
-                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#4ade80" }} />
-                            )}
+              <Field label="GPU">
+                <Select
+                  value={form.gpu_sku}
+                  onValueChange={(v) => setForm({ ...form, gpu_sku: v })}
+                  disabled={gpuOptions.length === 0}
+                >
+                  <SelectTrigger className={FIELD_INPUT}>
+                    {gpuInventory === null ? (
+                      <span className="inline-flex items-center gap-2 text-white/40">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select a GPU" />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {gpuOptions.map((row) => {
+                      const outOfStock = row.stockStatus === "none";
+                      const price = gpuPriceLabel(row);
+                      return (
+                        <SelectItem key={row.runpodGpuId} value={row.runpodGpuId} disabled={outOfStock || undefined}>
+                          <span className="flex items-center gap-2 w-full pr-1">
+                            <span className="font-medium">{gpuLabel(row.displayName)}</span>
+                            <span className="text-white/40 text-[11px] tabular-nums">{row.memoryGb}GB</span>
+                            <span className="ml-auto inline-flex items-center gap-2">
+                              {price && (
+                                <span className="text-white/70 text-[11px] tabular-nums">{price}</span>
+                              )}
+                              {outOfStock ? (
+                                <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
+                                  out of stock
+                                </span>
+                              ) : row.stockStatus === "low" ? (
+                                <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
+                                  limited
+                                </span>
+                              ) : (
+                                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#4ade80" }} />
+                              )}
+                            </span>
                           </span>
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </Field>
               <p className={`${MONO} mt-1 text-[10px] text-white/40`}>
                 {gpuInventoryError
                   ? "Live capacity unavailable — defaulting to standard GPUs."
@@ -657,87 +669,101 @@ export function Deployments({
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="dep-ref">
-                {form.source === "docker"
-                  ? "Image reference *"
-                  : form.source === "huggingface"
-                    ? "HF model id *"
-                    : "Git repo URL *"}
-              </Label>
-              <Input
-                id="dep-ref"
-                value={form.source_ref}
-                onChange={(e) => setForm({ ...form, source_ref: e.target.value })}
-                placeholder={
+              <Field
+                label={
                   form.source === "docker"
-                    ? "ghcr.io/your-org/your-image:latest"
+                    ? "Image reference *"
                     : form.source === "huggingface"
-                      ? "meta-llama/Llama-3.3-8B-Instruct"
-                      : "https://github.com/your-org/truss-bundle"
+                      ? "HF model id *"
+                      : "Git repo URL *"
                 }
-              />
+              >
+                <Input
+                  id="dep-ref"
+                  value={form.source_ref}
+                  onChange={(e) => setForm({ ...form, source_ref: e.target.value })}
+                  placeholder={
+                    form.source === "docker"
+                      ? "ghcr.io/your-org/your-image:latest"
+                      : form.source === "huggingface"
+                        ? "meta-llama/Llama-3.3-8B-Instruct"
+                        : "https://github.com/your-org/truss-bundle"
+                  }
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="dep-rev">Revision / tag (optional)</Label>
-              <Input
-                id="dep-rev"
-                value={form.source_revision}
-                onChange={(e) => setForm({ ...form, source_revision: e.target.value })}
-                placeholder={form.source === "docker" ? "Defaults to tag in ref" : "git sha or branch"}
-              />
+              <Field label="Revision / tag (optional)">
+                <Input
+                  id="dep-rev"
+                  value={form.source_revision}
+                  onChange={(e) => setForm({ ...form, source_revision: e.target.value })}
+                  placeholder={form.source === "docker" ? "Defaults to tag in ref" : "git sha or branch"}
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
 
             {form.source === "huggingface" && (
               <div className="md:col-span-2">
-                <Label htmlFor="dep-hf-token">HF token (required for gated models)</Label>
-                <Input
-                  id="dep-hf-token"
-                  type="password"
-                  autoComplete="off"
-                  value={form.hf_token}
-                  onChange={(e) => setForm({ ...form, hf_token: e.target.value })}
-                  placeholder="hf_xxxxxxxx (paste once; encrypted at rest)"
-                />
+                <Field label="HF token (required for gated models)">
+                  <Input
+                    id="dep-hf-token"
+                    type="password"
+                    autoComplete="off"
+                    value={form.hf_token}
+                    onChange={(e) => setForm({ ...form, hf_token: e.target.value })}
+                    placeholder="hf_xxxxxxxx (paste once; encrypted at rest)"
+                    className={FIELD_INPUT}
+                  />
+                </Field>
                 <p className={`${MONO} text-[10px] text-white/40 mt-1 leading-relaxed`}>
-                  Stored encrypted with the platform DEK. Used only at endpoint start-up to
-                  pull weights. Skip if the model is fully public.
+                  Stored encrypted at rest. Used only at endpoint start-up to pull weights.
+                  Skip if the model is fully public.
                 </p>
               </div>
             )}
 
             <div>
-              <Label>Min workers</Label>
-              <Input
-                type="number"
-                min={0}
-                max={50}
-                value={form.min_workers}
-                onChange={(e) => setForm({ ...form, min_workers: Number(e.target.value) })}
-              />
+              <Field label="Min workers">
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={form.min_workers}
+                  onChange={(e) => setForm({ ...form, min_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
               <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
                 ≥1 keeps a warm worker (eliminates cold starts; pay always-on).
               </p>
             </div>
             <div>
-              <Label>Max workers</Label>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={form.max_workers}
-                onChange={(e) => setForm({ ...form, max_workers: Number(e.target.value) })}
-              />
+              <Field label="Max workers">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={form.max_workers}
+                  onChange={(e) => setForm({ ...form, max_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
             <div className="md:col-span-2">
-              <Label>Idle timeout (seconds)</Label>
-              <Input
-                type="number"
-                min={5}
-                max={3600}
-                value={form.idle_timeout_s}
-                onChange={(e) => setForm({ ...form, idle_timeout_s: Number(e.target.value) })}
-              />
+              <Field label="Idle timeout (seconds)">
+                <Input
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={form.idle_timeout_s}
+                  onChange={(e) => setForm({ ...form, idle_timeout_s: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
               <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
                 How long a worker stays warm after the last request before scaling down.
               </p>
@@ -768,34 +794,40 @@ export function Deployments({
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div>
-              <Label>Min workers</Label>
-              <Input
-                type="number"
-                min={0}
-                max={50}
-                value={scaleForm.min_workers}
-                onChange={(e) => setScaleForm({ ...scaleForm, min_workers: Number(e.target.value) })}
-              />
+              <Field label="Min workers">
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={scaleForm.min_workers}
+                  onChange={(e) => setScaleForm({ ...scaleForm, min_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
             <div>
-              <Label>Max workers</Label>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={scaleForm.max_workers}
-                onChange={(e) => setScaleForm({ ...scaleForm, max_workers: Number(e.target.value) })}
-              />
+              <Field label="Max workers">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={scaleForm.max_workers}
+                  onChange={(e) => setScaleForm({ ...scaleForm, max_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
             <div className="col-span-2">
-              <Label>Idle timeout (seconds)</Label>
-              <Input
-                type="number"
-                min={5}
-                max={3600}
-                value={scaleForm.idle_timeout_s}
-                onChange={(e) => setScaleForm({ ...scaleForm, idle_timeout_s: Number(e.target.value) })}
-              />
+              <Field label="Idle timeout (seconds)">
+                <Input
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={scaleForm.idle_timeout_s}
+                  onChange={(e) => setScaleForm({ ...scaleForm, idle_timeout_s: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
             </div>
           </div>
           <DialogFooter>

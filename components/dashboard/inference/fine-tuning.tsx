@@ -742,13 +742,13 @@ export function FineTuning({
                 disabled={gpuOptions.length === 0}
               >
                 <SelectTrigger className="bg-white/[0.02] border-white/[0.08]">
-                  <SelectValue
-                    placeholder={
-                      gpuInventory === null
-                        ? "Loading live GPU prices…"
-                        : "Select a GPU"
-                    }
-                  />
+                  {gpuInventory === null ? (
+                    <span className="inline-flex items-center gap-2 text-white/40">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    </span>
+                  ) : (
+                    <SelectValue placeholder="Select a GPU" />
+                  )}
                 </SelectTrigger>
                 <SelectContent className="max-h-[320px]">
                   {gpuOptions.map((row) => {
