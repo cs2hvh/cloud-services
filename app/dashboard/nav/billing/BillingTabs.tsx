@@ -11,7 +11,6 @@ import {
     ArrowRight,
     ChevronLeft,
     ChevronRight,
-    CreditCard,
     Download,
     ExternalLink,
     Loader2,
@@ -470,14 +469,18 @@ function BalanceTab({
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span
-                                style={SERIF_STYLE}
-                                className="text-[24px] text-white/55 font-medium leading-none"
+                                style={{ ...SERIF_STYLE, color: "rgba(74,222,128,0.6)" }}
+                                className="text-[24px] font-medium leading-none"
                             >
                                 $
                             </span>
                             <span
-                                style={SERIF_STYLE}
-                                className="text-[54px] font-bold tabular-nums tracking-[-0.035em] text-white leading-none"
+                                style={{
+                                    ...SERIF_STYLE,
+                                    color: "#4ade80",
+                                    textShadow: "0 0 26px rgba(74,222,128,0.28)",
+                                }}
+                                className="text-[54px] font-bold tabular-nums tracking-[-0.035em] leading-none"
                             >
                                 {formattedBalance.toFixed(2)}
                             </span>
@@ -523,7 +526,19 @@ function BalanceTab({
                             <PaymentMethodCard
                                 active={paymentMethod === "stripe"}
                                 onClick={() => setPaymentMethod("stripe")}
-                                icon={<CreditCard className="h-3.5 w-3.5" />}
+                                icon={
+                                    <svg
+                                        viewBox="0 0 360 150"
+                                        className="h-3.5 w-auto"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        aria-label="Stripe"
+                                    >
+                                        <path
+                                            fill="#635BFF"
+                                            d="M360 77.4c0-25.6-12.4-45.8-36.1-45.8s-38.1 20.2-38.1 45.6c0 30.1 17 45.3 41.4 45.3 11.9 0 20.9-2.7 27.7-6.5V96c-6.8 3.4-14.6 5.5-24.5 5.5-9.7 0-18.3-3.4-19.4-15.2h48.9c0-1.3.1-6.5.1-8.9zm-49.4-9.5c0-11.3 6.9-16 13.2-16 6.1 0 12.6 4.7 12.6 16h-25.8zM247.1 31.6c-9.8 0-16.1 4.6-19.6 7.8l-1.3-6.2h-22v116.6l25-5.3.1-28.3c3.6 2.6 8.9 6.3 17.7 6.3 17.9 0 34.2-14.4 34.2-46.1-.1-29-16.6-44.8-34.1-44.8zm-6 68.9c-5.9 0-9.4-2.1-11.8-4.7l-.1-37.1c2.6-2.9 6.2-4.9 11.9-4.9 9.1 0 15.4 10.2 15.4 23.3 0 13.4-6.2 23.4-15.4 23.4zM205.2 25.7l25.1-5.4V0l-25.1 5.3v20.4zM205.2 33.3h25.1v87.5h-25.1zM178.3 40.7l-1.6-7.4h-21.6v87.5h25V61.5c5.9-7.7 15.9-6.3 19-5.2v-23c-3.2-1.2-14.9-3.4-20.8 7.4zM128.5 11.6L104.1 16.8l-.1 80.1c0 14.8 11.1 25.7 25.9 25.7 8.2 0 14.2-1.5 17.5-3.3V99c-3.2 1.3-19 5.9-19-8.9V54.6h19V33.3h-19l.1-21.7zM79.3 58.4c0-3.9 3.2-5.4 8.5-5.4 7.6 0 17.2 2.3 24.8 6.4V35.9c-8.3-3.3-16.5-4.6-24.8-4.6C67.5 31.3 54 41.9 54 59.6c0 27.6 38 23.2 38 35.1 0 4.6-4 6.1-9.6 6.1-8.3 0-18.9-3.4-27.3-8v23.8c9.3 4 18.7 5.7 27.3 5.7 20.8 0 35.1-10.3 35.1-28.2-.1-29.8-38.2-24.5-38.2-35.7z"
+                                        />
+                                    </svg>
+                                }
                                 label="Stripe"
                                 desc="Card, Apple Pay, Google Pay"
                             />
@@ -531,9 +546,12 @@ function BalanceTab({
                                 active={paymentMethod === "crypto"}
                                 onClick={() => setPaymentMethod("crypto")}
                                 icon={
-                                    <span className={`${MONO} text-[11px] font-bold`}>
-                                        ₿
-                                    </span>
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src="/currencies/usdt_trc20.svg"
+                                        alt="USDT"
+                                        className="h-5 w-5"
+                                    />
                                 }
                                 label="Crypto"
                                 desc="USDT (TRC20) · instant"
@@ -1527,7 +1545,7 @@ function PaymentMethodCard({
             }
         >
             <span
-                className="h-8 w-8 shrink-0 inline-flex items-center justify-center border rounded-[5px]"
+                className="h-8 min-w-8 w-auto px-2 shrink-0 inline-flex items-center justify-center border rounded-[5px]"
                 style={{
                     color: active ? ACCENT : "rgba(255,255,255,0.65)",
                     background: active ? ACCENT_DIM : "#0d0e11",
