@@ -12,7 +12,6 @@ import {
   ArrowUpRight,
   Copy,
   Globe,
-  Mail,
   Plus,
   RefreshCw,
   Search,
@@ -232,28 +231,6 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
             <Copy className="h-3 w-3" />
           </button>
         </div>
-        {item.purchase?.status === 'completed' && (() => {
-          const withinIcannWindow = item.purchase.created_at
-            ? Date.now() - new Date(item.purchase.created_at).getTime() < 15 * 24 * 60 * 60 * 1000
-            : false;
-          const isSandboxSentinel = item.purchase.registrant_email?.endsWith('@not-found.invalid');
-          const displayEmail = isSandboxSentinel ? null : item.purchase.registrant_email;
-          if (!displayEmail && !withinIcannWindow) return null;
-          return (
-            <div className={`mt-1 flex items-center gap-1.5 ${isChild ? 'pl-10' : 'pl-9'}`}>
-              <Mail className="h-2.5 w-2.5 shrink-0 text-white/25" />
-              {displayEmail ? (
-                <span className={`${MONO} text-[10px] text-white/35`} title="ICANN verification email sent to this address">
-                  ICANN → <span className="text-white/55">{displayEmail}</span>
-                </span>
-              ) : (
-                <span className={`${MONO} text-[10px] text-amber-400/70`} title="Verification email routing pending — retries automatically">
-                  ICANN email routing pending…
-                </span>
-              )}
-            </div>
-          );
-        })()}
       </td>
 
       {/* Status */}

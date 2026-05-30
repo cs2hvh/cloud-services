@@ -419,59 +419,28 @@ export class DomainMarketplaceService {
       }
     });
 
-    // After a successful purchase the name.com account-level contacts are used as
-    // the default registrant. For white-label: update the registrant contact to the
-    // purchasing user so ICANN contact-verification emails are routed to them, not
-    // to the platform admin inbox. User-supplied contact fields override the defaults.
-    // This is non-blocking — a failure here does NOT roll back the purchase.
-    const rc = input.registrantContact;
-    const [rawFirst, ...rest] = (actor.userName || "").trim().split(" ");
-    const derivedFirst = rawFirst || undefined;
-    const derivedLast = rest.join(" ") || undefined;
-    const contactEmail = rc?.email || actor.userEmail;
-
-    if (contactEmail && this.registrar.setRegistrantContact) {
-      this.emitNonBlocking(async () => {
-        let contactSynced = false;
-        try {
-          await this.registrar.setRegistrantContact!(cleanDomain, {
-            email: contactEmail,
-            firstName: rc?.firstName || derivedFirst,
-            lastName: rc?.lastName || derivedLast,
-            phone: rc?.phone,
-            companyName: rc?.companyName,
-            address1: rc?.address1,
-            city: rc?.city,
-            state: rc?.state,
-            zip: rc?.zip,
-            country: rc?.country,
-          });
-          contactSynced = true;
-          await this.purchaseRequests.updateStatus({
-            requestId: request.id,
-            status: "completed",
-            registrantEmail: contactEmail,
-          });
-        } catch (err) {
-          console.warn("[DomainMarketplace] setRegistrantContact failed (non-fatal)", {
-            domain: cleanDomain,
-            email: contactEmail,
-            error: err instanceof Error ? err.message : String(err),
-          });
+    // Reseller model: KEEP the platform's already‑ICANN‑verified account contact
+    // as the registrant and just enable WHOIS privacy. We intentionally do NOT
+    // push the customer's raw email as the registrant — doing so would trigger
+    // ICANN's per‑email verification ("verify within 15 days or suspend"), which
+    // is the friction we're removing. The customer owns + manages the domain via
+    // their dashboard; their email stays internal (used for renewal notices).
+    // Non‑blocking — a failure here does NOT roll back the purchase.
+    this.emitNonBlocking(async () => {
+      try {
+        const reg = this.registrar as unknown as {
+          updateDomain?: (d: string, u: { privacyEnabled?: boolean }) => Promise<unknown>;
+        };
+        if (reg.updateDomain) {
+          await reg.updateDomain(cleanDomain, { privacyEnabled: true });
         }
-        await this.emitAudit({
-          actor,
-          action: "update",
-          serviceId: request.id,
-          serviceName: cleanDomain,
-          metadata: {
-            event: "domain_registrant_contact_sync",
-            registrant_email: contactEmail,
-            contact_synced: contactSynced,
-          },
+      } catch (err) {
+        console.warn("[DomainMarketplace] enable WHOIS privacy failed (non-fatal)", {
+          domain: cleanDomain,
+          error: err instanceof Error ? err.message : String(err),
         });
-      });
-    }
+      }
+    });
 
     await this.emitNonBlocking(async () => {
       await this.emitAudit({
@@ -507,7 +476,7 @@ export class DomainMarketplaceService {
         severity: "info",
         alertTitle: "Domain purchase completed",
         serviceName: cleanDomain,
-        summary: `Your domain purchase for ${cleanDomain} has completed successfully. Check your inbox for an ICANN contact verification email and click the link to unlock DNS activation.`,
+        summary: `Your domain purchase for ${cleanDomain} has completed successfully. It's ready to manage from your dashboard — connect it to an app or update DNS anytime.`,
         metadata: {
           source_app_id: input.appId || "none",
           amount: first.purchasePrice ?? 0,
@@ -569,60 +538,12 @@ export class DomainMarketplaceService {
     limit?: number;
     lookupUser: (userId: string) => Promise<{ email: string | null; firstName?: string; lastName?: string } | null>;
   }): Promise<{ processed: number; failed: number; skipped: number; failures: Array<{ domain: string; error: string }> }> {
-    if (!this.registrar.setRegistrantContact) {
-      return { processed: 0, failed: 0, skipped: 0, failures: [] };
-    }
-
-    const unsynced = await this.purchaseRequests.findUnsyncedCompleted(params.limit ?? 20);
-    let processed = 0;
-    let failed = 0;
-    let skipped = 0;
-    const failures: Array<{ domain: string; error: string }> = [];
-
-    for (const record of unsynced) {
-      try {
-        const user = await params.lookupUser(record.user_id);
-        if (!user?.email) {
-          skipped++;
-          continue;
-        }
-
-        await this.registrar.setRegistrantContact(record.domain, {
-          email: user.email,
-          ...(user.firstName ? { firstName: user.firstName } : {}),
-          ...(user.lastName ? { lastName: user.lastName } : {}),
-        });
-        await this.purchaseRequests.updateStatus({
-          requestId: record.id,
-          status: "completed",
-          registrantEmail: user.email,
-        });
-        processed++;
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.warn("[DomainMarketplace] reconcileRegistrantContacts: failed for domain", {
-          domain: record.domain,
-          error: errMsg,
-        });
-        // If the domain doesn't exist at the registrar (e.g. sandbox purchase), permanently
-        // skip it so it never shows up in reconcile again.
-        const isNotFound = err instanceof DomainServiceError
-          && err.code === DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND;
-        if (isNotFound) {
-          await this.purchaseRequests.updateStatus({
-            requestId: record.id,
-            status: "completed",
-            registrantEmail: "sandbox@not-found.invalid",
-          }).catch(() => {});
-          skipped++;
-        } else {
-          failures.push({ domain: record.domain, error: errMsg });
-          failed++;
-        }
-      }
-    }
-
-    return { processed, failed, skipped, failures };
+    // DEPRECATED / no-op. We no longer set the customer as the public ICANN
+    // registrant (reseller model: platform contact + WHOIS privacy, so there's
+    // no per-customer verification to reconcile). Kept so the existing cron route
+    // doesn't break; returns an empty result.
+    void params;
+    return { processed: 0, failed: 0, skipped: 0, failures: [] };
   }
 
   private async emitFailureEvents(params: {

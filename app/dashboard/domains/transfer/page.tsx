@@ -86,7 +86,7 @@ const journeySteps = [
   },
   {
     title: "Submit auth code",
-    description: "Your EPP code is sent securely to Name.com and cleared from our transfer record after submission.",
+    description: "Your EPP code is sent securely to the registry and cleared from our transfer record after submission.",
   },
   {
     title: "Approve by email",

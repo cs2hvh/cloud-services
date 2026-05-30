@@ -152,8 +152,8 @@ function toDnsErrorResponse(error: unknown, fallbackMessage: string): NextRespon
         {
           error: "CONTACT_VERIFICATION_HOLD",
           message:
-            "DNS changes are blocked: the domain's registrant contact email has not been verified. " +
-            "Check your registrant email inbox for a verification email from name.com and click the link to unblock DNS management.",
+            "DNS changes are temporarily on hold while the domain's registrant contact is verified. " +
+            "This usually clears automatically within a few minutes — please retry shortly, or contact support if it persists.",
         },
         { status: 400 }
       );
