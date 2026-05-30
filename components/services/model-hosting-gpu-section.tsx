@@ -45,7 +45,7 @@ const GPUS: Gpu[] = [
     rate: "$1.20 /hr",
     costSec: "$0.00033",
     bestFor: "27B–32B models with comfortable context",
-    models: ["llama-4-scout", "qwen-3-32b", "gemma-3-27b", "deepseek-v3"],
+    models: ["qwen-3-32b", "gemma-3-27b", "mixtral-8x7b", "command-r-35b"],
     accent: "#33adff",
     perf: 78,
   },
@@ -54,8 +54,8 @@ const GPUS: Gpu[] = [
     vram: "80 GB",
     rate: "$2.90 /hr",
     costSec: "$0.00081",
-    bestFor: "Frontier MoE and large dense, long context",
-    models: ["llama-4-maverick", "deepseek-v3-671b"],
+    bestFor: "70B-class dense and MoE, long context",
+    models: ["llama-3.3-70b", "qwen-3-32b", "mixtral-8x7b"],
     accent: "#a855f7",
     perf: 100,
   },
@@ -105,7 +105,7 @@ export default function ModelHostingGpuSection() {
           </div>
           <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
             Pick the GPU{" "}
-            <span className="text-[#8ecaff]">that fits the workload.</span>
+            <span className="text-[#0095FF]">that fits the workload.</span>
           </h2>
           <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
             Per-second metering. Burst up to your max, scale to zero when idle. No reservations, no minimum commits.
@@ -159,7 +159,7 @@ export default function ModelHostingGpuSection() {
                         className="font-mono text-[16px] font-semibold tracking-tight transition-colors duration-400"
                         style={{
                           color: isSelected
-                            ? "rgba(255,255,255,0.95)"
+                            ? "#0095FF"
                             : "rgba(255,255,255,0.70)",
                         }}
                       >
@@ -253,7 +253,7 @@ export default function ModelHostingGpuSection() {
                   />
                 </div>
                 <div>
-                  <p className="font-mono text-[16px] font-semibold tracking-tight text-white">
+                  <p className="font-mono text-[16px] font-semibold tracking-tight text-[#0095FF]">
                     {selected.sku}
                   </p>
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
