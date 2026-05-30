@@ -196,11 +196,18 @@ export default {
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runServingPodWatchdog(env, event));
+    const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
+    // Fine-tuning watchdog every 5 min: reaps orphaned FT jobs (stale
+    // heartbeat) and zombie GPU pods left on already-terminal jobs. Its
+    // thresholds are 30 min so per-minute is overkill, and its zombie-pod
+    // sweep makes RunPod API calls — every 5 min is plenty.
+    if (minuteOfHour % 5 === 0) {
+      ctx.waitUntil(runFinetuneWatchdog(env, event));
+    }
     // GC once per hour to keep noise out of logs + bound Supabase
     // RPC pressure. The query-time freshness filter keeps stale
     // rows invisible to callers between sweeps, so frequency is
     // purely about storage, not correctness.
-    const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
     if (minuteOfHour === 0) {
       ctx.waitUntil(runSemanticCacheGc(env, event));
     }
@@ -208,22 +215,52 @@ export default {
 };
 
 async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/serving-pod-watchdog",
+    "serving-pod watchdog"
+  );
+}
+
+async function runFinetuneWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/finetune-watchdog",
+    "finetune watchdog"
+  );
+}
+
+/**
+ * POST a cron-only internal sweep endpoint on the control plane with the
+ * shared X-Ahura-Internal-Token. Best-effort: logs failures (with a 401
+ * remediation hint) and only logs success when the sweep actually did
+ * something, to keep the per-minute cron out of the log stream.
+ *
+ * The token has two accepted env names. Operators were previously asked to set
+ * BATCH_PROCESSOR_TOKEN on Next.js + INTERNAL_CRON_TOKEN on the worker, then
+ * keep them in sync. That's a footgun (silent 401s = no sweeps) so we accept
+ * either — the docs recommend BATCH_PROCESSOR_TOKEN on both sides so the value
+ * can be set once and reused.
+ */
+async function runControlPlaneSweep(
+  env: Env,
+  event: ScheduledEvent,
+  path: string,
+  label: string
+): Promise<void> {
   if (!env.CONTROL_PLANE_URL) {
     console.error(
       JSON.stringify({
         level: "error",
         message: "scheduled: CONTROL_PLANE_URL not configured",
+        label,
         cron: event.cron,
       })
     );
     return;
   }
-  // The token has two accepted env names. Operators were previously asked
-  // to set BATCH_PROCESSOR_TOKEN on Next.js + INTERNAL_CRON_TOKEN on the
-  // worker, then keep them in sync. That's a footgun (silent 401s = no
-  // auto-stop) so we now ALSO accept BATCH_PROCESSOR_TOKEN here. Set
-  // either — the docs recommend BATCH_PROCESSOR_TOKEN on both sides so
-  // the value can be set once and reused.
   const token = env.INTERNAL_CRON_TOKEN ?? env.BATCH_PROCESSOR_TOKEN;
   if (!token) {
     console.error(
@@ -231,12 +268,13 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
         level: "error",
         message:
           "scheduled: no shared-cron secret set — wrangler secret put BATCH_PROCESSOR_TOKEN (same value as Next.js .env)",
+        label,
         cron: event.cron,
       })
     );
     return;
   }
-  const url = `${env.CONTROL_PLANE_URL.replace(/\/+$/, "")}/api/inference/internal/serving-pod-watchdog`;
+  const url = `${env.CONTROL_PLANE_URL.replace(/\/+$/, "")}${path}`;
   const startedAt = Date.now();
   try {
     const r = await fetch(url, {
@@ -260,7 +298,7 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
       console.error(
         JSON.stringify({
           level: "error",
-          message: `scheduled: watchdog returned ${r.status}${hint}`,
+          message: `scheduled: ${label} returned ${r.status}${hint}`,
           status: r.status,
           elapsedMs,
           cron: event.cron,
@@ -268,21 +306,21 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
       );
       return;
     }
-    const summary = (await r.json().catch(() => ({}))) as {
-      scanned?: number;
-      stopped?: number;
-      errors?: number;
-    };
-    // Only log when something happened — avoids 1440 zero-activity log
-    // lines per day. Errors always log.
-    if ((summary.scanned ?? 0) > 0 || (summary.errors ?? 0) > 0) {
+    const summary = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+    const num = (k: string) => Number(summary[k] ?? 0);
+    // Only log when something happened — avoids zero-activity log spam.
+    const didSomething =
+      num("scanned") > 0 ||
+      num("errors") > 0 ||
+      num("stopped") > 0 ||
+      num("reaped") > 0 ||
+      num("zombie_pods_terminated") > 0;
+    if (didSomething) {
       console.log(
         JSON.stringify({
           level: "info",
-          message: "scheduled: watchdog completed",
-          scanned: summary.scanned,
-          stopped: summary.stopped,
-          errors: summary.errors,
+          message: `scheduled: ${label} completed`,
+          ...summary,
           elapsedMs,
         })
       );
@@ -291,7 +329,7 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
     console.error(
       JSON.stringify({
         level: "error",
-        message: "scheduled: watchdog fetch failed",
+        message: `scheduled: ${label} fetch failed`,
         err: err instanceof Error ? err.message : String(err),
         cron: event.cron,
       })
