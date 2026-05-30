@@ -182,8 +182,8 @@ export function DomainDnsTab({
                           <tr key={`verify-${c.id}`} className="border-t border-white/[0.04] text-white/70">
                             <td className="px-3 py-2"><RecordTypeBadge type="TXT" /></td>
                             <td className="px-3 py-2 font-mono break-all">
-                              galaxyhvh-verify.{c.domain}
-                              <CopyBtn value={`galaxyhvh-verify.${c.domain}`} label="Host" />
+                              ahuracloud-verify.{c.domain}
+                              <CopyBtn value={`ahuracloud-verify.${c.domain}`} label="Host" />
                             </td>
                             <td className="px-3 py-2 font-mono break-all max-w-[200px]">
                               <span className="truncate block">{c.verificationToken}</span>

@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { APP_DOMAIN } from "@/config/domain";
+import { APP_DOMAIN, DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import {
   DOMAIN_ERROR_CODES,
   type DomainErrorCode,
@@ -177,7 +177,7 @@ export class DomainService {
             ? null
             : {
                 record_type: "TXT" as const,
-                record_name: `galaxyhvh-verify.${cleanDomain}`,
+                record_name: `${DOMAIN_VERIFY_PREFIX}.${cleanDomain}`,
                 record_value: verificationToken,
                 ttl: 300,
               },
@@ -245,7 +245,7 @@ export class DomainService {
       return domain;
     }
 
-    const recordName = `galaxyhvh-verify.${domain.domain}`;
+    const recordName = `${DOMAIN_VERIFY_PREFIX}.${domain.domain}`;
     const txtRecords = await this.deps.dns.listTxtRecords(recordName);
 
     const verified = txtRecords.some((record) => record.includes(domain.verification_token));

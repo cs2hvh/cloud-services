@@ -8,6 +8,7 @@
  * 4. Remove Domain (REMOVED) - Remove from Ingress, cleanup
  */
 import { createServiceClient } from "@/lib/supabase/server";
+import { DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import { randomBytes } from "crypto";
 import { Resolver } from "dns";
 
@@ -179,7 +180,7 @@ export class CustomDomainService {
       domain: domainWithStatus,
       verification_instructions: {
         record_type: 'TXT',
-        record_name: `galaxyhvh-verify.${cleanDomain}`,
+        record_name: `${DOMAIN_VERIFY_PREFIX}.${cleanDomain}`,
         record_value: verificationToken,
         ttl: 300, // 5 minutes recommended
       },
@@ -214,7 +215,7 @@ export class CustomDomainService {
     }
 
     // Perform DNS TXT lookup using public DNS
-    const txtRecordName = `galaxyhvh-verify.${domainRecord.domain}`;
+    const txtRecordName = `${DOMAIN_VERIFY_PREFIX}.${domainRecord.domain}`;
     let txtRecords: string[] = [];
 
     try {

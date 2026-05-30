@@ -52,7 +52,7 @@ export const DomainOperationSchema = z
 export const VerificationInstructionSchema = z
   .object({
     record_type: z.literal("TXT").openapi({ example: "TXT" }),
-    record_name: z.string().openapi({ example: "galaxyhvh-verify.api.example.com" }),
+    record_name: z.string().openapi({ example: "ahuracloud-verify.api.example.com" }),
     record_value: z.string().openapi({ example: "verify_7f23cbb6500c31f7" }),
     ttl: z.number().openapi({ example: 300 }),
   })
@@ -259,7 +259,7 @@ export const AddDomainResponseSchema = z
       verification_instructions: VerificationInstructionSchema.nullable().openapi({
         example: {
           record_type: "TXT",
-          record_name: "galaxyhvh-verify.api.example.com",
+          record_name: "ahuracloud-verify.api.example.com",
           record_value: "verify_7f23cbb6500c31f7",
           ttl: 300,
         },
