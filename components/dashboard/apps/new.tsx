@@ -14,7 +14,6 @@ import {
     ArrowRight,
     Check,
     ChevronLeft,
-    ChevronRight,
     Code,
     GitBranch,
     Loader2,
@@ -562,7 +561,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1360px] mx-auto">
+            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -578,21 +577,20 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Deploy{" "}
                     <span
-                        style={SERIF_STYLE}
-                        className="text-white/55 font-normal"
+                        style={{ ...SERIF_STYLE, color: ACCENT }}
+                        className="font-normal"
                     >
                         an application
                     </span>
-                    .
                 </h1>
                 <p
-                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                    className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
                 >
                     Connect a Git provider, pick a repository, and we&apos;ll
                     detect the framework and build it.
                 </p>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
                     {/* ─── LEFT: Sections ──────────────────────── */}
                     <div className="min-w-0">
                         {/* 01 Source */}
@@ -1005,7 +1003,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
                                     {/* Branch selector — shows after repo is picked */}
                                     {selectedRepoData && (
-                                        <div className="max-w-[520px]">
+                                        <div className="max-w-[680px]">
                                             <FieldLabel
                                                 hint={
                                                     loadingBranches ? "loading…" : "deploys from"
@@ -1597,7 +1595,7 @@ function Section({
                             {title}
                         </h2>
                         <p
-                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[680px]`}
                         >
                             {desc}
                         </p>

@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
           app_id: appId,
           app_name: app.name,
           build_number: null,
-          logs: "Jenkins job is being created. Build logs will appear shortly...",
+          logs: "Build is being prepared. Build logs will appear shortly...",
           has_more: false,
           next_start: 0,
           pending: true,

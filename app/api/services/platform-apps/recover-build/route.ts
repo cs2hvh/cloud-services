@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         recovered: false,
         still_building: true,
         status: null,
-        message: "Build is still running on Jenkins",
+        message: "Build is still running",
         build_number: buildNumber,
       });
     }
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.includes("not found")) {
       return NextResponse.json(
-        { error: "Failed to query Jenkins build state" },
+        { error: "Failed to query build state" },
         { status: 500 }
       );
     }
