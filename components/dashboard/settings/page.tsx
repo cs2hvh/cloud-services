@@ -106,7 +106,7 @@ const SettingsPage = () => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 max-w-[1280px] mx-auto">
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
                 {/* Hero */}
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Account{" "}
