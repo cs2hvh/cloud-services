@@ -300,10 +300,9 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
           <div className="max-w-2xl">
             <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Managed databases{" "}
-              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                 for production workloads
               </span>
-              .
             </h1>
             <p
               className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
@@ -376,6 +375,25 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
           />
         </section>
 
+        {/* ── Inventory (front and centre — your actual clusters) ─ */}
+        <div id="inventory" className="mb-16">
+          <SectionHead
+            eyebrow="Cluster inventory"
+            title="Your"
+            accent="clusters"
+            rightMeta={
+              clusters.length > 0
+                ? `${onlineCount} healthy · ${clusters.length} total`
+                : undefined
+            }
+          />
+          {sortedClusters.length > 0 ? (
+            <ClusterTable clusters={sortedClusters} />
+          ) : (
+            <EmptyState />
+          )}
+        </div>
+
         {/* ── Engine catalog ──────────────────────────── */}
         <SectionHead
           eyebrow="Choose your engine"
@@ -444,24 +462,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
           }
         `}</style>
 
-        {/* ── Inventory ───────────────────────────────── */}
-        <div id="inventory">
-          <SectionHead
-            eyebrow="Cluster inventory"
-            title="Your"
-            accent="clusters"
-            rightMeta={
-              clusters.length > 0
-                ? `${onlineCount} healthy · ${clusters.length} total`
-                : undefined
-            }
-          />
-          {sortedClusters.length > 0 ? (
-            <ClusterTable clusters={sortedClusters} />
-          ) : (
-            <EmptyState />
-          )}
-        </div>
       </div>
     </div>
   );
@@ -494,10 +494,9 @@ function SectionHead({
         </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             {accent}
           </span>
-          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
       <div className="flex items-center gap-4">
