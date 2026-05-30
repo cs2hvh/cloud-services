@@ -1,0 +1,83 @@
+# ahura-finetune-watchdog CronJob
+#
+# Backstop sweep for the fine-tuning pipeline. Hits
+# POST /api/inference/internal/finetune-watchdog every 5 minutes, which:
+#   1. reaps orphaned jobs (stuck running/preparing with a stale heartbeat),
+#   2. terminates zombie GPU pods still alive on already-terminal jobs (in case
+#      the completion webhook's teardown failed).
+#
+# The endpoint is idempotent + atomic, so overlapping runs are safe — we Forbid
+# concurrency anyway. It curls the control plane over its public URL, so this
+# works whether or not the Next.js app runs in-cluster.
+#
+# Deploy:
+#   envsubst < workers/ft-runner/k8s/watchdog-secret.yaml.template | kubectl apply -f -
+#   kubectl apply -f workers/ft-runner/k8s/watchdog-cronjob.yaml
+#
+# Verify:
+#   kubectl -n ahura get cronjob ahura-finetune-watchdog
+#   kubectl -n ahura get jobs -l app=ahura-finetune-watchdog
+#   kubectl -n ahura logs -l app=ahura-finetune-watchdog --tail=20
+#   # one-off run now:
+#   kubectl -n ahura create job --from=cronjob/ahura-finetune-watchdog ftwd-manual-1
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ahura-finetune-watchdog
+  namespace: ahura
+  labels:
+    app: ahura-finetune-watchdog
+    tier: backend
+spec:
+  schedule: "*/5 * * * *"
+  # Never overlap a sweep with the previous one; skip a tick if the last is
+  # still running rather than piling up.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      # Kill a stuck sweep so it can't block the next tick.
+      activeDeadlineSeconds: 120
+      # Auto-clean finished Jobs so they don't accumulate.
+      ttlSecondsAfterFinished: 900
+      template:
+        metadata:
+          labels:
+            app: ahura-finetune-watchdog
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 10
+          containers:
+            - name: curl
+              image: curlimages/curl:8.11.1
+              envFrom:
+                - secretRef:
+                    name: ahura-finetune-watchdog-secrets
+              command: ["/bin/sh", "-c"]
+              # -f: fail (non-zero exit) on HTTP >=400 so a broken sweep shows up
+              # as a failed Job. Strip any trailing slash on the base URL.
+              args:
+                - >
+                  curl -fsS -X POST
+                  -H "X-Ahura-Internal-Token: ${BATCH_PROCESSOR_TOKEN}"
+                  -H "Content-Type: application/json"
+                  --max-time 90
+                  "${CONTROL_PLANE_URL%/}/api/inference/internal/finetune-watchdog"
+              resources:
+                requests:
+                  cpu: "10m"
+                  memory: "32Mi"
+                limits:
+                  cpu: "100m"
+                  memory: "64Mi"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65534
+                runAsGroup: 65534
+                capabilities:
+                  drop: ["ALL"]

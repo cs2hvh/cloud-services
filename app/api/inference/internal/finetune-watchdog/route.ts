@@ -60,6 +60,19 @@ async function terminatePod(podId: string): Promise<void> {
   }
 }
 
+/** True if a pod still exists and isn't already shutting down. A 404 (pod
+ *  already gone) returns false. */
+async function podStillAlive(podId: string): Promise<boolean> {
+  try {
+    const resp = await RunPodClient.rest<{ desiredStatus?: string }>("GET", `/pods/${podId}`);
+    const ds = (resp?.desiredStatus ?? "").toUpperCase();
+    return ds === "RUNNING" || ds === "PROVISIONING" || ds === "CREATED" || ds === "STARTING";
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "NOT_FOUND") return false;
+    throw err;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const token = request.headers.get("x-ahura-internal-token");
   const expected = process.env.BATCH_PROCESSOR_TOKEN;
@@ -153,9 +166,60 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── Second sweep: zombie pods on already-terminal jobs ───────────────
+  // The completion webhook tears the pod down when training ends, but if that
+  // call ever fails the pod would bill forever — the first sweep above won't
+  // catch it because the job is no longer running/preparing. Catch stragglers:
+  // recently-terminal jobs that still reference a pod. We only DELETE a pod
+  // that's actually still alive (cheap GET first), so the common case — pod
+  // already gone — costs one GET and never logs noise. No DB write or charge:
+  // the job is already settled. Narrow window (terminal 2-30 min ago) bounds
+  // how long we keep re-checking a given pod.
+  let zombiePodsTerminated = 0;
+  const zombieFromIso = new Date(now - 30 * 60_000).toISOString();
+  const zombieToIso = new Date(now - 2 * 60_000).toISOString();
+  const { data: terminalRows, error: terminalErr } = await supabase
+    .schema("inference")
+    .from("finetunes")
+    .select("id, runpod_job_id")
+    .in("status", ["completed", "failed", "cancelled"])
+    .not("runpod_job_id", "is", null)
+    .gte("completed_at", zombieFromIso)
+    .lte("completed_at", zombieToIso)
+    .limit(50)
+    .returns<Array<{ id: string; runpod_job_id: string | null }>>();
+
+  if (terminalErr) {
+    console.error("[ft-watchdog] zombie-pod scan failed:", terminalErr);
+  } else {
+    for (const row of terminalRows ?? []) {
+      if (!row.runpod_job_id) continue;
+      try {
+        if (await podStillAlive(row.runpod_job_id)) {
+          await terminatePod(row.runpod_job_id);
+          zombiePodsTerminated++;
+          console.log(
+            JSON.stringify({
+              level: "warn",
+              message: "finetune.zombie_pod_reaped",
+              ftId: row.id,
+              podId: row.runpod_job_id,
+            })
+          );
+        }
+      } catch (err) {
+        errors++;
+        const msg = err instanceof Error ? err.message : String(err);
+        errDetails.push({ id: row.id, msg });
+        console.error(`[ft-watchdog] zombie-pod reap failed for ft ${row.id}:`, err);
+      }
+    }
+  }
+
   return NextResponse.json({
     scanned: rows?.length ?? 0,
     reaped,
+    zombie_pods_terminated: zombiePodsTerminated,
     errors,
     errors_detail: errDetails,
   });
