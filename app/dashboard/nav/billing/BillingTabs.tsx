@@ -288,10 +288,9 @@ export default function BillingTabs({
             {/* Hero */}
             <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                 Billing{" "}
-                <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                     & payments
                 </span>
-                .
             </h1>
             <p
                 className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
@@ -483,11 +482,21 @@ function BalanceTab({
                                 {formattedBalance.toFixed(2)}
                             </span>
                         </div>
-                        <p
-                            className={`${MONO} mt-3 text-[10.5px] text-white/40`}
-                        >
-                            Auto-deducted hourly for running services
-                        </p>
+                        {formattedBalance <= 0 ? (
+                            <p className={`${MONO} mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-red-300/90`}>
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" style={{ boxShadow: "0 0 6px #f87171" }} />
+                                Balance depleted — running services may be suspended. Top up to keep them online.
+                            </p>
+                        ) : formattedBalance <= 5 ? (
+                            <p className={`${MONO} mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-amber-300/85`}>
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" style={{ boxShadow: "0 0 6px #fbbf24" }} />
+                                Low balance — top up to avoid service interruption.
+                            </p>
+                        ) : (
+                            <p className={`${MONO} mt-3 text-[10.5px] text-white/40`}>
+                                Auto-deducted hourly for running services
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -976,7 +985,14 @@ type ServiceTypeFilter =
     | "objectspace"
     | "spectrum"
     | "platform_apps"
-    | "domain";
+    | "domain"
+    | "compute"
+    | "gpu_pod"
+    | "custom_image"
+    | "inference_finetune"
+    | "inference_serving"
+    | "inference_deployment"
+    | "inference_vector";
 
 const CREDIT_TRANSACTION_TYPES = new Set([
     "topup",
@@ -1149,12 +1165,19 @@ function TransactionsTab() {
                         }
                         options={[
                             { value: "", label: "All services" },
+                            { value: "compute", label: "Compute (VPS)" },
+                            { value: "gpu_pod", label: "GPU" },
                             { value: "kubernetes", label: "Kubernetes" },
                             { value: "database", label: "Database" },
                             { value: "objectspace", label: "Object Storage" },
-                            { value: "spectrum", label: "DDoS / Spectrum" },
+                            { value: "spectrum", label: "DDoS Protection" },
                             { value: "platform_apps", label: "Platform Apps" },
                             { value: "domain", label: "Domains" },
+                            { value: "custom_image", label: "Custom Images" },
+                            { value: "inference_finetune", label: "Fine-tuning" },
+                            { value: "inference_serving", label: "Managed Serving" },
+                            { value: "inference_deployment", label: "Deployments" },
+                            { value: "inference_vector", label: "Vector" },
                         ]}
                     />
                     <DateInput value={dateFrom} onChange={setDateFrom} />
