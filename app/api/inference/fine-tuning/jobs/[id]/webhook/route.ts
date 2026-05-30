@@ -232,17 +232,28 @@ export async function POST(
     typeof payload.final_loss === "number" &&
     payload.final_loss > baselineLoss * 1.1
   ) {
-    await supabase
+    // GPU time was consumed (training ran to completion before the gate), so
+    // charge for it — same exactly-once atomic-win pattern as the failure path.
+    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const { data: won } = await supabase
       .schema("inference")
       .from("finetunes")
       .update({
         status: "failed",
-        error_message: `Eval gate: final_loss ${payload.final_loss.toFixed(4)} > baseline ${baselineLoss.toFixed(4)} × 1.1. Adapter not registered (likely diverged).`,
+        error_message:
+          "Training ran, but the result did not improve on the base model, so it was not registered. Adjust your dataset or hyperparameters and re-run.",
         training_seconds: payload.elapsed_seconds,
+        cost_cents: costCents,
         completed_at: new Date().toISOString(),
       })
-      .eq("id", id);
-    return NextResponse.json({ ok: true, gated: true });
+      .eq("id", id)
+      .in("status", ["queued", "preparing", "running"])
+      .select("id")
+      .maybeSingle();
+    if (won) {
+      await chargeFinetuneUsage(supabase, existing.org_id, id, existing.name, costCents, payload.elapsed_seconds);
+    }
+    return NextResponse.json({ ok: true, gated: true, cost_cents: costCents });
   }
 
   // Smoke test: any sample_outputs at all + non-empty assistant text
@@ -251,17 +262,26 @@ export async function POST(
     samples.length > 0 &&
     samples.some((s) => typeof s.output === "string" && s.output.trim().length > 0);
   if (samples.length > 0 && !hasUsableSample) {
-    await supabase
+    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const { data: won } = await supabase
       .schema("inference")
       .from("finetunes")
       .update({
         status: "failed",
-        error_message: "Eval gate: all sample generations were empty or whitespace.",
+        error_message:
+          "Training ran, but the result produced empty outputs and was not registered. Check your dataset formatting and re-run.",
         training_seconds: payload.elapsed_seconds,
+        cost_cents: costCents,
         completed_at: new Date().toISOString(),
       })
-      .eq("id", id);
-    return NextResponse.json({ ok: true, gated: true });
+      .eq("id", id)
+      .in("status", ["queued", "preparing", "running"])
+      .select("id")
+      .maybeSingle();
+    if (won) {
+      await chargeFinetuneUsage(supabase, existing.org_id, id, existing.name, costCents, payload.elapsed_seconds);
+    }
+    return NextResponse.json({ ok: true, gated: true, cost_cents: costCents });
   }
 
   // ── Persist completion ────────────────────────────────────────────

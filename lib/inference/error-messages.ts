@@ -26,12 +26,30 @@ export function customerSafeErrorMessage(raw: string | null | undefined): string
   if (/pod\s+(exited|stopped|terminated|failed)/i.test(raw)) {
     return "Training stopped unexpectedly before completing. Re-run the job; if it fails again, try a different GPU size.";
   }
+  // Gated base model — checked before the generic-traceback catch-all because
+  // the upstream 403 arrives wrapped in a Python traceback ("OSError: ...gated
+  // repo...") that would otherwise be swallowed into a vaguer message.
+  if (/gated repo|gated repository|is restricted|not in the authorized list|do not have (access|permission)/i.test(raw)) {
+    return "This base model needs access approval before it can be fine-tuned. Try a different base, or contact support to enable it.";
+  }
+  // Out-of-memory — the base + method didn't fit the chosen GPU.
+  if (/out of memory|cuda out of memory|outofmemory/i.test(raw)) {
+    return "The model was too large for the selected GPU. Re-run on a larger GPU, use qLoRA, or pick a smaller base model.";
+  }
+  // Any raw Python traceback / stderr dump — never show internals or file paths.
+  if (/traceback \(most recent call last\)|file "\/|\b(os|io|runtime|import|value|key|type)error\b|modulenotfounderror|assertionerror/i.test(raw)) {
+    return "Training failed while running. Check your dataset format and hyperparameters, then re-run; contact support if it keeps failing.";
+  }
 
   return raw
     .replace(/\bRunPod\b/gi, "GPU compute")
     .replace(/\bUpstash\b/gi, "cache")
     .replace(/\bCloudflare\b/gi, "edge")
     .replace(/\bOpenRouter\b/gi, "model gateway")
+    .replace(/hugging\s?face(\.co)?/gi, "model hub")
+    .replace(/\baxolotl\b/gi, "training runtime")
+    .replace(/ghcr\.io\/\S+/gi, "training image")
+    .replace(/(\/[\w.-]+){2,}\/?/g, " ") // absolute unix paths (e.g. /workspace/cache/...)
     .replace(/\bkubectl\b/gi, "operator")
     .replace(/\bvLLM\b/gi, "serving runtime")
     .replace(/\bLKE\b/g, "cluster")

@@ -19,6 +19,12 @@ import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDataset } from "@/lib/inference/finetune-validate";
 import { enqueueFinetuneJob } from "@/lib/inference/finetune-queue";
 import { internalError, tooManyRequests } from "@/lib/inference/api-errors";
+import {
+  ftBaseGpuFit,
+  ftBaseIsGated,
+  resolveHuggingFaceId,
+} from "@/lib/inference/ft-base-models";
+import { checkHuggingFaceAccess } from "@/lib/inference/hf-access";
 
 const createSchema = z.object({
   name: z
@@ -194,27 +200,61 @@ export async function POST(request: NextRequest) {
   // gpu_sku is the verbatim RunPod gpuTypeId; it must match an active row in
   // the live GPU catalog (the same source the deploy picker uses). Legacy
   // short SKUs from older clients are still accepted.
-  const LEGACY_GPU_SKUS = new Set([
-    "A100-80GB",
-    "A100-40GB",
-    "H100-80GB",
-    "L40S",
-    "A40",
-    "RTX-6000-Ada",
-  ]);
-  if (!LEGACY_GPU_SKUS.has(parsed.data.gpu_sku)) {
+  const LEGACY_GPU_MEMORY_GB: Record<string, number> = {
+    "A100-80GB": 80,
+    "A100-40GB": 40,
+    "H100-80GB": 80,
+    "L40S": 48,
+    "A40": 48,
+    "RTX-6000-Ada": 48,
+  };
+  let gpuMemoryGb: number | null = LEGACY_GPU_MEMORY_GB[parsed.data.gpu_sku] ?? null;
+  if (gpuMemoryGb === null) {
     const { data: gpuRow, error: gpuErr } = await supabase
       .from("gpu_catalog")
-      .select("runpod_gpu_id")
+      .select("runpod_gpu_id, memory_gb")
       .eq("runpod_gpu_id", parsed.data.gpu_sku)
       .eq("is_active", true)
-      .maybeSingle();
+      .maybeSingle<{ runpod_gpu_id: string; memory_gb: number }>();
     if (gpuErr) {
       return internalError("Could not validate GPU selection", gpuErr, "ft_gpu_validate_failed");
     }
     if (!gpuRow) {
       return NextResponse.json(
         { error: "That GPU is not available. Pick one from the list." },
+        { status: 400 }
+      );
+    }
+    gpuMemoryGb = gpuRow.memory_gb;
+  }
+
+  // ── GPU-fit guard ─────────────────────────────────────────────────
+  // Block model/GPU combos that can't physically train before a pod is ever
+  // provisioned — otherwise the job boots, OOMs (or can't load the weights)
+  // several minutes into a paid GPU and fails with a cryptic error.
+  const fit = ftBaseGpuFit(parsed.data.base_model_id, gpuMemoryGb);
+  if (!fit.ok) {
+    const msg =
+      fit.reason === "too-large"
+        ? `${parsed.data.base_model_id} is too large to fine-tune on a single GPU right now. Pick a smaller base model.`
+        : `This base model needs a GPU with at least ${fit.minGpuGb} GB of memory. Pick a larger GPU.`;
+    return NextResponse.json({ error: msg, code: "ft_gpu_unfit" }, { status: 400 });
+  }
+
+  // ── Gated-access guard ────────────────────────────────────────────
+  // Gated bases (Meta / Google) 403 deep inside the pod unless the platform's
+  // HF account is approved for the exact repo. Verify up front so we never burn
+  // GPU time on a download we can't complete. "unknown" (HF unreachable) does
+  // NOT block — the pod is the final gate.
+  if (ftBaseIsGated(parsed.data.base_model_id)) {
+    const access = await checkHuggingFaceAccess(resolveHuggingFaceId(parsed.data.base_model_id));
+    if (access === "denied" || access === "no-token") {
+      return NextResponse.json(
+        {
+          error:
+            "This base model isn't available for fine-tuning yet — it needs access approval. Try a different base, or contact support to enable it.",
+          code: "ft_base_access_pending",
+        },
         { status: 400 }
       );
     }

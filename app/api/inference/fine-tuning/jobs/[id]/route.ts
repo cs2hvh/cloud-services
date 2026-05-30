@@ -8,9 +8,23 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { RunPodClient } from "@/lib/services/runpod/client";
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
+}
+
+/** Tear down a cancelled job's GPU pod from the control plane. Best-effort +
+ *  logged — the ft-runner monitor + watchdog are backstops, but doing it here
+ *  means teardown doesn't depend on the worker monitor being alive. */
+async function terminateFinetunePod(podId: string, jobId: string): Promise<void> {
+  try {
+    await RunPodClient.rest("DELETE", `/pods/${podId}`);
+    console.log(`[FT cancel] terminated pod ${podId} for job ${jobId}`);
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "NOT_FOUND") return;
+    console.error(`[FT cancel] FAILED to terminate pod ${podId} for job ${jobId}:`, err);
+  }
 }
 
 export async function GET(
@@ -107,9 +121,11 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to cancel job" }, { status: 500 });
   }
 
-  // TODO (Phase 5.B): signal the BullMQ runner to terminate the RunPod pod
-  // if one was already provisioned. For now the runner is responsible for
-  // re-checking the DB status before each long-running step.
+  // Tear the GPU pod down now from the control plane. The ft-runner monitor
+  // also reacts to status='cancelled', but doing it here means a cancelled job
+  // stops billing immediately even if the worker monitor was orphaned (e.g. by
+  // a rollout). Fire-and-forget; the watchdog is the final backstop.
+  if (existing.pod_id) void terminateFinetunePod(existing.pod_id, id);
 
   const ctx = auditContextFrom(request);
   void recordAudit({
