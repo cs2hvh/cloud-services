@@ -44,7 +44,6 @@ import {
     HelpIcon,
     K8sIcon,
     KeyIcon,
-    LockIcon,
     NetworkIcon,
     OverviewIcon,
     PlusIcon,
@@ -77,7 +76,6 @@ const ArrowRightLeft = CastIcon(TransferIcon);
 const Network = CastIcon(NetworkIcon);
 const Shield = CastIcon(ShieldIcon);
 const ShieldCheck = CastIcon(ShieldCheckIcon);
-const Lock = CastIcon(LockIcon);
 const Settings = CastIcon(SettingsIcon);
 const Users = CastIcon(UsersIcon);
 const HelpCircle = CastIcon(HelpIcon);
@@ -443,7 +441,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         { label: "Kubernetes", href: "/dashboard/services/kubernetes", icon: KubernetesIcon, matchPrefix: true },
         { label: "Object Storage", href: "/dashboard/services/object-storage", icon: Archive, matchPrefix: true },
         { label: "DDoS Protection", href: "/dashboard/services/network-ddos", icon: Shield, matchPrefix: true },
-        { label: "Firewall", href: "/dashboard/services/firewall", icon: Lock, matchPrefix: true },
+        // Firewall hidden for now — re-add when the service ships.
     ];
 
     const adminGroup: NavGroup = {
