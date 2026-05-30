@@ -411,6 +411,13 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             // the inference section, not part of any subgroup.
             { label: "Overview", href: "/dashboard/services/inference", icon: LayoutDashboard },
 
+            // ─── Workloads: async / long-running jobs ─────────
+            { kind: "section", label: "Workloads" },
+            { label: "Fine-Tuning", href: "/dashboard/services/inference/fine-tuning", icon: GpuCloudIcon, matchPrefix: true },
+            { label: "Deployments", href: "/dashboard/services/inference/deployments", icon: AppDeployLucide, matchPrefix: true },
+            { label: "Batches", href: "/dashboard/services/inference/batches", icon: FileText, matchPrefix: true },
+            { label: "Vectors", href: "/dashboard/services/inference/vectors", icon: Database, matchPrefix: true },
+
             // ─── Build: things you USE to make calls ──────────
             { kind: "section", label: "Build" },
             { label: "Models", href: "/dashboard/services/inference/models", icon: BookOpen, matchPrefix: true },
@@ -418,13 +425,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Presets", href: "/dashboard/services/inference/presets", icon: Rocket, matchPrefix: true },
             { label: "API Keys", href: "/dashboard/services/inference/api-keys", icon: Key, matchPrefix: true },
             { label: "BYOK Keys", href: "/dashboard/services/inference/byok-keys", icon: Key, matchPrefix: true },
-
-            // ─── Workloads: async / long-running jobs ─────────
-            { kind: "section", label: "Workloads" },
-            { label: "Fine-Tuning", href: "/dashboard/services/inference/fine-tuning", icon: GpuCloudIcon, matchPrefix: true },
-            { label: "Deployments", href: "/dashboard/services/inference/deployments", icon: AppDeployLucide, matchPrefix: true },
-            { label: "Batches", href: "/dashboard/services/inference/batches", icon: FileText, matchPrefix: true },
-            { label: "Vectors", href: "/dashboard/services/inference/vectors", icon: Database, matchPrefix: true },
 
             // ─── Manage: observe + configure + org admin ──────
             { kind: "section", label: "Manage" },
