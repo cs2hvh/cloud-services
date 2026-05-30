@@ -246,7 +246,7 @@ function SingleCluster({
   const steps = useMemo(
     () =>
       [
-        { key: "createDropletStatus", label: "1. Create droplets" },
+        { key: "createDropletStatus", label: "1. Provision nodes" },
         { key: "createStatus", label: "2. Create cluster" },
         { key: "connectStatus", label: "3. Connect cluster" },
         { key: "verifyStatus", label: "4. Verify cluster" },
@@ -347,7 +347,7 @@ function SingleCluster({
       }
 
       if (!createDropletRes.ok) {
-        throw new Error("Failed to create droplets.");
+        throw new Error("Failed to create nodes.");
       }
 
       const createDropletData = await createDropletRes.json();
@@ -398,7 +398,7 @@ function SingleCluster({
 
       while (counter < actions.length) {
         if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
-          throw new Error("Droplet creation timed out after 10 minutes.");
+          throw new Error("Node creation timed out after 10 minutes.");
         }
 
         const checkStatusRes = await fetch(
@@ -482,7 +482,7 @@ function SingleCluster({
         throw new Error("Failed to start Kubernetes cluster provisioning.");
       }
 
-      toast.success("Droplets created. Cluster provisioning started.");
+      toast.success("Nodes created. Cluster provisioning started.");
       await pollOnce();
     } catch (error) {
       console.error("[startDropletCreation] Error:", error);

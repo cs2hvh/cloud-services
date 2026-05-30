@@ -239,7 +239,7 @@ const NewClusterForm = ({
         />
       </div>
 
-      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
         {/* Back link */}
         <Link
           href="/dashboard/services/kubernetes"
@@ -251,16 +251,16 @@ const NewClusterForm = ({
         {/* Title */}
         <h1 className="text-[44px] sm:text-[52px] leading-[1] tracking-[-0.025em] text-white font-semibold">
           Provision{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             a cluster
           </span>
         </h1>
-        <p className={`${MONO} mt-3 max-w-xl text-[12px] text-white/45 leading-relaxed`}>
+        <p className={`${MONO} mt-3 max-w-2xl text-[12px] text-white/45 leading-relaxed`}>
           Managed control plane · automatic upgrades · kubectl-ready in ~4 minutes
         </p>
 
         {/* Body */}
-        <div className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+        <div className="mt-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-6">
           {/* Left: sections */}
           <div className="space-y-4">
             {/* 01 — Admin: user (only when admin role) */}

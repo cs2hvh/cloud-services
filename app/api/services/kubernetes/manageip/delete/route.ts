@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (droplets.status===204){
          return NextResponse.json(
       {
-        message:'droplet deleted success'
+        message:'Node deleted successfully'
       },
       { status: 200 }
     );
@@ -51,7 +51,7 @@ return NextResponse.json({ message: "there is some internal error. please try la
     if (err instanceof Error) {
       console.error("[ManageIP Delete] Error:", err.message);
       return NextResponse.json(
-        { error: "Failed to delete droplet" },
+        { error: "Failed to delete node" },
         { status: 400 }
       );
     } else {
