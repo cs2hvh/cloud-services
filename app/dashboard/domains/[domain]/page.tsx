@@ -224,7 +224,7 @@ export default function DomainDetailPage() {
       </div>
 
       <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
-        <div className="mx-auto max-w-[1280px]">
+        <div className="mx-auto max-w-[1560px]">
 
           {/* Breadcrumb */}
           <nav className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-5`}>

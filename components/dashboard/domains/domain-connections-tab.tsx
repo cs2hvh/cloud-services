@@ -217,6 +217,15 @@ export function DomainConnectionsTab({
     }
   }, [loading, connections.length]);
 
+  // Tailor the setup guide to THIS domain (real values, not <domain>).
+  const guideLabels = domainName.split('.');
+  const guideIsApex = guideLabels.length <= 2;
+  const guideSubLabel = guideIsApex ? '@' : guideLabels[0];
+  const guideVerifyCode = `Type: TXT\nHost: galaxyhvh-verify.${domainName}\nValue: (shown after connecting)`;
+  const guideRouteCode = guideIsApex
+    ? `Type: A\nHost: @  (${domainName})\nValue: 139.59.1.6`
+    : `Type: CNAME\nHost: ${guideSubLabel}  (${domainName})\nValue: app.galaxyhvh.com`;
+
   return (
     <div className="space-y-5">
       {/* ── Setup guide (collapsible) ── */}
@@ -239,15 +248,17 @@ export function DomainConnectionsTab({
                 color: 'text-cyan-300',
                 bg: 'bg-cyan-500/15 border-cyan-500/20',
                 body: 'Connect a domain to an app below, then add a TXT record at your DNS provider and click Verify.',
-                code: 'Type: TXT\nHost: galaxyhvh-verify.<domain>\nValue: (shown after connecting)',
+                code: guideVerifyCode,
               },
               {
                 num: '2',
                 title: 'Activate',
                 color: 'text-cyan-300',
                 bg: 'bg-cyan-500/15 border-cyan-500/20',
-                body: 'Once verified, click Activate. Add a CNAME (subdomain) or A record (apex) to route traffic.',
-                code: 'Subdomain: CNAME → app.galaxyhvh.com\nRoot (@): A → 139.59.1.6',
+                body: guideIsApex
+                  ? 'Once verified, click Activate, then add this A record at your DNS provider to route traffic.'
+                  : 'Once verified, click Activate, then add this CNAME record at your DNS provider to route traffic.',
+                code: guideRouteCode,
               },
               {
                 num: '3',
