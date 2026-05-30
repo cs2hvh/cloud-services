@@ -337,7 +337,7 @@ const SpectrumAppCreate = ({
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 max-w-[1560px] mx-auto">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -357,21 +357,20 @@ const SpectrumAppCreate = ({
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Protect{" "}
                     <span
-                        style={SERIF_STYLE}
-                        className="text-white/55 font-normal"
+                        style={{ ...SERIF_STYLE, color: ACCENT }}
+                        className="font-normal"
                     >
                         an application
                     </span>
-                    .
                 </h1>
                 <p
-                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                    className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
                 >
-                    Spectrum routes Layer-4 traffic through the Cloudflare
-                    anycast network. Configure the listener and origin below.
+                    Route Layer-4 traffic through a global anycast network with
+                    always-on DDoS mitigation. Configure the listener and origin below.
                 </p>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
                     {/* ─── LEFT: Sections ──────────────────────── */}
                     <div className="min-w-0">
                         {/* Admin-only: 00 Owner */}
@@ -585,7 +584,7 @@ const SpectrumAppCreate = ({
                                       : "Required"
                             }
                         >
-                            <div className="max-w-[520px]">
+                            <div className="max-w-[680px]">
                                 <FieldLabel hint="alphanumeric only">
                                     Domain name
                                 </FieldLabel>
@@ -824,7 +823,7 @@ const SpectrumAppCreate = ({
                                 selectedProject?.name ?? "Required"
                             }
                         >
-                            <div className="max-w-[520px]">
+                            <div className="max-w-[680px]">
                                 <FieldLabel hint="required">
                                     Project
                                 </FieldLabel>
@@ -1179,7 +1178,7 @@ function Section({
                             {title}
                         </h2>
                         <p
-                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[680px]`}
                         >
                             {desc}
                         </p>

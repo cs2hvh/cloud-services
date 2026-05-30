@@ -149,8 +149,8 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
                       Routing guidance
                     </div>
                     <div className="mt-3 space-y-3 text-xs leading-5 text-white/46">
-                      <p>Point this to the service that should receive production traffic from Spectrum.</p>
-                      <p>For hostnames, ensure DNS resolves consistently and accepts connections from Cloudflare edge IPs.</p>
+                      <p>Point this to the service that should receive production traffic from the edge network.</p>
+                      <p>For hostnames, ensure DNS resolves consistently and accepts connections from our edge IPs.</p>
                       <p>Keep the origin port aligned with the application protocol exposed at the edge.</p>
                     </div>
                   </div>

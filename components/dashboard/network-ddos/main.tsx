@@ -114,10 +114,9 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
           <div className="max-w-2xl">
             <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Layer-4 DDoS{" "}
-              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                 protection for critical traffic
               </span>
-              .
             </h1>
             <p
               className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
@@ -189,6 +188,21 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
           />
         </section>
 
+        {/* Inventory (front and centre) */}
+        <div id="inventory" className="mb-16">
+          <SectionHead
+            eyebrow="Protection inventory"
+            title="Your"
+            accent="applications"
+            rightMeta={
+              stats.totalApplications > 0
+                ? `${stats.activeApps} active · ${stats.totalApplications} total`
+                : undefined
+            }
+          />
+          <SpectrumAppsTable spectrumApps={spectrumApps} userId={userId} />
+        </div>
+
         {/* Platform features */}
         <SectionHead
           eyebrow="Why managed DDoS"
@@ -209,20 +223,6 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
           }
         `}</style>
 
-        {/* Inventory */}
-        <div id="inventory">
-          <SectionHead
-            eyebrow="Protection inventory"
-            title="Your"
-            accent="applications"
-            rightMeta={
-              stats.totalApplications > 0
-                ? `${stats.activeApps} active · ${stats.totalApplications} total`
-                : undefined
-            }
-          />
-          <SpectrumAppsTable spectrumApps={spectrumApps} userId={userId} />
-        </div>
       </div>
     </div>
   );
@@ -255,10 +255,9 @@ function SectionHead({
         </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             {accent}
           </span>
-          <span className="text-white/55 font-normal">.</span>
         </h2>
       </div>
       <div className="flex items-center gap-4">
