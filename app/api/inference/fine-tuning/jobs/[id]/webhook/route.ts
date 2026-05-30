@@ -18,8 +18,29 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { emitInferenceEvent } from "@/lib/inference/notifications";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 import { chargeFinetuneUsage } from "@/lib/inference/finetune-billing";
+import { RunPodClient } from "@/lib/services/runpod/client";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
+
+/**
+ * Tear down a finished training pod. The webhook only fires once training is
+ * over (completed or failed), so the GPU pod must die regardless of outcome.
+ * Best-effort + logged: the ft-runner monitor and the finetune-watchdog are
+ * backstops, but doing it here — from the always-on control plane — means
+ * teardown never depends on the worker monitor still being alive (e.g. after a
+ * worker rollout), which would otherwise leave the pod billing indefinitely.
+ */
+async function terminateFinetunePod(podId: string, jobId: string): Promise<void> {
+  try {
+    await RunPodClient.rest("DELETE", `/pods/${podId}`);
+    console.log(`[FT webhook] terminated pod ${podId} for job ${jobId}`);
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "NOT_FOUND") {
+      return; // already gone — success
+    }
+    console.error(`[FT webhook] FAILED to terminate pod ${podId} for job ${jobId}:`, err);
+  }
+}
 
 interface WebhookPayload {
   job_id: string;
@@ -104,7 +125,7 @@ export async function POST(
   const { data: existing } = await supabase
     .schema("inference")
     .from("finetunes")
-    .select("id, status, org_id, base_model_id, name, hyperparams, output_model_id, hourly_cost_cents")
+    .select("id, status, org_id, base_model_id, name, hyperparams, output_model_id, hourly_cost_cents, runpod_job_id")
     .eq("id", id)
     .maybeSingle<{
       id: string;
@@ -115,18 +136,27 @@ export async function POST(
       hyperparams: Record<string, unknown>;
       output_model_id: string | null;
       hourly_cost_cents: number | null;
+      runpod_job_id: string | null;
     }>();
 
   if (!existing) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
   if (existing.status === "completed" || existing.status === "failed") {
+    // Already terminal — a retry. The first call already tore the pod down,
+    // but re-issue it cheaply in case that earlier teardown failed.
+    if (existing.runpod_job_id) void terminateFinetunePod(existing.runpod_job_id, id);
     return NextResponse.json({
       ok: true,
       idempotent: true,
       already_status: existing.status,
     });
   }
+
+  // Training is over (this webhook only fires on a terminal outcome) — tear the
+  // GPU pod down now, from the always-on control plane. Fire-and-forget so it
+  // never delays the DB transitions below; the watchdog is the backstop.
+  if (existing.runpod_job_id) void terminateFinetunePod(existing.runpod_job_id, id);
 
   // ── Failure path ──────────────────────────────────────────────────
   // Cost still applies to failed runs — RunPod billed us for the pod-up

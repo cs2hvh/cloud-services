@@ -237,9 +237,12 @@ async function monitorUntilDone(
     }
     if (cur.status === "completed" || cur.status === "failed") {
       log.info({ finalStatus: cur.status }, "webhook already marked terminal — done");
-      // Pod is responsible for self-shutdown after webhook POST; we still
-      // GC-terminate as a belt-and-braces against zombie pods.
-      await runpod.terminatePod(podId).catch(() => undefined);
+      // The completion webhook now tears the pod down from the control plane;
+      // this is a belt-and-braces GC in case that call failed. Log failures so
+      // a zombie pod that keeps billing is visible instead of silently swallowed.
+      await runpod
+        .terminatePod(podId)
+        .catch((err) => log.warn({ err: errStr(err), podId }, "GC terminate failed — pod may still be billing"));
       return;
     }
 
