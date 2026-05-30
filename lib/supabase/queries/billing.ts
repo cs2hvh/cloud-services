@@ -123,6 +123,7 @@ type BillableServiceType =
   | "gpu_pod"
   | "inference_finetune"
   | "inference_serving"
+  | "inference_deployment"
   | "inference_vector"
   | "compute"
   | "custom_image";

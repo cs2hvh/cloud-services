@@ -203,6 +203,8 @@ export default {
     // sweep makes RunPod API calls — every 5 min is plenty.
     if (minuteOfHour % 5 === 0) {
       ctx.waitUntil(runFinetuneWatchdog(env, event));
+      // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
+      ctx.waitUntil(runDeploymentMeter(env, event));
     }
     // GC once per hour to keep noise out of logs + bound Supabase
     // RPC pressure. The query-time freshness filter keeps stale
@@ -229,6 +231,15 @@ async function runFinetuneWatchdog(env: Env, event: ScheduledEvent): Promise<voi
     event,
     "/api/inference/internal/finetune-watchdog",
     "finetune watchdog"
+  );
+}
+
+async function runDeploymentMeter(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/deployment-meter",
+    "deployment meter"
   );
 }
 
@@ -314,7 +325,8 @@ async function runControlPlaneSweep(
       num("errors") > 0 ||
       num("stopped") > 0 ||
       num("reaped") > 0 ||
-      num("zombie_pods_terminated") > 0;
+      num("zombie_pods_terminated") > 0 ||
+      num("charged") > 0;
     if (didSomething) {
       console.log(
         JSON.stringify({

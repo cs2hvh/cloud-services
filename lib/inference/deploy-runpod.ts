@@ -167,6 +167,45 @@ export async function getServerlessEndpoint(endpointId: string): Promise<Serverl
   }
 }
 
+// ── Live worker count (for metering) ────────────────────────────────
+
+/**
+ * Count the workers RunPod currently has up for a serverless endpoint — the
+ * workers we're billed for. Read from the v2 health endpoint (the REST
+ * /endpoints/{id} only returns config, not live counts).
+ *
+ * Counts idle + ready + running + throttled. Deliberately EXCLUDES
+ * initializing + unhealthy so a transient state can't over-bill the customer.
+ *
+ * Returns null on any failure (no key, network, non-200, bad body). Callers
+ * MUST treat null as "unknown" and bill nothing — never assume a count.
+ */
+export async function getServerlessWorkerCount(endpointId: string): Promise<number | null> {
+  const key = process.env.RUNPOD_API_KEY;
+  if (!key) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const resp = await fetch(`https://api.runpod.ai/v2/${endpointId}/health`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    });
+    if (!resp.ok) return null;
+    const body = (await resp.json()) as { workers?: Record<string, number> };
+    const w = body?.workers ?? {};
+    const up =
+      (Number(w.idle) || 0) +
+      (Number(w.ready) || 0) +
+      (Number(w.running) || 0) +
+      (Number(w.throttled) || 0);
+    return Number.isFinite(up) ? up : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Update (scale) ──────────────────────────────────────────────────
 
 export async function scaleServerlessEndpoint(
