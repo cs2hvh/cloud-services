@@ -78,8 +78,8 @@ export default function DomainMarketplacePage() {
         />
       </div>
 
-      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
-        <div className="mx-auto max-w-[1320px]">
+      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
+        <div className="mx-auto max-w-[1600px]">
           {/* ── Hero ──────────────────────────────────────── */}
           <header className="relative mb-10 lg:mb-12">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
@@ -92,18 +92,9 @@ export default function DomainMarketplacePage() {
                 </p>
                 <h1 className="text-[40px] font-semibold leading-[1.04] tracking-[-0.03em] text-white sm:text-[52px] lg:text-[60px]">
                   Find your perfect{' '}
-                  <span
-                    style={{
-                      ...SERIF_STYLE,
-                      background: `linear-gradient(135deg, ${ACCENT}, #82adfb)`,
-                      WebkitBackgroundClip: 'text',
-                      backgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                    }}
-                  >
+                  <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                     domain
                   </span>
-                  .
                 </h1>
               </div>
               <p className="max-w-[460px] text-[14.5px] leading-[1.6] text-white/55 lg:pb-3">
