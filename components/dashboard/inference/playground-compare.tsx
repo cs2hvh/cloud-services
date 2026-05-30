@@ -476,7 +476,7 @@ export const PlaygroundCompare = forwardRef<
                   runs don't wipe previous responses. Mirrors single-mode
                   chat behavior; each pane is an independent thread bound
                   to its model. */}
-              <div className="flex-1 min-h-[260px] max-h-[520px] overflow-y-auto px-2">
+              <div className="custom-scrollbar flex-1 min-h-[260px] max-h-[520px] overflow-y-auto px-2">
                 {pane.turns.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-center py-8">
                     <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/30`}>
@@ -534,7 +534,7 @@ export const PlaygroundCompare = forwardRef<
               />
             </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto px-2 pb-3">
+          <div className="custom-scrollbar max-h-[420px] overflow-y-auto px-2 pb-3">
             {filteredModels.map((m) => {
               const inUse = panes.some((p) => p.modelId === m.model_id && p.id !== pickerForPane);
               return (

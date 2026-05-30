@@ -888,7 +888,7 @@ ${streamOn
                 </div>
                 <div
                   ref={conversationRef}
-                  className="px-4 h-[520px] overflow-y-auto"
+                  className="custom-scrollbar px-4 h-[520px] overflow-y-auto"
                 >
                   {turns.length === 0 ? (
                     <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto">
@@ -1058,7 +1058,7 @@ ${streamOn
             </button>
           </div>
           <pre
-            className={`${MONO} px-4 py-4 text-[11.5px] text-white/85 leading-relaxed overflow-x-auto`}
+            className={`${MONO} custom-scrollbar px-4 py-4 text-[11.5px] text-white/85 leading-relaxed overflow-x-auto`}
             style={{ background: "rgba(0,0,0,0.25)" }}
           >
             {codeSnippet}
@@ -1089,7 +1089,7 @@ ${streamOn
               />
             </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto px-2 pb-3">
+          <div className="custom-scrollbar max-h-[420px] overflow-y-auto px-2 pb-3">
             {filteredModels.map((m) => (
               <button
                 key={m.model_id}
