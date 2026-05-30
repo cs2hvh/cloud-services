@@ -106,17 +106,16 @@ const SettingsPage = () => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 max-w-[1280px] mx-auto">
                 {/* Hero */}
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Account{" "}
                     <span
-                        style={SERIF_STYLE}
-                        className="text-white/55 font-normal"
+                        style={{ ...SERIF_STYLE, color: ACCENT }}
+                        className="font-normal"
                     >
                         settings
                     </span>
-                    .
                 </h1>
                 <p
                     className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
