@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Globe, RefreshCw } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+// ─── Design tokens ─────────────────────────────────────────────────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 import { DomainOverviewTab } from '@/components/dashboard/domains/domain-overview-tab';
 import { DomainConnectionsTab } from '@/components/dashboard/domains/domain-connections-tab';
 import { DomainDnsTab } from '@/components/dashboard/domains/domain-dns-tab';
@@ -65,20 +68,25 @@ type OverallStatus =
   | 'Purchased'
   | 'Unknown';
 
+const STATUS_COLOR: Record<OverallStatus, string> = {
+  Active: '#4ade80',
+  'Partially Active': ACCENT,
+  'Purchase Pending': '#fbbf24',
+  'Setup Pending': '#fbbf24',
+  'Needs Attention': '#f87171',
+  Purchased: ACCENT,
+  Unknown: 'rgba(255,255,255,0.45)',
+};
+
 function StatusPill({ status }: { status: OverallStatus }) {
-  const cfg: Record<OverallStatus, { dot: string; text: string }> = {
-    Active:            { dot: 'bg-emerald-400', text: 'text-emerald-300' },
-    'Partially Active':{ dot: 'bg-cyan-400',     text: 'text-cyan-300' },
-    'Purchase Pending':{ dot: 'bg-amber-400',   text: 'text-amber-300' },
-    'Setup Pending':   { dot: 'bg-amber-400',   text: 'text-amber-300' },
-    'Needs Attention': { dot: 'bg-red-400',      text: 'text-red-300' },
-    Purchased:         { dot: 'bg-cyan-400',     text: 'text-cyan-300' },
-    Unknown:           { dot: 'bg-white/30',     text: 'text-white/50' },
-  };
-  const { dot, text } = cfg[status];
+  const color = STATUS_COLOR[status];
+  const pulse = status.includes('Pending');
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+    <span className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold`} style={{ color }}>
+      <span
+        className={`h-1.5 w-1.5 rounded-full shrink-0 ${pulse ? 'animate-pulse' : ''}`}
+        style={{ background: color, boxShadow: status === 'Unknown' ? 'none' : `0 0 5px ${color}` }}
+      />
       {status}
     </span>
   );
@@ -88,16 +96,10 @@ function StatusPill({ status }: { status: OverallStatus }) {
 function PageSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-8 w-56 animate-pulse rounded bg-white/[0.05]" />
-      <div className="flex gap-2">
-        {[80, 60, 100, 72].map((w, i) => (
-          <div key={i} className={`h-5 w-${w} animate-pulse rounded-full bg-white/[0.05]`} />
-        ))}
-      </div>
-      <div className="h-px w-full bg-white/[0.05]" />
-      <div className="grid grid-cols-4 gap-4 pt-2">
+      <div className="h-10 w-full max-w-[360px] animate-pulse rounded-[8px] bg-white/[0.05]" />
+      <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-lg bg-white/[0.04]" />
+          <div key={i} className="h-24 animate-pulse rounded-[6px] bg-white/[0.04]" />
         ))}
       </div>
     </div>
@@ -213,109 +215,114 @@ export default function DomainDetailPage() {
   }, [handleRefresh]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]" style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)' }} />
+        <div className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]" style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)' }} />
+        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)', backgroundSize: '28px 28px' }} />
+      </div>
 
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-1.5 text-sm text-white/40">
-          <Link href="/dashboard/domains" className="hover:text-white/70 transition-colors">
-            Domains
-          </Link>
-          {parentDomain && (
-            <>
-              <ChevronRight className="h-3.5 w-3.5 text-white/20" />
-              <Link
-                href={`/dashboard/domains/${encodeURIComponent(parentDomain)}`}
-                className="font-mono hover:text-white/70 transition-colors"
-              >
-                {parentDomain}
-              </Link>
-            </>
-          )}
-          <ChevronRight className="h-3.5 w-3.5 text-white/20" />
-          <span className="font-mono text-white/70">{domainName}</span>
-        </nav>
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
+        <div className="mx-auto max-w-[1280px]">
 
-        {/* Domain header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2 min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight font-mono text-white truncate">
-              {domainName}
-            </h1>
-            {/* Meta row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/45">
-              <StatusPill status={overallStatus} />
-              <span>{domainData.connections.length} connection{domainData.connections.length !== 1 ? 's' : ''}</span>
-              {connectedAppNames.length > 0 && (
-                <span>{connectedAppNames.join(', ')}</span>
-              )}
-              {domainData.expiresAt && (
-                <span>
-                  Expires{' '}
-                  <span className="text-white/60">
-                    {new Date(domainData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                </span>
-              )}
-              {domainData.autoRenew !== null && (
-                <span className={domainData.autoRenew ? 'text-emerald-400/80' : 'text-white/35'}>
-                  Auto-renew {domainData.autoRenew ? 'on' : 'off'}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start text-white/40 hover:text-white hover:bg-white/[0.06] shrink-0"
-            onClick={handleRefresh}
-            disabled={isPageLoading}
-          >
-            {isPageLoading ? (
-              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
+          {/* Breadcrumb */}
+          <nav className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-5`}>
+            <Link href="/dashboard/domains" className="hover:text-white/75 transition-colors">Domains</Link>
+            {parentDomain && (
+              <>
+                <ChevronRight className="h-3 w-3 text-white/20" />
+                <Link href={`/dashboard/domains/${encodeURIComponent(parentDomain)}`} className="normal-case tracking-normal hover:text-white/75 transition-colors">
+                  {parentDomain}
+                </Link>
+              </>
             )}
-          </Button>
-        </div>
+            <ChevronRight className="h-3 w-3 text-white/20" />
+            <span className="normal-case tracking-normal text-white/70">{domainName}</span>
+          </nav>
 
-        {/* Error */}
-        {domainData.error && (
-          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {looksInternal(domainData.error)
-              ? 'Unable to load this domain. Refresh the page to try again.'
-              : domainData.error}
-          </div>
-        )}
-
-        {/* Tabs */}
-        {initializing ? (
-          <PageSkeleton />
-        ) : (
-          <Tabs defaultValue="overview">
-            {/* Underline tab bar */}
-            <div className="border-b border-white/[0.06]">
-              <TabsList className="bg-transparent border-0 h-auto p-0 gap-0 rounded-none -mb-px">
-                {[
-                  { value: 'overview',     label: 'Overview' },
-                  { value: 'connections',  label: 'Connections' },
-                  { value: 'dns',          label: 'DNS' },
-                  { value: 'settings',     label: 'Settings' },
-                ].map((tab) => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-white/45 data-[state=active]:border-white data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
-                  >
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+          {/* Header */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 pb-6 border-b border-white/[0.06]">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="h-12 w-12 shrink-0 inline-flex items-center justify-center border border-white/[0.09] rounded-[8px]" style={{ background: 'linear-gradient(135deg, #16181d, #1a1c23)', color: ACCENT }}>
+                <Globe className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className={`${MONO} text-[22px] sm:text-[26px] leading-none tracking-[-0.01em] text-white font-semibold truncate`}>
+                  {domainName}
+                </h1>
+                <div className={`${MONO} mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-white/45`}>
+                  <StatusPill status={overallStatus} />
+                  <span className="text-white/15">·</span>
+                  <span>{domainData.connections.length} connection{domainData.connections.length !== 1 ? 's' : ''}</span>
+                  {connectedAppNames.length > 0 && (
+                    <>
+                      <span className="text-white/15">·</span>
+                      <span className="text-white/60 truncate">{connectedAppNames.join(', ')}</span>
+                    </>
+                  )}
+                  {domainData.expiresAt && (
+                    <>
+                      <span className="text-white/15">·</span>
+                      <span>Expires <span className="text-white/65">{new Date(domainData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></span>
+                    </>
+                  )}
+                  {domainData.autoRenew !== null && (
+                    <>
+                      <span className="text-white/15">·</span>
+                      <span className={domainData.autoRenew ? 'text-emerald-400/80' : 'text-white/35'}>Auto-renew {domainData.autoRenew ? 'on' : 'off'}</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="pt-5">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isPageLoading}
+              className={`${MONO} self-start sm:self-center inline-flex h-9 items-center gap-2 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50 shrink-0`}
+            >
+              <RefreshCw className={`h-3 w-3 ${isPageLoading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+
+          {/* Error */}
+          {domainData.error && (
+            <div className="mb-5 flex items-center gap-2.5 border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[12.5px] text-red-200 rounded-[6px]">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {looksInternal(domainData.error)
+                ? 'Unable to load this domain. Refresh the page to try again.'
+                : domainData.error}
+            </div>
+          )}
+
+          {/* Tabs */}
+          {initializing ? (
+            <PageSkeleton />
+          ) : (
+            <Tabs defaultValue="overview">
+              {/* Pill tab bar */}
+              <div className="inline-flex items-center gap-1 rounded-[8px] border border-white/[0.10] bg-white/[0.03] p-1">
+                <TabsList className="bg-transparent border-0 h-auto p-0 gap-1 rounded-none">
+                  {[
+                    { value: 'overview',     label: 'Overview' },
+                    { value: 'connections',  label: 'Connections' },
+                    { value: 'dns',          label: 'DNS' },
+                    { value: 'settings',     label: 'Settings' },
+                  ].map((tab) => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className={`${MONO} rounded-[6px] px-4 py-2 text-[11.5px] uppercase tracking-[0.12em] font-semibold text-white/55 hover:text-white/85 transition-colors data-[state=active]:text-white data-[state=active]:bg-[rgba(0,149,255,0.10)] data-[state=active]:shadow-[inset_0_0_0_1px_rgba(0,149,255,0.35)]`}
+                    >
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+
+              <div className="pt-6">
               <TabsContent value="overview" className="mt-0">
                 <DomainOverviewTab
                   purchaseRequest={domainData.purchaseRequest}
@@ -392,6 +399,7 @@ export default function DomainDetailPage() {
             </div>
           </Tabs>
         )}
+        </div>
       </div>
     </div>
   );
