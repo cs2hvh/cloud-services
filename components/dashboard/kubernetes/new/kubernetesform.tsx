@@ -421,7 +421,12 @@ const NewClusterForm = ({
                       key={v}
                       type="button"
                       onClick={() => setSelectedVersion(v)}
-                      className="text-left p-3 border rounded-[5px] transition-all"
+                      aria-pressed={sel}
+                      className={`text-left p-3 border rounded-[5px] transition-all cursor-pointer ${
+                        sel
+                          ? ""
+                          : "border-white/[0.06] bg-[#0d0e11] hover:border-white/25 hover:bg-white/[0.04]"
+                      }`}
                       style={
                         sel
                           ? {
@@ -430,7 +435,7 @@ const NewClusterForm = ({
                                 "linear-gradient(135deg, #0d0e11 0%, rgba(0,149,255,0.06) 100%)",
                               boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
                             }
-                          : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                          : undefined
                       }
                     >
                       <div className="flex items-start justify-between mb-1.5">
@@ -539,7 +544,12 @@ const NewClusterForm = ({
                           key={p.id}
                           type="button"
                           onClick={() => p.name && setSelectedPlan(p.name)}
-                          className="text-left p-3 border rounded-[5px] transition-all"
+                          aria-pressed={sel}
+                          className={`text-left p-3 border rounded-[5px] transition-all cursor-pointer ${
+                            sel
+                              ? ""
+                              : "border-white/[0.06] bg-[#0d0e11] hover:border-white/25 hover:bg-white/[0.04]"
+                          }`}
                           style={
                             sel
                               ? {
@@ -547,7 +557,7 @@ const NewClusterForm = ({
                                   background: ACCENT_DIM,
                                   boxShadow: `0 0 0 1px ${BORDER_ACCENT}`,
                                 }
-                              : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                              : undefined
                           }
                         >
                           <div className={`${MONO} text-[10.5px] font-semibold tracking-[0.04em] text-white/65 mb-1.5 truncate`}>
@@ -588,7 +598,12 @@ const NewClusterForm = ({
                         key={p.id}
                         type="button"
                         onClick={() => setSelectedProject(p.id)}
-                        className="flex items-center justify-between p-3 border rounded-[5px] transition-all"
+                        aria-pressed={sel}
+                        className={`flex items-center justify-between gap-2 p-3.5 border rounded-[6px] text-left transition-all cursor-pointer ${
+                          sel
+                            ? ""
+                            : "border-white/[0.08] bg-[#0d0e11] hover:border-white/25 hover:bg-white/[0.04]"
+                        }`}
                         style={
                           sel
                             ? {
@@ -597,22 +612,25 @@ const NewClusterForm = ({
                                   "linear-gradient(135deg, #0d0e11 0%, rgba(0,149,255,0.06) 100%)",
                                 boxShadow: `0 0 0 1px ${ACCENT}, 0 6px 18px rgba(0,149,255,0.08)`,
                               }
-                            : { borderColor: "rgba(255,255,255,0.06)", background: "#0d0e11" }
+                            : undefined
                         }
                       >
                         <span className="text-[13px] font-medium text-white truncate">{p.name}</span>
-                        {sel && (
-                          <span
-                            aria-hidden
-                            className="h-4 w-4 rounded-full shrink-0 relative"
-                            style={{ border: `1.5px solid ${ACCENT}` }}
-                          >
+                        {/* Always-visible radio so it reads as a selectable option */}
+                        <span
+                          aria-hidden
+                          className="h-4 w-4 rounded-full shrink-0 relative transition-colors"
+                          style={{
+                            border: `${sel ? 1.5 : 1}px solid ${sel ? ACCENT : "rgba(255,255,255,0.28)"}`,
+                          }}
+                        >
+                          {sel && (
                             <span
                               className="absolute inset-[3px] rounded-full block"
                               style={{ background: ACCENT, boxShadow: `0 0 6px rgba(0,149,255,0.6)` }}
                             />
-                          </span>
-                        )}
+                          )}
+                        </span>
                       </button>
                     );
                   })}
