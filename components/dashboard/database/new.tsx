@@ -343,7 +343,7 @@ const DatabaseSelect = ({
         />
       </div>
 
-      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1360px] mx-auto">
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
         {/* Back link */}
         <div className="mb-6">
           <Link
@@ -364,19 +364,18 @@ const DatabaseSelect = ({
         </div>
         <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
           Spin up a managed cluster{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             in seconds
           </span>
-          .
         </h1>
         <p
-          className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+          className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
         >
           Pick an engine, choose a region, and we handle replication, TLS, and
           connection strings. Per-second billing.
         </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
           {/* ─── LEFT: Sections ─────────────────────────────── */}
           <div className="min-w-0">
             {/* 01 Identity */}
@@ -387,7 +386,7 @@ const DatabaseSelect = ({
               status={isNameValid ? "done" : state.selectedName ? "active" : "idle"}
               statusLabel={isNameValid ? "Valid" : state.selectedName ? "Check" : "Required"}
             >
-              <div className="max-w-[520px]">
+              <div className="max-w-[680px]">
                 <FieldLabel hint="required">Cluster name</FieldLabel>
                 <Input
                   value={state.selectedName}
@@ -477,7 +476,7 @@ const DatabaseSelect = ({
 
                   {selectedDbTypeInfo && versions.length > 0 && (
                     <div
-                      className="flex items-center gap-3 max-w-[520px] px-4 h-11 border border-white/[0.06] bg-[#111216] rounded-[6px]"
+                      className="flex items-center gap-3 max-w-[680px] px-4 h-11 border border-white/[0.06] bg-[#111216] rounded-[6px]"
                     >
                       <span
                         className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40`}
@@ -508,7 +507,7 @@ const DatabaseSelect = ({
                     </div>
                   )}
                   {state.selectedDbType === "pg" && (
-                    <label className="flex items-center gap-3 max-w-[520px] px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer">
+                    <label className="flex items-center gap-3 max-w-[680px] px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer">
                       <input
                         type="checkbox"
                         checked={pgvectorEnabled}
@@ -657,7 +656,7 @@ const DatabaseSelect = ({
                 selectedProjectData?.name ?? "Required"
               }
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[520px]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[680px]">
                 <div>
                   <FieldLabel>Project</FieldLabel>
                   {projects.length === 0 ? (
@@ -1003,7 +1002,7 @@ function Section({
             <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-white">
               {title}
             </h2>
-            <p className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}>
+            <p className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[680px]`}>
               {desc}
             </p>
           </div>
