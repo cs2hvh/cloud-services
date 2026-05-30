@@ -11,9 +11,13 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install build deps first (better layer caching)
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+# Install build deps first (better layer caching). Use the committed lockfile
+# + `npm ci` so the image gets the exact deduped tree we build against locally.
+# Without the lock, npm install resolves a fresh tree where bullmq pulls its own
+# nested ioredis — a different copy than the top-level one — and the mismatched
+# Redis types break `tsc` (TS2322 at src/index.ts).
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 # Now the source + compile
 COPY tsconfig.json ./

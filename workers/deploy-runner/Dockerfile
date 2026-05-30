@@ -2,8 +2,11 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+# Use the committed lockfile + `npm ci` for a deterministic, deduped tree.
+# A bare `npm install` (no lock) lets bullmq pull its own nested ioredis, whose
+# Redis type then clashes with the top-level one and breaks `tsc`.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build && npm prune --omit=dev
