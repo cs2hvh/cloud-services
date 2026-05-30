@@ -33,9 +33,9 @@ const createSchema = z.object({
   source: z.enum(["docker", "huggingface", "truss"]),
   source_ref: z.string().min(1).max(500),
   source_revision: z.string().max(200).optional().nullable(),
-  gpu_sku: z
-    .enum(["A100-80GB", "A100-40GB", "H100-80GB", "L40S", "A40", "RTX-6000-Ada"])
-    .default("A100-80GB"),
+  // Verbatim RunPod gpuTypeId (gpu_catalog.runpod_gpu_id), validated against
+  // the live catalog below. Legacy short SKUs are still accepted for back-compat.
+  gpu_sku: z.string().min(1, "Select a GPU"),
   autoscale: z
     .object({
       min_workers: z.number().int().min(0).max(50).default(0),
@@ -213,6 +213,36 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   );
+
+  // ── GPU validation ────────────────────────────────────────────────
+  // gpu_sku is the verbatim RunPod gpuTypeId; it must match an active row in
+  // the live GPU catalog (the same source the deploy picker uses). Legacy
+  // short SKUs from older clients are still accepted.
+  const LEGACY_GPU_SKUS = new Set([
+    "A100-80GB",
+    "A100-40GB",
+    "H100-80GB",
+    "L40S",
+    "A40",
+    "RTX-6000-Ada",
+  ]);
+  if (!LEGACY_GPU_SKUS.has(parsed.data.gpu_sku)) {
+    const { data: gpuRow, error: gpuErr } = await supabase
+      .from("gpu_catalog")
+      .select("runpod_gpu_id")
+      .eq("runpod_gpu_id", parsed.data.gpu_sku)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (gpuErr) {
+      return internalError("Could not validate GPU selection", gpuErr, "deploy_gpu_validate_failed");
+    }
+    if (!gpuRow) {
+      return NextResponse.json(
+        { error: "That GPU is not available. Pick one from the list." },
+        { status: 400 }
+      );
+    }
+  }
 
   const { data, error } = await supabase
     .schema("inference")

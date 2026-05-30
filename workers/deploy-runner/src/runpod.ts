@@ -75,11 +75,11 @@ export class RunPod {
   }
 
   async createEndpoint(input: CreateEndpointInput): Promise<ServerlessEndpoint> {
-    const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku];
+    // gpu_sku now carries the verbatim RunPod gpuTypeId (gpu_catalog.runpod_gpu_id),
+    // so pass it through directly. Legacy rows hold a short SKU — map those.
+    const gpuTypeId = GPU_SKU_TO_RUNPOD_TYPE[input.gpuSku] ?? input.gpuSku;
     if (!gpuTypeId) {
-      throw new Error(
-        `Unknown GPU SKU "${input.gpuSku}". Allowed: ${Object.keys(GPU_SKU_TO_RUNPOD_TYPE).join(", ")}`
-      );
+      throw new Error("Deployment is missing a GPU type");
     }
 
     const envArray = Object.entries({
