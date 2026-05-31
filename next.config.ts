@@ -10,7 +10,7 @@ const supabaseWs = supabaseUrl.replace("https://", "wss://");
 // this from the browser, so it must be in connect-src. Override via env when
 // the gateway moves to ahurasense.com (see docs/inference/migration-ahurasense.md).
 const inferenceApiOrigin =
-  process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.cs2hvh.com";
+  process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.ahurasense.com";
 
 // Content-Security-Policy: restrict script sources and data exfiltration targets.
 // 'unsafe-inline' is required because Next.js injects inline scripts for hydration.

@@ -21,7 +21,7 @@ import type { InferenceEventName } from "@/lib/email/types";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const DASHBOARD_BASE =
-  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://wao.cs2hvh.com";
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://app.ahurasense.com";
 const WEBHOOK_USER_AGENT = "ahura-inference-webhook/1.0";
 const WEBHOOK_TIMEOUT_MS = 8000;
 const WEBHOOK_PAYLOAD_MAX_BYTES = 16 * 1024; // 16KB

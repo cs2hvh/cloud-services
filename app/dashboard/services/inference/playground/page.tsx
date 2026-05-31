@@ -110,7 +110,7 @@ export default async function PlaygroundPage() {
   ]);
 
   const apiBase =
-    process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.cs2hvh.com/v1";
+    process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.ahurasense.com/v1";
 
   return (
     <Playground

@@ -18,7 +18,7 @@
 //   k6 run workers/inference/test/load.k6.js
 //
 //   # Target a different deployment
-//   $env:BASE_URL = "https://api.cs2hvh.com/v1"
+//   $env:BASE_URL = "https://api.ahurasense.com/v1"
 //   k6 run workers/inference/test/load.k6.js
 //
 //   # Run only a single scenario (e.g. just the health scenario)
@@ -34,7 +34,7 @@ import http from "k6/http";
 import { check, sleep } from "k6";
 import { Trend, Rate } from "k6/metrics";
 
-const BASE = __ENV.BASE_URL || "https://api.cs2hvh.com/v1";
+const BASE = __ENV.BASE_URL || "https://api.ahurasense.com/v1";
 const KEY = __ENV.AHURA_API_KEY;
 
 // Custom metrics for cleaner reports

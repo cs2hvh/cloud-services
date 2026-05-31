@@ -41,7 +41,7 @@ export async function embedText(
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://cs2hvh.com",
+      "HTTP-Referer": "https://ahurasense.com",
       "X-Title": "AhuraCloud Inference (vector autoembed)",
     },
     body: JSON.stringify(body),

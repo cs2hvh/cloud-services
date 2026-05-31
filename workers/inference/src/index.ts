@@ -1,7 +1,7 @@
 /**
  * AhuraCloud Inference Edge Gateway
  *
- * Public surface: api.cs2hvh.com/v1/*  (migration target: api.ahurasense.com — see docs/inference/migration-ahurasense.md)
+ * Public surface: api.ahurasense.com/v1/*
  *
  * Request lifecycle:
  *   1. requestId + timing init

@@ -45,7 +45,7 @@ interface PageData {
 }
 
 const GATEWAY_BASE =
-  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.cs2hvh.com/v1";
+  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.ahurasense.com/v1";
 
 // ─── Data ─────────────────────────────────────────────────────────
 

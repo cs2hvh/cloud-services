@@ -1,60 +1,172 @@
-# Migration Guide — cs2hvh.com → ahurasense.com
+# Domain Migration — cs2hvh.com → ahurasense.com
 
-The gateway currently runs at `api.cs2hvh.com/v1` because the operator's role on the `ahurasense.com` Cloudflare account doesn't include Workers/KV/Queues write permissions. When that gets resolved, follow this guide to switch the gateway domain.
+Platform-wide runbook for moving every customer-facing and internal use of the
+**temporary** `cs2hvh.com` domain over to the real `ahurasense.com` domain.
 
-**Estimated downtime:** ~5 minutes of API requests returning 5xx during DNS/cert propagation, OR zero downtime if you run the two-domain transition step (4b below).
+The platform runs on `cs2hvh.com` today only because the operator's role on the
+`ahurasense.com` Cloudflare account didn't include Workers/KV/Queues write
+permissions when the gateway shipped. This guide covers the full switch once
+that's resolved — not just the inference gateway, but the dashboard host, the
+worker cron, the k8s runner webhooks, the support email, and the hardcoded
+copy/curl snippets on the marketing site.
 
-## Pre-flight checklist
+> **Scope note:** despite living under `docs/inference/`, this is the
+> whole-platform domain runbook (it's linked from `wrangler.toml`,
+> `lib/inference/branding.ts`, and `next.config.ts`, so the path is kept stable).
 
-Before starting, confirm all of these:
+---
 
-- [ ] Your member role on the Ahurasense Cloudflare account includes: `Workers Admin`, `Workers KV Storage Admin`, `Workers Routes Admin`, `Queues Admin` (or just `Administrator`)
-- [ ] The Ahurasense account is on Workers Paid plan ($5/mo — required for Queues)
-- [ ] `ahurasense.com` zone is active in the Ahurasense account (green status)
-- [ ] You have OpenRouter platform key + BYOK_DEK + Supabase service role key — same secrets, will be re-bound on the new Workers project
-- [ ] Customers using `api.cs2hvh.com` have been notified of the migration window (if any)
+## TL;DR — the three hosts
 
-## Decision: same Worker project or new one
+| Today | Role | Target | Driven by |
+|---|---|---|---|
+| `api.cs2hvh.com/v1` | Inference API gateway (CF Worker) | `api.ahurasense.com/v1` | wrangler route + `NEXT_PUBLIC_INFERENCE_API_*` |
+| `wao.cs2hvh.com` | Dashboard / control plane (Next.js) | **`app.ahurasense.com`** *(DECISION 1)* | DNS + `NEXT_PUBLIC_DASHBOARD_URL` + worker/runner `CONTROL_PLANE_URL` |
+| `cs2hvh.com` | Apex (referer attribution, support email) | `ahurasense.com` | hardcoded `HTTP-Referer` + `NEXT_PUBLIC_SUPPORT_EMAIL` |
 
-Two strategies:
+**The migration is NOT "just env vars."** It's three things:
+1. **Env vars + rebuild** — most customer-visible URLs read `NEXT_PUBLIC_*` with a
+   cs2hvh fallback, so they flip cleanly (but require a *rebuild*, not a restart —
+   `NEXT_PUBLIC_*` is inlined at build time).
+2. **Six hardcoded source edits** — three customer-facing snippets and three
+   upstream `HTTP-Referer` headers that do **not** read env (see inventory).
+3. **Infra config** — Cloudflare zone/route, KV/Queues/secrets re-bind, worker
+   `CONTROL_PLANE_URL`, and the k8s runner deployments' `CONTROL_PLANE_URL`.
 
-**Strategy A — Reuse the same Worker code, just change the route + account.** Tear down the cs2hvh deployment, redeploy to Ahurasense account on the new domain. Simpler, but causes the ~5 min DNS/cert window during the switch. Recommended for early stage (no real customers yet).
+---
 
-**Strategy B — Run both domains simultaneously, then deprecate cs2hvh.** Deploy a parallel Worker on Ahurasense; both `api.cs2hvh.com` and `api.ahurasense.com` route to the same backend logic for an overlap period; communicate the deprecation; remove cs2hvh route. Zero downtime; more orchestration.
+## DECISION 1 — dashboard subdomain
 
-This guide walks Strategy A. For B, do steps 1–6 keeping the cs2hvh deployment active, then plan a deprecation date.
+The marketing site takes the apex (`ahurasense.com` / `www.ahurasense.com`), so
+the dashboard needs its own subdomain. Recommended: **`app.ahurasense.com`**
+(conventional SaaS console host). Alternatives: `dashboard.` / `console.`.
+Everywhere below, `app.ahurasense.com` is used as the placeholder — substitute
+your pick consistently. This is the only naming choice you have to make; the
+gateway (`api.ahurasense.com/v1`) is already locked.
 
-## Steps
+---
 
-### 1. Switch Wrangler to the Ahurasense account
+## Complete reference inventory
+
+Every place the old domain appears, grouped by how it migrates. Verify with:
 
 ```powershell
-# Find the Ahurasense account ID
-npx wrangler whoami
-# Copy the ID for "Ahurasense@gmail.com's Account"
-
-# Set it
-$env:CLOUDFLARE_ACCOUNT_ID = "800d1f863643585554014dd496baebe3"
-npx wrangler whoami   # confirm it switched
+# Should be empty (outside docs/ + ghcr image refs) once migration is done:
+rg -n "cs2hvh\.com" --glob "!**/node_modules/**" --glob "!**/.next/**" --glob "!docs/**"
 ```
 
-Make permanent in `workers/inference/wrangler.toml`:
+### A. Env-driven — flip the env var, rebuild, done
 
-```toml
-account_id = "800d1f863643585554014dd496baebe3"
+These honor a `NEXT_PUBLIC_*` env var and only fall back to cs2hvh if it's unset.
+No code edit strictly required, **but** see the note under step C3 about also
+updating the fallback defaults so an unset env can't silently revert the brand.
+
+| File | Reads | Purpose |
+|---|---|---|
+| `lib/inference/branding.ts` | `NEXT_PUBLIC_INFERENCE_API_BASE`, `…_API_ORIGIN`, `…_DASHBOARD_URL`, `…_SUPPORT_EMAIL` | Single source of truth for customer-visible URLs/email |
+| `lib/inference/notifications.ts:24` | `NEXT_PUBLIC_DASHBOARD_URL` | Email + webhook deep-links into the dashboard |
+| `next.config.ts:12` | `NEXT_PUBLIC_INFERENCE_API_ORIGIN` | **CSP `connect-src`** — playground's browser fetch to the gateway is blocked if this is wrong |
+| `app/(marketing)/status/page.tsx:48` | `NEXT_PUBLIC_INFERENCE_API_BASE` | Status page probe |
+| `app/dashboard/services/inference/diagnostics/page.tsx:24` | `NEXT_PUBLIC_INFERENCE_API_BASE` | Diagnostics health checks |
+| `app/dashboard/services/inference/playground/page.tsx:113` | `NEXT_PUBLIC_INFERENCE_API_BASE` | Playground request target |
+
+### B. Hardcoded — MUST be edited in source (env won't move these)
+
+| File:line | Current literal | Change to | Customer-facing? |
+|---|---|---|---|
+| `components/services/fine-tuning-serving-section.tsx:26` | `curl https://api.cs2hvh.com/v1/chat/completions` | `…api.ahurasense.com/v1…` | ✅ yes (marketing curl) |
+| `components/services/inference-features-section.tsx:30` | `base_url="https://api.cs2hvh.com/v1"` | `…api.ahurasense.com/v1` | ✅ yes (marketing code sample) |
+| `components/model-training-pipeline-section.tsx:683` | `api.cs2hvh.com/v1` (display span) | `api.ahurasense.com/v1` | ✅ yes (marketing) |
+| `workers/inference/src/lib/openrouter.ts:37` | `"HTTP-Referer": "https://cs2hvh.com"` | `https://ahurasense.com` | ❌ upstream attribution only |
+| `lib/inference/embeddings.ts:44` | `"HTTP-Referer": "https://cs2hvh.com"` | `https://ahurasense.com` | ❌ upstream attribution only |
+| `app/api/inference/batches/[id]/process/route.ts:240` | `"HTTP-Referer": "https://cs2hvh.com"` | `https://ahurasense.com` | ❌ upstream attribution only |
+
+> The three `HTTP-Referer` headers are sent to the upstream provider for
+> attribution — not visible to customers — but should move for consistency.
+> The three marketing snippets **are** customer-visible and are the highest
+> priority in this group.
+
+### C. Infra / config
+
+| Where | Field | Current | Target |
+|---|---|---|---|
+| `workers/inference/wrangler.toml:20` | route `pattern` + `zone_name` | `api.cs2hvh.com/v1/*` / `cs2hvh.com` | `api.ahurasense.com/v1/*` / `ahurasense.com` |
+| `workers/inference/wrangler.toml:117` | `CONTROL_PLANE_URL` var | `https://wao.cs2hvh.com` | `https://app.ahurasense.com` |
+| `workers/ft-runner/k8s/secret.yaml.template` + live k8s secret | `CONTROL_PLANE_URL` | `https://…cs2hvh.com` | `https://app.ahurasense.com` |
+| deploy-runner k8s deployment | `CONTROL_PLANE_URL` (if set) | cs2hvh | `https://app.ahurasense.com` |
+| Root `.env` (app runtime) | the `NEXT_PUBLIC_*` vars in §A | unset → cs2hvh fallback | ahurasense values |
+
+`CONTROL_PLANE_URL` matters because the worker's `scheduled()` cron and the
+runners POST lifecycle/billing callbacks to the dashboard:
+- `workers/inference/src/index.ts` → `/api/inference/internal/serving-pod-watchdog` + `/api/inference/internal/deployment-meter` (every minute)
+- `workers/inference/src/consumers/usage.ts:341` → `/api/inference/internal/spend-alert`
+- ft-runner / deploy-runner → FT + deployment completion webhooks
+
+If `CONTROL_PLANE_URL` still points at the dead cs2hvh dashboard after the app
+moves, **idle pods stop auto-reaping, deployments stop metering, and spend
+alerts go dark** — silent failures, no error surfaced. This is the most
+commonly-missed step.
+
+### NOT in scope — do not conflate
+
+- **`ghcr.io/cs2hvh/*` images** (`branding.ts` `SERVING_IMAGE_URI`,
+  `finetune-runpod.ts`, `serving-pod.ts`, both runner k8s deployments,
+  `ft-runner` env). `cs2hvh` here is a **GitHub org/registry namespace**, not the
+  DNS domain — moving DNS does not require renaming images. Renaming the GHCR org
+  is a separate brand task (CI workflows + k8s specs + `gpu_templates` DB rows +
+  `SERVING_IMAGE_URI`) and should be done deliberately, not as part of this.
+- **`samatva.blr1.cdn.digitaloceanspaces.com`** in `next.config.ts` CSP/images —
+  the asset CDN bucket; separate brand-asset migration.
+
+---
+
+## Prerequisites
+
+- [ ] **DECISION 1** made (dashboard subdomain).
+- [ ] Your role on the Ahurasense Cloudflare account includes `Workers Admin`,
+      `Workers KV Storage Admin`, `Workers Routes Admin`, `Queues Admin` (or
+      `Administrator`). *This was the original blocker.*
+- [ ] Ahurasense account on **Workers Paid** ($5/mo — required for Queues).
+- [ ] `ahurasense.com` zone active (green) in the Ahurasense account.
+- [ ] You hold the **exact** `BYOK_DEK`, `OPENROUTER_PLATFORM_KEY`, and
+      `SUPABASE_SERVICE_ROLE_KEY` values (re-bound on the new Worker).
+- [ ] `support@ahurasense.com` mailbox/MX exists **before** flipping the support
+      email, or support mail silently breaks.
+- [ ] `BATCH_PROCESSOR_TOKEN` value on hand (must match between the worker and the
+      Next.js app, or the cron 401s).
+
+## Strategy: A (cutover) vs B (dual-run)
+
+- **Strategy A — cutover.** Tear down the cs2hvh gateway, redeploy on ahurasense.
+  ~5 min of 5xx during DNS/cert propagation. Fine pre-launch (no real customers).
+- **Strategy B — dual-run.** Route both `api.cs2hvh.com` and `api.ahurasense.com`
+  to the same Worker for an overlap window, announce deprecation, then drop the
+  cs2hvh route. Zero downtime; more orchestration. During overlap, keep **both**
+  origins in the CSP `connect-src` (set `NEXT_PUBLIC_INFERENCE_API_ORIGIN` to the
+  new one but temporarily add the old to `next.config.ts`).
+
+Steps below are Strategy A; for B, keep the cs2hvh route live through step 2 and
+set a deprecation date before step 7.
+
+---
+
+## Migration steps
+
+### Phase A — Cloudflare gateway (`api.`)
+
+**1. Point Wrangler at the Ahurasense account**
+
+```powershell
+npx wrangler whoami                       # copy the Ahurasense account ID
+$env:CLOUDFLARE_ACCOUNT_ID = "<ahurasense-account-id>"
+npx wrangler whoami                       # confirm it switched
 ```
 
-### 2. Update the route binding
+Make it permanent in `workers/inference/wrangler.toml`: add `account_id = "<id>"`.
 
-In `workers/inference/wrangler.toml`, change:
+**2. Update the route + header comment**
 
-```toml
-routes = [
-  { pattern = "api.cs2hvh.com/v1/*", zone_name = "cs2hvh.com" },
-]
-```
-
-to:
+`workers/inference/wrangler.toml`:
 
 ```toml
 routes = [
@@ -62,162 +174,169 @@ routes = [
 ]
 ```
 
-(If running Strategy B, list both routes during the overlap period.)
+Also fix the temporary-domain comment at the top of the file. (Strategy B: list
+both routes during overlap.)
 
-Also update the comment at the top of the file referencing the temporary domain.
-
-### 3. Recreate KV namespaces + Queues in the new account
-
-Workers resources are per-account, so they don't follow the route change. Recreate them:
+**3. Recreate KV namespaces + Queues (per-account, don't follow the route)**
 
 ```powershell
 cd c:\cloud-services\workers\inference
-
-# KV namespaces
-npx wrangler kv namespace create API_KEYS
-npx wrangler kv namespace create API_KEYS --preview
-npx wrangler kv namespace create SPEND
-npx wrangler kv namespace create SPEND --preview
-npx wrangler kv namespace create L1_CACHE
-npx wrangler kv namespace create L1_CACHE --preview
-
-# Queues
+npx wrangler kv namespace create API_KEYS;  npx wrangler kv namespace create API_KEYS --preview
+npx wrangler kv namespace create SPEND;     npx wrangler kv namespace create SPEND --preview
+npx wrangler kv namespace create L1_CACHE;  npx wrangler kv namespace create L1_CACHE --preview
 npx wrangler queues create ahura-inference-audit
 npx wrangler queues create ahura-inference-usage
 ```
 
-**Replace the IDs in `wrangler.toml`** with the new ones.
+Replace the six KV IDs in `wrangler.toml` with the new ones.
 
-### 4. Re-set secrets in the new account
-
-Secrets are also per-account. The values are the same, but they need to be uploaded to the new Worker.
+**4. Re-set secrets in the new account**
 
 ```powershell
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put OPENROUTER_PLATFORM_KEY
-npx wrangler secret put BYOK_DEK   # SAME base64 value as cs2hvh — DO NOT regenerate
+npx wrangler secret put BYOK_DEK            # SAME base64 value — never regenerate
+npx wrangler secret put BATCH_PROCESSOR_TOKEN
+npx wrangler secret put OTEL_EXPORTER_OTLP_HEADERS   # if used
 ```
 
-⚠️ **Critical:** `BYOK_DEK` must be the **exact same key** as the cs2hvh deployment, because customer-stored BYOK keys in `inference.byok_keys` are encrypted with it. A different DEK = unable to decrypt = customer keys are bricked.
+> ⚠️ **`BYOK_DEK` must be byte-identical to the cs2hvh deployment.** Customer BYOK
+> keys in `inference.byok_keys` are AES-GCM encrypted with it; a different DEK
+> bricks every stored key.
 
-### 5. Deploy
+**5. Set `CONTROL_PLANE_URL` and deploy**
+
+Update `wrangler.toml:117` → `CONTROL_PLANE_URL = "https://app.ahurasense.com"`,
+then:
 
 ```powershell
 npx wrangler deploy
+# → Published ahura-inference-edge … api.ahurasense.com/v1/*
 ```
 
-Successful output should show the new route:
+### Phase B — Next.js app (dashboard host `app.` + env)
 
-```
-Published ahura-inference-edge (X.XX sec)
-  api.ahurasense.com/v1/*
-```
+**6. DNS for the dashboard**
 
-### 6. Update file references back to ahurasense.com
+Create `app.ahurasense.com` → the Next.js app's origin (same target
+`wao.cs2hvh.com` resolves to today), proxied through Cloudflare for TLS.
 
-These were swapped to cs2hvh.com when we picked up the temporary domain. Switch them back:
+**7. Set the app env vars** (root `.env` / deployment env), then **rebuild**:
 
-```
-workers/inference/wrangler.toml              # comment + routes (done in step 2)
-workers/inference/package.json               # description
-workers/inference/README.md                  # domain references
-workers/inference/src/index.ts               # public surface comment
-workers/inference/src/lib/openrouter.ts      # HTTP-Referer header value
-app/(marketing)/services/inference/page.tsx  # FAQ text mentioning API URL
+```dotenv
+NEXT_PUBLIC_INFERENCE_API_BASE=https://api.ahurasense.com/v1
+NEXT_PUBLIC_INFERENCE_API_ORIGIN=https://api.ahurasense.com
+NEXT_PUBLIC_DASHBOARD_URL=https://app.ahurasense.com
+NEXT_PUBLIC_SUPPORT_EMAIL=support@ahurasense.com
 ```
 
-Grep to confirm nothing is missed:
+> `NEXT_PUBLIC_*` is inlined at **build time** → a plain restart won't pick these
+> up. Rebuild the standalone image. The CSP `connect-src` in `next.config.ts` is
+> computed from `NEXT_PUBLIC_INFERENCE_API_ORIGIN`, so the playground's browser
+> fetch only reaches the new gateway after the rebuild — verify in DevTools.
+
+**8. (Recommended) Update the fallback defaults** so an unset env can't silently
+revert to cs2hvh. In `lib/inference/branding.ts`, `lib/inference/notifications.ts:24`,
+`next.config.ts:13`, and the three inference pages in §A, change the `?? "…cs2hvh.com…"`
+defaults to the ahurasense equivalents.
+
+### Phase C — Hardcoded source edits (§B inventory)
+
+**9. Customer-facing marketing snippets** (highest priority):
+- `components/services/fine-tuning-serving-section.tsx:26`
+- `components/services/inference-features-section.tsx:30`
+- `components/model-training-pipeline-section.tsx:683`
+
+**10. Upstream `HTTP-Referer` headers** (`cs2hvh.com` → `ahurasense.com`):
+- `workers/inference/src/lib/openrouter.ts:37`
+- `lib/inference/embeddings.ts:44`
+- `app/api/inference/batches/[id]/process/route.ts:240`
+
+### Phase D — k8s runners
+
+**11.** Update `CONTROL_PLANE_URL` in the **live** ft-runner and deploy-runner
+k8s secrets/configmaps (and `workers/ft-runner/k8s/secret.yaml.template` +
+`.env.example` for the repo of record) to `https://app.ahurasense.com`, then
+roll the deployments:
 
 ```powershell
-# From repo root — should show only legacy/unrelated matches, no inference module
-npx grep -r "cs2hvh" --include="*.ts" --include="*.tsx" --include="*.toml" --include="*.md" --include="*.json"
+kubectl set env deploy/ahura-ft-runner   -n ahura CONTROL_PLANE_URL=https://app.ahurasense.com
+kubectl set env deploy/ahura-deploy-runner -n ahura CONTROL_PLANE_URL=https://app.ahurasense.com
+kubectl rollout restart deploy/ahura-ft-runner deploy/ahura-deploy-runner -n ahura
 ```
 
-### 7. Verify
+### Phase E — support email
+
+**12.** Once `support@ahurasense.com` is live, the `NEXT_PUBLIC_SUPPORT_EMAIL`
+from step 7 covers the dashboard. Also update any email-template "from"/"reply-to"
+and DNS SPF/DKIM/DMARC for the new sending domain.
+
+---
+
+## What does NOT change (data plane)
+
+Domain-independent — leave untouched:
+- Supabase `inference` schema (orgs, keys, usage, audit, byok_keys, …)
+- Postgres-stored API keys — matched by `sha256(key)`, not by domain; the **same
+  `ahu_live_…` keys keep working**, the gateway is stateless
+- BYOK ciphertext — decrypts fine as long as `BYOK_DEK` is preserved
+- OpenRouter account + platform key, R2 buckets, BullMQ/Redis, RunPod
+- `ghcr.io/cs2hvh/*` image names (see "NOT in scope")
+
+---
+
+## Verification / sign-off
 
 ```powershell
-# Health on new domain
-curl https://api.ahurasense.com/v1/health
-# {"status":"ok","version":"0.1.0",...}
-
-# Authenticated test — keys are stored in Postgres, so the SAME API keys work
-# (the gateway is stateless; only the domain changed)
-curl https://api.ahurasense.com/v1/key `
-  -H "Authorization: Bearer ahu_live_..."
+curl https://api.ahurasense.com/v1/health                       # 200 {"status":"ok",...}
+curl https://api.ahurasense.com/v1/key -H "Authorization: Bearer ahu_live_..."  # 200 org+usage
 ```
 
-### 8. Tear down the cs2hvh deployment (Strategy A only)
+- [ ] `/v1/health` 200 on the new domain
+- [ ] An existing API key authenticates (proves stateless cutover)
+- [ ] **One BYOK request succeeds** (proves `BYOK_DEK` preserved)
+- [ ] One platform-billed request succeeds (proves OpenRouter key bound)
+- [ ] Playground works from the browser at `app.ahurasense.com` (proves CSP origin)
+- [ ] Dashboard usage charts show recent requests
+- [ ] Rate limit + spend cap still enforce
+- [ ] A serving pod past its idle deadline auto-stops (proves worker→control-plane
+      `CONTROL_PLANE_URL` + `BATCH_PROCESSOR_TOKEN`)
+- [ ] A deployment meters (proves `deployment-meter` cron path)
+- [ ] An FT completion webhook lands (proves runner `CONTROL_PLANE_URL`)
+- [ ] `rg "cs2hvh\.com"` is clean outside `docs/` and ghcr image refs
+- [ ] Status/uptime monitor points at the new gateway
+
+---
+
+## Rollback (~5 min)
+
+1. Revert `wrangler.toml` route → `cs2hvh.com`; `npx wrangler deploy` on the old account.
+2. Revert the app env vars (or the step-8 defaults) → rebuild.
+3. Revert `CONTROL_PLANE_URL` on the runners + worker; roll the runners back.
+
+Keep the cs2hvh gateway deployed (don't delete the Worker) for **at least a week**
+after cutover so rollback stays trivial.
+
+### Tear down cs2hvh (Strategy A, only after the soak period)
 
 ```powershell
-# Temporarily switch back to your personal account
-$env:CLOUDFLARE_ACCOUNT_ID = "346645ceccf6c51518e55db7dedae3a9"
-
-# Delete the Worker
+$env:CLOUDFLARE_ACCOUNT_ID = "<personal-account-id>"
 npx wrangler delete ahura-inference-edge
-
-# Optional: delete the no-longer-needed KV namespaces from the personal account
-# (keep them if you want to roll back; cost is negligible)
-npx wrangler kv namespace delete --binding API_KEYS
-# ... etc
-
-# Switch back to Ahurasense
-$env:CLOUDFLARE_ACCOUNT_ID = "800d1f863643585554014dd496baebe3"
+$env:CLOUDFLARE_ACCOUNT_ID = "<ahurasense-account-id>"
 ```
 
-### 9. Update the marketing pages
-
-The inference landing page FAQ should mention the new canonical base URL again. The Phase 0 swap removed the URL entirely — re-add it now that we have stability:
-
-```diff
-- "Yes. Point the OpenAI SDK at the gateway base URL with your AhuraCloud key and it works unchanged."
-+ "Yes. Point the OpenAI SDK at api.ahurasense.com/v1 with your AhuraCloud key and it works unchanged."
-```
-
-### 10. Notify customers (if any)
-
-If `api.cs2hvh.com` saw external traffic, send a deprecation notice with the new endpoint and a migration deadline. Suggest at least 30 days of dual-route operation (Strategy B) before removing the cs2hvh route in production.
-
-## What doesn't change
-
-Nothing in the data plane. All of these are domain-independent:
-
-- Supabase `inference` schema (orgs, keys, usage, audit, etc.)
-- Postgres-stored API keys — still work, identified by sha256 hash regardless of domain
-- BYOK ciphertext — decrypts the same as long as `BYOK_DEK` is preserved across deployments
-- OpenRouter platform account + keys
-- R2 buckets, BullMQ workers on k8s
-
-## Rollback
-
-If anything goes wrong after step 5, you can roll back in ~5 minutes:
-
-1. Revert `wrangler.toml` routes back to `cs2hvh.com`
-2. Switch wrangler account back to personal
-3. `npx wrangler deploy`
-4. cs2hvh route resumes serving (if you didn't delete the Worker in step 8)
-
-Keep the cs2hvh deployment alive for at least a week after switching before deleting, so rollback is trivial.
+---
 
 ## Common gotchas
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `wrangler deploy` returns "no such zone" | Zone not yet active on Ahurasense account | Wait for activation; verify in dashboard |
-| All requests return 401 "Invalid API key" | New Worker can't reach Postgres | Re-check `SUPABASE_SERVICE_ROLE_KEY` secret was set in the new account |
-| BYOK requests fail to decrypt | `BYOK_DEK` differs between deployments | **Critical** — recover the original DEK from password manager and re-set |
-| Audit/usage events stop appearing in Postgres | k8s queue consumers still listen on cs2hvh queue names | Update consumer config to point at new queue (queues are per-account, so same name = different queue) |
-| `ahurasense.com` certificate not issuing | CF Universal SSL provisioning still in progress | Wait 10–30 min; refresh certificate status in dashboard |
-
-## Sign-off checklist
-
-After the migration is complete, verify all of these green:
-
-- [ ] `curl https://api.ahurasense.com/v1/health` → 200
-- [ ] `curl https://api.ahurasense.com/v1/key -H "Authorization: Bearer <real-key>"` → 200 with org+usage
-- [ ] Dashboard usage charts show recent requests on the new domain
-- [ ] One BYOK request succeeds (proves DEK is preserved)
-- [ ] One platform-billed request succeeds (proves OpenRouter key works)
-- [ ] Rate limit + spend cap behave as expected (try exceeding both)
-- [ ] Audit log records the migration test events
-- [ ] Status page (Better Stack) is monitoring the new domain
-- [ ] DNS-level monitoring shows the new endpoint resolving from multiple regions
+| `wrangler deploy` → "no such zone" | Zone not active on Ahurasense account | Wait for activation |
+| All requests 401 "Invalid API key" | New Worker can't reach Postgres | Re-set `SUPABASE_SERVICE_ROLE_KEY` in the new account |
+| BYOK requests fail to decrypt | `BYOK_DEK` differs | **Critical** — restore the original DEK and re-set |
+| Playground "blocked by CSP / connect-src" | `NEXT_PUBLIC_INFERENCE_API_ORIGIN` stale or not rebuilt | Set it + rebuild (it's build-time inlined) |
+| Idle pods never auto-stop / deployments stop billing / no spend alerts | Worker `CONTROL_PLANE_URL` still cs2hvh, or `BATCH_PROCESSOR_TOKEN` mismatch | Update the var + redeploy; confirm token matches Next.js |
+| FT/deployment webhooks never arrive | Runner `CONTROL_PLANE_URL` still cs2hvh | `kubectl set env` + rollout restart |
+| Customer copies a curl that 404s | Hardcoded marketing snippet not edited (§B) | Edit the three components in Phase C |
+| Audit/usage events stop in Postgres | Queue consumers on old per-account queues | Queues are per-account; recreate + redeploy consumer |
+| `ahurasense.com` cert not issuing | Universal SSL still provisioning | Wait 10–30 min |

@@ -237,7 +237,7 @@ export async function POST(
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${upstreamKey}`,
-          "HTTP-Referer": "https://cs2hvh.com",
+          "HTTP-Referer": "https://ahurasense.com",
           "X-Title": "AhuraCloud Inference (batch)",
         },
         body: JSON.stringify(parsed.body ?? {}),

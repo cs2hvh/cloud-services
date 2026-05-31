@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const INFERENCE_API_BASE =
-  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.cs2hvh.com/v1";
+  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.ahurasense.com/v1";
 
 const REQUIRED_SCHEMA_COLUMNS: Array<{ table: string; col: string }> = [
   // Phase 11.A

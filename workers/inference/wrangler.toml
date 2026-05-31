@@ -1,9 +1,8 @@
 # AhuraCloud Inference Edge Gateway
 #
-# Cloudflare Workers project serving api.cs2hvh.com/v1
-# (temporary domain — migration target is api.ahurasense.com once
-#  Workers/KV/Queues permissions are granted on that account.
-#  See docs/inference/migration-ahurasense.md for the switch runbook.)
+# Cloudflare Workers project serving api.ahurasense.com/v1
+# (migrated from the temporary api.cs2hvh.com domain — see
+#  docs/inference/migration-ahurasense.md for the runbook + rollback.)
 #
 # Handles: auth, rate limiting, spend caps, request normalization,
 # response caching, audit log enqueue, streaming proxy to OpenRouter.
@@ -17,7 +16,7 @@ compatibility_flags = ["nodejs_compat"]
 # Routes
 # ───────────────────────────────────────────────────────────────
 routes = [
-  { pattern = "api.cs2hvh.com/v1/*", zone_name = "cs2hvh.com" },
+  { pattern = "api.ahurasense.com/v1/*", zone_name = "ahurasense.com" },
 ]
 
 # ───────────────────────────────────────────────────────────────
@@ -114,7 +113,7 @@ ENV = "production"
 # {CONTROL_PLANE_URL}/api/inference/internal/serving-pod-watchdog every
 # minute to reap idle hosted-serving pods. Change this when the dashboard
 # moves to a different domain.
-CONTROL_PLANE_URL = "https://wao.cs2hvh.com"
+CONTROL_PLANE_URL = "https://app.ahurasense.com"
 
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC

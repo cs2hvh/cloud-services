@@ -23,7 +23,7 @@ const DOCKER_CMD = `docker run --gpus all -p 8000:8000 \\
   -e ADAPTER_DOWNLOAD_URL=<presigned> \\
   ghcr.io/ahuracloud/serving-vllm:latest`;
 
-const CURL_CMD = `curl https://api.cs2hvh.com/v1/chat/completions \\
+const CURL_CMD = `curl https://api.ahurasense.com/v1/chat/completions \\
   -H "Authorization: Bearer $AHURA_API_KEY" \\
   -d '{"model": "ahura/phi-4:ft-a1b2c3d4",
        "messages": [...]}'`;

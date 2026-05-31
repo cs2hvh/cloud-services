@@ -4,11 +4,10 @@
  * dashboard string that mentions a hostname, image URI, or email
  * should import from here.
  *
- * The defaults match the current temporary cs2hvh.com domain. When
- * the platform finishes migrating to ahurasense.com (see
- * docs/inference/migration-ahurasense.md), the entire switch becomes
- * a few env var changes on the Next.js process + a rebuild — no
- * grep-and-replace through the codebase.
+ * The defaults point at the ahurasense.com production domain. Override
+ * per environment via the NEXT_PUBLIC_* vars below (e.g. a staging host);
+ * see docs/inference/migration-ahurasense.md for the full
+ * cs2hvh.com -> ahurasense.com migration runbook + rollback.
  *
  * All vars are NEXT_PUBLIC_* because they appear in client-rendered
  * snippets (curl examples, copy-pasteable docker commands, etc.).
@@ -17,16 +16,16 @@
  */
 
 export const INFERENCE_API_BASE =
-  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.cs2hvh.com/v1";
+  process.env.NEXT_PUBLIC_INFERENCE_API_BASE ?? "https://api.ahurasense.com/v1";
 
 export const INFERENCE_API_ORIGIN =
-  process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.cs2hvh.com";
+  process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.ahurasense.com";
 
 export const DASHBOARD_URL =
-  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://wao.cs2hvh.com";
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://app.ahurasense.com";
 
 export const SUPPORT_EMAIL =
-  process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "support@cs2hvh.com";
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "support@ahurasense.com";
 
 /**
  * Public OCI image used by customers who self-serve FT adapters on

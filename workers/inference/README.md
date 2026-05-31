@@ -1,6 +1,6 @@
 # AhuraCloud Inference — Edge Gateway
 
-Cloudflare Workers project that fronts every `/v1/*` call to **api.cs2hvh.com** (temporary; migrating to **api.ahurasense.com** later — see [docs/inference/migration-ahurasense.md](../../docs/inference/migration-ahurasense.md)).
+Cloudflare Workers project that fronts every `/v1/*` call to **api.ahurasense.com**. (Migrated from the temporary cs2hvh.com domain — see [docs/inference/migration-ahurasense.md](../../docs/inference/migration-ahurasense.md) for the runbook + rollback.)
 
 ## Responsibilities
 

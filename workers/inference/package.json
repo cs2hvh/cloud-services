@@ -2,7 +2,7 @@
   "name": "ahura-inference-edge",
   "version": "0.1.0",
   "private": true,
-  "description": "AhuraCloud Inference edge gateway — Cloudflare Workers (api.cs2hvh.com/v1; migrating to api.ahurasense.com)",
+  "description": "AhuraCloud Inference edge gateway — Cloudflare Workers (api.ahurasense.com/v1)",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

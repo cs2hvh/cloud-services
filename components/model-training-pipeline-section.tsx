@@ -680,7 +680,7 @@ export function ModelTrainingPipelineSection() {
                 </span>
                 <span className="mt-outcome__col">
                   <span className="mt-outcome__pre">Endpoint</span>
-                  <span className="mt-outcome__val mt-outcome__mono">api.cs2hvh.com/v1</span>
+                  <span className="mt-outcome__val mt-outcome__mono">api.ahurasense.com/v1</span>
                 </span>
                 <span className="mt-outcome__col">
                   <span className="mt-outcome__pre">Status</span>

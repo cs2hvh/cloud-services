@@ -27,7 +27,7 @@ type CodeLine = { text: string; highlight?: boolean };
 const PYTHON_LINES: CodeLine[] = [
   { text: "from openai import OpenAI" },
   { text: "client = OpenAI(" },
-  { text: '  base_url="https://api.cs2hvh.com/v1",', highlight: true },
+  { text: '  base_url="https://api.ahurasense.com/v1",', highlight: true },
   { text: '  api_key=os.environ["AHURA_API_KEY"],' },
   { text: ")" },
 ];

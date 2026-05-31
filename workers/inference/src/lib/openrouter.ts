@@ -34,7 +34,7 @@ export async function forwardJson(opts: OpenRouterForwardOptions): Promise<Respo
     headers: {
       Authorization: `Bearer ${opts.upstreamKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://cs2hvh.com",
+      "HTTP-Referer": "https://ahurasense.com",
       "X-Title": "AhuraCloud Inference",
       ...opts.extraHeaders,
     },
