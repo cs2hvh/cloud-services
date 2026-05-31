@@ -22,7 +22,7 @@ export const INFERENCE_API_ORIGIN =
   process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.ahurasense.com";
 
 export const DASHBOARD_URL =
-  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://app.ahurasense.com";
+  process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "https://ahurasense.com";
 
 export const SUPPORT_EMAIL =
   process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "support@ahurasense.com";

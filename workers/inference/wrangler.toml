@@ -113,7 +113,7 @@ ENV = "production"
 # {CONTROL_PLANE_URL}/api/inference/internal/serving-pod-watchdog every
 # minute to reap idle hosted-serving pods. Change this when the dashboard
 # moves to a different domain.
-CONTROL_PLANE_URL = "https://app.ahurasense.com"
+CONTROL_PLANE_URL = "https://ahurasense.com"
 
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC

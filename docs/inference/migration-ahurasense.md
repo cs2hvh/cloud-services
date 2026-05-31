@@ -16,13 +16,17 @@ copy/curl snippets on the marketing site.
 
 ---
 
-## TL;DR — the three hosts
+## TL;DR — the hosts
+
+There are **two** production hosts. The Next.js app serves marketing
+(`app/(marketing)/*`) **and** the dashboard / control-plane (`app/dashboard/*`)
+from one origin — so it's just the **apex `ahurasense.com`** (no subdomain). Only
+the inference gateway is a separate host. (`wao.cs2hvh.com` was only a test host.)
 
 | Today | Role | Target | Driven by |
 |---|---|---|---|
 | `api.cs2hvh.com/v1` | Inference API gateway (CF Worker) | `api.ahurasense.com/v1` | wrangler route + `NEXT_PUBLIC_INFERENCE_API_*` |
-| `wao.cs2hvh.com` | Dashboard / control plane (Next.js) | **`app.ahurasense.com`** *(DECISION 1)* | DNS + `NEXT_PUBLIC_DASHBOARD_URL` + worker/runner `CONTROL_PLANE_URL` |
-| `cs2hvh.com` | Apex (referer attribution, support email) | `ahurasense.com` | hardcoded `HTTP-Referer` + `NEXT_PUBLIC_SUPPORT_EMAIL` |
+| `wao.cs2hvh.com` (test) + `cs2hvh.com` | Next.js app — marketing **and** dashboard/control-plane (one app), plus referer + support email | **`ahurasense.com`** (apex) | DNS + `NEXT_PUBLIC_DASHBOARD_URL` + worker/runner `CONTROL_PLANE_URL` + `HTTP-Referer` + `NEXT_PUBLIC_SUPPORT_EMAIL` |
 
 **The migration is NOT "just env vars."** It's three things:
 1. **Env vars + rebuild** — most customer-visible URLs read `NEXT_PUBLIC_*` with a
@@ -35,14 +39,12 @@ copy/curl snippets on the marketing site.
 
 ---
 
-## DECISION 1 — dashboard subdomain
+## No subdomain — the app is the apex
 
-The marketing site takes the apex (`ahurasense.com` / `www.ahurasense.com`), so
-the dashboard needs its own subdomain. Recommended: **`app.ahurasense.com`**
-(conventional SaaS console host). Alternatives: `dashboard.` / `console.`.
-Everywhere below, `app.ahurasense.com` is used as the placeholder — substitute
-your pick consistently. This is the only naming choice you have to make; the
-gateway (`api.ahurasense.com/v1`) is already locked.
+The Next.js app (marketing + dashboard / control-plane) is a single deployment
+served from the **apex `ahurasense.com`** — there is no separate dashboard
+subdomain. The old `wao.cs2hvh.com` was only a test host. The gateway
+(`api.ahurasense.com/v1`) is the one separate host, and it's already locked.
 
 ---
 
@@ -91,9 +93,9 @@ updating the fallback defaults so an unset env can't silently revert the brand.
 | Where | Field | Current | Target |
 |---|---|---|---|
 | `workers/inference/wrangler.toml:20` | route `pattern` + `zone_name` | `api.cs2hvh.com/v1/*` / `cs2hvh.com` | `api.ahurasense.com/v1/*` / `ahurasense.com` |
-| `workers/inference/wrangler.toml:117` | `CONTROL_PLANE_URL` var | `https://wao.cs2hvh.com` | `https://app.ahurasense.com` |
-| `workers/ft-runner/k8s/secret.yaml.template` + live k8s secret | `CONTROL_PLANE_URL` | `https://…cs2hvh.com` | `https://app.ahurasense.com` |
-| deploy-runner k8s deployment | `CONTROL_PLANE_URL` (if set) | cs2hvh | `https://app.ahurasense.com` |
+| `workers/inference/wrangler.toml:117` | `CONTROL_PLANE_URL` var | `https://wao.cs2hvh.com` | `https://ahurasense.com` |
+| `workers/ft-runner/k8s/secret.yaml.template` + live k8s secret | `CONTROL_PLANE_URL` | `https://…cs2hvh.com` | `https://ahurasense.com` |
+| deploy-runner k8s deployment | `CONTROL_PLANE_URL` (if set) | cs2hvh | `https://ahurasense.com` |
 | Root `.env` (app runtime) | the `NEXT_PUBLIC_*` vars in §A | unset → cs2hvh fallback | ahurasense values |
 
 `CONTROL_PLANE_URL` matters because the worker's `scheduled()` cron and the
@@ -115,6 +117,9 @@ commonly-missed step.
   DNS domain — moving DNS does not require renaming images. Renaming the GHCR org
   is a separate brand task (CI workflows + k8s specs + `gpu_templates` DB rows +
   `SERVING_IMAGE_URI`) and should be done deliberately, not as part of this.
+- **R2 buckets stay on the existing (cs2hvh) Cloudflare R2 account** — datasets +
+  adapters are kept as-is; no R2 migration. The endpoint is an account-ID host,
+  not the cs2hvh.com domain.
 - **`samatva.blr1.cdn.digitaloceanspaces.com`** in `next.config.ts` CSP/images —
   the asset CDN bucket; separate brand-asset migration.
 
@@ -206,7 +211,7 @@ npx wrangler secret put OTEL_EXPORTER_OTLP_HEADERS   # if used
 
 **5. Set `CONTROL_PLANE_URL` and deploy**
 
-Update `wrangler.toml:117` → `CONTROL_PLANE_URL = "https://app.ahurasense.com"`,
+Update `wrangler.toml:117` → `CONTROL_PLANE_URL = "https://ahurasense.com"`,
 then:
 
 ```powershell
@@ -214,19 +219,20 @@ npx wrangler deploy
 # → Published ahura-inference-edge … api.ahurasense.com/v1/*
 ```
 
-### Phase B — Next.js app (dashboard host `app.` + env)
+### Phase B — Next.js app (apex `ahurasense.com` + env)
 
-**6. DNS for the dashboard**
+**6. DNS for the app**
 
-Create `app.ahurasense.com` → the Next.js app's origin (same target
-`wao.cs2hvh.com` resolves to today), proxied through Cloudflare for TLS.
+Point the apex `ahurasense.com` (and `www.ahurasense.com`) at the Next.js app's
+origin — the same target the test host `wao.cs2hvh.com` resolves to today —
+proxied through Cloudflare for TLS.
 
 **7. Set the app env vars** (root `.env` / deployment env), then **rebuild**:
 
 ```dotenv
 NEXT_PUBLIC_INFERENCE_API_BASE=https://api.ahurasense.com/v1
 NEXT_PUBLIC_INFERENCE_API_ORIGIN=https://api.ahurasense.com
-NEXT_PUBLIC_DASHBOARD_URL=https://app.ahurasense.com
+NEXT_PUBLIC_DASHBOARD_URL=https://ahurasense.com
 NEXT_PUBLIC_SUPPORT_EMAIL=support@ahurasense.com
 ```
 
@@ -256,12 +262,12 @@ defaults to the ahurasense equivalents.
 
 **11.** Update `CONTROL_PLANE_URL` in the **live** ft-runner and deploy-runner
 k8s secrets/configmaps (and `workers/ft-runner/k8s/secret.yaml.template` +
-`.env.example` for the repo of record) to `https://app.ahurasense.com`, then
+`.env.example` for the repo of record) to `https://ahurasense.com`, then
 roll the deployments:
 
 ```powershell
-kubectl set env deploy/ahura-ft-runner   -n ahura CONTROL_PLANE_URL=https://app.ahurasense.com
-kubectl set env deploy/ahura-deploy-runner -n ahura CONTROL_PLANE_URL=https://app.ahurasense.com
+kubectl set env deploy/ahura-ft-runner   -n ahura CONTROL_PLANE_URL=https://ahurasense.com
+kubectl set env deploy/ahura-deploy-runner -n ahura CONTROL_PLANE_URL=https://ahurasense.com
 kubectl rollout restart deploy/ahura-ft-runner deploy/ahura-deploy-runner -n ahura
 ```
 
@@ -280,7 +286,11 @@ Domain-independent — leave untouched:
 - Postgres-stored API keys — matched by `sha256(key)`, not by domain; the **same
   `ahu_live_…` keys keep working**, the gateway is stateless
 - BYOK ciphertext — decrypts fine as long as `BYOK_DEK` is preserved
-- OpenRouter account + platform key, R2 buckets, BullMQ/Redis, RunPod
+- OpenRouter account + platform key, BullMQ/Redis, RunPod
+- **R2 storage** — datasets + adapters stay in the **existing (cs2hvh) Cloudflare
+  R2** buckets; deliberately not migrated. The endpoint is an account-ID host
+  (`<id>.r2.cloudflarestorage.com`), not the cs2hvh.com domain, so there is nothing
+  to move
 - `ghcr.io/cs2hvh/*` image names (see "NOT in scope")
 
 ---
@@ -296,7 +306,7 @@ curl https://api.ahurasense.com/v1/key -H "Authorization: Bearer ahu_live_..."  
 - [ ] An existing API key authenticates (proves stateless cutover)
 - [ ] **One BYOK request succeeds** (proves `BYOK_DEK` preserved)
 - [ ] One platform-billed request succeeds (proves OpenRouter key bound)
-- [ ] Playground works from the browser at `app.ahurasense.com` (proves CSP origin)
+- [ ] Playground works from the browser at `ahurasense.com` (proves CSP origin)
 - [ ] Dashboard usage charts show recent requests
 - [ ] Rate limit + spend cap still enforce
 - [ ] A serving pod past its idle deadline auto-stops (proves worker→control-plane
