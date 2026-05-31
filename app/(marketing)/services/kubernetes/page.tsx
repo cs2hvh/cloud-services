@@ -94,9 +94,9 @@ const KubernetesPage = async () => {
       <ServicesHomeSectionSix
         cases={cases}
         eyebrow="Use cases"
-        heading="Built for the workloads you"
-        headingAccent="actually run."
-        subtitle="From microservices to GPU training — one cluster shape, four workloads that ship every day."
+        heading="Built for"
+        headingAccent="every workload."
+        subtitle="From microservices to GPU training — one platform, ready for every production workload."
       />
     </main>
   );

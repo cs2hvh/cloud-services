@@ -1,10 +1,9 @@
-import { UseCasesHero, UseCasesShowcase } from "@/components/services/use-cases-page-sections";
+import AiUseCasesContent from "@/components/services/ai-use-cases-content";
 
 const AiUseCasesPage = () => {
   return (
-    <main className="bg-[#04060a]">
-      <UseCasesHero />
-      <UseCasesShowcase />
+    <main className="bg-[#0a0a0a]">
+      <AiUseCasesContent />
     </main>
   );
 };

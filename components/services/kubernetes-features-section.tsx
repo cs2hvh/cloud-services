@@ -78,7 +78,7 @@ function FeatureItem({ feature, index }: { feature: Feature; index: number }) {
 
             {/* Title + description */}
             <div>
-                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-white">
+                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#0095FF]">
                     {feature.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.65] text-white/60">
@@ -101,11 +101,10 @@ export default function KubernetesFeaturesSection() {
                         Features
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        Production defaults, not a checklist
+                        Production-ready,{" "}<span className="text-[#0095FF]">built in</span>
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
-                        Autoscaling, multi-region, GitOps, ingress, observability —
-                        wired in from the first cluster. No bolt-on plugins to babysit.
+                        Six production capabilities included from day one. No plugins to configure. No operational drift.
                     </p>
                 </div>
 

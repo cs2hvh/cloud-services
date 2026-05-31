@@ -141,7 +141,7 @@ export default function AppDeployFrameworksSection() {
                         Runtimes
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        Native support for every major runtime.
+                        <span className="text-[#0095FF]">Native support</span> for every major runtime.
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
                         Twelve runtimes are detected automatically from the repository
@@ -155,7 +155,7 @@ export default function AppDeployFrameworksSection() {
                     {FRAMEWORKS.map((fw) => (
                         <div
                             key={fw.name}
-                            className="group flex flex-col items-center gap-3.5 rounded-[10px] border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110"
+                            className="group flex flex-col items-center gap-3.5 rounded-[10px] border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[inset_3px_0_0_#0095FF]"
                             style={{
                                 background: `${fw.color}0D`,
                                 borderColor: `${fw.color}25`,

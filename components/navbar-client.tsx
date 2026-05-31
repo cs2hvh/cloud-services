@@ -156,55 +156,26 @@ const AI_LABS_GROUPS: AiLabsGroup[] = [
       {
         label: "Chatbots & Agents",
         desc: "Customer support copilots, internal assistants, tool-using agents",
-        href: "/services/ai-use-cases",
+        href: "/services/ai-use-cases#chatbots",
         tags: ["Streaming", "Tool calling", "Memory"],
       },
       {
         label: "RAG & Knowledge Search",
         desc: "Vector retrieval over your docs with citation-ready answers",
-        href: "/services/ai-use-cases",
+        href: "/services/ai-use-cases#rag",
         tags: ["pgvector", "Reranking", "Citations"],
       },
       {
         label: "Code Generation",
         desc: "Code completion, refactoring, review with frontier + OSS code models",
-        href: "/services/ai-use-cases",
+        href: "/services/ai-use-cases#code",
         tags: ["Codestral", "DeepSeek-Coder", "Qwen-Coder"],
       },
       {
         label: "Document Intelligence",
         desc: "Summarization, extraction, classification, OCR-aware pipelines",
-        href: "/services/ai-use-cases",
+        href: "/services/ai-use-cases#docs",
         tags: ["Long context", "JSON mode", "Batches"],
-      },
-    ],
-  },
-  {
-    label: "Resources",
-    items: [
-      {
-        label: "Model Catalog",
-        desc: "Browse 50+ models with capability flags + per-Mtok pricing",
-        href: "/services/inference",
-        tags: ["Frontier", "Open source", "Off-peak"],
-      },
-      {
-        label: "API Documentation",
-        desc: "Quickstart, endpoint reference, SDKs (OpenAI + Anthropic compat)",
-        href: "/api-docs",
-        tags: ["curl", "Python", "TypeScript"],
-      },
-      {
-        label: "Pricing",
-        desc: "Pay-per-token inference, hourly GPU for training + hosted serving",
-        href: "/pricing",
-        tags: ["No markup", "Off-peak", "Spend caps"],
-      },
-      {
-        label: "All AI Solutions",
-        desc: "Industry- and pattern-specific blueprints built on the platform",
-        href: "/solutions/ai-ml",
-        tags: ["Reference", "Patterns"],
       },
     ],
   },
@@ -653,7 +624,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       breathing room. Right rail keeps the existing image. */}
                   <div className="grid grid-cols-4">
                     <div className="col-span-3 p-8">
-                      <div className="grid grid-cols-3 gap-x-8 gap-y-5">
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-5">
                         {AI_LABS_GROUPS.map((group) => (
                           <div key={group.label}>
                             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/45 mb-4 pb-2 border-b border-black/10">

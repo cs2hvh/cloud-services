@@ -430,11 +430,10 @@ export default function VPSPage() {
                             Your{' '}
                             <span
                                 style={SERIF_STYLE}
-                                className="text-white/55 font-normal"
+                                className="text-[#0095FF] font-normal"
                             >
                                 servers
                             </span>
-                            .
                         </h1>
                         <p
                             className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}

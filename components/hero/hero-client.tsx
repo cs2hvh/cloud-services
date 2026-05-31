@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import PixelBlast from "./pixel-blast";
 
 const BRAND = "#0095FF";
@@ -167,6 +166,17 @@ type GpuRow = {
 
 const GPU_PRICING: GpuRow[] = [
     {
+        id: "b300",
+        name: "B300",
+        memory: 288,
+        gen: "HBM3e",
+        price: 6.99,
+        stock: "low",
+        href: "/dashboard/services/gpu/deploy?gpu=b300-288",
+        tone: "#fbbf24", // amber — newest flagship
+        tier: "Blackwell",
+    },
+    {
         id: "b200",
         name: "B200",
         memory: 180,
@@ -174,62 +184,29 @@ const GPU_PRICING: GpuRow[] = [
         price: 5.49,
         stock: "low",
         href: "/dashboard/services/gpu/deploy?gpu=b200-180",
-        tone: "#fbbf24", // amber — flagship
+        tone: "#a78bfa", // violet — Blackwell
         tier: "Blackwell",
     },
     {
-        id: "h200-sxm",
-        name: "H200 SXM",
+        id: "h200",
+        name: "H200",
         memory: 141,
         gen: "HBM3e",
         price: 3.99,
-        stock: "low",
+        stock: "high",
         href: "/dashboard/services/gpu/deploy?gpu=h200-141",
-        tone: "#4ade80",
+        tone: "#4ade80", // green — Hopper
         tier: "Hopper",
     },
-    // {
-    //     id: "h100-nvl",
-    //     name: "H100 NVL",
-    //     memory: 94,
-    //     gen: "HBM3",
-    //     price: 2.59,
-    //     stock: "high",
-    //     href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
-    //     tone: "#a78bfa",
-    //     tier: "Hopper",
-    // },
-    // {
-    //     id: "h100-sxm",
-    //     name: "H100 SXM",
-    //     memory: 80,
-    //     gen: "HBM3",
-    //     price: 2.99,
-    //     stock: "high",
-    //     href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
-    //     tone: "#22d3ee",
-    //     tier: "Hopper",
-    // },
-     {
-        id: "b200-x4",
-        name: "B200 X4",
-        memory: 180,
-        gen: "HBM3e",
-        price: 5.49,
+    {
+        id: "h100",
+        name: "H100",
+        memory: 80,
+        gen: "HBM3",
+        price: 2.99,
         stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=b200-x4-180",
-        tone: "#22d3ee",
-        tier: "Hopper",
-    },
-     {
-        id: "b200-x8",
-        name: "B200 X8",
-        memory: 180,
-        gen: "HBM3e",
-        price: 5.49,
-        stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=b200-x8-180",
-        tone: "#22d3ee",
+        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
+        tone: "#22d3ee", // cyan — Hopper
         tier: "Hopper",
     },
 ];
@@ -271,12 +248,10 @@ function GpuPricingRail() {
                                     {/* Top — NVIDIA + name + memory chip */}
                                     <div className="relative">
                                         <div className="flex items-center gap-2.5">
-                                            <NvidiaLogo
-                                                width={42}
-                                                height={11}
-                                                className="shrink-0 opacity-95"
-                                            />
-                                            <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-white">
+                                            <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                                                NVIDIA
+                                            </span>
+                                            <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-[#0095FF]">
                                                 {gpu.name}
                                             </p>
                                             <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.14em] tabular-nums text-white/45">
@@ -311,7 +286,7 @@ function GpuPricingRail() {
                                             <p className="mt-1 font-mono text-[24px] font-semibold leading-none tabular-nums text-white">
                                                 ${gpu.price.toFixed(2)}
                                                 <span className="ml-1 text-[10.5px] font-normal text-white/55">
-                                                    /hr
+                                                    /hr/gpu
                                                 </span>
                                             </p>
                                         </div>
@@ -403,7 +378,7 @@ export default function HeroClient() {
                             <AuthAwareServiceCta
                                 service="gpu"
                                 intent="new"
-                                className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-white/85 bg-white px-6 text-[13.5px] font-semibold text-black transition-colors hover:bg-white/90"
+                                className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-white/85 bg-white px-6 text-[13.5px] font-semibold text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
                             >
                                 <span className="relative">Get started</span>
                                 <HeroMark

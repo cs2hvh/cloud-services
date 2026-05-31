@@ -131,7 +131,7 @@ export default function EmbeddingsModelsSection() {
               </p>
               <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[2.9rem]">
                 Pick by dimension,{" "}
-                <span className="text-[#8ecaff]">budget, or language.</span>
+                <span className="text-[#0095FF]">budget, or language.</span>
               </h2>
               <p className="mt-5 max-w-md text-[14.5px] leading-7 text-white/55">
                 OpenAI for accuracy, BGE-M3 for multilingual at a tenth of the price, Voyage for 32k context. Hot-swap models with one config change.
@@ -147,7 +147,7 @@ export default function EmbeddingsModelsSection() {
                 initial={{ opacity: 0 }}
                 animate={inView ? { opacity: 1 } : {}}
                 transition={{ duration: 0.5, delay: 0.4 }}
-                className="group mt-8 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#33adff] transition-colors hover:text-white"
+                className="group mt-8 inline-flex items-center gap-1.5 text-[13px] font-medium text-white transition-colors hover:text-[#0095FF]"
               >
                 Create a collection
                 <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />

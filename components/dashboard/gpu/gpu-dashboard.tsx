@@ -319,10 +319,9 @@ export default function GpuDashboard() {
                 <div className="max-w-2xl">
                     <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                         On-demand{" "}
-                        <span style={SERIF_STYLE} className="text-white/55 font-normal">
-                            GPUs for inference and training
+                        <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
+                            GPUs
                         </span>
-                        .
                     </h1>
                     <p className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}>
                         Blackwell, Hopper, Ada, and Ampere on demand. Per-second

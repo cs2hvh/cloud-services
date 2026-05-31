@@ -171,7 +171,7 @@ export default function DatabasePricingSection({
               return (
                 <article
                   key={engine.key}
-                  className="group relative flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-shadow hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.18)]"
+                  className="group relative flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-all hover:border-[#0095FF] hover:shadow-[0_18px_40px_-16px_rgba(0,149,255,0.28)]"
                 >
                   {/* Engine logo */}
                   <div
@@ -258,7 +258,7 @@ export default function DatabasePricingSection({
                   <AuthAwareServiceCta
                     service="database"
                     intent="new"
-                    className={`${MONO} mt-5 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-black`}
+                    className={`${MONO} mt-5 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white`}
                   >
                     <span className="flex items-center gap-1.5">
                       Deploy {engine.name}
@@ -294,10 +294,10 @@ export default function DatabasePricingSection({
               {UNIVERSAL_FEATURES.map((feature) => (
                 <div
                   key={feature}
-                  className="flex items-center gap-2 bg-[#EEECE4] px-3 py-3 text-[12.5px] text-black/75"
+                  className="flex items-center gap-2 bg-[#EEECE4] px-3 py-3 text-[12.5px] font-medium text-[#0095FF]"
                 >
                   <Check
-                    className="h-3.5 w-3.5 shrink-0 text-black/55"
+                    className="h-3.5 w-3.5 shrink-0 text-[#0095FF]"
                     strokeWidth={2.2}
                   />
                   {feature}

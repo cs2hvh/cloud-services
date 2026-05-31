@@ -11,9 +11,16 @@ import { Container } from "@/components/ui/container";
 import { createClient } from "@/lib/supabase/client";
 import PixelBlast from "@/components/hero/pixel-blast";
 
+const HERO_MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
 type HeroAction = {
   label: string;
   href: string;
+};
+
+type HeroHighlight = {
+  value: string;
+  label: string;
 };
 
 type HeroImage = {
@@ -24,10 +31,15 @@ type HeroImage = {
 
 type ServiceHeroSectionProps = {
   badge?: string;
-  title: string;
+  title: React.ReactNode;
   description: string;
   primaryAction?: HeroAction;
   secondaryAction?: HeroAction;
+  /**
+   * Optional compact proof-stats rendered beneath the CTAs. Hero-only — pages
+   * that don't pass it render exactly as before.
+   */
+  highlights?: HeroHighlight[];
   /**
    * @deprecated Kept for backwards-compat with existing service pages.
    * The hero now uses the same PixelBlast ambient backdrop as the homepage
@@ -50,6 +62,7 @@ export function ServiceHeroSection({
   description,
   primaryAction,
   secondaryAction,
+  highlights,
   illustration,
   align = "right",
   className,
@@ -202,7 +215,7 @@ export function ServiceHeroSection({
                         type="button"
                         onClick={handlePrimaryActionClick}
                         disabled={isRouting}
-                        className="cursor-pointer inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
+                        className="cursor-pointer inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-[#0095FF] hover:text-white transition-colors"
                       >
                         {primaryAction.label}
                         <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -222,6 +235,32 @@ export function ServiceHeroSection({
                     )}
                   </div>
                 )}
+
+                {highlights && highlights.length > 0 && (
+                  <div className="mt-1 border-t border-white/[0.08] pt-5 sm:pt-6">
+                    <dl className="mx-auto grid max-w-md grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 lg:mx-0">
+                      {highlights.map((h) => (
+                        <div
+                          key={h.label}
+                          className="relative text-center lg:pl-3 lg:text-left"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-[3px] hidden h-[calc(100%-6px)] w-px bg-gradient-to-b from-[#0095FF]/60 to-transparent lg:block"
+                          />
+                          <dd className="text-lg font-semibold leading-none tracking-tight text-[#0095FF] tabular-nums sm:text-xl">
+                            {h.value}
+                          </dd>
+                          <dt
+                            className={`${HERO_MONO} mt-2 text-[10px] uppercase tracking-[0.14em] text-white/45`}
+                          >
+                            {h.label}
+                          </dt>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -236,14 +275,14 @@ export function ServiceHeroSection({
                     width={100}
                     height={100}
                     src={illustration.src}
-                    alt={illustration.alt ?? title}
+                    alt={illustration.alt ?? ""}
                     className="h-full w-full object-contain"
                     loading={illustration.priority ? "eager" : "lazy"}
                   />
                 ) : (
                   <Image
                     src={illustration.src}
-                    alt={illustration.alt ?? title}
+                    alt={illustration.alt ?? ""}
                     fill
                     priority={illustration.priority}
                     className="object-contain"

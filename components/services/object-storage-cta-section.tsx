@@ -15,7 +15,7 @@ export default function ObjectStorageCtaSection() {
           <AuthAwareServiceCta
             service="object-storage"
             intent="main"
-            className={`${MONO} cursor-pointer inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-md font-medium`}
+            className={`${MONO} cursor-pointer inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-md font-medium transition-colors hover:bg-[#0095FF] hover:text-white`}
           >
          
             Get Started <ArrowRight className="w-4 h-4" />

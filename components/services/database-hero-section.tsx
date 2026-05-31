@@ -97,7 +97,7 @@ export default function DatabaseHeroSection({
                   type="button"
                   onClick={handlePrimaryActionClick}
                   disabled={isRouting}
-                  className="inline-flex h-11 items-center gap-2 bg-white px-6 text-sm font-medium text-black transition hover:bg-white/90"
+                  className="inline-flex h-11 items-center gap-2 bg-white px-6 text-sm font-medium text-black transition hover:bg-[#0095FF] hover:text-white"
                 >
                   {primaryAction.label}
                   <ArrowRight className="h-4 w-4" />
@@ -117,7 +117,7 @@ export default function DatabaseHeroSection({
             <div className="mt-12 grid gap-6 sm:grid-cols-3">
               {HERO_METRICS.map((metric) => (
                 <div key={metric.label} className="border-t border-white/[0.1] pt-4">
-                  <div className="text-[1.15rem] font-medium tracking-tight text-white">{metric.value}</div>
+                  <div className="text-[1.15rem] font-medium tracking-tight text-[#0095FF]">{metric.value}</div>
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/36">
                     {metric.label}
                   </div>

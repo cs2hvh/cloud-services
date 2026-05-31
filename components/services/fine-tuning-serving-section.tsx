@@ -13,6 +13,66 @@ import {
 
 import { Container } from "@/components/ui/container";
 
+// ─── Looping code typewriter ─────────────────────────────────────────
+//
+// Types the command out, holds, then restarts — loops while the section
+// is in view. SSR-safe (renders nothing typed until `start` flips true,
+// no Math.random) and respects reduced-motion by showing the full text.
+const DOCKER_CMD = `docker run --gpus all -p 8000:8000 \\
+  -e BASE_MODEL="phi-4" \\
+  -e ADAPTER_DOWNLOAD_URL=<presigned> \\
+  ghcr.io/ahuracloud/serving-vllm:latest`;
+
+const CURL_CMD = `curl https://api.cs2hvh.com/v1/chat/completions \\
+  -H "Authorization: Bearer $AHURA_API_KEY" \\
+  -d '{"model": "ahura/phi-4:ft-a1b2c3d4",
+       "messages": [...]}'`;
+
+function TypeCode({
+  code,
+  start,
+  className = "",
+  stepMs = 18,
+}: {
+  code: string;
+  start: boolean;
+  className?: string;
+  stepMs?: number;
+}) {
+  const [typed, setTyped] = useState(0);
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+  }, []);
+
+  useEffect(() => {
+    if (!start || reduced) return;
+    // Finished → hold, then restart so the typing loops.
+    if (typed >= code.length) {
+      const id = setTimeout(() => setTyped(0), 2400);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => setTyped((c) => c + 1), stepMs);
+    return () => clearTimeout(id);
+  }, [start, reduced, typed, code.length, stepMs]);
+
+  const shown = reduced ? code : code.slice(0, typed);
+  const done = reduced || typed >= code.length;
+
+  return (
+    <pre className={className}>
+      {shown}
+      {!done && (
+        <span className="ml-px inline-block w-[6px] -translate-y-[1px] animate-pulse text-[#33adff]">
+          ▍
+        </span>
+      )}
+    </pre>
+  );
+}
+
 export default function FineTuningServingSection() {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
@@ -50,7 +110,7 @@ export default function FineTuningServingSection() {
           </p>
           <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Two paths to{" "}
-            <span className="text-[#8ecaff]">production.</span>
+            <span className="text-[#0095FF]">production.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             Pick what fits the workload. Switch any time — your adapter stays the same.
@@ -100,12 +160,11 @@ export default function FineTuningServingSection() {
                   copy &amp; paste
                 </span>
               </div>
-              <pre className="px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80">
-{`docker run --gpus all -p 8000:8000 \\
-  -e BASE_MODEL="phi-4" \\
-  -e ADAPTER_DOWNLOAD_URL=<presigned> \\
-  ghcr.io/ahuracloud/serving-vllm:latest`}
-              </pre>
+              <TypeCode
+                code={DOCKER_CMD}
+                start={inView}
+                className="min-h-[6rem] px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80"
+              />
             </div>
 
             <ul className="mt-6 space-y-2">
@@ -165,12 +224,11 @@ export default function FineTuningServingSection() {
                   call your fine-tune
                 </span>
               </div>
-              <pre className="px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80">
-{`curl https://api.cs2hvh.com/v1/chat/completions \\
-  -H "Authorization: Bearer $AHURA_API_KEY" \\
-  -d '{"model": "ahura/phi-4:ft-a1b2c3d4",
-       "messages": [...]}'`}
-              </pre>
+              <TypeCode
+                code={CURL_CMD}
+                start={inView}
+                className="min-h-[6rem] px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80"
+              />
             </div>
 
             <ul className="mt-6 space-y-2">

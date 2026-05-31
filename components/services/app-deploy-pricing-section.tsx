@@ -89,7 +89,7 @@ export default function AppDeployPricingSection({
                         Pricing
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-                        Three plans. Pay for what you ship.
+                        Three plans. Pay for <span className="text-[#0095FF]">what you ship.</span>
                     </h2>
                     <p className="mx-auto mt-5 max-w-[540px] text-[15px] leading-[1.6] text-black/60 sm:text-[16px]">
                         Transparent monthly pricing with no per-seat fees and no
@@ -104,10 +104,10 @@ export default function AppDeployPricingSection({
                         return (
                           <article
                             key={plan.name}
-                            className={`cursor-pointer relative flex flex-col rounded-[10px] border bg-[#EEECE4] p-7 transition-all duration-300 hover:bg-[#E6E2D7] hover:shadow-sm hover:-translate-y-1 ${
+                            className={`cursor-pointer relative flex flex-col rounded-[10px] border bg-[#EEECE4] p-7 transition-all duration-300 hover:bg-[#E6E2D7] hover:shadow-sm hover:-translate-y-1 hover:border-[#0095FF] ${
                               isFeatured
                                 ? "border-black"
-                                : "border-black/10 hover:border-black/25"
+                                : "border-black/10"
                             }`}
                           >
                             {isFeatured && (
@@ -175,8 +175,8 @@ export default function AppDeployPricingSection({
                                   intent="main"
                                   className={`${MONO} inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
                                     isFeatured
-                                      ? "border border-[#1A1814] bg-[#1A1814] text-[#EEECE4] hover:bg-black"
-                                      : "border border-black/15 bg-transparent text-black/80 hover:border-black/35 hover:bg-black/[0.04] hover:text-[#1A1814]"
+                                      ? "border border-[#1A1814] bg-[#1A1814] text-[#EEECE4] hover:bg-white hover:border-white hover:text-[#1A1814]"
+                                      : "border border-black/15 bg-transparent text-black/80 hover:border-[#0095FF] hover:bg-[#0095FF]/[0.06] hover:text-[#0095FF]"
                                   }`}
                                 >
                                   <span className="flex items-center gap-1.5">

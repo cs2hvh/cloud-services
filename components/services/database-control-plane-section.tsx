@@ -43,8 +43,8 @@ function BackupsVisual() {
                         style={{
                             height: `${heights[i]}px`,
                             background: recent
-                                ? "rgba(255,255,255,0.85)"
-                                : "rgba(255,255,255,0.18)",
+                                ? "rgba(0,149,255,0.9)"
+                                : "rgba(255,255,255,0.55)",
                         }}
                     />
                 );
@@ -58,8 +58,8 @@ function HaVisual() {
     return (
         <div className="flex items-center justify-between gap-3 h-10">
             <div className="flex flex-col items-center gap-1">
-                <div className="h-6 w-6 rounded-[3px] border border-white/40 bg-white/[0.08] flex items-center justify-center">
-                    <span className={`${MONO} text-[8px] font-bold text-white/90`}>
+                <div className="h-6 w-6 rounded-[3px] border border-[#0095FF]/60 bg-[#0095FF]/15 flex items-center justify-center">
+                    <span className={`${MONO} text-[8px] font-bold text-[#0095FF]`}>
                         P
                     </span>
                 </div>
@@ -71,8 +71,8 @@ function HaVisual() {
             <div className="flex gap-2">
                 {["R1", "R2"].map((r) => (
                     <div key={r} className="flex flex-col items-center gap-1">
-                        <div className="h-6 w-6 rounded-[3px] border border-white/20 bg-white/[0.03] flex items-center justify-center">
-                            <span className={`${MONO} text-[8px] font-medium text-white/65`}>
+                        <div className="h-6 w-6 rounded-[3px] border border-[#0095FF]/40 bg-[#0095FF]/10 flex items-center justify-center">
+                            <span className={`${MONO} text-[8px] font-medium text-[#0095FF]/90`}>
                                 {r}
                             </span>
                         </div>
@@ -98,7 +98,9 @@ function SecurityVisual() {
             ].map((layer) => (
                 <div
                     key={layer.label}
-                    className="flex-1 flex items-center justify-center rounded-[3px] border border-white/15 h-8"
+                    className={`flex-1 flex items-center justify-center rounded-[3px] border h-8 ${
+                        layer.label === "DB" ? "border-[#0095FF]/70" : "border-white/15"
+                    }`}
                     style={{ background: `rgba(255,255,255,${layer.opacity * 0.06})` }}
                 >
                     <span
@@ -132,19 +134,19 @@ function MetricsVisual() {
         >
             <defs>
                 <linearGradient id="ctrl-spark-fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                    <stop offset="0%" stopColor="rgba(0,149,255,0.22)" />
+                    <stop offset="100%" stopColor="rgba(0,149,255,0)" />
                 </linearGradient>
             </defs>
             <path d={`${path} L${w},${h} L0,${h} Z`} fill="url(#ctrl-spark-fill)" />
-            <path d={path} stroke="rgba(255,255,255,0.85)" strokeWidth="1.4" fill="none" />
+            <path d={path} stroke="#0095FF" strokeWidth="1.4" fill="none" />
             {points.map((p, i) => (
                 <circle
                     key={i}
                     cx={i * step}
                     cy={h - (p / max) * h}
                     r={i === points.length - 1 ? 2.2 : 0.8}
-                    fill={i === points.length - 1 ? "#ffffff" : "rgba(255,255,255,0.5)"}
+                    fill={i === points.length - 1 ? "#0095FF" : "rgba(0,149,255,0.5)"}
                 />
             ))}
         </svg>
@@ -224,7 +226,7 @@ function CapabilityCard({ c, index }: { c: Capability; index: number }) {
             </div>
 
             <div>
-                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-white">
+                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-white transition-colors group-hover:text-[#0095FF]">
                     {c.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
@@ -276,7 +278,7 @@ export default function DatabaseControlPlaneSection() {
                         The control plane
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
-                        Managed clusters, not hosted VMs
+                        <span className="text-[#0095FF]">Managed clusters</span>, not hosted VMs
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
                         Backups, failover, encryption, and observability ship as
@@ -305,7 +307,7 @@ export default function DatabaseControlPlaneSection() {
                             className="flex flex-col items-center gap-2 bg-[#0D0D0F] px-4 py-5"
                         >
                             <span
-                                className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-white sm:text-[26px]`}
+                                className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-[#0095FF] sm:text-[26px]`}
                             >
                                 {s.value}
                             </span>

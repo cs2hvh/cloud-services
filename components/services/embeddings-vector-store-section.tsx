@@ -54,7 +54,7 @@ export default function EmbeddingsVectorStoreSection() {
           </p>
           <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             A managed store{" "}
-            <span className="text-[#8ecaff]">your retrieval can trust.</span>
+            <span className="text-[#0095FF]">your retrieval can trust.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             Collections, indexes, metadata filters, replicas. The boring parts of a vector DB — already paved.
@@ -78,7 +78,7 @@ export default function EmbeddingsVectorStoreSection() {
               accent="#33adff"
             />
             <h3 className="mt-4 text-[22px] font-semibold leading-tight tracking-tight text-white sm:text-[26px]">
-              <span className="tabular-nums text-[#8ecaff]">p95 &lt; 100 ms</span>{" "}
+              <span className="tabular-nums text-[#0095FF]">p95 &lt; 100 ms</span>{" "}
               at 50M vectors per collection.
             </h3>
             <p className="mt-2 max-w-md text-[13px] leading-relaxed text-white/55">
@@ -194,7 +194,7 @@ export default function EmbeddingsVectorStoreSection() {
                 { dim: "3072", note: "embed-3-large" },
                 { dim: "1536", note: "embed-3-small" },
                 { dim: "1024", note: "BGE-M3 / Voyage" },
-                { dim: "512", note: "ada-legacy" },
+                { dim: "512", note: "truncated" },
               ].map((d) => (
                 <div
                   key={d.dim}
@@ -229,9 +229,28 @@ export default function EmbeddingsVectorStoreSection() {
               Per-collection metrics + a global usage feed. Embed calls, query calls, storage GB — invoiceable, not estimates.
             </p>
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <Metric label="Queries / hr" value="142,800" />
-              <Metric label="Embed tokens" value="9.4M" accent="#22c55e" />
-              <Metric label="Storage" value="6.8 GB" />
+              <LiveMetric
+                inView={inView}
+                label="Queries / hr"
+                base={142800}
+                tickDelta={123}
+                format={(v) => Math.floor(v).toLocaleString("en-US")}
+              />
+              <LiveMetric
+                inView={inView}
+                label="Embed tokens"
+                base={9.4}
+                tickDelta={0.1}
+                accent="#22c55e"
+                format={(v) => `${v.toFixed(1)}M`}
+              />
+              <LiveMetric
+                inView={inView}
+                label="Storage"
+                base={6.8}
+                tickDelta={0}
+                format={(v) => `${v.toFixed(1)} GB`}
+              />
             </div>
           </Tile>
 
@@ -355,15 +374,52 @@ function Dot({ color }: { color: string }) {
   );
 }
 
-function Metric({
+// Live-updating counter — counts up from 0 when the tile enters view, then
+// keeps ticking so the observability tile reads as a live feed (loops).
+function LiveMetric({
+  inView,
   label,
-  value,
+  base,
+  format,
   accent,
+  tickDelta = 0,
 }: {
+  inView: boolean;
   label: string;
-  value: string;
+  base: number;
+  format: (v: number) => string;
   accent?: string;
+  tickDelta?: number;
 }) {
+  const [val, setVal] = useState(0);
+  const [done, setDone] = useState(false);
+
+  // Count up 0 → base on first view.
+  useEffect(() => {
+    if (!inView) return;
+    const steps = 30;
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      const p = i / steps;
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(base * eased);
+      if (i >= steps) {
+        window.clearInterval(id);
+        setVal(base);
+        setDone(true);
+      }
+    }, 40);
+    return () => window.clearInterval(id);
+  }, [inView, base]);
+
+  // Then keep ticking up so it feels live.
+  useEffect(() => {
+    if (!done || !tickDelta) return;
+    const id = window.setInterval(() => setVal((v) => v + tickDelta), 1800);
+    return () => window.clearInterval(id);
+  }, [done, tickDelta]);
+
   return (
     <div className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] px-3 py-2">
       <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">
@@ -373,7 +429,7 @@ function Metric({
         className="mt-1 font-mono text-[13px] font-semibold tabular-nums"
         style={{ color: accent ?? "rgba(255,255,255,0.92)" }}
       >
-        {value}
+        {format(val)}
       </p>
     </div>
   );

@@ -5,7 +5,6 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const TABS = [
   {
@@ -24,8 +23,8 @@ const TABS = [
       "Reserved pricing up to 60% off for committed capacity",
       "Direct SSH access · idle pods stop billing instantly",
     ],
-    imageSrc: "/images/main-page/gpu aniamtion resized.png",
-    imageAlt: "GPU server stack",
+    imageSrc: "/ailabs/B200-GPU-Stack.png",
+    imageAlt: "B200 GPU server stack",
   },
   {
     id: "inference",
@@ -76,22 +75,6 @@ const TABS = [
     ],
     imageSrc: "/images/Features/database.png",
     imageAlt: "Database illustration",
-  },
-  {
-    id: "security",
-    label: "Security",
-    title: "Security",
-    heading: "Security built into every layer",
-    description:
-      "Enterprise-grade protection from edge to workload. Always-on DDoS mitigation, encrypted storage, and continuous compliance scanning — without slowing you down.",
-    bullets: [
-      "L3/L4/L7 DDoS protection and managed WAF",
-      "Secrets management with automatic rotation",
-      "Continuous vulnerability and posture scanning",
-      "Granular IAM with SSO and MFA enforcement",
-    ],
-    imageSrc: "/images/Features/protection.png",
-    imageAlt: "Security shield illustration",
   },
   // {
   //   id: "ai-agent",
@@ -193,7 +176,7 @@ export function EverythingSection() {
           >
             Everything You Need to
             <br />
-            Build and <span className="text-[#0095FF]">Scale</span>
+            <span className="text-[#0095FF]">Build and Scale</span>
           </h2>
         </div>
 
@@ -261,7 +244,7 @@ export function EverythingSection() {
 
                     <div className="w-full pl-0 sm:pl-6">
                       <div>
-                      <h3 className="text-2xl sm:text-3xl font-semibold text-white mb-2">
+                      <h3 className="text-2xl sm:text-3xl font-semibold text-[#0095FF] mb-2">
                         {activeTab.title}
                       </h3>
                       <p className="mb-2 w-full max-w-[728px] text-sm sm:text-base text-white/60">
@@ -270,35 +253,23 @@ export function EverythingSection() {
                     </div>
 
                     <ul className="space-y-2 sm:space-y-2.5">
-                      {activeTab.bullets.map((item) => {
-                        const showNvidia =
-                          activeTab.id === "gpu" && item.startsWith("NVIDIA");
-                        return (
-                          <li key={item}>
-                            <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
-                              {showNvidia ? (
-                                <NvidiaLogo
-                                  width={16}
-                                  height={11}
-                                  className="shrink-0 opacity-95"
-                                />
-                              ) : (
-                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                </span>
-                              )}
-                              <span className="text-xs sm:text-sm text-white/80">
-                                {item}
-                              </span>
-                            </div>
-                          </li>
-                        );
-                      })}
+                      {activeTab.bullets.map((item) => (
+                        <li key={item}>
+                          <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
+                              <CheckCircle2 className="h-3 w-3" />
+                            </span>
+                            <span className="text-xs sm:text-sm text-white/80">
+                              {item}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
                     </ul>
                      <button
                       onClick={() => router.push(`/services/${activeTab.id}`)}
                       type="button"
-                      className="cursor-pointer mt-4 inline-flex items-center gap-2 bg-white px-4 py-2 text-xs sm:text-sm font-medium text-black hover:bg-white/90 transition-colors"
+                      className="cursor-pointer mt-4 inline-flex items-center gap-2 bg-white px-4 py-2 text-xs sm:text-sm font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
                     >
                       Explore {activeTab.label}
                       <ArrowRight className="h-4 w-4" />
@@ -326,7 +297,9 @@ export function EverythingSection() {
                         alt={activeTab.imageAlt}
                         fill
                         sizes="(min-width: 1280px) 600px, (min-width: 1024px) 420px, (min-width: 640px) 70vw, 90vw"
-                        className="object-contain"
+                        className={`object-contain ${
+                          activeTab.id === "gpu" ? "scale-[1.35] -translate-y-6" : ""
+                        }`}
                         priority={activeTab.id === "gpu"}
                         unoptimized
                       />

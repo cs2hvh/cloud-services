@@ -6,34 +6,98 @@ import ServicesHomeSectionSix, {
 } from "@/components/serviceshome/section-6";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import { getComputeCategories } from "@/lib/helpers/compute-categories";
-import { Database, GitBranch, Globe, Radio } from "lucide-react";
+
+// Premium custom use-case icons — solid white glyphs with a minimal blue accent.
+const ICON_SIZE = "h-[22px] w-[22px]";
+
+// Web & SaaS — browser window with an API code glyph (white body, blue </>)
+const WebIcon = (
+  <svg viewBox="0 0 24 24" className={ICON_SIZE} aria-hidden="true">
+    {/* window frame */}
+    <rect x="3" y="4" width="18" height="16" rx="2.6" fill="#fff" />
+    {/* title-bar dots — one blue accent */}
+    <circle cx="6" cy="6.4" r="0.75" fill="#0095FF" />
+    <circle cx="8.3" cy="6.4" r="0.75" fill="#c2c8d0" />
+    <circle cx="10.6" cy="6.4" r="0.75" fill="#c2c8d0" />
+    {/* header divider */}
+    <rect x="3" y="8.7" width="18" height="0.85" fill="#e4e8ed" />
+    {/* </> code mark */}
+    <path
+      d="M10 12.6 L8.3 14.8 L10 17 M14 12.6 L15.7 14.8 L14 17"
+      fill="none"
+      stroke="#0095FF"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12.9 11.9 L11.1 17.7"
+      fill="none"
+      stroke="#0095FF"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Data tier — database cylinder (white body, blue top disc)
+const DataIcon = (
+  <svg viewBox="0 0 24 24" className={ICON_SIZE} aria-hidden="true">
+    <path d="M5 6v12c0 1.66 3.13 3 7 3s7-1.34 7-3V6Z" fill="#fff" />
+    <ellipse cx="12" cy="6" rx="7" ry="3" fill="#0095FF" />
+    <path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" fill="none" stroke="#0E0F0F" strokeWidth="1" opacity="0.18" />
+  </svg>
+);
+
+// CI/CD — branch / merge nodes (white nodes + connector, one blue node)
+const PipelineIcon = (
+  <svg viewBox="0 0 24 24" className={ICON_SIZE} aria-hidden="true" fill="none">
+    <path d="M6.5 8.5v7M6.5 12h6a4 4 0 0 0 4-4" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="6.5" cy="6" r="2.6" fill="#fff" />
+    <circle cx="6.5" cy="18" r="2.6" fill="#fff" />
+    <circle cx="16.5" cy="6" r="2.6" fill="#0095FF" />
+  </svg>
+);
+
+// Real-time — broadcast signal (blue core, white waves)
+const RealtimeIcon = (
+  <svg viewBox="0 0 24 24" className={ICON_SIZE} aria-hidden="true" fill="none">
+    <circle cx="12" cy="12" r="2.8" fill="#0095FF" />
+    <path
+      d="M7.6 7.6a6.2 6.2 0 0 0 0 8.8M16.4 7.6a6.2 6.2 0 0 1 0 8.8M4.8 4.8a10.2 10.2 0 0 0 0 14.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4"
+      stroke="#fff"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+  </svg>
+);
 
 const ComputeHome = async () => {
   const categories = await getComputeCategories();
   const cases: UseCase[] = [
     {
-      icon: Globe,
+      iconNode: WebIcon,
       metric: "Web & SaaS",
       title: "Production web apps and APIs",
       description:
         "Host high-traffic sites, REST/gRPC APIs, and SaaS backends on dedicated cores with sub-20 ms regional latency, managed TLS, and instant blue-green deploys.",
     },
     {
-      icon: Database,
+      iconNode: DataIcon,
       metric: "Data tier",
       title: "Self-managed database servers",
       description:
         "Run PostgreSQL, MySQL, Redis, or MongoDB on NVMe-backed instances with snapshot scheduling, point-in-time recovery, and replicated block volumes.",
     },
     {
-      icon: GitBranch,
+      iconNode: PipelineIcon,
       metric: "CI/CD",
       title: "Build farms and CI runners",
       description:
         "Parallel build pipelines and self-hosted runners on dedicated CPUs — persistent cache volumes, ephemeral worker pools, and BYO container registry.",
     },
     {
-      icon: Radio,
+      iconNode: RealtimeIcon,
       metric: "Real-time",
       title: "Game, media, and streaming servers",
       description:
@@ -45,10 +109,20 @@ const ComputeHome = async () => {
     <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
         badge="Compute"
-        title="Compute, ready in seconds."
-        description="Virtual machines, VDS, and dedicated servers across 12 regions. Full root access, NVMe storage, sub-20 ms latency."
+        title={
+          <>
+            Compute, ready in <span className="text-[#0095FF]">seconds</span>.
+          </>
+        }
+        description="Virtual machines, VDS, and dedicated servers with full root access, enterprise NVMe, and sub-20 ms latency — spun up across our global network in seconds."
         primaryAction={{ label: "Deploy a Server", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
+        highlights={[
+          { value: "15", label: "Global regions" },
+          { value: "7 GB/s", label: "NVMe storage" },
+          { value: "< 30s", label: "To deploy" },
+          { value: "L3–L7", label: "DDoS included" },
+        ]}
         backgroundImage={{
           src: "/images/hero/service-hero-bg.png",
           alt: "",

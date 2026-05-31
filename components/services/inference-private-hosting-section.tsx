@@ -17,7 +17,7 @@ const FEATURES: { label: string; body: string }[] = [
   },
   {
     label: "Auto-stop when idle",
-    body: "Pod tears down past your window. Cold-start returns 503 + Retry-After.",
+    body: "Spins down after your idle window; restarts automatically on the next request.",
   },
 ];
 
@@ -120,7 +120,7 @@ export default function InferencePrivateHostingSection() {
               }}
               className="border-b border-white/[0.06] py-6 sm:border-b-0 sm:border-r sm:pr-6 sm:pl-0 sm:last:border-r-0 [&:not(:first-child)]:sm:pl-6"
             >
-              <p className="text-[14.5px] font-semibold text-white">
+              <p className="text-[14.5px] font-semibold text-[#0095FF]">
                 {f.label}
               </p>
               <p className="mt-1.5 text-[13px] leading-[1.6] text-white/50">

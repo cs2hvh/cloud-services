@@ -85,7 +85,7 @@ export default function AppDeployWorkloadsSection() {
                         Use cases
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-                        Built for the workloads you ship to production.
+                        <span className="text-[#0095FF]">Built for the workloads</span> you ship to production.
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-black/60 sm:text-[16.5px]">
                         A single deployment pipeline, dashboard, and SLA — from
@@ -121,7 +121,7 @@ export default function AppDeployWorkloadsSection() {
                                     <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
                                     {w.metric}
                                 </p>
-                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814]">
+                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814] transition-colors group-hover:text-[#0095FF]">
                                     {w.title}
                                 </h3>
                                 <p className="mt-2 text-[13.5px] leading-[1.6] text-black/60">

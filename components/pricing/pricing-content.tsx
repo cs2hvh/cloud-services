@@ -1,137 +1,60 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
 
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
-type FilterTab = {
-  value: string;
-  label: string;
-  nvidia?: boolean;
-};
+const BRAND = "#0095FF";
 
-const DATABASE_TYPE_TABS: FilterTab[] = [
-  { value: "all", label: "All DB Types" },
-  { value: "mysql", label: "MySQL" },
-  { value: "mongodb", label: "MongoDB" },
-  { value: "postgres", label: "PostgreSQL" },
+// Flat pricing everywhere — region is a deployment choice, not a price lever.
+const REGIONS = [
+  "New York",
+  "San Francisco",
+  "Toronto",
+  "London",
+  "Frankfurt",
+  "Singapore",
+  "Tokyo",
+  "Sydney",
+  "Mumbai",
 ];
 
-const DEFAULT_CPU_TABS: FilterTab[] = [
-  { value: "all", label: "All CPU Types" },
-  { value: "basic", label: "Basic" },
-  { value: "general-purpose", label: "General-purpose" },
-  { value: "storage-optimized", label: "Storage-optimized" },
-];
-
-const GPU_CPU_TABS: FilterTab[] = [
-  { value: "all", label: "All GPU Types" },
-  { value: "h200", label: "H200", nvidia: true },
-  { value: "h100", label: "H100", nvidia: true },
-  { value: "l4os", label: "L4OS", nvidia: true },
-];
-
+// ─── normalizers ────────────────────────────────────────────────────
 function normalizeValue(value?: string | null): string {
   if (!value) return "";
   return value.toLowerCase().trim().replace(/[_\s]+/g, "-");
 }
 
 function normalizeDatabaseType(value?: string | null): string {
-  const normalized = normalizeValue(value);
-  if (!normalized) return "";
-  if (normalized.includes("mysql")) return "mysql";
-  if (normalized.includes("mongo")) return "mongodb";
-  if (normalized.includes("postgres") || normalized === "pg") return "postgres";
-  return normalized;
+  const n = normalizeValue(value);
+  if (!n) return "";
+  if (n.includes("mysql")) return "mysql";
+  if (n.includes("mongo")) return "mongodb";
+  if (n.includes("postgres") || n === "pg") return "postgres";
+  return n;
 }
 
 function normalizeCpuType(value?: string | null): string {
-  const normalized = normalizeValue(value);
-  if (!normalized) return "";
-  if (normalized.includes("general")) return "general-purpose";
-  if (normalized.includes("storage")) return "storage-optimized";
-  if (normalized.includes("basic")) return "basic";
-  return normalized;
+  const n = normalizeValue(value);
+  if (!n) return "";
+  if (n.includes("general")) return "general-purpose";
+  if (n.includes("storage")) return "storage-optimized";
+  if (n.includes("dedicated")) return "dedicated";
+  if (n.includes("shared")) return "shared";
+  if (n.includes("basic")) return "basic";
+  return n;
 }
 
-function formatCpuTypeLabel(value: string): string {
-  const normalized = normalizeValue(value);
-  if (!normalized) return "CPU";
-  return normalized
+function titleCase(value: string): string {
+  return value
     .split("-")
-    .map((part) => {
-      if (part.toLowerCase() === "gpu") return "GPU";
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
+    .map((p) => (p.toLowerCase() === "gpu" ? "GPU" : p.charAt(0).toUpperCase() + p.slice(1)))
     .join(" ");
 }
 
-function normalizeGpuType(value?: string | null): string {
-  const normalized = normalizeValue(value);
-  if (!normalized) return "";
-  if (normalized.includes("h200")) return "h200";
-  if (normalized.includes("h100")) return "h100";
-  if (normalized.includes("l4os") || normalized.includes("l40s")) return "l4os";
-  return normalized;
-}
-
-function FilterTabs({
-  label,
-  tabs,
-  activeValue,
-  onChange,
-}: {
-  label: string;
-  tabs: FilterTab[];
-  activeValue: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">{label}</p>
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((tab) => {
-          const isActive = tab.value === activeValue;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onChange(tab.value)}
-              className={cn(
-                "cursor-pointer inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors",
-                isActive
-                  ? "border-white bg-white text-black"
-                  : "border-white/20 bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
-              )}
-            >
-              {tab.nvidia && (
-                <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0")} />
-              )}
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-
-
-type ParsedSpecs = {
-  vcpu?: string;
-  memory?: string;
-  storage?: string;
-  network?: string;
-};
-
-type TableColumn = {
-  key: string;
-  header: string;
-  align?: "left" | "right";
-  render: (tier: PricingTier) => ReactNode;
-};
+// ─── spec parsing ───────────────────────────────────────────────────
+type ParsedSpecs = { vcpu?: string; memory?: string; storage?: string; network?: string };
 
 function formatSizeToken(value?: string | null): string | undefined {
   if (!value) return undefined;
@@ -145,18 +68,17 @@ function classifySpec(spec: string): "vcpu" | "memory" | "storage" | "network" |
   if (/v?cpu|core/.test(low)) return "vcpu";
   if (/ddr|ram|memory/.test(low)) return "memory";
   if (/nvme|ssd|hdd|disk|storage/.test(low)) return "storage";
-  if (/gbit|gbps|mbit|mbps|fabric|network|gb\/s/.test(low)) return "network";
+  if (/gbit|gbps|mbit|mbps|tbit|fabric|network|gb\/s/.test(low)) return "network";
   return "other";
 }
 
 function parseSpecs(tier: PricingTier): ParsedSpecs {
   const result: ParsedSpecs = {};
-
   for (const spec of tier.specs ?? []) {
     switch (classifySpec(spec)) {
       case "vcpu": {
-        const match = spec.match(/(\d+)/);
-        result.vcpu = match ? match[1] : spec.trim();
+        const m = spec.match(/(\d+)/);
+        result.vcpu = m ? m[1] : spec.trim();
         break;
       }
       case "memory":
@@ -170,36 +92,111 @@ function parseSpecs(tier: PricingTier): ParsedSpecs {
         break;
     }
   }
-
-  // Database/Kubernetes plans keep capacity inside features, e.g. "80GB storage".
   if (!result.storage) {
-    const storageFeature = (tier.features ?? []).find((feature) => /storage|disk/i.test(feature));
-    result.storage = formatSizeToken(storageFeature);
+    const f = (tier.features ?? []).find((x) => /storage|disk/i.test(x));
+    result.storage = formatSizeToken(f);
   }
-
   return result;
 }
 
 function getGpuModel(tier: PricingTier): string | undefined {
-  if (tier.machineType) return tier.machineType.toUpperCase();
-  for (const feature of tier.features ?? []) {
-    const match = feature.match(/nvidia\s+([a-z0-9]+)/i);
-    if (match) return match[1].toUpperCase();
+  if (tier.machineType) return tier.machineType;
+  for (const f of tier.features ?? []) {
+    const m = f.match(/nvidia\s+([a-z0-9× ]+)/i);
+    if (m) return m[1].trim().toUpperCase();
   }
   return undefined;
 }
 
-function getDatabaseEngineLabel(tier: PricingTier): string | undefined {
-  const type = normalizeDatabaseType(tier.subType || tier.name);
-  if (type === "mysql") return "MySQL";
-  if (type === "mongodb") return "MongoDB";
-  if (type === "postgres") return "PostgreSQL";
+function getEngine(tier: PricingTier): string | undefined {
+  const t = normalizeDatabaseType(tier.subType || tier.name);
+  if (t === "mysql") return "MySQL";
+  if (t === "mongodb") return "MongoDB";
+  if (t === "postgres") return "PostgreSQL";
   return undefined;
 }
 
-function getCpuTypeDisplay(tier: PricingTier): string | undefined {
-  const normalized = normalizeCpuType(tier.cpuType || tier.machineType || tier.name);
-  return normalized ? formatCpuTypeLabel(normalized) : undefined;
+function getClass(tier: PricingTier): string | undefined {
+  const n = normalizeCpuType(tier.cpuType || tier.machineType || tier.name);
+  return n ? titleCase(n) : undefined;
+}
+
+// ─── facets (the "type" dimensions a category exposes) ───────────────
+type Facet = {
+  key: string;
+  label: string;
+  nvidia?: boolean;
+  options: string[];
+  valueOf: (tier: PricingTier) => string | undefined;
+};
+
+function buildFacets(categoryId: string, tiers: PricingTier[]): Facet[] {
+  const distinct = (fn: (t: PricingTier) => string | undefined) =>
+    Array.from(new Set(tiers.map(fn).filter((x): x is string => Boolean(x))));
+
+  if (categoryId === "database") {
+    const facets: Facet[] = [];
+    const engines = distinct(getEngine);
+    if (engines.length > 1) facets.push({ key: "engine", label: "Engine", options: engines, valueOf: getEngine });
+    const classes = distinct(getClass);
+    if (classes.length > 1) facets.push({ key: "class", label: "Class", options: classes, valueOf: getClass });
+    return facets;
+  }
+  if (categoryId === "gpu" || categoryId === "gpu-instance") {
+    const models = distinct(getGpuModel);
+    return models.length > 1
+      ? [{ key: "gpu", label: "GPU", nvidia: true, options: models, valueOf: getGpuModel }]
+      : [];
+  }
+  if (categoryId === "compute" || categoryId === "kubernetes") {
+    const classes = distinct(getClass);
+    return classes.length > 1 ? [{ key: "class", label: "Type", options: classes, valueOf: getClass }] : [];
+  }
+  return [];
+}
+
+// ─── chip row ───────────────────────────────────────────────────────
+function ChipRow({
+  label,
+  options,
+  active,
+  nvidia,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  active: string;
+  nvidia?: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.16em] text-white/40">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const isActive = opt === active;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(opt)}
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                isActive
+                  ? "border-white bg-white text-black"
+                  : "border-white/12 bg-white/[0.02] text-white/60 hover:border-white/35 hover:text-white"
+              )}
+            >
+              {nvidia && <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0")} />}
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 type PricingContentProps = {
@@ -207,372 +204,420 @@ type PricingContentProps = {
   billingCycle: "monthly" | "yearly";
 };
 
-export function PricingContent({
-  category,
-  billingCycle,
-}: PricingContentProps) {
-  const [databaseTypeFilter, setDatabaseTypeFilter] = useState("all");
-  const [cpuTypeFilter, setCpuTypeFilter] = useState("all");
-
+export function PricingContent({ category, billingCycle }: PricingContentProps) {
   const categoryId = normalizeValue(category?.id);
-  const isDatabaseCategory = categoryId === "database";
-  const isKubernetesCategory = categoryId === "kubernetes";
-  const isGpuCategory = categoryId === "gpu" || categoryId === "gpu-instance";
+  const tiers = useMemo(() => category?.tiers ?? [], [category?.tiers]);
 
-  const kubernetesCpuTabs = useMemo<FilterTab[]>(() => {
-    if (!isKubernetesCategory) return DEFAULT_CPU_TABS;
-
-    const uniqueCpuTypes = Array.from(
-      new Set(
-        (category?.tiers ?? [])
-          .map((tier) => normalizeValue(tier.cpuType))
-          .filter(Boolean)
-      )
-    );
-
-    if (uniqueCpuTypes.length === 0) {
-      return DEFAULT_CPU_TABS;
-    }
-
-    return [
-      { value: "all", label: "All CPU Types" },
-      ...uniqueCpuTypes.map((cpuType) => ({
-        value: cpuType,
-        label: formatCpuTypeLabel(cpuType),
-      })),
-    ];
-  }, [category?.tiers, isKubernetesCategory]);
-
-  useEffect(() => {
-    setDatabaseTypeFilter("all");
-    setCpuTypeFilter("all");
-  }, [categoryId]);
-
-  const filteredTiers = useMemo(() => {
-    const tiers = category?.tiers ?? [];
-
-    return tiers.filter((tier) => {
-      if (isDatabaseCategory) {
-        const dbType = normalizeDatabaseType(tier.subType || tier.name);
-        const cpuType = normalizeCpuType(tier.cpuType || tier.machineType || tier.name);
-
-        const matchesDatabaseType =
-          databaseTypeFilter === "all" || dbType === normalizeDatabaseType(databaseTypeFilter);
-        const matchesCpuType =
-          cpuTypeFilter === "all" || cpuType === normalizeCpuType(cpuTypeFilter);
-
-        return matchesDatabaseType && matchesCpuType;
-      }
-
-      if (isKubernetesCategory) {
-        const cpuType = normalizeValue(tier.cpuType);
-        if (!cpuType) return cpuTypeFilter === "all";
-        return cpuTypeFilter === "all" || cpuType === normalizeValue(cpuTypeFilter);
-      }
-
-      if (isGpuCategory) {
-        const gpuType = normalizeGpuType(tier.machineType || tier.cpuType || tier.subType || tier.name);
-        return cpuTypeFilter === "all" || gpuType === normalizeGpuType(cpuTypeFilter);
-      }
-
-      return true;
-    });
-  }, [
-    category?.tiers,
-    cpuTypeFilter,
-    databaseTypeFilter,
-    isDatabaseCategory,
-    isGpuCategory,
-    isKubernetesCategory,
-  ]);
-
-  const formatPrice = (value: number) =>
-    Number.isInteger(value) ? value.toString() : value.toFixed(2);
-
+  const formatPrice = (v: number) => (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2));
   const formatHourly = (monthly: number) => {
-    const hourly = monthly / 720;
-    if (hourly === 0) return "0";
-    return hourly < 1 ? hourly.toFixed(3) : hourly.toFixed(2);
+    const h = monthly / 720;
+    if (h === 0) return "0";
+    return h < 1 ? h.toFixed(3) : h.toFixed(2);
   };
-
-  const getEffectiveMonthly = (tier: PricingTier) =>
+  const effMonthly = (tier: PricingTier) =>
     billingCycle === "monthly" ? tier.price.monthly : tier.price.yearly / 12;
 
-  const getTierId = (tier: PricingTier) =>
-    tier.id ?? tier.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-  const renderValue = (value?: string): ReactNode =>
-    value ? value : <span className="text-white/30">—</span>;
-
-  const planColumn: TableColumn = {
-    key: "plan",
-    header: "Plan",
-    render: (tier) => (
-      <div className="min-w-[160px]">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-white">{tier.name}</span>
-          {tier.isFeatured && (
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-black">
-              Most popular
-            </span>
-          )}
-        </div>
-        {tier.shortDescription && (
-          <p className="mt-1 max-w-xs text-xs text-white/50">{tier.shortDescription}</p>
-        )}
-      </div>
-    ),
-  };
-
-  const featuresColumn: TableColumn = {
-    key: "features",
-    header: "Features",
-    render: (tier) => (
-      <div className="flex max-w-md flex-wrap gap-x-4 gap-y-1">
-        {tier.features.map((feature) => (
-          <span key={feature} className="flex items-center gap-1.5 text-xs text-white/70">
-            <Check className="h-3 w-3 shrink-0 text-white/60" />
-            {feature}
-          </span>
-        ))}
-      </div>
-    ),
-  };
-
-  const specColumn = (
-    key: string,
-    header: string,
-    accessor: (parsed: ParsedSpecs) => string | undefined
-  ): TableColumn => ({
-    key,
-    header,
-    render: (tier) => renderValue(accessor(parseSpecs(tier))),
-  });
-
-  const vcpuColumn = specColumn("vcpu", "vCPU", (parsed) => parsed.vcpu);
-  const memoryColumn = specColumn("memory", "Memory", (parsed) => parsed.memory);
-  const storageColumn = specColumn("storage", "Storage", (parsed) => parsed.storage);
-  const networkColumn = specColumn("network", "Network", (parsed) => parsed.network);
-
-  const gpuColumn: TableColumn = {
-    key: "gpu",
-    header: "GPU",
-    render: (tier) => renderValue(getGpuModel(tier)),
-  };
-
-  const engineColumn: TableColumn = {
-    key: "engine",
-    header: "Engine",
-    render: (tier) => renderValue(getDatabaseEngineLabel(tier)),
-  };
-
-  const cpuTypeColumn: TableColumn = {
-    key: "cpu-type",
-    header: "CPU Type",
-    render: (tier) => renderValue(getCpuTypeDisplay(tier)),
-  };
-
-  const hourlyColumn: TableColumn = {
-    key: "hourly",
-    header: "$/hr",
-    align: "right",
-    render: (tier) => (
-      <span className="text-sm text-white/80">${formatHourly(getEffectiveMonthly(tier))}</span>
-    ),
-  };
-
-  const monthlyColumn: TableColumn = {
-    key: "monthly",
-    header: "$/month",
-    align: "right",
-    render: (tier) => (
-      <div>
-        <div className="text-base font-semibold text-white">
-          ${formatPrice(getEffectiveMonthly(tier))}
-        </div>
-        <div className="text-[10px] text-white/40">
-          {billingCycle === "monthly" ? "billed monthly" : "billed yearly"}
-        </div>
-      </div>
-    ),
-  };
-
-  const ctaColumn: TableColumn = {
-    key: "cta",
-    header: "",
-    align: "right",
-    render: (tier) => (
-      <a
-        href={tier.ctaLink}
-        className="inline-flex items-center justify-center whitespace-nowrap bg-white/10 px-3 py-2 text-xs text-white transition-colors hover:bg-white/15"
-      >
-        {tier.ctaText || tier.summary?.buttonText || "Get Started"}
-      </a>
-    ),
-  };
-
-  const columns: TableColumn[] = (() => {
-    switch (categoryId) {
-      case "compute":
-        return [planColumn, vcpuColumn, memoryColumn, storageColumn, networkColumn, hourlyColumn, monthlyColumn, ctaColumn];
-      case "gpu":
-      case "gpu-instance":
-        return [planColumn, gpuColumn, vcpuColumn, memoryColumn, storageColumn, networkColumn, hourlyColumn, monthlyColumn, ctaColumn];
-      case "database":
-        return [planColumn, engineColumn, cpuTypeColumn, storageColumn, hourlyColumn, monthlyColumn, ctaColumn];
-      case "kubernetes":
-        return [planColumn, vcpuColumn, memoryColumn, storageColumn, hourlyColumn, monthlyColumn, ctaColumn];
-      default:
-        return [planColumn, featuresColumn, hourlyColumn, monthlyColumn, ctaColumn];
-    }
-  })();
-
-  // Featured plans surface at the top of the table.
-  const orderedTiers = [...filteredTiers].sort(
-    (a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured))
+  // Configurator only makes sense when tiers carry CPU/RAM specs.
+  const configurable = useMemo(
+    () => categoryId !== "ai-labs" && tiers.some((t) => { const p = parseSpecs(t); return p.vcpu || p.memory; }),
+    [categoryId, tiers]
   );
 
+  const facets = useMemo(() => buildFacets(categoryId, tiers), [categoryId, tiers]);
+
   return (
-    <div className="flex-1">
-      <div className="space-y-8">
-        <div className="space-y-2">
-          <h2 className="text-2xl md:text-3xl font-semibold">
-            {category?.label}
-          </h2>
-          <p className="text-sm md:text-base text-white/50 max-w-2xl">
-            {category?.description}
-          </p>
-        </div>
-
-        {category?.promos && category.promos.length > 0 && (
-          <div className="space-y-3">
-            {category.promos.map((promo) => (
-              <div
-                key={promo.title}
-                className="border border-white/10 bg-[radial-gradient(74.51%_74.08%_at_50%_50%,_#303030_0%,_#0D0D0D_100%)] p-5 md:p-6"
-              >
-                <div className="flex items-center gap-2 text-xs text-white mb-2">
-                  <span className="flex h-6 w-[90px] items-center justify-center rounded-full bg-white text-[11px] font-semibold text-black">
-                    {promo.badge}
-                  </span>
-                  {promo.badgeNote && <span>{promo.badgeNote}</span>}
-                </div>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <h3 className="text-base md:text-lg font-semibold text-white">
-                      {promo.title}
-                    </h3>
-                    <p className="text-xs md:text-sm text-white">
-                      {promo.description}
-                    </p>
-                    {promo.subtext && (
-                      <p className="text-xs text-white mt-1">
-                        {promo.subtext}
-                      </p>
-                    )}
-                  </div>
-                  {promo.priceCurrent ? (
-                    <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                      {promo.priceOld && (
-                        <span className="text-white/40 line-through text-xs">
-                          {promo.priceOld}
-                        </span>
-                      )}
-                      <span>{promo.priceCurrent}</span>
-                    </div>
-                  ) : (
-                    <a
-                      href={promo.linkHref}
-                      className="text-xs md:text-sm text-white underline underline-offset-4"
-                    >
-                      {promo.linkText}
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+    <div>
+      {/* Category header */}
+      <div className="max-w-2xl">
+        <h2 className="text-[24px] font-semibold tracking-tight text-white sm:text-[30px]">
+          {category?.label}
+        </h2>
+        {category?.description && (
+          <p className="mt-2.5 text-[14px] leading-relaxed text-white/50">{category.description}</p>
         )}
+      </div>
 
-        {(isDatabaseCategory || isKubernetesCategory || isGpuCategory) && (
-          <div className="space-y-4 border border-white/10 bg-white/[0.02] p-4">
-            {isDatabaseCategory && (
-              <FilterTabs
-                label="Database Type"
-                tabs={DATABASE_TYPE_TABS}
-                activeValue={databaseTypeFilter}
-                onChange={setDatabaseTypeFilter}
-              />
-            )}
-
-            <FilterTabs
-              label={isGpuCategory ? "GPU Type" : "CPU Type"}
-              tabs={isGpuCategory ? GPU_CPU_TABS : isKubernetesCategory ? kubernetesCpuTabs : DEFAULT_CPU_TABS}
-              activeValue={cpuTypeFilter}
-              onChange={setCpuTypeFilter}
-            />
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <h3 className="text-lg md:text-xl font-semibold">
-            {"Starts at just $" + (category?.startingPriceLabel ?? "$9")}
-          </h3>
-          <p className="text-xs md:text-sm text-white/50">
-            {category?.startingPriceDescription ??
-              "Upgrade  anytime. Mix tiers across projects as your needs change."}
-          </p>
-        </div>
-
-        {orderedTiers.length === 0 ? (
-          <div className="border border-white/10 bg-white/[0.02] px-5 py-4 text-sm text-white/70">
-            No plans match the selected filters.
-          </div>
+      <div className="mt-8">
+        {configurable ? (
+          <Configurator
+            tiers={tiers}
+            facets={facets}
+            billingCycle={billingCycle}
+            categoryLabel={category?.label ?? ""}
+            effMonthly={effMonthly}
+            formatPrice={formatPrice}
+            formatHourly={formatHourly}
+          />
         ) : (
-          <div className="overflow-x-auto border border-white/10">
-            <table className="w-full min-w-[640px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/[0.02]">
-                  {columns.map((column) => (
-                    <th
-                      key={column.key}
-                      className={cn(
-                        "px-4 py-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40",
-                        column.align === "right" && "text-right"
-                      )}
-                    >
-                      {column.header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orderedTiers.map((tier) => (
-                  <tr
-                    key={getTierId(tier)}
-                    className={cn(
-                      "border-b border-white/[0.06] last:border-0",
-                      tier.isFeatured && "bg-white/[0.03]"
-                    )}
-                  >
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className={cn(
-                          "px-4 py-4 align-middle text-sm text-white/80",
-                          column.align === "right" && "text-right"
-                        )}
-                      >
-                        {column.render(tier)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <PlanCards tiers={tiers} billingCycle={billingCycle} effMonthly={effMonthly} formatPrice={formatPrice} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Configurator ───────────────────────────────────────────────────
+function Configurator({
+  tiers,
+  facets,
+  billingCycle,
+  categoryLabel,
+  effMonthly,
+  formatPrice,
+  formatHourly,
+}: {
+  tiers: PricingTier[];
+  facets: Facet[];
+  billingCycle: "monthly" | "yearly";
+  categoryLabel: string;
+  effMonthly: (t: PricingTier) => number;
+  formatPrice: (v: number) => string;
+  formatHourly: (v: number) => string;
+}) {
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [sizeIndex, setSizeIndex] = useState(0);
+  const [region, setRegion] = useState(REGIONS[0]);
+
+  // Initialize / reset facet selections when the facet set changes.
+  const facetKey = facets.map((f) => `${f.key}:${f.options.join(",")}`).join("|");
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    facets.forEach((f) => (init[f.key] = f.options[0]));
+    setSelected(init);
+    setSizeIndex(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facetKey]);
+
+  // Tiers matching the current facet selection, sorted by price (small → large).
+  const sizes = useMemo(() => {
+    const matched = tiers.filter((t) =>
+      facets.every((f) => {
+        const want = selected[f.key] ?? f.options[0];
+        return f.valueOf(t) === want;
+      })
+    );
+    const base = matched.length > 0 ? matched : tiers;
+    return [...base].sort((a, b) => a.price.monthly - b.price.monthly);
+  }, [tiers, facets, selected]);
+
+  const safeIndex = Math.min(sizeIndex, Math.max(0, sizes.length - 1));
+  const tier = sizes[safeIndex];
+
+  if (!tier) return null;
+
+  const specs = parseSpecs(tier);
+  const monthly = effMonthly(tier);
+  const gpuModel = getGpuModel(tier);
+
+  const specRows: Array<[string, string | undefined]> = [
+    ["GPU", categoryLabel.toLowerCase().includes("gpu") ? gpuModel : undefined],
+    ["vCPU", specs.vcpu],
+    ["Memory", specs.memory],
+    ["Storage", specs.storage],
+    ["Network", specs.network],
+  ];
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
+      {/* ── Controls ── */}
+      <div className="space-y-7 rounded-[12px] border border-white/[0.08] bg-white/[0.015] p-6 sm:p-7">
+        {facets.map((f) => (
+          <ChipRow
+            key={f.key}
+            label={f.label}
+            options={f.options}
+            nvidia={f.nvidia}
+            active={selected[f.key] ?? f.options[0]}
+            onChange={(v) => {
+              setSelected((s) => ({ ...s, [f.key]: v }));
+              setSizeIndex(0);
+            }}
+          />
+        ))}
+
+        {/* Region (flat pricing — display only) */}
+        <div>
+          <p className="mb-2 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.16em] text-white/40">
+            Region
+          </p>
+          <div className="relative inline-block">
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              className="cursor-pointer appearance-none rounded-[5px] border border-white/12 bg-white/[0.02] py-2 pl-3 pr-9 text-[12.5px] font-medium text-white/85 outline-none transition-colors hover:border-white/35 focus:border-white/45"
+            >
+              {REGIONS.map((r) => (
+                <option key={r} value={r} className="bg-[#0b0d12] text-white">
+                  {r}
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rotate-90 text-white/40" />
+          </div>
+          <span className="ml-3 text-[11px] text-white/35">Same price in every region</span>
+        </div>
+
+        {/* Size slider */}
+        {sizes.length > 1 && (
+          <div>
+            <div className="mb-3 flex items-baseline justify-between">
+              <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.16em] text-white/40">
+                Size
+              </p>
+              <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[12px] tabular-nums text-white/55">
+                {[specs.vcpu && `${specs.vcpu} vCPU`, specs.memory].filter(Boolean).join(" · ") || tier.name}
+              </p>
+            </div>
+
+            <SizeSlider count={sizes.length} value={safeIndex} onChange={setSizeIndex} sizes={sizes} />
+
+            <div className="mt-2.5 flex justify-between font-[var(--font-geist-mono),ui-monospace,monospace] text-[11px] tabular-nums text-white/35">
+              <span>${formatPrice(effMonthly(sizes[0]))}/mo</span>
+              <span>${formatPrice(effMonthly(sizes[sizes.length - 1]))}/mo</span>
+            </div>
+          </div>
+        )}
+
+        {/* Included features */}
+        {tier.features.length > 0 && (
+          <div>
+            <p className="mb-2.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.16em] text-white/40">
+              Included
+            </p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {tier.features.slice(0, 8).map((f) => (
+                <span key={f} className="flex items-center gap-1.5 text-[12.5px] text-white/65">
+                  <Check className="h-3 w-3 shrink-0" style={{ color: BRAND }} />
+                  {f}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
+
+      {/* ── Live summary ── */}
+      <div className="lg:sticky lg:top-24 lg:self-start">
+        <div className="relative overflow-hidden rounded-[12px] border border-[#0095FF]/25 bg-[#0b0d12]">
+          {/* top accent */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{ background: `linear-gradient(90deg, transparent, ${BRAND}, transparent)` }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-10 -top-16 h-32 opacity-50 blur-3xl"
+            style={{ background: `radial-gradient(50% 100% at 50% 0%, ${BRAND}55, transparent 70%)` }}
+          />
+
+          <div className="relative p-6">
+            <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[10px] uppercase tracking-[0.18em] text-white/40">
+              {categoryLabel} · {tier.name}
+            </p>
+
+            {/* Price */}
+            <div className="mt-4 flex items-end gap-3">
+              <div>
+                <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[40px] font-bold leading-none tabular-nums text-white">
+                  ${formatPrice(monthly)}
+                </span>
+                <span className="ml-1 text-[13px] text-white/45">/mo</span>
+              </div>
+              <div className="pb-1 font-[var(--font-geist-mono),ui-monospace,monospace] text-[12px] tabular-nums text-white/45">
+                ${formatHourly(monthly)}/hr
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] text-white/40">
+              {billingCycle === "monthly" ? (
+                "Billed monthly · cancel anytime"
+              ) : (
+                <>
+                  Billed yearly · <span className="text-[#8ecaff]">save 20%</span>
+                </>
+              )}
+            </p>
+
+            {/* Spec breakdown */}
+            <div className="mt-5 space-y-px overflow-hidden rounded-[7px] border border-white/[0.07]">
+              {specRows
+                .filter(([, v]) => Boolean(v))
+                .map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between bg-white/[0.02] px-3.5 py-2.5"
+                  >
+                    <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[10.5px] uppercase tracking-[0.12em] text-white/40">
+                      {label}
+                    </span>
+                    <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[12.5px] font-medium tabular-nums text-white/90">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+            </div>
+
+            <a
+              href={tier.ctaLink}
+              className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[6px] bg-white px-5 py-3 text-[13.5px] font-semibold text-black transition-colors hover:bg-white/90"
+            >
+              {tier.ctaText || "Deploy now"}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </a>
+            <p className="mt-3 text-center text-[11px] text-white/35">No setup fees · pay only while running</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom size slider ─────────────────────────────────────────────
+function SizeSlider({
+  count,
+  value,
+  onChange,
+  sizes,
+}: {
+  count: number;
+  value: number;
+  onChange: (v: number) => void;
+  sizes: PricingTier[];
+}) {
+  const pct = count > 1 ? (value / (count - 1)) * 100 : 0;
+  return (
+    <div className="relative h-6 select-none">
+      {/* track */}
+      <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/[0.08]" />
+      {/* filled */}
+      <div
+        className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+        style={{ width: `${pct}%`, background: BRAND, boxShadow: `0 0 12px ${BRAND}66` }}
+      />
+      {/* ticks */}
+      {sizes.map((s, i) => {
+        const left = count > 1 ? (i / (count - 1)) * 100 : 0;
+        return (
+          <span
+            key={s.id ?? i}
+            className="absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ left: `${left}%`, background: i <= value ? "#fff" : "rgba(255,255,255,0.22)" }}
+          />
+        );
+      })}
+      {/* thumb */}
+      <div
+        className="pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white"
+        style={{ left: `${pct}%`, borderColor: BRAND, boxShadow: `0 0 0 4px ${BRAND}33` }}
+      />
+      {/* native input for drag + keyboard */}
+      <input
+        type="range"
+        min={0}
+        max={Math.max(0, count - 1)}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label="Plan size"
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </div>
+  );
+}
+
+// ─── Card layout (metered / thin categories) ────────────────────────
+function PlanCards({
+  tiers,
+  billingCycle,
+  effMonthly,
+  formatPrice,
+}: {
+  tiers: PricingTier[];
+  billingCycle: "monthly" | "yearly";
+  effMonthly: (t: PricingTier) => number;
+  formatPrice: (v: number) => string;
+}) {
+  const ordered = [...tiers].sort(
+    (a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured))
+  );
+  // Metered categories have $0 monthly — show the billing model instead of a number.
+  const metered = tiers.every((t) => t.price.monthly === 0 && t.billingPeriod);
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {ordered.map((tier) => {
+        const monthly = effMonthly(tier);
+        return (
+          <div
+            key={tier.id ?? tier.name}
+            className={cn(
+              "group relative flex flex-col rounded-[10px] border p-5 transition-colors",
+              tier.isFeatured
+                ? "border-[#0095FF]/35 bg-[#0095FF]/[0.05]"
+                : "border-white/[0.08] bg-white/[0.015] hover:border-white/[0.18]"
+            )}
+          >
+            {tier.isFeatured && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                style={{ background: `linear-gradient(90deg, transparent, ${BRAND}, transparent)` }}
+              />
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15px] font-semibold text-white">{tier.name}</h3>
+              {tier.isFeatured && (
+                <span
+                  className="rounded-[3px] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-black"
+                  style={{ background: BRAND }}
+                >
+                  Popular
+                </span>
+              )}
+            </div>
+
+            {tier.shortDescription && (
+              <p className="mt-2 text-[12px] leading-relaxed text-white/50">{tier.shortDescription}</p>
+            )}
+
+            <div className="mt-4">
+              {metered ? (
+                <p className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[12px] uppercase tracking-[0.1em] text-[#8ecaff]">
+                  {tier.billingPeriod}
+                </p>
+              ) : (
+                <p className="font-[var(--font-geist-mono),ui-monospace,monospace] tabular-nums text-white">
+                  <span className="text-[26px] font-bold">${formatPrice(monthly)}</span>
+                  <span className="ml-1 text-[12px] text-white/45">
+                    {billingCycle === "monthly" ? "/mo" : "/mo · yearly"}
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <ul className="mt-3 space-y-1.5">
+              {tier.features.slice(0, 5).map((feature) => (
+                <li key={feature} className="flex items-start gap-1.5 text-[12px] text-white/65">
+                  <Check className="mt-0.5 h-3 w-3 shrink-0" style={{ color: BRAND }} />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+
+            <a
+              href={tier.ctaLink}
+              className={cn(
+                "group/cta mt-5 inline-flex items-center justify-center gap-1.5 rounded-[6px] border px-4 py-2.5 text-[12.5px] font-medium transition-colors",
+                tier.isFeatured
+                  ? "border-transparent bg-white text-black hover:bg-white/90"
+                  : "border-white/15 bg-white/[0.04] text-white/85 hover:border-white/40 hover:bg-white/[0.09] hover:text-white"
+              )}
+            >
+              {tier.ctaText || "Get started"}
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/cta:translate-x-0.5" />
+            </a>
+          </div>
+        );
+      })}
     </div>
   );
 }

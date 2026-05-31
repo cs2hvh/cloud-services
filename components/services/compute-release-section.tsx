@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
     ArrowRight,
@@ -96,10 +95,10 @@ function ServerCard({ server, index }: { server: Server; index: number }) {
     const isFeatured = !!server.featured;
     return (
         <article
-            className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
+            className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors hover:border-[#0095FF]/55 ${
                 isFeatured
-                    ? "border-white/[0.18] bg-[#13161B]"
-                    : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
+                    ? "border-white/[0.18] bg-[#13161B] hover:bg-[#161A1F]"
+                    : "border-white/[0.10] bg-[#111316] hover:bg-[#161A1F]"
             }`}
             style={{
                 boxShadow: isFeatured
@@ -116,33 +115,20 @@ function ServerCard({ server, index }: { server: Server; index: number }) {
                 />
             )}
 
-            {/* Header — index + badge + processor mark */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
-                        {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span
-                        className={`${MONO} inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[9.5px] uppercase tracking-[0.14em] ${
-                            isFeatured
-                                ? "border-white/[0.18] bg-white/[0.05] text-white/80"
-                                : "border-white/[0.10] bg-white/[0.03] text-white/55"
-                        }`}
-                    >
-                        {server.badge}
-                    </span>
-                </div>
-                <Image
-                    src={
-                        server.processor === "Intel"
-                            ? "/images/compute-page/intel.png"
-                            : "/images/compute-page/amd.png"
-                    }
-                    alt={server.processor}
-                    width={40}
-                    height={16}
-                    className="h-4 w-auto object-contain opacity-70 brightness-0 invert"
-                />
+            {/* Header — index + badge */}
+            <div className="flex items-center gap-3">
+                <span className={`${MONO} text-[10.5px] tabular-nums text-white/30`}>
+                    {String(index + 1).padStart(2, "0")}
+                </span>
+                <span
+                    className={`${MONO} inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[9.5px] uppercase tracking-[0.14em] ${
+                        isFeatured
+                            ? "border-white/[0.18] bg-white/[0.05] text-white/80"
+                            : "border-white/[0.10] bg-white/[0.03] text-white/55"
+                    }`}
+                >
+                    {server.badge}
+                </span>
             </div>
 
             {/* Title */}
@@ -206,11 +192,7 @@ function ServerCard({ server, index }: { server: Server; index: number }) {
                 <AuthAwareServiceCta
                     service="compute"
                     intent="new"
-                    className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
-                        isFeatured
-                            ? "border border-white bg-white text-black hover:bg-white/90"
-                            : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white/[0.04]"
-                    }`}
+                    className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white hover:bg-white hover:text-black active:border-white active:bg-white active:text-black`}
                 >
                     Configure
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -241,10 +223,8 @@ const ComputeReleaseSection = () => {
                         Dedicated hardware, on tap
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
-                        Whole-machine performance without the hypervisor tax.
-                        Out-of-band management, hardware RAID, and custom OS
-                        images on every node — billed monthly, racked in
-                        minutes, not weeks.
+                        Whole-machine performance without the hypervisor tax —
+                        racked in minutes, billed monthly.
                     </p>
 
                     {/* Platform highlight chips */}

@@ -383,7 +383,7 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1360px] mx-auto">
+            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1760px] mx-auto">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -398,13 +398,9 @@ const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
                 {/* Hero */}
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Launch{" "}
-                    <span
-                        style={SERIF_STYLE}
-                        className="text-white/55 font-normal"
-                    >
-                        a server
+                    <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
+                        server
                     </span>
-                    .
                 </h1>
                 <p
                     className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
@@ -1286,7 +1282,7 @@ function PlanPicker({
             ) : (
                 <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
                     {/* Column header */}
-                    <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.015]">
+                    <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.015]">
                         <span />
                         <ColHead>Slug</ColHead>
                         <ColHead>Name</ColHead>
@@ -1333,7 +1329,7 @@ function PlanPicker({
                                 )}
 
                                 {/* Desktop row */}
-                                <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 items-center">
+                                <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-5 py-3.5 items-center">
                                     <span
                                         aria-hidden
                                         className="relative h-[15px] w-[15px] rounded-full shrink-0"
@@ -1375,33 +1371,30 @@ function PlanPicker({
                                         )}
                                     </span>
                                     <span
-                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
+                                        className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}
                                     >
                                         {p.vcpu}
                                     </span>
                                     <span
-                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
+                                        className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}
                                     >
                                         {ramGB}
-                                        <span className="text-white/35 text-[10.5px]">
-                                            {" GB"}
+                                        <span className="ml-1 text-white/45 text-[11px]">
+                                            GB
                                         </span>
                                     </span>
                                     <span
-                                        className={`${MONO} text-right text-[11.5px] text-white/65 tabular-nums`}
+                                        className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}
                                     >
                                         {p.diskGB}
-                                        <span className="text-white/35 text-[10.5px]">
-                                            {" GB "}
-                                        </span>
-                                        <span className="text-white/30 text-[10px] uppercase tracking-[0.06em]">
-                                            NVMe
+                                        <span className="ml-1 text-white/45 text-[11px]">
+                                            GB NVMe
                                         </span>
                                     </span>
-                                    <span className="text-right flex items-baseline justify-end gap-1.5">
+                                    <span className="text-right flex items-baseline justify-end gap-1">
                                         <span
                                             style={SERIF_STYLE}
-                                            className="text-[16px] leading-none text-white font-bold tabular-nums"
+                                            className="text-[18px] leading-none text-white font-bold tabular-nums"
                                         >
                                             $
                                             {p.monthlyUSD.toFixed(
@@ -1411,7 +1404,7 @@ function PlanPicker({
                                             )}
                                         </span>
                                         <span
-                                            className={`${MONO} text-[10px] text-white/35`}
+                                            className={`${MONO} text-[10px] text-white/40`}
                                         >
                                             /mo
                                         </span>

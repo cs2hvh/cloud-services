@@ -272,10 +272,10 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
     const stock = STOCK_META[gpu.stock];
     return (
       <article
-        className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
+        className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors hover:bg-[#161A1F] ${
           gpu.featured
             ? "border-white/[0.18] bg-[#13161B]"
-            : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
+            : "border-white/[0.10] bg-[#111316]"
         }`}
         style={{
           boxShadow: gpu.featured
@@ -283,25 +283,20 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
             : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
         }}
       >
-        {gpu.featured && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
-            style={{ background: BRAND, opacity: 0.55 }}
-          />
-        )}
+        {/* Blue left accent — appears on hover */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          style={{ background: BRAND }}
+        />
 
-        {/* Header — index + NVIDIA mark + arch dot */}
+        {/* Header — index + name */}
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <span
-              className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
-            >
-              {String(index + 1).padStart(2, "0")}
-            </span>
-
-            <NvidiaLogo width={42} height={17} className="opacity-95" />
-          </div>
+          <span
+            className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+          >
+            {String(index + 1).padStart(2, "0")}
+          </span>
 
           <h3 className="text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
             {gpu.name}
@@ -374,11 +369,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
           </div>
           <Link
             href={gpu.href}
-            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
-              gpu.featured
-                ? "border border-white bg-white text-black hover:bg-white/90"
-                : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white hover:text-black"
-            }`}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors group-hover:border-white group-hover:bg-white group-hover:text-black`}
           >
             Deploy
             <ArrowRight className="h-3.5 w-3.5" />
@@ -561,7 +552,8 @@ export function GpuServicePage(
                             The lineup
                         </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
-                            Every NVIDIA class, ready to deploy
+                            Every NVIDIA class,{" "}
+                            <span className="text-[#0095FF]">ready to deploy</span>
                         </h2>
                         <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
                             From Ada Lovelace inference at $1.49 / GPU·hr to Blackwell B200 for

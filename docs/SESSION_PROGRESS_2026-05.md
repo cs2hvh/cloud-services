@@ -218,10 +218,12 @@ These landed earlier in the window (2026-05-26) and underpin the surfaces above.
 
 ---
 
-## 7. In progress / next (as of 2026-05-28)
+## 7. In progress / next (as of 2026-05-29)
 
 - **The Complete Model Training Pipeline** — homepage UI refinement (was the
   focus at 2026-05-28; superseded by the v1 service productionization below).
+- **Marketing pricing page + GPU/VPS visual polish** — *uncommitted in the tree*
+  as of 2026-05-29; see §9.
 
 ---
 
@@ -354,4 +356,66 @@ bar**. Full Compute reference doc written: **[docs/COMPUTE_SERVICE.md](COMPUTE_S
 
 ---
 
-*Generated from the `dev` branch commit log for 2026-05-26 → 2026-05-29.*
+## 9. Marketing pricing page + GPU/VPS polish (2026-05-29) — *uncommitted*
+
+A marketing/dashboard visual-polish pass. **Not yet committed** — lives in the
+working tree. Two threads: (a) the public **pricing page** made data-accurate and
+de-promo'd, (b) small **GPU/VPS** hero + table refinements.
+
+### Pricing page data accuracy ([lib/supabase/queries/pricing.ts](../lib/supabase/queries/pricing.ts))
+- **Comparison columns rendered empty** because products store cores/RAM/disk in
+  the structured `resources` field, not the free-form `specs` array.
+  `buildSpecsFromResources()` synthesizes `"<n> vCPU" / "<n> GB RAM" / "<n> GB
+  NVMe"` from `resources`, falling back to `specs` only when resources are absent.
+- `cleanTierName()` strips type/spec noise baked into product names
+  (e.g. `"Basic 1vCPU 2GB"` → `"Basic"`) since type + specs have their own columns.
+
+### Pricing page content ([app/(marketing)/pricing/page.tsx](../app/(marketing)/pricing/page.tsx) fallback data)
+- **Removed all promo blocks** (crypto deal, startup credits, "static pricing"
+  launch offer) — placeholders that don't reflect real offers.
+- **GPU Instances retiered to the real fleet:** promo block replaced with actual
+  SKUs — **H200 SXM** (141 GB), **B200** (192 GB, featured), **B200 ×4** (NVLink),
+  etc. Per-GPU, per-second billing copy; CTAs deep-link to
+  `/dashboard/services/gpu/deploy?gpu=…` instead of `/signup`.
+- Tightened tier/category descriptions across Compute + GPU.
+- Large reflow of [pricing-content.tsx](../components/pricing/pricing-content.tsx)
+  (~977 lines) and [pricing-client.tsx](../components/pricing/pricing-client.tsx)
+  to match.
+
+### GPU / VPS hero + table polish
+- **Hero accent treatment unified** to a single brand-blue keyword (drop the
+  trailing period, color the keyword `#0095FF` instead of `text-white/55`):
+  [gpu-dashboard.tsx](../components/dashboard/gpu/gpu-dashboard.tsx) ("GPUs"),
+  [enterprise-form.tsx](../components/dashboard/gpu/enterprise-form.tsx)
+  ("sales team"), [compute/vps/simple.tsx](../components/dashboard/compute/vps/simple.tsx)
+  ("server").
+- **VPS plan picker table** ([simple.tsx](../components/dashboard/compute/vps/simple.tsx)):
+  wider container (1360 → 1760px), roomier row padding, larger spec/price type
+  (12 → 13px, price 16 → 18px), cleaner `GB` / `GB NVMe` unit styling.
+- **"Everything you need" GPU tab** ([everything-section.tsx](../components/everything-section.tsx)):
+  swapped the static PNG for the new `/ailabs/B200-GPU-Stack.png`; GPU image
+  scaled up (`scale-[1.35] -translate-y-6`) to fill the frame.
+
+### Side fix (unrelated, found while inspecting the tree)
+- **Migration typo fixed:** `20260526000003_phase7_batch_grants.sql` had
+  `ALTER DEFAULT PRIVILEGES INa SCHEMA` (stray `a`) — a hard syntax error that
+  would have aborted the migration. Corrected to `IN SCHEMA`.
+
+> ℹ️ Also in the tree: **14 old `supabase/migrations/*.sql` files deleted**
+> (pre-2026-05 dates: `20231201`…`20260122`). **Confirmed intentional** — they're
+> redundant after the baseline squash captured in `20251115073901_remote_schema.sql`
+> (commits *"rename legacy files with timestamps, add remote schema baseline"* +
+> *"move legacy files after baseline, make idempotent for db pull compatibility"*).
+> Safe to commit the deletion — keep it in **its own commit**, separate from the
+> pricing work.
+
+### Open / next
+- Pricing rework + GPU/VPS polish are **unverified and uncommitted** — review the
+  full diff, run the pages, then commit. The 14 migration deletions are a confirmed
+  baseline-squash cleanup; commit them **separately** from the pricing work.
+- GPU pricing-card vs summary markup mismatch (carried from §8) still open.
+
+---
+
+*Generated from the `dev` branch commit log + working tree for
+2026-05-26 → 2026-05-29.*

@@ -96,14 +96,12 @@ function TierCard({ tier }: { tier: Tier }) {
                     : "inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 22px -8px rgba(0,0,0,0.6)",
             }}
         >
-            {/* Subtle left accent stripe on the featured card — no glow */}
-            {isFeatured && (
-                <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
-                    style={{ background: BRAND, opacity: 0.7 }}
-                />
-            )}
+            {/* Blue left accent line — appears only on hover */}
+            <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                style={{ background: BRAND }}
+            />
 
             {/* Header — index + label + (optional) flag */}
             <div className="flex items-center gap-3">
@@ -175,11 +173,7 @@ function TierCard({ tier }: { tier: Tier }) {
                     </p>
                 </div>
                 <span
-                    className={`${MONO} inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors ${
-                        isFeatured
-                            ? "text-[#0095FF]"
-                            : "text-white/55 group-hover:text-white"
-                    }`}
+                    className={`${MONO} inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/70 transition-colors group-hover:text-[#0095FF]`}
                 >
                     {tier.cta}
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -310,7 +304,7 @@ export function ComputeSection() {
                     </p>
                     <Link
                         href="/services/compute"
-                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-white`}
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/65 transition-colors hover:text-[#0095FF]`}
                     >
                         Compare all compute plans
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

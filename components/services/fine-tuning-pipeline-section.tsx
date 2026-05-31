@@ -164,7 +164,7 @@ export default function FineTuningPipelineSection() {
           </div>
           <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
             Six phases.{" "}
-            <span className="text-[#8ecaff]">Zero infra to run.</span>
+            <span className="text-[#0095FF]">Zero infra to run.</span>
           </h2>
           <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
             From a JSONL file to a callable model id. Scroll the phases — the visual on the right tracks where you are.
@@ -317,7 +317,7 @@ export default function FineTuningPipelineSection() {
                         <motion.p
                           animate={{
                             color: isActive
-                              ? "#8ecaff"
+                              ? "#0095FF"
                               : "rgba(255,255,255,0.62)",
                           }}
                           transition={{ duration: 0.5 }}
@@ -330,9 +330,12 @@ export default function FineTuningPipelineSection() {
 
                     {/* Title + body */}
                     <motion.h3
-                      animate={{ opacity: isActive ? 1 : 0.50 }}
+                      animate={{
+                        color: isActive ? "#0095FF" : "#ffffff",
+                        opacity: isActive ? 1 : 0.5,
+                      }}
                       transition={{ duration: 0.5 }}
-                      className="mt-7 max-w-xl text-[26px] font-medium leading-[1.12] tracking-tight text-white sm:text-[30px]"
+                      className="mt-7 max-w-xl text-[26px] font-medium leading-[1.12] tracking-tight sm:text-[30px]"
                     >
                       {p.title}
                     </motion.h3>

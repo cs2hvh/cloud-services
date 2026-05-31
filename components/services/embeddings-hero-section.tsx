@@ -135,7 +135,7 @@ export default function EmbeddingsHeroSection({
               className="mt-6 text-4xl font-[400] leading-[1.04] tracking-tight text-white sm:text-5xl lg:text-[3.8rem]"
             >
               Retrieval that lives{" "}
-              <span className="text-[#8ecaff]">next to your inference.</span>
+              <span className="text-[#0095FF]">next to your inference.</span>
             </motion.h1>
 
             <motion.p
@@ -157,7 +157,7 @@ export default function EmbeddingsHeroSection({
             >
               <Link
                 href={primaryAction.href}
-                className="group inline-flex items-center gap-2 rounded-[8px] bg-[#0095FF] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-[0_8px_24px_rgba(0,149,255,0.35)] transition-all hover:bg-[#33adff] hover:shadow-[0_10px_30px_rgba(0,149,255,0.5)]"
+                className="group inline-flex items-center gap-2 rounded-[8px] bg-white px-5 py-2.5 text-[13.5px] font-semibold text-black transition-all hover:bg-[#0095FF] hover:text-white"
               >
                 {primaryAction.label}
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -182,7 +182,7 @@ export default function EmbeddingsHeroSection({
                   key={m.label}
                   className="bg-[#0E0F0F] px-4 py-3"
                 >
-                  <p className="font-mono text-[14px] font-semibold text-white tabular-nums">
+                  <p className="font-mono text-[14px] font-semibold text-[#0095FF] tabular-nums">
                     {m.value}
                   </p>
                   <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/40">

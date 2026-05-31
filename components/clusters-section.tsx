@@ -10,7 +10,6 @@ import { motion } from "motion/react";
 import { ArrowRight, Check } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const BRAND = "#0095FF";
 
@@ -44,16 +43,7 @@ const CLUSTER_BENEFITS: Array<{ title: string; detail: string }> = [
 ];
 
 const SAMPLE_CONFIG: Array<{ label: string; value: React.ReactNode }> = [
-    {
-        label: "GPUs",
-        value: (
-            <span className="inline-flex items-center gap-1.5">
-                64×
-                <NvidiaLogo width={42} height={17} className="opacity-95" />
-                B200
-            </span>
-        ),
-    },
+    { label: "GPUs", value: "64× NVIDIA B200" },
     { label: "GPU memory", value: "12 TB (192 GB / GPU)" },
     { label: "Interconnect", value: "NVLink Switch System" },
     { label: "vCPUs / node", value: "96 vCPUs" },
@@ -90,7 +80,7 @@ function ClusterConfigCard() {
                             </p>
                             <Link
                                 href="/dashboard/services/gpu/enterprise"
-                                className={`${MONO} text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/65 hover:text-white transition-colors`}
+                                className={`${MONO} text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/65 hover:text-[#0095FF] transition-colors`}
                             >
                                 Review &amp; request
                             </Link>
@@ -98,9 +88,8 @@ function ClusterConfigCard() {
 
                         {/* Title */}
                         <div className="mt-7">
-                            <h3 className="flex items-center gap-2.5 text-[26px] font-semibold tracking-[-0.02em] text-white leading-tight">
-                                <NvidiaLogo width={42} height={17} className="opacity-95" />
-                                B200 SXM · 8-node cluster
+                            <h3 className="text-[26px] font-semibold tracking-[-0.02em] text-white leading-tight">
+                                <span className="text-[#0095FF]">NVIDIA B200 SXM</span> · 8-node cluster
                             </h3>
                             <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.18em] text-white/40`}>
                                 NVLink fabric · Redundant power · PCIe 5.0
@@ -218,7 +207,7 @@ export function ClustersSection() {
                             <div className="flex flex-wrap items-center gap-3">
                                 <Link
                                     href="/dashboard/services/gpu/enterprise"
-                                    className="group relative inline-flex h-12 items-center gap-2 overflow-hidden border border-white/85 bg-white px-6 text-[11.5px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90"
+                                    className="group relative inline-flex h-12 items-center gap-2 overflow-hidden border border-white/85 bg-white px-6 text-[11.5px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
                                 >
                                     <span className="relative">Contact sales</span>
                                     <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-0.5" />

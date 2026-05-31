@@ -66,7 +66,7 @@ export default function AppDeployHowSection() {
                         How it works
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        From repository to production in three steps.
+                        From repository to production in <span className="text-[#0095FF]">three steps.</span>
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
                         Connect a repository, push to the tracked branch, and a build
@@ -110,7 +110,7 @@ export default function AppDeployHowSection() {
                                     className="flex flex-col items-center gap-1.5 bg-[#0D0D0F] px-3 py-4"
                                 >
                                     <span
-                                        className={`${MONO} text-[16px] font-bold leading-none tabular-nums text-white`}
+                                        className={`${MONO} text-[16px] font-bold leading-none tabular-nums text-[#0095FF]`}
                                     >
                                         {s.v}
                                     </span>
@@ -131,7 +131,7 @@ export default function AppDeployHowSection() {
                             return (
                                 <li
                                     key={step.label}
-                                    className="relative flex gap-5 pb-7 last:pb-0"
+                                    className="group relative flex gap-5 pb-7 last:pb-0"
                                 >
                                     {/* Vertical connector */}
                                     {!isLast && (
@@ -161,7 +161,7 @@ export default function AppDeployHowSection() {
                                             >
                                                 {step.label}
                                             </span>
-                                            <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white">
+                                            <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white transition-colors group-hover:text-[#0095FF]">
                                                 {step.title}
                                             </h3>
                                         </div>

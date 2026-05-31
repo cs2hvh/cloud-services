@@ -1,48 +1,169 @@
 "use client";
 
+import Image from "next/image";
+
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import {
-  Activity,
-  Bell,
-  KeyRound,
-  Layers,
-  Lock,
-  ShieldCheck,
-  Sparkles,
-  TrendingDown,
-} from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
-// ─── Premium icon badge ──────────────────────────────────────────────
+// ─── Animated text helpers ───────────────────────────────────────────
 //
-// Used inside every tile. Wraps a lucide icon in a brand-blue gradient
-// chip with a soft outer glow. Replaces the previous "plain icon in a
-// thin-bordered square" treatment which read as generic.
-function IconBadge({ icon: Icon }: { icon: LucideIcon }) {
+// Two effects, both gated on `start` (the section's in-view flag) and both
+// SSR-safe (deterministic before `start`, no Math.random) so there's no
+// hydration mismatch.
+
+// Blinking caret used by the code typewriter.
+function Caret() {
+  return (
+    <span className="ml-px inline-block w-[6px] -translate-y-[1px] animate-pulse text-[#33adff]">
+      ▍
+    </span>
+  );
+}
+
+type CodeLine = { text: string; highlight?: boolean };
+
+const PYTHON_LINES: CodeLine[] = [
+  { text: "from openai import OpenAI" },
+  { text: "client = OpenAI(" },
+  { text: '  base_url="https://api.cs2hvh.com/v1",', highlight: true },
+  { text: '  api_key=os.environ["AHURA_API_KEY"],' },
+  { text: ")" },
+];
+
+// Types the code out line-by-line once `start` flips true. Reserves full
+// height so the card doesn't jump while typing.
+function CodeTypewriter({
+  lines,
+  start,
+  stepMs = 16,
+}: {
+  lines: CodeLine[];
+  start: boolean;
+  stepMs?: number;
+}) {
+  const total =
+    lines.reduce((n, l) => n + l.text.length, 0) + Math.max(0, lines.length - 1);
+  const [typed, setTyped] = useState(0);
+
+  useEffect(() => {
+    if (!start) return;
+    // Finished typing → hold, then restart so the effect loops.
+    if (typed >= total) {
+      const id = setTimeout(() => setTyped(0), 2400);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => setTyped((c) => c + 1), stepMs);
+    return () => clearTimeout(id);
+  }, [start, typed, total, stepMs]);
+
+  // Visible char count per line (one newline consumed between lines).
+  let remaining = typed;
+  const visibles = lines.map((l, i) => {
+    if (i > 0) remaining = Math.max(0, remaining - 1);
+    const v = Math.max(0, Math.min(l.text.length, remaining));
+    remaining = Math.max(0, remaining - v);
+    return v;
+  });
+
+  let activeIndex = lines.findIndex((l, i) => visibles[i] < l.text.length);
+  const done = activeIndex === -1;
+  if (done) activeIndex = lines.length - 1;
+
+  return (
+    <pre className="min-h-[7.5rem] px-4 py-3 text-white/80">
+      {lines.map((l, i) => {
+        if (i > activeIndex) return null;
+        const txt = l.text.slice(0, visibles[i]);
+        const showCaret = !done && i === activeIndex;
+        return l.highlight ? (
+          <span
+            key={i}
+            className="block rounded-[3px] bg-[#0095FF]/[0.15] -mx-2 px-2 text-white"
+          >
+            {txt}
+            {showCaret && <Caret />}
+          </span>
+        ) : (
+          <span key={i} className="block text-white/45">
+            {txt}
+            {showCaret && <Caret />}
+          </span>
+        );
+      })}
+    </pre>
+  );
+}
+
+// Scramble→reveal "decrypt" effect. Resolves left-to-right while the tail
+// keeps cycling through hex. Deterministic until `start` (SSR-safe).
+function DecryptText({
+  text,
+  start,
+  className = "",
+  stepMs = 55,
+}: {
+  text: string;
+  start: boolean;
+  className?: string;
+  stepMs?: number;
+}) {
+  const HEX = "0123456789abcdef";
+  const [revealed, setRevealed] = useState(0);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!start) return;
+    // Fully decrypted → hold, then re-scramble and run again (loops).
+    if (revealed >= text.length) {
+      const id = setTimeout(() => {
+        setTick((t) => t + 1);
+        setRevealed(0);
+      }, 2600);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => {
+      setTick((t) => t + 1);
+      setRevealed((r) => r + 1);
+    }, stepMs);
+    return () => clearTimeout(id);
+  }, [start, revealed, text.length, stepMs]);
+
+  const out = text
+    .split("")
+    .map((ch, i) =>
+      i < revealed || !/[0-9a-f]/i.test(ch)
+        ? ch
+        : HEX[(i * 7 + tick * 5 + 3) % HEX.length]
+    )
+    .join("");
+
+  return <span className={className}>{out}</span>;
+}
+
+// ─── Image icon ──────────────────────────────────────────────────────
+//
+// Renders the PNG directly — no bounding box, just the image with a
+// soft ambient glow behind it.
+function ImageBadge({ src, alt, size = 52 }: { src: string; alt: string; size?: number }) {
   return (
     <div className="relative">
       <span
         aria-hidden
-        className="absolute -inset-1.5 rounded-[8px] opacity-70 blur-md"
+        className="absolute -inset-3 rounded-full opacity-50 blur-xl"
         style={{
           background:
-            "radial-gradient(50% 50% at 50% 50%, rgba(0,149,255,0.5), transparent 70%)",
+            "radial-gradient(50% 50% at 50% 50%, rgba(0,149,255,0.45), transparent 70%)",
         }}
       />
-      <div
-        className="relative flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#33adff]/30 text-white"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(0,149,255,0.30) 0%, rgba(0,149,255,0.08) 100%)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 16px rgba(0,149,255,0.18)",
-        }}
-      >
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
-      </div>
+      <Image
+        src={src}
+        alt={alt}
+        width={size}
+        height={size}
+        className="relative object-contain"
+      />
     </div>
   );
 }
@@ -145,7 +266,7 @@ export default function InferenceFeaturesSection() {
           </p>
           <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Production guardrails.{" "}
-            <span className="text-[#8ecaff]">Day one.</span>
+            <span className="text-[#0095FF]">Day one.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             Spend caps, BYOK, ZDR, semantic cache, and audit logs — working out of the box.
@@ -159,7 +280,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 1: HERO — Drop-in compatibility (6 cols × 2 rows) ── */}
           <Tile className="lg:col-span-6 lg:row-span-2" delay={0.0} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <IconBadge icon={Layers} />
+              <ImageBadge src="/inference/sdk-icon.png" alt="SDK compatible" />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 Drop-in
               </span>
@@ -181,18 +302,7 @@ export default function InferenceFeaturesSection() {
                   python
                 </span>
               </div>
-              <pre className="px-4 py-3 text-white/80">
-                <span className="text-white/45">from openai import OpenAI</span>
-                {"\n"}
-                <span className="text-white/45">client = OpenAI(</span>
-                {"\n"}
-                <span className="block rounded-[3px] bg-[#0095FF]/[0.15] -mx-2 px-2 text-white">
-                  {"  "}base_url=&quot;https://api.cs2hvh.com/v1&quot;,
-                </span>
-                <span className="text-white/45">  api_key=os.environ[&quot;AHURA_API_KEY&quot;],</span>
-                {"\n"}
-                <span className="text-white/45">)</span>
-              </pre>
+              <CodeTypewriter lines={PYTHON_LINES} start={inView} />
             </div>
 
             <div className="mt-5 flex flex-wrap gap-1.5">
@@ -210,7 +320,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 2: TALL — Semantic cache (3 cols × 2 rows) ── */}
           <Tile className="lg:col-span-3 lg:row-span-2" delay={0.05} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <IconBadge icon={TrendingDown} />
+              <ImageBadge src="/inference/semantic-icon.png" alt="Semantic cache" size={70} />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 Cache
               </span>
@@ -244,6 +354,7 @@ export default function InferenceFeaturesSection() {
                     stroke="url(#cacheGrad)"
                     strokeWidth="6"
                     strokeLinecap="round"
+                    className="inference-ring-glow"
                     strokeDasharray={`${2 * Math.PI * 42}`}
                     initial={{ strokeDashoffset: 2 * Math.PI * 42 }}
                     animate={inView ? { strokeDashoffset: 2 * Math.PI * 42 * 0.05 } : {}}
@@ -282,7 +393,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 3: TALL — BYOK (3 cols × 2 rows) ── */}
           <Tile className="lg:col-span-3 lg:row-span-2" delay={0.1} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <IconBadge icon={KeyRound} />
+              <ImageBadge src="/inference/byok.png" alt="Bring your own key" />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 BYOK
               </span>
@@ -297,8 +408,12 @@ export default function InferenceFeaturesSection() {
             {/* Cipher line visual — looks like an encrypted payload */}
             <div className="mt-5 overflow-hidden rounded-[6px] border border-white/[0.06] bg-black/40 p-3 font-mono text-[10px]">
               <p className="text-white/35">$ payload (AES-256-GCM)</p>
-              <p className="mt-1 break-all text-emerald-400/80">
-                f4a9b2c7e1d80a5f3b6e9c2d7a1b4e6f8c0a3b5d7e9f1c2a4b6d8e0f2a4c6e8b
+              <p className="mt-1 break-all">
+                <DecryptText
+                  text="f4a9b2c7e1d80a5f3b6e9c2d7a1b4e6f8c0a3b5d7e9f1c2a4b6d8e0f2a4c6e8b"
+                  start={inView}
+                  className="text-emerald-400/80"
+                />
               </p>
               <p className="mt-2 text-white/35">$ decrypted at edge</p>
               <p className="mt-1 break-all text-white/65">sk-proj-xxxx••••••••</p>
@@ -319,7 +434,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 4: WIDE — Spend control (6 cols × 1 row) ── */}
           <Tile className="lg:col-span-6 lg:row-span-1" delay={0.15} inView={inView}>
             <div className="flex items-start gap-5">
-              <IconBadge icon={ShieldCheck} />
+              <ImageBadge src="/inference/per-key.png" alt="Per-key spend caps" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-[15px] font-semibold tracking-tight text-white">
@@ -340,11 +455,10 @@ export default function InferenceFeaturesSection() {
                       initial={{ width: "0%" }}
                       animate={inView ? { width: "68%" } : {}}
                       transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1], delay: 0.6 }}
-                      className="h-full rounded-full"
+                      className="inference-bar-glow h-full rounded-full"
                       style={{
                         background:
                           "linear-gradient(90deg, #4ade80 0%, #fbbf24 70%, #f87171 100%)",
-                        boxShadow: "0 0 12px rgba(74,222,128,0.4)",
                       }}
                     />
                     {/* 80% marker */}
@@ -374,7 +488,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 5: STD — Zero Data Retention (3 cols × 1 row) ── */}
           <Tile className="lg:col-span-3 lg:row-span-1" delay={0.2} inView={inView}>
             <div className="flex items-start gap-4">
-              <IconBadge icon={Lock} />
+              <ImageBadge src="/inference/ZeroData Retention.png" alt="Zero Data Retention" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
@@ -394,7 +508,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 6: STD — Observability (3 cols × 1 row) ── */}
           <Tile className="lg:col-span-3 lg:row-span-1" delay={0.25} inView={inView}>
             <div className="flex items-start gap-4">
-              <IconBadge icon={Activity} />
+              <ImageBadge src="/inference/usage-audit.png" alt="Usage and audit" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
@@ -414,13 +528,13 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 7: WIDE — Routing presets + webhooks (6 cols × 1 row) ── */}
           <Tile className="lg:col-span-6 lg:row-span-1" delay={0.3} inView={inView}>
             <div className="flex items-start gap-5">
-              <IconBadge icon={Sparkles} />
+              <ImageBadge src="/inference/routing-icon.png" alt="Routing presets and webhooks" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-[15px] font-semibold tracking-tight text-white">
                     Routing presets &amp; signed webhooks
                   </h3>
-                  <Bell className="h-3.5 w-3.5 text-white/40" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#33adff]/60" />
                 </div>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-white/55">
                   Named fallback chains via one header. HMAC-SHA256 webhooks on every inference event.
@@ -441,7 +555,12 @@ export default function InferenceFeaturesSection() {
                       Webhook signature
                     </p>
                     <p className="mt-1 truncate font-mono text-[11px] text-white/85">
-                      sha256=<span className="text-emerald-400/85">3f2a9c…</span>
+                      sha256=
+                      <DecryptText
+                        text="3f2a9c…"
+                        start={inView}
+                        className="text-emerald-400/85"
+                      />
                     </p>
                   </div>
                 </div>
@@ -450,6 +569,40 @@ export default function InferenceFeaturesSection() {
           </Tile>
         </div>
       </Container>
+
+      {/* Glow pulses for the cache ring + spend bar — "full and live" feel. */}
+      <style jsx global>{`
+        .inference-ring-glow {
+          animation: inferenceRingGlow 2.4s ease-in-out infinite;
+        }
+        @keyframes inferenceRingGlow {
+          0%,
+          100% {
+            filter: drop-shadow(0 0 2px rgba(0, 149, 255, 0.55));
+          }
+          50% {
+            filter: drop-shadow(0 0 7px rgba(0, 149, 255, 1));
+          }
+        }
+        .inference-bar-glow {
+          animation: inferenceBarGlow 2.2s ease-in-out infinite;
+        }
+        @keyframes inferenceBarGlow {
+          0%,
+          100% {
+            box-shadow: 0 0 6px rgba(74, 222, 128, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.85);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .inference-ring-glow,
+          .inference-bar-glow {
+            animation: none !important;
+          }
+        }
+      `}</style>
     </section>
   );
 }

@@ -3105,7 +3105,7 @@
           },
           "record_name": {
             "type": "string",
-            "example": "galaxyhvh-verify.api.example.com"
+            "example": "ahuracloud-verify.api.example.com"
           },
           "record_value": {
             "type": "string",
@@ -3124,7 +3124,7 @@
         ],
         "example": {
           "record_type": "TXT",
-          "record_name": "galaxyhvh-verify.api.example.com",
+          "record_name": "ahuracloud-verify.api.example.com",
           "record_value": "verify_7f23cbb6500c31f7",
           "ttl": 300
         }

@@ -152,7 +152,7 @@ export default function EmbeddingsRagSection() {
           </p>
           <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Five stages.{" "}
-            <span className="text-[#8ecaff]">One API key.</span>
+            <span className="text-[#0095FF]">One API key.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             From raw documents to a grounded answer — every step is a single endpoint, billed transparently.

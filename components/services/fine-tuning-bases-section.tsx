@@ -80,7 +80,7 @@ export default function FineTuningBasesSection() {
               </p>
               <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[2.9rem]">
                 Train on the models{" "}
-                <span className="text-[#8ecaff]">worth training on.</span>
+                <span className="text-[#0095FF]">worth training on.</span>
               </h2>
               <p className="mt-5 max-w-md text-[14.5px] leading-7 text-white/55">
                 Frontier open-weight families: Llama 4, DeepSeek, Qwen, Mistral, Phi, Gemma. Cost-banded per GPU recommendation so you can pick by budget.
@@ -96,7 +96,7 @@ export default function FineTuningBasesSection() {
                 initial={{ opacity: 0 }}
                 animate={inView ? { opacity: 1 } : {}}
                 transition={{ duration: 0.5, delay: 0.4 }}
-                className="group mt-8 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#33adff] transition-colors hover:text-white"
+                className="group mt-8 inline-flex items-center gap-1.5 text-[13px] font-medium text-white transition-colors hover:text-[#0095FF]"
               >
                 Start a fine-tune
                 <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />

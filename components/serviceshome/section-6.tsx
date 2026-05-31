@@ -129,7 +129,7 @@ const ServicesHomeSectionSix = ({
                         {headingAccent && (
                             <>
                                 {" "}
-                                <span style={ACCENT_FONT} className="text-[#82adfb]">
+                                <span style={ACCENT_FONT} className="text-[#0095FF]">
                                     {headingAccent}
                                 </span>
                             </>
@@ -156,7 +156,7 @@ const ServicesHomeSectionSix = ({
                     </p>
                     <Link
                         href="/contact"
-                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                     >
                         Talk to our solutions team
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

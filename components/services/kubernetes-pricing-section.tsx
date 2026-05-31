@@ -110,11 +110,10 @@ export default function KubernetesPricingSection({
                         Pricing
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-                        Pay for workers. Not the control plane.
+                        Workers only.{" "}<span className="text-[#0095FF]">Control plane free.</span>
                     </h2>
                     <p className="mx-auto mt-5 max-w-[560px] text-[15px] leading-[1.6] text-black/60 sm:text-[16px]">
-                        Four cluster shapes. Control plane is always on the house — you
-                        pay only for the worker nodes you run.
+                        Four cluster tiers. Control plane always included — pay only for worker nodes.
                     </p>
                 </div>
 
@@ -126,7 +125,7 @@ export default function KubernetesPricingSection({
                         return (
                             <article
                                 key={cat.key}
-                                className="flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-colors hover:border-black/25"
+                                className="flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-colors hover:border-[#0095FF]"
                             >
                                 {/* Icon + label */}
                                 <div className="flex items-start justify-between">
@@ -179,7 +178,7 @@ export default function KubernetesPricingSection({
                                 <AuthAwareServiceCta
                                     service="kubernetes"
                                     intent="new"
-                                    className={`${MONO} mt-6 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-black/35 hover:bg-black/[0.04] hover:text-[#1A1814]`}
+                                    className={`${MONO} mt-6 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] border border-black/15 bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-black/80 transition-colors hover:border-[#0095FF] hover:bg-[#0095FF]/[0.08] hover:text-[#0095FF]`}
                                 >
                                     <span className="flex items-center gap-1.5">
                                         Deploy

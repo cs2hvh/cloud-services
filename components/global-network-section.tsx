@@ -125,7 +125,7 @@ export default function GlobalNetworkSection() {
               key={stat.label}
               className="bg-black p-5 sm:p-6 text-center transition-colors duration-300 hover:bg-white/[0.03]"
             >
-              <div className="text-2xl sm:text-3xl font-semibold text-white">
+              <div className="text-2xl sm:text-3xl font-semibold text-[#0095FF]">
                 {stat.value}
               </div>
               <div className="mt-1 text-[11px] sm:text-xs text-white/35 tracking-wide uppercase">

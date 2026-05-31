@@ -9,34 +9,13 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     id: "compute",
     label: "Compute",
     description:
-      "General purpose instances for web apps, gaming servers, APIs, workers, and backend services.",
-    promos: [
-      {
-        badge: "Crypto Deal",
-        badgeNote: "Limited-time",
-        title: "Balanced for $399 with crypto",
-        description:
-          "Pay with supported cryptocurrencies and unlock a limited-time promo price on the Balanced tier.",
-        subtext: "New purchases only. One promo per account.",
-        linkText: "See terms",
-        linkHref: "/pricing",
-      },
-      {
-        badge: "Startup Offer",
-        badgeNote: "Limited-time",
-        title: "Free credits for new projects",
-        description:
-          "Launch your first VM and get starter credits for 30 days.",
-        linkText: "Learn More",
-        linkHref: "/contact",
-      },
-    ],
+      "General-purpose instances for web apps, APIs, workers, and backend services.",
     tiers: [
       {
         id: "balanced",
         name: "Balanced",
         shortDescription:
-          "Ideal for typical production workloads: backed services, web apps, and CI runners.",
+          "Typical production workloads — backend services, web apps, and CI runners.",
         price: { monthly: 79, yearly: 949 },
         billingPeriod: "per month billed monthly",
         specs: ["8 vCPU", "32GB DDR5", "400GB NVMe", "5 Gbit/s"],
@@ -135,81 +114,146 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     id: "gpu-instance",
     label: "GPU Instances",
     description:
-      "GPU-accelerated plans for model training, inference, and high-performance AI workloads.",
-    promos: [
-      {
-        badge: "Launch Offer",
-        badgeNote: "Static pricing",
-        title: "GPU plans available now",
-        description:
-          "Choose between H200, H100, and L4OS classes. Pricing is static for now and will move to dynamic products next.",
-        subtext: "Limited stock by region for premium GPU classes.",
-        linkText: "See terms",
-        linkHref: "/pricing",
-      },
-    ],
+      "On-demand NVIDIA GPUs for training, fine-tuning, and inference. Per-second billing, no commitments.",
     tiers: [
       {
-        id: "gpu-h200",
-        name: "H200 Cluster",
-        machineType: "H200",
-        shortDescription: "Best for large training and high-throughput inference pipelines.",
-        price: { monthly: 2899, yearly: 34788 },
-        billingPeriod: "per node/month",
-        specs: ["16 vCPU", "128 GB RAM", "1.6 TB NVMe", "200 Gbit/s fabric"],
+        id: "gpu-h200-sxm",
+        name: "H200 SXM",
+        machineType: "H200 SXM",
+        shortDescription: "141 GB HBM3e. Long-context training and high-throughput serving.",
+        price: { monthly: 2872, yearly: 34465 },
+        billingPeriod: "per GPU, billed per second",
+        specs: ["24 vCPU", "200 GB RAM", "1.6 TB NVMe", "200 Gbit/s"],
         features: [
-          "1x NVIDIA H200",
+          "141 GB HBM3e",
+          "Hopper architecture",
           "CUDA + drivers managed",
           "Private networking",
-          "Snapshot backups",
-          "Priority support",
+        ],
+        ctaText: "Deploy",
+        ctaLink: "/dashboard/services/gpu/deploy?gpu=h200-141",
+      },
+      {
+        id: "gpu-b200",
+        name: "B200",
+        machineType: "B200",
+        shortDescription: "192 GB HBM3e flagship. Frontier-scale training and inference.",
+        price: { monthly: 3953, yearly: 47434 },
+        billingPeriod: "per GPU, billed per second",
+        specs: ["28 vCPU", "256 GB RAM", "2 TB NVMe", "400 Gbit/s"],
+        features: [
+          "192 GB HBM3e",
+          "Blackwell architecture",
+          "CUDA + drivers managed",
+          "Private networking",
         ],
         highlighted: true,
-        ctaText: "Deploy H200",
-        ctaLink: "/signup",
-      },
-      {
-        id: "gpu-h100",
-        name: "H100 Cluster",
-        machineType: "H100",
-        shortDescription: "Strong balance for production-scale AI training and serving.",
-        price: { monthly: 2199, yearly: 26388 },
-        billingPeriod: "per node/month",
-        specs: ["16 vCPU", "96 GB RAM", "1 TB NVMe", "100 Gbit/s fabric"],
-        features: [
-          "1x NVIDIA H100",
-          "Multi-node ready",
-          "Managed monitoring",
-          "DDoS baseline protection",
-          "Daily backups",
-        ],
         isFeatured: true,
-        summary: {
-          billing: "Monthly",
-          support: "Priority",
-          provisioning: "Fast",
-          guarantee: "60 Days",
-          buttonText: "Deploy H100",
-        },
-        ctaText: "Deploy H100",
+        ctaText: "Deploy",
+        ctaLink: "/dashboard/services/gpu/deploy?gpu=b200-180",
+      },
+      {
+        id: "gpu-b200-x4",
+        name: "B200 ×4",
+        machineType: "B200 X4",
+        shortDescription: "4× B200 with NVLink. Multi-GPU training out of the box.",
+        price: { monthly: 15811, yearly: 189734 },
+        billingPeriod: "per node, billed per second",
+        specs: ["112 vCPU", "1 TB RAM", "8 TB NVMe", "400 Gbit/s"],
+        features: [
+          "4× 192 GB HBM3e",
+          "NVLink interconnect",
+          "Multi-node ready",
+          "Priority support",
+        ],
+        ctaText: "Deploy",
+        ctaLink: "/dashboard/services/gpu/deploy?gpu=b200-x4-180",
+      },
+      {
+        id: "gpu-b200-x8",
+        name: "B200 ×8",
+        machineType: "B200 X8",
+        shortDescription: "8× B200 HGX node. Maximum density for the largest models.",
+        price: { monthly: 31622, yearly: 379469 },
+        billingPeriod: "per node, billed per second",
+        specs: ["224 vCPU", "2 TB RAM", "16 TB NVMe", "3.2 Tbit/s"],
+        features: [
+          "8× 192 GB HBM3e",
+          "HGX baseboard · NVLink",
+          "Multi-node ready",
+          "Priority support",
+        ],
+        ctaText: "Deploy",
+        ctaLink: "/dashboard/services/gpu/deploy?gpu=b200-x8-180",
+      },
+    ],
+  },
+  {
+    id: "ai-labs",
+    label: "A.I. Labs",
+    description:
+      "Inference, fine-tuning, embeddings, and model hosting behind one API key. Pay per token or per GPU-second — zero markup.",
+    tiers: [
+      {
+        id: "ai-inference",
+        name: "Inference API",
+        shortDescription: "50+ frontier and open models, OpenAI- and Anthropic-compatible.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "metered per token",
+        features: [
+          "Pass-through token pricing",
+          "Streaming, tools, vision",
+          "BYOK + semantic cache",
+          "Zero markup",
+        ],
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Create API key",
         ctaLink: "/signup",
       },
       {
-        id: "gpu-l4os",
-        name: "L4OS Cluster",
-        machineType: "L4OS",
-        shortDescription: "Cost-efficient inference and media AI workloads.",
-        price: { monthly: 899, yearly: 10788 },
-        billingPeriod: "per node/month",
-        specs: ["8 vCPU", "48 GB RAM", "500 GB NVMe", "25 Gbit/s network"],
+        id: "ai-fine-tuning",
+        name: "Fine-Tuning",
+        shortDescription: "LoRA training on managed GPUs. From ~$0.10 per run.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "metered per GPU-second",
         features: [
-          "1x NVIDIA L4OS",
-          "Ideal for inference APIs",
-          "Managed upgrades",
-          "Auto-healing",
-          "Standard support",
+          "8+ open base models",
+          "Automatic eval gate",
+          "Live training progress",
+          "From $0.10 / run",
         ],
-        ctaText: "Deploy L4OS",
+        ctaText: "Start a fine-tune",
+        ctaLink: "/signup",
+      },
+      {
+        id: "ai-model-hosting",
+        name: "Model Hosting",
+        shortDescription: "Your model on a dedicated GPU. Scale-to-zero when idle.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "per GPU-second",
+        features: [
+          "Single-tenant GPUs",
+          "Bring HF id or Docker image",
+          "Autoscale + scale-to-zero",
+          "From $0.40 / GPU-hr",
+        ],
+        ctaText: "Deploy a model",
+        ctaLink: "/signup",
+      },
+      {
+        id: "ai-embeddings",
+        name: "Embeddings + Vector",
+        shortDescription: "Hosted embeddings and managed pgvector collections.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "metered per token",
+        features: [
+          "Hosted embedding models",
+          "Managed pgvector",
+          "One API key",
+          "Pass-through pricing",
+        ],
+        ctaText: "Get started",
         ctaLink: "/signup",
       },
     ],
@@ -445,55 +489,8 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     ],
   },
   {
-    id: "ai-deployment",
-    label: "AI Agents Deployment",
-    description: "Deploy and scale AI agents and models.",
-    tiers: [
-      {
-        id: "starter-ai",
-        name: "Starter AI",
-        price: { monthly: 99, yearly: 1188 },
-        billingPeriod: "per month",
-        features: ["GPU compute hours", "Model hosting", "API access", "Basic monitoring"],
-        ctaText: "Get Started",
-        ctaLink: "/signup",
-      },
-      {
-        id: "professional-ai",
-        name: "Professional AI",
-        price: { monthly: 299, yearly: 3588 },
-        billingPeriod: "per month",
-        features: [
-          "Advanced GPU access",
-          "Model training",
-          "Auto-scaling",
-          "Advanced monitoring",
-          "Custom models",
-        ],
-        highlighted: true,
-        ctaText: "Learn More",
-        ctaLink: "/contact",
-      },
-      {
-        id: "enterprise-ai",
-        name: "Enterprise AI",
-        price: { monthly: 999, yearly: 11988 },
-        billingPeriod: "per month",
-        features: [
-          "Unlimited GPU access",
-          "Multi-model deployment",
-          "Dedicated infrastructure",
-          "Advanced security",
-          "24/7 support",
-        ],
-        ctaText: "Contact Sales",
-        ctaLink: "/contact",
-      },
-    ],
-  },
-  {
     id: "app-deployment",
-    label: "Application Deployment",
+    label: "App Deployment",
     description: "Deploy applications with zero configuration.",
     tiers: [
       {
@@ -543,23 +540,25 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
 // Loading skeleton
 function PricingLoadingSkeleton() {
   return (
-    <main className="min-h-screen bg-[#191919] text-white pt-20">
-      <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
-        <div className="text-center">
-          <div className="h-12 bg-neutral-800 rounded w-48 mx-auto mb-4 animate-pulse" />
-          <div className="h-4 bg-neutral-800 rounded w-96 mx-auto mb-3 animate-pulse" />
-          <div className="h-4 bg-neutral-800 rounded w-80 mx-auto mb-8 animate-pulse" />
-        </div>
+    <main className="min-h-screen bg-[#04060a] text-white">
+      <section className="mx-auto w-full max-w-[1240px] px-[clamp(20px,4vw,48px)] pt-28 pb-10 sm:pt-32">
+        <div className="h-4 w-20 animate-pulse rounded bg-white/[0.06]" />
+        <div className="mt-5 h-12 w-2/3 animate-pulse rounded bg-white/[0.06]" />
+        <div className="mt-4 h-4 w-1/2 animate-pulse rounded bg-white/[0.05]" />
+        <div className="mt-8 h-10 w-56 animate-pulse rounded-[7px] bg-white/[0.06]" />
       </section>
-      <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
-          <aside className="lg:w-60 shrink-0">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-10 bg-neutral-800 rounded mb-2 animate-pulse" />
-            ))}
+      <section className="mx-auto w-full max-w-[1240px] px-[clamp(20px,4vw,48px)] pb-24">
+        <div className="flex flex-col gap-10 lg:flex-row lg:gap-12">
+          <aside className="lg:w-52 lg:shrink-0">
+            <div className="space-y-2">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-8 animate-pulse rounded bg-white/[0.05]" />
+              ))}
+            </div>
           </aside>
-          <div className="flex-1">
-            <div className="h-64 bg-neutral-800 rounded animate-pulse" />
+          <div className="flex-1 space-y-4">
+            <div className="h-8 w-48 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-64 animate-pulse rounded-[8px] bg-white/[0.04]" />
           </div>
         </div>
       </section>

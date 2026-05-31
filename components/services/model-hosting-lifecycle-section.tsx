@@ -183,7 +183,7 @@ export default function ModelHostingLifecycleSection() {
           </div>
           <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
             Workers appear with traffic.{" "}
-            <span className="text-[#8ecaff]">Disappear without it.</span>
+            <span className="text-[#0095FF]">Disappear without it.</span>
           </h2>
           <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
             Scale-to-zero by default. Min &gt; 0 if you need always-warm. Idle GPU minutes never hit your invoice.

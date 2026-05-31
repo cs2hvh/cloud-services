@@ -15,10 +15,8 @@ export function ComplianceCta() {
               </h2>
             </div>
             <p className="mt-6 text-sm sm:text-[14.4px] leading-6 text-black/80 md:max-w-[420px]">
-              Use ahura
-              <span className="text-[#0095FF]">sense</span>
-              &apos;s flexible building blocks to keep your customers&apos; data
-              secure and compliant at all times.
+              Use ahurasense&apos;s flexible building blocks to keep your
+              customers&apos; data secure and compliant at all times.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
               <Link

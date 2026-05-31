@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Container as ContainerIcon,
@@ -102,6 +102,45 @@ resources:
   },
 ];
 
+// Looping code typewriter for the right-side snippet box. Re-mounts per tab
+// (via the parent's key={activeTab}), so switching formats restarts typing.
+// Height is reserved from the full line count so there's no layout shift, and
+// it's SSR-safe (renders nothing typed on first paint, no Math.random).
+function TypeCode({
+  code,
+  className = "",
+  stepMs = 16,
+}: {
+  code: string;
+  className?: string;
+  stepMs?: number;
+}) {
+  const [typed, setTyped] = useState(0);
+
+  useEffect(() => {
+    if (typed >= code.length) {
+      const id = window.setTimeout(() => setTyped(0), 2200);
+      return () => window.clearTimeout(id);
+    }
+    const id = window.setTimeout(() => setTyped((c) => c + 1), stepMs);
+    return () => window.clearTimeout(id);
+  }, [typed, code.length, stepMs]);
+
+  const lines = code.split("\n").length;
+  const done = typed >= code.length;
+
+  return (
+    <pre className={className} style={{ minHeight: `${lines * 20}px` }}>
+      {code.slice(0, typed)}
+      {!done && (
+        <span className="ml-px inline-block w-[6px] -translate-y-[1px] animate-pulse text-[#33adff]">
+          ▍
+        </span>
+      )}
+    </pre>
+  );
+}
+
 export default function ModelHostingFormatsSection() {
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -161,7 +200,7 @@ export default function ModelHostingFormatsSection() {
           </div>
           <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
             Bring it in{" "}
-            <span className="text-[#8ecaff]">the shape you have it.</span>
+            <span className="text-[#0095FF]">the shape you have it.</span>
           </h2>
           <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
             Docker for full control, HuggingFace for zero-config, Truss for the paved Python path.
@@ -350,9 +389,10 @@ export default function ModelHostingFormatsSection() {
                   ))}
                 </div>
 
-                <pre className="overflow-x-auto pl-8 font-mono text-[11.5px] leading-[20px] text-white/85">
-                  {activeFormat.snippet.code}
-                </pre>
+                <TypeCode
+                  code={activeFormat.snippet.code}
+                  className="overflow-x-auto pl-8 font-mono text-[11.5px] leading-[20px] text-white/85"
+                />
               </div>
 
               <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-3 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/35">

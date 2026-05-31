@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
@@ -9,6 +10,7 @@ import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
+import { ModelTrainingPipelineSection } from "@/components/model-training-pipeline-section";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
@@ -515,78 +517,6 @@ const FAQS = [
    Sections
    ────────────────────────────────────────────────────────────── */
 
-function ModelLifecycle() {
-    return (
-        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
-            <div aria-hidden className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-            {/* ─── Atmospheric backdrop ─── */}
-            <Aurora intensity="medium" />
-            <Eclipse position="top" size={780} intensity={0.10} blur={90} />
-
-            <Container className="relative z-10">
-                <div className="mx-auto max-w-[760px] text-center">
-                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Model lifecycle
-                    </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[52px]">
-                        From raw data to a{" "}
-                        <span style={ACCENT_FONT} className="text-[#82adfb]">
-                            served token.
-                        </span>
-                    </h2>
-                </div>
-
-                <div className="relative mx-auto mt-14 max-w-[1180px] overflow-x-auto">
-                    <div className="relative flex min-w-[860px] items-stretch justify-between gap-4 px-2">
-                        <div aria-hidden className="pointer-events-none absolute left-[4%] right-[4%] top-[44px] h-px bg-gradient-to-r from-white/0 via-white/20 to-white/0" />
-                        <div aria-hidden className="pointer-events-none absolute left-[4%] right-[4%] top-[44px] h-px overflow-hidden">
-                            <span className="absolute -left-10 top-0 h-px w-24 bg-gradient-to-r from-transparent via-[#0095FF] to-transparent animate-[flowdash_3.6s_linear_infinite]" />
-                        </div>
-
-                        {FLOW.map((n, i) => (
-                            <div key={n.label} className="relative z-10 flex flex-1 flex-col items-center gap-3">
-                                <div className="relative flex h-[88px] w-[88px] items-center justify-center rounded-full border border-white/[0.12] bg-[#111316] text-white/85"
-                                    style={{ boxShadow: "0 12px 30px -16px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05)" }}>
-                                    <div className="h-[42px] w-[42px]">{n.icon}</div>
-                                    <span className="absolute -bottom-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.12] bg-[#0D0D0F] text-[9px] font-bold text-white/55"
-                                        style={{ fontFamily: "var(--font-geist-mono),ui-monospace,monospace" }}>
-                                        {String(i + 1).padStart(2, "0")}
-                                    </span>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-[12.5px] font-semibold tracking-[-0.005em] text-white">{n.label}</p>
-                                    <p className={`${MONO} mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/45`}>{n.sub}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="mx-auto mt-12 grid max-w-[1080px] grid-cols-1 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-3">
-                    {[
-                        { v: "<2min", l: "To first pod" },
-                        { v: "256", l: "GPUs · single job" },
-                        { v: "Zero", l: "In-region egress" },
-                    ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
-                            <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
-                            <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
-                        </div>
-                    ))}
-                </div>
-            </Container>
-
-            <style jsx>{`
-                @keyframes flowdash {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(1200px); }
-                }
-            `}</style>
-        </section>
-    );
-}
 
 function Scenarios() {
     const featured = SCENARIOS.find((s) => s.featured)!;
@@ -650,7 +580,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -695,7 +625,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:shadow-lg"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -946,6 +876,7 @@ function Stack() {
 }
 
 function Workloads() {
+    const [gridHovered, setGridHovered] = useState(false);
     return (
         <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
             {/* ─── Warm paper grain ─── */}
@@ -957,15 +888,19 @@ function Workloads() {
                         <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
                         Workloads
                     </p>
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
+                    <h2 className={`text-3xl font-semibold leading-[1.05] tracking-[-0.02em] transition-colors duration-300 sm:text-4xl lg:text-[48px] ${gridHovered ? "text-[#0095FF]" : "text-[#1A1814]"}`}>
                         Sized to what AI teams{" "}
-                        <span style={ACCENT_FONT} className="text-[#0066B3]">
+                        <span style={ACCENT_FONT} className={gridHovered ? "text-[#0095FF]" : "text-[#0066B3]"}>
                             actually run.
                         </span>
                     </h2>
                 </div>
 
-                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                    className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3"
+                    onMouseEnter={() => setGridHovered(true)}
+                    onMouseLeave={() => setGridHovered(false)}
+                >
                     {WORKLOADS.map((w, i) => (
                         <article key={w.title} className="flex flex-col gap-4 bg-[#EEECE4] p-7">
                             <div className="flex items-start justify-between">
@@ -1001,7 +936,7 @@ export function AiMlLanding() {
         <main className="bg-[#0D0D0F]">
             <ServiceHeroSection
                 badge="AI / ML"
-                title="Infrastructure for the full AI lifecycle."
+                title={<>Infrastructure for the full <span className="text-[#0095FF]">AI lifecycle.</span></>}
                 description="Training, fine-tuning, and inference on NVIDIA GPUs — with the data layer wired in."
                 primaryAction={{ label: "Talk to AI engineering", href: "/contact" }}
                 secondaryAction={{ label: "Browse GPU lineup", href: "/services/gpu" }}
@@ -1013,7 +948,7 @@ export function AiMlLanding() {
                 }}
             />
             <HeroStats metrics={HERO_STATS} eyebrow="GPU platform" />
-            <ModelLifecycle />
+            <ModelTrainingPipelineSection />
             <Scenarios />
             <Workloads />
             <ServicesHomeSectionFive title="Frequently asked questions" faqs={FAQS} />

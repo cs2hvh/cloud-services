@@ -34,7 +34,7 @@ export default function ObjectStoragePricingSection(_: ObjectStoragePricingSecti
                         Pricing
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-black sm:text-4xl lg:text-[46px]">
-                        $5 a month. 250 GB to start.
+                        <span className="text-[#0095FF]">$5</span> a month.{" "}<span className="text-[#0095FF]">250 GB</span> to start.
                     </h2>
                     <p className="mx-auto mt-5 max-w-[560px] text-[15px] leading-[1.6] text-black/65 sm:text-[16px]">
                         One plan. One price. Grow per GB only when you actually need to.
@@ -105,7 +105,7 @@ export default function ObjectStoragePricingSection(_: ObjectStoragePricingSecti
                             <AuthAwareServiceCta
                                 service="object-storage"
                                 intent="main"
-                                className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-black bg-black px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-black/85`}
+                                className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 rounded-[5px] border border-black bg-black px-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:bg-[#0095FF] hover:border-[#0095FF]`}
                             >
                                 <span className="flex items-center gap-1.5">
                                     Get started

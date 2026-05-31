@@ -266,12 +266,10 @@ export default function KubernetesReleaseSection() {
                         The control plane
                     </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
-                        Managed clusters, not raw nodes
+                        <span className="text-[#0095FF]">Managed clusters</span>, zero overhead
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
-                        Control plane, autoscaler, multi-zone HA, GitOps wiring — all
-                        defaults. You write manifests; we run the operational layer
-                        underneath.
+                        API server, autoscaler, multi-zone HA, and GitOps — fully managed. Ship manifests; we own the infrastructure.
                     </p>
                 </div>
 
@@ -293,7 +291,7 @@ export default function KubernetesReleaseSection() {
                             className="flex flex-col items-center gap-2 bg-[#0D0D0F] px-4 py-5"
                         >
                             <span
-                                className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-white sm:text-[26px]`}
+                                className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-[#0095FF] sm:text-[26px]`}
                             >
                                 {s.value}
                             </span>

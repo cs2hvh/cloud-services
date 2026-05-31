@@ -175,7 +175,8 @@ export function DomainSearchSection() {
             Domain Registration
           </p>
           <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
-            Find the right domain. Register in seconds.
+            Find the right domain.{" "}
+            <span className="text-[#0095FF]">Register in seconds.</span>
           </h2>
           <p className="mx-auto mt-5 max-w-[560px] text-[15px] leading-[1.6] text-black/60 sm:text-[16.5px]">
             Search 400+ TLDs, register with one click, and manage DNS from the
@@ -237,10 +238,10 @@ export function DomainSearchSection() {
                     });
                     inputRef.current?.focus();
                   }}
-                  className={`group inline-flex items-center gap-2 rounded-[5px] border px-4 py-2 text-[12.5px] transition-colors ${
+                  className={`group inline-flex items-center gap-2 rounded-[5px] border px-4 py-2 text-[12.5px] transition-colors hover:border-[#0095FF] ${
                     item.highlight
-                      ? "border-black/25 bg-[#EEECE4] text-[#1A1814] hover:border-black/40"
-                      : "border-black/10 bg-transparent text-black/65 hover:border-black/25 hover:bg-[#EEECE4] hover:text-[#1A1814]"
+                      ? "border-black/25 bg-[#EEECE4] text-[#1A1814]"
+                      : "border-black/10 bg-transparent text-black/65 hover:bg-[#EEECE4] hover:text-[#1A1814]"
                   }`}
                 >
                   <span className={`${MONO} font-semibold`}>{item.tld}</span>
@@ -315,7 +316,7 @@ export function DomainSearchSection() {
 
           <Link
             href="/services/domain"
-            className={`${MONO} inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.14em] text-black/65 transition-colors hover:text-[#1A1814]`}
+            className={`${MONO} inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.14em] text-black/65 transition-colors hover:text-[#0095FF]`}
           >
             Browse all extensions
             <ArrowRight className="h-3.5 w-3.5" />

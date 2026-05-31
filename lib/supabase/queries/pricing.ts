@@ -293,6 +293,34 @@ export const PricingPromos = {
   },
 };
 
+// Build spec strings the pricing table can parse (vCPU / Memory / Storage)
+// from the product's structured `resources` field. Products store cores/RAM/
+// disk in `resources`, not always in `specs`, which is why the comparison
+// columns rendered empty. We synthesize specs from resources and only fall
+// back to the free-form `specs` array when resources are absent.
+function buildSpecsFromResources(product: Product): string[] | undefined {
+  const r = product.resources;
+  const out: string[] = [];
+  if (r && typeof r === "object") {
+    if (r.cpu) out.push(`${r.cpu} vCPU`);
+    if (r.ram) out.push(`${r.ram} GB RAM`);
+    if (r.storage) out.push(`${r.storage} GB NVMe`);
+  }
+  if (out.length > 0) return out;
+  return product.specs || undefined;
+}
+
+// Some catalog rows bake the type + specs into the name, e.g.
+// "Basic 1vCPU 2GB" or "General Purpose 4vCPU 16GB". The table already shows
+// type and specs in their own columns, so strip that noise to a clean name.
+function cleanTierName(rawName: string): string {
+  let name = rawName;
+  // Drop trailing "<n>vCPU <n>GB" / "<n> vCPU" / "<n>GB" tokens.
+  name = name.replace(/\s+\d+\s*v?cpu(\s+\d+\s*gb)?/gi, "");
+  name = name.replace(/\s+\d+\s*gb\b/gi, "");
+  return name.trim() || rawName.trim();
+}
+
 // Transform product to pricing tier format
 function productToPricingTier(product: Product): PricingTier {
   const monthlyPrice = product.price || 0;
@@ -300,7 +328,7 @@ function productToPricingTier(product: Product): PricingTier {
 
   return {
     id: product.id,
-    name: product.name || "",
+    name: cleanTierName(product.name || ""),
     shortDescription: product.short_description || product.description || undefined,
     subType: product.sub || undefined,
     cpuType: product.cpu_type || undefined,
@@ -310,7 +338,7 @@ function productToPricingTier(product: Product): PricingTier {
       yearly: yearlyPrice,
     },
     billingPeriod: product.billing_period || "per month",
-    specs: product.specs || undefined,
+    specs: buildSpecsFromResources(product),
     features: product.features || [],
     summary: product.summary || undefined,
     highlighted: product.is_highlighted || false,

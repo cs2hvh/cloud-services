@@ -63,7 +63,7 @@ export default function FineTuningHeroSection({
 
             <h1 className="mt-6 max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
               Train your model.
-              <span className="block text-[#8ecaff]">Ship your adapter.</span>
+              <span className="block text-[#0095FF]">Ship your adapter.</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]">
@@ -74,7 +74,7 @@ export default function FineTuningHeroSection({
               {primaryAction ? (
                 <Link
                   href={primaryAction.href}
-                  className="inline-flex h-11 items-center gap-2 bg-white px-6 text-sm font-medium text-black transition hover:bg-white/90"
+                  className="inline-flex h-11 items-center gap-2 bg-white px-6 text-sm font-medium text-black transition hover:bg-[#0095FF] hover:text-white"
                 >
                   {primaryAction.label}
                   <ArrowRight className="h-4 w-4" />
@@ -94,7 +94,7 @@ export default function FineTuningHeroSection({
             <div className="mt-12 grid gap-6 sm:grid-cols-4">
               {HERO_METRICS.map((metric) => (
                 <div key={metric.label} className="border-t border-white/[0.1] pt-4">
-                  <div className="text-[1.15rem] font-medium tracking-tight text-white">
+                  <div className="text-[1.15rem] font-medium tracking-tight text-[#0095FF]">
                     {metric.value}
                   </div>
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/36">

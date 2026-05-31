@@ -117,7 +117,7 @@ export default function InferenceModelsSection() {
               </p>
               <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
                 One catalog.{" "}
-                <span className="text-[#8ecaff]">One key.</span>
+                <span className="text-[#0095FF]">One key.</span>
                 <br />
                 One bill.
               </h2>
@@ -139,7 +139,7 @@ export default function InferenceModelsSection() {
                     }}
                     className="border-t border-white/[0.1] pt-3"
                   >
-                    <div className="text-[1.4rem] font-medium tracking-tight text-white">
+                    <div className="text-[1.4rem] font-medium tracking-tight text-[#0095FF]">
                       {s.value}
                     </div>
                     <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
@@ -175,7 +175,7 @@ export default function InferenceModelsSection() {
                 initial={{ opacity: 0 }}
                 animate={inView ? { opacity: 1 } : {}}
                 transition={{ duration: 0.5, delay: 0.5 }}
-                className="group mt-10 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#33adff] transition-colors hover:text-white"
+                className="group mt-10 inline-flex items-center gap-1.5 text-[13px] font-medium text-white transition-colors hover:text-[#0095FF]"
               >
                 Browse the full catalog
                 <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
