@@ -41,18 +41,18 @@ head_sampling_rate = 1.0
 #   TTL configurable per route; default 5 min for non-streaming completions.
 [[kv_namespaces]]
 binding = "API_KEYS"
-id = "8c23f1a9daf94652a9e718489e9ecb3b"
-preview_id = "ff286be03f8840618473ca859fc5f480"
+id = "3a90545811784ba4b695a13fcc3323d6"
+preview_id = "bd021e5c5e834b2d882406a85a58ff04"
 
 [[kv_namespaces]]
 binding = "SPEND"
-id = "ee6a19a24d9c4d20a6f5c13494dcd0d9"
-preview_id = "e1a44e57bc8943eb926fe98b6a06bf90"
+id = "fe1de3087c8f4851a26729273f775b45"
+preview_id = "d6102edafae34964a363e733eba00ce9"
 
 [[kv_namespaces]]
 binding = "L1_CACHE"
-id = "331e27c11b654bf6ad9003b30530deff"
-preview_id = "039a89a1e882413c8f59c75a531a1f40"
+id = "2f6599a7b1dc4334bb3b11dc5a310332"
+preview_id = "3e43e360d8f047798c86ef1f40aa9c9c"
 
 # ───────────────────────────────────────────────────────────────
 # Durable Objects

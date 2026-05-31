@@ -350,3 +350,4 @@ $env:CLOUDFLARE_ACCOUNT_ID = "<ahurasense-account-id>"
 | Customer copies a curl that 404s | Hardcoded marketing snippet not edited (§B) | Edit the three components in Phase C |
 | Audit/usage events stop in Postgres | Queue consumers on old per-account queues | Queues are per-account; recreate + redeploy consumer |
 | `ahurasense.com` cert not issuing | Universal SSL still provisioning | Wait 10–30 min |
+| `wrangler queues create` → "The specified queue settings are invalid" (400, code 100128) | wrangler 3.114 sends a default `message_retention_period` of 345600s (4 days); the account caps it at 86400s (1 day) | Pass `--message-retention-period-secs 86400` (audit/usage drain in seconds, so 1 day is ample) |
