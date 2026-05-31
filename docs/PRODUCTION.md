@@ -12,6 +12,73 @@ at the bottom — this doc is the map that ties them together.
 
 ---
 
+## 0. Quick start — prerequisites & commands
+
+### Prerequisites
+- **Node 20+** (workers pin `>=20.10`) and **npm**.
+- A **Redis** reachable at `REDIS_URL` (BullMQ). Local: `docker run -p 6379:6379 redis:7` → `redis://localhost:6379`.
+- A **Supabase** project (URL + service-role key) with migrations applied (`supabase db push`).
+- Root **`.env`** filled in (see §10); each worker has its own env. For the CF worker: `npx wrangler login`.
+- `npm install` in each package you intend to run (root, `workers/*`, `credit-system-cron`).
+
+> The app boots even if optional services are down (e.g. Redis → build workers just log a warning).
+
+### ① Web app — `c:\cloud-services`
+```bash
+npm install
+npm run dev          # LOCAL: custom server.ts (VNC proxy + in-proc build workers), hot reload → http://localhost:3000
+npm run dev:next     # alt: Next-only dev, no custom server / no VNC
+
+npm run build        # PROD build: generate:openapi + next build
+npm run start        # PROD run: tsx server.ts  ← USE THIS (start:next / node server.js skip the VNC console — see §3)
+```
+
+### ③ GPU/job workers — `workers/ft-runner` and `workers/deploy-runner`
+```bash
+cd workers/ft-runner          # (same scripts in workers/deploy-runner)
+npm install
+npm run dev                   # LOCAL: tsx watch src/index.ts (needs REDIS_URL + SUPABASE_* + RUNPOD_API_KEY)
+npm run build && npm start    # PROD: tsc → node dist/index.js   (in prod these run on LKE — see §5, not by hand)
+```
+
+### ② Inference gateway — `workers/inference`
+```bash
+cd workers/inference
+npm install
+npx wrangler login
+npm run dev          # local edge at http://localhost:8787
+npm run deploy       # → api.ahurasense.com/v1   (npm run tail = live logs)
+```
+
+### ④ Billing/domain cron — `credit-system-cron`
+```bash
+cd credit-system-cron
+npm install
+node cron-worker.js  # always-on; needs DOMAIN, CRON_SECRET, SUPABASE_* in its .env
+```
+
+### Build workers (no separate command)
+`app-build` / `quick-build` workers start **in-process** with the web app via
+[instrumentation.ts](../instrumentation.ts) — running `npm run dev`/`start` is enough; they just need Redis.
+
+### Tests & checks
+```bash
+npm run lint                 # next lint (root)
+npm test                     # vitest (unit)
+npm run test:e2e             # playwright
+# in each worker dir:
+npm run typecheck
+```
+
+### Minimal "just run the app locally" path
+```bash
+docker run -d -p 6379:6379 redis:7      # 1. Redis
+#  2. ensure root .env has SUPABASE_*, REDIS_URL=redis://localhost:6379, etc. (no .env.example in repo — see §10)
+npm install && npm run dev               # 3. → http://localhost:3000
+```
+
+---
+
 ## 1. Architecture at a glance
 
 The platform is **four deployables** sitting on a shared **data plane**.
