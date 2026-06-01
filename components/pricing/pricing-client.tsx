@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { ServiceCategory} from "@/lib/supabase/queries/pricing";
+import { ServiceCategory } from "@/lib/supabase/queries/pricing";
 import { PricingContent } from "@/components/pricing/pricing-content";
+import { CategoryIcon } from "@/components/pricing/pricing-icons";
+
+const BRAND = "#0095FF";
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface PricingClientProps {
   categories: ServiceCategory[];
@@ -16,7 +20,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
   // Track active section based on scroll position
   useEffect(() => {
     const handleScroll = () => {
-      const sections = categories.map(cat => document.getElementById(cat.id));
+      const sections = categories.map((cat) => document.getElementById(cat.id));
       const scrollPosition = window.scrollY + 200; // offset for header
 
       for (let i = sections.length - 1; i >= 0; i--) {
@@ -28,8 +32,8 @@ export default function PricingClient({ categories }: PricingClientProps) {
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [categories]);
 
   const handleCategoryClick = (categoryId: string) => {
@@ -39,33 +43,59 @@ export default function PricingClient({ categories }: PricingClientProps) {
       const offset = 100; // adjust for header
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - offset;
-      
+
       window.scrollTo({
         top: offsetPosition,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
     }
   };
 
   return (
-    <main className="min-h-screen bg-[#191919] text-white pt-20">
+    <main className="relative min-h-screen overflow-hidden bg-[#04060a] text-white pt-20">
+      {/* Soft brand-blue ambient glow — echoes the homepage hero backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 -z-0 h-[520px]"
+        style={{
+          background:
+            "radial-gradient(60% 60% at 50% 0%, rgba(0,149,255,0.10), transparent 70%)",
+        }}
+      />
+
       {/* Header Section */}
-      <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
+      <section className="relative z-10 mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
         <div className="text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold mb-4">
-            Pricing
+          {/* Eyebrow — mono ping label, matches hero */}
+          <div
+            className={cn(
+              "mb-5 inline-flex items-center gap-2.5 text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/55",
+              MONO
+            )}
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span
+                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+                style={{ background: BRAND }}
+              />
+              <span
+                className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                style={{ background: BRAND, boxShadow: `0 0 6px ${BRAND}` }}
+              />
+            </span>
+            <span>Transparent pricing</span>
+          </div>
+
+          <h1 className="text-4xl font-semibold tracking-[-0.03em] md:text-5xl lg:text-6xl">
+            Pricing that scales <span style={{ color: BRAND }}>with you</span>.
           </h1>
-          <p className="text-white/60 text-sm md:text-base mb-3">
-            Pricing that scales from starter to enterprise
-          </p>
-          <p className="text-white/40 text-xs md:text-sm mb-8">
-            Browse all categories below or jump to a specific service using the navigation menu.
-            <br className="hidden sm:block" />
-            Transparent pricing with no hidden fees. Scale up or down anytime.
+          <p className="mx-auto mt-4 max-w-[560px] text-sm text-white/60 md:text-base">
+            Browse every service below, or jump straight to one using the menu. No hidden
+            fees — scale up or down anytime.
           </p>
 
-          {/* Toggle Switch */}
-          <div className="inline-flex items-center gap-4 text-xs md:text-sm font-medium">
+          {/* Billing toggle */}
+          <div className="mt-8 inline-flex items-center gap-3 text-xs font-medium md:text-sm">
             <button
               onClick={() => setBillingCycle("monthly")}
               className={cn(
@@ -80,67 +110,103 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 setBillingCycle((prev) => (prev === "monthly" ? "yearly" : "monthly"))
               }
               aria-pressed={billingCycle === "yearly"}
-              className="relative h-6 w-12 rounded-full border border-white/20 bg-white/10 transition-colors duration-200"
+              aria-label="Toggle annual billing"
+              className="relative h-6 w-12 cursor-pointer rounded-full border border-white/15 bg-white/[0.06] transition-colors duration-200 hover:border-white/30"
             >
               <span
-                className={cn(
-                  "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white transition-all duration-200",
-                  billingCycle === "yearly" ? "right-1" : "left-1"
-                )}
+                className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-all duration-200"
+                style={{
+                  background: billingCycle === "yearly" ? BRAND : "#ffffff",
+                  left: billingCycle === "yearly" ? "auto" : "4px",
+                  right: billingCycle === "yearly" ? "4px" : "auto",
+                  boxShadow: billingCycle === "yearly" ? `0 0 8px ${BRAND}` : "none",
+                }}
               />
             </button>
             <button
               onClick={() => setBillingCycle("yearly")}
               className={cn(
-                "cursor-pointer transition-colors duration-200",
+                "inline-flex cursor-pointer items-center gap-2 transition-colors duration-200",
                 billingCycle === "yearly" ? "text-white" : "text-white/50 hover:text-white"
               )}
             >
-              Pay annually get 20%
+              Annual
+              <span
+                className={cn(
+                  "rounded-full border border-white/[0.12] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                  MONO
+                )}
+                style={{
+                  color: BRAND,
+                  borderColor: "rgba(0,149,255,0.35)",
+                  background: "rgba(0,149,255,0.08)",
+                }}
+              >
+                Save 20%
+              </span>
             </button>
           </div>
         </div>
       </section>
 
-      {/* Main Content - Tabs and Pricing */}
-      <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
-          {/* Left Side - Category Tabs */}
-          <aside className="lg:w-60 shrink-0 border-r border-white pr-4">
+      {/* Main Content - Nav + Pricing */}
+      <section className="relative z-10 mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
+        <div className="flex flex-col gap-10 lg:flex-row lg:gap-14">
+          {/* Left — category nav */}
+          <aside className="shrink-0 lg:w-60">
             <div className="lg:sticky lg:top-24">
-              <div className="space-y-1 font-[family-name:var(--font-sansation)]">
-                {categories.map((category) => (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryClick(category.id)}
-                    className={cn(
-                      "cursor-pointer w-full text-left px-3 py-2 text-sm font-medium transition-all duration-200",
-                      activeCategory === category.id
-                        ? "bg-white text-black"
-                        : "text-white/50 hover:text-white"
-                    )}
-                  >
-                    {category.label}
-                  </button>
-                ))}
+              <p
+                className={cn(
+                  "mb-3 px-3 text-[10px] uppercase tracking-[0.2em] text-white/35",
+                  MONO
+                )}
+              >
+                Services
+              </p>
+              <div className="space-y-1">
+                {categories.map((category) => {
+                  const isActive = activeCategory === category.id;
+                  return (
+                    <button
+                      key={category.id}
+                      onClick={() => handleCategoryClick(category.id)}
+                      className={cn(
+                        "group flex w-full cursor-pointer items-center gap-2.5 rounded-[6px] px-3 py-2 text-left text-sm font-medium transition-all duration-200",
+                        isActive
+                          ? "bg-white text-black"
+                          : "text-white/55 hover:bg-white/[0.04] hover:text-white"
+                      )}
+                    >
+                      <CategoryIcon
+                        slug={category.id}
+                        strokeWidth={1.75}
+                        className={cn(
+                          "h-[18px] w-[18px] shrink-0 transition-colors",
+                          isActive ? "text-black" : "text-white/45 group-hover:text-[#0095FF]"
+                        )}
+                      />
+                      <span className="truncate">{category.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </aside>
 
-          <div className="flex-1 space-y-8">
+          <div className="flex-1 space-y-12">
             {categories.map((category, index) => (
               <div
                 key={category.id}
                 id={category.id}
-                className={cn(
-                  "scroll-mt-24",
-                  index > 0 && "border-t border-white pt-8"
-                )}
+                className={cn("scroll-mt-24", index > 0 && "pt-12")}
               >
-                <PricingContent
-                  category={category}
-                  billingCycle={billingCycle}
-                />
+                {index > 0 && (
+                  <div
+                    aria-hidden="true"
+                    className="mb-12 h-px w-full bg-gradient-to-r from-transparent via-white/12 to-transparent"
+                  />
+                )}
+                <PricingContent category={category} billingCycle={billingCycle} />
               </div>
             ))}
           </div>

@@ -38,6 +38,8 @@ async function loadCatalog(orgId: string): Promise<CatalogModel[]> {
     .order("sort_order", { ascending: true })
     .returns<RawModelRow[]>();
 
+    console.log(data,".....................22");
+
   if (error || !data) {
     console.error("[Inference Catalog] fetch failed", error);
     return [];

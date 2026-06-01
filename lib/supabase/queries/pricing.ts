@@ -31,6 +31,9 @@ export interface PricingTier {
           } | null;
   highlighted?: boolean;
   isFeatured?: boolean;
+  // Free-form per-plan attributes used by category-specific table columns
+  // (e.g. Security protocol allowances: ssh  / rdp / other).
+  attributes?: Record<string, string>;
   ctaText: string;
   ctaLink: string;
 }

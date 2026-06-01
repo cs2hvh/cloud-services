@@ -1,5 +1,7 @@
 import { Suspense } from "react";
-import { getFullPricingData, type ServiceCategory } from "@/lib/supabase/queries/pricing";
+import { type ServiceCategory } from "@/lib/supabase/queries/pricing";
+// Dynamic, DB-backed pricing — re-enable in the future (see PricingContent below).
+// import { getFullPricingData } from "@/lib/supabase/queries/pricing";
 import PricingClient from "@/components/pricing/pricing-client"
 
 // Fallback static data - used when database has no pricing data yet
@@ -72,6 +74,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         shortDescription: "High-performance compute for demanding workloads",
         price: { monthly: 199, yearly: 2388 },
         billingPeriod: "per month billed yearly",
+        specs: ["16 vCPU", "64 GB DDR5", "1 TB NVMe", "25 Gbit/s"],
         features: [
           "Dedicated resources",
           "Highest throughput",
@@ -115,6 +118,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         shortDescription: "Everyday workloads",
         price: { monthly: 39, yearly: 468 },
         billingPeriod: "per month billed yearly",
+        specs: ["4 vCPU", "16 GB DDR5", "200 GB NVMe", "2.5 Gbit/s"],
         features: ["Reliable compute", "Balanced memory", "SSD storage"],
         ctaText: "Create VM",
         ctaLink: "/signup",
@@ -125,6 +129,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         shortDescription: "Pocket-friendly starter",
         price: { monthly: 9, yearly: 108 },
         billingPeriod: "per month billed yearly",
+        specs: ["2 vCPU", "4 GB DDR5", "80 GB NVMe", "1 Gbit/s"],
         features: ["Starter resources", "Low-cost entry"],
         ctaText: "Create VM",
         ctaLink: "/signup",
@@ -263,6 +268,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "basic",
         price: { monthly: 39, yearly: 468 },
         billingPeriod: "per month",
+        specs: ["2 vCPU", "4 GB RAM", "20 GB SSD"],
         features: ["20GB storage", "Single AZ", "Automated patching", "Community support"],
         ctaText: "Start Free",
         ctaLink: "/signup",
@@ -274,6 +280,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "general-purpose",
         price: { monthly: 119, yearly: 1428 },
         billingPeriod: "per month",
+        specs: ["4 vCPU", "16 GB RAM", "80 GB NVMe"],
         features: [
           "80GB storage",
           "Read replicas",
@@ -291,6 +298,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "storage-optimized",
         price: { monthly: 219, yearly: 2628 },
         billingPeriod: "per month",
+        specs: ["8 vCPU", "32 GB RAM", "500 GB NVMe"],
         features: [
           "500GB storage",
           "IO tuned volumes",
@@ -308,6 +316,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "storage-optimized",
         price: { monthly: 199, yearly: 2388 },
         billingPeriod: "per month",
+        specs: ["8 vCPU", "32 GB RAM", "400 GB NVMe"],
         features: [
           "400GB storage",
           "High IOPS volume",
@@ -325,6 +334,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "basic",
         price: { monthly: 59, yearly: 708 },
         billingPeriod: "per month",
+        specs: ["2 vCPU", "8 GB RAM", "40 GB SSD"],
         features: [
           "40GB storage",
           "Single AZ",
@@ -341,12 +351,65 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "general-purpose",
         price: { monthly: 149, yearly: 1788 },
         billingPeriod: "per month",
+        specs: ["4 vCPU", "16 GB RAM", "120 GB NVMe"],
         features: [
           "120GB storage",
           "Replica set",
           "Automated scaling",
           "Advanced security",
           "Dedicated support",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "mongodb-basic",
+        name: "MongoDB Basic",
+        subType: "mongodb",
+        cpuType: "basic",
+        price: { monthly: 49, yearly: 588 },
+        billingPeriod: "per month",
+        specs: ["2 vCPU", "4 GB RAM", "30 GB SSD"],
+        features: [
+          "30GB storage",
+          "Single node",
+          "Automated backups",
+          "Community support",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "mysql-general",
+        name: "MySQL General",
+        subType: "mysql",
+        cpuType: "general-purpose",
+        price: { monthly: 99, yearly: 1188 },
+        billingPeriod: "per month",
+        specs: ["4 vCPU", "16 GB RAM", "100 GB NVMe"],
+        features: [
+          "100GB storage",
+          "Read replicas",
+          "Automated backups",
+          "Standard support",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "postgres-storage",
+        name: "PostgreSQL Storage Optimized",
+        subType: "postgres",
+        cpuType: "storage-optimized",
+        price: { monthly: 229, yearly: 2748 },
+        billingPeriod: "per month",
+        specs: ["8 vCPU", "32 GB RAM", "600 GB NVMe"],
+        features: [
+          "600GB storage",
+          "High IOPS volume",
+          "Point-in-time recovery",
+          "Cross-region backups",
+          "Priority support",
         ],
         ctaText: "Get Started",
         ctaLink: "/signup",
@@ -364,6 +427,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "basic",
         price: { monthly: 49, yearly: 588 },
         billingPeriod: "per cluster/month",
+        specs: ["2 vCPU", "8 GB RAM", "80 GB SSD"],
         features: ["3 nodes", "Basic monitoring", "Auto-scaling", "Load balancing"],
         ctaText: "Get Started",
         ctaLink: "/signup",
@@ -374,6 +438,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "general-purpose",
         price: { monthly: 149, yearly: 1788 },
         billingPeriod: "per cluster/month",
+        specs: ["4 vCPU", "16 GB RAM", "200 GB NVMe"],
         features: [
           "10 nodes",
           "Advanced monitoring",
@@ -391,6 +456,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "storage-optimized",
         price: { monthly: 299, yearly: 3588 },
         billingPeriod: "per cluster/month",
+        specs: ["8 vCPU", "32 GB RAM", "1 TB NVMe"],
         features: [
           "8 nodes",
           "High IOPS persistent volumes",
@@ -407,6 +473,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         cpuType: "general-purpose",
         price: { monthly: 499, yearly: 5988 },
         billingPeriod: "per cluster/month",
+        specs: ["16 vCPU", "64 GB RAM", "2 TB NVMe"],
         features: [
           "Unlimited nodes",
           "Multi-region",
@@ -423,71 +490,154 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     id: "security",
     label: "Security",
     description:
-      "Protect your workloads with firewalling, WAF, DDoS mitigation, access controls, and audit visibility.",
+      "DDoS-protected transit for your remote-access and game protocols. Higher tiers raise data allowances and add coverage for more protocols.",
     tiers: [
       {
-        id: "enterprise",
-        name: "Enterprise",
-        shortDescription: "Full suite of security features for your infrastructure.",
+        id: "pro",
+        name: "Pro",
+        shortDescription: "Protected transit for core remote-access protocols.",
+        price: { monthly: 29, yearly: 348 },
+        billingPeriod: "per month billed monthly",
+        features: [],
+        attributes: {
+          ssh: "5 GB/mo · $1/GB over",
+          //minecraft: "5 GB/mo · $1/GB over",
+        },
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "business",
+        name: "Business",
+        shortDescription: "Higher allowances plus RDP coverage.",
         price: { monthly: 79, yearly: 949 },
         billingPeriod: "per month billed monthly",
-        features: [
-          "DDoS baseline protection",
-          "Web Application Firewall",
-          "Access controls",
-          "Audit logs",
-        ],
+        features: [],
+        attributes: {
+          ssh: "10 GB/mo · $1/GB over",
+         // minecraft: "10 GB/mo · $1/GB over",
+          rdp: "10 GB/mo · $1/GB over",
+        },
         highlighted: true,
         isFeatured: true,
         ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+      {
+        id: "enterprise",
+        name: "Enterprise",
+        shortDescription: "Unlimited protected transit across all protocols.",
+        price: { monthly: 199, yearly: 2388 },
+        billingPeriod: "per month billed monthly",
+        features: [],
+        attributes: {
+          ssh: "included",
+         //minecraft: "included",
+          rdp: "included",
+          other: "included",
+        },
+        ctaText: "Contact Sales",
         ctaLink: "/contact",
       },
     ],
   },
   {
     id: "ai-deployment",
-    label: "AI Agents Deployment",
-    description: "Deploy and scale AI agents and models.",
+    label: "AI Labs",
+    description:
+      "OpenAI-compatible inference for open-weight models — billed per million tokens, no servers to manage. One API key for embeddings, chat, and more.",
+    startingPriceLabel: "0.01 / 1M tokens",
+    startingPriceDescription:
+      "Pay only for input tokens. Cached and output tokens are free on embedding models.",
+    promos: [
+      {
+        badge: "Embeddings",
+        badgeNote: "Open weight",
+        title: "Multilingual & English embedding models",
+        description:
+          "Production-ready retrieval embeddings on shared inference. Pick by dimensions, context window, and language coverage.",
+        subtext: "Cached and output tokens are always free for embeddings.",
+        linkText: "Read the docs",
+        linkHref: "/docs",
+      },
+    ],
     tiers: [
       {
-        id: "starter-ai",
-        name: "Starter AI",
-        price: { monthly: 99, yearly: 1188 },
-        billingPeriod: "per month",
-        features: ["GPU compute hours", "Model hosting", "API access", "Basic monitoring"],
-        ctaText: "Get Started",
+        id: "bge-m3",
+        name: "BGE-M3",
+        shortDescription:
+          "Multilingual embeddings (BAAI). Strong cross-lingual and long-document retrieval.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "per 1M tokens",
+        features: [],
+        attributes: {
+          provider: "BAAI",
+          modality: "Embedding",
+          dimensions: "1024",
+          context: "8K",
+          openWeight: "included",
+          priceInput: "$0.02",
+        },
+        ctaText: "Use model",
         ctaLink: "/signup",
       },
       {
-        id: "professional-ai",
-        name: "Professional AI",
-        price: { monthly: 299, yearly: 3588 },
-        billingPeriod: "per month",
-        features: [
-          "Advanced GPU access",
-          "Model training",
-          "Auto-scaling",
-          "Advanced monitoring",
-          "Custom models",
-        ],
-        highlighted: true,
-        ctaText: "Learn More",
-        ctaLink: "/contact",
+        id: "e5-large-multilingual",
+        name: "E5 Large Multilingual",
+        shortDescription:
+          "Multilingual embeddings (Microsoft E5). General-purpose retrieval across 100+ languages.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "per 1M tokens",
+        features: [],
+        attributes: {
+          provider: "Microsoft",
+          modality: "Embedding",
+          dimensions: "1024",
+          context: "512",
+          openWeight: "included",
+          priceInput: "$0.02",
+        },
+        ctaText: "Use model",
+        ctaLink: "/signup",
       },
       {
-        id: "enterprise-ai",
-        name: "Enterprise AI",
-        price: { monthly: 999, yearly: 11988 },
-        billingPeriod: "per month",
-        features: [
-          "Unlimited GPU access",
-          "Multi-model deployment",
-          "Dedicated infrastructure",
-          "Advanced security",
-          "24/7 support",
-        ],
-        ctaText: "Contact Sales",
-        ctaLink: "/contact",
+        id: "nomic-embed-v1-5",
+        name: "Nomic Embed v1.5",
+        shortDescription:
+          "English embeddings (Nomic). Matryoshka dimension reduction — cheap and fast.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "per 1M tokens",
+        features: [],
+        attributes: {
+          provider: "Nomic",
+          modality: "Embedding",
+          dimensions: "768",
+          context: "8K",
+          openWeight: "included",
+          matryoshka: "included",
+          priceInput: "$0.01",
+        },
+        ctaText: "Use model",
+        ctaLink: "/signup",
+      },
+      {
+        id: "mxbai-embed-large-v1",
+        name: "mxbai Embed Large",
+        shortDescription:
+          "English embeddings (Mixedbread). Top-tier MTEB retrieval for its size.",
+        price: { monthly: 0, yearly: 0 },
+        billingPeriod: "per 1M tokens",
+        features: [],
+        attributes: {
+          provider: "Mixedbread",
+          modality: "Embedding",
+          dimensions: "1024",
+          context: "512",
+          openWeight: "included",
+          priceInput: "$0.02",
+        },
+        ctaText: "Use model",
+        ctaLink: "/signup",
       },
     ],
   },
@@ -543,23 +693,23 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
 // Loading skeleton
 function PricingLoadingSkeleton() {
   return (
-    <main className="min-h-screen bg-[#191919] text-white pt-20">
+    <main className="min-h-screen bg-[#04060a] text-white pt-20">
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
         <div className="text-center">
-          <div className="h-12 bg-neutral-800 rounded w-48 mx-auto mb-4 animate-pulse" />
-          <div className="h-4 bg-neutral-800 rounded w-96 mx-auto mb-3 animate-pulse" />
-          <div className="h-4 bg-neutral-800 rounded w-80 mx-auto mb-8 animate-pulse" />
+          <div className="h-12 bg-white/[0.06] rounded w-48 mx-auto mb-4 animate-pulse" />
+          <div className="h-4 bg-white/[0.06] rounded w-96 mx-auto mb-3 animate-pulse" />
+          <div className="h-4 bg-white/[0.06] rounded w-80 mx-auto mb-8 animate-pulse" />
         </div>
       </section>
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
           <aside className="lg:w-60 shrink-0">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-10 bg-neutral-800 rounded mb-2 animate-pulse" />
+              <div key={i} className="h-10 bg-white/[0.06] rounded mb-2 animate-pulse" />
             ))}
           </aside>
           <div className="flex-1">
-            <div className="h-64 bg-neutral-800 rounded animate-pulse" />
+            <div className="h-64 bg-white/[0.06] rounded animate-pulse" />
           </div>
         </div>
       </section>
@@ -567,10 +717,15 @@ function PricingLoadingSkeleton() {
   );
 }
 
-async function PricingContent() {
+function PricingContent() {
+  // Using static FALLBACK_PRICING_DATA for now.
+  // The dynamic, DB-backed pricing path is commented out below and will be
+  // re-enabled in the future.
+  const pricingData: ServiceCategory[] = FALLBACK_PRICING_DATA;
+
+  /* ── Dynamic pricing (disabled for now) ──────────────────────────────
   // Fetch dynamic pricing data from database
   let pricingData = await getFullPricingData();
-  //console.log(pricingData,"..................467")
 
   // Use fallback data if no data in database
   if (!pricingData || pricingData.length === 0) {
@@ -599,6 +754,7 @@ async function PricingContent() {
       pricingData = withoutGpuCategories;
     }
   }
+  ───────────────────────────────────────────────────────────────────── */
 
   return <PricingClient categories={pricingData} />;
 }
