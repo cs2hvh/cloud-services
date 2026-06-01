@@ -32,7 +32,7 @@ export function useDomainData(domainName: string) {
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
-  const loadDomainContext = useCallback(async () => {
+  const loadDomainContext = useCallback(async (opts?: { silent?: boolean }) => {
     const requestId = ++requestIdRef.current;
     const isStale = () => requestId !== requestIdRef.current;
 
@@ -48,7 +48,7 @@ export function useDomainData(domainName: string) {
       return;
     }
 
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setError(null);
 
     try {
@@ -99,7 +99,16 @@ export function useDomainData(domainName: string) {
 
       setApps(loadedApps);
       setPurchaseRequest(rootItem?.purchase || null);
-      setConnections(relatedConnections);
+      // Preserve transient dnsReady/dnsMessage from previous state so background
+      // refreshes don't wipe DNS check results the user just fetched.
+      setConnections((prev) => {
+        const prevMap = new Map(prev.map((c) => [c.id, c]));
+        return relatedConnections.map((c) => {
+          const old = prevMap.get(c.id);
+          if (!old || (old.dnsReady === undefined && !old.dnsMessage)) return c;
+          return { ...c, dnsReady: old.dnsReady, dnsMessage: old.dnsMessage };
+        });
+      });
       setExpiresAt(rootItem?.expires_at || null);
       setAutoRenew(rootItem?.auto_renew ?? null);
     } catch (err) {

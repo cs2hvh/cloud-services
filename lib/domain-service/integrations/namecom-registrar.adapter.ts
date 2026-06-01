@@ -215,9 +215,10 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
     return { autorenewEnabled: d.autorenewEnabled ?? null, locked: d.locked ?? null, privacyEnabled: d.privacyEnabled ?? null, expireDate: d.expireDate ?? null };
   }
 
-  async getDomain(domainName: string): Promise<NameComDomainResponse> {
+  async getDomain(domainName: string): Promise<NameComDomainResponse & { expiresAt?: string | null }> {
     const encodedDomain = encodeURIComponent(domainName);
-    return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`);
+    const data = await this.request<NameComDomainResponse>(`/domains/${encodedDomain}`);
+    return { ...data, expiresAt: data.expireDate ?? null };
   }
 
   async updateDomain(domainName: string, input: NameComUpdateDomainInput): Promise<NameComDomainResponse> {

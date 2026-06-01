@@ -633,12 +633,14 @@ export class DomainTransferService {
 
     let completionMetadata: Record<string, unknown> | undefined;
     let completionRenewalPrice: number | null | undefined;
+    let completionExpiresAt: string | null | undefined;
 
     if (newMappedStatus === "completed") {
       try {
         const domainInfo = await this.registrar.getDomain(transfer.domain);
         completionMetadata = { nameservers: domainInfo.nameservers ?? [] };
         completionRenewalPrice = domainInfo.renewalPrice ?? transfer.renewal_price ?? null;
+        completionExpiresAt = domainInfo.expiresAt ?? null;
       } catch (error: unknown) {
         console.warn(
           `[DomainTransferService] Could not load completed domain info for ${transfer.domain}:`,
@@ -686,7 +688,7 @@ export class DomainTransferService {
               metadata: {
                 source: "transfer",
                 transfer_request_id: transfer.id,
-                expires_at: null,
+                expires_at: completionExpiresAt ?? null,
                 renewal_charged: false,
                 autorenew_enabled: true,
                 nameservers: completionMetadata?.nameservers ?? [],
@@ -871,7 +873,32 @@ export class DomainTransferService {
           type: "info",
           metadata: { event: "domain_transfer_cancelled_by_registrar" },
         });
+        if (systemActor.userEmail) {
+          await this.emitEmail({
+            actor: systemActor,
+            severity: "warning",
+            alertTitle: "Domain transfer cancelled by registrar",
+            serviceName: transfer.domain,
+            summary: `Your domain transfer for ${transfer.domain} was cancelled by your current registrar. Any charged credits have been refunded to your account.`,
+            metadata: { event: "domain_transfer_cancelled_by_registrar" },
+          });
+        }
       });
+
+      // Auto-refund when registrar cancels — mirrors the "failed" branch
+      const chargedAmount = Number(transfer.purchase_price || 0);
+      if (chargedAmount > 0 && this.deps.billing) {
+        await this.safeAsync(async () => {
+          await this.deps.billing!.refundDomainPurchase({
+            userId: transfer.user_id,
+            purchaseRequestId: transfer.id,
+            domain: transfer.domain,
+            amount: chargedAmount,
+            currency: transfer.currency,
+            reason: "transfer_cancelled_by_registrar",
+          });
+        });
+      }
     }
   }
 

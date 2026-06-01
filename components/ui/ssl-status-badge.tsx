@@ -56,7 +56,7 @@ export function SslStatusBadge({
 
   if (sslStatus === 'issuing') {
     const base = isRow
-      ? 'mt-2 flex items-center justify-between gap-2 rounded border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5 text-xs text-blue-200'
+      ? 'mt-2 rounded border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5 text-xs text-blue-200'
       : 'mt-3 rounded border border-blue-500/30 bg-blue-500/5 p-3 text-sm text-blue-200';
     return (
       <div className={base}>
@@ -86,7 +86,12 @@ export function SslStatusBadge({
             </button>
           )}
         </div>
-        {!isRow && (
+        {/* Show dns hint in both variants */}
+        {isRow ? (
+          dnsMessage && (
+            <p className="mt-1 text-[11px] text-amber-200/70 leading-relaxed">{dnsMessage}</p>
+          )
+        ) : (
           <p className="mt-1.5 text-xs text-white/45">
             {dnsMessage
               ? dnsMessage
@@ -99,7 +104,7 @@ export function SslStatusBadge({
 
   if (sslStatus === 'failed') {
     const base = isRow
-      ? 'mt-2 flex items-center gap-1.5 rounded border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-xs text-red-200'
+      ? 'mt-2 rounded border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-xs text-red-200'
       : 'mt-3 rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-200';
     return (
       <div className={base}>
@@ -114,10 +119,15 @@ export function SslStatusBadge({
               : 'Secure connection failed — site is not encrypted.'}
           </span>
         </div>
-        {!isRow && (
+        {isRow ? (
+          dnsMessage && (
+            <p className="mt-1 text-[11px] text-amber-200/70 leading-relaxed">{dnsMessage}</p>
+          )
+        ) : (
           <p className="mt-1.5 text-xs text-white/45">
-            Ensure your domain&apos;s DNS A/CNAME record points to our servers, then re-activate.
-            If the issue persists, contact support.
+            {dnsMessage
+              ? dnsMessage
+              : "Ensure your domain’s DNS A/CNAME record points to our servers, then re-activate. If the issue persists, contact support."}
           </p>
         )}
       </div>

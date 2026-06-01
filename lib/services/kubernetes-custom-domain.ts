@@ -696,7 +696,7 @@ pipeline {
               EXISTING_RULE_HOSTS=$(kubectl get ingress \${INGRESS_NAME} -o jsonpath='{.spec.rules[*].host}' 2>/dev/null || true)
               EXISTING_TLS_HOSTS=$(kubectl get ingress \${INGRESS_NAME} -o jsonpath='{.spec.tls[*].hosts[*]}' 2>/dev/null || true)
 
-              if echo " \${EXISTING_RULE_HOSTS} " | grep -qw "\${CUSTOM_DOMAIN}"; then
+              if echo "\${EXISTING_RULE_HOSTS}" | tr ' ' '\\n' | grep -qxF "\${CUSTOM_DOMAIN}"; then
                 echo "Ingress rule already contains \${CUSTOM_DOMAIN} (skip)"
               else
                 cat > patch-rules-append.json <<PATCH_EOF
@@ -757,7 +757,7 @@ PATCH_EOF
                 kubectl patch ingress \${INGRESS_NAME} --type='json' --patch-file patch-rules-init.json
               fi
 
-              if echo " \${EXISTING_TLS_HOSTS} " | grep -qw "\${CUSTOM_DOMAIN}"; then
+              if echo "\${EXISTING_TLS_HOSTS}" | tr ' ' '\\n' | grep -qxF "\${CUSTOM_DOMAIN}"; then
                 echo "Ingress TLS already contains \${CUSTOM_DOMAIN} (skip)"
               else
                 cat > patch-tls-append.json <<PATCH_EOF
@@ -799,11 +799,16 @@ PATCH_EOF
               kubectl get ingress \${INGRESS_NAME} -o jsonpath='{.spec.rules[*].host}' | tr ' ' '\\n'
             '''
 
-            // Step 2: Reuse existing cert if valid, otherwise apply and let cert-manager issue.
-            // Never force-delete CertificateRequests/Orders — that triggers immediate re-issuance
-            // and burns rate-limit quota. cert-manager will retry on its own schedule.
+            // Step 2: Reuse existing cert if valid, otherwise issue a fresh one.
+            // Stuck Certificates (Ready=False, non-rate-limited) are deleted before re-applying
+            // so cert-manager starts a new CertificateRequest immediately rather than retrying
+            // from exponential backoff. CertificateRequests/Orders are never deleted directly —
+            // cert-manager cleans those up when the parent Certificate is removed.
             sh '''
               # If the TLS secret already exists and holds a valid cert for this domain, reuse it.
+              # We still apply the Certificate CRD below so cert-manager takes ownership and
+              # handles renewal — without the CRD, the cert expires with no auto-renewal.
+              SKIP_STUCK_CERT_DELETE=false
               SECRET_EXISTS=$(kubectl get secret \${CERT_SECRET} -n default --ignore-not-found=true -o name 2>/dev/null || true)
               if [ -n "$SECRET_EXISTS" ]; then
                 CERT_DATA=$(kubectl get secret \${CERT_SECRET} -n default -o jsonpath='{.data.tls\.crt}' 2>/dev/null | base64 -d 2>/dev/null || true)
@@ -822,13 +827,37 @@ PATCH_EOF
                       NOW_EPOCH=$(date +%s)
                       DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
                       if [ $DAYS_LEFT -gt 30 ]; then
-                        echo "✅ Valid TLS secret already exists (expires in \${DAYS_LEFT} days) — skipping certificate issuance"
-                        exit 0
+                        echo "✅ Valid TLS secret already exists (expires in \${DAYS_LEFT} days) — applying Certificate CRD for renewal ownership"
+                        SKIP_STUCK_CERT_DELETE=true
                       else
                         echo "⚠️ Existing cert expires in \${DAYS_LEFT} days — applying renewal"
                       fi
                     fi
                   fi
+                fi
+              fi
+
+              # If a Certificate already exists and is stuck in a failed state,
+              # delete it so cert-manager starts a fresh CertificateRequest instead
+              # of retrying from exponential backoff (which can take hours).
+              # Rate-limited certs are surfaced as a hard error instead of being deleted.
+              # Skipped when the TLS secret is already valid — no stuck cert to clear.
+              CERT_EXISTS=$(kubectl get certificate \${CERT_NAME} -n default --ignore-not-found=true -o name 2>/dev/null || true)
+              if [ -n "$CERT_EXISTS" ] && [ "\${SKIP_STUCK_CERT_DELETE}" = "false" ]; then
+                EXISTING_READY=$(kubectl get certificate \${CERT_NAME} -n default \
+                  -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+                EXISTING_MSG=$(kubectl get certificate \${CERT_NAME} -n default \
+                  -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+
+                if echo "\${EXISTING_MSG}" | grep -Eqi "ratelimited|too many certificates|last 168h"; then
+                  echo "⚠️ Let's Encrypt rate limit reached — cannot re-issue for up to 7 days."
+                  exit 1
+                fi
+
+                if [ "\${EXISTING_READY}" = "False" ]; then
+                  echo "Certificate stuck in failed state — deleting for fresh issuance..."
+                  kubectl delete certificate \${CERT_NAME} -n default --ignore-not-found=true
+                  kubectl wait --for=delete certificate/\${CERT_NAME} -n default --timeout=15s 2>/dev/null || true
                 fi
               fi
 
@@ -860,8 +889,8 @@ CERT_EOF
               elif echo "$CERT_MSG" | grep -Eqi "ratelimited|too many certificates|last 168h"; then
                 echo "⚠️ Provider rate limit reached for this domain. Wait for the retry-after time before re-activating."
               elif [ "$CERT_READY" = "False" ]; then
-                echo "⚠️ Secure connection setup is in a failed state (\${CERT_REASON})."
-                echo "   Keep resources unchanged to avoid forced retry loops. Re-activate after root cause is fixed."
+                echo "⚠️ Secure connection setup reported a failure immediately after issuance (\${CERT_REASON})."
+                echo "   Check cert-manager logs and re-activate once the root cause is resolved."
               else
                 echo "ℹ️ Secure connection setup is still in progress."
               fi
