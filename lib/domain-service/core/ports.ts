@@ -299,6 +299,7 @@ export interface NameComCreateTransferResponse {
 export interface DomainTransferDomainResponse {
   nameservers?: string[];
   renewalPrice?: number | null;
+  expiresAt?: string | null;
 }
 
 export interface DomainTransferRegistrarPort {
