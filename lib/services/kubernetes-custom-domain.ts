@@ -806,6 +806,9 @@ PATCH_EOF
             // cert-manager cleans those up when the parent Certificate is removed.
             sh '''
               # If the TLS secret already exists and holds a valid cert for this domain, reuse it.
+              # We still apply the Certificate CRD below so cert-manager takes ownership and
+              # handles renewal — without the CRD, the cert expires with no auto-renewal.
+              SKIP_STUCK_CERT_DELETE=false
               SECRET_EXISTS=$(kubectl get secret \${CERT_SECRET} -n default --ignore-not-found=true -o name 2>/dev/null || true)
               if [ -n "$SECRET_EXISTS" ]; then
                 CERT_DATA=$(kubectl get secret \${CERT_SECRET} -n default -o jsonpath='{.data.tls\.crt}' 2>/dev/null | base64 -d 2>/dev/null || true)
@@ -824,8 +827,8 @@ PATCH_EOF
                       NOW_EPOCH=$(date +%s)
                       DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
                       if [ $DAYS_LEFT -gt 30 ]; then
-                        echo "✅ Valid TLS secret already exists (expires in \${DAYS_LEFT} days) — skipping certificate issuance"
-                        exit 0
+                        echo "✅ Valid TLS secret already exists (expires in \${DAYS_LEFT} days) — applying Certificate CRD for renewal ownership"
+                        SKIP_STUCK_CERT_DELETE=true
                       else
                         echo "⚠️ Existing cert expires in \${DAYS_LEFT} days — applying renewal"
                       fi
@@ -838,8 +841,9 @@ PATCH_EOF
               # delete it so cert-manager starts a fresh CertificateRequest instead
               # of retrying from exponential backoff (which can take hours).
               # Rate-limited certs are surfaced as a hard error instead of being deleted.
+              # Skipped when the TLS secret is already valid — no stuck cert to clear.
               CERT_EXISTS=$(kubectl get certificate \${CERT_NAME} -n default --ignore-not-found=true -o name 2>/dev/null || true)
-              if [ -n "$CERT_EXISTS" ]; then
+              if [ -n "$CERT_EXISTS" ] && [ "\${SKIP_STUCK_CERT_DELETE}" = "false" ]; then
                 EXISTING_READY=$(kubectl get certificate \${CERT_NAME} -n default \
                   -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
                 EXISTING_MSG=$(kubectl get certificate \${CERT_NAME} -n default \
