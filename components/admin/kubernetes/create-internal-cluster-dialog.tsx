@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import Image from "next/image";
 import axios from "axios";
 import { toast } from "sonner";
@@ -58,7 +59,7 @@ interface NodeEntry {
 }
 
 const emptyNode = (role: "control-plane" | "worker"): NodeEntry => ({
-  id: crypto.randomUUID(),
+  id: safeRandomUUID(),
   host: "",
   private_ip: "",
   role,

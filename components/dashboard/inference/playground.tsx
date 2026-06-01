@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import {
   Check,
   ChevronDown,
@@ -312,12 +313,12 @@ export function Playground({
     const priorTurns = historyOverride ?? turns;
 
     const userTurn: Turn = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       role: "user",
       content: userContent,
     };
     const assistantTurn: Turn = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       role: "assistant",
       content: "",
       modelId,

@@ -7,6 +7,7 @@
 // browse, framework auto-detect, env vars, instance sizing) preserved.
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -454,7 +455,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Idempotency-Key": `app-create:${crypto.randomUUID()}`,
+                    "Idempotency-Key": `app-create:${safeRandomUUID()}`,
                 },
                 body: JSON.stringify({
                     name: validName,

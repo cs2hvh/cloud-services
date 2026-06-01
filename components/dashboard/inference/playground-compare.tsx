@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import {
   ChevronDown,
   Eraser,
@@ -62,7 +63,7 @@ const MAX_PANES = 3;
 
 function makeBlankPane(modelId: string): PaneState {
   return {
-    id: crypto.randomUUID(),
+    id: safeRandomUUID(),
     modelId,
     turns: [],
   };
@@ -228,12 +229,12 @@ export const PlaygroundCompare = forwardRef<
     const priorTurns = pane.turns;
 
     const userTurn: Turn = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       role: "user",
       content: userContent,
     };
     const assistantTurn: Turn = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       role: "assistant",
       content: "",
       modelId: pane.modelId,

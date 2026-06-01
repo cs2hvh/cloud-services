@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,13 +91,13 @@ export default function PlaygroundPage({
     if (!input.trim() || !agent || sending) return;
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       role: 'user',
       content: input.trim(),
       timestamp: new Date(),
     };
 
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = safeRandomUUID();
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');

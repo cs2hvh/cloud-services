@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import { AlertTriangle, GitCommit, Loader2, RotateCcw } from 'lucide-react';
 import {
   AlertDialog,
@@ -75,7 +76,7 @@ export function RollbackAppModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': `rollback:${Date.now()}:${crypto.randomUUID()}`,
+          'Idempotency-Key': `rollback:${Date.now()}:${safeRandomUUID()}`,
         },
         body: JSON.stringify({ app_id: appId }),
       });
