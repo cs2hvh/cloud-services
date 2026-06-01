@@ -857,7 +857,7 @@ PATCH_EOF
                 if [ "\${EXISTING_READY}" = "False" ]; then
                   echo "Certificate stuck in failed state — deleting for fresh issuance..."
                   kubectl delete certificate \${CERT_NAME} -n default --ignore-not-found=true
-                  sleep 2
+                  kubectl wait --for=delete certificate/\${CERT_NAME} -n default --timeout=15s 2>/dev/null || true
                 fi
               fi
 
