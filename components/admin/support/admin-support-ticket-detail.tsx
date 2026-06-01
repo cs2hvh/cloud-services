@@ -13,7 +13,8 @@ import {
 import { AdminSupportTicketDetail, SupportTicketAttachment } from "@/lib/supabase/queries/support_tickets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { sanitizeSupportRichText } from "@/lib/support/richtext";
+import { plainTextFromRichText, sanitizeSupportRichText } from "@/lib/support/richtext";
+import SupportRichTextEditor from "@/components/dashboard/support/support-rich-text-editor";
 
 type TicketAttachmentWithUrl = SupportTicketAttachment & { download_url?: string | null };
 type AdminTicketDetailWithUrl = Omit<AdminSupportTicketDetail, "attachments"> & {
@@ -120,7 +121,7 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
 
   const handleSendReply = async () => {
     const reply = replyText.trim();
-    if (reply.length < 2) {
+    if (plainTextFromRichText(reply).length < 2) {
       toast.error("Reply must be at least 2 characters");
       return;
     }
@@ -235,12 +236,11 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
               <h2 className="text-sm font-medium text-white mb-3">Reply to User</h2>
-              <textarea
+              <SupportRichTextEditor
                 value={replyText}
-                onChange={(event) => setReplyText(event.target.value)}
-                rows={5}
+                onChange={setReplyText}
                 placeholder="Write a support reply visible to the user..."
-                className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-600"
+                minHeightClassName="min-h-[160px]"
               />
               <div className="mt-3 flex justify-end">
                 <Button
