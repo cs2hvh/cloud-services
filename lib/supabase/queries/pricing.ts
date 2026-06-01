@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from "../server";
+import { createClient, createServiceClient, createServerSupabase } from "../server";
 import { handleQueryError } from "@/lib/utils/error-handler";
 import { Tables, TablesInsert, TablesUpdate } from "../types";
 
@@ -408,10 +408,20 @@ export const PricingTiers = {
 // Get full pricing data for the pricing page
 export async function getFullPricingData(): Promise<ServiceCategory[]> {
   try {
-    const supabase = await createClient();
+    // Public catalog — read with the cookieless anon client so the /pricing
+    // page can be statically generated / ISR'd (reading cookies here forced it
+    // to render dynamically per request). Anon RLS behaviour is identical to the
+    // previous unauthenticated path.
+    const supabase = createServerSupabase();
 
-    // Fetch all categories
-    const categories = await PricingCategories.get_all();
+    // Fetch all categories (inlined with the cookieless client rather than
+    // PricingCategories.get_all(), which uses the cookie-bound client).
+    const { data: categoriesData } = await supabase
+      .from("pricing_categories")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+    const categories = categoriesData || [];
 
     // Fetch all active promos
     const { data: allPromos } = await supabase

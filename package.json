@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=\"--max-http-header-size=65536 --max-old-space-size=8192\" tsx watch server.ts",
     "dev:next": "next dev",
-    "build": "npm run generate:openapi && next build",
+    "build": "npm run generate:openapi && cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" next build",
     "start": "cross-env NODE_OPTIONS=\"--max-http-header-size=65536 --max-old-space-size=8192\" tsx server.ts",
     "start:next": "next start",
     "lint": "next lint",
@@ -106,6 +106,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@next/bundle-analyzer": "^15.5.18",
     "@playwright/test": "^1.41.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",

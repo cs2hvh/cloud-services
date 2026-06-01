@@ -125,7 +125,7 @@ export default function KubernetesPricingSection({
                         return (
                             <article
                                 key={cat.key}
-                                className="flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-colors hover:border-[#0095FF]"
+                                className="flex flex-col rounded-[10px] border border-black/10 bg-[#EEECE4] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:shadow-[0_8px_20px_rgba(0,0,0,0.12)]"
                             >
                                 {/* Icon + label */}
                                 <div className="flex items-start justify-between">

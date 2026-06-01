@@ -76,7 +76,7 @@ const FEATURES: Feature[] = [
 function FeatureCard({ f, index }: { f: Feature; index: number }) {
     return (
         <article
-            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#0F1114] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#13161B]"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-white/[0.10] bg-[#0F1114] p-7 transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:bg-[#13161B] hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
             style={{
                 boxShadow:
                     "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.7)",
@@ -115,7 +115,7 @@ function FeatureCard({ f, index }: { f: Feature; index: number }) {
             </div>
 
             <div className="relative">
-                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white">
+                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white transition-colors group-hover:text-[#0095FF]">
                     {f.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
@@ -201,7 +201,7 @@ export default function DomainChoiceSection() {
                         <AuthAwareServiceCta
                             service="domain"
                             intent="main"
-                            className={`${MONO} inline-flex h-11 items-center justify-center gap-1.5 border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                            className={`${MONO} inline-flex h-11 items-center justify-center gap-1.5 border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
                         >
                             Open dashboard
                             <ArrowRight className="h-3.5 w-3.5" />

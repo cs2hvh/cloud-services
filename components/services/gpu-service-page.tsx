@@ -272,7 +272,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
     const stock = STOCK_META[gpu.stock];
     return (
       <article
-        className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors hover:bg-[#161A1F] ${
+        className={`group relative flex flex-col rounded-[8px] border p-7 transition-all duration-300 hover:-translate-y-1 hover:bg-[#161A1F] hover:shadow-[0_8px_20px_rgba(0,0,0,0.5)] ${
           gpu.featured
             ? "border-white/[0.18] bg-[#13161B]"
             : "border-white/[0.10] bg-[#111316]"
@@ -369,7 +369,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
           </div>
           <Link
             href={gpu.href}
-            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors group-hover:border-white group-hover:bg-white group-hover:text-black`}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors group-hover:border-[#0095FF] group-hover:bg-[#0095FF] group-hover:text-white`}
           >
             Deploy
             <ArrowRight className="h-3.5 w-3.5" />
@@ -382,7 +382,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
 function WorkloadCard({ w, index }: { w: Workload; index: number }) {
     return (
         <article
-            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-black/10 bg-[#EEECE4] p-7 transition-colors hover:border-black/20"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-black/10 bg-[#EEECE4] p-7 transition-all duration-300 hover:-translate-y-1 hover:border-black/20 hover:shadow-[0_8px_20px_rgba(0,0,0,0.12)]"
         >
             {/* Accent hover glow */}
             <div
@@ -406,7 +406,7 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
                 </span>
             </div>
             <div className="relative">
-                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814]">
+                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814] transition-colors group-hover:text-[#0095FF]">
                     {w.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.6] text-black/60">
@@ -493,7 +493,7 @@ export function GpuServicePage(
                             <AuthAwareServiceCta
                                 service="gpu"
                                 intent="new"
-                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
                             >
                                 Launch a GPU
                                 <ArrowRight className="h-4 w-4" />
@@ -519,7 +519,7 @@ export function GpuServicePage(
                                     className="flex flex-col items-center gap-2 bg-[#04060a] px-4 py-5"
                                 >
                                     <span
-                                        className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-white sm:text-[26px]`}
+                                        className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-[#0095FF] sm:text-[26px]`}
                                     >
                                         {s.value}
                                     </span>
@@ -599,7 +599,7 @@ export function GpuServicePage(
                             How it works
                         </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
-                            From zero to inference in four steps
+                            From <span className="text-[#0095FF]">zero to inference</span> in four steps
                         </h2>
                         <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
                             No replatforming. No lock-in. No hyperscaler tax. Bring your
@@ -607,7 +607,7 @@ export function GpuServicePage(
                         </p>
                     </div>
 
-                  <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-white/[0.10] bg-white/[0.08] md:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-14 grid grid-cols-1 gap-px rounded-[8px] border border-white/[0.10] bg-white/[0.08] md:grid-cols-2 lg:grid-cols-4">
                         {[
                             {
                                 step: "01",
@@ -636,14 +636,14 @@ export function GpuServicePage(
                         ].map((s) => (
                             <article
                                 key={s.step}
-                                className="flex flex-col gap-4 bg-[#0D0D0F] p-7"
+                                className="group flex flex-col gap-4 bg-[#0D0D0F] p-7"
                             >
                                 <p
                                     className={`${MONO} text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/45 tabular-nums`}
                                 >
                                     {s.step}
                                 </p>
-                                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white">
+                                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white transition-colors group-hover:text-[#0095FF]">
                                     {s.title}
                                 </h3>
                                 <p className="text-[13px] leading-[1.6] text-white/60">
@@ -683,7 +683,7 @@ export function GpuServicePage(
                     </div>
 
                     {/* Inline platform features strip on cream bg */}
-                    <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[10px] border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="mt-14 grid grid-cols-1 gap-px rounded-[10px] border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-4">
                         {PLATFORM_FEATURES.map((f) => (
                                 <div
                                     key={f.title}
@@ -799,7 +799,7 @@ export function GpuServicePage(
                             <AuthAwareServiceCta
                                 service="gpu"
                                 intent="new"
-                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
                             >
                                 Get started
                                 <ArrowRight className="h-4 w-4" />

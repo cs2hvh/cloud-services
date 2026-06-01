@@ -166,6 +166,24 @@ export async function middleware(request: NextRequest) {
   const limited = applyIpCooldown(request);
   if (limited) return limited;
 
+  // Public marketing/static surfaces don't need a server-side session read.
+  // Skipping updateSession() (and thus the Supabase Auth getUser() round-trip
+  // + any Set-Cookie) keeps TTFB low and lets Cloudflare cache the now-static
+  // marketing pages. Authenticated surfaces still run it below, so session
+  // refresh + the protected-route redirect are unaffected (a logged-in user's
+  // session is refreshed on every /dashboard and /api request, plus the client
+  // refreshes every ~10 min).
+  const needsSession =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/payments") ||
+    pathname.startsWith("/signin") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/reset-password");
+  if (!needsSession) {
+    return NextResponse.next();
+  }
+
   // Update session (handles session refresh to prevent 30-min logout)
   return await updateSession(request);
 }

@@ -348,7 +348,7 @@ export default function DomainTransferSection() {
                       type="button"
                       onClick={() => handleTldPillClick(item.tld)}
                       title={query.trim() ? `Search ${query.trim().split(".")[0]}.${item.tld}` : `Type a name then click to search with ${item.label}`}
-                      className={`rounded-md px-3 py-2 text-center text-xs font-medium transition-opacity hover:opacity-80 cursor-pointer sm:text-sm ${
+                      className={`rounded-md px-3 py-2 text-center text-xs font-medium transition-all duration-200 hover:-translate-y-1 hover:opacity-100 cursor-pointer sm:text-sm ${
                         item.highlighted
                           ? "bg-[#2A2D33] text-[#8DFF84]"
                           : "bg-[#2A2D33] text-[#87C9FF]"
@@ -398,7 +398,7 @@ export default function DomainTransferSection() {
             <button
               type="button"
               onClick={() => void handleGoToTransfer()}
-              className="mt-4 w-full text-center text-xs text-black/70 hover:text-black transition-colors cursor-pointer sm:text-sm"
+              className="mt-4 w-full text-center text-xs text-black/70 hover:text-[#0095FF] transition-colors cursor-pointer sm:text-sm"
             >
               Already own a domain? Transfer it here{" "}
               <ArrowRight className="inline h-3.5 w-3.5" />
@@ -450,13 +450,13 @@ export default function DomainTransferSection() {
                   {transferSteps.map((step, index) => (
                     <div
                       key={step.title}
-                      className="relative flex items-start gap-4"
+                      className="group relative flex items-start gap-4"
                     >
                       <div className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">
                         {index + 1}
                       </div>
                       <div>
-                        <h4 className="text-2xl font-semibold leading-tight text-[#111] sm:text-[34px]">
+                        <h4 className="text-2xl font-semibold leading-tight text-[#111] transition-colors group-hover:text-[#0095FF] sm:text-[34px]">
                           {step.title}
                         </h4>
                         <p className="mt-1 text-sm leading-relaxed text-black/70 sm:text-base">

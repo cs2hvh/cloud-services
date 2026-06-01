@@ -242,7 +242,7 @@ export default function DomainPricingSection() {
                                             </span>
                                             <span className="hidden sm:inline-block text-right">
                                                 <span
-                                                    className={`${MONO} text-[14px] font-semibold tabular-nums text-white`}
+                                                    className={`${MONO} text-[14px] font-semibold tabular-nums text-white transition-colors group-hover:text-[#0095FF]`}
                                                 >
                                                     {row.prices[activeCycle]}
                                                 </span>
@@ -276,7 +276,7 @@ export default function DomainPricingSection() {
                         </p>
                         <Link
                             href="/dashboard/domains/marketplace"
-                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                         >
                             Browse all extensions
                             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

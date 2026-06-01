@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Use Cases — AhuraSense Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sansation:ital,wght@0,300;0,400;0,700;1,400;1,700&family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,800;1,900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<template id="__bundler_thumbnail" data-bg-color="#0a0a0a">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="g" cx="50%" cy="50%" r="55%">
+        <stop offset="0%" stop-color="#6aa3ff" stop-opacity="0.55" />
+        <stop offset="60%" stop-color="#4d8dff" stop-opacity="0.18" />
+        <stop offset="100%" stop-color="#0a0a0a" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+    <rect width="1200" height="800" fill="#0a0a0a" />
+    <ellipse cx="600" cy="400" rx="500" ry="320" fill="url(#g)" />
+    <g transform="translate(600 400)">
+      <rect x="-140" y="-90" width="220" height="120" rx="40" fill="#4d8dff" />
+      <rect x="-80" y="-30" width="220" height="120" rx="40" fill="#ffffff" fill-opacity="0.18" />
+    </g>
+    <g transform="translate(600 580)" font-family="Sansation, sans-serif" font-weight="700" font-size="44" fill="#f3f3f3" text-anchor="middle">
+      <text>ahurasense · use cases</text>
+    </g>
+  </svg>
+</template>
+<style>
+  :root{
+    --bg: #0a0a0a;
+    --bg-soft: #0f0f10;
+    --surface: #131315;
+    --surface-2: #17171a;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.14);
+    --text: #f3f3f3;
+    --muted: #8a8a8e;
+    --dim: #5a5a60;
+
+    /* Single blue accent across the page */
+    --blue: #4d8dff;
+    --blue-bright: #6aa3ff;
+    --blue-soft: rgba(77, 141, 255, 0.14);
+    --blue-line: rgba(77, 141, 255, 0.28);
+    --blue-ring: rgba(77, 141, 255, 0.18);
+    --accent: var(--blue);
+
+    --radius-sm: 8px;
+    --radius: 14px;
+    --radius-lg: 22px;
+    --maxw: 1200px;
+
+    --sans: "Nunito", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --display: "Sansation", "Nunito", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -200px, rgba(77,141,255,0.10), transparent 60%),
+      radial-gradient(800px 400px at 90% 10%, rgba(77,141,255,0.04), transparent 60%),
+      var(--bg);
+    min-height:100vh;
+    line-height:1.5;
+    font-weight:400;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--blue);color:#fff}
+
+  /* Italic display accent — Nunito italic mixed into Sansation headings */
+  .ital{
+    font-family:"Nunito", var(--sans);
+    font-style:italic;
+    font-weight:900;
+    letter-spacing:-0.025em;
+    background: linear-gradient(180deg, #ffffff 0%, #9aa0a6 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .ital.muted{
+    background: linear-gradient(180deg, #c0c5cc 0%, #6c7079 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+
+  /* ===== Blue colon highlight marker =====
+     Use as <span class="colon"></span> before a highlight phrase. */
+  .colon{
+    display:inline-block;
+    width:0.6em;height:0.6em;
+    margin-right:0.5em;
+    position:relative;top:-0.02em;
+    vertical-align:middle;
+  }
+  .colon::before, .colon::after{
+    content:"";position:absolute;left:50%;
+    width:5px;height:5px;border-radius:50%;
+    background:var(--blue);
+    box-shadow:0 0 8px rgba(77,141,255,0.55);
+    transform:translateX(-50%);
+  }
+  .colon::before{top:0}
+  .colon::after{bottom:0}
+  .hl{color:#fff}
+
+  /* ============ NAV ============ */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter: blur(14px) saturate(140%);
+    background: rgba(10,10,10,0.7);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:var(--maxw);margin:0 auto;padding:14px 28px;
+    display:flex;align-items:center;gap:32px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-0.01em;font-size:16px;font-family:var(--display)}
+  .brand-mark{
+    width:22px;height:22px;border-radius:6px;
+    background: radial-gradient(120% 120% at 30% 20%, var(--blue-bright), var(--blue) 55%, #1a3a8a 100%);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset, 0 0 14px rgba(77,141,255,0.35);
+  }
+  .nav-links{display:flex;gap:24px;font-size:14px;color:var(--muted);font-weight:500}
+  .nav-links a:hover{color:var(--text)}
+  .nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:9px 16px;border-radius:999px;font-size:13.5px;font-weight:600;
+    border:1px solid var(--border-strong);color:var(--text);
+    background:transparent;cursor:pointer;transition:all .15s ease;
+    white-space:nowrap;font-family:var(--sans);
+  }
+  .btn:hover{background:rgba(255,255,255,0.04)}
+  .btn.primary{
+    background:var(--blue);color:#fff;border-color:var(--blue);
+    box-shadow:0 8px 24px -8px rgba(77,141,255,0.55);
+  }
+  .btn.primary:hover{background:var(--blue-bright);border-color:var(--blue-bright);transform:translateY(-1px)}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn.ghost:hover{color:var(--text)}
+
+  /* ============ HERO ============ */
+  .hero{
+    max-width:var(--maxw);margin:0 auto;padding:88px 28px 64px;
+    position:relative;
+  }
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:6px 12px 6px 8px;border-radius:999px;
+    border:1px solid var(--border-strong);
+    background: rgba(255,255,255,0.02);
+    font-size:12px;color:var(--muted);
+    font-family:var(--mono);letter-spacing:0.04em;
+  }
+  .eyebrow .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--blue);
+    box-shadow:0 0 0 4px var(--blue-ring);
+  }
+  .hero h1{
+    font-family:var(--display);
+    font-size: clamp(46px, 6.6vw, 88px);
+    line-height:1.04;letter-spacing:-0.03em;font-weight:700;
+    margin:24px 0 22px;max-width:920px;
+  }
+  .hero p.lede{
+    font-size:18.5px;color:var(--muted);max-width:640px;margin:0 0 32px;line-height:1.55;font-weight:500;
+  }
+  .hero-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .hero-meta{
+    margin-top:64px;display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+    border-top:1px solid var(--border);
+    padding-top:32px;
+  }
+  .meta-cell{padding-right:24px}
+  .meta-cell .k{font-family:var(--mono);font-size:11.5px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase}
+  .meta-cell .v{font-size:26px;margin-top:6px;letter-spacing:-0.01em;font-weight:700;font-family:var(--display)}
+  .meta-cell .v small{font-size:13px;color:var(--muted);margin-left:4px;font-weight:600}
+  .meta-cell .v .num{color:var(--blue-bright)}
+
+  /* ============ SECTION SCAFFOLD ============ */
+  .section{
+    max-width:var(--maxw);margin:0 auto;padding:96px 28px;
+    position:relative;
+  }
+  .section-divider{
+    max-width:var(--maxw);margin:0 auto;padding:0 28px;
+  }
+  .section-divider hr{
+    border:0;height:1px;
+    background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+    margin:0;
+  }
+  .section-head{
+    display:grid;grid-template-columns: 80px 1fr;gap:24px;align-items:start;
+    margin-bottom:48px;
+  }
+  .section-num{
+    font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:0.06em;
+    padding-top:14px;
+  }
+  .section-num .bar{display:block;width:40px;height:1px;background:var(--border-strong);margin-top:10px}
+  .section-tag{
+    font-family:var(--mono);font-size:11.5px;color:var(--blue);letter-spacing:0.08em;text-transform:uppercase;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .section-tag .pip{width:6px;height:6px;background:var(--blue);border-radius:1px;box-shadow:0 0 8px rgba(77,141,255,0.6)}
+  .section h2{
+    font-family:var(--display);
+    font-size: clamp(34px, 4.4vw, 54px);line-height:1.06;letter-spacing:-0.025em;font-weight:700;
+    margin:14px 0 16px;max-width:720px;
+  }
+  .section .blurb{font-size:17px;color:var(--muted);max-width:560px;margin:0;font-weight:500}
+
+  .split{
+    display:grid;grid-template-columns: 1fr 1fr;gap:64px;align-items:center;
+  }
+  .split.reverse > :first-child{order:2}
+  .split.reverse > :last-child{order:1}
+
+  .feature-list{
+    list-style:none;padding:0;margin:32px 0 0;
+    display:grid;grid-template-columns:1fr 1fr;gap:18px 28px;
+  }
+  .feature-list li{
+    display:flex;gap:12px;align-items:flex-start;font-size:14.5px;color:var(--text);
+  }
+  .feature-list .ico{
+    flex:0 0 auto;width:18px;height:18px;border-radius:5px;
+    background: rgba(77,141,255,0.08);border:1px solid var(--blue-line);
+    display:grid;place-items:center;margin-top:2px;
+  }
+  .feature-list .ico::before{
+    content:"";width:6px;height:6px;background:var(--blue);border-radius:1.5px;
+    box-shadow:0 0 6px rgba(77,141,255,0.7);
+  }
+  .feature-list .ft-title{font-weight:700}
+  .feature-list .ft-sub{display:block;color:var(--muted);font-size:13px;margin-top:2px;font-weight:500}
+
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}
+  .pill{
+    font-family:var(--mono);font-size:12px;color:var(--muted);
+    padding:5px 11px;border-radius:999px;border:1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .pill.on{color:var(--text);border-color:var(--blue-line);background:var(--blue-soft)}
+
+  /* ============ ILLUSTRATION FRAMES ============ */
+  .frame{
+    position:relative;
+    aspect-ratio: 5/4.2;
+    border-radius:var(--radius-lg);
+    border:1px solid var(--border);
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(77,141,255,0.06), transparent 60%),
+      linear-gradient(180deg, #131315 0%, #0d0d0f 100%);
+    overflow:hidden;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 30px 60px -30px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(77,141,255,0.04);
+  }
+  .frame::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(80% 60% at 50% 50%, #000 30%, transparent 80%);
+  }
+  .frame-label{
+    position:absolute;top:14px;left:16px;z-index:5;
+    font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:0.06em;
+  }
+  .frame-label .live{color:var(--blue)}
+
+  /* ============ ICON BADGE ============ */
+  .icon-badge{
+    width:56px;height:56px;border-radius:14px;
+    background: linear-gradient(180deg, #1a1a1d 0%, #121214 100%);
+    border:1px solid var(--blue-line);
+    display:grid;place-items:center;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 10px 30px -15px rgba(0,0,0,0.8), 0 0 24px -10px rgba(77,141,255,0.5);
+    position:relative;
+  }
+
+  /* ============ SECTION 1: CHATBOTS ============ */
+  .chat-stage{position:absolute;inset:60px 28px 28px;display:flex;flex-direction:column;gap:14px}
+  .msg{
+    display:flex;gap:10px;align-items:flex-end;max-width:78%;
+  }
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .msg .av{
+    width:26px;height:26px;border-radius:8px;flex:0 0 auto;
+    background:#1c1c20;border:1px solid var(--border-strong);
+    display:grid;place-items:center;font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:600;
+  }
+  .msg.me .av{background:var(--blue);color:#fff;border-color:transparent}
+  .bubble{
+    padding:10px 14px;border-radius:14px;
+    background:#1a1a1d;border:1px solid var(--border);
+    font-size:13.5px;color:var(--text);line-height:1.45;font-weight:500;
+  }
+  .msg.me .bubble{background:var(--blue-soft);border-color:var(--blue-line)}
+  .tool-call{
+    align-self:flex-start;max-width:88%;
+    border:1px dashed var(--blue-line);border-radius:12px;
+    padding:10px 12px;background:rgba(77,141,255,0.03);
+    font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  }
+  .tool-call .tag{color:var(--blue);margin-right:8px;font-weight:600}
+  .tool-call .out{display:block;color:var(--text);margin-top:6px;white-space:pre-wrap;word-break:break-word}
+  .typing{display:inline-flex;gap:3px;padding:0 2px;vertical-align:middle}
+  .typing i{width:5px;height:5px;border-radius:50%;background:var(--blue)}
+
+  /* ============ SECTION 2: RAG ============ */
+  .rag-stage{position:absolute;inset:60px 28px 28px;display:grid;grid-template-rows:auto 1fr auto;gap:18px}
+  .rag-query{
+    align-self:start;
+    padding:10px 14px;border-radius:10px;
+    background:rgba(255,255,255,0.04);border:1px solid var(--border-strong);
+    font-size:13px;color:var(--text);
+    display:flex;align-items:center;gap:10px;font-weight:500;
+  }
+  .rag-query .q{font-family:var(--mono);color:var(--blue);font-size:11px;font-weight:600}
+  .rag-stack{
+    align-self:center;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+  }
+  .doc{
+    border:1px solid var(--border);border-radius:10px;
+    padding:12px 12px 14px;background:#16161a;
+    position:relative;overflow:hidden;
+    transition: border-color .4s ease, background .4s ease;
+  }
+  .doc.match{border-color: var(--blue-line);background:var(--blue-soft);
+    box-shadow:0 0 0 1px var(--blue-line) inset, 0 0 24px -8px rgba(77,141,255,0.4)
+  }
+  .doc .h{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-bottom:8px;letter-spacing:0.05em}
+  .doc .lines{display:flex;flex-direction:column;gap:4px}
+  .doc .lines span{display:block;height:3px;border-radius:2px;background:rgba(255,255,255,0.08)}
+  .doc.match .lines span{background:rgba(77,141,255,0.45)}
+  .doc .lines span:nth-child(1){width:90%}
+  .doc .lines span:nth-child(2){width:75%}
+  .doc .lines span:nth-child(3){width:85%}
+  .doc .lines span:nth-child(4){width:60%}
+  .doc .score{
+    position:absolute;top:8px;right:10px;
+    font-family:var(--mono);font-size:9.5px;
+    padding:2px 6px;border-radius:4px;background:rgba(0,0,0,0.4);color:var(--muted)
+  }
+  .doc.match .score{color:#fff;background:var(--blue)}
+  .rag-answer{
+    padding:12px 14px;border-radius:10px;
+    background:linear-gradient(180deg, var(--blue-soft), transparent);
+    border:1px solid var(--blue-line);
+    font-size:12.5px;color:var(--text);line-height:1.55;font-weight:500;
+  }
+  .rag-answer sup{color:var(--blue);font-family:var(--mono);font-size:10px;margin:0 1px;font-weight:600}
+
+  /* ============ SECTION 3: CODE ============ */
+  .code-stage{position:absolute;inset:60px 28px 28px;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0d0d0f}
+  .code-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:#101013}
+  .code-tab{
+    padding:9px 14px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    border-right:1px solid var(--border);position:relative;
+  }
+  .code-tab.on{color:var(--text);background:#0d0d0f}
+  .code-tab.on::before{content:"";position:absolute;top:0;left:0;right:0;height:1.5px;background:var(--blue)}
+  .code-body{flex:1;display:grid;grid-template-columns:36px 1fr;font-family:var(--mono);font-size:12px;line-height:1.65;min-height:0}
+  .gutter{padding:12px 8px 0;text-align:right;color:var(--dim);background:rgba(255,255,255,0.015);border-right:1px solid var(--border)}
+  .gutter div{height:1.65em}
+  .code{padding:12px 16px;color:#d4d4d8;overflow:hidden;margin:0;white-space:pre}
+  .code .kw{color:#8ab4ff}
+  .code .fn{color:#9ec5ff}
+  .code .str{color:#c9d6f0}
+  .code .com{color:#52525b;font-style:italic}
+  .code .var{color:#f3f3f3}
+  .code .num{color:#bcd0ff}
+  .code .ghost{color:var(--blue-bright);background:rgba(77,141,255,0.08);border-bottom:1px dashed var(--blue-line)}
+  .code .cursor{
+    display:inline-block;width:6px;height:1em;background:var(--blue);
+    vertical-align:text-bottom;margin-left:1px;
+    animation: caret 1s steps(1) infinite;
+  }
+  @keyframes caret{50%{opacity:0}}
+  .code-status{
+    padding:8px 14px;border-top:1px solid var(--border);
+    display:flex;gap:14px;align-items:center;
+    font-family:var(--mono);font-size:10.5px;color:var(--dim);background:#101013;
+  }
+  .code-status .ok{color:var(--blue-bright)}
+  .code-status .sep{width:1px;height:10px;background:var(--border-strong)}
+
+  /* ============ SECTION 4: DOCS ============ */
+  .doc-stage{position:absolute;inset:60px 28px 28px;display:grid;grid-template-columns: 1fr auto 1fr;gap:18px;align-items:center}
+  .doc-input{
+    border:1px solid var(--border);border-radius:10px;
+    background:#15151a;padding:14px;
+    height:80%;display:flex;flex-direction:column;
+    position:relative;
+  }
+  .doc-input::before{
+    content:"";position:absolute;top:10px;right:10px;width:22px;height:28px;
+    border:1px solid var(--border-strong);border-radius:3px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+  }
+  .doc-input .ttl{font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:0.05em;margin-bottom:10px}
+  .doc-input .ln{height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-bottom:7px}
+  .doc-input .ln.w1{width:92%}.doc-input .ln.w2{width:74%}.doc-input .ln.w3{width:86%}
+  .doc-input .ln.w4{width:60%}.doc-input .ln.w5{width:80%}.doc-input .ln.w6{width:70%}
+  .doc-input .ln.hi{background:rgba(77,141,255,0.45);box-shadow:0 0 8px rgba(77,141,255,0.4)}
+  .doc-input .ln.hi2{background:rgba(77,141,255,0.30)}
+  /* Scanning sweep across the source doc */
+  .doc-input::after{
+    content:"";position:absolute;left:0;right:0;top:0;height:30%;
+    background: linear-gradient(180deg, transparent 0%, rgba(77,141,255,0.20) 50%, transparent 100%);
+    animation: scan 3.6s ease-in-out infinite;pointer-events:none;
+  }
+  @keyframes scan{
+    0%   {transform:translateY(-30%);opacity:0}
+    10%  {opacity:1}
+    50%  {transform:translateY(260%);opacity:1}
+    60%  {opacity:0}
+    100% {transform:translateY(-30%);opacity:0}
+  }
+
+  /* Pulse glow on the matched RAG doc */
+  .doc.match{animation: matchPulse 2.8s ease-in-out infinite}
+  @keyframes matchPulse{
+    0%,100%{box-shadow:0 0 0 1px var(--blue-line) inset, 0 0 24px -10px rgba(77,141,255,0.40)}
+    50%    {box-shadow:0 0 0 1px var(--blue-bright) inset, 0 0 32px -6px rgba(77,141,255,0.75)}
+  }
+
+  /* ============ RAG IMAGE FRAME ============ */
+  .frame.rag-image{ padding:0; aspect-ratio: 1/1 }
+  .frame.rag-image::before{ display:none }
+  .rag-image-wrap{ position:absolute; inset:0; overflow:hidden;
+    background:
+      radial-gradient(60% 50% at 50% 46%, rgba(255,255,255,0.06), transparent 70%),
+      radial-gradient(40% 30% at 50% 44%, rgba(77,141,255,0.10), transparent 75%);
+  }
+  .rag-image-wrap > img{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:contain; object-position:center 46%;
+    display:block;
+    /* knock the warm white slightly cooler so it matches the dark UI */
+    filter: saturate(0.92) brightness(1.02);
+  }
+  .rag-image-wrap .ov{
+    position:absolute; inset:0; pointer-events:none;
+    mix-blend-mode: screen;
+  }
+
+  /* soft blue accent glows over the important elements.
+     subtle — the image stays predominantly white. */
+  .ov .glow{
+    position:absolute; border-radius:50%;
+    transform: translate(-50%,-50%) scale(.9);
+    will-change: transform, opacity;
+  }
+  .ov .glow.brain{
+    left:39%; top:29%; width:24%; aspect-ratio:1;
+    background: radial-gradient(circle, rgba(77,141,255,0.32) 0%, rgba(77,141,255,0) 65%);
+    animation: glowPulse 3.8s ease-in-out infinite;
+  }
+  .ov .glow.chart{
+    left:41%; top:57%; width:14%; aspect-ratio:1;
+    background: radial-gradient(circle, rgba(106,163,255,0.42) 0%, rgba(77,141,255,0) 68%);
+    animation: glowPulse 2.6s ease-in-out infinite .4s;
+  }
+  .ov .glow.db{
+    left:27%; top:56%; width:15%; aspect-ratio:1;
+    background: radial-gradient(circle, rgba(77,141,255,0.26) 0%, rgba(77,141,255,0) 68%);
+    animation: glowPulse 3.2s ease-in-out infinite .9s;
+  }
+  .ov .glow.screen{
+    left:62%; top:48%; width:18%; aspect-ratio:1;
+    background: radial-gradient(circle, rgba(77,141,255,0.22) 0%, rgba(77,141,255,0) 68%);
+    animation: glowPulse 4.2s ease-in-out infinite 1.4s;
+  }
+  @keyframes glowPulse{
+    0%,100%{ transform:translate(-50%,-50%) scale(.85); opacity:.45 }
+    50%   { transform:translate(-50%,-50%) scale(1.12); opacity:1 }
+  }
+
+  /* tiny rising sparks from the brain core to suggest active processing */
+  .ov .spark{
+    position:absolute; left:39%; top:34%;
+    width:4px; height:4px; border-radius:50%;
+    background:#cfe1ff;
+    box-shadow:0 0 6px rgba(106,163,255,0.95), 0 0 12px rgba(77,141,255,0.7);
+    transform: translate(-50%,0);
+    animation: spark 3.4s linear infinite;
+    opacity:0;
+  }
+  .ov .spark.k1{ left:37%; animation-delay:0s }
+  .ov .spark.k2{ left:39.5%; animation-delay:.8s }
+  .ov .spark.k3{ left:41.5%; animation-delay:1.6s }
+  .ov .spark.k4{ left:38.5%; animation-delay:2.4s }
+  @keyframes spark{
+    0%   { transform:translate(-50%,0) scale(.6); opacity:0 }
+    18%  { opacity:1 }
+    82%  { opacity:.85 }
+    100% { transform:translate(-50%,-90px) scale(1); opacity:0 }
+  }
+
+  /* data-flow dot travelling from the database toward the brain (loop) */
+  .ov .flow{
+    position:absolute;
+    width:6px; height:6px; border-radius:50%;
+    background:#9ec5ff;
+    box-shadow:0 0 8px #6aa3ff, 0 0 14px rgba(77,141,255,0.7);
+    animation: flowUp 2.8s ease-in-out infinite;
+    opacity:0;
+  }
+  .ov .flow.f2{ animation-delay:1.4s }
+  @keyframes flowUp{
+    0%   { left:28%; top:52%; opacity:0; transform:scale(.7) }
+    15%  { opacity:1 }
+    50%  { left:36%; top:40%; opacity:1; transform:scale(1) }
+    85%  { opacity:.8 }
+    100% { left:39%; top:33%; opacity:0; transform:scale(.7) }
+  }
+
+  /* Sweep highlight on the JSON output as values arrive */
+  .doc-output{position:relative}
+  .doc-output::after{
+    content:"";position:absolute;left:0;right:0;top:0;height:24%;
+    background: linear-gradient(180deg, transparent, rgba(77,141,255,0.10), transparent);
+    animation: scan 4.4s ease-in-out infinite;
+    animation-delay:.4s;pointer-events:none;
+  }
+
+  /* Animated chat-typing dots */
+  .typing i{animation: blink 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}
+  .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+  .arrow{
+    display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--dim);
+  }
+  .arrow .line{width:1px;height:30px;background:var(--blue-line);position:relative}
+  .arrow .line::after{content:"";position:absolute;bottom:-1px;left:-3px;width:7px;height:7px;border-right:1px solid var(--blue-line);border-bottom:1px solid var(--blue-line);transform:rotate(-45deg)}
+  .arrow .tag{font-family:var(--mono);font-size:10px;color:var(--blue);letter-spacing:0.06em;font-weight:600}
+  .doc-output{
+    border:1px solid var(--blue-line);border-radius:10px;
+    background: linear-gradient(180deg, var(--blue-soft), transparent);
+    padding:14px;font-family:var(--mono);font-size:11px;line-height:1.6;
+    height:80%;overflow:hidden;
+    white-space:pre;
+  }
+  .doc-output .k{color:var(--muted)}
+  .doc-output .v{color:var(--text)}
+  .doc-output .s{color:var(--blue-bright)}
+  .doc-output .n{color:#bcd0ff}
+
+  /* ============ MATRIX / CTA ============ */
+  .matrix{
+    max-width:var(--maxw);margin:0 auto;padding:64px 28px 24px;
+    display:grid;grid-template-columns: repeat(4, 1fr);gap:16px;
+  }
+  .mtile{
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px;background:linear-gradient(180deg, var(--surface), var(--bg-soft));
+    display:flex;flex-direction:column;gap:14px;
+    transition: border-color .2s ease, transform .2s ease;
+    position:relative;overflow:hidden;
+  }
+  .mtile::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--blue);
+    opacity:0;transition:opacity .2s ease;
+  }
+  .mtile:hover{border-color:var(--blue-line);transform:translateY(-2px)}
+  .mtile:hover::before{opacity:1}
+  .mtile .num{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:0.08em}
+  .mtile h4{margin:0;font-size:18px;letter-spacing:-0.005em;font-weight:700;font-family:var(--display)}
+  .mtile p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.5;font-weight:500}
+
+  .cta{
+    max-width:var(--maxw);margin:48px auto 0;padding:0 28px 96px;
+  }
+  .cta-card{
+    border:1px solid var(--blue-line);border-radius:24px;
+    padding:48px;position:relative;overflow:hidden;
+    background:
+      radial-gradient(700px 350px at 100% 0%, rgba(77,141,255,0.18), transparent 60%),
+      radial-gradient(600px 300px at 0% 100%, rgba(77,141,255,0.10), transparent 60%),
+      linear-gradient(180deg, #131520, #0c0d11);
+    display:grid;grid-template-columns: 1fr auto;gap:24px;align-items:center;
+  }
+  .cta-card h3{font-size:40px;letter-spacing:-0.025em;font-weight:700;margin:0;max-width:540px;line-height:1.1;font-family:var(--display)}
+  .cta-card p{margin:12px 0 0;color:var(--muted);font-size:15px;max-width:480px;font-weight:500}
+  .cta-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+  /* ============ FOOTER ============ */
+  footer{border-top:1px solid var(--border)}
+  .foot{
+    max-width:var(--maxw);margin:0 auto;padding:48px 28px;
+    display:grid;grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;gap:32px;
+  }
+  .foot h5{font-size:12px;letter-spacing:0.06em;color:var(--dim);text-transform:uppercase;margin:0 0 14px;font-family:var(--mono);font-weight:500}
+  .foot ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:var(--muted);font-weight:500}
+  .foot ul a:hover{color:var(--text)}
+  .foot-tag{color:var(--muted);font-size:13.5px;margin:12px 0 0;max-width:280px;line-height:1.55;font-weight:500}
+  .foot-bot{
+    border-top:1px solid var(--border);
+    max-width:var(--maxw);margin:0 auto;padding:18px 28px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:12.5px;color:var(--dim);font-family:var(--mono);
+  }
+  .status{display:inline-flex;align-items:center;gap:8px}
+  .status .d{width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px var(--blue-ring)}
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 920px){
+    .nav-links{display:none}
+    .hero{padding:64px 22px 40px}
+    .hero-meta{grid-template-columns:repeat(2,1fr);gap:18px 0}
+    .meta-cell{padding-right:0}
+    .section{padding:64px 22px}
+    .section-head{grid-template-columns:1fr;gap:0}
+    .section-num{display:none}
+    .split{grid-template-columns:1fr;gap:36px}
+    .split.reverse > :first-child{order:0}
+    .split.reverse > :last-child{order:0}
+    .feature-list{grid-template-columns:1fr}
+    .matrix{grid-template-columns:repeat(2,1fr)}
+    .cta-card{grid-template-columns:1fr;padding:32px}
+    .cta-card h3{font-size:28px}
+    .foot{grid-template-columns:1fr 1fr;gap:28px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================ NAV ================ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>ahurasense</span>
+    </a>
+    <div class="nav-links">
+      <a href="#">A.I. Labs</a>
+      <a href="#">Products</a>
+      <a href="#">Solutions</a>
+      <a href="#">Pricing</a>
+      <a href="#">Docs</a>
+    </div>
+    <div class="nav-right">
+      <a href="#" class="btn ghost">Log in</a>
+      <a href="#" class="btn primary">Get started →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================ HERO ================ -->
+<header class="hero">
+  <span class="eyebrow"><span class="dot"></span> USE CASES · A.I. LABS</span>
+  <h1>Four patterns. <span class="ital">One API.</span><br />Ship AI to production.</h1>
+  <p class="lede"><span class="colon"></span><span class="hl">From conversational agents to document understanding</span> — every workload runs on the same control plane, the same key, and one consolidated bill.</p>
+  <div class="hero-actions">
+    <a href="#" class="btn primary">Start building</a>
+    <a href="#" class="btn">Read the docs →</a>
+  </div>
+
+  <div class="hero-meta">
+    <div class="meta-cell">
+      <div class="k">Models</div>
+      <div class="v"><span class="num">50+</span> <small>hosted</small></div>
+    </div>
+    <div class="meta-cell">
+      <div class="k">Median TTFT</div>
+      <div class="v"><span class="num">380</span><small>ms</small></div>
+    </div>
+    <div class="meta-cell">
+      <div class="k">Context</div>
+      <div class="v"><span class="num">1M</span> <small>tokens</small></div>
+    </div>
+    <div class="meta-cell">
+      <div class="k">Uptime SLA</div>
+      <div class="v"><span class="num">99.99</span><small>%</small></div>
+    </div>
+  </div>
+</header>
+
+<div class="section-divider"><hr /></div>
+
+<!-- ================ SECTION 01 — CHATBOTS ================ -->
+<section class="section" id="chatbots">
+  <div class="section-head">
+    <div class="section-num">01<span class="bar"></span></div>
+    <div>
+      <span class="section-tag"><span class="pip"></span> CHATBOTS &amp; AGENTS</span>
+      <h2>Conversational agents that <span class="ital">act,</span> not just answer.</h2>
+      <p class="blurb"><span class="colon"></span><span class="hl">Streaming responses, tool calls, and persistent memory</span> — wired together with first-class function calling and OpenAI-compatible endpoints.</p>
+    </div>
+  </div>
+
+  <div class="split">
+    <div>
+      <div class="icon-badge" aria-hidden="true">
+        <div style="position:relative;width:28px;height:24px">
+          <div style="position:absolute;left:0;top:0;width:18px;height:11px;border-radius:5px 5px 5px 1px;background:var(--blue)"></div>
+          <div style="position:absolute;right:0;bottom:0;width:18px;height:11px;border-radius:5px 5px 1px 5px;background:rgba(255,255,255,0.25)"></div>
+        </div>
+      </div>
+
+      <ul class="feature-list">
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Streaming responses</span>
+            <span class="ft-sub">Token-by-token output via SSE or WebSocket.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Tool / function calling</span>
+            <span class="ft-sub">Native JSON schemas, parallel tool execution.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Persistent memory</span>
+            <span class="ft-sub">Thread-scoped state across sessions.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Guardrails &amp; moderation</span>
+            <span class="ft-sub">Built-in PII scrubbing and policy filters.</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="pills">
+        <span class="pill on">gpt-4o-mini</span>
+        <span class="pill on">claude-haiku</span>
+        <span class="pill on">llama-4-scout</span>
+        <span class="pill">qwen-2.5-72b</span>
+      </div>
+    </div>
+
+    <div class="frame" aria-label="Chat agent demo">
+      <div class="frame-label"><span class="live">●</span> <span data-typewriter data-text="live · thread #4821" data-delay="150"></span></div>
+      <div class="chat-stage">
+        <div class="msg me">
+          <div class="av">U</div>
+          <div class="bubble">What's the status of order #4821?</div>
+        </div>
+        <div class="tool-call">
+          <span class="tag">→ tool_call</span>lookup_order(id: "4821")
+          <span class="out" data-typewriter data-text='{"status":"shipped","carrier":"DHL","eta":"May 29"}' data-delay="900"></span>
+        </div>
+        <div class="msg">
+          <div class="av">A</div>
+          <div class="bubble">Order <strong>#4821</strong> shipped via DHL — arrives May 29. Want me to share tracking?</div>
+        </div>
+        <div class="msg me">
+          <div class="av">U</div>
+          <div class="bubble">Yes please<span class="typing"><i></i><i></i><i></i></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"><hr /></div>
+
+<!-- ================ SECTION 02 — RAG ================ -->
+<section class="section" id="rag">
+  <div class="section-head">
+    <div class="section-num">02<span class="bar"></span></div>
+    <div>
+      <span class="section-tag"><span class="pip"></span> RAG &amp; KNOWLEDGE</span>
+      <h2>Retrieval grounded in <span class="ital">your</span> data.</h2>
+      <p class="blurb"><span class="colon"></span><span class="hl">Native pgvector, reranking, and inline citations</span> — turn private corpora into answerable knowledge without leaving Postgres.</p>
+    </div>
+  </div>
+
+  <div class="split reverse">
+    <div>
+      <div class="icon-badge" aria-hidden="true">
+        <div style="position:relative;width:28px;height:24px">
+          <div style="position:absolute;left:0;right:0;top:0;height:6px;border-radius:2px;background:rgba(255,255,255,0.25)"></div>
+          <div style="position:absolute;left:2px;right:2px;top:9px;height:6px;border-radius:2px;background:rgba(255,255,255,0.45)"></div>
+          <div style="position:absolute;left:4px;right:4px;top:18px;height:6px;border-radius:2px;background:var(--blue)"></div>
+        </div>
+      </div>
+
+      <ul class="feature-list">
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">pgvector at scale</span>
+            <span class="ft-sub">HNSW + IVF indexes, billion-vector ready.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Cross-encoder reranking</span>
+            <span class="ft-sub">2nd-stage scoring for precision @ k.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Inline citations</span>
+            <span class="ft-sub">Source-attributed answers, every span.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Hybrid search</span>
+            <span class="ft-sub">BM25 + dense fusion out of the box.</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="pills">
+        <span class="pill on">pgvector</span>
+        <span class="pill on">bge-rerank-v2</span>
+        <span class="pill on">cohere-rerank-3</span>
+        <span class="pill">text-embed-3-large</span>
+      </div>
+    </div>
+
+    <div class="frame rag-image" aria-label="RAG document pipeline">
+      <div class="frame-label"><span data-typewriter data-text="retrieval · top-3 · rerank=bge-v2" data-delay="150"></span></div>
+      <div class="rag-image-wrap">
+        <img src="ai-labs.png" alt="AI knowledge lab pipeline" />
+        <div class="ov" aria-hidden="true">
+          <span class="glow brain"></span>
+          <span class="glow chart"></span>
+          <span class="glow db"></span>
+          <span class="glow screen"></span>
+
+          <span class="spark k1"></span>
+          <span class="spark k2"></span>
+          <span class="spark k3"></span>
+          <span class="spark k4"></span>
+
+          <span class="flow f1"></span>
+          <span class="flow f2"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"><hr /></div>
+
+<!-- ================ SECTION 03 — CODE GENERATION ================ -->
+<section class="section" id="code">
+  <div class="section-head">
+    <div class="section-num">03<span class="bar"></span></div>
+    <div>
+      <span class="section-tag"><span class="pip"></span> CODE GENERATION</span>
+      <h2>Code completion, refactors, and <span class="ital">autonomous</span> commits.</h2>
+      <p class="blurb"><span class="colon"></span><span class="hl">Codestral, DeepSeek-Coder, and Qwen-Coder</span> — host on dedicated GPUs or stream from the shared pool, with fill-in-middle and repo-level context.</p>
+    </div>
+  </div>
+
+  <div class="split">
+    <div>
+      <div class="icon-badge" aria-hidden="true">
+        <div style="position:relative;width:32px;height:22px">
+          <div style="position:absolute;left:0;top:50%;width:9px;height:9px;border-radius:2px;background:var(--blue);transform:translate(0,-50%) rotate(45deg)"></div>
+          <div style="position:absolute;right:0;top:50%;width:9px;height:9px;border-radius:2px;background:rgba(255,255,255,0.3);transform:translate(0,-50%) rotate(45deg)"></div>
+          <div style="position:absolute;left:12px;top:50%;width:8px;height:2px;border-radius:1px;background:rgba(255,255,255,0.4);transform:translateY(-50%)"></div>
+        </div>
+      </div>
+
+      <ul class="feature-list">
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Fill-in-the-middle</span>
+            <span class="ft-sub">Bidirectional context, ghost completions.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Repo-level context</span>
+            <span class="ft-sub">128k window across multi-file edits.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Dedicated GPU hosting</span>
+            <span class="ft-sub">Your fine-tune, your latency floor.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Streaming diffs</span>
+            <span class="ft-sub">Patch-format output for safe applies.</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="pills">
+        <span class="pill on">codestral-22b</span>
+        <span class="pill on">deepseek-coder-v2</span>
+        <span class="pill on">qwen-coder-32b</span>
+        <span class="pill">starcoder-2</span>
+      </div>
+    </div>
+
+    <div class="frame" aria-label="Code completion demo">
+      <div class="frame-label"><span data-typewriter data-text="codestral · 22b · fim" data-delay="150"></span></div>
+      <div class="code-stage">
+        <div class="code-tabs">
+          <div class="code-tab on">checkout.ts</div>
+          <div class="code-tab">cart.ts</div>
+          <div class="code-tab">api.ts</div>
+        </div>
+        <div class="code-body">
+          <div class="gutter">
+            <div>14</div><div>15</div><div>16</div><div>17</div><div>18</div><div>19</div><div>20</div><div>21</div><div>22</div>
+          </div>
+<pre class="code" id="codeBlock"><span class="com">// apply discount, then tax</span>
+<span class="kw">export function</span> <span class="fn">finalize</span>(<span class="var">cart</span>: <span class="var">Cart</span>) {
+  <span class="kw">const</span> <span class="var">sub</span> = <span class="var">cart</span>.<span class="fn">subtotal</span>();
+  <span class="kw">const</span> <span class="var">disc</span> = <span class="fn">applyDiscount</span>(<span class="var">sub</span>, <span class="var">cart</span>.<span class="var">code</span>);
+<span class="ghost" id="ghost1"></span><span class="ghost" id="ghost2"></span><span class="ghost" id="ghost3"></span></pre>
+        </div>
+        <div class="code-status">
+          <span class="ok" id="codeStatus">● generating</span>
+          <span class="sep"></span>
+          <span>fim · 142 tok · 86 ms</span>
+          <span class="sep"></span>
+          <span>↹ tab to accept</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"><hr /></div>
+
+<!-- ================ SECTION 04 — DOCUMENT INTEL ================ -->
+<section class="section" id="docs">
+  <div class="section-head">
+    <div class="section-num">04<span class="bar"></span></div>
+    <div>
+      <span class="section-tag"><span class="pip"></span> DOCUMENT INTELLIGENCE</span>
+      <h2>Structured data from <span class="ital">unstructured</span> docs.</h2>
+      <p class="blurb"><span class="colon"></span><span class="hl">Long-context models, strict JSON mode, and batch endpoints</span> — extract, classify, and summarize at archive scale, on a schedule.</p>
+    </div>
+  </div>
+
+  <div class="split reverse">
+    <div>
+      <div class="icon-badge" aria-hidden="true">
+        <div style="position:relative;width:24px;height:28px">
+          <div style="position:absolute;left:4px;top:0;width:18px;height:24px;border-radius:3px;background:rgba(255,255,255,0.18)"></div>
+          <div style="position:absolute;left:0;top:4px;width:18px;height:24px;border-radius:3px;background:var(--blue)"></div>
+          <div style="position:absolute;left:3px;top:9px;width:10px;height:1.5px;border-radius:1px;background:rgba(0,0,0,0.35)"></div>
+          <div style="position:absolute;left:3px;top:13px;width:12px;height:1.5px;border-radius:1px;background:rgba(0,0,0,0.35)"></div>
+          <div style="position:absolute;left:3px;top:17px;width:8px;height:1.5px;border-radius:1px;background:rgba(0,0,0,0.35)"></div>
+        </div>
+      </div>
+
+      <ul class="feature-list">
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">1M-token context</span>
+            <span class="ft-sub">Whole-PDF, whole-codebase in one pass.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Strict JSON mode</span>
+            <span class="ft-sub">Schema-constrained decoding, no parse fails.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">Batch API · 50% off</span>
+            <span class="ft-sub">Overnight processing for archive jobs.</span>
+          </div>
+        </li>
+        <li>
+          <span class="ico"></span>
+          <div>
+            <span class="ft-title">OCR + vision</span>
+            <span class="ft-sub">Scanned PDFs, handwriting, table layouts.</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="pills">
+        <span class="pill on">claude-opus</span>
+        <span class="pill on">gpt-4o</span>
+        <span class="pill on">gemini-1.5-pro</span>
+        <span class="pill">batch · JSON</span>
+      </div>
+    </div>
+
+    <div class="frame" aria-label="Document extraction demo">
+      <div class="frame-label"><span data-typewriter data-text="batch · 1,284 docs · json_schema" data-delay="150"></span></div>
+      <div class="doc-stage">
+        <div class="doc-input">
+          <div class="ttl">invoice_4821.pdf</div>
+          <div class="ln w1"></div>
+          <div class="ln w2"></div>
+          <div class="ln w3 hi"></div>
+          <div class="ln w4"></div>
+          <div class="ln w5"></div>
+          <div class="ln w6 hi2"></div>
+          <div class="ln w2"></div>
+          <div class="ln w3"></div>
+          <div class="ln w4 hi"></div>
+          <div class="ln w1"></div>
+        </div>
+        <div class="arrow" aria-hidden="true">
+          <div class="tag">extract</div>
+          <div class="line"></div>
+        </div>
+<pre class="doc-output"><span class="k">{</span>
+  <span class="k">"vendor":</span> <span class="s" data-typewriter data-text='"Acme Corp"' data-delay="300"></span>,
+  <span class="k">"invoice_id":</span> <span class="s" data-typewriter data-text='"4821"' data-delay="650"></span>,
+  <span class="k">"issued":</span> <span class="s" data-typewriter data-text='"2026-05-12"' data-delay="950"></span>,
+  <span class="k">"due":</span> <span class="s" data-typewriter data-text='"2026-06-11"' data-delay="1300"></span>,
+  <span class="k">"line_items":</span> <span class="n" data-decrypt data-final="12" data-delay="1650">12</span>,
+  <span class="k">"subtotal":</span> <span class="n" data-decrypt data-final="8420.00" data-delay="1850">8420.00</span>,
+  <span class="k">"tax":</span> <span class="n" data-decrypt data-final="673.60" data-delay="2100">673.60</span>,
+  <span class="k">"total":</span> <span class="n" data-decrypt data-final="9093.60" data-delay="2350">9093.60</span>,
+  <span class="k">"currency":</span> <span class="s" data-typewriter data-text='"USD"' data-delay="2650"></span>
+<span class="k">}</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"><hr /></div>
+
+<!-- ================ MATRIX ================ -->
+<section class="matrix">
+  <div class="mtile">
+    <span class="num">01 · IDENTITY</span>
+    <h4>One API key</h4>
+    <p>Same auth across every model, every endpoint, every region.</p>
+  </div>
+  <div class="mtile">
+    <span class="num">02 · BILLING</span>
+    <h4>One consolidated bill</h4>
+    <p>Tokens, GPUs, storage, batches — itemized, per-second.</p>
+  </div>
+  <div class="mtile">
+    <span class="num">03 · COMPATIBILITY</span>
+    <h4>OpenAI-compatible</h4>
+    <p>Swap the base URL. Your SDKs, agents, and tooling just work.</p>
+  </div>
+  <div class="mtile">
+    <span class="num">04 · LOCALITY</span>
+    <h4>12 regions, sub-20ms</h4>
+    <p>Inference next to your users, your data, and your compute.</p>
+  </div>
+</section>
+
+<!-- ================ CTA ================ -->
+<section class="cta">
+  <div class="cta-card">
+    <div>
+      <h3>Pick a pattern. <span class="ital">Ship by Friday.</span></h3>
+      <p><span class="colon"></span><span class="hl">Free $50 credit on signup.</span> No card required. Every model, every region — yours to try in under two minutes.</p>
+    </div>
+    <div class="cta-actions">
+      <a href="#" class="btn primary">Get started →</a>
+      <a href="#" class="btn">Talk to sales</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================ FOOTER ================ -->
+<footer>
+  <div class="foot">
+    <div>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>ahurasense</span>
+      </div>
+      <p class="foot-tag">Enterprise-grade cloud infrastructure with global reach and sub-20ms latency.</p>
+    </div>
+    <div>
+      <h5>Company</h5>
+      <ul>
+        <li><a href="#">Blog</a></li>
+        <li><a href="#">Careers</a></li>
+        <li><a href="#">Pricing</a></li>
+        <li><a href="#">Customers</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>Resources</h5>
+      <ul>
+        <li><a href="#">Resources Hub</a></li>
+        <li><a href="#">API Reference</a></li>
+        <li><a href="#">Changelog</a></li>
+        <li><a href="#">Status</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>Solutions</h5>
+      <ul>
+        <li><a href="#">Compute</a></li>
+        <li><a href="#">GPU Instances</a></li>
+        <li><a href="#">Kubernetes</a></li>
+        <li><a href="#">Object Storage</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>Legal</h5>
+      <ul>
+        <li><a href="#">Terms</a></li>
+        <li><a href="#">Privacy</a></li>
+        <li><a href="#">Cookies</a></li>
+        <li><a href="#">DPA</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bot">
+    <span>© 2026 ahurasense. All rights reserved.</span>
+    <span class="status"><span class="d"></span> ALL SYSTEMS OPERATIONAL</span>
+  </div>
+</footer>
+
+<!-- ============ TEXT ANIMATIONS ============ -->
+<script>
+(function(){
+  const CHARS_DEFAULT = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  const CHARS_NUM     = "0123456789.,";
+  const CHARS_CODE    = "{}[]();,.:=+-*/<>?\"'_@#&|";
+
+  function pickCharset(text){
+    if (/^[\d.,+%MKkBb]+$/.test(text)) return CHARS_NUM;
+    if (/[{}\[\]();:=<>\/\"']/.test(text)) return CHARS_CODE;
+    return CHARS_DEFAULT;
+  }
+  function rand(set){ return set[(Math.random()*set.length)|0]; }
+
+  // ===== DECRYPT / SCRAMBLE =====
+  function decrypt(el){
+    const final = el.dataset.final ?? el.textContent;
+    const charset = pickCharset(final);
+    const delay   = parseInt(el.dataset.delay || "0", 10);
+    const totalDur = 900;
+    const perChar  = totalDur / Math.max(final.length, 1);
+    const buf = final.split("").map(c => c === " " ? " " : rand(charset));
+    el.textContent = buf.join("");
+    let start = null;
+    function frame(ts){
+      if (!start) start = ts;
+      const t = ts - start;
+      const settled = Math.min(final.length, Math.floor(t / perChar));
+      for (let i=0; i<final.length; i++){
+        if (i < settled) buf[i] = final[i];
+        else if (final[i] !== " ") buf[i] = rand(charset);
+      }
+      el.textContent = buf.join("");
+      if (settled < final.length) requestAnimationFrame(frame);
+      else el.textContent = final;
+    }
+    setTimeout(()=> requestAnimationFrame(frame), delay);
+  }
+
+  // ===== TYPEWRITER =====
+  function typewriter(el){
+    const text  = el.dataset.text ?? el.textContent;
+    const delay = parseInt(el.dataset.delay || "0", 10);
+    const speed = parseInt(el.dataset.speed || "32", 10);
+    el.textContent = "";
+    const caret = document.createElement("span");
+    caret.className = "cursor";
+    el.appendChild(caret);
+    let i = 0;
+    setTimeout(function step(){
+      if (i < text.length){
+        caret.insertAdjacentText("beforebegin", text[i]);
+        i++;
+        setTimeout(step, speed + Math.random()*30);
+      } else {
+        setTimeout(()=> caret.remove(), 600);
+      }
+    }, delay);
+  }
+
+  // ===== CODE GHOST TYPING =====
+  function codeGhostType(){
+    const lines = [
+      "  const tax  = computeTax(disc, cart.region);",
+      "  return { sub, disc, tax, total: disc + tax };",
+      "}"
+    ];
+    const targets = ["ghost1","ghost2","ghost3"].map(id => document.getElementById(id));
+    const status  = document.getElementById("codeStatus");
+    if (!targets[0]) return;
+
+    function typeLine(idx, cb){
+      if (idx >= lines.length) return cb && cb();
+      const el = targets[idx];
+      const text = lines[idx];
+      el.textContent = (idx === 0) ? "\n" : "";
+      let i = 0;
+      const caret = document.createElement("span");
+      caret.className = "cursor";
+      el.appendChild(caret);
+      function step(){
+        if (i < text.length){
+          caret.insertAdjacentText("beforebegin", text[i]);
+          i++;
+          setTimeout(step, 22 + Math.random()*28);
+        } else {
+          if (idx < lines.length - 1) caret.insertAdjacentText("beforebegin", "\n");
+          caret.remove();
+          setTimeout(()=> typeLine(idx+1, cb), 160);
+        }
+      }
+      step();
+    }
+
+    function run(){
+      targets.forEach(t => t.textContent = "");
+      if (status) status.innerHTML = "● generating";
+      typeLine(0, ()=>{
+        if (status) status.innerHTML = "● accepted";
+        setTimeout(run, 5500);
+      });
+    }
+    setTimeout(run, 700);
+  }
+
+  // ===== KICK OFF =====
+  function init(){
+    const els = [
+      ...document.querySelectorAll("[data-decrypt]"),
+      ...document.querySelectorAll("[data-typewriter]")
+    ];
+    els.forEach(el => {
+      if (el.dataset.__done) return;
+      el.dataset.__done = "1";
+      if (el.hasAttribute("data-decrypt")) decrypt(el);
+      if (el.hasAttribute("data-typewriter")) typewriter(el);
+    });
+    if (document.getElementById("ghost1")) codeGhostType();
+  }
+
+  if (document.readyState !== "loading") init();
+  else document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+
+</body>
+</html>

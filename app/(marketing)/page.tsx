@@ -9,6 +9,7 @@ import { EverythingSection } from "@/components/everything-section";
 import { ClustersSection } from "@/components/clusters-section";
 import { ComputeSection } from "@/components/compute-section";
 import GlobalNetworkSection from "@/components/global-network-section";
+import HomePopup from "@/components/home-popup";
 // import FeatureSection from "@/components/feature-section";
 
 export const metadata: Metadata = {
@@ -116,6 +117,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <HomePopup />
       <div className="min-h-screen bg-black relative overflow-hidden">
         {/* Background Effect */}
         <div className="fixed inset-0 w-full h-full [--color-neutral-300:#1f1f23] [--color-neutral-100:#0a0a0a] [--color-neutral-500:#27272a] [--color-neutral-700:#18181b] [--color-neutral-900:#000000] [--color-neutral-800:#09090b]">

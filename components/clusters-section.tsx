@@ -18,7 +18,7 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const CLUSTER_BENEFITS: Array<{ title: string; detail: string }> = [
     {
         title: "Multi-node NVLink fabric",
-        detail: "8× SXM per node · 900 GB/s GPU-to-GPU bandwidth",
+        detail: "8× B300 SXM per node · 1.8 TB/s GPU-to-GPU bandwidth",
     },
     {
         title: "Reserved pricing",
@@ -43,11 +43,11 @@ const CLUSTER_BENEFITS: Array<{ title: string; detail: string }> = [
 ];
 
 const SAMPLE_CONFIG: Array<{ label: string; value: React.ReactNode }> = [
-    { label: "GPUs", value: "64× NVIDIA B200" },
-    { label: "GPU memory", value: "12 TB (192 GB / GPU)" },
-    { label: "Interconnect", value: "NVLink Switch System" },
+    { label: "GPUs", value: "64× NVIDIA B300" },
+    { label: "GPU memory", value: "18.4 TB (288 GB / GPU)" },
+    { label: "Interconnect", value: "NVLink Switch System 5.0" },
     { label: "vCPUs / node", value: "96 vCPUs" },
-    { label: "Networking", value: "400 Gbps · RDMA" },
+    { label: "Networking", value: "800 Gbps · RDMA" },
     { label: "Term", value: "12-month reserved" },
 ];
 
@@ -89,7 +89,7 @@ function ClusterConfigCard() {
                         {/* Title */}
                         <div className="mt-7">
                             <h3 className="text-[26px] font-semibold tracking-[-0.02em] text-white leading-tight">
-                                <span className="text-[#0095FF]">NVIDIA B200 SXM</span> · 8-node cluster
+                                <span className="text-[#0095FF]">NVIDIA B300 SXM</span> · 8-node cluster
                             </h3>
                             <p className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.18em] text-white/40`}>
                                 NVLink fabric · Redundant power · PCIe 5.0
@@ -155,8 +155,8 @@ export function ClustersSection() {
                         </h2>
 
                         <p className="mt-6 max-w-[560px] text-[15px] leading-[1.65] text-white/65 sm:text-[16px]">
-                            Multi-node H100, H200, and B200 clusters with NVIDIA NVLink
-                            fabric, dedicated capacity, and committed pricing. From a
+                            Multi-node H200, B200, and B300 clusters with NVIDIA NVLink
+                            5.0 fabric, dedicated capacity, and committed pricing. From a
                             single 8-GPU node to thousand-GPU training runs — we handle
                             the rest.
                         </p>

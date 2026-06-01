@@ -39,7 +39,7 @@ function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
 
     return (
         <article
-            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.22] hover:bg-[#161A1F]"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:bg-[#161A1F] hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
             style={{
                 boxShadow:
                     "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.7)",

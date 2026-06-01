@@ -1,4 +1,12 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzerInit from "@next/bundle-analyzer";
+
+// Bundle analyzer — only active when ANALYZE=true so normal builds are unaffected.
+// Usage: `ANALYZE=true npm run build` → opens treemaps under .next/analyze/.
+const withBundleAnalyzer = withBundleAnalyzerInit({
+  enabled: process.env.ANALYZE === "true",
+  openAnalyzer: false,
+});
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 if (!supabaseUrl) {
@@ -95,6 +103,10 @@ const nextConfig: NextConfig = {
   },
 
   images: {
+    // Large source PNGs are re-encoded by sharp on the origin Node process on
+    // first request; a long optimized-image cache TTL keeps that a one-time cost
+    // instead of competing with request/billing CPU on every cache miss.
+    minimumCacheTTL: 2678400, // 31 days
     remotePatterns: [
       {
         protocol: "https",
@@ -125,4 +137,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

@@ -159,10 +159,18 @@ export async function GET() {
       isFree: model.is_free,
     }));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: formattedModels,
     });
+    // Public platform model catalog — safe to cache at the edge for a few
+    // minutes (only the primary success path; the error fallback below is not
+    // cached so a transient failure can't be pinned).
+    response.headers.set(
+      "Cache-Control",
+      "public, s-maxage=600, stale-while-revalidate=3600"
+    );
+    return response;
   } catch (error) {
     console.error("[Platform Models API] Error listing models:", error);
     

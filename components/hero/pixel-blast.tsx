@@ -13,7 +13,7 @@ import * as THREE from "three";
 
 type Variant = "square" | "circle" | "triangle" | "diamond";
 
-interface PixelBlastProps {
+export interface PixelBlastProps {
     variant?: Variant;
     pixelSize?: number;
     color?: string;

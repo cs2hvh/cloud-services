@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
-import PixelBlast from "./pixel-blast";
+import PixelBlast from "./pixel-blast-lazy";
 
 const BRAND = "#0095FF";
 
@@ -251,7 +251,7 @@ function GpuPricingRail() {
                                             <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
                                                 NVIDIA
                                             </span>
-                                            <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-[#0095FF]">
+                                            <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-[#76b900]">
                                                 {gpu.name}
                                             </p>
                                             <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.14em] tabular-nums text-white/45">
@@ -301,6 +301,7 @@ function GpuPricingRail() {
                     </div>
                 </div>
             </div>
+
         </div>
     );
 }

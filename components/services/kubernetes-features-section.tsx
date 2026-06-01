@@ -78,7 +78,7 @@ function FeatureItem({ feature, index }: { feature: Feature; index: number }) {
 
             {/* Title + description */}
             <div>
-                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#0095FF]">
+                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-white transition-colors group-hover:text-[#0095FF]">
                     {feature.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.65] text-white/60">

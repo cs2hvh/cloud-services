@@ -20,9 +20,9 @@ export default function ObjectStorageReleaseSection() {
             src="/a159e753bfb39b7a12ae7b90c019690a05bab577 (1).png"
             alt=""
             fill
+            sizes="100vw"
             className="object-cover object-center"
             style={{ filter: "blur(2.5px)", opacity: 0.7 }}
-            unoptimized
           />
         </div>
 
@@ -43,8 +43,8 @@ export default function ObjectStorageReleaseSection() {
                 src="/e1d5f04fa8af10806f332bf618d0ac4818dbcb78.png"
                 alt="Megaphone"
                 fill
+                sizes="(min-width: 1024px) 111px, 90px"
                 className="object-contain"
-                unoptimized
               />
             </div>
 

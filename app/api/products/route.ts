@@ -18,10 +18,17 @@ export async function GET(req: NextRequest) {
       products = await Products.get_all();
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { products, count: products.length },
       { status: 200 }
     );
+    // Public product catalog — cacheable at the CDN/browser. Varies by the
+    // ?type/&sub query string, which Cloudflare keys on automatically.
+    response.headers.set(
+      "Cache-Control",
+      "public, s-maxage=3600, stale-while-revalidate=86400"
+    );
+    return response;
   } catch (error) {
     logError("GET /api/products", error);
     return NextResponse.json(

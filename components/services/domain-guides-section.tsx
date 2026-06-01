@@ -130,7 +130,7 @@ function GuideCard({ guide }: { guide: Guide }) {
                     {guide.readTime}
                 </span>
                 <span
-                    className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75 transition-colors group-hover:text-white`}
+                    className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/75 transition-colors group-hover:text-[#0095FF]`}
                 >
                     Read guide
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -184,7 +184,7 @@ export default function DomainGuidesSection() {
                     </p>
                     <Link
                         href="/dashboard/domains"
-                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                     >
                         Manage in the dashboard
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

@@ -181,7 +181,7 @@ const CAPABILITIES: Capability[] = [
 function CapabilityCard({ c, index }: { c: Capability; index: number }) {
     return (
         <article
-            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-colors hover:border-white/[0.18] hover:bg-[#13161B]"
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[#111316] p-7 transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:bg-[#13161B] hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
             style={{
                 boxShadow:
                     "inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px -14px rgba(0,0,0,0.7)",

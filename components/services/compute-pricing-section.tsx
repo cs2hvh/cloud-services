@@ -457,7 +457,7 @@ function VirtualPlanCard({ plan, index }: { plan: VirtualPlan; index: number }) 
       <AuthAwareServiceCta
         service="compute"
         intent="new"
-        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
+        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
       >
         Deploy {getPlanName(index, false)}
         <ArrowRight className="h-4 w-4" />
@@ -516,7 +516,7 @@ function BareMetalPlanCard({ plan, index }: { plan: BareMetalPlan; index: number
       <AuthAwareServiceCta
         service="compute"
         intent="new"
-        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
+        className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
       >
         Configure {getPlanName(index, true)}
         <ArrowRight className="h-4 w-4" />
@@ -761,7 +761,7 @@ export default function ComputePricingSection({
                           <AuthAwareServiceCta
                             service="compute"
                             intent="new"
-                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
+                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
                           >
                             Configure
                             <ArrowRight className="h-3.5 w-3.5" />
@@ -822,7 +822,7 @@ export default function ComputePricingSection({
                           <AuthAwareServiceCta
                             service="compute"
                             intent="new"
-                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
+                            className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
                           >
                             Deploy
                             <ArrowRight className="h-3.5 w-3.5" />
@@ -846,7 +846,7 @@ export default function ComputePricingSection({
               </div>
 
               <h3 className="mt-4 max-w-sm text-2xl font-[400] tracking-tight text-white lg:text-[30px]">
-                <span className="text-[#8ecaff]">Deploy</span> compute where your users actually are
+                <span className="text-[#0095FF]">Deploy compute</span> where your users actually are
               </h3>
             </div>
 

@@ -10,7 +10,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
-import PixelBlast from "@/components/hero/pixel-blast";
+import PixelBlast from "@/components/hero/pixel-blast-lazy";
 
 const BRAND = "#0095FF";
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RAG Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#06070a;
+    --panel:#121419;
+    --panel-2:#0d0f13;
+    --line:rgba(255,255,255,.08);
+    --line-2:rgba(255,255,255,.15);
+    --ink:#eaedf2;
+    --muted:#969ca6;
+    --faint:#5c636d;
+    --blue:#3f86ff;
+    --blue-bright:#6aa6ff;
+    --blue-deep:#2f6fe6;
+    --blue-faint:rgba(63,134,255,.12);
+    --display:"Nunito",-apple-system,sans-serif;
+    --body:"Nunito",-apple-system,sans-serif;
+    --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+    --T:13s;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:var(--bg);overflow:hidden;font-family:var(--body);}
+  .stage{position:fixed;inset:0;overflow:hidden;
+    background:radial-gradient(125% 100% at 50% 6%,#0e1119 0%,#06070a 60%,#040506 100%);}
+  .canvas{position:absolute;left:50%;top:50%;transform-origin:center center;
+    width:1760px;height:980px;color:var(--ink);-webkit-font-smoothing:antialiased;}
+
+  /* ---------- connectors ---------- */
+  svg.links{position:absolute;inset:0;width:1760px;height:980px;overflow:visible;pointer-events:none;}
+  /* faint structural line — stays unmarked */
+  .ln{fill:none;stroke:rgba(165,177,194,.4);stroke-width:1.6;stroke-dasharray:5 6;}
+  /* blue "marking" that draws onto a line as the flow reaches it */
+  .mark{fill:none;stroke:var(--blue-bright);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:100;stroke-dashoffset:100;opacity:0;filter:url(#glow);}
+  .m1{animation:draw1 var(--T) linear infinite;}
+  .m2{animation:draw2 var(--T) linear infinite;}
+  .m3{animation:draw3 var(--T) linear infinite;}
+  .m4{animation:draw4 var(--T) linear infinite;}
+  .m5{animation:draw5 var(--T) linear infinite;}
+  .m6{animation:draw6 var(--T) linear infinite;}
+  /* each step: draw the line on, hold briefly, then fade away (don't stay marked) */
+  @keyframes draw1{0%{stroke-dashoffset:100;opacity:0}1%{opacity:1}8%{stroke-dashoffset:0;opacity:1}13%{stroke-dashoffset:0;opacity:1}16.6%{stroke-dashoffset:0;opacity:0}100%{stroke-dashoffset:0;opacity:0}}
+  @keyframes draw2{0%,16.6%{stroke-dashoffset:100;opacity:0}17.6%{opacity:1}24.6%{stroke-dashoffset:0;opacity:1}29.6%{stroke-dashoffset:0;opacity:1}33.3%{stroke-dashoffset:0;opacity:0}100%{opacity:0}}
+  @keyframes draw3{0%,33.3%{stroke-dashoffset:100;opacity:0}34.3%{opacity:1}41.3%{stroke-dashoffset:0;opacity:1}46.3%{stroke-dashoffset:0;opacity:1}50%{stroke-dashoffset:0;opacity:0}100%{opacity:0}}
+  @keyframes draw4{0%,50%{stroke-dashoffset:100;opacity:0}51%{opacity:1}58%{stroke-dashoffset:0;opacity:1}63%{stroke-dashoffset:0;opacity:1}66.6%{stroke-dashoffset:0;opacity:0}100%{opacity:0}}
+  @keyframes draw5{0%,66.6%{stroke-dashoffset:100;opacity:0}67.6%{opacity:1}74.6%{stroke-dashoffset:0;opacity:1}79.6%{stroke-dashoffset:0;opacity:1}83.3%{stroke-dashoffset:0;opacity:0}100%{opacity:0}}
+  @keyframes draw6{0%,83.3%{stroke-dashoffset:100;opacity:0}84.3%{opacity:1}92%{stroke-dashoffset:0;opacity:1}97%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+
+  /* ---------- node base ---------- */
+  .node{position:absolute;border-radius:16px;background:var(--panel);
+    border:1px solid var(--line);padding:15px 17px;
+    box-shadow:0 16px 38px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04);}
+  .ng{position:absolute;inset:-1px;border-radius:16px;pointer-events:none;opacity:0;
+    border:1.5px solid rgba(63,134,255,.6);
+    box-shadow:0 0 0 1px rgba(63,134,255,.18),0 0 46px rgba(47,111,230,.42),inset 0 0 30px rgba(47,111,230,.1);}
+
+  .hd{display:flex;align-items:center;gap:10px;}
+  .hd .t{font-family:var(--display);font-size:13.5px;font-weight:800;letter-spacing:.045em;
+    color:var(--blue-bright);text-transform:uppercase;white-space:nowrap;}
+  .kick{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.1em;
+    color:var(--faint);text-transform:uppercase;margin-left:auto;padding-left:8px;}
+  .sub{font-family:var(--mono);color:var(--muted);font-size:10.5px;letter-spacing:0;margin-top:8px;font-weight:400;line-height:1.45;}
+  .rule{height:1px;background:var(--line);margin:13px 0;}
+
+  /* icon badge */
+  .ic{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;
+    background:rgba(255,255,255,.035);border:1px solid var(--line);color:#c2c9d2;}
+  .ic svg{width:20px;height:20px;}
+  .i-fill{fill:currentColor;opacity:.18;}
+  .i-line{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+
+  .tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}
+  .tag{font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--line-2);
+    border-radius:6px;padding:3px 8px;letter-spacing:.02em;}
+
+  /* ---------- sources ---------- */
+  #sources{left:60px;top:310px;width:272px;height:330px;}
+  .chips{display:flex;flex-direction:column;gap:9px;margin-top:13px;}
+  .chip{display:flex;align-items:center;gap:11px;}
+  .chip .nm{font-family:var(--mono);font-size:10.5px;color:var(--ink);width:42px;letter-spacing:.03em;}
+  .chip .vb{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.06);position:relative;overflow:hidden;}
+  .chip .vb::after{content:"";position:absolute;inset:0;width:var(--w);border-radius:4px;background:rgba(255,255,255,.32);}
+  .chip .ct{font-family:var(--mono);font-size:9.5px;color:var(--faint);width:30px;text-align:right;}
+
+  /* ---------- query ---------- */
+  #query{left:402px;top:382px;width:182px;height:108px;}
+  .qbox{margin-top:11px;border-left:2px solid var(--line-2);padding:2px 0 2px 10px;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink);font-weight:400;line-height:1.5;}
+
+  /* ---------- vector db ---------- */
+  #vectordb{left:638px;top:56px;width:286px;height:140px;}
+  .vec{display:flex;align-items:flex-end;gap:3px;height:30px;margin-top:13px;}
+  .vec i{flex:1;background:linear-gradient(180deg,rgba(255,255,255,.46),rgba(255,255,255,.14));border-radius:2px;height:var(--h);}
+
+  /* ---------- core ---------- */
+  #core{left:620px;top:386px;width:324px;height:188px;border-color:rgba(63,134,255,.3);
+    box-shadow:0 20px 54px rgba(0,0,0,.6),0 0 60px rgba(47,111,230,.18),inset 0 1px 0 rgba(255,255,255,.05);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;}
+  .core-ring{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 50% 34%,#1b2740,#0d1014);border:1.5px solid rgba(63,134,255,.5);
+    box-shadow:0 0 22px rgba(63,134,255,.32),inset 0 0 14px rgba(63,134,255,.16);}
+  .core-ring svg{width:25px;height:25px;color:var(--blue-bright);}
+  .core-title{font-family:var(--display);font-size:15px;font-weight:800;letter-spacing:.04em;
+    color:var(--blue-bright);text-transform:uppercase;}
+  .core-title span{font-family:var(--mono);display:block;font-size:9px;color:var(--muted);font-weight:500;margin-top:6px;letter-spacing:.08em;}
+  .core-tags{display:flex;gap:7px;}
+
+  /* ---------- hybrid ---------- */
+  #hybrid{left:620px;top:688px;width:324px;height:122px;}
+  .blend{margin-top:13px;display:flex;flex-direction:column;gap:8px;}
+  .brow{display:flex;align-items:center;gap:10px;}
+  .brow .bl{font-family:var(--mono);font-size:10px;color:var(--ink);width:48px;letter-spacing:.03em;}
+  .brow .bbar{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.06);position:relative;overflow:hidden;}
+  .brow .bbar::after{content:"";position:absolute;inset:0;width:var(--w);border-radius:4px;background:rgba(255,255,255,.34);}
+  .brow .bv{font-family:var(--mono);font-size:9.5px;color:var(--faint);width:34px;text-align:right;}
+
+  /* ---------- results ---------- */
+  .result{left:1010px;width:240px;height:112px;display:flex;align-items:center;gap:13px;padding:0 17px;}
+  #res1{top:322px;} #res2{top:448px;} #res3{top:574px;}
+  #res2{border-color:rgba(63,134,255,.5);
+    box-shadow:0 16px 42px rgba(0,0,0,.55),0 0 40px rgba(47,111,230,.26),inset 0 1px 0 rgba(255,255,255,.05);}
+  .rank{width:25px;height:25px;border-radius:7px;display:grid;place-items:center;flex:none;
+    font-family:var(--mono);font-size:11.5px;font-weight:700;
+    background:rgba(255,255,255,.05);border:1px solid var(--line-2);color:var(--muted);}
+  #res2 .rank{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 15px rgba(63,134,255,.55);}
+  .rmid{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .rsrc{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:.04em;}
+  .rlines{display:flex;flex-direction:column;gap:5px;}
+  .rl{height:4px;border-radius:3px;background:rgba(255,255,255,.1);}
+  #res2 .rl{background:rgba(120,170,255,.42);}
+  .rl.w1{width:92%;}.rl.w2{width:68%;}
+  .rscore{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:700;flex:none;}
+  #res2 .rscore{color:var(--blue-bright);}
+
+  /* ---------- rerank ---------- */
+  #rerank{left:1298px;top:400px;width:166px;height:215px;}
+  .scores{margin-top:14px;display:flex;flex-direction:column;gap:12px;}
+  .score{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11.5px;}
+  .score .k{color:var(--faint);width:9px;}
+  .score .bar{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;}
+  .score .bar i{display:block;height:100%;border-radius:3px;background:rgba(255,255,255,.24);}
+  .score .v{color:var(--muted);width:32px;text-align:right;}
+  .score.top .k{color:var(--blue-bright);}
+  .score.top .v{color:var(--blue-bright);font-weight:700;}
+  .score.top .bar i{background:linear-gradient(90deg,var(--blue-deep),var(--blue-bright));box-shadow:0 0 9px rgba(63,134,255,.5);}
+
+  /* ---------- answer ---------- */
+  #answer{left:1488px;top:290px;width:255px;height:430px;padding:19px;display:flex;flex-direction:column;}
+  .ans-body{margin-top:13px;font-size:15.5px;line-height:1.5;color:var(--ink);font-weight:700;}
+  .cite{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--blue-bright);
+    border:1px solid rgba(63,134,255,.45);border-radius:5px;padding:0 5px;margin-left:2px;
+    background:var(--blue-faint);vertical-align:1px;}
+  .ans-fill{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+  .afl{height:5px;border-radius:3px;background:rgba(255,255,255,.07);}
+  .afl.a{width:100%;}.afl.b{width:90%;}.afl.c{width:58%;}
+  .sources-row{margin-top:auto;padding-top:16px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px;}
+  .sources-row .lab{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;font-weight:500;}
+  .schip{width:27px;height:27px;border-radius:7px;display:grid;place-items:center;
+    font-family:var(--mono);font-size:11.5px;border:1px solid var(--line-2);color:var(--faint);}
+  .schip.on{border-color:rgba(63,134,255,.5);color:var(--blue-bright);background:var(--blue-faint);}
+
+  /* ---------- secure ---------- */
+  #secure{left:758px;top:856px;width:248px;height:54px;display:flex;align-items:center;justify-content:center;gap:11px;
+    border-radius:30px;padding:0;}
+  #secure .lk{width:15px;height:15px;color:var(--blue-bright);}
+  #secure .t{font-family:var(--display);font-size:12.5px;font-weight:800;letter-spacing:.07em;color:var(--ink);text-transform:uppercase;white-space:nowrap;}
+
+  /* ---------- labels / title / legend ---------- */
+  .label{position:absolute;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--faint);font-weight:500;white-space:nowrap;}
+  .conn-label{position:absolute;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--faint);background:var(--bg);padding:2px 8px;border-radius:5px;}
+  .title{position:absolute;left:60px;top:52px;}
+  .title h1{font-family:var(--display);font-size:23px;font-weight:800;letter-spacing:-.01em;color:var(--ink);white-space:nowrap;}
+  .title h1 b{color:var(--blue-bright);}
+  .title p{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0;font-weight:400;white-space:nowrap;}
+  .legend{position:absolute;right:60px;top:56px;display:flex;flex-direction:column;gap:9px;align-items:flex-end;}
+  .lg{font-family:var(--mono);display:flex;align-items:center;gap:10px;font-size:10px;color:var(--muted);font-weight:400;letter-spacing:0;white-space:nowrap;}
+  .lg .sw{width:30px;height:0;border-top:2px solid;}
+  .lg .blue{border-color:var(--blue);}
+  .lg .gray{border-top:2px dashed rgba(150,162,178,.5);}
+  .lg .lk{width:13px;height:13px;color:var(--faint);}
+
+  /* ---------- node activation glow (fires as flow arrives) ---------- */
+  #sources .ng{animation:ng1 var(--T) ease-in-out infinite;}
+  #vectordb .ng{animation:ng2 var(--T) ease-in-out infinite;}
+  #query .ng{animation:ng3 var(--T) ease-in-out infinite;}
+  #hybrid .ng{animation:ng3 var(--T) ease-in-out infinite;}
+  #core .ng{animation:ng4 var(--T) ease-in-out infinite;}
+  #res1 .ng,#res2 .ng,#res3 .ng{animation:ng5 var(--T) ease-in-out infinite;}
+  #rerank .ng{animation:ng6 var(--T) ease-in-out infinite;}
+  #answer .ng{animation:ng7 var(--T) ease-in-out infinite;}
+  @keyframes ng1{0%{opacity:1}5%{opacity:1}9%{opacity:0}92%{opacity:0}96%{opacity:1}100%{opacity:1}}
+  @keyframes ng2{0%,11%{opacity:0}14%{opacity:1}17%{opacity:1}21%{opacity:0}100%{opacity:0}}
+  @keyframes ng3{0%,18%{opacity:0}21%{opacity:1}25%{opacity:1}29%{opacity:0}100%{opacity:0}}
+  @keyframes ng4{0%,28%{opacity:0}31%{opacity:1}34%{opacity:1}38%{opacity:0}100%{opacity:0}}
+  @keyframes ng5{0%,45%{opacity:0}47%{opacity:1}51%{opacity:1}55%{opacity:0}100%{opacity:0}}
+  @keyframes ng6{0%,61%{opacity:0}64%{opacity:1}67%{opacity:1}71%{opacity:0}100%{opacity:0}}
+  @keyframes ng7{0%,78%{opacity:0}81%{opacity:1}85%{opacity:1}89%{opacity:0}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="canvas" id="canvas" data-screen-label="RAG Pipeline">
+
+    <!-- ================= CONNECTORS ================= -->
+    <svg class="links" viewBox="0 0 1760 980">
+      <defs>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <marker id="ah-gray" markerWidth="9" markerHeight="9" refX="6" refY="4.2" orient="auto">
+          <path d="M1.5 1.5 L7 4.2 L1.5 6.9" fill="none" stroke="rgba(165,177,194,.72)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- faint structural lines (every connector, in flow order) -->
+      <path class="ln" d="M196,310 C196,170 380,125 638,125" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M781,196 L781,386" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M584,436 C612,436 606,468 620,468" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M782,688 L782,574" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M944,452 C982,452 984,378 1010,378" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M944,480 C980,480 984,504 1010,504" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M944,510 C982,510 985,630 1010,630" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M1250,378 C1282,378 1288,452 1298,458" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M1250,504 C1280,504 1284,512 1298,512" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M1250,630 C1282,630 1288,564 1298,558" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M1464,512 L1488,512" marker-end="url(#ah-gray)"/>
+      <path class="ln" d="M1615,720 L1615,890 Q1615,912 1595,912 L210,912 Q190,912 190,890 L190,640" marker-end="url(#ah-gray)"/>
+
+      <!-- blue marking that draws on, step by step -->
+      <!-- step 1: sources -> vector store -->
+      <path class="mark m1" pathLength="100" d="M196,310 C196,170 380,125 638,125"/>
+      <!-- step 2: store + query + hybrid -> retrieval -->
+      <path class="mark m2" pathLength="100" d="M781,196 L781,386"/>
+      <path class="mark m2" pathLength="100" d="M584,436 C612,436 606,468 620,468"/>
+      <path class="mark m2" pathLength="100" d="M782,688 L782,574"/>
+      <!-- step 3: retrieval -> top results -->
+      <path class="mark m3" pathLength="100" d="M944,452 C982,452 984,378 1010,378"/>
+      <path class="mark m3" pathLength="100" d="M944,480 C980,480 984,504 1010,504"/>
+      <path class="mark m3" pathLength="100" d="M944,510 C982,510 985,630 1010,630"/>
+      <!-- step 4: results -> rerank -->
+      <path class="mark m4" pathLength="100" d="M1250,378 C1282,378 1288,452 1298,458"/>
+      <path class="mark m4" pathLength="100" d="M1250,504 C1280,504 1284,512 1298,512"/>
+      <path class="mark m4" pathLength="100" d="M1250,630 C1282,630 1288,564 1298,558"/>
+      <!-- step 5: rerank -> answer -->
+      <path class="mark m5" pathLength="100" d="M1464,512 L1488,512"/>
+      <!-- step 6: secure loop back to sources -->
+      <path class="mark m6" pathLength="100" d="M1615,720 L1615,890 Q1615,912 1595,912 L210,912 Q190,912 190,890 L190,640"/>
+    </svg>
+
+    <div class="conn-label" style="left:372px;top:182px;">embed &amp; index</div>
+    <div class="conn-label" style="left:556px;top:930px;">end-to-end encrypted</div>
+
+    <!-- ================= TITLE / LEGEND ================= -->
+    <div class="title">
+      <h1>Retrieval-Augmented Generation</h1>
+      <p>From your private documents to grounded, cited answers</p>
+    </div>
+    <div class="legend">
+      <div class="lg"><span>active flow step</span><span class="sw blue"></span></div>
+      <div class="lg"><span>pipeline connection</span><span class="sw gray"></span></div>
+      <div class="lg"><span>stays on your infra</span><span class="lk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span></div>
+    </div>
+
+    <!-- ================= NODES ================= -->
+
+    <!-- SOURCES -->
+    <div class="node" id="sources">
+      <div class="ng"></div>
+      <div class="hd">
+        <span class="ic"><svg viewBox="0 0 24 24">
+          <path class="i-fill" d="M5 4h7l4 4v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>
+          <path class="i-line" d="M8.5 6.5h5.5l4 4V20a1 1 0 0 1-1 1H8.5a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1z"/>
+          <path class="i-line" d="M14 6.5v4h4M10 14h6M10 16.5h4"/>
+          <path class="i-line" d="M5 5.5v11"/>
+        </svg></span>
+        <span class="t">Private Sources</span>
+        <span class="kick">Ingest</span>
+      </div>
+      <div class="sub">Your documents, indexed on-premise</div>
+      <div class="rule"></div>
+      <div class="chips">
+        <div class="chip"><span class="nm">PDF</span><span class="vb" style="--w:84%"></span><span class="ct">612</span></div>
+        <div class="chip"><span class="nm">DOCX</span><span class="vb" style="--w:58%"></span><span class="ct">418</span></div>
+        <div class="chip"><span class="nm">MD</span><span class="vb" style="--w:44%"></span><span class="ct">307</span></div>
+        <div class="chip"><span class="nm">TXT</span><span class="vb" style="--w:30%"></span><span class="ct">144</span></div>
+      </div>
+      <div class="tags"><span class="tag">chunk 512t</span><span class="tag">overlap 64t</span></div>
+    </div>
+
+    <!-- QUERY -->
+    <div class="node" id="query">
+      <div class="ng"></div>
+      <div class="hd">
+        <span class="ic"><svg viewBox="0 0 24 24">
+          <path class="i-fill" d="M4 5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H10l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>
+          <path class="i-line" d="M4 5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H10l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>
+          <path class="i-line" d="M7.5 9.5h9M7.5 12h6"/>
+        </svg></span>
+        <span class="t">Query</span>
+        <span class="kick">Request</span>
+      </div>
+      <div class="qbox">“Best practices for cloud access control?”</div>
+    </div>
+
+    <!-- VECTOR DB -->
+    <div class="node" id="vectordb">
+      <div class="ng"></div>
+      <div class="hd">
+        <span class="ic"><svg viewBox="0 0 24 24">
+          <ellipse class="i-fill" cx="12" cy="6" rx="7" ry="2.6"/>
+          <path class="i-line" d="M5 6c0-1.4 3.1-2.6 7-2.6s7 1.2 7 2.6-3.1 2.6-7 2.6-7-1.2-7-2.6z"/>
+          <path class="i-line" d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/>
+          <path class="i-line" d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"/>
+        </svg></span>
+        <span class="t">Vector Store</span>
+        <span class="kick">Index</span>
+      </div>
+      <div class="sub">Embeddings searchable by meaning</div>
+      <div class="vec">
+        <i style="--h:46%"></i><i style="--h:72%"></i><i style="--h:32%"></i><i style="--h:88%"></i>
+        <i style="--h:54%"></i><i style="--h:66%"></i><i style="--h:38%"></i><i style="--h:80%"></i>
+        <i style="--h:48%"></i><i style="--h:92%"></i><i style="--h:30%"></i><i style="--h:62%"></i>
+        <i style="--h:74%"></i><i style="--h:42%"></i><i style="--h:58%"></i><i style="--h:36%"></i>
+      </div>
+      <div class="tags"><span class="tag">pgvector</span><span class="tag">1536-d</span><span class="tag">HNSW</span></div>
+    </div>
+
+    <!-- CORE -->
+    <div class="node" id="core">
+      <div class="ng"></div>
+      <div class="core-ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16 L21 21"/><path d="M8.4 11h5.2M11 8.4v5.2"/></svg></div>
+      <div>
+        <div class="core-title">Retrieval<span>Semantic Search</span></div>
+      </div>
+      <div class="core-tags"><span class="tag">top-k = 8</span><span class="tag">cosine</span></div>
+    </div>
+
+    <!-- HYBRID -->
+    <div class="node" id="hybrid">
+      <div class="ng"></div>
+      <div class="hd">
+        <span class="ic"><svg viewBox="0 0 24 24">
+          <path class="i-line" d="M4 7h16M4 17h16"/>
+          <circle class="i-fill" cx="9" cy="7" r="2.7"/><circle class="i-line" cx="9" cy="7" r="2.7"/>
+          <circle class="i-fill" cx="15" cy="17" r="2.7"/><circle class="i-line" cx="15" cy="17" r="2.7"/>
+        </svg></span>
+        <span class="t">Hybrid Search</span>
+        <span class="kick">Fusion</span>
+      </div>
+      <div class="sub">Lexical + semantic, fused with RRF</div>
+      <div class="blend">
+        <div class="brow"><span class="bl">Vector</span><span class="bbar" style="--w:65%"></span><span class="bv">0.65</span></div>
+        <div class="brow"><span class="bl">BM25</span><span class="bbar" style="--w:35%"></span><span class="bv">0.35</span></div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="label" style="left:1010px;top:294px;">Top results · most relevant chunks</div>
+    <div class="node result" id="res1">
+      <div class="ng"></div>
+      <span class="rank">1</span>
+      <span class="rmid"><span class="rsrc">iam-policy.pdf · p.12</span><span class="rlines"><i class="rl w1"></i><i class="rl w2"></i></span></span>
+      <span class="rscore">0.81</span>
+    </div>
+    <div class="node result" id="res2">
+      <div class="ng"></div>
+      <span class="rank">2</span>
+      <span class="rmid"><span class="rsrc">security-guide.md · §4</span><span class="rlines"><i class="rl w1"></i><i class="rl w2"></i></span></span>
+      <span class="rscore">0.76</span>
+    </div>
+    <div class="node result" id="res3">
+      <div class="ng"></div>
+      <span class="rank">3</span>
+      <span class="rmid"><span class="rsrc">runbook.docx · p.3</span><span class="rlines"><i class="rl w1"></i><i class="rl w2"></i></span></span>
+      <span class="rscore">0.69</span>
+    </div>
+
+    <!-- RERANK -->
+    <div class="node" id="rerank">
+      <div class="ng"></div>
+      <div class="hd">
+        <span class="ic"><svg viewBox="0 0 24 24">
+          <path class="i-fill" d="M4 5h16l-6 7v6l-4 2v-8z"/>
+          <path class="i-line" d="M4 5h16l-6 7v5.5l-4 2V12z"/>
+        </svg></span>
+        <span class="t">Rerank</span>
+      </div>
+      <div class="sub" style="font-size:9.5px;">Cross-encoder scoring</div>
+      <div class="scores">
+        <div class="score top"><span class="k">2</span><span class="bar"><i style="width:96%"></i></span><span class="v">0.92</span></div>
+        <div class="score"><span class="k">1</span><span class="bar"><i style="width:84%"></i></span><span class="v">0.87</span></div>
+        <div class="score"><span class="k">3</span><span class="bar"><i style="width:62%"></i></span><span class="v">0.74</span></div>
+      </div>
+    </div>
+
+    <!-- ANSWER -->
+    <div class="node" id="answer">
+      <div class="ng"></div>
+      <div class="hd"><span class="t">Grounded Answer</span><span class="kick">Generate</span></div>
+      <div class="ans-body">Apply least-privilege access and rotate credentials regularly<span class="cite">1</span><span class="cite">2</span></div>
+      <div class="ans-fill"><i class="afl a"></i><i class="afl b"></i><i class="afl c"></i></div>
+      <div class="sources-row">
+        <span class="lab">Sources</span>
+        <span class="schip on">1</span>
+        <span class="schip on">2</span>
+        <span class="schip">3</span>
+      </div>
+    </div>
+
+    <!-- SECURE -->
+    <div class="node" id="secure">
+      <span class="lk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+      <span class="t">Private &amp; Secure</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function fit(){
+    var s=Math.min(window.innerWidth/1760, window.innerHeight/980);
+    document.getElementById('canvas').style.transform='translate(-50%,-50%) scale('+s+')';
+  }
+  window.addEventListener('resize',fit); fit();
+</script>
+</body>
+</html>
