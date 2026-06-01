@@ -12,6 +12,7 @@ import { BANDWIDTH_PACKS, type BandwidthPackId } from "@/lib/services/platform-a
 import { resolveQuota } from "@/lib/services/platform-app-bandwidth/quota";
 import { toUsageSummary, monthBounds, dateOnly } from "@/lib/services/platform-app-bandwidth/utils";
 import { createServiceClient } from "@/lib/supabase/server";
+import { BANDWIDTH_PACKS_ENABLED } from "@/lib/features";
 
 /**
  * POST /api/services/platform-apps/bandwidth/purchase
@@ -22,8 +23,22 @@ import { createServiceClient } from "@/lib/supabase/server";
  * new effective quota brings the app back within limits.
  *
  * Body: { app_id: string; pack: "100gb" | "500gb" | "1tb" }
+ *
+ * Currently gated behind BANDWIDTH_PACKS_ENABLED in lib/features.ts.
+ * Full implementation is preserved — flip the flag to re-enable.
  */
 export async function POST(req: NextRequest) {
+  if (!BANDWIDTH_PACKS_ENABLED) {
+    return NextResponse.json(
+      {
+        error: "FEATURE_UNAVAILABLE",
+        message:
+          "Bandwidth packs are not available at this time. To increase your bandwidth limit, upgrade your compute plan.",
+      },
+      { status: 410 }
+    );
+  }
+
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
@@ -78,8 +93,7 @@ export async function POST(req: NextRequest) {
     const balanceAfter = await Billing.deduct(auth.user!.id, pack.price);
 
     // Increment purchased_bytes for this billing period.
-    // If the upsert fails after the deduct, refund immediately so the user is
-    // not charged without receiving the bytes — consistent with postProvisionBilling.
+    // If the upsert fails after the deduct, refund immediately.
     let updatedRow;
     try {
       updatedRow = await addPurchasedBytes(app_id, auth.user!.id, pack.bytes);
@@ -124,7 +138,7 @@ export async function POST(req: NextRequest) {
       console.warn("[platform-app-bandwidth] Failed to record pack purchase transaction:", error);
     });
 
-    // Resolve quota and build the updated summary so the caller can update the UI
+    // Resolve quota and build the updated summary for the caller to refresh the UI
     const quota = await resolveQuota(app.size);
     const summary = toUsageSummary(updatedRow, quota);
 
@@ -134,7 +148,6 @@ export async function POST(req: NextRequest) {
       const liftResult = await removeBandwidthRestriction(app.name).catch(() => ({ removed: false }));
       restrictionLifted = liftResult.removed;
 
-      // Update the DB row to clear restricted state
       if (restrictionLifted) {
         const supabase = await createServiceClient();
         await supabase

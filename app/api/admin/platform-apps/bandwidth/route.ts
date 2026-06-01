@@ -164,6 +164,7 @@ export async function POST(req: NextRequest) {
         userId: app.user_id,
         size: app.size,
       });
+      await PlatformAppBandwidthService.syncRestrictionState(app.name, usage.lifecycleStatus);
 
       return NextResponse.json({ ok: true, sync: { usage } });
     }

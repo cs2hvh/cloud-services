@@ -75,7 +75,26 @@ export class AppBuildSideEffectsService {
         // Sync NGINX proxy-body-size and lift any active bandwidth restriction.
         try {
           const quota = await PlatformAppBandwidthService.getQuotaForSize(targetSize);
-          const bodyResult = await syncMaxRequestBodySize(params.appName, quota.maxRequestBodyBytes);
+          const planMaxBytes = quota.maxRequestBodyBytes;
+          const planMaxMb = planMaxBytes !== null ? Math.floor(planMaxBytes / (1024 * 1024)) : null;
+
+          // Re-fetch app to get latest custom_request_body_mb (may be set by user).
+          const freshApp = await Platform_Apps.get(params.appId);
+          const customMb = freshApp.success ? (freshApp.data?.custom_request_body_mb ?? null) : null;
+
+          // Clamp custom value to new plan max (handles plan downgrades).
+          const effectiveMb =
+            customMb !== null && planMaxMb !== null
+              ? Math.min(customMb, planMaxMb)
+              : planMaxMb;
+          const effectiveBodyBytes = effectiveMb !== null ? effectiveMb * 1024 * 1024 : planMaxBytes;
+
+          // If we had to clamp the custom value, persist the updated limit.
+          if (customMb !== null && planMaxMb !== null && customMb > planMaxMb) {
+            await Platform_Apps.update(params.appId, { custom_request_body_mb: planMaxMb }).catch(() => {});
+          }
+
+          const bodyResult = await syncMaxRequestBodySize(params.appName, effectiveBodyBytes);
           if (!bodyResult.synced) {
             logger.warn("Failed to sync proxy-body-size after resize", {
               target_size: targetSize,
@@ -163,13 +182,21 @@ export class AppBuildSideEffectsService {
       });
     }
 
-    // Sync NGINX proxy-body-size to match the plan quota for this app's size.
+    // Sync NGINX proxy-body-size to match the plan quota (or user's custom limit).
     // Non-critical: runs fire-and-forget style so a K8s error never fails the deploy.
     try {
       const appResult = await Platform_Apps.get(params.appId);
       if (appResult.success && appResult.data?.size) {
         const quota = await PlatformAppBandwidthService.getQuotaForSize(appResult.data.size);
-        const bodyResult = await syncMaxRequestBodySize(params.appName, quota.maxRequestBodyBytes);
+        const planMaxBytes = quota.maxRequestBodyBytes;
+        const planMaxMb = planMaxBytes !== null ? Math.floor(planMaxBytes / (1024 * 1024)) : null;
+        const customMb = appResult.data.custom_request_body_mb ?? null;
+        const effectiveMb =
+          customMb !== null && planMaxMb !== null
+            ? Math.min(customMb, planMaxMb)
+            : planMaxMb;
+        const effectiveBodyBytes = effectiveMb !== null ? effectiveMb * 1024 * 1024 : planMaxBytes;
+        const bodyResult = await syncMaxRequestBodySize(params.appName, effectiveBodyBytes);
         if (!bodyResult.synced) {
           logger.warn("Failed to sync proxy-body-size after deploy", {
             app_size: appResult.data.size,
