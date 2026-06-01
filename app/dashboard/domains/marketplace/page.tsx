@@ -1,21 +1,27 @@
 'use client';
 
+// Domain marketplace — editorial canvas focused on the search experience.
+// Hero + search/results only. No nav chrome, no trust strip, no how-it-works.
+
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'motion/react';
-import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Globe, ShieldCheck, Zap } from 'lucide-react';
 
 import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
-import { PurchaseRequests } from '@/components/dashboard/apps/domain-marketplace/purchase-requests';
 import type { PurchaseRequest } from '@/components/dashboard/apps/domain-marketplace/types';
 import { consumePendingDomain } from '@/lib/domain-intent';
+
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
+};
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
+
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 export default function DomainMarketplacePage() {
   const searchParams = useSearchParams();
   const [initialQuery, setInitialQuery] = useState('');
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
 
   useEffect(() => {
     const pending = consumePendingDomain();
@@ -23,110 +29,88 @@ export default function DomainMarketplacePage() {
     setInitialQuery(domainParam || pending?.domain || '');
   }, [searchParams]);
 
-  const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
-
   const fetchRequests = useCallback(async (silent = false) => {
-    if (!silent) setRequestsLoading(true);
+    void silent;
     try {
       const res = await fetch('/api/domains/market/purchase-requests');
       if (res.ok) {
         const data = await res.json();
         setRequests(data?.data ?? []);
       }
-    } finally {
-      if (!silent) setRequestsLoading(false);
+    } catch {
+      // swallow — request state is best-effort here
     }
   }, []);
 
-  useEffect(() => { void fetchRequests(); }, [fetchRequests]);
+  useEffect(() => {
+    void fetchRequests();
+  }, [fetchRequests]);
 
-  // Poll every 5s while any request is still in-progress
   useEffect(() => {
     const hasActive = requests.some((r) => !TERMINAL_STATUSES.has(r.status));
     if (!hasActive) return;
-    const id = setInterval(() => { void fetchRequests(true); }, 5_000);
+    const id = setInterval(() => {
+      void fetchRequests(true);
+    }, 5_000);
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background layer */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[900px] w-[900px] blur-[60px]"
+          style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.10), transparent 60%)' }}
+        />
+        <div
+          className="absolute top-[200px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{ background: 'radial-gradient(circle, rgba(0,149,255,0.05), transparent 60%)' }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.022) 1px, transparent 0)',
+            backgroundSize: '28px 28px',
+          }}
+        />
+      </div>
 
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="mb-6 glass-panel overflow-hidden"
-      >
-        <div className="px-6 py-5">
-          <nav className="mb-4 flex items-center gap-1.5 text-sm text-white/38">
-            <Link href="/dashboard/domains" className="flex items-center gap-1.5 transition-colors hover:text-white/70">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Domains
-            </Link>
-          </nav>
-
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">
-                Domain Marketplace
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                Search domain names and request registration.
-              </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-                Use this page for search and registration. DNS, renewals, and routing stay on the Domains page.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {[
-                  { icon: Globe, text: '500+ extensions' },
-                  { icon: ShieldCheck, text: 'Managed registrar' },
-                  { icon: Zap, text: 'Instant availability' },
-                ].map(({ icon: Icon, text }) => (
-                  <span key={text} className="inline-flex items-center gap-1.5 border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/42">
-                    <Icon className="h-3 w-3 text-cyan-300/70" />
-                    {text}
+      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
+        <div className="mx-auto max-w-[1600px]">
+          {/* ── Hero ──────────────────────────────────────── */}
+          <header className="relative mb-10 lg:mb-12">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
+              <div>
+                <p
+                  className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/55`}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                  Domain marketplace
+                </p>
+                <h1 className="text-[40px] font-semibold leading-[1.04] tracking-[-0.03em] text-white sm:text-[52px] lg:text-[60px]">
+                  Find your perfect{' '}
+                  <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
+                    domain
                   </span>
-                ))}
+                </h1>
               </div>
+              <p className="max-w-[460px] text-[14.5px] leading-[1.6] text-white/55 lg:pb-3">
+                Search across 500+ extensions, compare pricing side-by-side, and
+                register through our managed ICANN-accredited backend — WHOIS
+                privacy included on every domain.
+              </p>
             </div>
+          </header>
 
-            <Link
-              href="/dashboard/domains"
-              className="inline-flex shrink-0 self-start items-center justify-center gap-2 border border-cyan-400/25 bg-cyan-500/90 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-400 lg:mt-1"
-            >
-              Go to Domains
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+          {/* ── Search + Results ────────────────────────────── */}
+          <section>
+            <DomainMarketplaceTab initialQuery={initialQuery} onPurchaseRequested={fetchRequests} />
+          </section>
         </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.06, duration: 0.28 }}
-      >
-        <DomainMarketplaceTab initialQuery={initialQuery} onPurchaseRequested={fetchRequests} />
-      </motion.div>
-
-      {(requestsLoading || requests.length > 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12, duration: 0.28 }}
-          className="mt-8"
-        >
-          <PurchaseRequests
-            requests={requests}
-            loading={requestsLoading}
-            showAttachActions={false}
-            attachOptions={[]}
-            onRefresh={fetchRequests}
-          />
-        </motion.div>
-      )}
+      </div>
     </div>
   );
 }

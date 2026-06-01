@@ -52,7 +52,7 @@ export const DomainOperationSchema = z
 export const VerificationInstructionSchema = z
   .object({
     record_type: z.literal("TXT").openapi({ example: "TXT" }),
-    record_name: z.string().openapi({ example: "galaxyhvh-verify.api.example.com" }),
+    record_name: z.string().openapi({ example: "ahuracloud-verify.api.example.com" }),
     record_value: z.string().openapi({ example: "verify_7f23cbb6500c31f7" }),
     ttl: z.number().openapi({ example: 300 }),
   })
@@ -71,11 +71,30 @@ export const DomainMarketplaceSearchRequestSchema = z
   })
   .openapi("DomainMarketplaceSearchRequest");
 
+export const RegistrantContactSchema = z
+  .object({
+    firstName: z.string().min(1).max(64).optional().openapi({ example: "Jane" }),
+    lastName: z.string().min(1).max(64).optional().openapi({ example: "Smith" }),
+    email: z.string().email().max(128).optional().openapi({ example: "jane@example.com" }),
+    phone: z.string().min(4).max(32).optional().openapi({ example: "+1.2025551234" }),
+    companyName: z.string().min(1).max(128).optional().openapi({ example: "Acme Corp" }),
+    address1: z.string().min(1).max(128).optional().openapi({ example: "123 Main St" }),
+    city: z.string().min(1).max(64).optional().openapi({ example: "San Francisco" }),
+    state: z.string().min(1).max(64).optional().openapi({ example: "CA" }),
+    zip: z.string().min(1).max(20).optional().openapi({ example: "94105" }),
+    country: z.string().length(2).optional().openapi({ example: "US" }),
+  })
+  .optional()
+  .openapi("RegistrantContact");
+
+export type RegistrantContact = NonNullable<z.infer<typeof RegistrantContactSchema>>;
+
 export const DomainMarketplacePurchaseRequestSchema = z
   .object({
     app_id: z.string().uuid().optional().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     domain: z.string().min(3).max(253).openapi({ example: "mybrand.com" }),
     idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "idem-domain-001" }),
+    registrant_contact: RegistrantContactSchema,
   })
   .openapi("DomainMarketplacePurchaseRequest");
 
@@ -240,7 +259,7 @@ export const AddDomainResponseSchema = z
       verification_instructions: VerificationInstructionSchema.nullable().openapi({
         example: {
           record_type: "TXT",
-          record_name: "galaxyhvh-verify.api.example.com",
+          record_name: "ahuracloud-verify.api.example.com",
           record_value: "verify_7f23cbb6500c31f7",
           ttl: 300,
         },
@@ -349,6 +368,7 @@ export const DomainTransferCreateSchema = z
       .openapi({ example: "Auth@c0de123" }),
     privacy_enabled: z.boolean().optional().openapi({ example: false }),
     idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "xfer-domain-001" }),
+    registrant_contact: RegistrantContactSchema,
   })
   .openapi("DomainTransferCreate");
 
@@ -371,6 +391,10 @@ export const DomainTransferListQuerySchema = z
         .min(1, "limit must be between 1 and 100")
         .max(100, "limit must be between 1 and 100")
         .optional()
+    ),
+    include_archived: z.preprocess(
+      (value) => value === "true" || value === true,
+      z.boolean().optional()
     ),
   })
   .openapi("DomainTransferListQuery");

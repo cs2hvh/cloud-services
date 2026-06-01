@@ -60,6 +60,8 @@ export interface PodMetrics {
   pod: string;
   cpu: number;      // CPU usage in cores (e.g., 0.5 = 500m)
   memory: number;   // Memory in bytes
+  networkReceiveBytes?: number;
+  networkTransmitBytes?: number;
 }
 
 export interface AppMetrics {
@@ -67,6 +69,17 @@ export interface AppMetrics {
   pods: PodMetrics[];
   totalCpu: number;
   totalMemory: number;
+  totalNetworkReceiveBytes: number;
+  totalNetworkTransmitBytes: number;
+  timestamp: string;
+}
+
+export interface AppNetworkUsage {
+  appName: string;
+  ingressBytes: number;
+  egressBytes: number;
+  totalBytes: number;
+  windowSeconds: number;
   timestamp: string;
 }
 
@@ -185,6 +198,171 @@ export class PrometheusService {
   }
 
   /**
+   * Get network receive/transmit byte increases for app pods over a window.
+   *
+   * receive = ingress into the pod. transmit = egress from the pod.
+   * This counts all pod network traffic, including traffic to third-party
+   * services, so it is suitable as the platform-app bandwidth meter.
+   */
+  static async getNetworkUsageByPod(
+    appName: string,
+    windowSeconds = 300
+  ): Promise<{ pod: string; receiveBytes: number; transmitBytes: number }[]> {
+    const deploymentName = `${sanitizePromqlLabelValue(appName)}-app`;
+    const seconds = Math.max(Math.trunc(windowSeconds), 60);
+
+    const receiveQuery =
+      `sum(increase(container_network_receive_bytes_total{pod=~"${deploymentName}.*"}[${seconds}s])) by (pod)`;
+    const transmitQuery =
+      `sum(increase(container_network_transmit_bytes_total{pod=~"${deploymentName}.*"}[${seconds}s])) by (pod)`;
+
+    const [receiveData, transmitData] = await Promise.all([
+      this.query(receiveQuery).catch(() => []),
+      this.query(transmitQuery).catch(() => []),
+    ]);
+
+    const podMap = new Map<string, { pod: string; receiveBytes: number; transmitBytes: number }>();
+
+    receiveData.forEach((item: PrometheusResult) => {
+      const pod = item.metric.pod;
+      if (!pod) return;
+      podMap.set(pod, {
+        pod,
+        receiveBytes: Math.max(parseFloat(item.value[1]) || 0, 0),
+        transmitBytes: 0,
+      });
+    });
+
+    transmitData.forEach((item: PrometheusResult) => {
+      const pod = item.metric.pod;
+      if (!pod) return;
+      const existing = podMap.get(pod);
+      if (existing) {
+        existing.transmitBytes = Math.max(parseFloat(item.value[1]) || 0, 0);
+      } else {
+        podMap.set(pod, {
+          pod,
+          receiveBytes: 0,
+          transmitBytes: Math.max(parseFloat(item.value[1]) || 0, 0),
+        });
+      }
+    });
+
+    return Array.from(podMap.values());
+  }
+
+  /**
+   * Get absolute cumulative network byte counter values for app pods.
+   *
+   * These are monotonically increasing counters that reset to 0 on pod restart.
+   * Use this for delta-based monthly accumulation: compute (current - last) per pod
+   * at each sync interval, handling resets by treating current as the delta when
+   * current < last. This is correct across Prometheus retention boundaries because
+   * we accumulate in the database rather than querying a long window.
+   */
+  static async getAppNetworkCounters(appName: string): Promise<{
+    pod: string;
+    receiveBytes: number;
+    transmitBytes: number;
+  }[]> {
+    const deploymentName = `${sanitizePromqlLabelValue(appName)}-app`;
+
+    const receiveQuery =
+      `sum(container_network_receive_bytes_total{pod=~"${deploymentName}.*"}) by (pod)`;
+    const transmitQuery =
+      `sum(container_network_transmit_bytes_total{pod=~"${deploymentName}.*"}) by (pod)`;
+
+    const [receiveData, transmitData] = await Promise.all([
+      this.query(receiveQuery).catch(() => []),
+      this.query(transmitQuery).catch(() => []),
+    ]);
+
+    const podMap = new Map<string, { pod: string; receiveBytes: number; transmitBytes: number }>();
+
+    receiveData.forEach((item: PrometheusResult) => {
+      const pod = item.metric.pod;
+      if (!pod) return;
+      podMap.set(pod, {
+        pod,
+        receiveBytes: Math.max(parseFloat(item.value[1]) || 0, 0),
+        transmitBytes: 0,
+      });
+    });
+
+    transmitData.forEach((item: PrometheusResult) => {
+      const pod = item.metric.pod;
+      if (!pod) return;
+      const existing = podMap.get(pod);
+      if (existing) {
+        existing.transmitBytes = Math.max(parseFloat(item.value[1]) || 0, 0);
+      } else {
+        podMap.set(pod, {
+          pod,
+          receiveBytes: 0,
+          transmitBytes: Math.max(parseFloat(item.value[1]) || 0, 0),
+        });
+      }
+    });
+
+    return Array.from(podMap.values());
+  }
+
+  /**
+   * Get HTTP-layer request/response bytes from NGINX ingress controller metrics.
+   *
+   * These are absolute cumulative counters scoped to the named ingress resource.
+   * They measure traffic at the HTTP edge (after TLS termination), which is more
+   * accurate for billing than pod-level network bytes that include internal cluster
+   * traffic. Returns { requestBytes, responseBytes } as counters since ingress creation.
+   */
+  static async getIngressHttpCounters(
+    ingressName: string,
+    namespace = 'default'
+  ): Promise<{ requestBytes: number; responseBytes: number }> {
+    const safeIngress = sanitizePromqlLabelValue(ingressName);
+    const safeNs = sanitizePromqlLabelValue(namespace);
+
+    // nginx_ingress_controller_request_size_sum / response_size_sum are emitted by
+    // the NGINX Ingress Controller when the prometheus metrics port is enabled.
+    const requestQuery =
+      `sum(nginx_ingress_controller_request_size_sum{ingress="${safeIngress}",namespace="${safeNs}"})`;
+    const responseQuery =
+      `sum(nginx_ingress_controller_response_size_sum{ingress="${safeIngress}",namespace="${safeNs}"})`;
+
+    const [requestResult, responseResult] = await Promise.all([
+      this.query(requestQuery).catch(() => []),
+      this.query(responseQuery).catch(() => []),
+    ]);
+
+    return {
+      requestBytes: requestResult.length > 0
+        ? Math.max(parseFloat(requestResult[0].value[1]) || 0, 0)
+        : 0,
+      responseBytes: responseResult.length > 0
+        ? Math.max(parseFloat(responseResult[0].value[1]) || 0, 0)
+        : 0,
+    };
+  }
+
+  /**
+   * Get aggregate app network usage over a window.
+   */
+  static async getAppNetworkUsage(appName: string, windowSeconds: number): Promise<AppNetworkUsage> {
+    const pods = await this.getNetworkUsageByPod(appName, windowSeconds);
+    const ingressBytes = Math.round(pods.reduce((sum, p) => sum + p.receiveBytes, 0));
+    const egressBytes = Math.round(pods.reduce((sum, p) => sum + p.transmitBytes, 0));
+
+    return {
+      appName,
+      ingressBytes,
+      egressBytes,
+      totalBytes: ingressBytes + egressBytes,
+      windowSeconds: Math.max(Math.trunc(windowSeconds), 60),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * Get restart count for an app's pods
    */
   static async getRestartCount(appName: string): Promise<number> {
@@ -231,9 +409,10 @@ export class PrometheusService {
    * Get full metrics for an app
    */
   static async getAppMetrics(appName: string): Promise<AppMetrics> {
-    const [cpuData, memoryData] = await Promise.all([
+    const [cpuData, memoryData, networkData] = await Promise.all([
       this.getCpuUsage(appName).catch(() => []),
       this.getMemoryUsage(appName).catch(() => []),
+      this.getNetworkUsageByPod(appName, 300).catch(() => []),
     ]);
 
     // Combine CPU and memory data by pod
@@ -252,6 +431,22 @@ export class PrometheusService {
       }
     });
 
+    networkData.forEach(({ pod, receiveBytes, transmitBytes }) => {
+      const existing = podMap.get(pod);
+      if (existing) {
+        existing.networkReceiveBytes = receiveBytes;
+        existing.networkTransmitBytes = transmitBytes;
+      } else {
+        podMap.set(pod, {
+          pod,
+          cpu: 0,
+          memory: 0,
+          networkReceiveBytes: receiveBytes,
+          networkTransmitBytes: transmitBytes,
+        });
+      }
+    });
+
     const pods = Array.from(podMap.values());
     
     return {
@@ -259,6 +454,8 @@ export class PrometheusService {
       pods,
       totalCpu: pods.reduce((sum, p) => sum + p.cpu, 0),
       totalMemory: pods.reduce((sum, p) => sum + p.memory, 0),
+      totalNetworkReceiveBytes: Math.round(pods.reduce((sum, p) => sum + (p.networkReceiveBytes ?? 0), 0)),
+      totalNetworkTransmitBytes: Math.round(pods.reduce((sum, p) => sum + (p.networkTransmitBytes ?? 0), 0)),
       timestamp: new Date().toISOString(),
     };
   }

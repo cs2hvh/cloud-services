@@ -17,6 +17,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DnsFormState, DnsRecordItem, DomainConnectionItem, DnsRecordType } from './domain-detail-types';
 import { looksInternal } from './domain-detail-types';
@@ -33,7 +40,7 @@ const RECORD_TYPE_INFO: Record<string, { desc: string; example: string }> = {
   TXT:  { desc: 'Used for verification, SPF, DKIM, and other metadata', example: 'v=spf1 include:_spf.google.com ~all' },
   MX:   { desc: 'Specifies which mail servers handle email for this domain', example: 'mail.example.com' },
   NS:   { desc: 'Delegates a subdomain to specific nameservers', example: 'ns1.example.com' },
-  SRV:  { desc: 'Defines the location of specific services (e.g. SIP, XMPP)', example: '0 5 5269 xmpp-server.example.com' },
+  SRV:  { desc: 'Defines the location of specific services. Value format: weight port target (priority set separately)', example: '0 5269 xmpp-server.example.com' },
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -182,8 +189,8 @@ export function DomainDnsTab({
                           <tr key={`verify-${c.id}`} className="border-t border-white/[0.04] text-white/70">
                             <td className="px-3 py-2"><RecordTypeBadge type="TXT" /></td>
                             <td className="px-3 py-2 font-mono break-all">
-                              galaxyhvh-verify.{c.domain}
-                              <CopyBtn value={`galaxyhvh-verify.${c.domain}`} label="Host" />
+                              ahuracloud-verify.{c.domain}
+                              <CopyBtn value={`ahuracloud-verify.${c.domain}`} label="Host" />
                             </td>
                             <td className="px-3 py-2 font-mono break-all max-w-[200px]">
                               <span className="truncate block">{c.verificationToken}</span>
@@ -355,15 +362,21 @@ export function DomainDnsTab({
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[120px_1fr_1fr_100px]">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-white/50">Type</Label>
-                    <select
+                    <Select
                       value={dnsForm.type}
-                      onChange={(e) => onFormChange({ type: e.target.value as DnsRecordType })}
-                      className="h-9 w-full rounded-md border border-white/[0.08] bg-black/40 px-2.5 text-sm text-white focus:border-white/[0.2] focus:outline-none"
+                      onValueChange={(v) => onFormChange({ type: v as DnsRecordType })}
                     >
-                      {DNS_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-9 w-full rounded-md border-white/[0.08] bg-black/40 text-sm text-white focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus:border-white/[0.2]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
+                        {DNS_TYPES.map((t) => (
+                          <SelectItem key={t} value={t} className="text-white focus:bg-white/[0.06]">
+                            <RecordTypeBadge type={t} />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-white/50">Host</Label>
@@ -422,7 +435,7 @@ export function DomainDnsTab({
                   )}
                   <Button
                     size="sm"
-                    className="bg-white text-black hover:bg-white/90 font-medium"
+                    className="bg-[#0095FF] text-[#001930] hover:bg-[#33adff] font-semibold"
                     disabled={dnsSaving}
                     onClick={onSaveRecord}
                   >

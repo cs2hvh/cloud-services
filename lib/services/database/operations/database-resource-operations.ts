@@ -25,6 +25,7 @@ import type {
   RetrieveDatabaseRequest,
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 
 async function listDatabasesFromProvider(
   clusterId: string,
@@ -37,7 +38,7 @@ async function listDatabasesFromProvider(
     );
 
     if (response.status !== 200) {
-      return { success: false, error: "Failed to fetch databases from DigitalOcean" };
+      return { success: false, error: "Failed to fetch databases from the database provider" };
     }
 
     const databases = response.data.dbs as DatabaseInstance[];
@@ -172,7 +173,7 @@ export const databaseResourceOperations = {
       );
 
       if (response.status !== 201) {
-        return { success: false, error: "Failed to create database in DigitalOcean" };
+        return { success: false, error: "Failed to create database in the database provider" };
       }
 
       const database = response.data.db;
@@ -186,7 +187,7 @@ export const databaseResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database created in DigitalOcean but failed to sync with database",
+          error: "Database created in the database provider but failed to sync with database",
         };
       }
 
@@ -236,6 +237,25 @@ export const databaseResourceOperations = {
         console.error("[createDatabase] Failed to create notification:", notifErr);
       }
 
+      try {
+        const recipient =
+          userEmail || (await resolveUserEmail(String(clusterResult.data.owner_id)));
+        await sendDatabaseAlertEmail({
+          userEmail: recipient,
+          serviceName: String(clusterResult.data.name),
+          alertTitle: "Database created",
+          summary: `A new database "${request.name}" was created in your cluster "${clusterResult.data.name}".`,
+          severity: "info",
+          metadata: {
+            Operation: "Create database",
+            Database: request.name,
+            Cluster: String(clusterResult.data.name),
+          },
+        });
+      } catch (emailErr) {
+        console.error("[createDatabase] Failed to send email:", emailErr);
+      }
+
       return { success: true, data: database };
     } catch (err: unknown) {
       if (err instanceof Error && "response" in err) {
@@ -256,7 +276,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async createDatabaseInternal(
     request: InternalCreateDatabaseRequest,
     req?: NextRequest,
@@ -291,7 +311,7 @@ export const databaseResourceOperations = {
       if (response.status !== 201) {
         return {
           success: false,
-          error: "Failed to create database in DigitalOcean",
+          error: "Failed to create database in the database provider",
           statusCode: 500,
         };
       }
@@ -360,6 +380,25 @@ export const databaseResourceOperations = {
         } catch (notifErr) {
           console.error("[createDatabase] Failed to create notification:", notifErr);
         }
+
+        try {
+          const recipient =
+            userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database created",
+            summary: `A new database "${request.name}" was created in your cluster "${clusterData.data.name}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Create database",
+              Database: request.name,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[createDatabase] Failed to send email:", emailErr);
+        }
       }
 
       return { success: true, data: database, statusCode: 201 };
@@ -400,14 +439,14 @@ export const databaseResourceOperations = {
       );
 
       if (response.status !== 204) {
-        return { success: false, error: "Failed to delete database from DigitalOcean" };
+        return { success: false, error: "Failed to delete database from the database provider" };
       }
 
       const supabaseResult = await Database_Clusters.remove_db(request.clusterId, request.dbName);
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database deleted from DigitalOcean but failed to sync with database",
+          error: "Database deleted from the database provider but failed to sync with database",
         };
       }
 
@@ -436,6 +475,24 @@ export const databaseResourceOperations = {
         } catch (notifErr) {
           console.error("[deleteDatabase] Failed to create notification:", notifErr);
         }
+
+        try {
+          const recipient = await resolveUserEmail(String(clusterData.data.owner_id));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database deleted",
+            summary: `The database "${request.dbName}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database",
+              Database: request.dbName,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabase] Failed to send email:", emailErr);
+        }
       }
 
       return { success: true };
@@ -458,7 +515,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async deleteDatabaseInternal(
     request: InternalDeleteDatabaseRequest
   ): Promise<{ success: boolean; error?: string; details?: string; statusCode?: number }> {
@@ -485,7 +542,7 @@ export const databaseResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "Database deleted from DigitalOcean but failed to sync with database",
+          error: "Database deleted from the database provider but failed to sync with database",
           details: supabaseResult.error,
           statusCode: 500,
         };
@@ -515,6 +572,24 @@ export const databaseResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[deleteDatabase] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient = await resolveUserEmail(String(clusterData.data.owner_id));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database deleted",
+            summary: `The database "${request.dbName}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database",
+              Database: request.dbName,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabase] Failed to send email:", emailErr);
         }
       }
 
@@ -561,7 +636,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async listDatabasesInternal(
     request: InternalListDatabasesRequest
   ): Promise<ListDatabasesResult> {
@@ -608,7 +683,7 @@ export const databaseResourceOperations = {
   },
 
   // Compatibility method for legacy internal routes that historically called
-  // DigitalOcean directly without cluster engine/precheck gates.
+  // the database provider directly without cluster engine/precheck gates.
   async retrieveDatabaseInternal(
     request: InternalRetrieveDatabaseRequest
   ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {

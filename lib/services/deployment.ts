@@ -9,6 +9,7 @@ import { InfrastructureCleanupService } from "./infrastructure-cleanup";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { randomBytes } from "crypto";
 import { AppReleaseBuildService, JenkinsBuildAdapter } from "@/lib/app-operations";
+import { PlatformAppLogRetentionService } from "@/lib/services/platform-app-log-retention";
 
 // Generate a random ID
 function generateId(length: number = 10): string {
@@ -33,6 +34,7 @@ export interface DeploymentConfig {
   deploy_branch?: string;
   project_id?: string;
   container_port?: number; // User-specified or auto-detected port
+  healthcheck_path?: string;
   idempotencyKey?: string | null;
 }
 
@@ -85,6 +87,8 @@ export class DeploymentService {
       case 'flask':
       case 'fastapi':
         return 8000;
+      case 'dockerfile':
+      case 'custom':
       case 'nodejs':
       case 'node':
       case 'express':
@@ -130,6 +134,7 @@ export class DeploymentService {
         deploy_branch: config.deploy_branch || config.branch,
         size: config.size || 'small', // Store size for redeployments
         project_id: config.project_id || null,
+        healthcheck_path: config.healthcheck_path || null,
       };
 
       const result = await Platform_Apps.create(appPayload);
@@ -197,6 +202,7 @@ export class DeploymentService {
               envVars: envVarsToPass,
               containerPort,
               gitAuthUrl: config.authenticated_url || undefined,
+              healthcheckPath: config.healthcheck_path || undefined,
             });
             console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
             return {
@@ -324,6 +330,20 @@ export class DeploymentService {
 
       // Clean up custom domains BEFORE database deletion (to avoid cascade)
       await this.cleanupCustomDomains(appId, app.name);
+
+      try {
+        const logCleanup = await PlatformAppLogRetentionService.deleteBuildLogsForApp(appId);
+        if (logCleanup.deletedObjects > 0) {
+          console.log(
+            `[DeploymentService] Deleted ${logCleanup.deletedObjects} archived build log object(s)`
+          );
+        }
+      } catch (logCleanupError) {
+        console.warn(
+          `[DeploymentService] Build log storage cleanup failed for ${appId}:`,
+          logCleanupError
+        );
+      }
 
       // Delete from database (will cascade to platform_app_domains)
       const deleteResult = isAdmin

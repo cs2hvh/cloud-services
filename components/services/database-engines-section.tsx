@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowUpRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
@@ -34,9 +34,9 @@ const ENGINES: EngineDefinition[] = [
     logoStyle: "icon",
     accent: "#8ecaff",
     fit: "Application core",
-    summary: "For transactional systems, structured app data, and products that need one durable system of record.",
-    bestFit: "SaaS products, APIs, account systems, finance data, and feature-rich application schemas.",
-    signal: "Best when the product model is relational and the application stack needs mature SQL features.",
+    summary: "Transactional systems and structured app data with mature SQL features.",
+    bestFit: "SaaS, APIs, account systems, and complex application schemas.",
+    signal: "Best for relational data patterns and feature-rich queries.",
     quickFacts: [
       { label: "Topology", value: "Primary + replicas" },
       { label: "Recovery", value: "Point in time" },
@@ -54,9 +54,9 @@ const ENGINES: EngineDefinition[] = [
     logoStyle: "wordmark",
     accent: "#93c5fd",
     fit: "Web scale",
-    summary: "For content-heavy applications, transactional websites, and high-volume products that need familiar SQL operations.",
-    bestFit: "Commerce platforms, CMS stacks, user portals, and read-heavy production websites.",
-    signal: "Best when teams want predictable relational behavior with a broadly adopted web stack footprint.",
+    summary: "High-volume SQL operations with familiar relational behavior.",
+    bestFit: "Commerce, CMS, user portals, and read-heavy websites.",
+    signal: "Best for predictable relational workloads with proven web stack adoption.",
     quickFacts: [
       { label: "Topology", value: "HA deployment" },
       { label: "Recovery", value: "Daily + PITR" },
@@ -74,9 +74,9 @@ const ENGINES: EngineDefinition[] = [
     logoStyle: "wordmark",
     accent: "#86efac",
     fit: "Flexible product data",
-    summary: "For evolving schemas, content models, event streams, and teams shipping product changes without constant migrations.",
-    bestFit: "Catalogs, profile data, content platforms, event payloads, and rapidly changing application models.",
-    signal: "Best when the product model changes often and the team values schema flexibility over rigid relational structure.",
+    summary: "Evolving schemas and flexible content models without constant migrations.",
+    bestFit: "Catalogs, profiles, content platforms, and rapidly changing models.",
+    signal: "Best for schema flexibility and frequent product iterations.",
     quickFacts: [
       { label: "Topology", value: "Replica set" },
       { label: "Recovery", value: "Snapshot restore" },
@@ -94,9 +94,9 @@ const ENGINES: EngineDefinition[] = [
     logoStyle: "wordmark",
     accent: "#fca5a5",
     fit: "Low-latency data",
-    summary: "For caching, queues, sessions, and application paths where latency matters more than storage density.",
-    bestFit: "Session state, cache layers, job queues, pub/sub flows, and real-time application responses.",
-    signal: "Best when speed is the first priority and the data path needs to sit close to the application runtime.",
+    summary: "Sub-microsecond latency for caching, queues, and sessions.",
+    bestFit: "Session state, cache layers, job queues, and real-time responses.",
+    signal: "Best when speed is the first priority.",
     quickFacts: [
       { label: "Topology", value: "Primary + replica" },
       { label: "Recovery", value: "Snapshot + AOF" },
@@ -121,11 +121,7 @@ export default function DatabaseEnginesSection() {
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#8ecaff]" />
-                Engine Selection
-              </span>
-              <h2 className="mt-5 text-3xl font-[400] leading-[1.02] tracking-tight text-white sm:text-4xl lg:text-[4rem]">
+              <h2 className="text-3xl font-[400] leading-[1.02] tracking-tight text-white sm:text-4xl lg:text-[4rem]">
                 Pick a database by
                 <span className="block text-[#8ecaff]">workload, not branding</span>
               </h2>
@@ -231,26 +227,18 @@ export default function DatabaseEnginesSection() {
                     <p className="mt-4 max-w-xl text-[16px] leading-8 text-white/72">{active.summary}</p>
                   </div>
 
-                  <div className="relative overflow-hidden">
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.12),transparent_48%)]" />
-                    <motion.div
-                      className="pointer-events-none absolute inset-x-[-20%] top-4 h-12 bg-gradient-to-r from-transparent via-white/12 to-transparent blur-xl"
-                      animate={{ x: ["-20%", "120%"] }}
-                      transition={{ duration: 3.6, repeat: Number.POSITIVE_INFINITY, repeatDelay: 1.1, ease: "easeInOut" }}
+                  <div className="flex items-center justify-center py-6">
+                    <Image
+                      src={active.image}
+                      alt={active.name}
+                      width={active.logoStyle === "wordmark" ? 320 : 180}
+                      height={active.logoStyle === "wordmark" ? 120 : 180}
+                      className={`object-contain ${
+                        active.logoStyle === "wordmark"
+                          ? "h-auto w-full max-w-[220px] sm:max-w-[240px]"
+                          : "h-28 w-28 sm:h-32 sm:w-32"
+                      }`}
                     />
-                    <div className="relative flex min-h-[210px] items-center justify-center px-2 py-6">
-                      <Image
-                        src={active.image}
-                        alt={active.name}
-                        width={active.logoStyle === "wordmark" ? 320 : 180}
-                        height={active.logoStyle === "wordmark" ? 120 : 180}
-                        className={`object-contain ${
-                          active.logoStyle === "wordmark"
-                            ? "h-auto w-full max-w-[220px] sm:max-w-[240px]"
-                            : "h-28 w-28 sm:h-32 sm:w-32"
-                        }`}
-                      />
-                    </div>
                   </div>
                 </div>
 

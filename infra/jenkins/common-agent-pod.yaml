@@ -1,0 +1,68 @@
+# Jenkins Kubernetes Cloud Pod template for "common-agent"
+# Source: production Jenkins snapshot (updated 2026-05-09 — Kaniko → BuildKit migration)
+# Exact current state from Jenkins UI
+
+spec:
+  dnsPolicy: ClusterFirst
+  dnsConfig:
+    nameservers:
+      - 8.8.8.8
+      - 8.8.4.4
+
+  containers:
+    - name: git
+      image: alpine/git:latest
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+    - name: buildkit
+      image: moby/buildkit:latest
+      tty: true
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+      volumeMounts:
+        - mountPath: /var/lib/buildkit
+          name: build-cache
+
+    - name: kubectl
+      image: alpine/k8s:1.28.0
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "256Mi"
+          cpu: "500m"
+
+    - name: trivy
+      image: aquasec/trivy:0.48.0
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+  volumes:
+    - name: build-cache
+      emptyDir:
+        sizeLimit: 20Gi

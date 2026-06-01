@@ -61,6 +61,8 @@ export const createDatabaseSchema = z.object({
   project_id: z.string().uuid("project_id must be a valid UUID"),
   owner_id: z.string().uuid("owner_id must be a valid UUID"),
   plan_id: z.string().uuid("plan_id must be a valid UUID"),
+  // Opt-in to the pgvector extension (only applied for the "pg" engine).
+  enable_pgvector: z.boolean().optional(),
 });
 
 export type CreateDatabasePayload = z.infer<typeof createDatabaseSchema>;

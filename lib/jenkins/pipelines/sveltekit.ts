@@ -1,6 +1,6 @@
 /**
  * SvelteKit Pipeline - SvelteKit with Node adapter
- * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Auto-creates Dockerfile, builds with BuildKit, deploys to Kubernetes
  * SvelteKit with adapter-node produces a Node.js server (not static files)
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
@@ -9,7 +9,7 @@
  * 2. Create Environment Secret stage
  * 3. Deploy to Kubernetes stage
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateSveltekitDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -25,6 +25,7 @@ export function createSvelteKitPipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -37,63 +38,37 @@ export function createSvelteKitPipeline(
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
 
-  const sizeKey = (size || 'small').toLowerCase();
-  let cpuRequest = '250m';
-  let cpuLimit = '500m';
-  let memoryRequest = '256Mi';
-  let memoryLimit = '512Mi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
 
   // Use provided container port or default to 3000 (SvelteKit with adapter-node)
   const port = containerPort ?? 3000;
 
-  // Split env vars: PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  // Public vars (PUBLIC_*) are baked into the client bundle via build args.
   const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
-  const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
 
-  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
+  // Runtime secret must include ALL vars: SvelteKit reads public vars from process.env on the
+  // server at runtime (SSR, $env/dynamic, server hooks), so they must be present in the runtime
+  // environment in addition to being baked into the client bundle via build args.
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // SECURITY FIX: Only pass PUBLIC_* vars as build args (client-side only)
-  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
-  // This prevents secrets from being baked into Docker images
-  // Why: SvelteKit only needs public vars during build for static generation
-  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars
-        .map(e => {
-          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-          return `--build-arg ${e.key}="${escapedValue}"`;
-        }).join(' \\\\\n                    ')
-    : '';
-  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
-  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
-  const buildArgsLine = buildArgs
-    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
-    : ` \\\\\n                    ${pmBuildArg}`;
+  // Only PUBLIC_* vars are baked into the image at build time.
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
+  const buildOpts: string[] = [
+    ...clientEnvVars.map(e => {
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
+    }),
+    '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
+  ];
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
     SvelteKit deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
@@ -248,56 +223,7 @@ ${generateSveltekitDockerfileStage(envVars)}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          script {
-            echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
-            withCredentials([usernamePassword(
-              credentialsId: 'dockerhublogin',
-              usernameVariable: 'DOCKER_USER',
-              passwordVariable: 'DOCKER_PASS'
-            )]) {
-              sh(
-                script: '''
-                  mkdir -p /kaniko/.docker
-                  AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
-
-                  cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "\$AUTH"
-    }
-  }
-}
-EOF
-
-                  # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-                  echo 'Executing Kaniko build'
-                  /kaniko/executor \\
-                    --context=\${WORKSPACE} \\
-                    --dockerfile=Dockerfile \\
-                    --destination=\${DOCKER_IMAGE_VERSION} \\
-                    --destination=\${DOCKER_IMAGE_LATEST}${buildArgsLine} \\
-                    --cache=true \\
-                    --cache-repo=hav0ky/${appName}-cache \\
-                    --use-new-run \\
-                    --digest-file=image-digest.txt
-                  
-                  echo 'Image build completed successfully'
-                ''',
-                returnStatus: false,
-                returnStdout: false
-              )
-            }
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, buildOpts, getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 
@@ -377,20 +303,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
               echo 'Generating Kubernetes service manifest'

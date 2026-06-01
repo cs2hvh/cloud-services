@@ -1,41 +1,54 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
-// import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
-import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
-import ObjectStorageReleaseSection from "@/components/services/object-storage-release-section";
+import ServicesHomeSectionSix, {
+  type UseCase,
+} from "@/components/serviceshome/section-6";
 import ObjectStorageFeaturesSection from "@/components/services/object-storage-features-section";
 import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
 import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
-import { getStorageCategories} from "@/lib/helpers/storage-categories";
+import { getStorageCategories } from "@/lib/helpers/storage-categories";
+import {
+  IconArchiveFilled,
+  IconReportAnalyticsFilled,
+  IconStackFilled,
+  IconVideoFilled,
+} from "@tabler/icons-react";
 
 const GpuHome = async () => {
-  // Fetch dynamic storage categories from database
   const categories = await getStorageCategories();
-  console.log("Fetched storage categories:", categories);
-  
-  // Fetch dynamic overview plans for ServicesHomeSectionFour
-  // const plans = await getStorageOverviewPlans();
 
-  const cases = [
+  const cases: UseCase[] = [
     {
-      title: "Media & Content Delivery",
+      iconNode: <IconVideoFilled size={20} />,
+      accent: "#8B5CF6",
+      metric: "Media",
+      title: "Media & content delivery",
       description:
-        "Store and serve images, videos, and static assets with low-latency access and built-in CDN integration.",
+        "Origin storage for images, video, audio, and static assets — with CDN cache egress free and signed URLs for paid content.",
     },
     {
-      title: "Backup & Disaster Recovery",
+      iconNode: <IconArchiveFilled size={20} />,
+      accent: "#F59E0B",
+      metric: "Backup & DR",
+      title: "Backups and disaster recovery",
       description:
-        "Automated backups with versioning, lifecycle policies, and cross-region replication for business continuity.",
+        "Versioned snapshots, lifecycle transitions to Archive, cross-region replication, and object lock for compliance.",
     },
     {
-      title: "Data Lakes & Analytics",
+      iconNode: <IconReportAnalyticsFilled size={20} />,
+      accent: "#0095FF",
+      metric: "Analytics",
+      title: "Data lakes and analytics",
       description:
-        "Scalable storage for big data workloads, log aggregation, and analytics pipelines with S3-compatible tools.",
+        "S3-compatible object store for log aggregation, training datasets, and analytics pipelines. Works with every S3 tool.",
     },
     {
-      title: "Application Storage",
+      iconNode: <IconStackFilled size={20} />,
+      accent: "#10B981",
+      metric: "App data",
+      title: "Application storage",
       description:
-        "Store user uploads, application state, and documents with fine-grained access controls and encryption.",
+        "User uploads, generated artifacts, and document storage with per-object ACLs, presigned URLs, and AES-256 encryption.",
     },
   ];
   const faqs = [
@@ -76,13 +89,17 @@ const GpuHome = async () => {
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/object-space.png", alt: "Object Storage infrastructure" }}
       />
-      <ObjectStorageReleaseSection />
       <ObjectStoragePricingSection categories={categories || undefined} />
       <ObjectStorageFeaturesSection />
-      {/* <ServicesHomeSectionFour plans={plans} /> */}
-      <ServicesHomeSectionFive title="Frequently Asked Questions" faqs={faqs} />
+      <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
+      <ServicesHomeSectionSix
+        cases={cases}
+        eyebrow="Use cases"
+        heading="Built for the data you"
+        headingAccent="actually store."
+        subtitle="One S3-compatible store, four workloads — 99.999% durability, lifecycle automation, free CDN cache egress."
+      />
       <ObjectStorageCtaSection />
-      <ServicesHomeSectionSix cases={cases} />
     </main>
   );
 };

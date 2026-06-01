@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { logError } from "@/lib/api/error-sanitizer";
+import { DomainServiceError, mapDomainErrorToHttp } from "@/lib/domain-service/core/errors";
 import {
   NameComRegistrarAdapter,
   type NameComRecordType,
@@ -14,6 +15,7 @@ import {
   userOwnsDomain,
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
+import { DEFAULT_MANAGED_NAMESERVERS, NAMECOM_MANAGED_NAMESERVER_RE } from "@/lib/domain-service/managed-nameservers";
 
 type NameComDnsRecordView = {
   id: number | null;
@@ -35,6 +37,8 @@ const SUPPORTED_DNS_TYPES: NameComRecordType[] = [
   "SRV",
   "TXT",
 ];
+
+const MIN_NAMESERVERS = 2;
 
 function normalizeHost(host: string | null | undefined): string {
   if (!host || host === "") return "@";
@@ -82,6 +86,23 @@ function isSupportedDnsType(value: string): value is NameComRecordType {
   return SUPPORTED_DNS_TYPES.includes(value as NameComRecordType);
 }
 
+function sameNameservers(a: string[], b: string[]): boolean {
+  const left = a.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  const right = b.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean).sort();
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+async function hasManagedNameservers(adapter: NameComRegistrarAdapter, zone: string): Promise<boolean> {
+  const domain = await adapter.getDomain(zone);
+  const nameservers = Array.isArray(domain.nameservers) ? domain.nameservers : [];
+  const normalized = nameservers.map((value) => value.trim().toLowerCase().replace(/\.$/, "")).filter(Boolean);
+  return (
+    sameNameservers(normalized, DEFAULT_MANAGED_NAMESERVERS) ||
+    (normalized.length >= MIN_NAMESERVERS && normalized.every((value) => NAMECOM_MANAGED_NAMESERVER_RE.test(value)))
+  );
+}
+
 async function ensureOwnedDomain(input: { userId: string; domain: string }): Promise<{
   ok: true;
 } | {
@@ -122,6 +143,25 @@ async function ensureOwnedDomain(input: { userId: string; domain: string }): Pro
       ),
     };
   }
+}
+
+function toDnsErrorResponse(error: unknown, fallbackMessage: string): NextResponse {
+  if (error instanceof DomainServiceError) {
+    if (error.message.toLowerCase().includes("contact verification hold")) {
+      return NextResponse.json(
+        {
+          error: "CONTACT_VERIFICATION_HOLD",
+          message:
+            "DNS changes are temporarily on hold while the domain's registrant contact is verified. " +
+            "This usually clears automatically within a few minutes — please retry shortly, or contact support if it persists.",
+        },
+        { status: 400 }
+      );
+    }
+    const http = mapDomainErrorToHttp(error);
+    return NextResponse.json({ error: http.code, message: http.message }, { status: http.status });
+  }
+  return NextResponse.json({ error: "INTERNAL_ERROR", message: fallbackMessage }, { status: 500 });
 }
 
 export async function GET(req: NextRequest) {
@@ -175,6 +215,19 @@ export async function GET(req: NextRequest) {
           host: null,
           records: [] as NameComDnsRecordView[],
           message: "No platform-managed DNS zone found for this domain.",
+        },
+      });
+    }
+
+    const nameserversManaged = await hasManagedNameservers(adapter, managed.zone);
+    if (!nameserversManaged) {
+      return NextResponse.json({
+        data: {
+          managed: false,
+          zone: managed.zone,
+          host: managed.host,
+          records: [] as NameComDnsRecordView[],
+          message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider.",
         },
       });
     }
@@ -278,6 +331,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     const record = await adapter.createRecord(managed.zone, {
       host: toProviderHost(host),
@@ -296,13 +355,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/POST", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to create DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to create DNS record");
   }
 }
 
@@ -371,6 +424,12 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     const record = await adapter.updateRecord(managed.zone, recordId, {
       host: toProviderHost(host),
@@ -389,13 +448,7 @@ export async function PATCH(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/PATCH", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to update DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to update DNS record");
   }
 }
 
@@ -441,6 +494,12 @@ export async function DELETE(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!(await hasManagedNameservers(adapter, managed.zone))) {
+      return NextResponse.json(
+        { error: "DOMAIN_NOT_MANAGED", message: "This domain is using custom nameservers. Manage DNS records at the selected DNS provider." },
+        { status: 400 }
+      );
+    }
 
     await adapter.deleteRecord(managed.zone, recordId);
 
@@ -454,12 +513,6 @@ export async function DELETE(req: NextRequest) {
     });
   } catch (error: unknown) {
     logError("domains/dns/DELETE", error);
-    return NextResponse.json(
-      {
-        error: "INTERNAL_ERROR",
-        message: "Failed to delete DNS record",
-      },
-      { status: 500 }
-    );
+    return toDnsErrorResponse(error, "Failed to delete DNS record");
   }
 }

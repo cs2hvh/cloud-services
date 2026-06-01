@@ -5,8 +5,46 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const TABS = [
+  {
+    id: "gpu",
+    label: "GPU Pods",
+    title: "GPU Pods",
+    heading: "Premier GPU compute, ready in seconds",
+    description:
+      "H100, H200, and B200 accelerators on demand. Reserve a single GPU or a multi-node cluster across 12 regions — provisioned in under 90 seconds, billed by the second, with persistent volumes that follow your workload between sessions.",
+    bullets: [
+      "NVIDIA H100 SXM · H200 SXM · B200 — from $2.59/hr",
+      "Sub-90-second provisioning · per-second billing",
+      "Persistent network volumes · region-pinned snapshots",
+      "CUDA 12.4, PyTorch 2.x, JAX, vLLM pre-installed",
+      "Single GPU to 8× SXM clusters with NVLink fabric",
+      "Reserved pricing up to 60% off for committed capacity",
+      "Direct SSH access · idle pods stop billing instantly",
+    ],
+    imageSrc: "/images/main-page/gpu aniamtion resized.png",
+    imageAlt: "GPU server stack",
+  },
+  {
+    id: "inference",
+    label: "A.I. Labs",
+    title: "A.I. Labs",
+    heading: "Frontier models, your data, one API",
+    description:
+      "OpenAI-compatible inference for 50+ frontier and open-source models. Fine-tune Llama, DeepSeek, or Qwen with LoRA, store vectors in managed pgvector, and deploy your own model — all behind one API key.",
+    bullets: [
+      "50+ models · OpenAI- and Anthropic-compatible · BYOK keys",
+      "LoRA fine-tuning on Llama, DeepSeek, Qwen, Mistral, Phi",
+      "Hosted embeddings + managed pgvector collections",
+      "Private model hosting on dedicated single-tenant GPUs",
+      "Per-token billing · zero markup · spend caps + alerts",
+      "Streaming · tool calling · structured outputs · batches",
+    ],
+    imageSrc: "/ailabs/ai-labs.png",
+    imageAlt: "A.I. Labs platform illustration",
+  },
   {
     id: "compute",
     label: "Compute",
@@ -40,22 +78,6 @@ const TABS = [
     imageAlt: "Database illustration",
   },
   {
-    id: "gpu",
-    label: "GPU Instance",
-    title: "GPU Instance",
-    heading: "Raw GPU power on demand",
-    description:
-      "Accelerate AI training, inference, 3D rendering, and video processing with dedicated NVIDIA GPUs. Bare-metal performance with cloud flexibility — scale from a single GPU to multi-node clusters.",
-    bullets: [
-      "NVIDIA H100 & A100 Tensor Core GPUs",
-      "Scalable clusters for deep learning and LLMs",
-      "Real-time 3D rendering and video transcoding",
-      "Pre-configured with CUDA, PyTorch, and Jupyter",
-    ],
-    imageSrc: "/images/main-page/gpu aniamtion resized.png",
-    imageAlt: "GPU server stack",
-  },
-  {
     id: "security",
     label: "Security",
     title: "Security",
@@ -71,22 +93,22 @@ const TABS = [
     imageSrc: "/images/Features/protection.png",
     imageAlt: "Security shield illustration",
   },
-  {
-    id: "ai-agent",
-    label: "AI Agent",
-    title: "AI Agents",
-    heading: "Ship AI-native products faster",
-    description:
-      "Build autonomous agents that monitor, optimize, and act on your infrastructure. First-class tooling for vector search, model gateways, and agent observability.",
-    bullets: [
-      "Managed vector databases and embedding pipelines",
-      "Secure model gateways with rate limiting",
-      "Real-time event streams and agent observability",
-      "Production-ready orchestration and workflows",
-    ],
-    imageSrc: "/images/Features/ai-agent.png",
-    imageAlt: "AI agent illustration",
-  },
+  // {
+  //   id: "ai-agent",
+  //   label: "AI Agent",
+  //   title: "AI Agents",
+  //   heading: "Ship AI-native products faster",
+  //   description:
+  //     "Build autonomous agents that monitor, optimize, and act on your infrastructure. First-class tooling for vector search, model gateways, and agent observability.",
+  //   bullets: [
+  //     "Managed vector databases and embedding pipelines",
+  //     "Secure model gateways with rate limiting",
+  //     "Real-time event streams and agent observability",
+  //     "Production-ready orchestration and workflows",
+  //   ],
+  //   imageSrc: "/images/Features/ai-agent.png",
+  //   imageAlt: "AI agent illustration",
+  // },
   {
     id: "kubernetes",
     label: "Kubernetes",
@@ -248,18 +270,30 @@ export function EverythingSection() {
                     </div>
 
                     <ul className="space-y-2 sm:space-y-2.5">
-                      {activeTab.bullets.map((item) => (
-                        <li key={item}>
-                          <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
-                              <CheckCircle2 className="h-3 w-3" />
-                            </span>
-                            <span className="text-xs sm:text-sm text-white/80">
-                              {item}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
+                      {activeTab.bullets.map((item) => {
+                        const showNvidia =
+                          activeTab.id === "gpu" && item.startsWith("NVIDIA");
+                        return (
+                          <li key={item}>
+                            <div className="flex items-center gap-3 rounded-[2px] bg-white/[0.04] border border-white/[0.06] px-3 py-2 sm:px-4 sm:py-2.5">
+                              {showNvidia ? (
+                                <NvidiaLogo
+                                  width={16}
+                                  height={11}
+                                  className="shrink-0 opacity-95"
+                                />
+                              ) : (
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[#0095FF]/70">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                </span>
+                              )}
+                              <span className="text-xs sm:text-sm text-white/80">
+                                {item}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                      <button
                       onClick={() => router.push(`/services/${activeTab.id}`)}

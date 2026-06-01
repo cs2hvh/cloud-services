@@ -20,14 +20,14 @@ import {
   AlertTriangle,
   TrendingUp,
   HardDrive,
-  Server,
+  // Server,
   Network,
-  Container,
+  // Container,
   Shield,
   Layers,
   RefreshCw,
-  Copy,
-  Check,
+  // Copy,
+  // Check,
   X,
   Eye,
 } from 'lucide-react';
@@ -61,7 +61,7 @@ export function AppCard({
   build,
   logs,
   logsLoading,
-  // logsError,
+  logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
@@ -76,7 +76,7 @@ export function AppCard({
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
-  const [copiedField, setCopiedField] = useState<string | null>(null);
+  // const [copiedField, setCopiedField] = useState<string | null>(null);
   const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
 
   // When the card is expanded and the active build number changes (new build started),
@@ -84,7 +84,7 @@ export function AppCard({
   useEffect(() => {
     const prev = prevBuildNumberRef.current;
     prevBuildNumberRef.current = build?.number;
-    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== build.number) {
       onFetchLogs(build.number);
     }
   }, [build?.number, isExpanded, activeTab, onFetchLogs]);
@@ -96,15 +96,10 @@ export function AppCard({
   });
 
   const handleToggleLogs = () => {
-    // Always try to fetch logs when expanding IF we have a build number
-    if (!isExpanded) {
-      if (build?.number) {
-        onFetchLogs(build.number);
-      } else {
-        // If no build info yet, try build #1 (most apps will have at least one build)
-        onFetchLogs(1);
-      }
+    if (!isExpanded && build?.number) {
+      onFetchLogs(build.number);
     }
+    // If build info isn't available yet, the useEffect above will fetch once it arrives.
     setActiveTab('logs');
     onToggleLogs();
   };
@@ -116,11 +111,11 @@ export function AppCard({
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
+  // const copyToClipboard = (text: string, field: string) => {
+  //   navigator.clipboard.writeText(text);
+  //   setCopiedField(field);
+  //   setTimeout(() => setCopiedField(null), 2000);
+  // };
 
   const canRollback = !!app.can_rollback;
   const isAppBuilding = app.status === 'building';
@@ -235,7 +230,7 @@ export function AppCard({
                   <Loader2 className="w-3 h-3 text-white/40 animate-spin mx-auto" />
                 ) : health ? (
                   <p className="text-xs text-white/70 font-mono">
-                    {health.pod_count} pod{health.pod_count !== 1 ? 's' : ''}
+                    {health.pod_count} instance{health.pod_count !== 1 ? 's' : ''}
                     {health.restart_count > 0 && (
                       <span className="text-yellow-400 ml-1">⚠</span>
                     )}
@@ -393,6 +388,7 @@ export function AppCard({
                 buildInfo={build ?? null}
                 buildLogs={logs ?? ''}
                 initialLoading={!!logsLoading}
+                logsError={logsError}
                 appName={app.name}
                 fetchBuildLogs={(_, buildNumber) => {
                   onFetchLogs(buildNumber);
@@ -456,7 +452,7 @@ export function AppCard({
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
                             <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Box className="w-3 h-3" /> Pods
+                              <Box className="w-3 h-3" /> Instances
                             </p>
                             <p className="text-lg font-bold text-white">{health.pod_count}</p>
                           </div>
@@ -506,8 +502,8 @@ export function AppCard({
                               className="h-2 bg-white/10"
                             />
                             <div className="flex justify-between mt-2 text-xs text-white/30">
-                              <span>Request: {details?.container?.resources.requests.cpu || '100m'}</span>
-                              <span>Limit: {details?.container?.resources.limits.cpu || '500m'}</span>
+                              <span>Allocated: {details?.container?.resources.requests.cpu || '-'}</span>
+                              <span>Max: {details?.container?.resources.limits.cpu || '-'}</span>
                             </div>
                           </div>
 
@@ -526,98 +522,22 @@ export function AppCard({
                               className="h-2 bg-white/10"
                             />
                             <div className="flex justify-between mt-2 text-xs text-white/30">
-                              <span>Request: {details?.container?.resources.requests.memory || '128Mi'}</span>
-                              <span>Limit: {details?.container?.resources.limits.memory || '512Mi'}</span>
+                              <span>Allocated: {details?.container?.resources.requests.memory || '-'}</span>
+                              <span>Max: {details?.container?.resources.limits.memory || '-'}</span>
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Pod & Container Info */}
-                    {details?.pod && (
-                      <div className="bg-black/30 rounded-lg p-4">
-                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                          <Container className="w-3.5 h-3.5" />
-                          Pod Information
-                        </h5>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Pod Name</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white truncate flex-1">
-                                {details.pod.name}
-                              </p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.name, 'pod')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'pod' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node
-                            </p>
-                            <p className="text-xs text-white truncate" title={details.pod.nodeName}>
-                              {details.pod.nodeName.split('-').slice(0, 2).join('-')}...
-                            </p>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Network className="w-3 h-3" /> Pod IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.podIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.podIP, 'podip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'podip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
-                              <Server className="w-3 h-3" /> Node IP
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-mono text-white">{details.pod.nodeIP}</p>
-                              <button 
-                                onClick={() => copyToClipboard(details.pod!.nodeIP, 'nodeip')}
-                                className="text-white/30 hover:text-white/70 transition-colors"
-                              >
-                                {copiedField === 'nodeip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Phase</p>
-                            <Badge className={`text-[10px] ${
-                              details.pod.phase === 'Running' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                              details.pod.phase === 'Pending' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
-                              'bg-red-500/20 text-red-400 border-red-500/30'
-                            }`}>
-                              {details.pod.phase}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Started</p>
-                            <p className="text-xs text-white">
-                              {details.pod.startTime ? new Date(details.pod.startTime).toLocaleString() : '-'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
 
-                    {/* Container Info */}
+
+                    {/* Runtime Info */}
                     {details?.container && (
                       <div className="bg-black/30 rounded-lg p-4">
                         <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
-                          Container
+                          Runtime
                         </h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="bg-black/20 rounded-lg p-3">
@@ -639,7 +559,7 @@ export function AppCard({
                               details.container.state.includes('Waiting') ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
                               'bg-red-500/20 text-red-400 border-red-500/30'
                             }`}>
-                              {details.container.state}
+                              {details.container.state?.includes('CrashLoop') ? 'Restarting' : details.container.state}
                             </Badge>
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
@@ -661,7 +581,7 @@ export function AppCard({
                         </h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Ingress Host</p>
+                            <p className="text-xs text-white/40 mb-1">Hostname</p>
                             <p className="text-xs font-mono text-white truncate">{details.network.ingressHost}</p>
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
@@ -693,35 +613,24 @@ export function AppCard({
                       <div className="bg-black/30 rounded-lg p-4">
                         <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
-                          Deployment
+                          Capacity
                         </h5>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Replicas</p>
-                            <p className="text-lg font-bold text-white">
+                            <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                            <p className="text-2xl font-bold text-white">
                               {details.deployment.readyReplicas}/{details.deployment.replicas}
                             </p>
                           </div>
                           <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Strategy</p>
-                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
-                              {details.deployment.strategy}
-                            </Badge>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Available</p>
-                            <span className={`text-sm font-medium ${
-                              details.deployment.availableReplicas >= details.deployment.replicas 
-                                ? 'text-green-400' : 'text-yellow-400'
+                            <p className="text-xs text-white/40 mb-1">Status</p>
+                            <Badge className={`text-[10px] ${
+                              details.deployment.readyReplicas >= details.deployment.replicas
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                             }`}>
-                              {details.deployment.availableReplicas}
-                            </span>
-                          </div>
-                          <div className="bg-black/20 rounded-lg p-3">
-                            <p className="text-xs text-white/40 mb-1">Created</p>
-                            <p className="text-xs text-white">
-                              {details.deployment.createdAt ? new Date(details.deployment.createdAt).toLocaleDateString() : '-'}
-                            </p>
+                              {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                            </Badge>
                           </div>
                         </div>
                       </div>

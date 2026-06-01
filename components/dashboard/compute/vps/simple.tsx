@@ -1,996 +1,1515 @@
 "use client";
 
+// VPS create — editorial single-page form matching the database/new
+// pattern. Numbered sections on the left with live status pills, sticky
+// right summary with SSH/RDP connection preview, big Nunito monthly
+// price, and gradient brand-blue Deploy CTA. Wiring unchanged.
+
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
-  CheckCircle,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  MapPin,
-  Minus,
-  MonitorUp,
-  Plus,
-  ShieldCheck,
+    ArrowRight,
+    Check,
+    ChevronLeft,
+    HardDrive,
+    Loader2,
+    MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
+
 import { createClient } from "@/lib/supabase/client";
-import DeploymentProgress from "./deployment-progress";
+import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { OsImg } from "./os-icons";
 
-// Password validation constants
+// ─── Design tokens ───────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+    fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
+
+// Sentinel OS value: a CTA row that navigates to the custom-images page
+// instead of selecting an OS.
+const CUSTOM_IMAGE_CTA = "__custom_image_cta__";
+
 const PASSWORD_PATTERNS = {
-  hasUpperCase: /[A-Z]/,
-  hasLowerCase: /[a-z]/,
-  hasNumbers: /[0-9]/,
-  hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
+    hasUpperCase: /[A-Z]/,
+    hasLowerCase: /[a-z]/,
+    hasNumbers: /[0-9]/,
+    hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
 } as const;
-
 const PASSWORD_MIN_LENGTH = 12;
 
-interface Region {
-  id: string;
-  name: string;
-  available: boolean;
-}
-
-interface OSOption {
-  id: string;
-  name: string;
-  regions: string[];
-}
-
-interface ComputeOptions {
-  regions: Region[];
-  osOptions: OSOption[];
-  specs?: {
-    minCpuCores: number;
-    maxCpuCores: number;
-    minMemoryMB: number;
-    maxMemoryMB: number;
-    minDiskGB: number;
-    maxDiskGB: number;
-  };
-}
-
-interface PageProps {
-  computeOptions: ComputeOptions;
-}
-
-const STEP_META: Array<{
-  id: number;
-  label: string;
-  title: string;
-  description: string;
-  iconSrc: string;
-}> = [
-  {
-    id: 0,
-    label: "Name",
-    title: "Hostname",
-    description: "Set server hostname",
-    iconSrc: "/dashboard-icons/name.png",
-  },
-  {
-    id: 1,
-    label: "Region",
-    title: "Deployment region",
-    description: "Choose deployment location",
-    iconSrc: "/dashboard-icons/region.png",
-  },
-  {
-    id: 2,
-    label: "Operating System",
-    title: "Image",
-    description: "Image & access type",
-    iconSrc: "/dashboard-icons/operating-system.png",
-  },
-  {
-    id: 3,
-    label: "Configuration",
-    title: "Resources",
-    description: "CPU, RAM & storage",
-    iconSrc: "/dashboard-icons/configuration.png",
-  },
-  {
-    id: 4,
-    label: "Access",
-    title: "Access",
-    description: "Set root password",
-    iconSrc: "/dashboard-icons/acess.png",
-  },
-];
-
-const REGION_FLAGS: Record<string, string> = {
-  india: "IN",
-  france: "FR",
-  germany: "DE",
-  uk: "GB",
-  "united-kingdom": "GB",
-  us: "US",
-  usa: "US",
-  "united-states": "US",
-  singapore: "SG",
-  australia: "AU",
-  netherlands: "NL",
-  canada: "CA",
-  japan: "JP",
-  brazil: "BR",
-  uae: "AE",
-  poland: "PL",
-  sweden: "SE",
+// Region slug → ISO 3166-1 alpha-2 country code (flagcdn renders SVGs).
+const REGION_CC: Record<string, string> = {
+    india: "in", in: "in", blr: "in", bom: "in", del: "in",
+    france: "fr", fr: "fr", par: "fr",
+    germany: "de", de: "de", fra: "de", ger: "de",
+    uk: "gb", gb: "gb", "united-kingdom": "gb", britain: "gb", lon: "gb",
+    us: "us", usa: "us", "united-states": "us",
+    "us-east": "us", "us-west": "us", "us-central": "us", nyc: "us",
+    singapore: "sg", sg: "sg", sgp: "sg",
+    netherlands: "nl", nl: "nl", ams: "nl",
+    australia: "au", au: "au", syd: "au",
+    canada: "ca", ca: "ca", tor: "ca", mtl: "ca",
+    japan: "jp", jp: "jp", tok: "jp", tyo: "jp",
+    brazil: "br", br: "br", sao: "br",
+    uae: "ae", ae: "ae", dxb: "ae",
+    poland: "pl", pl: "pl",
+    sweden: "se", se: "se",
+    ireland: "ie", ie: "ie",
+    italy: "it", it: "it",
+    spain: "es", es: "es",
 };
 
-const panelClassName = "glass-panel overflow-hidden";
-const inputClassName =
-  "border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
-
-function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="flex items-center gap-2">
-        {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
-        )}
-        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
-      </div>
-      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
-    </div>
-  );
+function flagCodeFor(id: string): string | null {
+    if (!id) return null;
+    const tokens = id.toLowerCase().split(/[-_/\s]+/).filter(Boolean);
+    for (const t of [...tokens].reverse()) {
+        if (REGION_CC[t]) return REGION_CC[t];
+    }
+    return REGION_CC[id.toLowerCase()] ?? null;
 }
 
-function StepContainer({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={panelClassName}>
-      <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">{eyebrow}</p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">{title}</h2>
-        {description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">{description}</p> : null}
-      </div>
-      <div className="px-6 py-6 sm:px-7 sm:py-7">{children}</div>
-    </div>
-  );
+function FlagImg({ id, size = 22 }: { id: string; size?: number }) {
+    const code = flagCodeFor(id);
+    if (!code) {
+        return (
+            <MapPin
+                className="text-white/40"
+                style={{ width: size * 0.7, height: size * 0.7 }}
+            />
+        );
+    }
+    const w = size;
+    const h = Math.round(size * (2 / 3));
+    return (
+        <Image
+            src={`https://flagcdn.com/${size * 2}x${h * 2}/${code}.png`}
+            alt=""
+            width={w}
+            height={h}
+            className="object-cover"
+            style={{ width: w, height: h }}
+            unoptimized
+        />
+    );
 }
 
-const VPSSelect = ({ computeOptions }: PageProps) => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [maxVisitedStep, setMaxVisitedStep] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+interface Region {
+    id: string;
+    name: string;
+    available: boolean;
+}
+interface OSOption {
+    id: string;
+    name: string;
+    regions: string[];
+}
+interface PlanOption {
+    slug: string;
+    name: string;
+    tier: "shared" | "dedicated";
+    vcpu: number;
+    memoryMB: number;
+    diskGB: number;
+    hourlyUSD: number;
+    monthlyUSD: number;
+    tagline?: string;
+    allowedRegions?: string[];
+    allowedHostIds?: string[];
+}
+interface ComputeOptions {
+    regions: Region[];
+    osOptions: OSOption[];
+    plans?: PlanOption[];
+    planAvailability?: Record<string, Record<string, boolean>>;
+}
 
-  // Form state
-  const [hostname, setHostname] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState<string>("");
-  const [selectedOS, setSelectedOS] = useState<string>("");
-  const [cpuCores, setCpuCores] = useState(2);
-  const [memoryGB, setMemoryGB] = useState(2);
-  const [diskGB, setDiskGB] = useState(50);
-  const [sshPassword, setSshPassword] = useState("");
-  const [sshPasswordConfirm, setSshPasswordConfirm] = useState("");
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [deploymentServerId, setDeploymentServerId] = useState<number | null>(null);
+const VPSSelect = ({ computeOptions }: { computeOptions: ComputeOptions }) => {
+    // ─── State ──────────────────────────────────────────────────
+    const [hostname, setHostname] = useState("");
+    const [selectedRegion, setSelectedRegion] = useState("");
+    const [selectedOS, setSelectedOS] = useState("");
+    const [selectedTier, setSelectedTier] = useState<"shared" | "dedicated">(
+        "shared",
+    );
+    const [selectedPlanSlug, setSelectedPlanSlug] = useState("");
+    const [sshPassword, setSshPassword] = useState("");
+    const [sshPasswordConfirm, setSshPasswordConfirm] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const router = useRouter();
 
-  const regions = computeOptions.regions;
+    const regions = computeOptions.regions;
+    const allPlans = computeOptions.plans ?? [];
+    const planAvailability = computeOptions.planAvailability ?? {};
 
-  // Filter OS options to only those available in the selected region
-  const availableOS = useMemo(() => {
-    if (!selectedRegion) return computeOptions.osOptions;
-    return computeOptions.osOptions.filter(os => os.regions.includes(selectedRegion));
-  }, [computeOptions.osOptions, selectedRegion]);
+    // ─── Derived ────────────────────────────────────────────────
+    const availableOS = useMemo(() => {
+        if (!selectedRegion) return computeOptions.osOptions;
+        return computeOptions.osOptions.filter((os) =>
+            os.regions.includes(selectedRegion),
+        );
+    }, [computeOptions.osOptions, selectedRegion]);
 
-  // Derive whether selected OS is Windows or Desktop (both use RDP)
-  const isWindows = useMemo(() => {
-    const osName = (availableOS.find(o => o.id === selectedOS)?.name || selectedOS).toLowerCase();
-    return osName.includes("windows");
-  }, [selectedOS, availableOS]);
+    const selectedOSName =
+        availableOS.find((o) => o.id === selectedOS)?.name || selectedOS;
+    const isWindows = selectedOSName.toLowerCase().includes("windows");
+    const isDesktop = selectedOSName.toLowerCase().includes("desktop");
+    const usesRDP = isWindows || isDesktop;
 
-  const isDesktop = useMemo(() => {
-    const osName = (availableOS.find(o => o.id === selectedOS)?.name || selectedOS).toLowerCase();
-    return osName.includes("desktop");
-  }, [selectedOS, availableOS]);
+    const selectedPlan = useMemo(
+        () => allPlans.find((p) => p.slug === selectedPlanSlug) ?? null,
+        [allPlans, selectedPlanSlug],
+    );
 
-  const usesRDP = isWindows || isDesktop;
+    const visiblePlans = useMemo(() => {
+        const minRamMB = isWindows || isDesktop ? 2048 : 0;
+        const minDiskGB = isWindows ? 40 : isDesktop ? 25 : 0;
+        return allPlans
+            .filter((p) => p.tier === selectedTier)
+            .filter((p) => p.memoryMB >= minRamMB && p.diskGB >= minDiskGB)
+            .filter((p) => {
+                if (!selectedRegion) return true;
+                if (p.allowedRegions && p.allowedRegions.length > 0) {
+                    return p.allowedRegions.includes(selectedRegion);
+                }
+                return true;
+            })
+            .filter((p) => {
+                if (!selectedRegion) return true;
+                if (!p.allowedHostIds || p.allowedHostIds.length === 0) return true;
+                const avail = planAvailability[selectedRegion]?.[p.slug];
+                return avail !== false;
+            })
+            .sort((a, b) => a.vcpu - b.vcpu || a.memoryMB - b.memoryMB);
+    }, [
+        allPlans,
+        selectedTier,
+        selectedRegion,
+        planAvailability,
+        isWindows,
+        isDesktop,
+    ]);
 
-  useEffect(() => {
-    setMaxVisitedStep(prev => Math.max(prev, currentStep));
-  }, [currentStep]);
-
-  useEffect(() => {
-    if (regions.length > 0 && !selectedRegion) {
-      const firstAvailable = regions.find(r => r.available);
-      setSelectedRegion(firstAvailable?.id || regions[0].id);
-    }
-  }, [regions, selectedRegion]);
-
-  useEffect(() => {
-    if (availableOS.length > 0 && !availableOS.find(o => o.id === selectedOS)) {
-      setSelectedOS(availableOS[0].id);
-    }
-  }, [availableOS, selectedOS]);
-
-  // Auto-enforce minimum specs when switching to Windows/Desktop
-  useEffect(() => {
-    if (isWindows) {
-      if (memoryGB < 2) setMemoryGB(2);
-      if (diskGB < 40) setDiskGB(40);
-    } else if (isDesktop) {
-      if (memoryGB < 2) setMemoryGB(2);
-      if (diskGB < 25) setDiskGB(25);
-    }
-  }, [isWindows, isDesktop, memoryGB, diskGB]);
-
-  const stepsValid = [
-    hostname.trim().length > 0,
-    !!selectedRegion,
-    !!selectedOS,
-    cpuCores >= 1 && memoryGB >= (usesRDP ? 2 : 1) && diskGB >= (isWindows ? 40 : isDesktop ? 25 : 10),
-    sshPassword.length >= 12 && sshPassword === sshPasswordConfirm,
-  ];
-
-  const handleNextStep = () => {
-    if (currentStep === 0 && !hostname.trim()) {
-      toast.error("Please enter a hostname");
-      return;
-    }
-    if (currentStep === 1 && !selectedRegion) {
-      toast.error("Please select a region");
-      return;
-    }
-    if (currentStep === 2 && !selectedOS) {
-      toast.error("Please select an operating system");
-      return;
-    }
-    if (currentStep === 3) {
-      if (cpuCores < 1 || memoryGB < 1 || diskGB < 10) {
-        toast.error("Invalid configuration");
-        return;
-      }
-    }
-      if (currentStep === 4) {
-        if (sshPassword.length < PASSWORD_MIN_LENGTH) {
-          toast.error(`${usesRDP ? "RDP" : "SSH"} password must be at least ${PASSWORD_MIN_LENGTH} characters`);
-          return;
+    // ─── Defaults ───────────────────────────────────────────────
+    useEffect(() => {
+        if (regions.length > 0 && !selectedRegion) {
+            const first = regions.find((r) => r.available) ?? regions[0];
+            setSelectedRegion(first.id);
         }
-        if (sshPassword !== sshPasswordConfirm) {
-          toast.error("Passwords do not match");
-          return;
+    }, [regions, selectedRegion]);
+
+    useEffect(() => {
+        if (
+            availableOS.length > 0 &&
+            !availableOS.find((o) => o.id === selectedOS)
+        ) {
+            setSelectedOS(availableOS[0].id);
         }
-        // Validate password strength
-        const hasUpperCase = PASSWORD_PATTERNS.hasUpperCase.test(sshPassword);
-        const hasLowerCase = PASSWORD_PATTERNS.hasLowerCase.test(sshPassword);
-        const hasNumbers = PASSWORD_PATTERNS.hasNumbers.test(sshPassword);
-        const hasSpecialChar = PASSWORD_PATTERNS.hasSpecialChar.test(sshPassword);
+    }, [availableOS, selectedOS]);
 
-        if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
-          toast.error("Password must contain uppercase, lowercase, numbers, and special characters");
-          return;
+    useEffect(() => {
+        if (
+            selectedPlanSlug &&
+            !visiblePlans.some((p) => p.slug === selectedPlanSlug)
+        ) {
+            setSelectedPlanSlug("");
         }
-      }    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
+    }, [visiblePlans, selectedPlanSlug]);
 
-  const handlePrevStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+    // ─── Validation ─────────────────────────────────────────────
+    const hostnameValid = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(
+        hostname.trim(),
+    );
+    const passwordChecks = {
+        length: sshPassword.length >= PASSWORD_MIN_LENGTH,
+        upper: PASSWORD_PATTERNS.hasUpperCase.test(sshPassword),
+        lower: PASSWORD_PATTERNS.hasLowerCase.test(sshPassword),
+        number: PASSWORD_PATTERNS.hasNumbers.test(sshPassword),
+        special: PASSWORD_PATTERNS.hasSpecialChar.test(sshPassword),
+    };
+    const passwordValid =
+        Object.values(passwordChecks).every(Boolean) &&
+        sshPassword === sshPasswordConfirm;
+    const formValid =
+        hostnameValid &&
+        !!selectedRegion &&
+        !!selectedOS &&
+        !!selectedPlan &&
+        passwordValid;
 
-  const onSubmit = async () => {
-    // Validate all steps
-    const firstInvalid = stepsValid.findIndex((v) => !v);
-    if (firstInvalid >= 0) {
-      setCurrentStep(firstInvalid);
-      toast.error("Please complete all required fields");
-      return;
-    }
+    // ─── Submit ─────────────────────────────────────────────────
+    const onDeploy = async () => {
+        if (!formValid) {
+            toast.error("Complete every section before deploying");
+            return;
+        }
+        setIsLoading(true);
+        setError(null);
+        try {
+            const supabase = createClient();
+            const { data: sessionData } = await supabase.auth.getSession();
+            const { data: userData } = await supabase.auth.getUser();
+            const accessToken = sessionData?.session?.access_token;
 
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
+            const payload = {
+                region: selectedRegion,
+                os: selectedOSName,
+                hostname: hostname.trim(),
+                planSlug: selectedPlan!.slug,
+                cpuCores: selectedPlan!.vcpu,
+                memoryMB: selectedPlan!.memoryMB,
+                diskGB: selectedPlan!.diskGB,
+                sshPassword,
+                ownerId: userData?.user?.id,
+                ownerEmail: userData?.user?.email,
+            };
 
-    try {
-      // Get auth session
-      const supabase = createClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const { data: userData } = await supabase.auth.getUser();
-      const accessToken = sessionData?.session?.access_token;
-
-      // Find the selected OS template name
-      const selectedOSName = availableOS.find(t => t.id === selectedOS)?.name || selectedOS;
-
-      const payload = {
-        region: selectedRegion,
-        os: selectedOSName,
-        hostname: hostname,
-        cpuCores: cpuCores,
-        memoryMB: memoryGB * 1024,
-        diskGB: diskGB,
-        sshPassword: sshPassword,
-        ownerId: userData?.user?.id,
-        ownerEmail: userData?.user?.email,
-      };
-
-
-
-      const res = await fetch("/api/services/compute/vms/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Something went wrong while creating your server.");
-      }
-
-      // API returns immediately with serverId — server is now provisioning in background
-      setDeploymentServerId(json.serverId);
-      setResult(json);
-      toast.success(`Deploying "${hostname}"...`);
-    } catch (err) {
-      console.error("VPS creation error:", err);
-      const raw = err instanceof Error ? err.message : "";
-      // Only show the message if it looks user-friendly (from our API), otherwise show a generic message
-      const isFriendly = raw && !raw.includes("fetch") && !raw.includes("500") && !raw.includes("ECONNREFUSED") && !raw.includes("TypeError") && !raw.includes("SyntaxError") && raw.length < 200;
-      const message = isFriendly ? raw : "Something went wrong while creating your server. Please try again or contact support.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const selectedRegionData = regions.find((r) => r.id === selectedRegion);
-  const selectedOSName = availableOS.find((o) => o.id === selectedOS)?.name || "Select an operating system";
-  const activeStepMeta = STEP_META[currentStep];
-  const selectedDefaultUser =
-    isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : selectedOS.toLowerCase().includes("centos") ? "centos" : "ubuntu";
-
-  return (
-    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
-      {!result?.ok ? (
-        <>
-          {/* ─── Unified top panel: header + stats + progress bar + step grid ─── */}
-          <div className={panelClassName}>
-            <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-                  VPS Provisioning
-                </p>
-                <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  Deploy a virtual machine.
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                  Region, image, resources, and access.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {["KVM hypervisor", "NVMe SSD", "IPv4 included", "Up to 32 vCPUs"].map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center border border-white/[0.1] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/42"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <Image
-                src="/dashboard-services-icons/da compute.png"
-                alt=""
-                width={160}
-                height={160}
-                className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
-                priority
-                unoptimized
-              />
-            </div>
-
-            <div className="border-t border-white/[0.06] px-5 pb-4 pt-3 sm:px-6">
-              <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
-                  style={{ width: `${((currentStep + 1) / 5) * 100}%` }}
-                />
-              </div>
-
-              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
-                {STEP_META.map((step) => {
-                  const isActive = currentStep === step.id;
-                  const isCompleted = currentStep > step.id;
-                  const accessible = step.id === 0 || stepsValid.slice(0, step.id).every(Boolean);
-
-                  return (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => { if (accessible) setCurrentStep(step.id); }}
-                      className={`relative border px-3 py-3 text-left transition-colors ${
-                        isActive
-                          ? "border-blue-400/30 bg-blue-500/10"
-                          : isCompleted
-                            ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                            : "border-white/[0.06] bg-transparent"
-                      } ${accessible ? "cursor-pointer" : "cursor-default"}`}
-                    >
-                      {isActive && (
-                        <span className="absolute left-0 top-0 h-0.5 w-full bg-blue-400/70" />
-                      )}
-                      <div className="flex h-full flex-col">
-                        <span className={`text-xs font-semibold ${
-                          isActive ? "text-blue-200/90" : isCompleted ? "text-emerald-300/80" : "text-white/32"
-                        }`}>
-                          0{step.id + 1}
-                        </span>
-                        <div className="mt-2 flex items-center justify-between gap-2 pt-3">
-                          <div className="min-w-0">
-                            <div className={`text-sm font-semibold ${
-                              isActive ? "text-white" : "text-white/88"
-                            }`}>
-                              {step.label}
-                            </div>
-                            <div className={`mt-0.5 text-xs leading-snug ${
-                              isActive ? "text-white/48" : "text-white/28"
-                            }`}>
-                              {step.description}
-                            </div>
-                          </div>
-                          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                            <Image
-                              src={step.iconSrc}
-                              alt={step.label}
-                              width={44}
-                              height={44}
-                              className="h-11 w-11 object-contain"
-                              unoptimized
-                            />
-                            {isCompleted && (
-                              <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                                <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none">
-                                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ─── Main two-column layout ─── */}
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            {/* Left: step form + navigation */}
-            <div className="space-y-6">
-              <StepContainer
-                eyebrow={`Step ${String(currentStep + 1).padStart(2, "0")}`}
-                title={currentStep === 4 ? (usesRDP ? "RDP Access" : "SSH Access") : activeStepMeta.title}
-                description={currentStep === 4 ? `Set a strong ${usesRDP ? "RDP" : "SSH"} password for your server.` : activeStepMeta.description}
-              >
-                {/* Step 0: Hostname */}
-                {currentStep === 0 && (() => {
-                  const hn = hostname.trim();
-                  const checks = [
-                    { label: "2–63 characters", ok: hn.length >= 2 && hn.length <= 63 },
-                    { label: "Lowercase letters, numbers, hyphens", ok: /^[a-z0-9-]+$/.test(hn) && hn.length > 0 },
-                    { label: "No spaces or special characters", ok: hn.length > 0 && !/[\s!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(hn) },
-                  ];
-                  return (
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
-                      <div>
-                        <Label htmlFor="hostname" className="mb-3 block text-sm font-medium text-white/78">
-                          Hostname
-                        </Label>
-                        <Input
-                          id="hostname"
-                          value={hostname}
-                          onChange={(e) => setHostname(e.target.value)}
-                          placeholder="prod-web-01"
-                          className={inputClassName}
-                        />
-                      </div>
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                        <h3 className="text-sm font-semibold text-white">Requirements</h3>
-                        <div className="mt-4 space-y-2.5">
-                          {checks.map((c) => (
-                            <div key={c.label} className="flex items-start gap-2">
-                              <span className={`mt-px text-xs font-bold leading-none ${c.ok ? "text-emerald-400" : "text-white/28"}`}>
-                                {c.ok ? "✓" : "·"}
-                              </span>
-                              <span className={`text-sm leading-snug ${c.ok ? "text-white/70" : "text-white/42"}`}>{c.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Step 1: Region */}
-                {currentStep === 1 && (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {regions.map((r) => {
-                      const flagCode = REGION_FLAGS[r.id.toLowerCase()];
-                      return (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => r.available && setSelectedRegion(r.id)}
-                          disabled={!r.available}
-                          className={`flex items-center gap-4 border p-4 text-left transition-colors ${
-                            r.available
-                              ? selectedRegion === r.id
-                                ? "border-blue-400/30 bg-blue-500/10"
-                                : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                              : "border-white/[0.05] bg-white/[0.02] cursor-not-allowed opacity-55"
-                          }`}
-                        >
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border border-white/[0.08] bg-white/[0.05]">
-                            {flagCode ? (
-                              <Image
-                                src={`https://flagsapi.com/${flagCode}/flat/64.png`}
-                                alt={r.name}
-                                width={32}
-                                height={32}
-                                className="h-6 w-8 object-cover"
-                                unoptimized
-                              />
-                            ) : (
-                              <MapPin className="h-4 w-4 text-white/60" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold text-white">{r.name}</div>
-                            {!r.available && (
-                              <div className="mt-1 text-xs text-red-400/80">Unavailable</div>
-                            )}
-                          </div>
-                          {selectedRegion === r.id && (
-                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-blue-300" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Step 2: Operating System */}
-                {currentStep === 2 && (
-                  <div className="space-y-5">
-                    <div>
-                      <Label htmlFor="os-select" className="mb-3 block text-sm font-medium text-white/78">
-                        Operating System
-                      </Label>
-                      <Select value={selectedOS} onValueChange={setSelectedOS}>
-                        <SelectTrigger id="os-select" className={inputClassName}>
-                          <SelectValue placeholder="Select OS" />
-                        </SelectTrigger>
-                        <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
-                          {availableOS.map((os) => (
-                            <SelectItem key={os.id} value={os.id}>
-                              {os.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          <MonitorUp className="h-3.5 w-3.5 text-cyan-300" />
-                          Access mode
-                        </div>
-                        <p className="mt-3 text-sm font-medium text-white">
-                          {usesRDP ? "RDP" : "SSH"}
-                        </p>
-                      </div>
-                      <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-                          Default user
-                        </div>
-                        <p className="mt-3 text-sm font-medium text-white">{selectedDefaultUser}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: Configuration */}
-                {currentStep === 3 && (
-                  <div>
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                      {/* vCPU */}
-                      <div>
-                        <Label htmlFor="cpu-cores" className="mb-3 block text-sm font-medium text-white/78">
-                          vCPU Cores
-                        </Label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCpuCores(v => Math.max(1, v - 1))}
-                            disabled={cpuCores <= 1}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <Input
-                            id="cpu-cores"
-                            type="number"
-                            min={1}
-                            max={32}
-                            value={cpuCores}
-                            onChange={(e) => setCpuCores(Math.max(1, Math.min(32, parseInt(e.target.value || "1", 10))))}
-                            className={`${inputClassName} text-center`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setCpuCores(v => Math.min(32, v + 1))}
-                            disabled={cpuCores >= 32}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <p className="mt-2 text-xs text-white/40">1 – 32 cores</p>
-                      </div>
-                      {/* Memory */}
-                      <div>
-                        <Label htmlFor="memory-gb" className="mb-3 block text-sm font-medium text-white/78">
-                          Memory (GB)
-                        </Label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setMemoryGB(v => Math.max(isWindows ? 2 : 1, v - 1))}
-                            disabled={memoryGB <= (isWindows ? 2 : 1)}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <Input
-                            id="memory-gb"
-                            type="number"
-                            min={isWindows ? 2 : 1}
-                            max={128}
-                            value={memoryGB}
-                            onChange={(e) => setMemoryGB(Math.max(isWindows ? 2 : 1, Math.min(128, parseInt(e.target.value || (isWindows ? "2" : "1"), 10))))}
-                            className={`${inputClassName} text-center`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setMemoryGB(v => Math.min(128, v + 1))}
-                            disabled={memoryGB >= 128}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        {isWindows ? (
-                          <p className="mt-2 text-xs text-amber-400/80">Min 2 GB for Windows</p>
-                        ) : (
-                          <p className="mt-2 text-xs text-white/40">1 – 128 GB</p>
-                        )}
-                      </div>
-                      {/* Storage */}
-                      <div>
-                        <Label htmlFor="disk-gb" className="mb-3 block text-sm font-medium text-white/78">
-                          Storage (GB)
-                        </Label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDiskGB(v => Math.max(isWindows ? 40 : isDesktop ? 25 : 10, v - 5))}
-                            disabled={diskGB <= (isWindows ? 40 : isDesktop ? 25 : 10)}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <Input
-                            id="disk-gb"
-                            type="number"
-                            min={isWindows ? 40 : 10}
-                            max={2000}
-                            value={diskGB}
-                            onChange={(e) => setDiskGB(Math.max(isWindows ? 40 : 10, Math.min(2000, parseInt(e.target.value || (isWindows ? "40" : "10"), 10))))}
-                            className={`${inputClassName} text-center`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setDiskGB(v => Math.min(2000, v + 5))}
-                            disabled={diskGB >= 2000}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/[0.12] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-30"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        {isWindows ? (
-                          <p className="mt-2 text-xs text-amber-400/80">Min 40 GB for Windows</p>
-                        ) : (
-                          <p className="mt-2 text-xs text-white/40">10 – 2000 GB</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 4: Access / Password */}
-                {currentStep === 4 && (
-                  <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="password" className="mb-3 block text-sm font-medium text-white/78">
-                          {usesRDP ? "RDP Password" : "SSH Password"}
-                        </Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          value={sshPassword}
-                          onChange={(e) => setSshPassword(e.target.value)}
-                          placeholder="Enter a strong password"
-                          className={inputClassName}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="password-confirm" className="mb-3 block text-sm font-medium text-white/78">
-                          Confirm Password
-                        </Label>
-                        <Input
-                          id="password-confirm"
-                          type="password"
-                          value={sshPasswordConfirm}
-                          onChange={(e) => setSshPasswordConfirm(e.target.value)}
-                          placeholder="Re-enter password"
-                          className={inputClassName}
-                        />
-                        {sshPasswordConfirm && sshPassword !== sshPasswordConfirm && (
-                          <p className="mt-2 text-xs text-red-400">Passwords do not match</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                      <h3 className="text-sm font-semibold text-white">Requirements</h3>
-                      <div className="mt-4 space-y-2.5">
-                        {[
-                          { label: "12+ characters", ok: sshPassword.length >= 12 },
-                          { label: "Uppercase (A–Z)", ok: PASSWORD_PATTERNS.hasUpperCase.test(sshPassword) },
-                          { label: "Lowercase (a–z)", ok: PASSWORD_PATTERNS.hasLowerCase.test(sshPassword) },
-                          { label: "Number (0–9)", ok: PASSWORD_PATTERNS.hasNumbers.test(sshPassword) },
-                          { label: "Special character", ok: PASSWORD_PATTERNS.hasSpecialChar.test(sshPassword) },
-                        ].map((c) => (
-                          <div key={c.label} className="flex items-center gap-2">
-                            <span className={`text-xs font-bold leading-none ${c.ok ? "text-emerald-400" : "text-white/28"}`}>
-                              {c.ok ? "✓" : "·"}
-                            </span>
-                            <span className={`text-sm ${c.ok ? "text-white/70" : "text-white/42"}`}>{c.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="mt-4 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                    {error}
-                  </div>
-                )}
-              </StepContainer>
-
-              {/* Navigation */}
-              <div className="flex items-center justify-between gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  disabled={currentStep === 0 || isLoading}
-                  className="rounded-none border-white/[0.12] bg-transparent px-4 text-white hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
-                >
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-
-                {currentStep < 4 ? (
-                  <Button
-                    type="button"
-                    onClick={handleNextStep}
-                    disabled={!stepsValid[currentStep]}
-                    className="rounded-none border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
-                  >
-                    Continue
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={onSubmit}
-                    disabled={isLoading || !stepsValid.every(Boolean)}
-                    className="rounded-none border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Provisioning...
-                      </>
-                    ) : (
-                      <>
-                        Deploy VPS
-                        <ChevronRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Right: sticky sidebar */}
-            <div className="space-y-6">
-              <div className={`${panelClassName} lg:sticky lg:top-8`}>
-                <div className="border-b border-white/[0.06] px-6 py-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                    Summary
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
-                </div>
-
-                <div className="px-6 py-4">
-                  {/* Identity */}
-                  <div className="space-y-0.5">
-                    <SummaryRow
-                      icon="/dashboard-icons/name.png"
-                      label="Hostname"
-                      value={hostname.trim() || "—"}
-                      empty={!hostname.trim()}
-                    />
-                    <SummaryRow
-                      icon="/dashboard-icons/region.png"
-                      label="Region"
-                      value={maxVisitedStep >= 1 ? (selectedRegionData?.name ?? "—") : "—"}
-                      empty={maxVisitedStep < 1}
-                    />
-                    <SummaryRow
-                      icon="/dashboard-icons/operating-system.png"
-                      label="OS"
-                      value={maxVisitedStep >= 2 ? selectedOSName : "—"}
-                      empty={maxVisitedStep < 2}
-                    />
-                  </div>
-
-                  <div className="my-3 border-t border-white/[0.05]" />
-
-                  {/* Resources */}
-                  <div className="space-y-0.5">
-                    <SummaryRow
-                      icon="/dashboard-icons/cpu.png"
-                      label="vCPU"
-                      value={maxVisitedStep >= 3 ? `${cpuCores} cores` : "—"}
-                      empty={maxVisitedStep < 3}
-                    />
-                    <SummaryRow
-                      icon="/dashboard-icons/ram.png"
-                      label="Memory"
-                      value={maxVisitedStep >= 3 ? `${memoryGB} GB` : "—"}
-                      empty={maxVisitedStep < 3}
-                    />
-                    <SummaryRow
-                      icon="/dashboard-icons/storage.png"
-                      label="Storage"
-                      value={maxVisitedStep >= 3 ? `${diskGB} GB` : "—"}
-                      empty={maxVisitedStep < 3}
-                    />
-                    <SummaryRow
-                      label="CPU model"
-                      value={maxVisitedStep >= 3 ? "Host passthrough" : "—"}
-                      empty={maxVisitedStep < 3}
-                    />
-                  </div>
-
-                  <div className="my-3 border-t border-white/[0.05]" />
-
-                  {/* Connectivity */}
-                  <div className="space-y-0.5">
-                    <SummaryRow
-                      icon="/dashboard-icons/acess.png"
-                      label="Access"
-                      value={maxVisitedStep >= 2 ? (usesRDP ? "RDP" : "SSH") : "—"}
-                      empty={maxVisitedStep < 2}
-                    />
-                    <SummaryRow
-                      icon="/dashboard-icons/network.png"
-                      label="Network"
-                      value="IPv4 included"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        /* Deployment Progress — live tracking via Supabase realtime */
-        deploymentServerId ? (
-          <DeploymentProgress
-            serverId={deploymentServerId}
-            serverName={result?.name as string || hostname}
-            serverIp={result?.ip as string || ""}
-            serverOs={result?.os as string || availableOS.find(o => o.id === selectedOS)?.name || selectedOS}
-            connectionType={usesRDP ? "rdp" : "ssh"}
-            username={
-              (result?.ssh as Record<string, unknown>)?.username as string ||
-              (result?.rdp as Record<string, unknown>)?.username as string ||
-              (isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : selectedOS.toLowerCase().includes("centos") ? "centos" : "ubuntu")
+            const res = await fetch("/api/services/compute/vms/create", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(accessToken
+                        ? { Authorization: `Bearer ${accessToken}` }
+                        : {}),
+                },
+                body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.ok) {
+                throw new Error(
+                    json.error ||
+                        "Something went wrong while creating your server.",
+                );
             }
-            onCreateAnother={() => {
-              setResult(null);
-              setDeploymentServerId(null);
-              setHostname("");
-              setSshPassword("");
-              setSshPasswordConfirm("");
-              setError(null);
-              setCurrentStep(0);
-            }}
-          />
-        ) : (
-          /* Fallback success message */
-          <div className="glass-panel overflow-hidden">
-            <div className="h-px w-full bg-gradient-to-r from-emerald-400/35 via-emerald-300/10 to-transparent" />
-            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="flex h-14 w-14 items-center justify-center border border-emerald-500/30 bg-emerald-500/10">
-                <CheckCircle className="h-7 w-7 text-emerald-400" />
-              </div>
-              <h2 className="mt-5 text-xl font-semibold text-white">VPS Created Successfully</h2>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-white/45">
-                Your VPS is being provisioned. You can manage it from your dashboard.
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Button
-                  onClick={() => {
-                    setResult(null);
-                    setHostname("");
-                    setCurrentStep(0);
-                  }}
-                  className="rounded-none border border-white/[0.12] bg-white/[0.06] px-5 text-sm text-white hover:bg-white/[0.10]"
-                >
-                  Create Another
-                </Button>
-                <Link
-                  href="/dashboard/services/compute/vps"
-                  className="inline-flex items-center gap-2 border border-emerald-500/25 bg-emerald-500/90 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  View Servers
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
+            toast.success(`Deploying "${hostname}"…`);
+            // Hand off to the all-servers list, which shows live per-row
+            // provisioning progress via realtime — no separate transition view.
+            router.push("/dashboard/services/compute/vps");
+            return;
+        } catch (err) {
+            const raw = err instanceof Error ? err.message : "";
+            const friendly =
+                raw &&
+                raw.length < 200 &&
+                !raw.includes("fetch") &&
+                !raw.includes("ECONNREFUSED");
+            const msg = friendly
+                ? raw
+                : "Something went wrong while creating your server.";
+            setError(msg);
+            toast.error(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const defaultUser = isWindows
+        ? "admin"
+        : selectedOSName.toLowerCase().includes("debian")
+          ? "debian"
+          : selectedOSName.toLowerCase().includes("centos") ||
+              selectedOSName.toLowerCase().includes("almalinux") ||
+              selectedOSName.toLowerCase().includes("rocky")
+            ? selectedOSName.toLowerCase().includes("centos")
+                ? "centos"
+                : selectedOSName.toLowerCase().includes("alma")
+                  ? "almalinux"
+                  : "rocky"
+            : "ubuntu";
+
+    const selectedRegionName =
+        regions.find((r) => r.id === selectedRegion)?.name ?? "—";
+    const ramGB = selectedPlan
+        ? selectedPlan.memoryMB % 1024 === 0
+            ? selectedPlan.memoryMB / 1024
+            : (selectedPlan.memoryMB / 1024).toFixed(1)
+        : null;
+
+    // ─── Section validation states ──────────────────────────────
+    const imageStatus = selectedOS ? "done" : "idle";
+    const regionStatus = selectedRegion ? "done" : "idle";
+    const planStatus = selectedPlan ? "done" : selectedRegion ? "active" : "idle";
+    const detailsStatus = hostnameValid
+        ? "done"
+        : hostname
+          ? "active"
+          : "idle";
+    const authStatus = passwordValid
+        ? "done"
+        : sshPassword
+          ? "active"
+          : "idle";
+
+    return (
+        <div className="relative min-h-full bg-[#08090b] text-white">
+            {/* Background layer */}
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+                <div
+                    className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
+                    }}
+                />
+                <div
+                    className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+                    }}
+                />
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        backgroundImage:
+                            "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+                        backgroundSize: "28px 28px",
+                    }}
+                />
             </div>
-          </div>
-        )
-      )}
-    </div>
-  );
+
+            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1360px] mx-auto">
+                {/* Back link */}
+                <div className="mb-6">
+                    <Link
+                        href="/dashboard/services/compute/vps"
+                        className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Back to servers
+                    </Link>
+                </div>
+
+                {/* Hero */}
+                <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+                    Launch{" "}
+                    <span
+                        style={SERIF_STYLE}
+                        className="text-white/55 font-normal"
+                    >
+                        a server
+                    </span>
+                    .
+                </h1>
+                <p
+                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                >
+                    Pick an image, choose a region, and we provision compute,
+                    networking, and storage. Per-second billing.
+                </p>
+
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 items-start">
+                    {/* ─── LEFT: Sections ──────────────────────── */}
+                    <div className="min-w-0">
+                        {/* 01 Image */}
+                        <Section
+                            num="01"
+                            title="Image"
+                            desc="Operating system installed on the server."
+                            status={imageStatus}
+                            statusLabel={selectedOSName || "Required"}
+                        >
+                            <div className="max-w-[520px]">
+                                <FieldLabel
+                                    hint={usesRDP ? "RDP access" : "SSH access"}
+                                >
+                                    Operating system
+                                </FieldLabel>
+                                <Select
+                                    value={selectedOS}
+                                    onValueChange={(value) => {
+                                        if (value === CUSTOM_IMAGE_CTA) {
+                                            router.push(
+                                                "/dashboard/services/compute/images",
+                                            );
+                                            return;
+                                        }
+                                        setSelectedOS(value);
+                                    }}
+                                >
+                                    <SelectTrigger
+                                        className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px] [&_img]:shrink-0`}
+                                    >
+                                        {/* SelectValue mirrors the selected
+                                            item's content (icon + name), so we
+                                            do NOT add a separate icon here —
+                                            that would render it twice. */}
+                                        <SelectValue placeholder="Select an OS" />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
+                                        {availableOS.map((os) => (
+                                            <SelectItem key={os.id} value={os.id}>
+                                                <span className="flex items-center gap-2.5">
+                                                    <OsImg
+                                                        name={os.name}
+                                                        size={18}
+                                                    />
+                                                    {os.name}
+                                                </span>
+                                            </SelectItem>
+                                        ))}
+                                        {/* CTA → manage / import custom images */}
+                                        <SelectItem
+                                            value={CUSTOM_IMAGE_CTA}
+                                            className="mt-1 border-t border-white/[0.08]"
+                                        >
+                                            <span
+                                                className="flex items-center gap-2.5 font-medium"
+                                                style={{ color: ACCENT_BRIGHT }}
+                                            >
+                                                <HardDrive className="h-[18px] w-[18px]" />
+                                                Custom image…
+                                            </span>
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p
+                                    className={`${MONO} mt-2 text-[10.5px] text-white/40`}
+                                >
+                                    Linux uses SSH on port 22. Windows and
+                                    Desktop builds use RDP on port 3389.
+                                </p>
+                            </div>
+                        </Section>
+
+                        {/* 02 Region */}
+                        <Section
+                            num="02"
+                            title="Region"
+                            desc="Where the server will be deployed."
+                            status={regionStatus}
+                            statusLabel={
+                                selectedRegion ? selectedRegionName : "Required"
+                            }
+                        >
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden">
+                                {regions.map((r) => (
+                                    <RegionCard
+                                        key={r.id}
+                                        region={r}
+                                        selected={selectedRegion === r.id}
+                                        onClick={() =>
+                                            r.available &&
+                                            setSelectedRegion(r.id)
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        </Section>
+
+                        {/* 03 Plan */}
+                        <Section
+                            num="03"
+                            title="Plan"
+                            desc="vCPU, RAM, and storage. Shared is burstable; Dedicated pins 1:1 to cores."
+                            status={planStatus}
+                            statusLabel={
+                                selectedPlan
+                                    ? `${selectedPlan.slug} · ${selectedPlan.vcpu} vCPU`
+                                    : selectedRegion
+                                      ? "Choose a plan"
+                                      : "Pick region first"
+                            }
+                        >
+                            <PlanPicker
+                                plans={visiblePlans}
+                                selectedTier={selectedTier}
+                                setSelectedTier={setSelectedTier}
+                                selectedPlanSlug={selectedPlanSlug}
+                                setSelectedPlanSlug={setSelectedPlanSlug}
+                                anyPlans={allPlans.length > 0}
+                                isWindowsOrDesktop={isWindows || isDesktop}
+                                isWindows={isWindows}
+                                isDesktop={isDesktop}
+                            />
+                        </Section>
+
+                        {/* 04 Details */}
+                        <Section
+                            num="04"
+                            title="Details"
+                            desc="A friendly name to identify the server in your dashboard."
+                            status={detailsStatus}
+                            statusLabel={
+                                hostnameValid
+                                    ? "Valid"
+                                    : hostname
+                                      ? "Check format"
+                                      : "Required"
+                            }
+                        >
+                            <div className="max-w-[520px]">
+                                <FieldLabel hint="required">Hostname</FieldLabel>
+                                <Input
+                                    value={hostname}
+                                    onChange={(e) =>
+                                        setHostname(e.target.value)
+                                    }
+                                    placeholder="my-server-01"
+                                    className={`${MONO} h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px]`}
+                                />
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                    <span
+                                        className={`${MONO} text-[10.5px] text-white/40`}
+                                    >
+                                        Letters · numbers · hyphens · 1–63 chars
+                                    </span>
+                                    {hostname && (
+                                        <span
+                                            className={`${MONO} text-[10.5px] inline-flex items-center gap-1 ${
+                                                hostnameValid
+                                                    ? "text-emerald-400"
+                                                    : "text-red-400"
+                                            }`}
+                                        >
+                                            {hostnameValid ? (
+                                                <>
+                                                    <Check className="h-3 w-3" />{" "}
+                                                    Available
+                                                </>
+                                            ) : (
+                                                "Invalid format"
+                                            )}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* 05 Authentication */}
+                        <Section
+                            num="05"
+                            title={
+                                usesRDP
+                                    ? "RDP authentication"
+                                    : "SSH authentication"
+                            }
+                            desc={`Set a strong password for the ${usesRDP ? "RDP" : "SSH"} session. Connection details arrive after deployment.`}
+                            status={authStatus}
+                            statusLabel={
+                                passwordValid
+                                    ? "Strong"
+                                    : sshPassword
+                                      ? "Needs work"
+                                      : "Required"
+                            }
+                        >
+                            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-5">
+                                <div className="space-y-3">
+                                    <div>
+                                        <FieldLabel hint="required">
+                                            {usesRDP
+                                                ? "RDP password"
+                                                : "Root / sudo password"}
+                                        </FieldLabel>
+                                        <div className="relative">
+                                            <Input
+                                                type={
+                                                    showPassword
+                                                        ? "text"
+                                                        : "password"
+                                                }
+                                                value={sshPassword}
+                                                onChange={(e) =>
+                                                    setSshPassword(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="At least 12 characters, mixed case, number, symbol"
+                                                className="h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] pr-16 rounded-[6px]"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setShowPassword(
+                                                        (s) => !s,
+                                                    )
+                                                }
+                                                className={`${MONO} absolute right-2 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[0.14em] text-white/45 hover:text-white px-2 py-1 rounded-[3px]`}
+                                            >
+                                                {showPassword ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <FieldLabel>
+                                            Confirm password
+                                        </FieldLabel>
+                                        <Input
+                                            type={
+                                                showPassword
+                                                    ? "text"
+                                                    : "password"
+                                            }
+                                            value={sshPasswordConfirm}
+                                            onChange={(e) =>
+                                                setSshPasswordConfirm(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Re-enter the same password"
+                                            className="h-11 bg-[#0d0e11] border-white/[0.08] text-white text-[12.5px] rounded-[6px]"
+                                        />
+                                        {sshPasswordConfirm &&
+                                            sshPassword !==
+                                                sshPasswordConfirm && (
+                                                <p
+                                                    className={`${MONO} mt-1.5 text-[10.5px] text-red-400/85`}
+                                                >
+                                                    Passwords don&apos;t match
+                                                </p>
+                                            )}
+                                    </div>
+                                </div>
+
+                                <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[6px] p-3.5">
+                                    <p
+                                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-2.5 font-semibold`}
+                                    >
+                                        Requirements
+                                    </p>
+                                    <ReqCheck ok={passwordChecks.length}>
+                                        12+ characters
+                                    </ReqCheck>
+                                    <ReqCheck ok={passwordChecks.upper}>
+                                        Uppercase letter
+                                    </ReqCheck>
+                                    <ReqCheck ok={passwordChecks.lower}>
+                                        Lowercase letter
+                                    </ReqCheck>
+                                    <ReqCheck ok={passwordChecks.number}>
+                                        Number
+                                    </ReqCheck>
+                                    <ReqCheck ok={passwordChecks.special}>
+                                        Special character
+                                    </ReqCheck>
+                                </div>
+                            </div>
+                        </Section>
+                    </div>
+
+                    {/* ─── RIGHT: Sticky summary ───────────────── */}
+                    <aside className="lg:sticky lg:top-6 self-start">
+                        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                            <header className="border-b border-white/[0.06] px-5 py-4 flex items-start justify-between gap-2">
+                                <div>
+                                    <p
+                                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1`}
+                                    >
+                                        Configuration
+                                    </p>
+                                    <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+                                        Your server
+                                    </h3>
+                                </div>
+                                <span
+                                    className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold`}
+                                    style={{
+                                        color: formValid ? "#4ade80" : ACCENT,
+                                    }}
+                                >
+                                    <span
+                                        className="h-1.5 w-1.5 rounded-full"
+                                        style={{
+                                            background: formValid
+                                                ? "#4ade80"
+                                                : ACCENT,
+                                            boxShadow: `0 0 6px ${formValid ? "#4ade80" : ACCENT}`,
+                                        }}
+                                    />
+                                    {formValid ? "Ready" : "Pending"}
+                                </span>
+                            </header>
+
+                            {/* Summary rows */}
+                            <div className="px-5 py-3">
+                                <SumRow
+                                    k="Hostname"
+                                    v={hostname || "—"}
+                                    empty={!hostname}
+                                    mono
+                                />
+                                <SumRowFlag
+                                    k="Region"
+                                    regionId={selectedRegion}
+                                    regionName={selectedRegionName}
+                                />
+                                <SumRow
+                                    k="Image"
+                                    v={selectedOSName || "—"}
+                                    empty={!selectedOSName}
+                                />
+                                <SumRow
+                                    k="Plan"
+                                    v={selectedPlan?.slug || "—"}
+                                    empty={!selectedPlan}
+                                    mono
+                                />
+                                {selectedPlan && (
+                                    <>
+                                        <SumRow
+                                            k="vCPU"
+                                            v={`${selectedPlan.vcpu}`}
+                                            mono
+                                        />
+                                        <SumRow
+                                            k="Memory"
+                                            v={`${ramGB} GB`}
+                                            mono
+                                        />
+                                        <SumRow
+                                            k="Storage"
+                                            v={`${selectedPlan.diskGB} GB NVMe`}
+                                            mono
+                                        />
+                                        <SumRow
+                                            k="Tier"
+                                            v={
+                                                selectedPlan.tier === "shared"
+                                                    ? "Shared CPU"
+                                                    : "Dedicated CPU"
+                                            }
+                                        />
+                                    </>
+                                )}
+                                <SumRow
+                                    k="Auth"
+                                    v={usesRDP ? "RDP password" : "SSH password"}
+                                />
+                            </div>
+
+                            {/* Connection preview */}
+                            {hostname && hostnameValid && selectedOSName && (
+                                <div className="mx-5 mb-4 px-3 py-2.5 border border-white/[0.06] bg-[#08090b] rounded-[5px]">
+                                    <div
+                                        className={`${MONO} flex items-center justify-between mb-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold text-white/35`}
+                                    >
+                                        Connection preview
+                                    </div>
+                                    <code
+                                        className={`${MONO} text-[10.5px] break-all leading-snug text-white/55`}
+                                    >
+                                        {usesRDP ? (
+                                            <>
+                                                <span
+                                                    style={{ color: ACCENT }}
+                                                >
+                                                    rdp://
+                                                </span>
+                                                <span className="text-emerald-400">
+                                                    {defaultUser}
+                                                </span>
+                                                @
+                                                <span className="text-white/85">
+                                                    {hostname}
+                                                </span>
+                                                :3389
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span
+                                                    style={{ color: ACCENT }}
+                                                >
+                                                    ssh{" "}
+                                                </span>
+                                                <span className="text-emerald-400">
+                                                    {defaultUser}
+                                                </span>
+                                                @
+                                                <span className="text-white/85">
+                                                    {hostname}
+                                                </span>
+                                            </>
+                                        )}
+                                    </code>
+                                </div>
+                            )}
+
+                            {/* Cost block */}
+                            <div className="px-5 py-4 bg-[#08090b] border-t border-white/[0.06]">
+                                <div className="flex items-baseline justify-between mb-2">
+                                    <span
+                                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40`}
+                                    >
+                                        Monthly cost
+                                    </span>
+                                    {selectedPlan && (
+                                        <span
+                                            className={`${MONO} text-[10.5px] text-white/45`}
+                                        >
+                                            ${selectedPlan.hourlyUSD.toFixed(3)}{" "}
+                                            / hr
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-baseline gap-1">
+                                    {!selectedPlan ? (
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[28px] font-bold text-white/35 leading-none"
+                                        >
+                                            —
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span
+                                                style={SERIF_STYLE}
+                                                className="text-[18px] text-white/50 font-medium leading-none"
+                                            >
+                                                $
+                                            </span>
+                                            <span
+                                                style={SERIF_STYLE}
+                                                className="text-[38px] font-bold tracking-[-0.03em] tabular-nums text-white leading-none"
+                                            >
+                                                {selectedPlan.monthlyUSD.toFixed(
+                                                    selectedPlan.monthlyUSD %
+                                                        1 ===
+                                                        0
+                                                        ? 0
+                                                        : 2,
+                                                )}
+                                            </span>
+                                            <span
+                                                className={`${MONO} text-[11px] text-white/40 ml-1`}
+                                            >
+                                                / mo
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    disabled={!formValid || isLoading}
+                                    onClick={onDeploy}
+                                    className={`${MONO} mt-4 w-full inline-flex items-center justify-center gap-2 h-11 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                                    style={{
+                                        background:
+                                            formValid && !isLoading
+                                                ? `linear-gradient(135deg, ${ACCENT}, #0066B3)`
+                                                : "#1a1d24",
+                                        color:
+                                            formValid && !isLoading
+                                                ? "#ffffff"
+                                                : "rgba(255,255,255,0.35)",
+                                        boxShadow:
+                                            formValid && !isLoading
+                                                ? "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)"
+                                                : "none",
+                                        cursor:
+                                            formValid && !isLoading
+                                                ? "pointer"
+                                                : "not-allowed",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!formValid || isLoading) return;
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                                        e.currentTarget.style.transform =
+                                            "translateY(-1px)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!formValid || isLoading) return;
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                                        e.currentTarget.style.transform =
+                                            "none";
+                                    }}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            Deploying
+                                        </>
+                                    ) : (
+                                        <>
+                                            Deploy server
+                                            <ArrowRight className="h-3.5 w-3.5" />
+                                        </>
+                                    )}
+                                </button>
+                                <p
+                                    className={`${MONO} text-center text-[10px] text-white/35 mt-2`}
+                                >
+                                    Per-second billing · cancel anytime
+                                </p>
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="mt-3 border border-red-500/25 bg-red-500/[0.06] rounded-[6px] p-3 text-[12px] text-red-300">
+                                {error}
+                            </div>
+                        )}
+                    </aside>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default VPSSelect;
+
+// ─── Subcomponents ────────────────────────────────────────────────
+
+type SectionStatus = "done" | "active" | "idle";
+
+function Section({
+    num,
+    title,
+    desc,
+    status,
+    statusLabel,
+    children,
+}: {
+    num: string;
+    title: string;
+    desc: string;
+    status: SectionStatus;
+    statusLabel: string;
+    children: React.ReactNode;
+}) {
+    const tone =
+        status === "done"
+            ? { dot: "#4ade80", text: "#4ade80" }
+            : status === "active"
+              ? { dot: ACCENT, text: ACCENT }
+              : {
+                    dot: "rgba(255,255,255,0.25)",
+                    text: "rgba(255,255,255,0.35)",
+                };
+
+    return (
+        <section className="border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0">
+            <header className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                    <span
+                        className={`${MONO} text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30 mt-0.5`}
+                    >
+                        {num}
+                    </span>
+                    <div>
+                        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-white">
+                            {title}
+                        </h2>
+                        <p
+                            className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[520px]`}
+                        >
+                            {desc}
+                        </p>
+                    </div>
+                </div>
+                <span
+                    className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] font-semibold shrink-0 mt-1 truncate max-w-[200px]`}
+                    style={{ color: tone.text }}
+                    title={statusLabel}
+                >
+                    <span
+                        className="h-1.5 w-1.5 rounded-full shrink-0"
+                        style={{
+                            background: tone.dot,
+                            boxShadow:
+                                status !== "idle"
+                                    ? `0 0 6px ${tone.dot}`
+                                    : "none",
+                        }}
+                    />
+                    <span className="truncate">{statusLabel}</span>
+                </span>
+            </header>
+            {children}
+        </section>
+    );
+}
+
+function FieldLabel({
+    children,
+    hint,
+}: {
+    children: React.ReactNode;
+    hint?: string;
+}) {
+    return (
+        <label className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[12px] font-medium text-white/85">
+                {children}
+            </span>
+            {hint && (
+                <span className={`${MONO} text-[10px] text-white/35`}>
+                    {hint}
+                </span>
+            )}
+        </label>
+    );
+}
+
+function RegionCard({
+    region,
+    selected,
+    onClick,
+}: {
+    region: Region;
+    selected: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={!region.available}
+            className="relative text-left px-4 py-3.5 bg-[#111216] hover:bg-[#16181d] transition-colors min-h-[78px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#111216]"
+            style={
+                selected
+                    ? {
+                          background: "#16181d",
+                          boxShadow: `inset 0 0 0 1px ${ACCENT}`,
+                      }
+                    : undefined
+            }
+        >
+            <div className="flex items-center justify-between mb-2">
+                <span
+                    className={`${MONO} text-[11px] font-semibold tracking-[0.04em] uppercase truncate`}
+                    style={{
+                        color: selected
+                            ? ACCENT
+                            : "rgba(255,255,255,0.55)",
+                    }}
+                >
+                    {region.id}
+                </span>
+                {region.available ? (
+                    <span
+                        className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold inline-flex items-center gap-1 text-emerald-300/85`}
+                    >
+                        <span
+                            className="h-1 w-1 rounded-full bg-emerald-400"
+                            style={{ boxShadow: "0 0 5px #4ade80" }}
+                        />
+                        Ready
+                    </span>
+                ) : (
+                    <span
+                        className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold text-red-400/70`}
+                    >
+                        Unavailable
+                    </span>
+                )}
+            </div>
+            <div className="flex items-center gap-2 min-w-0">
+                <FlagImg id={region.id} size={18} />
+                <span className="text-[13.5px] font-semibold tracking-[-0.005em] text-white truncate">
+                    {region.name}
+                </span>
+            </div>
+        </button>
+    );
+}
+
+function ReqCheck({
+    ok,
+    children,
+}: {
+    ok: boolean;
+    children: React.ReactNode;
+}) {
+    return (
+        <div
+            className={`${MONO} flex items-center gap-2 text-[11px] py-0.5 ${
+                ok ? "text-emerald-300/85" : "text-white/40"
+            }`}
+        >
+            <span
+                className="h-1.5 w-1.5 rounded-full shrink-0"
+                style={{
+                    background: ok ? "#4ade80" : "rgba(255,255,255,0.15)",
+                    boxShadow: ok ? "0 0 5px rgba(74,222,128,0.6)" : "none",
+                }}
+            />
+            {children}
+        </div>
+    );
+}
+
+function SumRow({
+    k,
+    v,
+    empty,
+    mono,
+}: {
+    k: string;
+    v: string;
+    empty?: boolean;
+    mono?: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-b-0">
+            <span
+                className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-medium text-white/40`}
+            >
+                {k}
+            </span>
+            <span
+                className={`${mono ? MONO : ""} text-[12px] font-medium truncate max-w-[200px] ${
+                    empty ? "text-white/25" : "text-white/90"
+                }`}
+                title={v}
+            >
+                {v}
+            </span>
+        </div>
+    );
+}
+
+function SumRowFlag({
+    k,
+    regionId,
+    regionName,
+}: {
+    k: string;
+    regionId: string;
+    regionName: string;
+}) {
+    const empty = !regionId;
+    return (
+        <div className="flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-b-0">
+            <span
+                className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-medium text-white/40`}
+            >
+                {k}
+            </span>
+            <span className="flex items-center gap-2 text-right max-w-[200px] min-w-0">
+                {!empty && <FlagImg id={regionId} size={14} />}
+                <span
+                    className={`text-[12px] font-medium truncate ${
+                        empty ? "text-white/25" : "text-white/90"
+                    }`}
+                >
+                    {empty ? "—" : regionName}
+                </span>
+            </span>
+        </div>
+    );
+}
+
+// ─── Plan picker ──────────────────────────────────────────────────
+
+function PlanPicker({
+    plans,
+    selectedTier,
+    setSelectedTier,
+    selectedPlanSlug,
+    setSelectedPlanSlug,
+    anyPlans,
+    isWindowsOrDesktop,
+    isWindows,
+    isDesktop,
+}: {
+    plans: PlanOption[];
+    selectedTier: "shared" | "dedicated";
+    setSelectedTier: (t: "shared" | "dedicated") => void;
+    selectedPlanSlug: string;
+    setSelectedPlanSlug: (s: string) => void;
+    anyPlans: boolean;
+    isWindowsOrDesktop: boolean;
+    isWindows: boolean;
+    isDesktop: boolean;
+}) {
+    if (!anyPlans) {
+        return (
+            <div
+                className={`${MONO} border border-amber-400/20 bg-amber-400/[0.04] rounded-[6px] p-4 text-[12px] text-amber-200/85`}
+            >
+                Plan catalog is empty. An administrator needs to add plans
+                before VMs can be created.
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            {/* Tier toggle — chip style */}
+            <div className="inline-flex border border-white/[0.06] bg-[#0d0e11] rounded-[5px] p-0.5 gap-0.5">
+                {(["shared", "dedicated"] as const).map((t) => (
+                    <button
+                        key={t}
+                        type="button"
+                        onClick={() => setSelectedTier(t)}
+                        className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold px-3 h-7 rounded-[4px] transition-colors`}
+                        style={
+                            selectedTier === t
+                                ? {
+                                      color: ACCENT,
+                                      background: ACCENT_DIM,
+                                      border:
+                                          "1px solid rgba(0,149,255,0.25)",
+                                  }
+                                : {
+                                      color: "rgba(255,255,255,0.55)",
+                                      border: "1px solid transparent",
+                                  }
+                        }
+                    >
+                        {t === "shared" ? "Shared CPU" : "Dedicated CPU"}
+                    </button>
+                ))}
+            </div>
+
+            {plans.length === 0 ? (
+                <div
+                    className={`${MONO} border border-dashed border-white/[0.08] rounded-[6px] p-6 text-center text-[11px] text-white/45`}
+                >
+                    No {selectedTier} plans match the current selection.
+                    {isWindowsOrDesktop && (
+                        <span className="block mt-1 text-[10.5px] text-white/40">
+                            {isWindows ? "Windows" : "Desktop"} requires ≥ 2 GB
+                            RAM and{" "}
+                            {isWindows ? "≥ 40 GB disk" : "≥ 25 GB disk"}
+                        </span>
+                    )}
+                </div>
+            ) : (
+                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                    {/* Column header */}
+                    <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.015]">
+                        <span />
+                        <ColHead>Slug</ColHead>
+                        <ColHead>Name</ColHead>
+                        <ColHead align="right">vCPU</ColHead>
+                        <ColHead align="right">RAM</ColHead>
+                        <ColHead align="right">Storage</ColHead>
+                        <ColHead align="right">Monthly</ColHead>
+                    </div>
+                    {plans.map((p, idx) => {
+                        const sel = selectedPlanSlug === p.slug;
+                        const ramGB =
+                            p.memoryMB % 1024 === 0
+                                ? p.memoryMB / 1024
+                                : (p.memoryMB / 1024).toFixed(1);
+                        const popular =
+                            !sel && idx === 2 && plans.length >= 4;
+                        return (
+                            <button
+                                type="button"
+                                key={p.slug}
+                                onClick={() => setSelectedPlanSlug(p.slug)}
+                                className="relative group w-full text-left transition-colors border-b border-white/[0.04] last:border-b-0"
+                                style={
+                                    sel
+                                        ? { background: ACCENT_DIM }
+                                        : { background: "transparent" }
+                                }
+                                onMouseEnter={(e) => {
+                                    if (!sel)
+                                        e.currentTarget.style.background =
+                                            "rgba(255,255,255,0.02)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!sel)
+                                        e.currentTarget.style.background =
+                                            "transparent";
+                                }}
+                            >
+                                {sel && (
+                                    <span
+                                        className="absolute left-0 top-0 bottom-0 w-[2px]"
+                                        style={{ background: ACCENT }}
+                                    />
+                                )}
+
+                                {/* Desktop row */}
+                                <div className="hidden md:grid grid-cols-[24px_minmax(48px,68px)_minmax(0,1.3fr)_minmax(52px,0.6fr)_minmax(66px,0.7fr)_minmax(104px,0.95fr)_minmax(96px,140px)] gap-3 px-4 py-2.5 items-center">
+                                    <span
+                                        aria-hidden
+                                        className="relative h-[15px] w-[15px] rounded-full shrink-0"
+                                        style={{
+                                            border: `1.5px solid ${sel ? ACCENT : "rgba(255,255,255,0.18)"}`,
+                                        }}
+                                    >
+                                        {sel && (
+                                            <span
+                                                className="absolute inset-[3px] rounded-full block"
+                                                style={{
+                                                    background: ACCENT,
+                                                    boxShadow: `0 0 6px rgba(0,149,255,0.6)`,
+                                                }}
+                                            />
+                                        )}
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-[11.5px] ${sel ? "text-white" : "text-white/55"}`}
+                                        style={sel ? { color: ACCENT_BRIGHT } : undefined}
+                                    >
+                                        {p.slug}
+                                    </span>
+                                    <span className="flex items-center gap-2 min-w-0">
+                                        <span className="text-[13px] text-white truncate">
+                                            {p.name}
+                                        </span>
+                                        {popular && (
+                                            <span
+                                                className={`${MONO} text-[9px] font-semibold uppercase tracking-[0.12em] px-1.5 py-px rounded-[3px] shrink-0`}
+                                                style={{
+                                                    background: ACCENT_DIM,
+                                                    color: ACCENT,
+                                                    border: "1px solid rgba(0,149,255,0.25)",
+                                                }}
+                                            >
+                                                Popular
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
+                                    >
+                                        {p.vcpu}
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-right text-[12px] text-white/90 tabular-nums`}
+                                    >
+                                        {ramGB}
+                                        <span className="text-white/35 text-[10.5px]">
+                                            {" GB"}
+                                        </span>
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-right text-[11.5px] text-white/65 tabular-nums`}
+                                    >
+                                        {p.diskGB}
+                                        <span className="text-white/35 text-[10.5px]">
+                                            {" GB "}
+                                        </span>
+                                        <span className="text-white/30 text-[10px] uppercase tracking-[0.06em]">
+                                            NVMe
+                                        </span>
+                                    </span>
+                                    <span className="text-right flex items-baseline justify-end gap-1.5">
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[16px] leading-none text-white font-bold tabular-nums"
+                                        >
+                                            $
+                                            {p.monthlyUSD.toFixed(
+                                                p.monthlyUSD % 1 === 0
+                                                    ? 0
+                                                    : 2,
+                                            )}
+                                        </span>
+                                        <span
+                                            className={`${MONO} text-[10px] text-white/35`}
+                                        >
+                                            /mo
+                                        </span>
+                                    </span>
+                                </div>
+
+                                {/* Mobile stacked */}
+                                <div className="md:hidden px-4 py-3 flex items-start gap-3">
+                                    <span
+                                        aria-hidden
+                                        className="mt-0.5 relative h-4 w-4 rounded-full shrink-0"
+                                        style={{
+                                            border: `1.5px solid ${sel ? ACCENT : "rgba(255,255,255,0.18)"}`,
+                                        }}
+                                    >
+                                        {sel && (
+                                            <span
+                                                className="absolute inset-[3px] rounded-full block"
+                                                style={{
+                                                    background: ACCENT,
+                                                    boxShadow: `0 0 6px rgba(0,149,255,0.6)`,
+                                                }}
+                                            />
+                                        )}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span
+                                                className={`${MONO} text-[11.5px] text-white/85`}
+                                            >
+                                                {p.slug}
+                                            </span>
+                                            <span className="text-[13px] text-white truncate">
+                                                {p.name}
+                                            </span>
+                                            {popular && (
+                                                <span
+                                                    className={`${MONO} text-[9px] font-semibold uppercase tracking-[0.12em] px-1.5 py-px rounded-[3px]`}
+                                                    style={{
+                                                        background:
+                                                            ACCENT_DIM,
+                                                        color: ACCENT,
+                                                        border: "1px solid rgba(0,149,255,0.25)",
+                                                    }}
+                                                >
+                                                    Popular
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div
+                                            className={`${MONO} mt-1 text-[11px] text-white/55 tabular-nums`}
+                                        >
+                                            {p.vcpu} vCPU · {ramGB} GB ·{" "}
+                                            {p.diskGB} GB NVMe
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[16px] leading-none text-white font-bold tabular-nums"
+                                        >
+                                            $
+                                            {p.monthlyUSD.toFixed(
+                                                p.monthlyUSD % 1 === 0
+                                                    ? 0
+                                                    : 2,
+                                            )}
+                                        </span>
+                                        <span
+                                            className={`${MONO} ml-1 text-[10px] text-white/35`}
+                                        >
+                                            /mo
+                                        </span>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ColHead({
+    children,
+    align = "left",
+}: {
+    children: React.ReactNode;
+    align?: "left" | "right";
+}) {
+    return (
+        <span
+            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40 ${
+                align === "right" ? "text-right" : ""
+            }`}
+        >
+            {children}
+        </span>
+    );
+}

@@ -1,0 +1,8 @@
+# Don't ship build artifacts or cache to the image
+*.log
+*.tmp
+__pycache__
+.DS_Store
+.git
+.gitignore
+README.md

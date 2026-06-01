@@ -44,6 +44,9 @@ export const VALID_TABLE_NAMES = [
   "active_objectspace",
   "active_spectrum",
   "active_platform_apps",
+  "active_inference_vector",
+  "active_compute",
+  "active_custom_image",
 ];
 
 const TABLE_TO_SERVICE_TYPE = {
@@ -52,6 +55,9 @@ const TABLE_TO_SERVICE_TYPE = {
   active_objectspace: "objectspace",
   active_spectrum: "spectrum",
   active_platform_apps: "platform_apps",
+  active_inference_vector: "inference_vector",
+  active_compute: "compute",
+  active_custom_image: "custom_image",
 };
 
 const BILLING_SERVICE_TABLES = Object.keys(TABLE_TO_SERVICE_TYPE);
@@ -1396,8 +1402,8 @@ export async function processServiceTable(tableName) {
   }
 }
 
-// Run every 5 minutes
-cron.schedule("*/5 * * * *", async () => {
+// Run every 1 hr minutes
+cron.schedule("0 * * * *", async () => {
   try {
     console.log("Billing cycle started:", new Date().toISOString());
 
@@ -1473,6 +1479,42 @@ cron.schedule("0 * * * *", async () => {
 });
 
 // -----------------------------
+// DOMAIN TRANSFER POLL
+// Runs every 30 minutes — polls Name.com for status updates on pending
+// transfers. Transfers stay stuck forever without this job because the
+// poll endpoint is never called otherwise.
+// -----------------------------
+cron.schedule("*/30 * * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[domain-transfer-poll] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[domain-transfer-poll] Polling pending transfers:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/domains/transfer/poll`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 50 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[domain-transfer-poll] Poll failed:", data);
+    } else {
+      console.log("[domain-transfer-poll] Poll completed:", data.message);
+    }
+  } catch (error) {
+    console.error("[domain-transfer-poll] Poll error:", error.message);
+  }
+});
+
+// -----------------------------
 // DOMAIN RENEWAL BILLING
 // Runs daily at 09:00 UTC — charges users' credit balances for domains
 // expiring within the next 30 days. Name.com handles the actual renewal
@@ -1508,6 +1550,41 @@ cron.schedule("0 9 * * *", async () => {
   }
 });
 
+// -----------------------------
+// PLATFORM APP BUILD LOG CLEANUP
+// Runs daily — removes expired archived build logs from private storage.
+// Deployment metadata remains available; only stored log objects expire.
+// -----------------------------
+cron.schedule("20 3 * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[platform-build-log-cleanup] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[platform-build-log-cleanup] Running cleanup:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/services/platform-apps/cleanup-logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 100 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[platform-build-log-cleanup] Cleanup failed:", data);
+    } else {
+      console.log("[platform-build-log-cleanup] Cleanup completed:", data);
+    }
+  } catch (error) {
+    console.error("[platform-build-log-cleanup] Cleanup error:", error.message);
+  }
+});
+
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +
@@ -1527,4 +1604,3 @@ console.log(
     : "disabled"
 );
 console.log("Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());
-

@@ -1,4 +1,4 @@
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateNextjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -14,6 +14,7 @@ export function createNextJsPipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -26,57 +27,34 @@ export function createNextJsPipeline(
     .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
-  const sizeKey = (size || 'small').toLowerCase();
-
-  let cpuRequest = '500m';
-  let cpuLimit = '1';
-  let memoryRequest = '512Mi';
-  let memoryLimit = '1Gi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  // Next.js SSR needs at least 512 MB — floor at medium
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
 
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;
 
-  // Split env vars: NEXT_PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  // NEXT_PUBLIC_* vars are baked into the client bundle via build args.
+  // ALL vars (including NEXT_PUBLIC_*) are also injected at runtime via K8s Secret so the
+  // server process can read them from process.env.
   const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
-  const serverEnvVars = envVars.filter(e => !e.key.startsWith('NEXT_PUBLIC_'));
 
-  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
+  // Runtime secret must include ALL vars: server-side vars AND NEXT_PUBLIC_* vars.
+  // Next.js reads NEXT_PUBLIC_* from process.env on the server at runtime (SSR, server
+  // components, instrumentation hooks, env validation), so they must be present in the
+  // runtime environment in addition to being baked into the client bundle via build args.
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
-  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
-  // This prevents secrets from being baked into Docker images
-  // Why: Next.js only needs public vars during build for static generation
-  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars
-        .map(e => {
-          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-          return `--build-arg ${e.key}="${escapedValue}"`;
-        }).join(' \\\\\n                    ')
-    : '';
-  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
-  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
-  const buildArgsLine = buildArgs
-    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
-    : ` \\\\\n                    ${pmBuildArg}`;
+  // Only NEXT_PUBLIC_* vars are baked into the image at build time.
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) are injected at runtime via K8s Secrets.
+  const buildOpts: string[] = [
+    ...clientEnvVars.map(e => {
+      const escapedValue = e.value.replace(/'/g, "'\\''");
+      return `--opt 'build-arg:${e.key}=${escapedValue}'`;
+    }),
+    '--opt build-arg:PACKAGE_MANAGER=$PACKAGE_MANAGER',
+  ];
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -224,48 +202,7 @@ ${generateNextjsDockerfileStage(envVars)}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              echo "STAGE: Build Docker Image"
-              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-                # Re-detect package manager (shell vars don't persist across stages)
-${getPackageManagerDetectionScript()}
-
-              echo 'Executing Kaniko build'
-              /kaniko/executor \
-                --context=$WORKSPACE \
-                --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE_VERSION \
-                --destination=\$DOCKER_IMAGE_LATEST${buildArgsLine} \\
-                --cache=true \\
-                --cache-repo=hav0ky/${appName}-cache \\
-                --use-new-run \\
-                --digest-file=image-digest.txt
-
-              echo 'Image build completed successfully'
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName, buildOpts, getPackageManagerDetectionScript())}
 
 ${generateImageScanStage({ language: 'node' })}
 
@@ -331,20 +268,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
             echo "Generating Kubernetes service manifest"

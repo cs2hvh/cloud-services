@@ -60,6 +60,7 @@ export class JenkinsBuildAdapter {
     envVars: Array<{ key: string; value: string }>;
     containerPort?: number;
     gitAuthUrl?: string;
+    healthcheckPath?: string;
   }) {
     await JenkinsService.createJob(
       params.appName,
@@ -71,7 +72,8 @@ export class JenkinsBuildAdapter {
       params.deployTrigger,
       params.envVars,
       params.containerPort,
-      params.gitAuthUrl
+      params.gitAuthUrl,
+      params.healthcheckPath,
     );
 
     return {

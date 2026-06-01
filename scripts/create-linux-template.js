@@ -64,6 +64,46 @@ const TEMPLATES = [
     cloudImageFile: "CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2",
     defaultUser: "centos",
   },
+  {
+    vmid: 111,
+    name: "ubuntu-server-24-template",
+    dbName: "Ubuntu Server 24.04",
+    osType: "ubuntu-server-24",
+    osDisplayName: "Ubuntu Server 24.04 LTS",
+    cloudImageUrl: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img",
+    cloudImageFile: "ubuntu-24.04-server-cloudimg-amd64.img",
+    defaultUser: "ubuntu",
+  },
+  {
+    vmid: 112,
+    name: "ubuntu-server-20-template",
+    dbName: "Ubuntu Server 20.04",
+    osType: "ubuntu-server-20",
+    osDisplayName: "Ubuntu Server 20.04 LTS",
+    cloudImageUrl: "https://cloud-images.ubuntu.com/releases/20.04/release/ubuntu-20.04-server-cloudimg-amd64.img",
+    cloudImageFile: "ubuntu-20.04-server-cloudimg-amd64.img",
+    defaultUser: "ubuntu",
+  },
+  {
+    vmid: 113,
+    name: "almalinux-9-template",
+    dbName: "AlmaLinux 9",
+    osType: "almalinux-9",
+    osDisplayName: "AlmaLinux 9",
+    cloudImageUrl: "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+    cloudImageFile: "AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+    defaultUser: "almalinux",
+  },
+  {
+    vmid: 114,
+    name: "rocky-linux-9-template",
+    dbName: "Rocky Linux 9",
+    osType: "rocky-linux-9",
+    osDisplayName: "Rocky Linux 9",
+    cloudImageUrl: "https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2",
+    cloudImageFile: "Rocky-9-GenericCloud.latest.x86_64.qcow2",
+    defaultUser: "rocky",
+  },
 ];
 
 // ── NAT Setup for Internet During Template Build ──────────────────────
@@ -155,7 +195,10 @@ async function createTemplate(ssh, tpl, host) {
     "--net0 virtio,bridge=" + (host.bridge || "vmbr0"),
     "--agent 1,fstrim_cloned_disks=1",
     "--serial0 socket",
-    "--vga serial0",
+    // qxl gives a real noVNC/SPICE console (visible in the Proxmox
+    // UI). Serial socket above is kept so cloud-init's early-boot
+    // output still lands somewhere debuggable.
+    "--vga qxl",
   ].join(" "));
 
   r = await ssh("qm importdisk " + V + " " + imgPath + " " + S + " --format qcow2", 300000);

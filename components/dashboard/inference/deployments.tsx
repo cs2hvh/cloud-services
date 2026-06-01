@@ -1,0 +1,885 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  Box,
+  CheckCircle2,
+  Cpu,
+  Globe,
+  Loader2,
+  Plus,
+  RotateCw,
+  Sliders,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  ACCENT,
+  ColHead,
+  DataTable,
+  EmptyState,
+  GhostButton,
+  Hero,
+  MONO,
+  PageCanvas,
+  PrimaryButton,
+  RowActionButton,
+  SectionHead,
+  SERIF_STYLE,
+  StatCell,
+  StatsStrip,
+} from "@/components/dashboard/inference/chrome";
+import { Field } from "@/components/dashboard/inference/fine-tuning-cells";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+
+// Editorial dark input styling, shared by every field in the create dialog so
+// the form matches the fine-tuning dialog + the rest of the dashboard.
+const FIELD_INPUT = `${MONO} bg-white/[0.02] border-white/[0.08] text-[12px]`;
+
+export interface Deployment {
+  id: string;
+  name: string;
+  source: "docker" | "huggingface" | "truss";
+  source_ref: string;
+  source_revision: string | null;
+  gpu_sku: string;
+  autoscale: { min_workers: number; max_workers: number; idle_timeout_s: number };
+  status: "building" | "deploying" | "active" | "paused" | "failed" | "deleted";
+  endpoint_id: string | null;
+  image_uri: string | null;
+  model_id: string | null;
+  error_message: string | null;
+  deployed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface InventoryRow {
+  gpuCatalogId: string;
+  runpodGpuId: string;
+  displayName: string;
+  memoryGb: number;
+  cloudType: "SECURE" | "COMMUNITY";
+  stockStatus: "high" | "medium" | "low" | "none";
+  onDemandPerHr: number | null;
+  spotPerHr: number | null;
+}
+
+// GPU compute markup applied to the raw observed rate for display — mirrors
+// the billed rate in pod-lifecycle-operations and the deploy wizard quote.
+const GPU_DISPLAY_MARKUP = 1.25;
+
+/** Clean a RunPod display name / gpuTypeId for the customer — drop the vendor prefix. */
+function gpuLabel(name: string): string {
+  return name.replace(/^NVIDIA\s+/i, "").trim() || name;
+}
+
+/** Marked-up "$X.XX/hr" for an inventory row, or null when price is unknown. */
+function gpuPriceLabel(row: InventoryRow): string | null {
+  if (row.onDemandPerHr === null || row.onDemandPerHr === undefined) return null;
+  return `$${(row.onDemandPerHr * GPU_DISPLAY_MARKUP).toFixed(2)}/hr`;
+}
+
+const SOURCE_OPTIONS = [
+  { value: "docker" as const, label: "Docker image" },
+  { value: "huggingface" as const, label: "HuggingFace repo" },
+  {
+    value: "truss" as const,
+    label: "Truss git repo (coming soon)",
+    disabled: true,
+  },
+];
+
+function statusMeta(status: Deployment["status"]): { color: string; label: string; pulse?: boolean } {
+  if (status === "active") return { color: "#4ade80", label: "Active" };
+  if (status === "building") return { color: "#fbbf24", label: "Building", pulse: true };
+  if (status === "deploying") return { color: ACCENT, label: "Deploying", pulse: true };
+  if (status === "paused") return { color: "rgba(255,255,255,0.5)", label: "Paused" };
+  if (status === "failed") return { color: "#f87171", label: "Failed" };
+  if (status === "deleted") return { color: "rgba(255,255,255,0.35)", label: "Deleted" };
+  return { color: "rgba(255,255,255,0.4)", label: status };
+}
+
+function sourceMeta(s: Deployment["source"]): string {
+  if (s === "docker") return "Docker";
+  if (s === "huggingface") return "HF";
+  return "Truss";
+}
+
+export function Deployments({
+  initial,
+  orgName,
+}: {
+  initial: Deployment[];
+  orgName: string;
+}) {
+  const [items, setItems] = useState<Deployment[]>(initial);
+  const [loading, setLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Deployment | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
+  const [scaleSaving, setScaleSaving] = useState(false);
+  const [scaleForm, setScaleForm] = useState({
+    min_workers: 0,
+    max_workers: 4,
+    idle_timeout_s: 60,
+  });
+  // Live GPU inventory — fetched when the create dialog opens. Powers the
+  // catalog-driven GPU picker (price + stock), same source as GPU cloud.
+  const [gpuInventory, setGpuInventory] = useState<InventoryRow[] | null>(null);
+  const [gpuInventoryError, setGpuInventoryError] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
+    name: "",
+    source: "docker" as Deployment["source"],
+    source_ref: "",
+    source_revision: "",
+    /** Only meaningful when source === 'huggingface'. Stored once,
+     *  encrypted server-side, never returned to the client after that. */
+    hf_token: "",
+    gpu_sku: "", // set to the first in-stock GPU once live inventory loads
+    min_workers: 0,
+    max_workers: 4,
+    idle_timeout_s: 60,
+  });
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/inference/deployments", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load deployments");
+      const data = await r.json();
+      setItems(data.data ?? []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch live GPU inventory when the create dialog opens.
+  useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/services/gpu/inventory", { credentials: "include" });
+        const data = await r.json();
+        if (cancelled) return;
+        if (!r.ok || !data.ok) {
+          setGpuInventoryError(data.error ?? "inventory fetch failed");
+          setForm((f) => (f.gpu_sku ? f : { ...f, gpu_sku: "A100-80GB" }));
+          return;
+        }
+        setGpuInventory(data.inventory ?? []);
+        setGpuInventoryError(null);
+      } catch (err) {
+        if (!cancelled) {
+          setGpuInventoryError(err instanceof Error ? err.message : "fetch failed");
+          setForm((f) => (f.gpu_sku ? f : { ...f, gpu_sku: "A100-80GB" }));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen]);
+
+  // SECURE GPUs from the live catalog, in-stock first then cheapest first.
+  const gpuOptions = useMemo(() => {
+    const rows = (gpuInventory ?? []).filter((r) => r.cloudType === "SECURE");
+    return [...rows].sort((a, b) => {
+      const aOut = a.stockStatus === "none" ? 1 : 0;
+      const bOut = b.stockStatus === "none" ? 1 : 0;
+      if (aOut !== bOut) return aOut - bOut;
+      const ap = a.onDemandPerHr ?? Infinity;
+      const bp = b.onDemandPerHr ?? Infinity;
+      if (ap !== bp) return ap - bp;
+      return gpuLabel(a.displayName).localeCompare(gpuLabel(b.displayName));
+    });
+  }, [gpuInventory]);
+
+  // Auto-select the first in-stock GPU once inventory arrives (or if the
+  // current choice fell out of stock / isn't in the catalog).
+  useEffect(() => {
+    if (gpuOptions.length === 0) return;
+    const current = gpuOptions.find((r) => r.runpodGpuId === form.gpu_sku);
+    if (current && current.stockStatus !== "none") return;
+    const pick = gpuOptions.find((r) => r.stockStatus !== "none") ?? gpuOptions[0];
+    if (pick && pick.runpodGpuId !== form.gpu_sku) {
+      setForm((f) => ({ ...f, gpu_sku: pick.runpodGpuId }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpuOptions]);
+
+  // Auto-refresh while any deployment is mid-flight
+  useEffect(() => {
+    const inFlight = items.some((d) => ["building", "deploying"].includes(d.status));
+    if (!inFlight) return;
+    const t = setInterval(reload, 8000);
+    return () => clearInterval(t);
+  }, [items]);
+
+  const create = async () => {
+    if (!form.name.trim() || !form.source_ref.trim()) {
+      toast.error("Name and source reference are required");
+      return;
+    }
+    if (form.min_workers > form.max_workers) {
+      toast.error("min_workers must be ≤ max_workers");
+      return;
+    }
+    if (!form.gpu_sku) {
+      toast.error("Select a GPU");
+      return;
+    }
+    setCreating(true);
+    try {
+      const r = await fetch("/api/inference/deployments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          source: form.source,
+          source_ref: form.source_ref.trim(),
+          source_revision: form.source_revision.trim() || null,
+          gpu_sku: form.gpu_sku,
+          autoscale: {
+            min_workers: form.min_workers,
+            max_workers: form.max_workers,
+            idle_timeout_s: form.idle_timeout_s,
+          },
+          ...(form.source === "huggingface" && form.hf_token.trim()
+            ? { hf_token: form.hf_token.trim() }
+            : {}),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        const errMsg = data?.preflight?.errors?.[0] ?? data?.error ?? "Failed to create deployment";
+        throw new Error(errMsg);
+      }
+      const warnings: string[] = data?.preflight?.warnings ?? [];
+      toast.success(`Created "${form.name}"`);
+      warnings.forEach((w) => toast.warning(w, { duration: 8000 }));
+      setForm({ ...form, name: "", source_ref: "", source_revision: "", hf_token: "" });
+      setCreateOpen(false);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const openScale = (d: Deployment) => {
+    setScaleForm({
+      min_workers: d.autoscale.min_workers,
+      max_workers: d.autoscale.max_workers,
+      idle_timeout_s: d.autoscale.idle_timeout_s,
+    });
+    setScaleTarget(d);
+  };
+
+  const saveScale = async () => {
+    if (!scaleTarget) return;
+    if (scaleForm.min_workers > scaleForm.max_workers) {
+      toast.error("min_workers must be ≤ max_workers");
+      return;
+    }
+    setScaleSaving(true);
+    try {
+      const r = await fetch(`/api/inference/deployments/${scaleTarget.id}/scale`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(scaleForm),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Failed to update scale");
+      toast.success(`Updated autoscale for "${scaleTarget.name}"`);
+      setScaleTarget(null);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update scale");
+    } finally {
+      setScaleSaving(false);
+    }
+  };
+
+  const doDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const r = await fetch(`/api/inference/deployments/${deleteTarget.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Failed to delete");
+      toast.success(`Tearing down "${deleteTarget.name}"`);
+      setDeleteTarget(null);
+      await reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const selectedGpu = gpuOptions.find((r) => r.runpodGpuId === form.gpu_sku);
+
+  // Aggregates
+  const active = items.filter((d) => d.status === "active").length;
+  const inFlight = items.filter((d) => ["building", "deploying"].includes(d.status)).length;
+  const failed = items.filter((d) => d.status === "failed").length;
+  const totalMaxWorkers = items
+    .filter((d) => ["active", "deploying"].includes(d.status))
+    .reduce((s, d) => s + (d.autoscale?.max_workers ?? 0), 0);
+
+  return (
+    <PageCanvas>
+      <Hero
+        breadcrumb={{ label: "Inference", href: "/dashboard/services/inference" }}
+        title="BYO deploys"
+        accent="& endpoints"
+        caption="Bring any Docker image, HuggingFace model, or Truss bundle. We provision a managed serverless endpoint with autoscale, register it in your catalog, and route calls through the same gateway as the rest of your models."
+        size="md"
+        actions={
+          <>
+            <GhostButton onClick={reload} disabled={loading}>
+              <RotateCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </GhostButton>
+            <PrimaryButton onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              New deployment
+            </PrimaryButton>
+          </>
+        }
+      />
+
+      <StatsStrip>
+        <StatCell label="Deployments" value={String(items.length)} hint="All time, this org" />
+        <StatCell
+          label="Active"
+          value={String(active)}
+          suffix={items.length > 0 ? `/ ${items.length}` : undefined}
+          hint="Serving traffic"
+          accent={active > 0 ? "#4ade80" : undefined}
+        />
+        <StatCell
+          label="In flight"
+          value={String(inFlight)}
+          hint="Building or deploying"
+          accent={inFlight > 0 ? ACCENT : undefined}
+        />
+        <StatCell
+          label="Max workers"
+          value={String(totalMaxWorkers)}
+          hint={`${failed} failed`}
+        />
+      </StatsStrip>
+
+      {/* Customer-visible note — explains why new deployments may sit in 'building' */}
+      <section className="mb-10">
+        <div className="border border-amber-400/15 bg-amber-400/[0.03] rounded-[6px] p-4 flex items-start gap-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-300/80 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className={`${MONO} text-[11px] uppercase tracking-[0.12em] font-semibold text-amber-200/90`}>
+              Preview — API live, provisioning in private beta
+            </p>
+            <p className={`${MONO} mt-1 text-[11px] text-white/55 leading-relaxed`}>
+              Deployments created here land in <span className="text-white/80">status=building</span> and
+              are queued for provisioning. End-to-end deploy is rolling out to organizations
+              progressively. Pre-flight checks (image manifest, source-registry probes) are fully
+              active, so bad inputs still get rejected at create time.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <SectionHead
+        eyebrow="Inventory"
+        title="Your"
+        accent="deployments"
+        rightMeta={items.length > 0 ? `${items.length} total · org: ${orgName}` : `org: ${orgName}`}
+      />
+
+      {items.length > 0 ? (
+        <DataTable>
+          <div className="hidden md:grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.7fr)] gap-3 px-5 py-2.5 border-b border-white/[0.06]">
+            <ColHead>Name</ColHead>
+            <ColHead>Source · GPU</ColHead>
+            <ColHead>Status</ColHead>
+            <ColHead align="right">Workers (min/max)</ColHead>
+            <ColHead>Endpoint</ColHead>
+            <ColHead align="right">Actions</ColHead>
+          </div>
+          {items.map((d) => {
+            const s = statusMeta(d.status);
+            return (
+              <div
+                key={d.id}
+                className="grid grid-cols-1 gap-2 px-5 py-3 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.015] transition-colors md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.7fr)] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Box className="h-3.5 w-3.5 shrink-0 text-[#0095FF]/70" />
+                    <span className={`${MONO} text-[12.5px] font-semibold text-white truncate`}>
+                      {d.name}
+                    </span>
+                  </div>
+                  <span className={`${MONO} block text-[10.5px] text-white/35 mt-0.5`}>
+                    {new Date(d.created_at).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <code className={`${MONO} block text-[11.5px] text-white/85 truncate`}>
+                    {d.source_ref}
+                    {d.source_revision ? `:${d.source_revision}` : ""}
+                  </code>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`${MONO} inline-flex items-center gap-1 text-[10px] text-white/55`}>
+                      <Cpu className="h-2.5 w-2.5" />
+                      {gpuLabel(d.gpu_sku)}
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] text-white/55`}>
+                      {sourceMeta(d.source)}
+                    </span>
+                  </div>
+                </div>
+                <div className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${s.pulse ? "animate-pulse" : ""}`}
+                    style={{
+                      background: s.color,
+                      boxShadow: s.color.startsWith("rgba(255,255,255") ? "none" : `0 0 5px ${s.color}`,
+                    }}
+                  />
+                  <span
+                    className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold`}
+                    style={{ color: s.color }}
+                  >
+                    {s.label}
+                  </span>
+                  {s.pulse && <Loader2 className="h-3 w-3 animate-spin text-white/40" />}
+                </div>
+                <div className="text-right">
+                  <span style={SERIF_STYLE} className="text-[14px] font-bold text-white tabular-nums">
+                    {d.autoscale.min_workers} / {d.autoscale.max_workers}
+                  </span>
+                  <span className={`${MONO} block text-[10px] text-white/45`}>
+                    idle {d.autoscale.idle_timeout_s}s
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  {d.endpoint_id ? (
+                    <span
+                      className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-emerald-300/85`}
+                      title="Serverless endpoint id (internal)"
+                    >
+                      <Globe className="h-2.5 w-2.5" />
+                      <span className="truncate max-w-[120px]">{d.endpoint_id.slice(0, 12)}</span>
+                    </span>
+                  ) : d.error_message ? (
+                    <span className={`${MONO} block text-[10.5px] text-red-300/75 truncate max-w-[160px]`}>
+                      {customerSafeErrorMessage(d.error_message)}
+                    </span>
+                  ) : (
+                    <span className={`${MONO} text-[10.5px] text-white/30`}>—</span>
+                  )}
+                  {d.model_id && (
+                    <span className={`${MONO} inline-flex items-center gap-1 text-[10px] text-white/50 mt-0.5`}>
+                      <CheckCircle2 className="h-2.5 w-2.5" /> in catalog
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-end gap-1.5">
+                  {d.status !== "deleted" && d.status !== "failed" && (
+                    <RowActionButton onClick={() => openScale(d)}>
+                      <Sliders className="h-3 w-3" />
+                      Scale
+                    </RowActionButton>
+                  )}
+                  {d.status !== "deleted" && (
+                    <RowActionButton onClick={() => setDeleteTarget(d)} variant="danger">
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </RowActionButton>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </DataTable>
+      ) : (
+        <EmptyState
+          title="No deployments yet"
+          description="Deploy any open-weight model, custom container, or Truss bundle. Endpoints auto-register in your model catalog and route through the same gateway as the rest of inference."
+          action={
+            <PrimaryButton onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Create first deployment
+            </PrimaryButton>
+          }
+        />
+      )}
+
+      {/* ── Create dialog ────────────────────────────────────────── */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New deployment</DialogTitle>
+            <DialogDescription>
+              Provision a managed serverless endpoint from a Docker image, HuggingFace repo,
+              or Truss bundle. Pre-flight validates the source before queueing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+            <div className="md:col-span-2">
+              <Field label="Name *">
+                <Input
+                  id="dep-name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="prod-llama-3-8b"
+                  maxLength={64}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+              <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
+                Lowercase letters, digits, underscores, hyphens. Must be unique in your org.
+              </p>
+            </div>
+
+            <div>
+              <Field label="Source type *">
+                <Select
+                  value={form.source}
+                  onValueChange={(v) => setForm({ ...form, source: v as Deployment["source"] })}
+                >
+                  <SelectTrigger className={FIELD_INPUT}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        disabled={"disabled" in o && o.disabled === true}
+                      >
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <div>
+              <Field label="GPU">
+                <Select
+                  value={form.gpu_sku}
+                  onValueChange={(v) => setForm({ ...form, gpu_sku: v })}
+                  disabled={gpuOptions.length === 0}
+                >
+                  <SelectTrigger className={FIELD_INPUT}>
+                    {gpuInventory === null ? (
+                      <span className="inline-flex items-center gap-2 text-white/40">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedGpu ? (
+                      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-left">
+                        <span className="truncate font-medium">{gpuLabel(selectedGpu.displayName)}</span>
+                        <span className="shrink-0 text-white/40 text-[11px] tabular-nums">{selectedGpu.memoryGb}GB</span>
+                        {gpuPriceLabel(selectedGpu) && (
+                          <span className="shrink-0 text-white/60 text-[11px] tabular-nums">
+                            {gpuPriceLabel(selectedGpu)}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <SelectValue placeholder="Select a GPU" />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {gpuOptions.map((row) => {
+                      const outOfStock = row.stockStatus === "none";
+                      const price = gpuPriceLabel(row);
+                      return (
+                        <SelectItem key={row.runpodGpuId} value={row.runpodGpuId} disabled={outOfStock || undefined}>
+                          <span className="flex items-center gap-2 w-full pr-1">
+                            <span className="font-medium">{gpuLabel(row.displayName)}</span>
+                            <span className="text-white/40 text-[11px] tabular-nums">{row.memoryGb}GB</span>
+                            <span className="ml-auto inline-flex items-center gap-2">
+                              {price && (
+                                <span className="text-white/70 text-[11px] tabular-nums">{price}</span>
+                              )}
+                              {outOfStock ? (
+                                <span className="text-red-300/70 text-[10px] uppercase tracking-[0.1em]">
+                                  out of stock
+                                </span>
+                              ) : row.stockStatus === "low" ? (
+                                <span className="text-amber-300/80 text-[10px] uppercase tracking-[0.1em]">
+                                  limited
+                                </span>
+                              ) : (
+                                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#4ade80" }} />
+                              )}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <p className={`${MONO} mt-1 text-[10px] text-white/40`}>
+                {gpuInventoryError
+                  ? "Live capacity unavailable — defaulting to standard GPUs."
+                  : "Live on-demand rate per GPU worker."}
+              </p>
+            </div>
+
+            <div className="md:col-span-2">
+              <Field
+                label={
+                  form.source === "docker"
+                    ? "Image reference *"
+                    : form.source === "huggingface"
+                      ? "HF model id *"
+                      : "Git repo URL *"
+                }
+              >
+                <Input
+                  id="dep-ref"
+                  value={form.source_ref}
+                  onChange={(e) => setForm({ ...form, source_ref: e.target.value })}
+                  placeholder={
+                    form.source === "docker"
+                      ? "ghcr.io/your-org/your-image:latest"
+                      : form.source === "huggingface"
+                        ? "meta-llama/Llama-3.3-8B-Instruct"
+                        : "https://github.com/your-org/truss-bundle"
+                  }
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+
+            <div className="md:col-span-2">
+              <Field label="Revision / tag (optional)">
+                <Input
+                  id="dep-rev"
+                  value={form.source_revision}
+                  onChange={(e) => setForm({ ...form, source_revision: e.target.value })}
+                  placeholder={form.source === "docker" ? "Defaults to tag in ref" : "git sha or branch"}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+
+            {form.source === "huggingface" && (
+              <div className="md:col-span-2">
+                <Field label="HF token (required for gated models)">
+                  <Input
+                    id="dep-hf-token"
+                    type="password"
+                    autoComplete="off"
+                    value={form.hf_token}
+                    onChange={(e) => setForm({ ...form, hf_token: e.target.value })}
+                    placeholder="hf_xxxxxxxx (paste once; encrypted at rest)"
+                    className={FIELD_INPUT}
+                  />
+                </Field>
+                <p className={`${MONO} text-[10px] text-white/40 mt-1 leading-relaxed`}>
+                  Stored encrypted at rest. Used only at endpoint start-up to pull weights.
+                  Skip if the model is fully public.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <Field label="Min workers">
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={form.min_workers}
+                  onChange={(e) => setForm({ ...form, min_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+              <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
+                ≥1 keeps a warm worker (eliminates cold starts; pay always-on).
+              </p>
+            </div>
+            <div>
+              <Field label="Max workers">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={form.max_workers}
+                  onChange={(e) => setForm({ ...form, max_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+            <div className="md:col-span-2">
+              <Field label="Idle timeout (seconds)">
+                <Input
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={form.idle_timeout_s}
+                  onChange={(e) => setForm({ ...form, idle_timeout_s: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+              <p className={`${MONO} text-[10px] text-white/40 mt-1`}>
+                How long a worker stays warm after the last request before scaling down.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <GhostButton onClick={() => setCreateOpen(false)} disabled={creating}>
+              Cancel
+            </GhostButton>
+            <PrimaryButton onClick={create} disabled={creating}>
+              {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Create deployment
+            </PrimaryButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Scale dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!scaleTarget} onOpenChange={(o) => !o && setScaleTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Scale <span className="font-mono text-[#0095FF]">{scaleTarget?.name}</span>
+            </DialogTitle>
+            <DialogDescription>
+              Updates the autoscale config and applies it to the live endpoint.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div>
+              <Field label="Min workers">
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={scaleForm.min_workers}
+                  onChange={(e) => setScaleForm({ ...scaleForm, min_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Max workers">
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={scaleForm.max_workers}
+                  onChange={(e) => setScaleForm({ ...scaleForm, max_workers: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+            <div className="col-span-2">
+              <Field label="Idle timeout (seconds)">
+                <Input
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={scaleForm.idle_timeout_s}
+                  onChange={(e) => setScaleForm({ ...scaleForm, idle_timeout_s: Number(e.target.value) })}
+                  className={FIELD_INPUT}
+                />
+              </Field>
+            </div>
+          </div>
+          <DialogFooter>
+            <GhostButton onClick={() => setScaleTarget(null)} disabled={scaleSaving}>
+              Cancel
+            </GhostButton>
+            <PrimaryButton onClick={saveScale} disabled={scaleSaving}>
+              {scaleSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sliders className="h-3.5 w-3.5" />}
+              Apply
+            </PrimaryButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete confirm ───────────────────────────────────────── */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Tear down <span className="font-mono text-[#0095FF]">{deleteTarget?.name}</span>?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This terminates the serving endpoint (workers stop billing within ~30s),
+              unregisters the model from your catalog, and marks the deployment deleted.
+              The action is asynchronous — the row will move to <span className="font-mono text-white/80">paused</span> first,
+              then <span className="font-mono text-white/80">deleted</span> once teardown completes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </PageCanvas>
+  );
+}

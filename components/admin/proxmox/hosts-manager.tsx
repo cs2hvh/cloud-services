@@ -1,13 +1,42 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Trash2, Plus, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Trash2, Plus, Edit2, ChevronDown, ChevronUp,
+  Server, Cpu, MemoryStick, HardDrive, Globe, Sparkles, Settings2, X,
+} from 'lucide-react';
+
+import { VmacSyncPanel } from './vmac-sync-panel';
+import { AutoSetupPanel } from './auto-setup-panel';
+
+const SERVER_SERIES_OPTIONS = [
+  { value: 'generic', label: 'Generic / existing setup' },
+  { value: 'ovh_rise_game', label: 'Entry-tier bare metal (Rise / Game)' },
+  { value: 'ovh_advance_gen3', label: 'Mid-tier bare metal (Advance Gen3)' },
+  { value: 'ovh_high_grade_scale', label: 'High-grade / scale bare metal' },
+] as const;
+
+const NETWORK_MODE_OPTIONS = [
+  { value: 'legacy_public_gateway', label: 'Legacy routed public gateway' },
+  { value: 'ovh_failover_vmac', label: 'Failover IP with virtual MAC' },
+  { value: 'ovh_hg_scale_routed', label: 'High-grade routed BYOIP' },
+  { value: 'ovh_advance_gen3_routed', label: 'Mid-tier routed BYOIP' },
+  { value: 'ovh_vrack_block', label: 'vRack routed IP block' },
+] as const;
+
+function defaultNetworkModeForSeries(series: string): string {
+  if (series === 'ovh_high_grade_scale') return 'ovh_hg_scale_routed';
+  if (series === 'ovh_advance_gen3') return 'ovh_advance_gen3_routed';
+  if (series === 'ovh_rise_game') return 'ovh_failover_vmac';
+  return 'legacy_public_gateway';
+}
 
 interface HostData {
   id: string;
@@ -22,6 +51,14 @@ interface HostData {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider: string | null;
+  server_series: string | null;
+  network_mode: string | null;
+  vm_private_cidr: string | null;
+  vm_private_gateway: string | null;
+  vm_private_ip_start: number | null;
+  public_prefix_length: number | null;
+  snippet_storage: string | null;
   region: string;
   display_region: string;
   total_cpu_cores: number;
@@ -30,7 +67,7 @@ interface HostData {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  public_ip_pools?: Array<{ id: string; mac: string; public_ip_pool_ips?: Array<{ id: string; ip: string }> }>;
+  public_ip_pools?: Array<{ id: string; mac: string; label?: string | null; public_ip_pool_ips?: Array<{ id: string; ip: string }> }>;
   proxmox_templates?: Array<{ id: string; vmid: number; name: string; os_type: string | null; os_display_name: string | null }>;
 }
 
@@ -49,6 +86,14 @@ interface FormState {
   gateway_ip: string;
   dns_primary: string;
   dns_secondary: string;
+  provider: string;
+  server_series: string;
+  network_mode: string;
+  vm_private_cidr: string;
+  vm_private_gateway: string;
+  vm_private_ip_start: string;
+  public_prefix_length: string;
+  snippet_storage: string;
   template_vmid: string;
   region: string;
   display_region: string;
@@ -56,7 +101,7 @@ interface FormState {
   total_memory_mb: string;
   total_disk_gb: string;
   is_active: boolean;
-  ipAddresses: Array<{ ip: string; mac: string }>;
+  ipAddresses: Array<{ ip: string; mac: string; label?: string }>;
   templates: Array<{ name: string; vmid: string; os_type: string; os_display_name: string }>;
 }
 
@@ -74,6 +119,14 @@ const emptyForm: FormState = {
   gateway_ip: '',
   dns_primary: '',
   dns_secondary: '',
+  provider: 'ovh',
+  server_series: 'generic',
+  network_mode: 'legacy_public_gateway',
+  vm_private_cidr: '',
+  vm_private_gateway: '',
+  vm_private_ip_start: '10',
+  public_prefix_length: '32',
+  snippet_storage: 'local',
   template_vmid: '',
   region: '',
   display_region: '',
@@ -85,6 +138,9 @@ const emptyForm: FormState = {
   templates: [],
 };
 
+type PanelMode = 'closed' | 'add' | 'edit';
+type AddTab = 'auto' | 'manual';
+
 export function ProxmoxHostsManager() {
   const [hosts, setHosts] = useState<HostData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +149,10 @@ export function ProxmoxHostsManager() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [expandedHostId, setExpandedHostId] = useState<string | null>(null);
   const [usedIps, setUsedIps] = useState<Set<string>>(new Set());
+  const [panelMode, setPanelMode] = useState<PanelMode>('closed');
+  const [addTab, setAddTab] = useState<AddTab>('auto');
+  const isPrivateRoutedMode = form.network_mode === 'ovh_hg_scale_routed' || form.network_mode === 'ovh_advance_gen3_routed';
+  const isVrackMode = form.network_mode === 'ovh_vrack_block';
 
   // Load hosts + used IPs
   const loadHosts = useCallback(async () => {
@@ -129,10 +189,13 @@ export function ProxmoxHostsManager() {
   // Reset form
   const resetForm = useCallback(() => {
     setForm(emptyForm);
+    setPanelMode('closed');
   }, []);
 
   // Edit host
   const handleEdit = useCallback((host: HostData) => {
+    setPanelMode('edit');
+    setAddTab('manual'); // edit always uses the manual form (it has all fields)
     setForm({
       id: host.id,
       name: host.name,
@@ -148,6 +211,14 @@ export function ProxmoxHostsManager() {
       gateway_ip: host.gateway_ip || '',
       dns_primary: host.dns_primary || '',
       dns_secondary: host.dns_secondary || '',
+      provider: host.provider || 'ovh',
+      server_series: host.server_series || 'generic',
+      network_mode: host.network_mode || 'legacy_public_gateway',
+      vm_private_cidr: host.vm_private_cidr || '',
+      vm_private_gateway: host.vm_private_gateway || '',
+      vm_private_ip_start: host.vm_private_ip_start?.toString() || '10',
+      public_prefix_length: host.public_prefix_length?.toString() || '32',
+      snippet_storage: host.snippet_storage || 'local',
       template_vmid: host.template_vmid?.toString() || '',
       region: host.region || '',
       display_region: host.display_region || '',
@@ -156,7 +227,7 @@ export function ProxmoxHostsManager() {
       total_disk_gb: host.total_disk_gb?.toString() || '',
       is_active: host.is_active,
       ipAddresses: host.public_ip_pools?.flatMap(p =>
-        (p.public_ip_pool_ips || []).map(ip => ({ ip: ip.ip, mac: p.mac }))
+        (p.public_ip_pool_ips || []).map(ip => ({ ip: ip.ip, mac: p.mac, label: p.label || '' }))
       ) || [],
       templates: host.proxmox_templates?.map(t => ({
         name: t.name,
@@ -172,9 +243,9 @@ export function ProxmoxHostsManager() {
   const addIpAddress = useCallback(() => {
     setForm(prev => ({
       ...prev,
-      ipAddresses: [...prev.ipAddresses, { ip: '', mac: '' }]
+      ipAddresses: [...prev.ipAddresses, { ip: '', mac: '', label: isPrivateRoutedMode || isVrackMode ? 'BYOIP routed' : 'Failover IP' }]
     }));
-  }, []);
+  }, [isPrivateRoutedMode, isVrackMode]);
 
   // Remove IP address
   const removeIpAddress = useCallback((idx: number) => {
@@ -271,6 +342,14 @@ export function ProxmoxHostsManager() {
         gateway_ip: form.gateway_ip || undefined,
         dns_primary: form.dns_primary || undefined,
         dns_secondary: form.dns_secondary || undefined,
+        provider: form.provider || 'ovh',
+        server_series: form.server_series,
+        network_mode: form.network_mode,
+        vm_private_cidr: form.vm_private_cidr || undefined,
+        vm_private_gateway: form.vm_private_gateway || undefined,
+        vm_private_ip_start: form.vm_private_ip_start ? Number(form.vm_private_ip_start) : undefined,
+        public_prefix_length: form.public_prefix_length ? Number(form.public_prefix_length) : undefined,
+        snippet_storage: form.snippet_storage || 'local',
         template_vmid: form.template_vmid ? Number(form.template_vmid) : undefined,
         region: form.region || undefined,
         display_region: form.display_region || undefined,
@@ -279,8 +358,8 @@ export function ProxmoxHostsManager() {
         total_disk_gb: form.total_disk_gb ? Number(form.total_disk_gb) : undefined,
         is_active: form.is_active,
         pools: form.ipAddresses
-          .filter(a => a.ip && a.mac)
-          .map(a => ({ mac: a.mac, ips: [a.ip] })),
+          .filter(a => a.ip && (a.mac || isPrivateRoutedMode || isVrackMode))
+          .map(a => ({ mac: a.mac || `route:${a.ip}`, ips: [a.ip], label: a.label || (isPrivateRoutedMode || isVrackMode ? 'BYOIP routed' : 'Failover IP') })),
         templates: form.templates.filter(t => t.name && t.vmid),
       };
 
@@ -304,19 +383,148 @@ export function ProxmoxHostsManager() {
     } finally {
       setSaving(false);
     }
-  }, [form, resetForm, loadHosts]);
+  }, [form, isPrivateRoutedMode, isVrackMode, resetForm, loadHosts]);
+
+  // Summary metrics (computed from loaded hosts)
+  const totals = useMemo(() => {
+    const active = hosts.filter((h) => h.is_active).length;
+    const cores = hosts.reduce((s, h) => s + (h.total_cpu_cores || 0), 0);
+    const ram = hosts.reduce((s, h) => s + (h.total_memory_mb || 0), 0);
+    const disk = hosts.reduce((s, h) => s + (h.total_disk_gb || 0), 0);
+    return { active, cores, ram, disk };
+  }, [hosts]);
 
   return (
-    <div className="space-y-6">
-      {/* Form Card */}
-      <Card className="bg-black/50 border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white">{form.id ? 'Edit Host' : 'Add Proxmox Host'}</CardTitle>
-          <CardDescription className="text-white/60">
-            Configure a Proxmox host for VPS provisioning. Add credentials, network settings, and templates.
-          </CardDescription>
+    <div className="space-y-6 pb-12">
+      {/* Summary metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard icon={<Server className="h-4 w-4" />} label="Hosts" value={String(hosts.length)} sub={`${totals.active} active`} />
+        <MetricCard icon={<Cpu className="h-4 w-4" />} label="vCPU cores" value={String(totals.cores)} sub="aggregate" />
+        <MetricCard icon={<MemoryStick className="h-4 w-4" />} label="Memory" value={formatMem(totals.ram)} sub="aggregate" />
+        <MetricCard icon={<HardDrive className="h-4 w-4" />} label="Storage" value={formatDisk(totals.disk)} sub="aggregate" />
+      </div>
+
+      {/* Hosts list (always visible — primary content) */}
+      <Card className="bg-black/40 border-white/10">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-white text-base">Proxmox hosts</CardTitle>
+            <CardDescription className="text-white/55 text-xs mt-0.5">
+              {hosts.length === 0
+                ? 'No hosts configured. Add one to start provisioning.'
+                : `${hosts.length} host${hosts.length === 1 ? '' : 's'} configured across ${
+                    new Set(hosts.map((h) => h.region || 'default')).size
+                  } region${new Set(hosts.map((h) => h.region || 'default')).size === 1 ? '' : 's'}`}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={loadHosts}
+              disabled={loading}
+              size="sm"
+              variant="outline"
+              className="border-white/15 bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white"
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </Button>
+            {panelMode === 'closed' && (
+              <Button
+                onClick={() => { resetForm(); setPanelMode('add'); setAddTab('auto'); }}
+                size="sm"
+                className="bg-[#0095FF] text-white hover:bg-[#0aa0ff]"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add host
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded mb-4 text-sm">
+              {error}
+            </div>
+          )}
+          {loading ? (
+            <div className="text-white/55 text-center py-10 text-sm">Loading hosts…</div>
+          ) : hosts.length === 0 ? (
+            <div className="border border-dashed border-white/15 rounded-md py-10 text-center">
+              <Server className="h-8 w-8 mx-auto text-white/30 mb-2" />
+              <p className="text-white/60 text-sm">No hosts configured yet.</p>
+              <p className="text-white/40 text-xs mt-1">Click &quot;Add host&quot; to register your first Proxmox host.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {hosts.map((host) => (
+                <HostListItem
+                  key={host.id}
+                  host={host}
+                  expanded={expandedHostId === host.id}
+                  onToggle={() => setExpandedHostId(expandedHostId === host.id ? null : host.id)}
+                  onEdit={() => handleEdit(host)}
+                  onDelete={() => handleDelete(host.id, host.name)}
+                  usedIps={usedIps}
+                  loadHosts={loadHosts}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add / Edit panel (conditional) */}
+      {panelMode !== 'closed' && (
+        <Card className="bg-black/40 border-white/10">
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div className="flex-1">
+              <CardTitle className="text-white text-base flex items-center gap-2">
+                {panelMode === 'edit' ? <Settings2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-[#0095FF]" />}
+                {panelMode === 'edit' ? `Edit host — ${form.name}` : 'Add a new Proxmox host'}
+              </CardTitle>
+              <CardDescription className="text-white/55 text-xs mt-0.5">
+                {panelMode === 'edit'
+                  ? 'Modify the configuration of an existing host.'
+                  : 'Auto-setup probes the host, builds templates, and seeds IP pools in one streamed run.'}
+              </CardDescription>
+              {panelMode === 'add' && (
+                <div className="mt-3 inline-flex border border-white/10 bg-black/30 rounded overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setAddTab('auto')}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      addTab === 'auto'
+                        ? 'bg-[#0095FF] text-white'
+                        : 'text-white/55 hover:text-white hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    Auto-setup (recommended)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddTab('manual')}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                      addTab === 'manual'
+                        ? 'bg-[#0095FF] text-white'
+                        : 'text-white/55 hover:text-white hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    Manual configuration
+                  </button>
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={resetForm}
+              size="sm"
+              variant="outline"
+              className="border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+            >
+              <X className="w-3.5 h-3.5 mr-1" /> Close
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {panelMode === 'add' && addTab === 'auto' ? (
+              <AutoSetupPanel onCreated={() => { loadHosts(); resetForm(); }} />
+            ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -374,6 +582,58 @@ export function ProxmoxHostsManager() {
                   placeholder="e.g., 9001"
                   className="bg-black/50 text-white border-white/10 mt-1"
                 />
+              </div>
+            </div>
+
+            {/* Provider & Network Profile */}
+            <div className="border-t border-white/10 pt-4">
+              <h3 className="text-white font-semibold mb-3">Provider & Network Profile</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-white">Provider</Label>
+                  <Select value={form.provider} onValueChange={(value) => setForm(prev => ({ ...prev, provider: value }))}>
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ovh">OVHcloud</SelectItem>
+                      <SelectItem value="generic">Generic</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-white">Server Series</Label>
+                  <Select
+                    value={form.server_series}
+                    onValueChange={(value) => setForm(prev => ({
+                      ...prev,
+                      server_series: value,
+                      network_mode: defaultNetworkModeForSeries(value),
+                    }))}
+                  >
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Server series" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SERVER_SERIES_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-white">Network Mode</Label>
+                  <Select value={form.network_mode} onValueChange={(value) => setForm(prev => ({ ...prev, network_mode: value }))}>
+                    <SelectTrigger className="bg-black/50 text-white border-white/10 mt-1 w-full">
+                      <SelectValue placeholder="Network mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NETWORK_MODE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -498,11 +758,11 @@ export function ProxmoxHostsManager() {
               <h3 className="text-white font-semibold mb-3">Network Settings</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-white">Gateway IP</Label>
+                  <Label className="text-white">{isPrivateRoutedMode ? 'Host Public Gateway' : 'Gateway IP'}</Label>
                   <Input
                     value={form.gateway_ip}
                     onChange={(e) => setForm(prev => ({ ...prev, gateway_ip: e.target.value }))}
-                    placeholder="192.168.1.1"
+                    placeholder={isPrivateRoutedMode ? '100.64.0.1' : '192.168.1.1'}
                     className="bg-black/50 text-white border-white/10 mt-1"
                   />
                 </div>
@@ -525,6 +785,63 @@ export function ProxmoxHostsManager() {
                   />
                 </div>
               </div>
+              {(isPrivateRoutedMode || isVrackMode) && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                  {isPrivateRoutedMode && (
+                    <>
+                      <div>
+                        <Label className="text-white">VM Private CIDR</Label>
+                        <Input
+                          value={form.vm_private_cidr}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_cidr: e.target.value }))}
+                          placeholder="192.168.0.0/24"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-white">VM Private Gateway</Label>
+                        <Input
+                          value={form.vm_private_gateway}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_gateway: e.target.value }))}
+                          placeholder="192.168.0.1"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-white">Private IP Start</Label>
+                        <Input
+                          type="number"
+                          value={form.vm_private_ip_start}
+                          onChange={(e) => setForm(prev => ({ ...prev, vm_private_ip_start: e.target.value }))}
+                          placeholder="10"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <Label className="text-white">Public Prefix Length</Label>
+                    <Input
+                      type="number"
+                      value={form.public_prefix_length}
+                      onChange={(e) => setForm(prev => ({ ...prev, public_prefix_length: e.target.value }))}
+                      placeholder={isVrackMode ? '28' : '32'}
+                      className="bg-black/50 text-white border-white/10 mt-1"
+                    />
+                  </div>
+                  {isPrivateRoutedMode && (
+                    <div>
+                      <Label className="text-white">Snippet Storage</Label>
+                      <Input
+                        value={form.snippet_storage}
+                        onChange={(e) => setForm(prev => ({ ...prev, snippet_storage: e.target.value }))}
+                        placeholder="local"
+                        className="bg-black/50 text-white border-white/10 mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* IP Addresses */}
@@ -540,11 +857,16 @@ export function ProxmoxHostsManager() {
                   <Plus className="w-4 h-4 mr-1" /> Add IP
                 </Button>
               </div>
-              <p className="text-xs text-white/50 mb-3">Each IP requires its own unique vMAC from OVH.</p>
+              <p className="text-xs text-white/50 mb-3">
+                {isVrackMode || isPrivateRoutedMode
+                  ? 'Add usable BYOIP/Additional IP addresses. MAC can be left empty for routed BYOIP/vRack profiles.'
+                  : 'Each IP requires its own unique virtual MAC unless this host uses route-only networking.'}
+              </p>
               {form.ipAddresses.length > 0 && (
                 <div className="flex gap-2 text-xs text-white/40 px-1 mb-1">
                   <span className="flex-1">IP Address</span>
                   <span className="flex-1">vMAC Address</span>
+                  <span className="flex-1">Pool Label</span>
                   <span className="w-9" />
                 </div>
               )}
@@ -570,6 +892,17 @@ export function ProxmoxHostsManager() {
                           ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, mac: e.target.value } : a)
                         }))}
                         placeholder="02:00:00:17:73:3d"
+                        className="bg-black/50 text-white border-white/10"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        value={entry.label || ''}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, label: e.target.value } : a)
+                        }))}
+                        placeholder={isVrackMode || isPrivateRoutedMode ? 'BYOIP routed' : 'Failover IP'}
                         className="bg-black/50 text-white border-white/10"
                       />
                     </div>
@@ -699,179 +1032,204 @@ export function ProxmoxHostsManager() {
               )}
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Hosts List */}
-      <Card className="bg-black/50 border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-white">Proxmox Hosts</CardTitle>
-            <CardDescription className="text-white/60">Configured Proxmox hosts and their resources</CardDescription>
-          </div>
-          <Button
-            onClick={loadHosts}
-            disabled={loading}
-            className="bg-white/10 text-white border border-white/10 hover:bg-white/15"
-          >
-            Refresh
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-          {loading ? (
-            <div className="text-white/60 text-center py-8">Loading hosts...</div>
-          ) : hosts.length === 0 ? (
-            <div className="text-white/60 text-center py-8">No hosts configured yet</div>
-          ) : (
-            <div className="space-y-3">
-              {hosts.map((host) => (
-                <div key={host.id} className="border border-white/10 rounded-lg p-4 bg-black/30">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setExpandedHostId(expandedHostId === host.id ? null : host.id)}
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-white font-semibold">{host.name}</h3>
-                        {host.is_active ? (
-                          <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Active</span>
-                        ) : (
-                          <span className="text-xs bg-gray-500/20 text-gray-400 px-2 py-1 rounded">Inactive</span>
-                        )}
-                      </div>
-                      <p className="text-white/60 text-sm mt-1">{host.host_url}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(host);
-                        }}
-                        size="sm"
-                        className="bg-white/10 text-white hover:bg-white/20"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(host.id, host.name);
-                        }}
-                        size="sm"
-                        variant="destructive"
-                        className="bg-red-600/20 text-red-400 border border-red-400/30 hover:bg-red-600/30"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                      {expandedHostId === host.id ? (
-                        <ChevronUp className="w-5 h-5 text-white/60" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-white/60" />
-                      )}
-                    </div>
-                  </div>
-
-                  {expandedHostId === host.id && (
-                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <p className="text-white/60">Node</p>
-                          <p className="text-white">{host.node}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/60">Region</p>
-                          <p className="text-white">{host.display_region || host.region || '-'}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/60">Storage</p>
-                          <p className="text-white">{host.storage}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/60">Bridge</p>
-                          <p className="text-white">{host.bridge}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <p className="text-white/60">Total CPU</p>
-                          <p className="text-white">{host.total_cpu_cores || 0} cores</p>
-                        </div>
-                        <div>
-                          <p className="text-white/60">Total Memory</p>
-                          <p className="text-white">{host.total_memory_mb ? `${Math.round(host.total_memory_mb / 1024)} GB` : '0 GB'}</p>
-                        </div>
-                        <div>
-                          <p className="text-white/60">Total Disk</p>
-                          <p className="text-white">{host.total_disk_gb || 0} GB</p>
-                        </div>
-                      </div>
-
-                      {host.public_ip_pools && host.public_ip_pools.length > 0 && (
-                        <div>
-                          <p className="text-white/80 font-semibold text-sm mb-2">
-                            IP Addresses:
-                            <span className="ml-2 font-normal text-xs">
-                              <span className="text-green-400">
-                                {host.public_ip_pools.reduce((count, pool) => 
-                                  count + (pool.public_ip_pool_ips?.filter(ip => !usedIps.has(ip.ip)).length || 0), 0
-                                )} available
-                              </span>
-                              {' / '}
-                              <span className="text-red-400">
-                                {host.public_ip_pools.reduce((count, pool) => 
-                                  count + (pool.public_ip_pool_ips?.filter(ip => usedIps.has(ip.ip)).length || 0), 0
-                                )} used
-                              </span>
-                            </span>
-                          </p>
-                          <div className="space-y-1">
-                            {host.public_ip_pools.map((pool) =>
-                              pool.public_ip_pool_ips?.map((ip) => {
-                                const inUse = usedIps.has(ip.ip);
-                                return (
-                                  <div key={ip.id} className="flex items-center gap-2 ml-2 text-xs">
-                                    <span className={`w-2 h-2 rounded-full ${inUse ? 'bg-red-500' : 'bg-green-500'}`} />
-                                    <span className="text-white/70 font-mono">{ip.ip}</span>
-                                    <span className="text-white/40">MAC: {pool.mac || '-'}</span>
-                                    {inUse && (
-                                      <span className="text-red-400/80 text-[10px] px-1.5 py-0.5 bg-red-500/10 rounded">
-                                        in use
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {host.proxmox_templates && host.proxmox_templates.length > 0 && (
-                        <div>
-                          <p className="text-white/80 font-semibold text-sm mb-2">Templates:</p>
-                          <div className="space-y-1">
-                            {host.proxmox_templates.map((tpl) => (
-                              <p key={tpl.id} className="text-white/70 text-xs ml-2">
-                                • {tpl.name} (VMID: {tpl.vmid}, Type: {tpl.os_type || 'N/A'})
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
+}
+
+// ─── Subcomponents ────────────────────────────────────────────
+
+function MetricCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
+  return (
+    <div className="border border-white/10 bg-black/40 px-4 py-3 rounded-md">
+      <div className="flex items-center gap-2 text-white/45 text-[11px] uppercase tracking-[0.14em]">
+        {icon}
+        {label}
+      </div>
+      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+      {sub && <p className="text-[11px] text-white/40 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function HostListItem({
+  host,
+  expanded,
+  onToggle,
+  onEdit,
+  onDelete,
+  usedIps,
+  loadHosts,
+}: {
+  host: HostData;
+  expanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  usedIps: Set<string>;
+  loadHosts: () => void;
+}) {
+  const ipStats = useMemo(() => {
+    let available = 0;
+    let used = 0;
+    for (const pool of host.public_ip_pools ?? []) {
+      for (const r of pool.public_ip_pool_ips ?? []) {
+        if (usedIps.has(r.ip)) used++;
+        else available++;
+      }
+    }
+    return { available, used, total: available + used };
+  }, [host.public_ip_pools, usedIps]);
+
+  const templatesCount = host.proxmox_templates?.length ?? 0;
+  const hostUrlShort = host.host_url.replace(/^https?:\/\//, '').replace(/:8006\/?$/, '');
+
+  return (
+    <div className="border border-white/10 rounded-md bg-black/30 overflow-hidden transition-colors hover:border-white/15">
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={onToggle}>
+        <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded bg-[#0095FF]/10 border border-[#0095FF]/25">
+          <Server className="h-4 w-4 text-[#0095FF]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-white font-medium text-sm truncate">{host.name}</h3>
+            {host.is_active ? (
+              <span className="text-[10px] font-medium uppercase tracking-wider bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded">
+                Active
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium uppercase tracking-wider bg-white/10 text-white/40 px-1.5 py-0.5 rounded">
+                Inactive
+              </span>
+            )}
+            {host.display_region && (
+              <span className="text-[10px] text-white/55 bg-white/[0.04] border border-white/10 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                <Globe className="h-3 w-3" />
+                {host.display_region}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-white/40 mt-0.5 font-mono truncate">{hostUrlShort}</p>
+        </div>
+        <div className="hidden md:flex items-center gap-4 text-[11px] text-white/60 shrink-0">
+          <div className="text-right">
+            <p className="text-white/40 text-[10px] uppercase tracking-wider">CPU</p>
+            <p className="text-white font-medium">{host.total_cpu_cores || 0}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-white/40 text-[10px] uppercase tracking-wider">RAM</p>
+            <p className="text-white font-medium">{formatMem(host.total_memory_mb || 0)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-white/40 text-[10px] uppercase tracking-wider">Disk</p>
+            <p className="text-white font-medium">{formatDisk(host.total_disk_gb || 0)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-white/40 text-[10px] uppercase tracking-wider">IPs</p>
+            <p className="text-white font-medium">
+              {ipStats.available}
+              <span className="text-white/40">/{ipStats.total}</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0 border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0 border-red-500/20 bg-red-500/[0.06] text-red-300/80 hover:bg-red-500/15 hover:text-red-200"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+          {expanded ? <ChevronUp className="w-4 h-4 text-white/40" /> : <ChevronDown className="w-4 h-4 text-white/40" />}
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-white/10 bg-black/20 px-4 py-4 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+            <DetailField label="Node" value={host.node} />
+            <DetailField label="Storage" value={host.storage} />
+            <DetailField label="Bridge" value={host.bridge} />
+            <DetailField label="Network mode" value={host.network_mode || 'legacy_public_gateway'} />
+            <DetailField label="Templates" value={String(templatesCount)} />
+          </div>
+
+          {(host.public_ip_pools?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-white/70 text-xs font-semibold mb-2">
+                IP addresses{' '}
+                <span className="font-normal text-[11px] text-white/45">
+                  · <span className="text-emerald-300">{ipStats.available} free</span> · <span className="text-amber-300">{ipStats.used} in use</span>
+                </span>
+              </p>
+              <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-black/30 p-2 space-y-0.5">
+                {host.public_ip_pools!.flatMap((pool) =>
+                  (pool.public_ip_pool_ips ?? []).map((ip) => {
+                    const inUse = usedIps.has(ip.ip);
+                    return (
+                      <div key={ip.id} className="flex items-center gap-2 text-[11px] font-mono">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${inUse ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                        <span className="text-white/80 w-32">{ip.ip}</span>
+                        <span className="text-white/40 truncate">{pool.mac || '—'}</span>
+                        {inUse && <span className="text-amber-300 text-[10px] ml-auto">in use</span>}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {templatesCount > 0 && (
+            <div>
+              <p className="text-white/70 text-xs font-semibold mb-2">OS templates</p>
+              <div className="flex flex-wrap gap-1.5">
+                {host.proxmox_templates!.map((tpl) => (
+                  <span key={tpl.id} className="text-[11px] border border-white/10 bg-white/[0.04] text-white/75 px-2 py-1 rounded">
+                    {tpl.name} <span className="text-white/40">· #{tpl.vmid}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {host.provider === 'ovh' && (
+            <VmacSyncPanel hostId={host.id} hostUrl={host.host_url} onPoolsChanged={loadHosts} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-white/40 text-[10px] uppercase tracking-wider">{label}</p>
+      <p className="text-white text-sm font-medium mt-0.5 truncate">{value}</p>
+    </div>
+  );
+}
+
+function formatMem(mb: number): string {
+  if (!mb) return '—';
+  if (mb < 1024) return `${mb} MB`;
+  return `${(mb / 1024).toFixed(1)} GB`;
+}
+function formatDisk(gb: number): string {
+  if (!gb) return '—';
+  if (gb < 1024) return `${gb} GB`;
+  return `${(gb / 1024).toFixed(2)} TB`;
 }

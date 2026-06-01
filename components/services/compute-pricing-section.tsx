@@ -5,17 +5,21 @@ import Image from "next/image";
 import {
   ArrowRight,
   CircuitBoard,
-  Clock,
   Cpu,
-  Gauge,
   Globe,
   HardDrive,
   MemoryStick,
-  Network,
   Server,
-  Shield,
   Zap,
 } from "lucide-react";
+import {
+  IconFlameFilled,
+  IconGaugeFilled,
+  IconCloudDataConnectionFilled,
+  IconGlobeFilled,
+  IconShieldCheckFilled,
+  IconClockFilled,
+} from "@tabler/icons-react";
 import { Container } from "@/components/ui/container";
 import WorldMap from "@/components/ui/worldmap";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
@@ -51,40 +55,46 @@ interface ComputeCategory {
 
 const HIGHLIGHTS = [
   {
-    icon: Cpu,
+    iconNode: <IconFlameFilled size={20} />,
+    accent: "#F59E0B",
     stat: "5.7 GHz",
     title: "AMD EPYC and Ryzen 9",
-    desc: "Modern processors tuned for both single-thread and sustained multi-core performance.",
+    desc: "Single-thread and multi-core performance on every plan.",
   },
   {
-    icon: Gauge,
+    iconNode: <IconGaugeFilled size={20} />,
+    accent: "#10B981",
     stat: "7 GB/s",
     title: "Enterprise NVMe",
-    desc: "Gen4 NVMe storage with fast boot, low queue latency, and high random IOPS.",
+    desc: "Fast boot, low latency, and high random IOPS.",
   },
   {
-    icon: Network,
+    iconNode: <IconCloudDataConnectionFilled size={20} />,
+    accent: "#0095FF",
     stat: "25 Gbit/s",
     title: "Premium network",
-    desc: "Low-jitter networking with redundant uplinks and free inbound traffic on every plan.",
+    desc: "Redundant uplinks, free inbound traffic on every plan.",
   },
   {
-    icon: Globe,
+    iconNode: <IconGlobeFilled size={20} />,
+    accent: "#06B6D4",
     stat: "15 locations",
     title: "Global footprint",
-    desc: "Launch closer to users across the Americas, Europe, Asia, and Oceania.",
+    desc: "Americas, Europe, Asia, and Oceania covered.",
   },
   {
-    icon: Shield,
+    iconNode: <IconShieldCheckFilled size={20} />,
+    accent: "#E11D48",
     stat: "L3-L7",
     title: "DDoS protection",
-    desc: "Always-on mitigation protects workloads from volumetric and application-layer attacks.",
+    desc: "Always-on volumetric and app-layer attack mitigation.",
   },
   {
-    icon: Clock,
+    iconNode: <IconClockFilled size={20} />,
+    accent: "#8B5CF6",
     stat: "< 30 sec",
     title: "Fast provisioning",
-    desc: "Public IPs, SSH access, and firewall controls are ready as soon as the instance boots.",
+    desc: "IP, SSH, and firewall ready on first boot.",
   },
 ];
 
@@ -552,9 +562,7 @@ export default function ComputePricingSection({
                 Hardware buyers can trust
               </h3>
               <p className="mt-4 max-w-xl text-sm leading-7 text-white/45 lg:text-[15px]">
-                Every compute plan runs on modern server hardware, fast NVMe, and a premium network fabric.
-                The goal is simple: clear instance pricing backed by infrastructure details buyers actually use to
-                compare providers.
+                Enterprise AMD and Intel hardware, Gen4 NVMe, and a 25 Gbit/s network — spec-for-spec pricing you can verify.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -585,13 +593,25 @@ export default function ComputePricingSection({
               {HIGHLIGHTS.map((highlight) => (
                 <div
                   key={highlight.title}
-                  className="bg-[#0a0a0a] p-5 transition-colors duration-200 hover:bg-[#0d0d0d]"
+                  className="group bg-[#0a0a0a] p-5 transition-colors duration-200 hover:bg-[#0d0d0d]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center border border-[#0095FF]/20 bg-[#0095FF]/10">
-                      <highlight.icon className="h-5 w-5 text-[#0095FF]" />
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center border transition-all group-hover:brightness-110"
+                      style={{
+                        borderColor: `${highlight.accent}40`,
+                        background: `${highlight.accent}18`,
+                        color: highlight.accent,
+                      }}
+                    >
+                      {highlight.iconNode}
                     </div>
-                    <span className="text-xl font-semibold tracking-tight text-white">{highlight.stat}</span>
+                    <span
+                      className="text-xl font-semibold tracking-tight"
+                      style={{ color: highlight.accent }}
+                    >
+                      {highlight.stat}
+                    </span>
                   </div>
                   <h4 className="mt-4 text-[15px] font-medium text-white">{highlight.title}</h4>
                   <p className="mt-2 text-[13px] leading-6 text-white/40">{highlight.desc}</p>

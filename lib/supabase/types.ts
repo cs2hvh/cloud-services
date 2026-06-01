@@ -163,6 +163,8 @@ export type PlatformApp = {
   project_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
 export type Rule = {
@@ -914,6 +916,14 @@ export type Database = {
           gateway_ip: string | null;
           dns_primary: string | null;
           dns_secondary: string | null;
+          provider: string;
+          server_series: string;
+          network_mode: string;
+          vm_private_cidr: string | null;
+          vm_private_gateway: string | null;
+          vm_private_ip_start: number;
+          public_prefix_length: number;
+          snippet_storage: string;
           template_vmid: number | null;
           is_active: boolean;
           created_at: string;
@@ -934,6 +944,14 @@ export type Database = {
           gateway_ip?: string | null;
           dns_primary?: string | null;
           dns_secondary?: string | null;
+          provider?: string;
+          server_series?: string;
+          network_mode?: string;
+          vm_private_cidr?: string | null;
+          vm_private_gateway?: string | null;
+          vm_private_ip_start?: number;
+          public_prefix_length?: number;
+          snippet_storage?: string;
           template_vmid?: number | null;
           is_active?: boolean;
           created_at?: string;
@@ -954,6 +972,14 @@ export type Database = {
           gateway_ip?: string | null;
           dns_primary?: string | null;
           dns_secondary?: string | null;
+          provider?: string;
+          server_series?: string;
+          network_mode?: string;
+          vm_private_cidr?: string | null;
+          vm_private_gateway?: string | null;
+          vm_private_ip_start?: number;
+          public_prefix_length?: number;
+          snippet_storage?: string;
           template_vmid?: number | null;
           is_active?: boolean;
           created_at?: string;

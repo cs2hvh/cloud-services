@@ -1,43 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+// New database cluster — single-page editorial form. Numbered sections
+// on the left, sticky configuration summary on the right. All wiring
+// (engine list from /api/database-types, plans from products table,
+// regions from locations, projects from supabase) is preserved.
+
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertCircle,
+  ArrowRight,
   ArrowUpRight,
+  Check,
   ChevronLeft,
-  ChevronRight,
-  Clock3,
   Cpu,
   HardDrive,
   Loader2,
   Server,
 } from "lucide-react";
+import { z } from "zod";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 import { Tables } from "@/lib/supabase/types";
 import { formatPrice } from "@/lib/utils";
 import { NAMING_RULES } from "@/lib/validation/constants";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
-import { z } from "zod";
+
+// ─── Design tokens ────────────────────────────────────────────────
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
+
+// ─── Types ────────────────────────────────────────────────────────
 
 interface PageProps {
   products: Tables<"products">[];
@@ -57,15 +57,6 @@ interface DatabaseType {
   available: boolean;
 }
 
-type ErrorState = {
-  name: string;
-  location: string;
-  dbType: string;
-  plan: string;
-  version: string;
-  project: string;
-};
-
 type CpuType = "basic" | "general_purpose" | "storage_optimized";
 
 type ProductResources = {
@@ -74,395 +65,201 @@ type ProductResources = {
   storage?: number;
 };
 
-const STEP_META = [
-  {
-    id: 1,
-    name: "Name",
-    title: "Name the cluster",
-    description: "Choose a clear production-safe name for this managed database cluster.",
-    iconSrc: "/dashboard-icons/name.png",
-  },
-  {
-    id: 2,
-    name: "Location",
-    title: "Select deployment region",
-    description: "Place the cluster near your applications, users, or compliance boundary.",
-    iconSrc: "/dashboard-icons/location.png",
-  },
-  {
-    id: 3,
-    name: "Type",
-    title: "Choose database engine",
-    description: "Select the engine that best matches workload requirements and tooling.",
-    iconSrc: "/dashboard-icons/type.png",
-  },
-  {
-    id: 4,
-    name: "Plan",
-    title: "Right-size compute and storage",
-    description: "Pick the performance tier, plan size, and engine version for deployment.",
-    iconSrc: "/dashboard-icons/plan-1.png",
-  },
-  {
-    id: 5,
-    name: "Project",
-    title: "Attach to a project",
-    description: "Associate the cluster with an existing project for organization and access.",
-    iconSrc: "/dashboard-icons/project-1.png",
-  },
-  {
-    id: 6,
-    name: "Review",
-    title: "Review and confirm",
-    description: "Verify configuration, monthly pricing, and policy acceptance before launch.",
-    iconSrc: "/dashboard-icons/review-1.png",
-  },
-] as const;
-
 const CPU_META: Record<CpuType, { label: string; description: string }> = {
   basic: {
     label: "Basic",
-    description: "Shared CPU for development, staging, and lower-throughput workloads.",
+    description: "Shared CPU · dev and lower-throughput workloads.",
   },
   general_purpose: {
     label: "General Purpose",
-    description: "Dedicated CPU for steady production traffic and balanced performance.",
+    description: "Dedicated CPU · steady production traffic.",
   },
   storage_optimized: {
     label: "Storage Optimized",
-    description: "Higher storage profile for data-heavy or IO-focused deployments.",
+    description: "Higher storage tier · data-heavy workloads.",
   },
 };
 
-const panelClassName = "glass-panel overflow-hidden";
+const ENGINE_CATEGORY: Record<string, string> = {
+  pg: "SQL · Relational",
+  mysql: "SQL · Relational",
+  mongodb: "NoSQL · Document",
+  kafka: "Streaming · Distributed log",
+  redis: "Cache · Key-Value",
+  valkey: "Cache · Key-Value",
+  clickhouse: "Analytics · Columnar",
+};
 
-const inputClassName =
-  "border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25";
+// ─── Helpers ──────────────────────────────────────────────────────
 
-function getProductResources(product: Tables<"products">): ProductResources {
-  return ((product.resources as ProductResources | null) || {}) as ProductResources;
+function getProductResources(p: Tables<"products">): ProductResources {
+  return ((p.resources as ProductResources | null) || {}) as ProductResources;
 }
 
-function getProductCpuType(product: Tables<"products">): CpuType {
-  const cpuType = (product as { cpu_type?: CpuType }).cpu_type;
-  return cpuType || "basic";
+function getProductCpuType(p: Tables<"products">): CpuType {
+  return (p as { cpu_type?: CpuType }).cpu_type || "basic";
 }
 
-function getDiscountPercent(product: Tables<"products">): number {
-  const parsed = Number(product.discount ?? 0);
+function getDiscountPercent(p: Tables<"products">): number {
+  const parsed = Number(p.discount ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getEffectivePrice(product?: Tables<"products"> | null): number | null {
-  if (!product || product.price === null || product.price === undefined) {
-    return null;
-  }
-
-  const price = Number(product.price);
-  if (!Number.isFinite(price)) {
-    return null;
-  }
-
-  const discount = getDiscountPercent(product);
-  return discount > 0 ? price * (1 - discount / 100) : price;
+function getEffectivePrice(p?: Tables<"products"> | null): number | null {
+  if (!p || p.price === null || p.price === undefined) return null;
+  const price = Number(p.price);
+  if (!Number.isFinite(price)) return null;
+  const d = getDiscountPercent(p);
+  return d > 0 ? price * (1 - d / 100) : price;
 }
 
-function getPriceLabel(product?: Tables<"products"> | null): string {
-  if (!product) return "-";
-
-  const effectivePrice = getEffectivePrice(product);
-  if (effectivePrice === null || effectivePrice === 0) {
-    return "Free";
-  }
-
-  return `${formatPrice(effectivePrice)}/mo`;
+function priceLabel(p?: Tables<"products"> | null): string {
+  if (!p) return "—";
+  const eff = getEffectivePrice(p);
+  if (eff === null || eff === 0) return "Free";
+  return `${formatPrice(eff)}/mo`;
 }
 
-function FieldError({ message }: { message: string }) {
-  if (!message) return null;
+// ─── Component ────────────────────────────────────────────────────
 
-  return (
-    <div className="mt-3 flex items-center gap-2 text-sm text-red-400">
-      <AlertCircle className="h-4 w-4" />
-      <span>{message}</span>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="flex items-center gap-2">
-        {icon && (
-          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} unoptimized />
-        )}
-        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
-      </div>
-      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
-    </div>
-  );
-}
-
-function StepContainer({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={panelClassName}>
-      <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-          {eyebrow}
-        </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-          {title}
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">{description}</p>
-      </div>
-      <div className="px-6 py-6 sm:px-7 sm:py-7">{children}</div>
-    </div>
-  );
-}
-
-const DatabaseSelect = ({ products, locations, projects, userId, clusters }: PageProps) => {
+const DatabaseSelect = ({
+  products,
+  locations,
+  projects,
+  userId,
+  clusters,
+}: PageProps) => {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const [databaseTypes, setDatabaseTypes] = useState<DatabaseType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [selectedCpuType, setSelectedCpuType] = useState<CpuType>("basic");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [pgvectorEnabled, setPgvectorEnabled] = useState(false);
   const [state, setState] = useState({
     selectedDb: "",
     selectedName: "",
     selectedVersion: "",
     selectedLocation: "",
     selectedDbType: "",
-    selectedProject: "",
-  });
-  const [errors, setErrors] = useState<ErrorState>({
-    name: "",
-    location: "",
-    dbType: "",
-    plan: "",
-    version: "",
-    project: "",
+    selectedProject: projects[0]?.id ?? "",
   });
 
-  const router = useRouter();
-
-  const validateClusterName = (name: string): string => {
-    if (!name) {
-      return "Cluster name is required";
-    }
-    if (name.length < NAMING_RULES.MIN_CLUSTER_NAME_LENGTH) {
-      return `Cluster name must be at least ${NAMING_RULES.MIN_CLUSTER_NAME_LENGTH} characters`;
-    }
-    if (name.length > NAMING_RULES.MAX_CLUSTER_NAME_LENGTH) {
-      return `Cluster name must be at most ${NAMING_RULES.MAX_CLUSTER_NAME_LENGTH} characters`;
-    }
-    if (!NAMING_RULES.CLUSTER_NAME_PATTERN.test(name)) {
-      return "Cluster name must start and end with alphanumeric and use lowercase letters, numbers, or hyphens only";
-    }
-    if (clusters.some((cluster) => cluster.name === name)) {
-      return "Cluster name already exists";
-    }
-    return "";
-  };
-
-  const validateLocation = (location: string): string => {
-    return location ? "" : "Location is required";
-  };
-
-  const validateDbType = (dbType: string): string => {
-    return dbType ? "" : "Database type is required";
-  };
-
-  const validatePlan = (planId: string): string => {
-    return planId ? "" : "Database plan is required";
-  };
-
-  const validateVersion = (version: string, dbType: string): string => {
-    if (!version) {
-      return "Version is required";
-    }
-    if (dbType && !validateEngineVersion(dbType, version)) {
-      return "Invalid version for selected database engine";
-    }
-    return "";
-  };
-
-  const validateProject = (projectId: string): string => {
-    return projectId ? "" : "Project is required";
-  };
-
+  // Fetch engines on mount
   useEffect(() => {
-    const fetchDatabaseTypes = async () => {
+    (async () => {
       try {
         setLoadingTypes(true);
-        const response = await api.get("/database-types");
-        if (response?.data?.success) {
-          setDatabaseTypes(response?.data?.data ?? []);
+        const res = await api.get("/database-types");
+        if (res?.data?.success) {
+          setDatabaseTypes(res?.data?.data ?? []);
         }
-      } catch (error) {
-        console.error("Error fetching database types:", error);
-        toast.error("Failed to load database types");
+      } catch (err) {
+        console.error("Error fetching database types:", err);
+        toast.error("Failed to load database engines");
       } finally {
         setLoadingTypes(false);
       }
-    };
-
-    fetchDatabaseTypes();
+    })();
   }, []);
 
   const selectedDbTypeInfo = useMemo(
-    () => databaseTypes.find((type) => type.code === state.selectedDbType),
+    () => databaseTypes.find((t) => t.code === state.selectedDbType),
     [databaseTypes, state.selectedDbType],
   );
 
   const versions = selectedDbTypeInfo?.versions || [];
 
   const availablePlans = useMemo(() => {
-    if (!state.selectedDbType) {
-      return [] as Tables<"products">[];
-    }
-
+    if (!state.selectedDbType) return [] as Tables<"products">[];
     return products
-      .filter((product) => {
-        const matchesDbType = product.sub === state.selectedDbType;
-        const matchesCpuType = getProductCpuType(product) === selectedCpuType;
-        return matchesDbType && matchesCpuType;
-      })
-      .sort((first, second) => Number(first.price ?? 0) - Number(second.price ?? 0));
+      .filter(
+        (p) =>
+          p.sub === state.selectedDbType &&
+          getProductCpuType(p) === selectedCpuType,
+      )
+      .sort((a, b) => Number(a.price ?? 0) - Number(b.price ?? 0));
   }, [products, selectedCpuType, state.selectedDbType]);
 
   useEffect(() => {
-    if (state.selectedDb && !availablePlans.some((plan) => plan.id === state.selectedDb)) {
+    if (
+      state.selectedDb &&
+      !availablePlans.some((p) => p.id === state.selectedDb)
+    ) {
       setState((prev) => ({ ...prev, selectedDb: "" }));
     }
   }, [availablePlans, state.selectedDb]);
 
-  const selectedDatabase =
-    availablePlans.find((plan) => plan.id === state.selectedDb) ||
-    products.find((plan) => plan.id === state.selectedDb);
+  const selectedPlan =
+    availablePlans.find((p) => p.id === state.selectedDb) ??
+    products.find((p) => p.id === state.selectedDb);
 
   const selectedLocationData = locations.find(
-    (location) => location.short === state.selectedLocation,
+    (l) => l.short === state.selectedLocation,
   );
 
   const selectedProjectData = projects.find(
-    (project) => project.id === state.selectedProject,
+    (p) => p.id === state.selectedProject,
   );
 
-  const activeStepMeta = STEP_META[currentStep - 1];
+  // ─── Validation helpers ────────────────────────────────────────
 
-  const handleNextStep = () => {
-    const nextErrors = { ...errors };
-
-    if (currentStep === 1) {
-      nextErrors.name = validateClusterName(state.selectedName);
+  const nameError = useMemo(() => {
+    const n = state.selectedName;
+    if (!n) return "";
+    if (n.length < NAMING_RULES.MIN_CLUSTER_NAME_LENGTH) {
+      return `At least ${NAMING_RULES.MIN_CLUSTER_NAME_LENGTH} characters`;
     }
-
-    if (currentStep === 2) {
-      nextErrors.location = validateLocation(state.selectedLocation);
+    if (n.length > NAMING_RULES.MAX_CLUSTER_NAME_LENGTH) {
+      return `At most ${NAMING_RULES.MAX_CLUSTER_NAME_LENGTH} characters`;
     }
-
-    if (currentStep === 3) {
-      nextErrors.dbType = validateDbType(state.selectedDbType);
+    if (!NAMING_RULES.CLUSTER_NAME_PATTERN.test(n)) {
+      return "Lowercase letters, numbers, and hyphens only";
     }
+    if (clusters.some((c) => c.name === n)) return "Name already taken";
+    return "";
+  }, [state.selectedName, clusters]);
 
-    if (currentStep === 4) {
-      nextErrors.plan = validatePlan(state.selectedDb);
-      nextErrors.version = validateVersion(state.selectedVersion, state.selectedDbType);
-    }
+  const isNameValid = !!state.selectedName && !nameError;
+  const isEngineValid = !!state.selectedDbType && !!state.selectedVersion;
+  const isRegionValid = !!state.selectedLocation;
+  const isPlanValid = !!state.selectedDb;
+  const isProjectValid = !!state.selectedProject;
 
-    if (currentStep === 5) {
-      nextErrors.project = validateProject(state.selectedProject);
-    }
+  const canSubmit =
+    isNameValid &&
+    isEngineValid &&
+    isRegionValid &&
+    isPlanValid &&
+    isProjectValid &&
+    termsAccepted &&
+    !isLoading;
 
-    setErrors(nextErrors);
+  // ─── Handlers ──────────────────────────────────────────────────
 
-    const fieldOrder: (keyof ErrorState)[] = [
-      "name",
-      "location",
-      "dbType",
-      "plan",
-      "version",
-      "project",
-    ];
-    const firstError = fieldOrder.map((field) => nextErrors[field]).find(Boolean);
-
-    if (firstError) {
-      toast.error(firstError);
-      return;
-    }
-
-    if (currentStep < STEP_META.length) {
-      setCurrentStep((prev) => prev + 1);
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep((prev) => prev - 1);
-    }
-  };
-
-  const handleDbTypeChange = (dbType: string) => {
-    const selectedType = databaseTypes.find((type) => type.code === dbType);
-
+  const handleEngineChange = (code: string) => {
+    const t = databaseTypes.find((x) => x.code === code);
+    if (!t?.available) return;
     setState((prev) => ({
       ...prev,
-      selectedDbType: dbType,
+      selectedDbType: code,
       selectedDb: "",
-      selectedVersion: selectedType?.versions?.[0] || "",
+      selectedVersion: t?.versions?.[0] || "",
     }));
-
-    setErrors((prev) => ({
-      ...prev,
-      dbType: "",
-      plan: "",
-      version: "",
-    }));
-  };
-
-  const handleDbPlanChange = (dbId: string) => {
-    setState((prev) => ({ ...prev, selectedDb: dbId }));
-    setErrors((prev) => ({ ...prev, plan: "" }));
   };
 
   const onSubmit = async () => {
-    if (!termsAccepted) {
-      toast.error("Please accept the terms of service and privacy policy");
+    if (!canSubmit) {
+      toast.error("Complete all required fields");
+      return;
+    }
+    if (!selectedPlan) {
+      toast.error("Invalid plan selected");
       return;
     }
 
     try {
-      //debugger
       setIsLoading(true);
-
-      if (
-        !state.selectedDb ||
-        !state.selectedName ||
-        !state.selectedVersion ||
-        !state.selectedLocation ||
-        !state.selectedDbType ||
-        !state.selectedProject
-      ) {
-        toast.error("Please complete all required configuration fields");
-        return;
-      }
-
-      const selectedPlan = availablePlans.find((plan) => plan.id === state.selectedDb);
-      if (!selectedPlan) {
-        toast.error("Invalid plan selected");
-        return;
-      }
 
       const resources = getProductResources(selectedPlan);
       const sizeSlug =
@@ -478,671 +275,688 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
         region: state.selectedLocation,
         project_id: state.selectedProject,
         owner_id: userId,
+        enable_pgvector: state.selectedDbType === "pg" ? pgvectorEnabled : false,
       };
 
       try {
         createDatabaseSchema.parse(payload);
-      } catch (validationError) {
-        if (validationError instanceof z.ZodError) {
-          const firstError = validationError.errors[0];
-          toast.error(firstError.message);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          toast.error(e.errors[0].message);
           return;
         }
-        throw validationError;
+        throw e;
       }
 
       if (!validateEngineVersion(payload.engine, payload.version)) {
-        toast.error(`Version ${payload.version} is not valid for ${payload.engine}`);
+        toast.error(
+          `Version ${payload.version} is not valid for ${payload.engine}`,
+        );
         return;
       }
 
-      const response = await api.post("/services/database/create", payload);
-      if (response.status === 200) {
-        toast.success(response?.data?.message || "Database creation started!");
-        const clusterId = response?.data?.data?.cluster_id;
+      const res = await api.post("/services/database/create", payload);
+      if (res.status === 200) {
+        toast.success(res?.data?.message || "Database creation started.");
+        const clusterId = res?.data?.data?.cluster_id;
         if (clusterId) {
           router.push(`/dashboard/services/database/clusters/${clusterId}`);
         }
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to create database. Please try again later.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to create database. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const progressPercentage = (currentStep / STEP_META.length) * 100;
-  const selectedMonthlyPrice = getEffectivePrice(selectedDatabase);
+  const monthlyPrice = getEffectivePrice(selectedPlan ?? null);
+  const hourlyPrice =
+    monthlyPrice !== null ? monthlyPrice / (24 * 30) : null;
 
   return (
-    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
-      <div className={panelClassName}>
-        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-              Database Provisioning
-            </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-              Create a managed database cluster with a cleaner, production-ready setup flow.
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-              Move through naming, region, engine, sizing, and project assignment with a
-              focused review before provisioning begins.
-            </p>
-          </div>
-          <Image
-            src="/dashboard-services-icons/da database.png"
-            alt=""
-            width={160}
-            height={160}
-            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
-            priority
-            unoptimized
-          />
-        </div>
-
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
-
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-6">
-            {STEP_META.map((step) => {
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => {
-                    if (step.id < currentStep) {
-                      setCurrentStep(step.id);
-                    }
-                  }}
-                  className={`border px-3 py-3 text-left transition-colors ${
-                    isActive
-                      ? "border-blue-400/30 bg-blue-500/10"
-                      : isCompleted
-                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                        : "border-white/[0.06] bg-transparent"
-                  } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
-                >
-                  <div className="flex flex-col h-full">
-                    <span className="text-xs font-semibold text-white/32">0{step.id}</span>
-                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">{step.name}</div>
-                        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
-                      </div>
-                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
-                        {isCompleted && (
-                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
-                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      {/* Background layer */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[900px] w-[900px] blur-[60px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <StepContainer
-            eyebrow={`Step ${currentStep.toString().padStart(2, "0")}`}
-            title={activeStepMeta.title}
-            description={activeStepMeta.description}
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
+        {/* Back link */}
+        <div className="mb-6">
+          <Link
+            href="/dashboard/services/database"
+            className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
           >
-            {currentStep === 1 && (
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div>
-                  <Label htmlFor="cluster-name" className="mb-3 block text-sm font-medium text-white/78">
-                    Cluster name
-                  </Label>
-                  <Input
-                    id="cluster-name"
-                    value={state.selectedName}
-                    onChange={(event) => {
-                      setState((prev) => ({ ...prev, selectedName: event.target.value }));
-                      if (errors.name) {
-                        setErrors((prev) => ({ ...prev, name: "" }));
-                      }
-                    }}
-                    onBlur={() => {
-                      setErrors((prev) => ({
-                        ...prev,
-                        name: validateClusterName(state.selectedName),
-                      }));
-                    }}
-                    placeholder="my-production-db"
-                    className={inputClassName}
-                  />
-                  <FieldError message={errors.name} />
-                  <p className="mt-3 text-sm leading-6 text-white/42">
-                    Use a stable lowercase identifier. It should be easy for operators to recognize
-                    in tickets, dashboards, and project context.
-                  </p>
-                </div>
-
-                <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                  <h3 className="text-sm font-semibold text-white">Naming rules</h3>
-                  <div className="mt-4 space-y-3 text-sm text-white/50">
-                    <p>3-63 characters</p>
-                    <p>Lowercase letters, numbers, and hyphens only</p>
-                    <p>Must start and end with an alphanumeric character</p>
-                    <p>Must be unique across your existing clusters</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div>
-                <RadioGroup
-                  value={state.selectedLocation}
-                  onValueChange={(value) => {
-                    setState((prev) => ({ ...prev, selectedLocation: value }));
-                    if (errors.location) {
-                      setErrors((prev) => ({ ...prev, location: "" }));
-                    }
-                  }}
-                  className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                >
-                  {locations.map((region) => (
-                    <div key={region.id}>
-                      <RadioGroupItem
-                        value={region.short}
-                        id={`region-${region.id}`}
-                        className="peer sr-only"
-                        disabled={!region.available}
-                      />
-                      <Label
-                        htmlFor={`region-${region.id}`}
-                        className={`flex cursor-pointer items-center gap-4 border p-4 transition-colors ${
-                          region.available
-                            ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] peer-data-[state=checked]:border-blue-400/30 peer-data-[state=checked]:bg-blue-500/10"
-                            : "border-white/[0.05] bg-white/[0.02] opacity-55"
-                        }`}
-                      >
-                        <Image
-                          src={`https://flagsapi.com/${region.country_code}/flat/64.png`}
-                          alt={region.city}
-                          width={32}
-                          height={24}
-                          className="rounded-sm"
-                          unoptimized
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-white">{region.city}</div>
-                          <div className="mt-1 text-xs uppercase tracking-wide text-white/35">
-                            {region.country}
-                          </div>
-                        </div>
-                        {!region.available && (
-                          <Badge variant="outline" className="border-white/[0.14] bg-white/[0.04] text-white/55">
-                            Coming soon
-                          </Badge>
-                        )}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                <FieldError message={errors.location} />
-              </div>
-            )}
-
-            {currentStep === 3 && (
-              <div>
-                {loadingTypes ? (
-                  <div className="flex min-h-[260px] items-center justify-center border border-white/[0.08] bg-white/[0.03]">
-                    <div className="text-center">
-                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-white/60" />
-                      <p className="mt-4 text-sm text-white/45">Loading database engines</p>
-                    </div>
-                  </div>
-                ) : (
-                  <RadioGroup
-                    value={state.selectedDbType}
-                    onValueChange={(value) => {
-                      const selectedType = databaseTypes.find((type) => type.code === value);
-                      if (!selectedType?.available) return;
-                      handleDbTypeChange(value);
-                    }}
-                    className="grid grid-cols-1 gap-4 xl:grid-cols-2"
-                  >
-                    {databaseTypes.map((dbType) => {
-                      const planCount = products.filter((product) => product.sub === dbType.code).length;
-
-                      return (
-                        <div key={dbType.code}>
-                          <RadioGroupItem
-                            value={dbType.code}
-                            id={`db-type-${dbType.code}`}
-                            className="peer sr-only"
-                            disabled={!dbType.available}
-                          />
-                          <Label
-                            htmlFor={`db-type-${dbType.code}`}
-                            className={`flex cursor-pointer items-start gap-4 border p-5 transition-colors ${
-                              dbType.available
-                                ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] peer-data-[state=checked]:border-blue-400/30 peer-data-[state=checked]:bg-blue-500/10"
-                                : "border-white/[0.05] bg-white/[0.02] opacity-55"
-                            }`}
-                          >
-                            <div className="flex h-12 w-12 items-center justify-center border border-white/[0.08] bg-white/[0.05]">
-                              <Image
-                                src={dbType.icon_url}
-                                alt={dbType.name}
-                                width={28}
-                                height={28}
-                                className="object-contain"
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold text-white">{dbType.name}</div>
-                                  <div className="mt-1 text-sm leading-6 text-white/45">
-                                    {dbType.description}
-                                  </div>
-                                </div>
-                                {!dbType.available && (
-                                  <Badge variant="outline" className="border-white/[0.14] bg-white/[0.04] text-white/55">
-                                    Unavailable
-                                  </Badge>
-                                )}
-                              </div>
-
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.03] text-white/60">
-                                  {dbType.versions.length} version{dbType.versions.length === 1 ? "" : "s"}
-                                </Badge>
-                                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.03] text-white/60">
-                                  {planCount} plan{planCount === 1 ? "" : "s"}
-                                </Badge>
-                              </div>
-                            </div>
-                          </Label>
-                        </div>
-                      );
-                    })}
-                  </RadioGroup>
-                )}
-                <FieldError message={errors.dbType} />
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <div className="space-y-6">
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-                  <div>
-                    <Label className="mb-3 block text-sm font-medium text-white/78">
-                      CPU profile
-                    </Label>
-                    <Tabs
-                      value={selectedCpuType}
-                      onValueChange={(value) => {
-                        setSelectedCpuType(value as CpuType);
-                        setState((prev) => ({ ...prev, selectedDb: "" }));
-                        setErrors((prev) => ({ ...prev, plan: "" }));
-                      }}
-                      className="w-full"
-                    >
-                      <TabsList className="grid h-auto w-full grid-cols-3 border border-white/[0.08] bg-white/[0.04] p-1">
-                        <TabsTrigger value="basic" className="rounded-none px-3 py-2 text-xs data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
-                          {CPU_META.basic.label}
-                        </TabsTrigger>
-                        <TabsTrigger value="general_purpose" className="rounded-none px-3 py-2 text-xs data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
-                          {CPU_META.general_purpose.label}
-                        </TabsTrigger>
-                        <TabsTrigger value="storage_optimized" className="rounded-none px-3 py-2 text-xs data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">
-                          {CPU_META.storage_optimized.label}
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                    <p className="mt-3 text-sm text-white/45">{CPU_META[selectedCpuType].description}</p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="version" className="mb-3 block text-sm font-medium text-white/78">
-                      Engine version
-                    </Label>
-                    <Select
-                      value={state.selectedVersion}
-                      onValueChange={(value) => {
-                        setState((prev) => ({ ...prev, selectedVersion: value }));
-                        if (errors.version) {
-                          setErrors((prev) => ({ ...prev, version: "" }));
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="version" className={inputClassName}>
-                        <SelectValue placeholder="Select version" />
-                      </SelectTrigger>
-                      <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
-                        {versions.map((version) => (
-                          <SelectItem key={version} value={version}>
-                            v{version}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError message={errors.version} />
-                  </div>
-                </div>
-
-                {availablePlans.length === 0 ? (
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center">
-                    <Clock3 className="mx-auto h-8 w-8 text-white/40" />
-                    <h3 className="mt-4 text-lg font-semibold text-white">No plans available</h3>
-                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-white/45">
-                      Try a different CPU profile or select another database engine to view
-                      matching plans.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {availablePlans.map((plan) => {
-                      const resources = getProductResources(plan);
-                      const isSelected = state.selectedDb === plan.id;
-                      const discount = getDiscountPercent(plan);
-                      const effectivePrice = getEffectivePrice(plan);
-
-                      return (
-                        <button
-                          key={plan.id}
-                          type="button"
-                          onClick={() => handleDbPlanChange(plan.id)}
-                          className={`border p-5 text-left transition-colors ${
-                            isSelected
-                              ? "border-blue-400/30 bg-blue-500/10"
-                              : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <div className="text-lg font-semibold text-white">{plan.name}</div>
-                              <div className="mt-1 text-sm text-white/42">
-                                {CPU_META[getProductCpuType(plan)].label} profile
-                              </div>
-                            </div>
-
-                            <div className="text-right">
-                              {effectivePrice === null || effectivePrice === 0 ? (
-                                <div className="text-2xl font-semibold text-white">Free</div>
-                              ) : (
-                                <>
-                                  {discount > 0 && (
-                                    <div className="text-xs text-white/30 line-through">
-                                      {formatPrice(Number(plan.price || 0))}/mo
-                                    </div>
-                                  )}
-                                  <div className="text-2xl font-semibold text-white">
-                                    {formatPrice(effectivePrice)}
-                                    <span className="ml-1 text-sm font-normal text-white/45">/mo</span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/[0.08] pt-4">
-                            <div>
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/35">
-                                <Cpu className="h-3.5 w-3.5" /> CPU
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-white">
-                                {resources.cpu || 1} vCPU
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/35">
-                                <Server className="h-3.5 w-3.5" /> RAM
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-white">
-                                {resources.ram || 1} GB
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/35">
-                                <HardDrive className="h-3.5 w-3.5" /> Storage
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-white">
-                                {resources.storage || 0} GB
-                              </div>
-                            </div>
-                          </div>
-
-                          {discount > 0 && (
-                            <Badge variant="outline" className="mt-4 border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
-                              Save {discount}%
-                            </Badge>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <FieldError message={errors.plan} />
-              </div>
-            )}
-
-            {currentStep === 5 && (
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div>
-                  <Label htmlFor="project" className="mb-3 block text-sm font-medium text-white/78">
-                    Project
-                  </Label>
-                  <Select
-                    value={state.selectedProject}
-                    onValueChange={(value) => {
-                      setState((prev) => ({ ...prev, selectedProject: value }));
-                      if (errors.project) {
-                        setErrors((prev) => ({ ...prev, project: "" }));
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="project" className={inputClassName}>
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent className="border-white/[0.12] bg-[#0a0a0c] text-white">
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FieldError message={errors.project} />
-                  <p className="mt-3 text-sm leading-6 text-white/45">
-                    Projects help group infrastructure, audit activity, and access controls. Attach
-                    the cluster to the team or workload that owns it.
-                  </p>
-                </div>
-
-                <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                  <h3 className="text-sm font-semibold text-white">Need a new project?</h3>
-                  <p className="mt-3 text-sm leading-6 text-white/45">
-                    Create a project first if this cluster belongs to a new environment or customer
-                    workload.
-                  </p>
-                  <Link
-                    href="/dashboard/projects/new"
-                    className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-white/68 transition-colors hover:text-white"
-                  >
-                    Create project
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 6 && (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Provisioning
-                    </div>
-                    <div className="mt-3 text-sm leading-6 text-white/50">
-                      Provisioning begins immediately after confirmation. Status and connection
-                      details will appear on the cluster detail page once the service comes online.
-                    </div>
-                  </div>
-
-                  <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Security & policy
-                    </div>
-                    <div className="mt-3 text-sm leading-6 text-white/50">
-                      Managed database provisioning is governed by your selected project, account
-                      billing, and accepted service terms.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border border-white/[0.08] bg-white/[0.04] p-5">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="terms"
-                      checked={termsAccepted}
-                      onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-                      className="mt-0.5 rounded-sm border-white/20 data-[state=checked]:border-blue-400 data-[state=checked]:bg-blue-500"
-                    />
-                    <label htmlFor="terms" className="text-sm leading-6 text-white/70">
-                      I accept the <Link href="/terms" className="text-white underline underline-offset-4">Terms of Service</Link> and <Link href="/privacy" className="text-white underline underline-offset-4">Privacy Policy</Link> for provisioning this managed database cluster.
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-          </StepContainer>
-
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePrevStep}
-              disabled={currentStep === 1 || isLoading}
-              className="border-white/[0.12] bg-transparent px-4 text-white hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
-            >
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-
-            {currentStep < STEP_META.length ? (
-              <Button
-                type="button"
-                onClick={handleNextStep}
-                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
-              >
-                Continue
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={onSubmit}
-                disabled={isLoading || !termsAccepted}
-                className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Provisioning...
-                  </>
-                ) : (
-                  <>
-                    Pay and Deploy
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Back to databases
+          </Link>
         </div>
 
-        <div className="space-y-6">
-          <div className={`${panelClassName} lg:sticky lg:top-8`}>
-            <div className="border-b border-white/[0.06] px-6 py-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                Summary
-              </p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
-            </div>
+        {/* Hero */}
+        <div
+          className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}
+        >
+          <span className="h-px w-4 bg-white/45" />
+          Database · Provisioning
+        </div>
+        <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+          Spin up a managed cluster{" "}
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
+            in seconds
+          </span>
+        </h1>
+        <p
+          className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+        >
+          Pick an engine, choose a region, and we handle replication, TLS, and
+          connection strings. Per-second billing.
+        </p>
 
-            <div className="px-6 py-4">
-              {selectedDbTypeInfo && (
-                <div className="mb-4 flex items-center gap-3 border border-white/[0.08] bg-white/[0.04] p-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10">
-                    <Image
-                      src={selectedDbTypeInfo.icon_url}
-                      alt={selectedDbTypeInfo.name}
-                      width={26}
-                      height={26}
-                      className="object-contain"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">{selectedDbTypeInfo.name}</div>
-                    {state.selectedVersion && (
-                      <div className="mt-0.5 text-xs uppercase tracking-wide text-white/35">
-                        Version {state.selectedVersion}
-                      </div>
-                    )}
-                  </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
+          {/* ─── LEFT: Sections ─────────────────────────────── */}
+          <div className="min-w-0">
+            {/* 01 Identity */}
+            <Section
+              num="01"
+              title="Cluster identity"
+              desc="A stable name for dashboards, billing, and connection strings."
+              status={isNameValid ? "done" : state.selectedName ? "active" : "idle"}
+              statusLabel={isNameValid ? "Valid" : state.selectedName ? "Check" : "Required"}
+            >
+              <div className="max-w-[680px]">
+                <FieldLabel hint="required">Cluster name</FieldLabel>
+                <Input
+                  value={state.selectedName}
+                  placeholder="prod-orders-pg"
+                  onChange={(e) =>
+                    setState((p) => ({ ...p, selectedName: e.target.value }))
+                  }
+                  mono
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className={`${MONO} text-[10.5px] text-white/40`}>
+                    3–63 chars · lowercase · hyphens allowed
+                  </span>
+                  {state.selectedName && (
+                    <span
+                      className={`${MONO} text-[10.5px] inline-flex items-center gap-1 ${
+                        isNameValid ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {isNameValid ? (
+                        <>
+                          <Check className="h-3 w-3" /> Available
+                        </>
+                      ) : (
+                        nameError
+                      )}
+                    </span>
+                  )}
                 </div>
-              )}
-
-              <div className="space-y-0.5">
-                <SummaryRow icon="/dashboard-icons/name.png" label="Cluster name" value={state.selectedName || "—"} empty={!state.selectedName} />
-                <SummaryRow icon="/dashboard-icons/region.png" label="Region" value={selectedLocationData?.city ?? "—"} empty={!selectedLocationData} />
-                <SummaryRow icon="/dashboard-icons/engine.png" label="Engine" value={selectedDbTypeInfo?.name ?? "—"} empty={!selectedDbTypeInfo} />
               </div>
+            </Section>
 
-              {(selectedDatabase) && (
+            {/* 02 Engine */}
+            <Section
+              num="02"
+              title="Engine"
+              desc="Select your database engine. Version is selectable after picking."
+              status={isEngineValid ? "done" : "idle"}
+              statusLabel={
+                isEngineValid && selectedDbTypeInfo
+                  ? selectedDbTypeInfo.name
+                  : "Required"
+              }
+            >
+              {loadingTypes ? (
+                <div className="flex items-center gap-3 text-white/50 py-12 justify-center border border-white/[0.06] bg-[#111216] rounded-[6px]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className={`${MONO} text-[11px] uppercase tracking-[0.14em]`}>
+                    Loading engines
+                  </span>
+                </div>
+              ) : (
                 <>
-                  <div className="my-3 border-t border-white/[0.05]" />
-                  <div className="space-y-0.5">
-                    <SummaryRow icon="/dashboard-icons/cpu.png" label="CPU profile" value={CPU_META[selectedCpuType].label} />
-                    <SummaryRow icon="/dashboard-icons/plan-1.png" label="Plan" value={selectedDatabase.name} />
-                    {selectedProjectData && (
-                      <SummaryRow icon="/dashboard-icons/project-1.png" label="Project" value={selectedProjectData.name} />
-                    )}
+                  <div
+                    className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden mb-3"
+                  >
+                    {databaseTypes.map((engine) => {
+                      const isSelected = state.selectedDbType === engine.code;
+                      const planCount = products.filter(
+                        (p) => p.sub === engine.code,
+                      ).length;
+                      const fromPrice = products
+                        .filter((p) => p.sub === engine.code && p.price !== null)
+                        .reduce<number | null>((min, p) => {
+                          const eff = getEffectivePrice(p);
+                          if (eff === null) return min;
+                          return min === null || eff < min ? eff : min;
+                        }, null);
+                      const category =
+                        ENGINE_CATEGORY[engine.code.toLowerCase()] ?? "Database";
+
+                      return (
+                        <EngineCard
+                          key={engine.code}
+                          name={engine.name}
+                          category={category}
+                          iconUrl={engine.icon_url}
+                          version={engine.versions[engine.versions.length - 1]}
+                          fromPrice={fromPrice}
+                          selected={isSelected}
+                          disabled={!engine.available || planCount === 0}
+                          onClick={() => handleEngineChange(engine.code)}
+                        />
+                      );
+                    })}
                   </div>
+
+                  {selectedDbTypeInfo && versions.length > 0 && (
+                    <div
+                      className="flex items-center gap-3 max-w-[680px] px-4 h-11 border border-white/[0.06] bg-[#111216] rounded-[6px]"
+                    >
+                      <span
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40`}
+                      >
+                        Version
+                      </span>
+                      <span
+                        className={`${MONO} text-[12px] text-white/85 truncate flex-1`}
+                      >
+                        {selectedDbTypeInfo.name} {state.selectedVersion}
+                      </span>
+                      <select
+                        value={state.selectedVersion}
+                        onChange={(e) =>
+                          setState((p) => ({
+                            ...p,
+                            selectedVersion: e.target.value,
+                          }))
+                        }
+                        className={`${MONO} bg-[#0d0e11] border border-white/[0.08] text-white text-[11px] px-2 py-1 rounded-[4px] outline-none`}
+                      >
+                        {versions.map((v) => (
+                          <option key={v} value={v}>
+                            v{v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {state.selectedDbType === "pg" && (
+                    <label className="flex items-center gap-3 max-w-[680px] px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pgvectorEnabled}
+                        onChange={(e) => setPgvectorEnabled(e.target.checked)}
+                        className="h-4 w-4 accent-[#0095ff]"
+                      />
+                      <span className="flex-1">
+                        <span className="block text-[12px] text-white/85">
+                          Enable pgvector
+                        </span>
+                        <span
+                          className={`${MONO} block text-[10.5px] text-white/40`}
+                        >
+                          Adds the vector extension for storing and
+                          similarity-searching embeddings in this database.
+                        </span>
+                      </span>
+                    </label>
+                  )}
                 </>
               )}
+            </Section>
 
-              <Separator className="my-4 bg-white/[0.08]" />
+            {/* 03 Region */}
+            <Section
+              num="03"
+              title="Region"
+              desc="Where the primary node is provisioned. Replicas can be added later."
+              status={isRegionValid ? "done" : "idle"}
+              statusLabel={
+                isRegionValid && selectedLocationData
+                  ? selectedLocationData.city
+                  : "Required"
+              }
+            >
+              <div
+                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden"
+              >
+                {locations.map((r) => (
+                  <RegionCard
+                    key={r.id}
+                    city={r.city}
+                    country={r.country}
+                    countryCode={r.country_code}
+                    short={r.short}
+                    available={!!r.available}
+                    selected={state.selectedLocation === r.short}
+                    onClick={() => {
+                      if (!r.available) return;
+                      setState((p) => ({ ...p, selectedLocation: r.short }));
+                    }}
+                  />
+                ))}
+              </div>
+            </Section>
 
-              <div className="flex items-end justify-between gap-4">
+            {/* 04 Plan */}
+            <Section
+              num="04"
+              title="Plan & sizing"
+              desc="Compute and memory tier. Storage scales with the chosen plan."
+              status={isPlanValid ? "done" : isEngineValid ? "active" : "idle"}
+              statusLabel={
+                selectedPlan
+                  ? `${selectedPlan.name} · ${getProductResources(selectedPlan).cpu || 1} vCPU`
+                  : isEngineValid
+                    ? "Choose a plan"
+                    : "Pick engine first"
+              }
+            >
+              {/* CPU profile tabs */}
+              <div className="mb-4">
+                <FieldLabel>CPU profile</FieldLabel>
+                <div
+                  className="inline-flex border border-white/[0.06] bg-[#0d0e11] rounded-[5px] p-0.5 gap-0.5"
+                >
+                  {(Object.keys(CPU_META) as CpuType[]).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCpuType(k);
+                        setState((p) => ({ ...p, selectedDb: "" }));
+                      }}
+                      className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] font-semibold px-3 h-7 rounded-[4px] transition-colors`}
+                      style={
+                        selectedCpuType === k
+                          ? {
+                              color: ACCENT,
+                              background: ACCENT_DIM,
+                              border: "1px solid rgba(0,149,255,0.25)",
+                            }
+                          : {
+                              color: "rgba(255,255,255,0.55)",
+                              border: "1px solid transparent",
+                            }
+                      }
+                    >
+                      {CPU_META[k].label}
+                    </button>
+                  ))}
+                </div>
+                <p className={`${MONO} mt-2 text-[10.5px] text-white/40`}>
+                  {CPU_META[selectedCpuType].description}
+                </p>
+              </div>
+
+              {!isEngineValid ? (
+                <div
+                  className={`${MONO} text-[11px] text-white/45 px-6 py-10 text-center border border-dashed border-white/[0.08] rounded-[6px]`}
+                >
+                  Pick an engine in step 02 to see matching plans.
+                </div>
+              ) : availablePlans.length === 0 ? (
+                <div
+                  className={`${MONO} text-[11px] text-white/45 px-6 py-10 text-center border border-dashed border-white/[0.08] rounded-[6px]`}
+                >
+                  No plans available for {CPU_META[selectedCpuType].label.toLowerCase()} profile.
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden"
+                >
+                  {availablePlans.map((plan, idx) => (
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      featured={idx === 1}
+                      selected={state.selectedDb === plan.id}
+                      onClick={() =>
+                        setState((p) => ({ ...p, selectedDb: plan.id }))
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* 05 Project */}
+            <Section
+              num="05"
+              title="Project & billing"
+              desc="Resource group for IAM, billing, and quotas."
+              status={isProjectValid ? "done" : "idle"}
+              statusLabel={
+                selectedProjectData?.name ?? "Required"
+              }
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[680px]">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Estimated monthly cost
-                  </div>
-                  <div className="mt-2 text-2xl font-semibold text-white">
-                    {selectedDatabase ? getPriceLabel(selectedDatabase) : "—"}
+                  <FieldLabel>Project</FieldLabel>
+                  {projects.length === 0 ? (
+                    <div
+                      className={`${MONO} text-[11px] text-white/45 px-4 h-11 inline-flex items-center border border-dashed border-white/[0.08] rounded-[6px] w-full`}
+                    >
+                      No projects yet
+                    </div>
+                  ) : (
+                    <select
+                      value={state.selectedProject}
+                      onChange={(e) =>
+                        setState((p) => ({
+                          ...p,
+                          selectedProject: e.target.value,
+                        }))
+                      }
+                      className={`${MONO} w-full bg-[#0d0e11] border border-white/[0.08] text-white text-[12px] px-3 h-11 rounded-[6px] outline-none hover:border-white/15 focus:border-[${ACCENT}]`}
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <Link
+                    href="/dashboard/projects/new"
+                    className={`${MONO} mt-2 inline-flex items-center gap-1 text-[10.5px] text-white/50 hover:text-[#0095FF] transition-colors`}
+                  >
+                    Create new project
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div>
+                  <FieldLabel>Billing account</FieldLabel>
+                  <div
+                    className={`${MONO} w-full bg-[#0d0e11] border border-white/[0.08] text-white/85 text-[12px] px-3 h-11 inline-flex items-center rounded-[6px]`}
+                  >
+                    Default · pay-as-you-go
                   </div>
                 </div>
-                {selectedMonthlyPrice !== null && selectedMonthlyPrice !== 0 && (
-                  <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">
-                    Billed monthly
-                  </Badge>
-                )}
               </div>
-            </div>
+            </Section>
+
+            {/* 06 Confirm */}
+            <Section
+              num="06"
+              title="Review and confirm"
+              desc="Provisioning begins immediately after confirmation."
+              status={termsAccepted ? "done" : "idle"}
+              statusLabel={termsAccepted ? "Accepted" : "Required"}
+            >
+              <label
+                className="flex items-start gap-3 px-4 py-3 border border-white/[0.06] bg-[#111216] rounded-[6px] cursor-pointer max-w-[640px]"
+              >
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 h-3.5 w-3.5 accent-[#0095FF]"
+                />
+                <span className="text-[12.5px] leading-snug text-white/75">
+                  I accept the{" "}
+                  <Link
+                    href="/terms"
+                    className="text-white underline underline-offset-4"
+                  >
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    className="text-white underline underline-offset-4"
+                  >
+                    Privacy Policy
+                  </Link>{" "}
+                  for provisioning this managed database cluster.
+                </span>
+              </label>
+            </Section>
           </div>
 
+          {/* ─── RIGHT: Sticky summary ──────────────────────── */}
+          <aside className="lg:sticky lg:top-6 self-start">
+            <div
+              className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden"
+            >
+              <header
+                className="border-b border-white/[0.06] px-5 py-4 flex items-start justify-between gap-2"
+              >
+                <div>
+                  <p
+                    className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1`}
+                  >
+                    Configuration
+                  </p>
+                  <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+                    Your cluster
+                  </h3>
+                </div>
+                <span
+                  className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold`}
+                  style={{ color: canSubmit ? "#4ade80" : ACCENT }}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                      background: canSubmit ? "#4ade80" : ACCENT,
+                      boxShadow: `0 0 6px ${canSubmit ? "#4ade80" : ACCENT}`,
+                    }}
+                  />
+                  {canSubmit ? "Ready" : "Pending"}
+                </span>
+              </header>
+
+              {/* Summary rows */}
+              <div className="px-5 py-3">
+                <SumRow
+                  k="Name"
+                  v={state.selectedName || "—"}
+                  empty={!state.selectedName}
+                  mono
+                />
+                <SumRow
+                  k="Engine"
+                  v={
+                    selectedDbTypeInfo && state.selectedVersion
+                      ? `${selectedDbTypeInfo.name} ${state.selectedVersion}`
+                      : "—"
+                  }
+                  empty={!selectedDbTypeInfo}
+                />
+                <SumRow
+                  k="Region"
+                  v={
+                    selectedLocationData
+                      ? `${selectedLocationData.city} · ${selectedLocationData.short}`
+                      : "—"
+                  }
+                  empty={!selectedLocationData}
+                />
+                <SumRow
+                  k="Plan"
+                  v={selectedPlan?.name || "—"}
+                  empty={!selectedPlan}
+                  mono
+                />
+                {selectedPlan && (
+                  <>
+                    <SumRow
+                      k="vCPU"
+                      v={`${getProductResources(selectedPlan).cpu || 1}`}
+                      mono
+                    />
+                    <SumRow
+                      k="Memory"
+                      v={`${getProductResources(selectedPlan).ram || 1} GB`}
+                      mono
+                    />
+                    <SumRow
+                      k="Storage"
+                      v={`${getProductResources(selectedPlan).storage || 0} GB`}
+                      mono
+                    />
+                  </>
+                )}
+                <SumRow
+                  k="Project"
+                  v={selectedProjectData?.name || "—"}
+                  empty={!selectedProjectData}
+                />
+              </div>
+
+              {/* Connection preview */}
+              {selectedDbTypeInfo && state.selectedName && selectedLocationData && (
+                <div
+                  className="mx-5 mb-4 px-3 py-2.5 border border-white/[0.06] bg-[#08090b] rounded-[5px]"
+                >
+                  <div
+                    className={`${MONO} flex items-center justify-between mb-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold text-white/35`}
+                  >
+                    Connection preview
+                  </div>
+                  <code
+                    className={`${MONO} text-[10.5px] break-all leading-snug text-white/55`}
+                  >
+                    <span style={{ color: ACCENT }}>
+                      {connSchemaFor(state.selectedDbType)}
+                    </span>
+                    <span className="text-emerald-400">admin</span>
+                    :****@
+                    <span className="text-white/85">
+                      {state.selectedName}.{state.selectedLocation}.ahurasense.com
+                    </span>
+                    :{connPortFor(state.selectedDbType)}
+                  </code>
+                </div>
+              )}
+
+              {/* Cost block */}
+              <div
+                className="px-5 py-4 bg-[#08090b] border-t border-white/[0.06]"
+              >
+                <div className="flex items-baseline justify-between mb-2">
+                  <span
+                    className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40`}
+                  >
+                    Monthly cost
+                  </span>
+                  {hourlyPrice !== null && hourlyPrice > 0 && (
+                    <span className={`${MONO} text-[10.5px] text-white/45`}>
+                      ${hourlyPrice.toFixed(4)} / hr
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1">
+                  {monthlyPrice === null ? (
+                    <span
+                      style={SERIF_STYLE}
+                      className="text-[28px] font-bold text-white/35 leading-none"
+                    >
+                      —
+                    </span>
+                  ) : monthlyPrice === 0 ? (
+                    <span
+                      style={SERIF_STYLE}
+                      className="text-[34px] font-bold tracking-[-0.03em] text-white leading-none"
+                    >
+                      Free
+                    </span>
+                  ) : (
+                    <>
+                      <span
+                        style={SERIF_STYLE}
+                        className="text-[18px] text-white/50 font-medium leading-none"
+                      >
+                        $
+                      </span>
+                      <span
+                        style={SERIF_STYLE}
+                        className="text-[38px] font-bold tracking-[-0.03em] tabular-nums text-white leading-none"
+                      >
+                        {monthlyPrice.toFixed(monthlyPrice < 10 ? 2 : 0)}
+                      </span>
+                      <span
+                        className={`${MONO} text-[11px] text-white/40 ml-1`}
+                      >
+                        / mo
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!canSubmit}
+                  onClick={onSubmit}
+                  className={`${MONO} mt-4 w-full inline-flex items-center justify-center gap-2 h-11 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                  style={{
+                    background: canSubmit
+                      ? `linear-gradient(135deg, ${ACCENT}, #0066B3)`
+                      : "#1a1d24",
+                    color: canSubmit ? "#ffffff" : "rgba(255,255,255,0.35)",
+                    boxShadow: canSubmit
+                      ? "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)"
+                      : "none",
+                    cursor: canSubmit ? "pointer" : "not-allowed",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!canSubmit) return;
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!canSubmit) return;
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                    e.currentTarget.style.transform = "none";
+                  }}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Provisioning
+                    </>
+                  ) : (
+                    <>
+                      Create cluster
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+                <p
+                  className={`${MONO} text-center text-[10px] text-white/35 mt-2`}
+                >
+                  Per-second billing · cancel anytime
+                </p>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
@@ -1150,3 +964,421 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
 };
 
 export default DatabaseSelect;
+
+// ─── Subcomponents ────────────────────────────────────────────────
+
+function Section({
+  num,
+  title,
+  desc,
+  status,
+  statusLabel,
+  children,
+}: {
+  num: string;
+  title: string;
+  desc: string;
+  status: "done" | "active" | "idle";
+  statusLabel: string;
+  children: React.ReactNode;
+}) {
+  const tone =
+    status === "done"
+      ? { dot: "#4ade80", text: "#4ade80" }
+      : status === "active"
+        ? { dot: ACCENT, text: ACCENT }
+        : { dot: "rgba(255,255,255,0.25)", text: "rgba(255,255,255,0.35)" };
+
+  return (
+    <section className="border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0">
+      <header className="mb-5 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <span
+            className={`${MONO} text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30 mt-0.5`}
+          >
+            {num}
+          </span>
+          <div>
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-white">
+              {title}
+            </h2>
+            <p className={`${MONO} mt-1 text-[11px] text-white/45 leading-snug max-w-[680px]`}>
+              {desc}
+            </p>
+          </div>
+        </div>
+        <span
+          className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] font-semibold shrink-0 mt-1`}
+          style={{ color: tone.text }}
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{
+              background: tone.dot,
+              boxShadow: status !== "idle" ? `0 0 6px ${tone.dot}` : "none",
+            }}
+          />
+          {statusLabel}
+        </span>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function FieldLabel({
+  children,
+  hint,
+}: {
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <label className="mb-1.5 flex items-center justify-between gap-2">
+      <span className="text-[12px] font-medium text-white/85">{children}</span>
+      {hint && (
+        <span className={`${MONO} text-[10px] text-white/35`}>{hint}</span>
+      )}
+    </label>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+  mono,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  mono?: boolean;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={`${mono ? MONO : ""} w-full bg-[#0d0e11] border border-white/[0.08] text-white text-[12.5px] px-3 h-11 rounded-[6px] outline-none placeholder:text-white/25 hover:border-white/15 focus:border-[${ACCENT}] focus:shadow-[0_0_0_3px_rgba(0,149,255,0.09)] transition-all`}
+    />
+  );
+}
+
+function EngineCard({
+  name,
+  category,
+  iconUrl,
+  version,
+  fromPrice,
+  selected,
+  disabled,
+  onClick,
+}: {
+  name: string;
+  category: string;
+  iconUrl: string;
+  version?: string;
+  fromPrice: number | null;
+  selected: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="relative text-left px-5 py-4 bg-[#111216] hover:bg-[#16181d] transition-colors flex flex-col gap-2.5 min-h-[150px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#111216]"
+      style={
+        selected
+          ? {
+              background: "#16181d",
+              boxShadow: `inset 0 0 0 1px ${ACCENT}`,
+            }
+          : undefined
+      }
+    >
+      {selected && (
+        <span
+          className="absolute top-3 right-3 h-4 w-4 rounded-full inline-flex items-center justify-center"
+          style={{ background: ACCENT }}
+        >
+          <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+        </span>
+      )}
+      <div className="flex items-center gap-3">
+        <div
+          className="h-9 w-9 inline-flex items-center justify-center border border-white/[0.08] bg-[#0d0e11] rounded-[6px] shrink-0"
+        >
+          {iconUrl ? (
+            <Image
+              src={iconUrl}
+              alt={name}
+              width={22}
+              height={22}
+              className="object-contain"
+              unoptimized
+            />
+          ) : (
+            <Server className="h-4 w-4 text-white/55" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-semibold tracking-[-0.005em] text-white truncate">
+            {name}
+          </div>
+          <div
+            className={`${MONO} mt-0.5 text-[10px] uppercase tracking-[0.12em] text-white/45 truncate`}
+          >
+            {category}
+          </div>
+        </div>
+      </div>
+      <div
+        className={`${MONO} mt-auto flex items-center justify-between gap-2 pt-2 border-t border-white/[0.05] text-[10.5px] text-white/45`}
+      >
+        {version ? (
+          <span>
+            v <span className="text-white/85 font-medium">{version}</span>
+          </span>
+        ) : (
+          <span>—</span>
+        )}
+        {fromPrice !== null && fromPrice > 0 && (
+          <span className="text-white/85 font-semibold">
+            <span className="text-white/40 font-normal">From</span> $
+            {fromPrice.toFixed(fromPrice < 10 ? 2 : 0)}
+            <span className="text-white/40 font-normal">/mo</span>
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function RegionCard({
+  city,
+  country,
+  countryCode,
+  short,
+  available,
+  selected,
+  onClick,
+}: {
+  city: string;
+  country: string;
+  countryCode: string | null;
+  short: string;
+  available: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!available}
+      className="relative text-left px-4 py-3.5 bg-[#111216] hover:bg-[#16181d] transition-colors min-h-[78px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#111216]"
+      style={
+        selected
+          ? {
+              background: "#16181d",
+              boxShadow: `inset 0 0 0 1px ${ACCENT}`,
+            }
+          : undefined
+      }
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className={`${MONO} text-[11px] font-semibold tracking-[0.04em] uppercase`}
+          style={{ color: selected ? ACCENT : "rgba(255,255,255,0.55)" }}
+        >
+          {short} · {countryCode || ""}
+        </span>
+        {available ? (
+          <span
+            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold inline-flex items-center gap-1 text-emerald-300/85`}
+          >
+            <span
+              className="h-1 w-1 rounded-full bg-emerald-400"
+              style={{ boxShadow: "0 0 5px #4ade80" }}
+            />
+            Ready
+          </span>
+        ) : (
+          <span
+            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold text-white/35`}
+          >
+            Soon
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
+        {countryCode && (
+          <Image
+            src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+            alt={country}
+            width={18}
+            height={12}
+            className="rounded-sm shrink-0"
+            unoptimized
+          />
+        )}
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-semibold tracking-[-0.005em] text-white truncate">
+            {city}
+          </div>
+          <div className={`${MONO} text-[10px] text-white/40 truncate`}>
+            {country}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PlanCard({
+  plan,
+  featured,
+  selected,
+  onClick,
+}: {
+  plan: Tables<"products">;
+  featured?: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const resources = getProductResources(plan);
+  const discount = getDiscountPercent(plan);
+  const effective = getEffectivePrice(plan);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative text-left px-5 py-4 bg-[#111216] hover:bg-[#16181d] transition-colors flex flex-col gap-2.5 min-h-[170px]"
+      style={
+        selected
+          ? {
+              background: "#16181d",
+              boxShadow: `inset 0 0 0 1px ${ACCENT}`,
+            }
+          : undefined
+      }
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="text-[13.5px] font-semibold tracking-[-0.005em]"
+          style={{ color: selected ? ACCENT : "#ffffff" }}
+        >
+          {plan.name}
+        </span>
+        {featured && (
+          <span
+            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold px-1.5 py-px rounded-[3px]`}
+            style={{
+              background: ACCENT_DIM,
+              color: ACCENT,
+              border: "1px solid rgba(0,149,255,0.25)",
+            }}
+          >
+            Popular
+          </span>
+        )}
+      </div>
+      <div className={`${MONO} text-[11px] flex flex-col gap-1`}>
+        <div className="flex justify-between text-white/45">
+          <span>vCPU</span>
+          <span className="text-white/85 font-medium">
+            {resources.cpu || 1}
+          </span>
+        </div>
+        <div className="flex justify-between text-white/45">
+          <span>Memory</span>
+          <span className="text-white/85 font-medium">
+            {resources.ram || 1} GB
+          </span>
+        </div>
+        <div className="flex justify-between text-white/45">
+          <span>Storage</span>
+          <span className="text-white/85 font-medium">
+            {resources.storage || 0} GB
+          </span>
+        </div>
+      </div>
+      <div className="mt-auto pt-2 border-t border-white/[0.05] flex items-baseline justify-between gap-2">
+        {effective === null || effective === 0 ? (
+          <span
+            style={SERIF_STYLE}
+            className="text-[18px] font-bold tracking-[-0.01em] text-white"
+          >
+            Free
+          </span>
+        ) : (
+          <span style={SERIF_STYLE} className="text-[18px] font-bold tracking-[-0.01em] text-white">
+            <span className="text-white/45 text-[13px] font-medium">$</span>
+            {effective.toFixed(effective < 10 ? 2 : 0)}
+            <span className={`${MONO} text-[9.5px] text-white/35 font-medium ml-0.5`}>
+              /mo
+            </span>
+          </span>
+        )}
+        {discount > 0 && (
+          <span
+            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold text-emerald-300`}
+          >
+            Save {discount}%
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function SumRow({
+  k,
+  v,
+  empty,
+  mono,
+}: {
+  k: string;
+  v: string;
+  empty?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-white/[0.04] last:border-b-0">
+      <span
+        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-medium text-white/40`}
+      >
+        {k}
+      </span>
+      <span
+        className={`${mono ? MONO : ""} text-[12px] font-medium truncate max-w-[200px] ${
+          empty ? "text-white/25" : "text-white/90"
+        }`}
+        title={v}
+      >
+        {v}
+      </span>
+    </div>
+  );
+}
+
+function connSchemaFor(engine: string): string {
+  const e = engine.toLowerCase();
+  if (e === "pg") return "postgresql://";
+  if (e === "mysql") return "mysql://";
+  if (e === "mongodb") return "mongodb://";
+  if (e === "kafka") return "kafka://";
+  return "db://";
+}
+
+function connPortFor(engine: string): string {
+  const e = engine.toLowerCase();
+  if (e === "pg") return "5432";
+  if (e === "mysql") return "3306";
+  if (e === "mongodb") return "27017";
+  if (e === "kafka") return "9092";
+  return "—";
+}

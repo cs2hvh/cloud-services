@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       if (result.statusCode === 500 && result.details) {
         return NextResponse.json(
           {
-            error: "Database deleted from DigitalOcean but failed to sync with database",
+            error: "Database deleted from the database provider but failed to sync with database",
             details: result.details,
           },
           { status: 500 }

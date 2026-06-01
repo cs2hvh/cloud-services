@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     {
       clusterId: result.clusterId,
       status: "pending",
-      message: "Cluster initialized. Droplet creation will begin from the cluster page.",
+      message: "Cluster initialized. Node provisioning will begin from the cluster page.",
     },
     { status: 200 }
   );

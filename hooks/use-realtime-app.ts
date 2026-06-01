@@ -36,6 +36,7 @@ interface AppRecord extends Record<string, unknown> {
   output_directory: string | null;
   size: string | null;
   last_failure_reason: string | null;
+  healthcheck_path: string | null;
 }
 
 // UI-friendly format
@@ -59,6 +60,7 @@ interface App {
   output_directory?: string;
   size?: string;
   last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
 interface UseRealtimeAppOptions {
@@ -90,6 +92,7 @@ function transformApp(record: AppRecord): App {
     output_directory: record.output_directory || undefined,
     size: record.size || undefined,
     last_failure_reason: record.last_failure_reason,
+    healthcheck_path: record.healthcheck_path,
   };
 }
 

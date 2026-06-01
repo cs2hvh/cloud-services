@@ -3,7 +3,10 @@ import { createWorkerClient } from "@/lib/supabase/server";
 import { checkAdminAuth } from "@/lib/auth/check-admin";
 import { Agent as UndiciAgent } from "undici";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
-import { addHostRoute } from "@/lib/proxmox-utils";
+import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
+import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
+import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
+import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,14 @@ type HostConfig = {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
 };
 
 interface ProxmoxResponse<T = unknown> {
@@ -140,6 +151,46 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Proxm
   throw new Error("task timeout");
 }
 
+// On-demand vMAC allocation.
+//
+// When network_mode=ovh_failover_vmac and the strict vMAC-pool scan
+// found nothing, we look at the routed pools (typically the BYOIP
+// block seeded by auto-setup) for an unused IP. For that IP we ask
+// OVH to mint a fresh vMAC, wait for the task, persist the new
+// (mac, ip) as its own public_ip_pools row, and return it.
+//
+// Requirements:
+//   - host.provider == "ovh"
+//   - OVH credentials in env (OVH_APP_KEY / _SECRET / OVH_CONSUMER_KEY)
+//   - the IP must already be attached as an additional IP on the
+//     server in OVH (i.e. createVirtualMac succeeds). If the BYOIP
+//     block isn't attached, OVH rejects and we surface the error.
+async function allocateOnDemandVmac(args: {
+  supabase: Awaited<ReturnType<typeof createWorkerClient>>;
+  host: HostConfig;
+  ipRows: Array<Record<string, unknown>>;
+  usedSet: Set<string>;
+  macByPool: Map<number, string | undefined>;
+  labelByPool: Map<number, string | null>;
+  isRoutedPool: (mac?: string, label?: string | null) => boolean;
+}): Promise<{ ip: string; mac: string } | null> {
+  // First unused IP in a routed pool
+  for (const r of args.ipRows) {
+    const ip = String((r as Record<string, unknown>).ip);
+    const poolId = Number((r as Record<string, unknown>).pool_id);
+    const mac = args.macByPool.get(poolId);
+    const label = args.labelByPool.get(poolId);
+    if (!args.isRoutedPool(mac, label)) continue;
+    if (args.usedSet.has(ip)) continue;
+    return allocateVmacForIp({
+      supabase: args.supabase,
+      host: { id: args.host.id, host_url: args.host.host_url, provider: args.host.provider },
+      ip,
+    });
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const { authorized, user } = await checkAdminAuth();
   if (!authorized || !user) {
@@ -175,8 +226,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!body.cpuCores || body.cpuCores < 1 || body.cpuCores > 32) {
-      return NextResponse.json({ ok: false, error: "Invalid cpuCores (1-32)" }, { status: 400 });
+    if (!body.cpuCores || body.cpuCores < 1 || body.cpuCores > 64) {
+      return NextResponse.json({ ok: false, error: "Invalid cpuCores (1-64)" }, { status: 400 });
     }
 
     if (!body.memoryMB || body.memoryMB < 512 || body.memoryMB > 262144) {
@@ -220,7 +271,7 @@ export async function POST(req: NextRequest) {
     // Verify host exists and is active
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password")
+      .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
       .eq("id", body.hostId)
       .eq("is_active", true)
       .single();
@@ -234,11 +285,32 @@ export async function POST(req: NextRequest) {
     const dispatcher = allowInsecure ? new UndiciAgent({ connect: { rejectUnauthorized: false } }) : undefined;
     const apiBase = (cfg.host_url.startsWith("http:") ? cfg.host_url.replace(/^http:/, "https:") : cfg.host_url).replace(/\/+$/, "");
     const node = cfg.node;
-    const storage = body.storage || cfg.storage || "local";
-    const bridge = body.bridge || cfg.bridge || "vmbr0";
-    const gateway = cfg.gateway_ip || undefined;
-    const dns1 = cfg.dns_primary || "8.8.8.8";
-    const dns2 = cfg.dns_secondary || "1.1.1.1";
+    // If the admin pinned a specific storage in body.storage, honor it.
+    // Otherwise auto-pick the storage with the most free space across
+    // every disk that accepts VM disk content.
+    let storage: string;
+    if (body.storage) {
+      storage = body.storage;
+    } else {
+      const pick = await pickBestStorage({
+        hostUrl: cfg.host_url,
+        username: cfg.username || "root",
+        password: cfg.password || "",
+        node: cfg.node,
+        requiredGB: body.diskGB || 20,
+        allowInsecure: !!cfg.allow_insecure_tls,
+        fallback: cfg.storage || "local",
+      });
+      storage = pick.storage;
+      if (pick.reason === "fallback-no-fit") {
+        return NextResponse.json({
+          ok: false,
+          error: `No storage with ${body.diskGB || 20} GB free on this host.`,
+        }, { status: 409 });
+      }
+      console.log(`[Admin VM Create] storage=${storage} (${pick.reason})`);
+    }
+    const bridgeOverride = body.bridge || undefined;
 
     // IP auto-assign from pools
     let assignedIp: string | undefined;
@@ -249,15 +321,21 @@ export async function POST(req: NextRequest) {
 
     const { data: pools } = await supabase
       .from("public_ip_pools")
-      .select("id, mac")
+      .select("id, mac, label, is_active")
       .eq("host_id", cfg.id)
-      .or("label.is.null,label.not.ilike.*IPXO*");
+      .neq("is_active", false);
+
+    const vmacMode = cfg.network_mode === "ovh_failover_vmac";
 
     if (pools && pools.length > 0) {
       const poolIds = pools.map((p: Record<string, unknown>) => Number(p.id));
       const macByPool = new Map<number, string | undefined>(
         pools.map((p: Record<string, unknown>) => [Number(p.id), p.mac as string | undefined])
       );
+      const labelByPool = new Map<number, string | null>(
+        pools.map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null])
+      );
+      const routedMode = cfg.network_mode === "ovh_hg_scale_routed" || cfg.network_mode === "ovh_advance_gen3_routed" || cfg.network_mode === "ovh_vrack_block";
 
       const { data: ipRows } = await supabase
         .from("public_ip_pool_ips")
@@ -267,19 +345,57 @@ export async function POST(req: NextRequest) {
       for (const r of ipRows || []) {
         const ip = String((r as Record<string, unknown>).ip);
         const poolId = Number((r as Record<string, unknown>).pool_id);
+        const mac = macByPool.get(poolId);
+        const label = labelByPool.get(poolId);
+        const routedPool = isRoutedPool(mac, label);
+        if (routedMode && !routedPool) continue;
+        if (!routedMode && routedPool) continue;
         if (!usedSet.has(ip)) {
           assignedIp = ip;
-          macAddress = macByPool.get(poolId);
+          macAddress = routedPool ? undefined : mac;
           break;
+        }
+      }
+
+      // On-demand vMAC allocation:
+      // If we're in vMAC mode (ovh_failover_vmac) on an OVH host and the
+      // strict vMAC-pool scan found nothing, fall back to the routed pool
+      // (typically the BYOIP block seeded by auto-setup). For the next
+      // unused routed IP we'll mint a fresh vMAC via the OVH API, persist
+      // it as its own (mac, ip) pool row, and hand both back to the VM.
+      // This is the "vMAC per IP, on demand" flow.
+      if (!assignedIp && vmacMode && (cfg.provider || "ovh") === "ovh") {
+        const allocation = await allocateOnDemandVmac({
+          supabase,
+          host: cfg,
+          ipRows: ipRows || [],
+          usedSet,
+          macByPool,
+          labelByPool,
+          isRoutedPool,
+        });
+        if (allocation) {
+          assignedIp = allocation.ip;
+          macAddress = allocation.mac;
         }
       }
     }
 
-    if (!assignedIp || !gateway) {
-      return NextResponse.json({ ok: false, error: "No available IPs or gateway missing" }, { status: 409 });
+    if (!assignedIp) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            vmacMode
+              ? "No available IPs (vMAC pool empty and on-demand allocation failed — is the BYOIP block attached as additional IPs in OVH?)"
+              : "No available IPs",
+        },
+        { status: 409 }
+      );
     }
-    if (!macAddress) {
-      return NextResponse.json({ ok: false, error: "MAC address required for routed IP" }, { status: 400 });
+    const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
+    if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
+      return NextResponse.json({ ok: false, error: "MAC address required for this network profile" }, { status: 400 });
     }
 
     // Calculate pricing
@@ -376,8 +492,22 @@ export async function POST(req: NextRequest) {
       await waitTask(apiBase, node, String(cloneUpid), auth, dispatcher);
 
       // Configure VM — different settings for Windows vs Linux
-      const ipConfig0 = `ip=${assignedIp}/32,gw=${gateway}`;
-      const nameservers = `${dns1}${dns2 ? ` ${dns2}` : ""}`;
+      const networkPlan = buildVmNetworkPlan({
+        host: { ...cfg, bridge: bridgeOverride || cfg.bridge },
+        publicIp: assignedIp,
+        vmid: newVmid,
+        reservationId,
+        isWindows,
+      });
+      if (networkPlan.networkSnippetFilename && networkPlan.networkSnippetContent) {
+        await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.networkSnippetFilename, networkPlan.networkSnippetContent);
+      }
+      if (networkPlan.vendorSnippetFilename && networkPlan.vendorSnippetContent) {
+        await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.vendorSnippetFilename, networkPlan.vendorSnippetContent);
+      }
+      const ipConfig0 = networkPlan.ipconfig0;
+      const nameservers = networkPlan.nameservers;
+      const bridge = networkPlan.bridge;
 
       // Bandwidth rate limit (MBps) based on vCPU count
       const rateMBps = body.cpuCores <= 2 ? 4 : body.cpuCores <= 4 ? 8 : body.cpuCores <= 6 ? 15 : 30;
@@ -387,9 +517,10 @@ export async function POST(req: NextRequest) {
         sockets: 1,
         cores: body.cpuCores,
         memory: body.memoryMB,
+        ciupgrade: 0,
         onboot: 1,
         nameserver: nameservers,
-        net0: `virtio=${macAddress},bridge=${bridge},rate=${rateMBps}`,
+        net0: `${macAddress ? `virtio=${macAddress}` : "virtio"},bridge=${bridge},rate=${rateMBps}`,
         ipconfig0: ipConfig0,
         cipassword: body.sshPassword,
       };
@@ -411,6 +542,12 @@ export async function POST(req: NextRequest) {
         configPayload.ciuser = "admin";
       } else {
         configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+        const vendorSnippet = networkPlan.cicustomVendor || `vendor=${networkPlan.snippetStorage}:snippets/linux-cloud-init.yml`;
+        const cicustom = buildCiCustomValue({
+          networkSnippet: networkPlan.cicustomNetwork,
+          vendorSnippet,
+        });
+        if (cicustom) configPayload.cicustom = cicustom;
       }
 
       await postForm(
@@ -465,8 +602,9 @@ export async function POST(req: NextRequest) {
         );
       } catch {}
 
-      // Add host route for this VM's IP (OVH routed IP model)
-      await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], assignedIp, bridge);
+      if (networkPlan.addHostRoute) {
+        await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], assignedIp, bridge);
+      }
 
       // Start VM
       const startRes = await postForm<ProxmoxResponse<string>>(
@@ -484,7 +622,7 @@ export async function POST(req: NextRequest) {
       // Update DB record with actual VMID
       await supabase
         .from("servers")
-        .update({ vmid: newVmid, status: "running" })
+        .update({ vmid: newVmid, status: "running", details: { network: networkPlan.details } })
         .eq("id", reservationId);
 
       return NextResponse.json({

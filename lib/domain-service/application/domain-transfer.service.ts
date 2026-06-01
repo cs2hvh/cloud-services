@@ -5,19 +5,24 @@ import type {
   DomainBillingPort,
   DomainEmailPort,
   DomainNotificationPort,
+  DomainPurchaseRequestRepositoryPort,
   DomainTransferRegistrarPort,
   DomainTransferRequestRepositoryPort,
+  DomainUserResolverPort,
 } from "@/lib/domain-service/core/ports";
 import type { ActorContext, DomainTransferRequest, DomainTransferRequestStatus } from "@/lib/domain-service/core/types";
+import type { RegistrantContactInput } from "@/lib/domain-service/core/ports";
 
 /** Name.com statuses mapped to internal statuses */
 const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
+  "submitting transfer": "pending",
   "retrieving email": "pending",
   "pending approval": "pending",
   "pending_transfer": "pending",
   "pending": "pending",
   "approved": "approved",
   "completed": "completed",
+  "transferred": "completed",
   "cancelled": "cancelled",
   "rejected": "failed",
   "denied": "failed",
@@ -60,6 +65,8 @@ export class DomainTransferService {
     audit?: DomainAuditLogPort;
     notifications?: DomainNotificationPort;
     email?: DomainEmailPort;
+    userResolver?: DomainUserResolverPort;
+    purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   };
 
   constructor(
@@ -70,6 +77,8 @@ export class DomainTransferService {
       audit?: DomainAuditLogPort;
       notifications?: DomainNotificationPort;
       email?: DomainEmailPort;
+      userResolver?: DomainUserResolverPort;
+      purchaseRequests?: DomainPurchaseRequestRepositoryPort;
     } = {}
   ) {
     this.deps = deps;
@@ -154,6 +163,7 @@ export class DomainTransferService {
     privacyEnabled?: boolean;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
+    registrantContact?: Omit<RegistrantContactInput, "email"> & { email?: string };
   }): Promise<DomainTransferRequest> {
     const domain = normalizeDomain(input.domain);
     ensureDomainFormat(domain);
@@ -199,6 +209,7 @@ export class DomainTransferService {
       metadata: {
         privacy_enabled: input.privacyEnabled || false,
         pricing_source: "namecom_check_availability",
+        ...(input.registrantContact ? { registrant_contact: input.registrantContact } : {}),
         ...(input.metadata || {}),
       },
       status: "initiated",
@@ -392,12 +403,60 @@ export class DomainTransferService {
   async listTransferRequests(input: {
     actor: ActorContext;
     limit?: number;
+    includeArchived?: boolean;
   }): Promise<DomainTransferRequest[]> {
     const requests = await this.transfers.listByUser({
       userId: input.actor.userId,
       limit: input.limit || 20,
+      includeArchived: input.includeArchived,
     });
     return requests.map(toPublicTransferRequest);
+  }
+
+  /**
+   * Hide a terminal transfer from the default activity list without deleting
+   * billing/audit history.
+   */
+  async archiveTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    if (isActiveTransferStatus(request.status)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+        message: "Active transfers cannot be archived. Cancel the transfer first if it should not continue.",
+        details: { currentStatus: request.status },
+      });
+    }
+
+    await this.transfers.archive(request.id, input.actor.userId);
+
+    await this.safeAsync(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "update",
+        serviceId: request.id,
+        serviceName: request.domain,
+        metadata: { event: "domain_transfer_archived" },
+      });
+    });
+
+    return toPublicTransferRequest({
+      ...request,
+      metadata: {
+        ...(request.metadata || {}),
+        archived_at: new Date().toISOString(),
+        archived_by: input.actor.userId,
+      },
+    });
   }
 
   /**
@@ -528,6 +587,31 @@ export class DomainTransferService {
     return { polled: pending.length, processed, errors };
   }
 
+  async pollTransferRequest(input: {
+    actor: ActorContext;
+    requestId: string;
+  }): Promise<DomainTransferRequest> {
+    const request = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!request) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.TRANSFER_NOT_FOUND,
+        message: "Domain transfer request not found",
+      });
+    }
+
+    await this.pollSingleTransfer(request);
+    await this.transfers.updatePolled(request.id).catch(() => {});
+
+    const updated = await this.transfers.findByIdForUser(input.requestId, input.actor.userId);
+    if (!updated) {
+      console.warn("[DomainTransferService] Transfer disappeared after polling", {
+        requestId: input.requestId,
+        userId: input.actor.userId,
+      });
+    }
+    return toPublicTransferRequest(updated || request);
+  }
+
   private async pollSingleTransfer(transfer: DomainTransferRequest): Promise<void> {
     let providerData: Awaited<ReturnType<DomainTransferRegistrarPort["getTransfer"]>>;
 
@@ -581,6 +665,37 @@ export class DomainTransferService {
         await this.transfers.clearAuthCode(transfer.id);
       }
 
+      // On completion, create a domain_purchase_requests record so the domain
+      // appears in inventory and the renewal cron can pick it up.
+      if (newMappedStatus === "completed" && newMappedStatus !== oldStatus && this.deps.purchaseRequests) {
+        await this.safeAsync(async () => {
+          const existing = await this.deps.purchaseRequests!.findLatestByDomain({
+            userId: transfer.user_id,
+            domain: transfer.domain,
+          });
+          if (!existing) {
+            await this.deps.purchaseRequests!.create({
+              userId: transfer.user_id,
+              domain: transfer.domain,
+              purchasePrice: transfer.purchase_price ?? null,
+              renewalPrice: completionRenewalPrice ?? transfer.renewal_price ?? null,
+              currency: transfer.currency || "USD",
+              provider: "namecom",
+              providerRequestId: transfer.provider_order_id ?? null,
+              status: "completed",
+              metadata: {
+                source: "transfer",
+                transfer_request_id: transfer.id,
+                expires_at: null,
+                renewal_charged: false,
+                autorenew_enabled: true,
+                nameservers: completionMetadata?.nameservers ?? [],
+              },
+            });
+          }
+        });
+      }
+
       // If status changed to a notable state, emit events
       if (newMappedStatus !== oldStatus) {
         await this.emitStatusChangeEvents(transfer, oldStatus as DomainTransferRequestStatus, newMappedStatus);
@@ -625,15 +740,41 @@ export class DomainTransferService {
     _oldStatus: DomainTransferRequestStatus,
     newStatus: DomainTransferRequestStatus
   ): Promise<void> {
-    // NOTE: We don't have the user's email in the transfer record (provider_email is the WHOIS contact).
-    // Audit + notifications still work via userId. Emails are skipped during polling.
+    // Resolve user email so completion/failure emails reach the user from the polling path.
+    // provider_email is the WHOIS registrant contact, not the platform user's email.
+    const resolvedEmail = this.deps.userResolver
+      ? await this.deps.userResolver.getUserEmail(transfer.user_id).catch(() => null)
+      : null;
+
     const systemActor: ActorContext = {
       userId: transfer.user_id,
-      userEmail: undefined,
+      userEmail: resolvedEmail ?? undefined,
       userRole: "system",
     };
 
     if (newStatus === "completed") {
+      // Set registrant contact now that the domain is fully owned.
+      // Use stored user-supplied contact if present, falling back to resolved platform email.
+      const storedContact = (transfer.metadata as Record<string, unknown>)
+        ?.registrant_contact as Partial<RegistrantContactInput> | undefined;
+      const contactEmail = storedContact?.email || resolvedEmail;
+      if (contactEmail && this.registrar.setRegistrantContact) {
+        await this.safeAsync(async () => {
+          await this.registrar.setRegistrantContact!(transfer.domain, {
+            email: contactEmail,
+            firstName: storedContact?.firstName,
+            lastName: storedContact?.lastName,
+            phone: storedContact?.phone,
+            companyName: storedContact?.companyName,
+            address1: storedContact?.address1,
+            city: storedContact?.city,
+            state: storedContact?.state,
+            zip: storedContact?.zip,
+            country: storedContact?.country,
+          });
+        });
+      }
+
       await this.safeAsync(async () => {
         await this.emitAudit({
           actor: systemActor,
@@ -656,7 +797,11 @@ export class DomainTransferService {
             severity: "info",
             alertTitle: "Domain transfer completed",
             serviceName: transfer.domain,
-            summary: `Your domain transfer for ${transfer.domain} has completed successfully! The domain is now managed by AhuraCloud.`,
+            summary: `Your domain transfer for ${transfer.domain} has completed successfully! The domain is now managed by AhuraCloud.${
+              contactEmail
+                ? ` A registrant contact verification email has been sent to ${contactEmail} — please click the link in that email to enable DNS management for your domain.`
+                : ""
+            }`,
             metadata: {
               event: "domain_transfer_completed",
             },
@@ -929,6 +1074,27 @@ function ensureDomainFormat(domain: string): void {
       details: { domain },
     });
   }
+
+  if (!looksLikeRegistrableRoot(labels)) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Transfers must use a root-level domain, such as example.com. Subdomains like app.example.com cannot be transferred.",
+      details: { domain },
+    });
+  }
+}
+
+function looksLikeRegistrableRoot(labels: string[]): boolean {
+  if (labels.length === 2) return true;
+  if (labels.length !== 3) return false;
+
+  const secondLevel = labels[1];
+  const countryCodeTld = labels[2];
+  const commonSecondLevelTlds = new Set([
+    "ac", "co", "com", "edu", "gov", "net", "org",
+  ]);
+
+  return countryCodeTld.length === 2 && commonSecondLevelTlds.has(secondLevel);
 }
 
 function mapTransferProviderError(error: DomainServiceError, domain: string): DomainServiceError {

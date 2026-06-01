@@ -78,11 +78,22 @@ function tokenize(code: string, lang: string): Token[] {
 
 // ─── CodeBlock component ──────────────────────────────────────────────────────
 
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_DIM = "rgba(0,149,255,0.08)";
+
 const LANG_LABELS: Record<string, string> = {
   js: "JavaScript",
   python: "Python",
   ruby: "Ruby",
   curl: "Bash / cURL",
+};
+
+const LANG_FILE: Record<string, string> = {
+  js: "upload.mjs",
+  python: "upload.py",
+  ruby: "upload.rb",
+  curl: "upload.sh",
 };
 
 interface CodeBlockProps {
@@ -97,38 +108,48 @@ function CodeBlock({ code, label, lang, copiedLabel, onCopy }: CodeBlockProps) {
   const tokens = tokenize(code, lang);
   const isCopied = copiedLabel === label;
   return (
-    <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#0d1117]">
+    <div className="overflow-hidden border border-white/[0.06] bg-[#08090b] rounded-[6px]">
       {/* title bar */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.025] px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500/50" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/50" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/50" />
-        </div>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/25">
-          {LANG_LABELS[lang] ?? lang}
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2.5">
+        <span
+          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/55 font-semibold`}
+        >
+          {LANG_FILE[lang] ?? lang}
         </span>
         <button
           onClick={() => onCopy(code, label)}
-          className="flex cursor-pointer items-center gap-1.5 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white/75"
+          className={`${MONO} inline-flex h-7 items-center gap-1.5 px-2.5 text-[10px] uppercase tracking-[0.12em] font-semibold border rounded-[4px] transition-colors`}
+          style={
+            isCopied
+              ? {
+                  color: "#4ade80",
+                  borderColor: "rgba(74,222,128,0.3)",
+                  background: "rgba(74,222,128,0.08)",
+                }
+              : {
+                  color: "rgba(255,255,255,0.55)",
+                  borderColor: "rgba(255,255,255,0.08)",
+                  background: "#0d0e11",
+                }
+          }
         >
           {isCopied ? (
             <>
-              <Check className="h-3 w-3 text-emerald-400" />
-              <span className="text-emerald-400">Copied</span>
+              <Check className="h-3 w-3" />
+              Copied
             </>
           ) : (
             <>
               <Copy className="h-3 w-3" />
-              <span>Copy</span>
+              Copy
             </>
           )}
         </button>
       </div>
       {/* code */}
       <div className="overflow-x-auto">
-        <pre className="p-5 text-[13px] leading-[1.7]">
-          <code className="font-mono">
+        <pre className={`${MONO} px-5 py-4 text-[12px] leading-[1.7]`}>
+          <code>
             {tokens.map((tok, i) => (
               <span key={i} className={tok.cls}>
                 {tok.text}
@@ -154,30 +175,22 @@ const Documentation = () => {
   };
 
   return (
-    <div className="glass-panel overflow-hidden">
-      <div className="border-b border-white/[0.06] px-6 py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-          API Reference
-        </p>
-        <h3 className="mt-1.5 text-lg font-semibold text-white">Code Samples</h3>
-        <p className="mt-1 text-sm text-white/45">
-          Example code for uploading objects to your bucket via the S3-compatible API.
-        </p>
-      </div>
-
-      <div className="p-6">
-        <Tabs defaultValue="js">
-          <TabsList className="mb-5 h-auto w-fit rounded-lg border border-white/[0.08] bg-white/[0.03] p-1">
-            {(["js", "python", "ruby", "curl"] as const).map((lang) => (
-              <TabsTrigger
-                key={lang}
-                value={lang}
-                className="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-white/50 data-[state=active]:bg-white/[0.08] data-[state=active]:text-white data-[state=active]:shadow-none"
-              >
-                {LANG_LABELS[lang]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+    <div>
+      <Tabs defaultValue="js">
+        <TabsList className="bg-transparent p-0 h-auto inline-flex w-auto gap-1 rounded-none mb-4">
+          {(["js", "python", "ruby", "curl"] as const).map((lang) => (
+            <TabsTrigger
+              key={lang}
+              value={lang}
+              className={`${MONO} flex-none inline-flex items-center h-8 px-3 text-[10.5px] uppercase tracking-[0.12em] font-semibold rounded-[4px] border transition-colors text-white/55 border-white/[0.08] bg-[#111216] hover:text-white hover:border-white/[0.14] data-[state=active]:text-[${ACCENT}] data-[state=active]:border-[rgba(0,149,255,0.4)] data-[state=active]:bg-[${ACCENT_DIM}] data-[state=active]:shadow-none`}
+              style={{
+                ["--accent" as string]: ACCENT,
+              } as React.CSSProperties}
+            >
+              {LANG_LABELS[lang]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
           <TabsContent value="js">
             <CodeBlock
@@ -292,8 +305,7 @@ curl -X PUT -T "$FILE" \\
   "https://$SPACE.$REGION.ahurasense.com/$FILE"`}
             />
           </TabsContent>
-        </Tabs>
-      </div>
+      </Tabs>
     </div>
   );
 };

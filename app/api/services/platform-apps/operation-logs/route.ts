@@ -22,9 +22,6 @@ function synthesizeOperationLogs(params: {
   if (params.details.target?.build_number) {
     lines.push(`Target Build: #${params.details.target.build_number}`);
   }
-  if (params.details.target?.image_ref) {
-    lines.push(`Target Image: ${params.details.target.image_ref}`);
-  }
   if (params.details.source?.size || params.details.target?.size) {
     lines.push(
       `Size: from ${params.details.source?.size ?? "unknown"} to ${params.details.target?.size ?? "unknown"}`
@@ -52,16 +49,21 @@ function synthesizeOperationLogs(params: {
     lines.push("[VERIFICATION]");
     lines.push(`Status: ${params.details.verification.status.toUpperCase()}`);
     if (params.details.verification.message) {
-      lines.push(params.details.verification.message);
+      // Sanitize infra terms from verification messages before surfacing to users.
+      const msg = params.details.verification.message
+        .replace(/\breplicas?\b/gi, (m) => m.toLowerCase() === 'replica' ? 'instance' : 'instances')
+        .replace(/\bpods?\b/gi, (m) => m.toLowerCase() === 'pod' ? 'instance' : 'instances')
+        .replace(/\bKubernetes\b/g, 'Platform')
+        .replace(/\bkubernetes\b/g, 'platform')
+        .replace(/\bk8s\b/gi, 'platform');
+      lines.push(msg);
     }
     if (params.details.verification.ready_replicas != null || params.details.verification.desired_replicas != null) {
       lines.push(
-        `Replicas: ${params.details.verification.ready_replicas ?? "?"}/${params.details.verification.desired_replicas ?? "?"}`
+        `Instances: ${params.details.verification.ready_replicas ?? "?"}/${params.details.verification.desired_replicas ?? "?"}`
       );
     }
-    if (params.details.verification.observed_image) {
-      lines.push(`Observed Image: ${params.details.verification.observed_image}`);
-    }
+    // Observed Image is an internal Docker registry reference — not surfaced to users.
   }
 
   if (params.details.warnings?.length) {
@@ -137,10 +139,20 @@ export async function GET(req: NextRequest) {
 
     let logs: string;
     if (operation.trigger === "resize" && resizeRunNumber) {
-      logs = await JenkinsService.getResizeDeploymentLog(
-        appResult.data.name,
-        resizeRunNumber
-      );
+      try {
+        logs = await JenkinsService.getResizeDeploymentLog(
+          appResult.data.name,
+          resizeRunNumber
+        );
+      } catch (jenkinsErr) {
+        logError("services/platform-apps/operation-logs:resize-log", jenkinsErr);
+        logs = synthesizeOperationLogs({
+          appName: appResult.data.name,
+          operationId: operation.id,
+          trigger: operation.trigger,
+          details,
+        });
+      }
     } else {
       logs = synthesizeOperationLogs({
         appName: appResult.data.name,

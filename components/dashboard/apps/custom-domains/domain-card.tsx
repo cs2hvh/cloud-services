@@ -330,11 +330,11 @@ export function DomainCard({
                 <button
                   type="button"
                   onClick={() =>
-                    onCopy(`galaxyhvh-verify.${domain.domain}`, `pending-name-${domain.id}`)
+                    onCopy(`ahuracloud-verify.${domain.domain}`, `pending-name-${domain.id}`)
                   }
                   className="flex items-center gap-1 text-white hover:text-yellow-100"
                 >
-                  <span className="truncate max-w-[190px]">{`galaxyhvh-verify.${domain.domain}`}</span>
+                  <span className="truncate max-w-[190px]">{`ahuracloud-verify.${domain.domain}`}</span>
                   {copiedField === `pending-name-${domain.id}` ? (
                     <Check className="h-3 w-3" />
                   ) : (

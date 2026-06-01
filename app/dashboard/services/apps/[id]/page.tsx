@@ -34,8 +34,12 @@ import {
   RotateCcw,
   FolderOpen,
   Edit2,
+  ShoppingCart,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
+import { BANDWIDTH_PACKS, BANDWIDTH_PACK_LIST, type BandwidthPackId } from '@/lib/services/platform-app-bandwidth/packs';
+import { useBandwidth } from '@/hooks/use-app-bandwidth';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,6 +64,7 @@ import { OperationLogsPanel } from '@/components/dashboard/apps/operation-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
+import { AppBandwidthCard } from '@/components/dashboard/apps/app-bandwidth-card';
 import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
@@ -71,6 +76,7 @@ import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-edit
 import { DeploymentHistory } from '@/components/dashboard/apps/deployment-history';
 import { AppStatusBadge } from '@/components/dashboard/apps/app-status-badge';
 import { generateIdempotencyKey } from '@/lib/idempotency';
+import { getPlatformAppRetentionPolicy } from '@/lib/platform-apps/retention';
 
 
 
@@ -103,27 +109,48 @@ interface AppDetail {
   rollback_target_commit_sha?: string | null;
   // Failure tracking
   last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
 }
 
-type PlatformAppSize = 'small' | 'medium' | 'large';
+type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 type SizeKey = PlatformAppSize;
 
 type PlatformAppRates = {
   initialCost: number;
   hourlyRate: number;
   price: number;
+  quota?: {
+    totalBytes: number | null;
+    maxRequestBodyBytes: number | null;
+  };
 };
 
-const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large'];
+const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
 
 const PLATFORM_APP_SIZE_SPECS: Record<
   SizeKey,
   { cpu: string; memory: string; replicas: number }
 > = {
-  small: { cpu: '0.5 CPU', memory: '512MB', replicas: 1 },
-  medium: { cpu: '1 CPU', memory: '1GB', replicas: 2 },
-  large: { cpu: '2 CPU', memory: '2GB', replicas: 3 },
+  small:     { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
+  medium:    { cpu: '0.5 CPU',  memory: '512 MB', replicas: 2 },
+  large:     { cpu: '1 CPU',    memory: '1 GB',   replicas: 3 },
+  xlarge:    { cpu: '2 CPU',    memory: '2 GB',   replicas: 4 },
+  'xxlarge': { cpu: '4 CPU',    memory: '4 GB',   replicas: 6 },
 };
+
+function formatBytes(bytes?: number | null): string {
+  if (bytes === undefined) return '—';
+  if (bytes === null) return 'Unlimited';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit <= 1 ? 0 : 1)} ${units[unit]}`;
+}
 
 const SECTION_META: Array<{
   value: string;
@@ -199,6 +226,48 @@ const SECTION_META: Array<{
   },
 ];
 
+const PLATFORM_APP_RETENTION_POLICY = getPlatformAppRetentionPolicy();
+
+// ─── Design tokens ────────────────────────────────────────────────
+const APP_SERIF_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const APP_MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const APP_ACCENT = "#0095FF";
+const APP_ACCENT_BRIGHT = "#33adff";
+
+function AppCanvas({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+      </div>
+      <div className="relative z-10 px-6 py-8 sm:px-8 xl:px-10">{children}</div>
+    </div>
+  );
+}
+
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -245,6 +314,9 @@ export default function AppDetailPage() {
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
 
+  // Health path check state
+  const [healthPathStatus, setHealthPathStatus] = useState<'checking' | 'reachable' | 'unreachable' | 'not_configured' | null>(null);
+
   // Resize state
   const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
   const [pendingResizeSize, setPendingResizeSize] = useState<SizeKey | null>(null);
@@ -255,6 +327,13 @@ export default function AppDetailPage() {
   const [operationLogs, setOperationLogs] = useState('');
   const [operationLogsLoading, setOperationLogsLoading] = useState(false);
   const [platformPricing, setPlatformPricing] = useState<Partial<Record<SizeKey, PlatformAppRates>>>({});
+
+  // Bandwidth pack purchase state (Settings tab)
+  const [selectedPack, setSelectedPack] = useState<BandwidthPackId | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
+  const [packSuccess, setPackSuccess] = useState<string | null>(null);
+  const { data: bandwidthData, refetch: refetchBandwidth } = useBandwidth(appId, !!app);
 
   // Project assignment state
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -282,7 +361,7 @@ export default function AppDetailPage() {
     refetch: refetchDeployments,
   } = useRealtimeDeployments({ 
     appId,
-    limit: 50,
+    limit: PLATFORM_APP_RETENTION_POLICY.deploymentHistory.maxLoadable,
     enabled: !!app 
   });
 
@@ -509,7 +588,16 @@ export default function AppDetailPage() {
 
         const data = await res.json();
         if (!cancelled && data?.rates) {
-          setPlatformPricing(data.rates);
+          const ratesWithQuota = Object.fromEntries(
+            Object.entries(data.rates).map(([size, rate]) => [
+              size,
+              {
+                ...(rate as PlatformAppRates),
+                quota: data.quotas?.[size],
+              },
+            ])
+          ) as Partial<Record<SizeKey, PlatformAppRates>>;
+          setPlatformPricing(ratesWithQuota);
         }
       } catch (error) {
         console.error('Error fetching platform pricing:', error);
@@ -682,8 +770,9 @@ export default function AppDetailPage() {
       setPendingResizeSize(null);
       // Refresh on both success and failure: failure reason and status are updated server-side
       fetchApp();
+      refetchBandwidth();
     }
-  }, [operationDeployments, fetchApp]);
+  }, [operationDeployments, fetchApp, refetchBandwidth]);
 
   useEffect(() => {
     if (operationDeployments.length === 0) {
@@ -736,6 +825,17 @@ export default function AppDetailPage() {
       setEnvVarsModified(false);
     }
   }, [activeTab]);
+
+  // Check healthcheck_path reachability when Settings tab opens.
+  useEffect(() => {
+    if (activeTab !== 'settings' || !app?.id) return;
+    if (!app.healthcheck_path) { setHealthPathStatus('not_configured'); return; }
+    setHealthPathStatus('checking');
+    fetch(`/api/services/platform-apps/check-health-path?app_id=${app.id}`)
+      .then(r => r.json())
+      .then(d => setHealthPathStatus(d.reachable ? 'reachable' : 'unreachable'))
+      .catch(() => setHealthPathStatus('unreachable'));
+  }, [activeTab, app?.id, app?.healthcheck_path]);
 
   // Lazy-load env var values only when the Settings tab is first opened.
   // Values are intentionally excluded from the main page-load GET response
@@ -1025,6 +1125,30 @@ export default function AppDetailPage() {
     }
   };
 
+  const handlePurchasePack = async () => {
+    if (!app || !selectedPack) return;
+    setPurchasing(true);
+    setPackError(null);
+    setPackSuccess(null);
+    try {
+      const res = await fetch('/api/services/platform-apps/bandwidth/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, pack: selectedPack }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Purchase failed');
+      const pack = BANDWIDTH_PACKS[selectedPack];
+      setPackSuccess(`${pack.label} bandwidth added${data.restriction_lifted ? ' — traffic restored' : ''}`);
+      setSelectedPack(null);
+      refetchBandwidth();
+    } catch (err) {
+      setPackError(err instanceof Error ? err.message : 'Purchase failed');
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
   const handleRollbackSuccess = useCallback(async () => {
     setEnvVarError(null);
     setEnvVarSuccess('Rollback completed successfully');
@@ -1179,26 +1303,31 @@ export default function AppDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-white/50" />
-      </div>
+      <AppCanvas>
+        <div className="mx-auto max-w-[1600px] flex items-center justify-center py-32">
+          <Loader2 className="w-8 h-8 animate-spin text-white/40" />
+        </div>
+      </AppCanvas>
     );
   }
 
   if (error || !app) {
     return (
-      <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-        <div className="text-center py-20">
-          <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold mb-2">{error || 'App not found'}</h2>
-          <Link href="/dashboard/services/apps">
-            <Button variant="outline" className="mt-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
+      <AppCanvas>
+        <div className="mx-auto max-w-[900px]">
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-16 text-center">
+            <XCircle className="h-10 w-10 text-rose-300/70 mx-auto mb-4" />
+            <p className="text-[15px] font-semibold text-white">{error || 'App not found'}</p>
+            <Link
+              href="/dashboard/services/apps"
+              className={`${APP_MONO} mt-6 inline-flex items-center gap-1.5 h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            >
+              <ArrowLeft className="h-3 w-3" />
               Back to Apps
-            </Button>
-          </Link>
+            </Link>
+          </div>
         </div>
-      </div>
+      </AppCanvas>
     );
   }
 
@@ -1206,134 +1335,136 @@ export default function AppDetailPage() {
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
-  const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
-  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
-  const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
+  const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
+  // During an in-flight resize, show the target size in the header; otherwise show the running size.
+  const displaySize = (resizeInProgress && pendingResizeSize) ? pendingResizeSize : currentSize;
+  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[displaySize];
+  const currentSizePrice = platformPricing[displaySize]?.price ?? 0;
 
   return (
-    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-panel overflow-hidden rounded-none"
-      >
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
+    <AppCanvas>
+    <div className="mx-auto max-w-[1600px] text-white">
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <header className="mb-10">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl min-w-0">
             <Link
               href="/dashboard/services/apps"
-              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+              className={`${APP_MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to application inventory
+              <ArrowLeft className="h-3 w-3" />
+              Back to apps
             </Link>
 
-            <div className="mt-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-                  Application Deployment
-                </p>
+            <div className={`${APP_MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+              <span>Apps</span>
+              <span className="text-white/20">/</span>
+              <span className="text-white/65 truncate">{app.name}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 mb-3">
                 {<AppStatusBadge status={app.status} building={isBuilding} />}
-                {/* Live badge � but show Degraded when new deploy failed and old pod is serving */}
               {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
-                    <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
-                      <AlertTriangle className="mr-1.5 h-2 w-2" />
+                    <span
+                      className={`${APP_MONO} inline-flex items-center gap-1.5 px-2.5 py-1 border border-orange-400/25 bg-orange-500/[0.08] text-[10px] uppercase tracking-[0.12em] text-orange-300 rounded-[20px]`}
+                    >
+                      <AlertTriangle className="h-2.5 w-2.5" />
                       Degraded
-                    </Badge>
+                    </span>
                   ) : (
-                    <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
-                      <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                    <span
+                      className={`${APP_MONO} inline-flex items-center gap-1.5 px-2.5 py-1 border border-emerald-400/25 bg-emerald-500/[0.08] text-[10px] uppercase tracking-[0.12em] text-emerald-300 rounded-[20px]`}
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse"
+                        style={{ boxShadow: "0 0 6px #4ade80" }}
+                      />
                       Live
-                    </Badge>
+                    </span>
                   )
                 )}
-                {/* Show which build is actually serving traffic */}
                 {servingBuildNumber !== null && app.status === 'running' && !isBuilding && (
-                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs font-mono">
+                  <span className={`${APP_MONO} inline-flex items-center px-2.5 py-1 border border-white/[0.08] bg-[#111216] text-[10px] uppercase tracking-[0.06em] text-white/55 rounded-[20px]`}>
                     Serving Build #{servingBuildNumber}
-                  </Badge>
+                  </span>
                 )}
                 {lastOperationLabel && !isBuilding && (
-                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs">
-                    Last Operation: {lastOperationLabel}
-                  </Badge>
+                  <span className={`${APP_MONO} inline-flex items-center px-2.5 py-1 border border-white/[0.08] bg-[#111216] text-[10px] uppercase tracking-[0.06em] text-white/55 rounded-[20px]`}>
+                    Last op · {lastOperationLabel}
+                  </span>
                 )}
               </div>
 
-              <div className="mt-2 flex items-center gap-3">
-                <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              <div className="flex items-center gap-3">
+                <h1 className={`${APP_MONO} text-[28px] sm:text-[36px] leading-[1.05] tracking-[-0.015em] text-white font-semibold truncate`}>
                   {app.name}
                 </h1>
                 <button
                   onClick={() => copyToClipboard(app.name, 'app-name')}
-                  className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white/75"
+                  className="shrink-0 text-white/30 hover:text-[#0095FF] transition-colors"
                   title="Copy app name"
                 >
-                  {copiedField === 'app-name' ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                  {copiedField === 'app-name' ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
 
-              {/* Failure reason: shown for failed apps AND running apps with a recent operation failure (e.g. resize, redeploy on first-ever build) that did NOT leave a prior release live */}
               {app.last_failure_reason && !isBuilding && !isDegraded &&
                 (app.status === 'failed' || app.status === 'running') && (
-                <div className={`mt-3 flex items-center gap-2 border px-3 py-2 text-sm ${
+                <div className={`${APP_MONO} mt-4 flex items-center gap-2 border rounded-[5px] px-3 py-2 text-[12px] ${
                   app.status === 'failed'
-                    ? 'border-red-400/20 bg-red-500/10 text-red-300'
-                    : 'border-orange-400/20 bg-orange-500/10 text-orange-300'
+                    ? 'border-rose-500/25 bg-rose-500/[0.06] text-rose-300'
+                    : 'border-orange-400/25 bg-orange-500/[0.06] text-orange-300'
                 }`}>
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
                 </div>
               )}
-              {/* Degraded state warning: newer release failed but old pod is still serving */}
               {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
-                <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <div className={`${APP_MONO} mt-4 flex items-center gap-2 border border-orange-400/25 bg-orange-500/[0.06] rounded-[5px] px-3 py-2 text-[12px] text-orange-300`}>
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                   <span>
                     {`Build #${latestReleaseDeployment.build_number} did not take over — still serving Build #${servingBuildNumber}.`}
                     {app.last_failure_reason ? ` Failure: ${app.last_failure_reason}` : ''}
                   </span>
                 </div>
               )}
-              {/* High restart warning */}
               {hasHighRestarts && app.status === 'running' && !isBuilding && (
-                <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
-                  <RefreshCw className="h-4 w-4 flex-shrink-0" />
+                <div className={`${APP_MONO} mt-4 flex items-center gap-2 border border-yellow-400/25 bg-yellow-500/[0.06] rounded-[5px] px-3 py-2 text-[12px] text-yellow-300`}>
+                  <RefreshCw className="h-3.5 w-3.5 flex-shrink-0" />
                   <span>
-                    Pod has restarted {restartCount} times. This may indicate a CrashLoop � check Runtime Logs.
+                    Your app has restarted {restartCount} times. It may be repeatedly crashing — check Runtime Logs.
                   </span>
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-1.5">
                 <a
                   href={`https://${domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-white/50 transition-colors hover:text-white"
+                  className={`${APP_MONO} inline-flex items-center gap-1.5 text-[11.5px] text-white/55 hover:text-[#0095FF] transition-colors`}
                 >
-                  <Globe className="h-4 w-4" />
+                  <Globe className="h-3.5 w-3.5" />
                   {domain}
                   <ExternalLink className="h-3 w-3" />
                 </a>
                 <button
                   onClick={() => copyToClipboard(`https://${domain}`, 'domain')}
-                  className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white/75"
+                  className="text-white/30 hover:text-[#0095FF] transition-colors"
                   title="Copy URL"
                 >
-                  {copiedField === 'domain' ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                  {copiedField === 'domain' ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
               </div>
-            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
               onClick={() => setRollbackModalOpen(true)}
               disabled={deploymentMutationBlocked || !canRollback}
-              className="rounded-none border-white/[0.12] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
               title={
                 canRollback
                   ? app?.rollback_target_build_number
@@ -1342,198 +1473,156 @@ export default function AppDetailPage() {
                   : 'No previous release available. Resize-only operations do not create rollback targets.'
               }
             >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Rollback Release
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              <RotateCcw className="h-3 w-3" />
+              Rollback
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 if (app.name) fetchBuildInfo(app.name);
                 refetchDetails();
               }}
-              className="rounded-none border-white/[0.12] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="h-3 w-3" />
               Refresh
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
+            </button>
+            <button
+              type="button"
               onClick={() => setDeleteModalOpen(true)}
               disabled={deploymentMutationBlocked}
-              className="rounded-none"
+              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-rose-500/25 bg-rose-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.10] rounded-[5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="h-3 w-3" />
               Delete
-            </Button>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Stats strip ───────────────────────────────────── */}
+      <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-5 divide-x divide-white/[0.06]">
+        <div className="px-5 py-5 flex flex-col gap-2 min-w-0">
+          <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>App ID</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`${APP_MONO} text-[12px] text-white truncate tabular-nums`}>{app.id}</span>
+            <button
+              onClick={() => copyToClipboard(app.id, 'app-id')}
+              className="shrink-0 text-white/25 hover:text-[#0095FF] transition-colors"
+              title="Copy app ID"
+            >
+              {copiedField === 'app-id' ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            </button>
           </div>
         </div>
 
-        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                App ID
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-mono text-sm text-white">{app.id}</p>
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>Framework</span>
+          <span style={APP_SERIF_STYLE} className="text-[22px] leading-none font-bold tracking-[-0.025em] text-white">
+            {app.framework || '—'}
+          </span>
+        </div>
+
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45 inline-flex items-center gap-1.5`}>
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: APP_ACCENT, boxShadow: `0 0 6px ${APP_ACCENT}` }}
+            />
+            Branch
+          </span>
+          <span className={`${APP_MONO} text-[14px] text-white font-medium truncate`}>
+            {app.branch || '—'}
+          </span>
+        </div>
+
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+            {resizeInProgress ? 'Upgrading to' : 'Runtime Size'}
+          </span>
+          <div className="flex items-baseline gap-1.5">
+            <span style={APP_SERIF_STYLE} className="text-[22px] leading-none font-bold tracking-[-0.025em] text-white capitalize">
+              {displaySize}
+            </span>
+            <span className={`${APP_MONO} text-[10.5px] text-white/45`}>
+              {currentSizePrice > 0 ? `$${currentSizePrice.toFixed(2)}/mo` : 'Free'}
+            </span>
+          </div>
+          <p className={`${APP_MONO} text-[10.5px] text-white/40`}>
+            {currentSizeSpec.cpu} · {currentSizeSpec.memory}
+          </p>
+          {resizeInProgress && (
+            <p className={`${APP_MONO} text-[10px] text-amber-300/80`}>Resize in progress</p>
+          )}
+        </div>
+
+        <div className="px-5 py-5 flex flex-col gap-2">
+          <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>Created</span>
+          <span style={APP_SERIF_STYLE} className="text-[22px] leading-none font-bold tabular-nums tracking-[-0.025em] text-white">
+            {new Date(app.created_at).toLocaleDateString()}
+          </span>
+        </div>
+      </section>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {/* ── Pill tab nav ─────────────────────────────── */}
+        <div className="mb-6 border-b border-white/[0.06] overflow-x-auto">
+          <div className="flex items-center gap-1 -mb-px min-w-max">
+            {SECTION_META.map((section) => {
+              const SectionIcon = section.icon;
+              const isActive = activeTab === section.value;
+              return (
                 <button
-                  onClick={() => copyToClipboard(app.id, 'app-id')}
-                  className="text-white/35 transition-colors hover:text-white/70"
-                  title="Copy app ID"
+                  key={section.value}
+                  type="button"
+                  onClick={() => setActiveTab(section.value)}
+                  className={`${APP_MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] transition-colors ${
+                    isActive ? "text-white" : "text-white/45 hover:text-white/75"
+                  }`}
                 >
-                  {copiedField === 'app-id' ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  <SectionIcon className="h-3 w-3" />
+                  {section.label}
+                  {isActive && (
+                    <span
+                      className="absolute left-2 right-2 -bottom-px h-[2px]"
+                      style={{
+                        background: APP_ACCENT,
+                        boxShadow: `0 0 8px ${APP_ACCENT}`,
+                      }}
+                    />
+                  )}
                 </button>
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Framework
-              </div>
-              <div className="mt-1.5 text-sm font-semibold text-white">{app.framework || 'Not specified'}</div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Branch
-              </div>
-              <div className="mt-1.5 flex items-center gap-1 text-sm font-semibold text-white">
-                <GitBranch className="h-3.5 w-3.5 text-blue-300" />
-                {app.branch || 'Not specified'}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                {resizeInProgress ? 'Requested Size' : 'Runtime Size'}
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold capitalize text-white">{currentSize}</p>
-                  <p className="text-xs text-white/45">
-                    {currentSizeSpec.cpu} – {currentSizeSpec.memory}
-                  </p>
-                  {resizeInProgress ? (
-                    <p className="mt-1 text-[11px] text-amber-300/80">
-                      Resize rollout in progress. Serving capacity updates after deployment finishes.
-                    </p>
-                  ) : null}
-                </div>
-                <Badge className="rounded-none border-white/[0.08] bg-white/[0.04] text-white/75">
-                  {currentSizePrice > 0 ? `$${currentSizePrice.toFixed(2)}/mo` : 'Free'}
-                </Badge>
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Created
-              </div>
-              <div className="mt-1.5 text-sm font-semibold text-white">
-                {new Date(app.created_at).toLocaleDateString()}
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
-      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-      >
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[272px_minmax(0,1fr)] xl:items-start">
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.18, duration: 0.24 }}
-              className="space-y-4 xl:sticky xl:top-8"
-            >
-              <Card className="glass-panel overflow-hidden rounded-none">
-                <CardContent className="p-4">
-                  <div className="mb-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                      Application Areas
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-white/45">
-                      Move between runtime health, domains, logs, deployments, and settings without leaving the page.
-                    </p>
-                  </div>
+        {/* ── Section header ───────────────────────────── */}
+        <div className="mb-6 flex items-baseline gap-3">
+          <span className={`${APP_MONO} text-[10.5px] tabular-nums text-white/35`}>
+            {String(SECTION_META.findIndex(s => s.value === activeTab) + 1).padStart(2, '0')}
+          </span>
+          <div>
+            <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
+              {activeSection.label.split(" ")[0]}{" "}
+              <span style={APP_SERIF_STYLE} className="text-white/55 font-normal">
+                {activeSection.label.split(" ").slice(1).join(" ") || activeSection.eyebrow.toLowerCase()}
+              </span>
+              <span className="text-white/55 font-normal">.</span>
+            </h2>
+            <p className={`${APP_MONO} mt-1 text-[11px] text-white/45`}>
+              {activeSection.description}
+            </p>
+          </div>
+        </div>
 
-                  <div className="space-y-2">
-                    {SECTION_META.map((section) => {
-                      const SectionIcon = section.icon;
-                      const isActive = activeTab === section.value;
-                      return (
-                        <button
-                          key={section.value}
-                          type="button"
-                          onClick={() => setActiveTab(section.value)}
-                          className={`w-full border px-3 py-3 text-left transition-colors ${
-                            isActive
-                              ? 'border-blue-400/24 bg-white/[0.05]'
-                              : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div
-                              className={`flex h-9 w-9 items-center justify-center border ${
-                                isActive
-                                  ? 'border-blue-400/24 bg-white/[0.05] text-blue-200'
-                                  : 'border-white/[0.08] bg-white/[0.03] text-white/55'
-                              }`}
-                            >
-                              <SectionIcon className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-white">{section.label}</div>
-                              <div className="mt-1 text-xs leading-5 text-white/40">
-                                {section.description}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2, duration: 0.24 }}
-            >
-              <Card className="glass-panel overflow-hidden rounded-none">
-                <CardContent className="p-0">
-                  <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center border border-blue-500/18 bg-white/[0.03] text-blue-200">
-                        <ActiveSectionIcon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                          {activeSection.eyebrow}
-                        </p>
-                        <h2 className="mt-1 text-xl font-semibold text-white">{activeSection.label}</h2>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-                          {activeSection.description}
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/35">
-                          {activeSection.helper}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="px-5 py-5 sm:px-6 sm:py-6">
+        <div className="space-y-4">
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
             {/* Health & Metrics */}
             {app.status === 'running' && (
-              <Card className="glass-panel rounded-none border-white/[0.08]">
+              <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
                 <CardHeader className="border-b border-white/[0.06]">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Box className="w-5 h-5" />
@@ -1557,7 +1646,7 @@ export default function AppDetailPage() {
                           </Badge>
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Pods</p>
+                          <p className="text-xs text-white/40 mb-1">Instances</p>
                           <p className="text-xl font-bold text-white">
                             {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
                           </p>
@@ -1568,7 +1657,7 @@ export default function AppDetailPage() {
                             {restartCount}
                           </p>
                           {hasHighRestarts && (
-                            <p className="text-xs text-yellow-400/70 mt-1">Possible CrashLoop</p>
+                            <p className="text-xs text-yellow-400/70 mt-1">Repeatedly restarting</p>
                           )}
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
@@ -1582,7 +1671,7 @@ export default function AppDetailPage() {
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                             <Box className="w-4 h-4" />
-                            Running Container
+                            Running Version
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
@@ -1590,13 +1679,13 @@ export default function AppDetailPage() {
                               <p className="text-sm font-mono text-white">{details.container.imageTag || 'latest'}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Container State</p>
+                              <p className="text-xs text-white/40 mb-1">State</p>
                               <Badge className={`rounded-none text-xs ${
                                 details.container.state === 'Running' ? 'bg-green-500/20 text-green-400' :
                                 details.container.state?.includes('CrashLoop') ? 'bg-red-500/20 text-red-400' :
                                 'bg-yellow-500/20 text-yellow-400'
                               }`}>
-                                {details.container.state || 'Unknown'}
+                                {details.container.state?.includes('CrashLoop') ? 'Restarting' : details.container.state || 'Unknown'}
                               </Badge>
                             </div>
                             <div>
@@ -1625,30 +1714,64 @@ export default function AppDetailPage() {
                         </div>
                       )}
 
+
+
                       {/* Resource Usage */}
-                      {metrics && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <Cpu className="w-3.5 h-3.5" /> CPU Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.cpu_usage ?? 0).toFixed(2)}%
-                              </span>
+                      {metrics && details?.container?.resources && (
+                        <div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <Cpu className="w-3.5 h-3.5" /> CPU Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.cpu_usage ?? 0).toFixed(2)}%
+                                </span>
+                              </div>
+                              <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Allocated: {details.container.resources.requests?.cpu || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.cpu || '-'}</p>
+                              </div>
                             </div>
-                            <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
+                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-white/40 flex items-center gap-1">
+                                  <HardDrive className="w-3.5 h-3.5" /> Memory Usage
+                                </p>
+                                <span className="text-sm font-mono text-white">
+                                  {(metrics.memory_mb ?? 0).toFixed(1)} Mi
+                                </span>
+                              </div>
+                              <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
+                                <p>Allocated: {details.container.resources.requests?.memory || '-'}</p>
+                                <p>Max: {details.container.resources.limits?.memory || '-'}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs text-white/40 flex items-center gap-1">
-                                <HardDrive className="w-3.5 h-3.5" /> Memory Usage
-                              </p>
-                              <span className="text-sm font-mono text-white">
-                                {(metrics.memory_mb ?? 0).toFixed(1)} Mi
-                              </span>
+                        </div>
+                      )}
+
+                      {/* Capacity */}
+                      {details?.deployment && (
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Running Instances</p>
+                              <p className="text-2xl font-bold text-white">{details.deployment.readyReplicas}/{details.deployment.replicas}</p>
                             </div>
-                            <Progress value={metrics.memory_usage ?? 0} className="h-2" />
+                            <div className="text-right">
+                              <p className="text-xs text-white/40 mb-1">Status</p>
+                              <Badge className={`rounded-none ${
+                                details.deployment.readyReplicas >= details.deployment.replicas
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : 'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1662,13 +1785,13 @@ export default function AppDetailPage() {
                           </h5>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
-                              <p className="text-xs text-white/40 mb-1">Ingress Host</p>
+                              <p className="text-xs text-white/40 mb-1">Hostname</p>
                               <div className="flex items-center gap-1">
                                 <p className="text-xs font-mono text-white truncate flex-1">{details.network.ingressHost}</p>
                                 <button
                                   onClick={() => copyToClipboard(details.network?.ingressHost || '', 'ingress-host')}
                                   className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                                  title="Copy ingress host"
+                                  title="Copy hostname"
                                 >
                                   {copiedField === 'ingress-host' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                                 </button>
@@ -1734,8 +1857,13 @@ export default function AppDetailPage() {
               </Card>
             )}
 
+            {/* Bandwidth */}
+            {app.status === 'running' && (
+              <AppBandwidthCard appId={app.id} onManage={() => setActiveTab('settings')} />
+            )}
+
             {/* Repository Info */}
-            <Card className="glass-panel rounded-none border-white/[0.08]">
+            <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
               <CardHeader className="border-b border-white/[0.06]">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <GitBranch className="w-5 h-5" />
@@ -1775,6 +1903,7 @@ export default function AppDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
           </TabsContent>
 
           {/* Integrations Tab */}
@@ -1862,7 +1991,7 @@ export default function AppDetailPage() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card className="glass-panel rounded-none border-white/[0.08]">
+            <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
               <CardHeader className="border-b border-white/[0.06]">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -1919,6 +2048,27 @@ export default function AppDetailPage() {
                     <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
                       {app.output_directory || 'Default'}
                     </p>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                    <p className="text-xs text-white/40 mb-1">Health Check Path</p>
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                        {app.healthcheck_path || <span className="text-white/30">Not set · TCP socket probe</span>}
+                      </p>
+                      {app.healthcheck_path && (
+                        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded ${
+                          healthPathStatus === 'checking'     ? 'bg-white/[0.06] text-white/40' :
+                          healthPathStatus === 'reachable'    ? 'bg-green-500/10 text-green-400' :
+                          healthPathStatus === 'unreachable'  ? 'bg-orange-500/10 text-orange-400' :
+                          'bg-white/[0.06] text-white/40'
+                        }`}>
+                          {healthPathStatus === 'checking'    ? 'Checking…' :
+                           healthPathStatus === 'reachable'   ? '✓ Reachable' :
+                           healthPathStatus === 'unreachable' ? '⚠ Not reachable' :
+                           ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2024,15 +2174,17 @@ export default function AppDetailPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
                     {PLATFORM_APP_SIZE_ORDER.map((size) => {
                       const specs = PLATFORM_APP_SIZE_SPECS[size];
                       const monthlyPrice = platformPricing[size]?.price ?? 0;
-                      const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
-                      const isCurrent = size === currentSize;
+                      const quota = platformPricing[size]?.quota;
+                      const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
+                      const isPendingUpgrade = resizeInProgress && size === pendingResizeSize;
+                      const isCurrent = size === currentSize && !resizeInProgress;
                       const isUpgrade =
                         PLATFORM_APP_SIZE_ORDER.indexOf(size) >
-                        PLATFORM_APP_SIZE_ORDER.indexOf(currentSize);
+                        PLATFORM_APP_SIZE_ORDER.indexOf(resizeInProgress && pendingResizeSize ? pendingResizeSize : currentSize);
                       const isSelected = selectedSize === size;
                       const isDisabled = !isUpgrade || deploymentMutationBlocked;
 
@@ -2041,7 +2193,9 @@ export default function AppDetailPage() {
                           key={size}
                           onClick={() => !isDisabled && setSelectedSize(isSelected ? null : size)}
                           className={`relative border px-4 py-4 transition-all cursor-pointer ${
-                            isCurrent
+                            isPendingUpgrade
+                              ? 'border-amber-500/40 bg-white/[0.05]'
+                              : isCurrent
                               ? 'border-blue-500/40 bg-white/[0.05]'
                               : isSelected
                               ? 'border-green-500/40 bg-white/[0.05]'
@@ -2050,12 +2204,17 @@ export default function AppDetailPage() {
                               : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
                           }`}
                         >
+                          {isPendingUpgrade && (
+                            <Badge className="absolute -top-2 -right-2 rounded-none bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
+                              Upgrading…
+                            </Badge>
+                          )}
                           {isCurrent && (
                             <Badge className="absolute -top-2 -right-2 rounded-none bg-blue-500 text-white text-xs">
                               Current
                             </Badge>
                           )}
-                          {isUpgrade && !isCurrent && (
+                          {isUpgrade && !isCurrent && !isPendingUpgrade && (
                             <Badge className="absolute -top-2 -right-2 rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
                               <ArrowUpCircle className="w-3 h-3 mr-1" />
                               Upgrade
@@ -2075,7 +2234,15 @@ export default function AppDetailPage() {
                             </div>
                             <div className="flex items-center gap-2 text-white/70">
                               <Layers className="w-3 h-3" />
-                              <span>{specs.replicas} replica{specs.replicas > 1 ? 's' : ''}</span>
+                              <span>{specs.replicas} instance{specs.replicas > 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Activity className="w-3 h-3" />
+                              <span>{formatBytes(quota?.totalBytes)} transfer</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Upload className="w-3 h-3" />
+                              <span>{formatBytes(quota?.maxRequestBodyBytes)} request body</span>
                             </div>
                           </div>
 
@@ -2115,6 +2282,93 @@ export default function AppDetailPage() {
                       </Button>
                       <span className="text-xs text-white/50">
                         Your app will be redeployed with new resources.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bandwidth Packs */}
+                <div className="border-t border-white/10 pt-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="w-4 h-4 text-blue-400" />
+                    <p className="text-sm font-medium text-white">Bandwidth Packs</p>
+                  </div>
+                  {bandwidthData && (
+                    <p className="text-xs text-white/40 mb-3">
+                      {bandwidthData.quota.totalBytes
+                        ? `${bandwidthData.percentUsed !== null ? bandwidthData.percentUsed.toFixed(1) : '0.0'}% of quota used this period`
+                        : 'No quota configured'}
+                      {bandwidthData.purchasedBytes > 0 && ` · ${(bandwidthData.purchasedBytes / 1073741824).toFixed(0)} GB purchased`}
+                      {resizeInProgress && pendingResizeSize && (
+                        <span className="text-amber-400/70"> · quota updates when upgrade completes</span>
+                      )}
+                    </p>
+                  )}
+
+                  {packError && (
+                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      {packError}
+                    </div>
+                  )}
+                  {packSuccess && (
+                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
+                      <CheckCircle2 className="w-4 h-4" />
+                      {packSuccess}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {BANDWIDTH_PACK_LIST.map((pack) => {
+                      const isSelected = selectedPack === pack.id;
+                      return (
+                        <div
+                          key={pack.id}
+                          onClick={() => { setSelectedPack(isSelected ? null : pack.id); setPackError(null); setPackSuccess(null); }}
+                          className={`relative border px-4 py-4 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-green-500/40 bg-white/[0.05]'
+                              : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
+                          }`}
+                        >
+                          <h4 className="text-base font-semibold text-white mb-1">{pack.label}</h4>
+                          <p className="text-xs text-white/50">One-time for this billing period</p>
+                          <p className="mt-3 text-sm font-medium text-white/90">${pack.price.toFixed(2)}</p>
+                          {isSelected && (
+                            <Check className="absolute top-3 right-3 w-4 h-4 text-green-400" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedPack && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={handlePurchasePack}
+                        disabled={purchasing}
+                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {purchasing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Purchasing...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-4 h-4 mr-2" />
+                            Buy {BANDWIDTH_PACKS[selectedPack].label}
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { setSelectedPack(null); setPackError(null); }}
+                        className="rounded-none border-white/20 text-white hover:bg-white/10"
+                      >
+                        Cancel
+                      </Button>
+                      <span className="text-xs text-white/50">
+                        Deducted from your credit balance.
                       </span>
                     </div>
                   )}
@@ -2202,13 +2456,8 @@ export default function AppDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        </Tabs>
-      </motion.div>
+        </div>
+      </Tabs>
 
       {/* Delete Modal */}
       <DeleteAppModal
@@ -2232,5 +2481,6 @@ export default function AppDetailPage() {
         onRollbackSuccess={handleRollbackSuccess}
       />
     </div>
+    </AppCanvas>
   );
 }

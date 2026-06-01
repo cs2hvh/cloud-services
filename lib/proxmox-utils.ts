@@ -24,6 +24,14 @@ export interface ProxmoxHost {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
   template_vmid?: number;
   is_active?: boolean;
 }
@@ -334,6 +342,31 @@ function isValidBridgeName(name: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9_-]{0,15}$/.test(name);
 }
 
+function isSafeSnippetFilename(name: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,80}\.ya?ml$/.test(name);
+}
+
+/**
+ * Write a cloud-init snippet to Proxmox local snippet storage.
+ * The app stores cicustom references as <storage>:snippets/<filename>, while
+ * the default Proxmox "local" file storage maps snippets to /var/lib/vz/snippets.
+ */
+export async function writeCloudInitSnippet(host: ProxmoxHost, filename: string, content: string): Promise<void> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to write cloud-init snippets");
+  }
+  if (!isSafeSnippetFilename(filename)) {
+    throw new Error("Invalid cloud-init snippet filename");
+  }
+
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const encoded = Buffer.from(content, "utf8").toString("base64");
+  const command = `mkdir -p /var/lib/vz/snippets && printf '%s' '${encoded}' | base64 -d > /var/lib/vz/snippets/${filename}`;
+
+  await sshExec(sshHost, username, host.password, command, 20000);
+}
+
 /**
  * Add a host route for a VM's IP on the Proxmox host.
  * Required for OVH routed IP model: the host must know to send
@@ -562,6 +595,76 @@ export async function getVMConfig(
 }
 
 /**
+ * Identify the VM's primary OS/boot disk from a config object and parse its
+ * current size in GB. Skips cdrom + cloudinit drives. Prefers the configured
+ * `bootdisk`, then the usual bus order.
+ */
+export function findVMBootDisk(
+  config: Record<string, any>
+): { disk: string; sizeGb: number } | null {
+  const candidates = ['scsi0', 'virtio0', 'sata0', 'ide0', 'scsi1', 'virtio1'];
+  const bootdisk = typeof config.bootdisk === 'string' ? config.bootdisk : null;
+  const order = bootdisk
+    ? [bootdisk, ...candidates.filter((c) => c !== bootdisk)]
+    : candidates;
+
+  for (const key of order) {
+    const val = config[key];
+    if (typeof val !== 'string') continue;
+    if (/media=cdrom/i.test(val) || /cloudinit/i.test(val)) continue;
+    const m = val.match(/size=(\d+(?:\.\d+)?)([KMGT])/i);
+    if (!m) continue;
+    let sizeGb = parseFloat(m[1]);
+    const unit = m[2].toUpperCase();
+    if (unit === 'T') sizeGb *= 1024;
+    else if (unit === 'M') sizeGb /= 1024;
+    else if (unit === 'K') sizeGb /= 1024 * 1024;
+    return { disk: key, sizeGb };
+  }
+  return null;
+}
+
+/**
+ * Grow a VM disk to an absolute size (in GB). Proxmox can only ever GROW a
+ * disk — passing a size smaller than the current size errors out — so callers
+ * must validate target >= current first. Uses PUT (the resize endpoint is not
+ * a POST). The guest filesystem still has to be expanded inside the VM; cloud
+ * images do this automatically via cloud-init growpart on the next boot.
+ */
+export async function resizeDisk(
+  host: ProxmoxHost,
+  vmid: number,
+  disk: string,
+  sizeGb: number,
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<void> {
+  const apiBase = host.host_url.replace(/\/$/, '');
+  const url = `${apiBase}/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/resize`;
+  const formData = new URLSearchParams();
+  formData.append('disk', disk);
+  formData.append('size', `${Math.round(sizeGb)}G`);
+
+  const res = await withTimeout(
+    fetch(url, {
+      method: 'PUT',
+      body: formData,
+      redirect: 'follow',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(auth.headers as any),
+      },
+      dispatcher,
+    } as any)
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Proxmox resize error: ${res.status} ${text}`);
+  }
+}
+
+/**
  * Get VM RRD (time-series) metrics data.
  * Proxmox stores RRD data at various timeframes.
  * @param timeframe - "hour" | "day" | "week" | "month" | "year"
@@ -582,6 +685,186 @@ export async function getVMRRDData(
     dispatcher
   );
   return Array.isArray(json) ? json : json?.data || [];
+}
+
+/**
+ * Build a Proxmox VM template from a downloadable cloud image (qcow2/raw) for
+ * the custom‑OS‑images feature. Runs entirely against ONE host: downloads the
+ * image over SSH, imports the disk, attaches a cloud‑init drive + guest agent +
+ * serial console, and converts the VM to a template. Returns the new template
+ * vmid + the source image size in bytes (for storage billing).
+ *
+ * The resulting template behaves exactly like a built‑in OS template, so the
+ * normal clone + cloud‑init networking path works unchanged. Best‑effort cleanup
+ * (destroy the half‑built VM + remove the temp file) on failure.
+ *
+ * SECURITY: `sourceUrl` is validated to be a clean https URL (no shell
+ * metacharacters) and single‑quoted in the SSH command.
+ */
+export async function buildCustomImageTemplate(
+  host: ProxmoxHost,
+  opts: { sourceUrl: string; name: string; osType?: string },
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<{ vmid: number; sizeBytes: number }> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to build a custom image template");
+  }
+  // Validate the source URL: https only, and reject anything that could break
+  // out of the single‑quoted shell argument.
+  let parsed: URL;
+  try {
+    parsed = new URL(opts.sourceUrl);
+  } catch {
+    throw new Error("Invalid image URL");
+  }
+  if (parsed.protocol !== "https:") throw new Error("Image URL must be https");
+  if (/['"`$\\\n\r;|&<>(){}]/.test(opts.sourceUrl)) {
+    throw new Error("Image URL contains unsafe characters");
+  }
+
+  const node = host.node;
+  const storage = host.storage || "local";
+  const bridge = isValidBridgeName(host.bridge) ? host.bridge : "vmbr0";
+  const ostype = opts.osType || "l26";
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const ssh = (cmd: string, timeoutMs: number) => sshExec(sshHost, username, host.password as string, cmd, timeoutMs);
+
+  const vmid = await getNextVMID(host, auth, dispatcher);
+  const tmpFile = `/var/tmp/ci-${vmid}.img`;
+  let created = false;
+
+  try {
+    // 1. Download the image to a temp file (up to 30 min for large images).
+    await ssh(
+      `curl -fSL --connect-timeout 30 -o '${tmpFile}' '${opts.sourceUrl}' || wget -q -O '${tmpFile}' '${opts.sourceUrl}'`,
+      30 * 60_000
+    );
+    const sizeStr = await ssh(`stat -c %s '${tmpFile}' 2>/dev/null || echo 0`, 30_000);
+    const sizeBytes = Number(String(sizeStr).trim()) || 0;
+    if (sizeBytes <= 0) throw new Error("Downloaded image is empty or unreadable");
+
+    // 2. Create the VM shell via the API.
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu`,
+      {
+        vmid,
+        name: opts.name.slice(0, 60).replace(/[^a-zA-Z0-9-]/g, "-") || `custom-${vmid}`,
+        memory: 1024,
+        cores: 1,
+        ostype,
+        scsihw: "virtio-scsi-pci",
+        net0: `virtio,bridge=${bridge}`,
+        serial0: "socket",
+        vga: "serial0",
+        agent: "enabled=1",
+      },
+      auth,
+      dispatcher
+    );
+    created = true;
+
+    // 3. Import the downloaded disk (CLI only — no API equivalent). Shows up as unusedN.
+    await ssh(`qm importdisk ${vmid} '${tmpFile}' ${storage}`, 20 * 60_000);
+
+    // 4. Find the imported disk in the config and attach it as the boot disk.
+    const cfg = await getVMConfig(host, vmid, auth, dispatcher);
+    const unusedKey = Object.keys(cfg).find((k) => /^unused\d+$/.test(k));
+    const importedDisk = unusedKey ? String(cfg[unusedKey]) : `${storage}:vm-${vmid}-disk-0`;
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`,
+      { scsi0: `${importedDisk},discard=on`, boot: "order=scsi0", ide2: `${storage}:cloudinit` },
+      auth,
+      dispatcher
+    );
+
+    // 5. Convert to a template.
+    await postForm(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/template`,
+      {},
+      auth,
+      dispatcher
+    );
+
+    // 6. Clean up the temp file (best effort).
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+
+    return { vmid, sizeBytes };
+  } catch (err) {
+    // Best‑effort cleanup so a failed build doesn't leave an orphan VM/file.
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    if (created) {
+      await deleteVM(host, vmid, auth, dispatcher).catch(() => {});
+    }
+    throw err;
+  }
+}
+
+/**
+ * Export a (stopped) VM's boot disk to qcow2 and upload it to a presigned URL
+ * — used to stage a snapshot to R2 so other hosts/regions can pull + build it.
+ *
+ * Storage‑backend agnostic: the real disk path is resolved with `pvesm path`
+ * (works for LVM‑thin block devices and dir/qcow2 files alike), so callers
+ * never need to know the host's storage layout. Returns the exported size in
+ * bytes. Best‑effort temp‑file cleanup. Requires SSH credentials.
+ *
+ * SECURITY: `putUrl` is validated to be a clean https URL (no shell
+ * metacharacters) and single‑quoted in the SSH command.
+ */
+export async function exportVmDiskToUrl(
+  host: ProxmoxHost,
+  vmid: number,
+  putUrl: string,
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<{ sizeBytes: number }> {
+  if (!host.username || !host.password) {
+    throw new Error("SSH credentials are required to export a VM disk");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(putUrl);
+  } catch {
+    throw new Error("Invalid upload URL");
+  }
+  if (parsed.protocol !== "https:") throw new Error("Upload URL must be https");
+  if (/['"`\\\n\r]/.test(putUrl)) throw new Error("Upload URL contains unsafe characters");
+
+  // Resolve the boot disk volume id from the VM config.
+  const cfg = await getVMConfig(host, vmid, auth, dispatcher);
+  const boot = findVMBootDisk(cfg);
+  if (!boot) throw new Error("Could not locate the VM's boot disk");
+  const volid = String(cfg[boot.disk]).split(",")[0].trim();
+  if (!/^[a-zA-Z0-9._:\-\/]+$/.test(volid)) throw new Error("Unexpected disk volume id");
+
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+  const ssh = (cmd: string, timeoutMs: number) => sshExec(sshHost, username, host.password as string, cmd, timeoutMs);
+  const tmpFile = `/var/tmp/snap-${vmid}.qcow2`;
+
+  try {
+    // Resolve the real on-disk path (works for any storage backend).
+    const realPath = (await ssh(`pvesm path '${volid}'`, 30_000)).trim();
+    if (!realPath.startsWith("/")) throw new Error("Could not resolve disk path on host");
+
+    // Convert to a compact qcow2, upload to R2, measure, clean up.
+    await ssh(`qemu-img convert -O qcow2 '${realPath}' '${tmpFile}'`, 30 * 60_000);
+    const sizeStr = await ssh(`stat -c %s '${tmpFile}' 2>/dev/null || echo 0`, 30_000);
+    const sizeBytes = Number(String(sizeStr).trim()) || 0;
+    if (sizeBytes <= 0) throw new Error("Exported disk is empty");
+
+    await ssh(`curl -fSL -X PUT -T '${tmpFile}' '${putUrl}'`, 30 * 60_000);
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    return { sizeBytes };
+  } catch (err) {
+    await ssh(`rm -f '${tmpFile}'`, 30_000).catch(() => {});
+    throw err;
+  }
 }
 
 /**

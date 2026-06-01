@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GitHubWebhookHandler } from '@/lib/webhooks/github';
 import { Platform_App_Webhooks } from '@/lib/supabase/queries';
-import { AutoDeployService } from '@/lib/services/auto-deploy';
+import { queueBuild } from '@/lib/build-job';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import type { WebhookResult } from '@/lib/webhooks/types';
 import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
@@ -162,59 +162,27 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       });
     }
 
-    // 12. Trigger auto-deploy with fresh token refresh
-    // This is the key change - we now use AutoDeployService which:
-    // - Gets fresh access token for the user
-    // - Updates Jenkins job config with authenticated URL
-    // - Triggers build and polls for status
-    console.log(`[GitHub Webhook] 🚀 Triggering auto-deploy for ${app.name}...`);
-    
-    const deployResult = await AutoDeployService.deploy({
+    // 12. Queue the deployment — the build worker picks it up and calls AutoDeployService.
+    // Responding quickly (< 10s) satisfies GitHub's webhook delivery requirement.
+    console.log(`[GitHub Webhook] Queuing deployment for ${app.name} commit ${payload.commit.sha.substring(0, 7)}`);
+
+    await queueBuild({
       appId: app.id,
-      appName: app.name,
-      userId: app.user_id,
-      gitProvider: 'github',
-      repositoryUrl: app.repository_url,
-      branch: targetBranch,
-      framework: app.framework,
-      size: app.size || 'small',
-      commitSha: payload.commit.sha,
-      deliveryId: deliveryId,  // For idempotency
+      buildType: 'full',
+      sourceHash: payload.commit.sha,
+      branch: payload.branch,
+      timestamp: Date.now(),
+      deliveryId: deliveryId ?? undefined,
+      webhookId: app.webhook_id,
     });
 
-    // 13. Handle deploy result
-    if (deployResult.skipped) {
-      console.log(`[GitHub Webhook] ⏭️ Deployment skipped: ${deployResult.skipReason}`);
-      return NextResponse.json({
-        success: true,
-        action: 'skipped',
-        message: deployResult.skipReason || 'Deployment skipped',
-        app_name: app.name,
-      });
-    }
-
-    if (!deployResult.success) {
-      console.error(`[GitHub Webhook] ❌ Auto-deploy failed:`, deployResult.error);
-      
-      // Record error
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, deployResult.error);
-      
-      return NextResponse.json({
-        success: false,
-        action: 'error',
-        message: `Failed to trigger deployment: ${deployResult.error}`,
-        app_name: app.name,
-      }, { status: 500 });
-    }
-
-    // 14. Record successful trigger
+    // 13. Record the queued trigger immediately
     await Platform_App_Webhooks.record_trigger(app.webhook_id);
 
     const duration = Date.now() - startTime;
-    console.log(`[GitHub Webhook] ✅ Deployment triggered for ${app.name} (${duration}ms)`);
-    console.log(`[GitHub Webhook] Build #${deployResult.buildNumber} - Commit: ${payload.commit.sha.substring(0, 7)}`);
+    console.log(`[GitHub Webhook] Deployment queued for ${app.name} (${duration}ms)`);
 
-    // Audit log: webhook received and deployment triggered
+    // Audit log
     const auditContext = getAuditContext(req);
     await AuditLogService.create({
       user_id: app.user_id,
@@ -231,9 +199,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
         branch: payload.branch,
         commit_sha: payload.commit.sha,
         commit_message: payload.commit.message.split('\n')[0],
-        build_number: deployResult.buildNumber,
         duration_ms: duration,
-        result: 'triggered',
+        result: 'queued',
       },
       ip_address: auditContext.ipAddress,
       user_agent: auditContext.userAgent,
@@ -242,13 +209,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
 
     return NextResponse.json({
       success: true,
-      action: 'triggered',
-      message: `Deployment triggered for ${app.name}`,
+      action: 'queued',
+      message: `Deployment queued for ${app.name}`,
       app_name: app.name,
       branch: payload.branch,
       commit_sha: payload.commit.sha,
-      build_number: deployResult.buildNumber,
-    });
+    }, { status: 202 });
 
   } catch (error: unknown) {
     logError('POST /api/webhooks/git/github', error);

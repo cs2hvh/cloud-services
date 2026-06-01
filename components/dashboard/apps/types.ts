@@ -9,6 +9,7 @@ export interface App {
   created_at: string;
   project_id?: string;
   size?: string;
+  healthcheck_path?: string | null;
   can_rollback?: boolean;
   serving_build_number?: number | null;
   last_operation_build_number?: number | null;

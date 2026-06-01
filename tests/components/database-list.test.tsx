@@ -97,7 +97,7 @@ describe('DatabasePage Component', () => {
         data: { data: [] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading database cluster/i)).not.toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('DatabasePage Component', () => {
         data: { data: [] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('DatabasePage Component', () => {
         data: { data: [] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -164,7 +164,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(api.post).toHaveBeenCalledWith(
@@ -180,7 +180,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('DatabasePage Component', () => {
         data: { data: [mockClusters[0]] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.getByText('production-mysql')).toBeInTheDocument();
@@ -212,7 +212,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -228,7 +228,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -248,7 +248,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.getByText('8.0')).toBeInTheDocument();
@@ -263,7 +263,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -281,7 +281,7 @@ describe('DatabasePage Component', () => {
         data: { data: [mockClusters[0]] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -298,7 +298,7 @@ describe('DatabasePage Component', () => {
         data: { data: [mockClusters[0]] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.getByText('cluster-1')).toBeInTheDocument();
@@ -314,7 +314,7 @@ describe('DatabasePage Component', () => {
       });
 
       const user = userEvent.setup();
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -336,7 +336,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -367,7 +367,7 @@ describe('DatabasePage Component', () => {
         data: { data: [migratingCluster] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -391,7 +391,7 @@ describe('DatabasePage Component', () => {
         data: { data: [migratingCluster] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -407,7 +407,7 @@ describe('DatabasePage Component', () => {
         data: { data: [mockClusters[0]] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -426,7 +426,7 @@ describe('DatabasePage Component', () => {
       });
 
       const user = userEvent.setup();
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -448,7 +448,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -468,7 +468,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -487,7 +487,7 @@ describe('DatabasePage Component', () => {
         () => new Promise(() => {}) // Never resolves
       );
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       expect(screen.getByText(/loading database cluster/i)).toBeInTheDocument();
       // Verify loading spinner SVG is present (has animate-spin class)
@@ -501,7 +501,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading database cluster/i)).not.toBeInTheDocument();
@@ -513,7 +513,7 @@ describe('DatabasePage Component', () => {
     it('should handle API errors gracefully', async () => {
       vi.mocked(api.post).mockRejectedValue(new Error('Network error'));
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
@@ -527,7 +527,7 @@ describe('DatabasePage Component', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.mocked(api.post).mockRejectedValue(new Error('API Error'));
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -545,7 +545,7 @@ describe('DatabasePage Component', () => {
       const { useSession } = await import('@/app/dashboard/provider');
       vi.mocked(useSession).mockReturnValue(null as any);
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       expect(mockRouter.push).toHaveBeenCalledWith('/login');
       expect(toast.error).toHaveBeenCalledWith(
@@ -561,7 +561,7 @@ describe('DatabasePage Component', () => {
         data: { data: [] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.getByText('Databases')).toBeInTheDocument();
@@ -575,7 +575,7 @@ describe('DatabasePage Component', () => {
         data: { data: [] },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         const newButton = screen.getByRole('link', { name: /new database/i });
@@ -590,7 +590,7 @@ describe('DatabasePage Component', () => {
         data: { data: mockClusters },
       });
 
-      render(<DatabasePage />);
+      render(<DatabasePage engines={[]} />);
 
       await waitFor(() => {
         expect(screen.getByText('Cluster Name')).toBeInTheDocument();

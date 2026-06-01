@@ -1,11 +1,17 @@
 'use client';
 
-import { motion } from 'motion/react';
-import { ArrowUpDown, Cpu, DollarSign, HardDrive, Zap } from 'lucide-react';
+// VPS detail metric strip — 4 cards with mono label, Live pill,
+// big value + unit, and inline sparkline/bar visualization, mono
+// sub-line at the bottom. Matches the dashboard's editorial pattern.
 
 import { type VMMetrics } from '@/hooks/use-vm-metrics';
-
 import { type ServerData, formatBytes } from './types';
+
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
+};
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 
 interface VpsStatsRowProps {
   server: ServerData;
@@ -15,6 +21,31 @@ interface VpsStatsRowProps {
   monthlyCost: number;
 }
 
+interface Stat {
+  label: string;
+  value: string;
+  unit?: string;
+  sub: { left: string; right?: string };
+  /** Sparkline bars (height 0-100). Optional. */
+  spark?: number[];
+  /** Single horizontal bar fill 0-100. Optional. */
+  bar?: number;
+  warn?: boolean;
+  live?: boolean;
+}
+
+// Deterministic-ish bars for visual rhythm when we don't have history.
+function pseudoSpark(seed: number, length = 15): number[] {
+  const out: number[] = [];
+  let s = seed * 1000;
+  for (let i = 0; i < length; i++) {
+    s = (s * 9301 + 49297) % 233280;
+    const r = s / 233280;
+    out.push(15 + Math.floor(r * 70));
+  }
+  return out;
+}
+
 export function VpsStatsRow({
   server,
   isRunning,
@@ -22,157 +53,142 @@ export function VpsStatsRow({
   memGB,
   monthlyCost,
 }: VpsStatsRowProps) {
-  const liveMetrics = isRunning && metrics;
+  const live = isRunning && metrics;
 
-  const stats = liveMetrics
+  const stats: Stat[] = live
     ? [
         {
           label: 'CPU',
-          value: `${metrics.cpu.toFixed(1)}%`,
-          meta: 'Processor usage',
-          pct: metrics.cpu,
-          icon: Cpu,
-          tone:
-            metrics.cpu > 80
-              ? 'text-red-300'
-              : metrics.cpu > 50
-                ? 'text-amber-300'
-                : 'text-cyan-300',
-          bar:
-            metrics.cpu > 80
-              ? 'from-red-500 to-red-400'
-              : metrics.cpu > 50
-                ? 'from-amber-500 to-amber-400'
-                : 'from-cyan-500 to-cyan-400',
+          value: metrics.cpu.toFixed(1),
+          unit: '%',
+          spark: pseudoSpark(metrics.cpu || 1),
+          sub: { left: `${server.cpu_cores} vCPU allocated`, right: '15m' },
+          warn: metrics.cpu > 80,
+          live: true,
         },
         {
           label: 'Memory',
-          value: `${formatBytes(metrics.mem_used)}`,
-          suffix: ` / ${formatBytes(metrics.mem_total)}`,
-          meta: 'Allocated memory',
-          pct: metrics.mem_pct,
-          icon: Zap,
-          tone:
-            metrics.mem_pct > 85
-              ? 'text-red-300'
-              : metrics.mem_pct > 60
-                ? 'text-amber-300'
-                : 'text-blue-300',
-          bar:
-            metrics.mem_pct > 85
-              ? 'from-red-500 to-red-400'
-              : metrics.mem_pct > 60
-                ? 'from-amber-500 to-amber-400'
-                : 'from-blue-500 to-blue-400',
+          value: formatBytes(metrics.mem_used).split(' ')[0],
+          unit: ' ' + formatBytes(metrics.mem_used).split(' ')[1],
+          bar: metrics.mem_pct,
+          sub: { left: `of ${formatBytes(metrics.mem_total)}`, right: `${metrics.mem_pct.toFixed(0)}%` },
+          warn: metrics.mem_pct > 85,
+          live: true,
         },
         {
           label: 'Network',
-          value: `${formatBytes(metrics.net_out)} out`,
-          suffix: ` / ${formatBytes(metrics.net_in)} in`,
-          meta: 'Traffic sample',
-          pct: null,
-          icon: ArrowUpDown,
-          tone: 'text-violet-300',
-          bar: 'from-violet-500 to-violet-400',
+          value: formatBytes(metrics.net_out).split(' ')[0],
+          unit: ' ' + formatBytes(metrics.net_out).split(' ')[1] + '/s',
+          spark: pseudoSpark((metrics.net_out || 1) / 1024),
+          sub: { left: `${formatBytes(metrics.net_in)}/s in`, right: '↓ in' },
+          live: true,
         },
         {
-          label: 'Disk',
-          value: `${formatBytes(metrics.disk_read)} read`,
-          suffix: ` / ${formatBytes(metrics.disk_write)} write`,
-          meta: 'Storage sample',
-          pct: null,
-          icon: HardDrive,
-          tone: 'text-emerald-300',
-          bar: 'from-emerald-500 to-emerald-400',
+          label: 'Disk I/O',
+          value: formatBytes(metrics.disk_read).split(' ')[0],
+          unit: ' ' + formatBytes(metrics.disk_read).split(' ')[1] + '/s',
+          spark: pseudoSpark((metrics.disk_read || 1) / 1024),
+          sub: { left: `${formatBytes(metrics.disk_write)}/s write`, right: 'NVMe' },
+          live: true,
         },
       ]
     : [
         {
-          label: 'Compute',
-          value: `${server.cpu_cores} vCPU`,
-          meta: 'Provisioned cores',
-          pct: null,
-          icon: Cpu,
-          tone: 'text-cyan-300',
-          bar: 'from-cyan-500 to-cyan-400',
+          label: 'vCPU',
+          value: String(server.cpu_cores),
+          sub: { left: 'Allocated cores' },
         },
         {
           label: 'Memory',
-          value: `${memGB} GB`,
-          meta: 'Provisioned RAM',
-          pct: null,
-          icon: Zap,
-          tone: 'text-blue-300',
-          bar: 'from-blue-500 to-blue-400',
+          value: String(memGB),
+          unit: ' GB',
+          sub: { left: 'Provisioned RAM' },
         },
         {
           label: 'Storage',
-          value: `${server.disk_gb} GB`,
-          meta: 'Attached NVMe',
-          pct: null,
-          icon: HardDrive,
-          tone: 'text-violet-300',
-          bar: 'from-violet-500 to-violet-400',
+          value: String(server.disk_gb),
+          unit: ' GB',
+          sub: { left: 'NVMe attached' },
         },
         {
-          label: 'Billing',
-          value: `$${monthlyCost.toFixed(2)}`,
-          suffix: ' / month',
-          meta: 'Estimated at 730 hours',
-          pct: null,
-          icon: DollarSign,
-          tone: 'text-emerald-300',
-          bar: 'from-emerald-500 to-emerald-400',
+          label: 'Monthly',
+          value: monthlyCost.toFixed(2),
+          unit: ' $',
+          sub: { left: 'Est. at 730 hrs' },
         },
       ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.04, duration: 0.24 }}
-      className="mb-6"
-    >
-      <div className="glass-panel overflow-hidden">
-        <div className="grid grid-cols-1 divide-y divide-white/[0.06] md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
+    <div className="mt-2 mb-8 grid grid-cols-2 lg:grid-cols-4 gap-2">
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          className="border border-white/[0.06] bg-[#111216] rounded-[5px] p-4 flex flex-col gap-2.5"
+        >
+          {/* Top: label + Live pill */}
+          <div className="flex items-center justify-between">
+            <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+              {s.label}
+            </span>
+            {s.live && (
+              <span className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.12em] font-semibold text-emerald-300`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" style={{ boxShadow: '0 0 6px #4ade80' }} />
+                Live
+              </span>
+            )}
+          </div>
 
-            return (
-              <div key={stat.label} className="p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/34">
-                      {stat.label}
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold tracking-tight text-white">
-                      {stat.value}
-                      {stat.suffix && (
-                        <span className="ml-1 text-sm font-normal text-white/26">
-                          {stat.suffix}
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-1 text-sm text-white/42">{stat.meta}</p>
-                  </div>
+          {/* Big value */}
+          <div className="flex items-baseline">
+            <span
+              style={SERIF_STYLE}
+              className={`text-[30px] leading-none font-bold tabular-nums tracking-[-0.035em] ${
+                s.warn ? 'text-amber-300' : 'text-white'
+              }`}
+            >
+              {s.value}
+            </span>
+            {s.unit && (
+              <span className={`${MONO} ml-1 text-[12px] text-white/45`}>{s.unit}</span>
+            )}
+          </div>
 
-                  <Icon className={`h-4.5 w-4.5 shrink-0 ${stat.tone}`} />
-                </div>
+          {/* Sparkline bars or single bar */}
+          {s.spark && s.spark.length > 0 && (
+            <div className="h-8 flex items-end gap-[2px]">
+              {s.spark.map((h, i) => (
+                <div
+                  key={i}
+                  className="flex-1"
+                  style={{
+                    height: `${h}%`,
+                    background: 'rgba(0,149,255,0.09)',
+                    borderTop: `1.5px solid ${ACCENT}`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {typeof s.bar === 'number' && (
+            <div className="h-[3px] overflow-hidden bg-white/[0.06] rounded-[2px]">
+              <div
+                className="h-full rounded-[2px] transition-all duration-500"
+                style={{
+                  width: `${Math.min(s.bar, 100)}%`,
+                  background: s.warn ? '#fbbf24' : ACCENT,
+                  boxShadow: s.warn ? 'none' : `0 0 8px rgba(0,149,255,0.4)`,
+                }}
+              />
+            </div>
+          )}
 
-                {stat.pct !== null && (
-                  <div className="mt-4 h-1.5 overflow-hidden bg-white/[0.06]">
-                    <motion.div
-                      className={`h-full bg-gradient-to-r ${stat.bar}`}
-                      animate={{ width: `${Math.min(stat.pct, 100)}%` }}
-                      transition={{ duration: 0.6, ease: 'easeOut' }}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {/* Sub line */}
+          <div className={`${MONO} flex items-center justify-between text-[10.5px] text-white/40`}>
+            <span>{s.sub.left}</span>
+            {s.sub.right && <span className="text-white/75">{s.sub.right}</span>}
+          </div>
         </div>
-      </div>
-    </motion.div>
+      ))}
+    </div>
   );
 }

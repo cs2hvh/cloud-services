@@ -256,9 +256,9 @@ export default function DomainTransferSection() {
   );
 
   return (
-    <section className="relative overflow-hidden bg-[#0D0D0F] pt-16 sm:pt-20 lg:pt-24">
+    <section id="search" className="relative overflow-hidden bg-[#0D0D0F] pt-16 sm:pt-20 lg:pt-24">
       <Container className="relative z-10 ">
-        <div style={{boxShadow:'5px 5px 7.3px -2px #000000'}}  className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-2xl bg-[#C6D5E3] px-6 py-7 sm:px-12 sm:py-9 lg:px-20 lg:py-11">
+        <div className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-2xl bg-[#C6D5E3] px-6 py-7 sm:px-12 sm:py-9 lg:px-20 lg:py-11">
           <Image
             src="/images/main-page/service-home-domain-sec-1-bg.png"
             alt=""
@@ -266,17 +266,17 @@ export default function DomainTransferSection() {
             className="object-cover"
           />
           <div className="relative bg-[#C6D5E3]">
-            <h2 className="font-salsa mt-2 text-center text-3xl font-semibold leading-tight text-[#111] sm:text-4xl lg:text-[52px]">
-              Search and Secure Your
-              <span className="block text-[#0A9FFF]">Perfect Domain</span>
+            <h2 className="mt-2 text-center text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#0a0a0a] sm:text-4xl lg:text-[48px]">
+              Register, manage, and operate
+              <span className="block text-[#0A9FFF]">your domain portfolio</span>
             </h2>
 
-            <p className="font-salsa mx-auto mt-4 max-w-[700px] text-center text-sm font-semibold leading-relaxed text-black sm:text-base">
-              Discover, register, and manage your domain with speed, security,
-              and full control all from one modern platform.
+            <p className="mx-auto mt-5 max-w-[640px] text-center text-[14px] leading-[1.6] text-black/65 sm:text-[15.5px]">
+              Anycast DNS, free WHOIS privacy, lossless transfers, and a
+              single dashboard for hundreds of domains — at registry-fair prices.
             </p>
-            <p className="mx-auto mt-2 text-center text-xs text-black/70 sm:text-sm">
-              Instant search &nbsp; Smart suggestions &nbsp; Seamless transfers
+            <p className="mx-auto mt-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.18em] text-black/55 font-[var(--font-geist-mono),ui-monospace,monospace]">
+              Instant search · Smart suggestions · Seamless transfers
             </p>
 
             <div className="mx-auto mt-5 w-full max-w-[700px]">
@@ -425,13 +425,14 @@ export default function DomainTransferSection() {
           <div className="mx-auto w-full max-w-[980px]">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_1.2fr] lg:gap-12">
               <div className="rounded-xl p-4 sm:p-6">
-                <h3 className="font-salsa text-3xl font-semibold leading-tight text-[#111] sm:text-4xl">
-                  Transfer Your Domain
-                  <span className="block text-[#0095FF]">Without Downtime</span>
+                <h3 className="text-3xl font-semibold leading-[1.1] tracking-[-0.02em] text-[#0a0a0a] sm:text-[34px]">
+                  Move existing domains
+                  <span className="block text-[#0095FF]">without downtime</span>
                 </h3>
-                <p className="mt-2 max-w-[460px] text-sm leading-relaxed text-black/70 sm:text-base">
-                  Transfer your domain to AhuraCloud in minutes with zero
-                  disruption and full control.
+                <p className="mt-3 max-w-[460px] text-sm leading-[1.6] text-black/65 sm:text-[15px]">
+                  Inbound transfers from any ICANN-accredited registrar with
+                  pre-flight validation, DNS pre-staging, and a 30-day rollback
+                  window.
                 </p>
                 <div className="relative mt-5 h-[170px] w-full max-w-[280px]">
                   <Image
@@ -485,7 +486,7 @@ export default function DomainTransferSection() {
               <button
                 type="button"
                 onClick={() => void handleGoToTransfer(transferDomain.trim() || undefined)}
-                className="inline-flex h-11 items-center justify-center rounded-md bg-[#019EFF] px-5 text-sm font-medium font-salsa text-black transition-colors hover:bg-[#0086E5] cursor-pointer"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-[#019EFF] px-5 text-sm font-medium text-black transition-colors hover:bg-[#0086E5] cursor-pointer"
               >
                 Transfer Domain
                 <ArrowRight className="ml-2 h-4 w-4" />

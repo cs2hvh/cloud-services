@@ -30,6 +30,9 @@
 import { useRealtimeTable } from './use-realtime-table';
 import { parseOperationDetails } from '@/lib/app-operations/core/operation-details';
 import { getAppHistoryType } from '@/lib/app-operations/core/presentation';
+import { getPlatformAppRetentionPolicy } from '@/lib/platform-apps/retention';
+
+const RETENTION_POLICY = getPlatformAppRetentionPolicy();
 
 // Database schema (what Supabase returns)
 interface DeploymentRecord extends Record<string, unknown> {
@@ -117,7 +120,7 @@ function transformDeployment(record: DeploymentRecord): Deployment {
  */
 export function useRealtimeDeployments({
   appId,
-  limit = 20,
+  limit = RETENTION_POLICY.deploymentHistory.defaultVisible,
   enabled = true,
 }: UseRealtimeDeploymentsOptions) {
   const {

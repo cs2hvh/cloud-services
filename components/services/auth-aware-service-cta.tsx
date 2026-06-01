@@ -36,8 +36,8 @@ const SERVICE_DASHBOARD_TARGETS: Record<
     new: "/dashboard/services/compute/vps/new",
   },
   gpu: {
-    main: "/dashboard/services/compute",
-    new: "/dashboard/services/compute/vps/new",
+    main: "/dashboard/services/gpu",
+    new: "/dashboard/services/gpu/deploy",
   },
   kubernetes: {
     main: "/dashboard/services/kubernetes",

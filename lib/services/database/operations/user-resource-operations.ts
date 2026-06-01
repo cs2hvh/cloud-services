@@ -16,7 +16,7 @@ import type {
   ListDatabaseUsersResult,
   ResetDatabaseUserPasswordRequest,
 } from "../types";
-import { sendDatabaseAlertEmail } from "./database-alert-email";
+import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
 function decryptStoredPassword(
@@ -57,7 +57,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 201) {
-        return { success: false, error: "Failed to create user in DigitalOcean" };
+        return { success: false, error: "Failed to create user in the database provider" };
       }
 
       const user = response.data.user;
@@ -78,7 +78,7 @@ export const userResourceOperations = {
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "User created in DigitalOcean but failed to sync with database",
+          error: "User created in the database provider but failed to sync with database",
         };
       }
 
@@ -129,6 +129,25 @@ export const userResourceOperations = {
         } catch (notifErr) {
           console.error("[createDatabaseUser] Failed to create notification:", notifErr);
         }
+
+        try {
+          const recipient =
+            userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database user created",
+            summary: `A new database user "${request.name}" was created on your cluster "${clusterData.data.name}".`,
+            severity: "info",
+            metadata: {
+              Operation: "Create database user",
+              "Database user": request.name,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[createDatabaseUser] Failed to send email:", emailErr);
+        }
       }
 
       return { success: true, data: user };
@@ -163,7 +182,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 200) {
-        return { success: false, error: "Failed to fetch users from DigitalOcean" };
+        return { success: false, error: "Failed to fetch users from the database provider" };
       }
 
       const users = response.data.users as DatabaseUser[];
@@ -252,14 +271,14 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 204) {
-        return { success: false, error: "Failed to delete user from DigitalOcean" };
+        return { success: false, error: "Failed to delete user from the database provider" };
       }
 
       const supabaseResult = await Database_Clusters.remove_user(request.clusterId, request.username);
       if (!supabaseResult.success) {
         return {
           success: false,
-          error: "User deleted from DigitalOcean but failed to sync with database",
+          error: "User deleted from the database provider but failed to sync with database",
         };
       }
 
@@ -309,6 +328,25 @@ export const userResourceOperations = {
           );
         } catch (notifErr) {
           console.error("[deleteDatabaseUser] Failed to create notification:", notifErr);
+        }
+
+        try {
+          const recipient =
+            request.userEmail || (await resolveUserEmail(String(clusterData.data.owner_id)));
+          await sendDatabaseAlertEmail({
+            userEmail: recipient,
+            serviceName: String(clusterData.data.name),
+            alertTitle: "Database user deleted",
+            summary: `The database user "${request.username}" was deleted from your cluster "${clusterData.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Delete database user",
+              "Database user": request.username,
+              Cluster: String(clusterData.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[deleteDatabaseUser] Failed to send email:", emailErr);
         }
       }
 
@@ -365,7 +403,7 @@ export const userResourceOperations = {
       );
 
       if (response.status !== 200) {
-        return { success: false, error: "Failed to reset password in DigitalOcean" };
+        return { success: false, error: "Failed to reset password in the database provider" };
       }
 
       const user = response.data.user;

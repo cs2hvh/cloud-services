@@ -19,6 +19,14 @@ interface HostInput {
   gateway_ip?: string;
   dns_primary?: string;
   dns_secondary?: string;
+  provider?: string;
+  server_series?: string;
+  network_mode?: string;
+  vm_private_cidr?: string;
+  vm_private_gateway?: string;
+  vm_private_ip_start?: number;
+  public_prefix_length?: number;
+  snippet_storage?: string;
   template_vmid?: number;
   region?: string;
   display_region?: string;
@@ -26,7 +34,7 @@ interface HostInput {
   total_memory_mb?: number;
   total_disk_gb?: number;
   is_active?: boolean;
-  pools?: Array<{ mac: string; ips: string[] }>;
+  pools?: Array<{ mac: string; ips: string[]; label?: string }>;
   templates?: Array<{ name: string; vmid: number; os_type?: string; os_display_name?: string }>;
 }
 
@@ -118,6 +126,8 @@ export async function GET(req: NextRequest) {
         `
         id, name, host_url, allow_insecure_tls, token_id, node, storage, 
         bridge, template_vmid, gateway_ip, dns_primary, dns_secondary,
+        provider, server_series, network_mode, vm_private_cidr, vm_private_gateway,
+        vm_private_ip_start, public_prefix_length, snippet_storage,
         region, display_region, total_cpu_cores, total_memory_mb, total_disk_gb,
         is_active, created_at, updated_at,
         public_ip_pools ( id, mac, public_ip_pool_ips ( id, ip ) ),
@@ -189,6 +199,14 @@ export async function POST(req: NextRequest) {
       gateway_ip: body.gateway_ip || null,
       dns_primary: body.dns_primary || null,
       dns_secondary: body.dns_secondary || null,
+      provider: body.provider || "ovh",
+      server_series: body.server_series || "generic",
+      network_mode: body.network_mode || "legacy_public_gateway",
+      vm_private_cidr: body.vm_private_cidr || null,
+      vm_private_gateway: body.vm_private_gateway || null,
+      vm_private_ip_start: body.vm_private_ip_start || 10,
+      public_prefix_length: body.public_prefix_length || 32,
+      snippet_storage: body.snippet_storage || "local",
       template_vmid: body.template_vmid || null,
       region: body.region || "default",
       display_region: body.display_region || "Default",
@@ -222,19 +240,20 @@ export async function POST(req: NextRequest) {
         .map((p) => ({
           mac: String(p.mac),
           ip: String(p.ips[0]),
+          label: p.label ? String(p.label) : null,
         }));
 
       // Get existing pools and their IPs for this host
       const { data: existingPools } = await supabase
         .from("public_ip_pools")
-        .select("id, mac, public_ip_pool_ips ( id, ip )")
+        .select("id, mac, label, public_ip_pool_ips ( id, ip )")
         .eq("host_id", hostId);
 
       // Build a map of existing entries: ip -> { poolId, mac }
-      const existingByIp = new Map<string, { poolId: string; mac: string }>();
-      for (const p of (existingPools || []) as Array<{ id: string; mac: string; public_ip_pool_ips: Array<{ id: string; ip: string }> }>) {
+      const existingByIp = new Map<string, { poolId: string; mac: string; label: string | null }>();
+      for (const p of (existingPools || []) as Array<{ id: string; mac: string; label?: string | null; public_ip_pool_ips: Array<{ id: string; ip: string }> }>) {
         for (const ipRow of (p.public_ip_pool_ips || [])) {
-          existingByIp.set(String(ipRow.ip), { poolId: String(p.id), mac: String(p.mac) });
+          existingByIp.set(String(ipRow.ip), { poolId: String(p.id), mac: String(p.mac), label: p.label || null });
         }
       }
 
@@ -253,17 +272,17 @@ export async function POST(req: NextRequest) {
 
         if (existing) {
           // Update MAC if changed
-          if (existing.mac !== entry.mac) {
+          if (existing.mac !== entry.mac || existing.label !== entry.label) {
             await supabase
               .from("public_ip_pools")
-              .update({ mac: entry.mac })
+              .update({ mac: entry.mac, label: entry.label })
               .eq("id", existing.poolId);
           }
         } else {
           // Create new pool + IP
           const { data: inserted, error: poolErr } = await supabase
             .from("public_ip_pools")
-            .insert({ host_id: hostId, mac: entry.mac })
+            .insert({ host_id: hostId, mac: entry.mac, label: entry.label })
             .select("id")
             .single();
 

@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { APP_DOMAIN } from "@/config/domain";
+import { APP_DOMAIN, DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import {
   DOMAIN_ERROR_CODES,
   type DomainErrorCode,
@@ -177,7 +177,7 @@ export class DomainService {
             ? null
             : {
                 record_type: "TXT" as const,
-                record_name: `galaxyhvh-verify.${cleanDomain}`,
+                record_name: `${DOMAIN_VERIFY_PREFIX}.${cleanDomain}`,
                 record_value: verificationToken,
                 ttl: 300,
               },
@@ -245,7 +245,7 @@ export class DomainService {
       return domain;
     }
 
-    const recordName = `galaxyhvh-verify.${domain.domain}`;
+    const recordName = `${DOMAIN_VERIFY_PREFIX}.${domain.domain}`;
     const txtRecords = await this.deps.dns.listTxtRecords(recordName);
 
     const verified = txtRecords.some((record) => record.includes(domain.verification_token));
@@ -800,6 +800,8 @@ export class DomainService {
       // Use app.name (not app.slug): the platform DNS A record is <name>.APP_DOMAIN,
       // not <slug>.APP_DOMAIN. The slug includes a hash suffix that has no specific A record.
       const cnameTarget = `${app.name}.${APP_DOMAIN}`;
+      const routingIps = parseRoutingIps();
+      const isApexDomain = domain.domain.split(".").filter(Boolean).length <= 2;
       let dnsAutoConfigured = true;
       let dnsAutomationMessage: string | null = null;
 
@@ -860,13 +862,22 @@ export class DomainService {
         dns_auto_configured: dnsAutoConfigured,
         dns_automation_message: dnsAutomationMessage,
         ...(!dnsAutoConfigured && {
-          routing_instructions: {
-            record_type: "CNAME",
-            record_name: updated.domain,
-            record_value: cnameTarget,
-            ttl: 300,
-            note: "Point your domain to this CNAME target if you are using a subdomain. For apex domains (for example, example.com), use an A record to your public routing IP.",
-          },
+          routing_instructions: isApexDomain
+            ? {
+                record_type: "A",
+                record_name: "@",
+                record_value: routingIps[0] || "",
+                record_values: routingIps,
+                ttl: 300,
+                note: "Add one A record for each listed platform ingress IP at your DNS provider.",
+              }
+            : {
+                record_type: "CNAME",
+                record_name: updated.domain,
+                record_value: cnameTarget,
+                ttl: 300,
+                note: "Add this CNAME record at your DNS provider. If your provider offers proxy or CDN mode, keep the record as direct DNS while SSL issues.",
+              },
         }),
       });
       console.log("[DomainService] Activation operation marked succeeded", {
@@ -1214,10 +1225,28 @@ export class DomainService {
 }
 
 function shouldSkipManagedDnsAutomation(error: DomainServiceError): boolean {
-  return (
+  // Primary path: dns-provider adapter detected custom nameservers before touching Name.com DNS.
+  if (
     error.code === DOMAIN_ERROR_CODES.DOMAIN_INVALID
     && /No (platform-managed DNS|managed) zone found/i.test(error.message)
-  );
+  ) {
+    return true;
+  }
+  // Safety net: Name.com DNS records API explicitly rejected the write because the
+  // domain's nameservers no longer point to Name.com. This happens when the adapter's
+  // nameserver pre-check is bypassed (e.g. Name.com returned empty nameservers) and
+  // the record operation itself surfaces the authoritativeness error.
+  if (/permission denied.*ns not authoritative/i.test(error.message)) {
+    return true;
+  }
+  return false;
+}
+
+function parseRoutingIps(): string[] {
+  return (process.env.KUBE_IP || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function shouldAttemptRoutingCleanup(status: DomainRecord["status"]): boolean {
@@ -1309,6 +1338,19 @@ function classifyActivationFailure(error: DomainServiceError): ActivationFailure
       code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
       retryable: true,
       message: "A platform dependency is temporarily unavailable. Please retry in 1-2 minutes.",
+    };
+  }
+
+  // Name.com rejects DNS record writes when the domain uses external nameservers.
+  // Normally caught by shouldSkipManagedDnsAutomation; this branch is a fallback
+  // in case it somehow escapes that check and reaches the failure classifier.
+  if (lower.includes("permission denied") && lower.includes("ns not authoritative")) {
+    return {
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      retryable: false,
+      message:
+        "DNS records could not be configured automatically because this domain uses custom nameservers. " +
+        "Add the CNAME (or A) routing record shown above at your DNS provider, then re-activate.",
     };
   }
 

@@ -1,126 +1,137 @@
 "use client";
 
-import { motion } from "motion/react";
+import {
+    IconDeviceDesktopFilled,
+    IconSparklesFilled,
+    IconShoppingCartFilled,
+    IconHexagonFilled,
+    IconBoltFilled,
+    IconShieldCheckFilled,
+} from "@tabler/icons-react";
+
 import { Container } from "@/components/ui/container";
 
-const workloadCards = [
-  {
-    title: "AI & Machine Learning",
-    description:
-      "Deploy ML models and inference APIs with GPU-optimized containers.",
-  },
-  {
-    title: "Web Hosting & SaaS",
-    description:
-      "Ship SaaS products with CI/CD, previews, and global edge delivery.",
-  },
-  {
-    title: "Ecommerce Infrastructure",
-    description:
-      "High-availability storefronts with autoscaling for peak traffic.",
-  },
-  {
-    title: "Database-Driven Apps",
-    description:
-      "Pair with managed databases for full-stack data applications.",
-  },
-  {
-    title: "Game Development",
-    description:
-      "Low-latency game servers with real-time scaling across regions.",
-  },
-  {
-    title: "Secure Enterprise Cloud",
-    description:
-      "SOC 2 compliant deployments with VPC isolation and encryption.",
-  },
-  {
-    title: "Cloud-Native K8s",
-    description:
-      "Kubernetes-ready workloads with managed orchestration.",
-  },
-  {
-    title: "Storage & Backup",
-    description:
-      "Persistent volumes and S3-compatible object storage for any workload.",
-  },
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+type Workload = {
+    icon: React.ReactNode;
+    accent: string;
+    metric: string;
+    title: string;
+    description: string;
+};
+
+const WORKLOADS: Workload[] = [
+    {
+        icon: <IconDeviceDesktopFilled size={22} />,
+        accent: "#0095FF",
+        metric: "Web & SaaS",
+        title: "Customer-facing web applications",
+        description:
+            "Server-rendered and static frameworks deployed to the edge, with preview environments for every pull request and zero-downtime releases.",
+    },
+    {
+        icon: <IconSparklesFilled size={22} />,
+        accent: "#8B5CF6",
+        metric: "AI / ML",
+        title: "Model inference services",
+        description:
+            "GPU-backed runtimes with request-rate autoscaling and warm pools to keep cold-start and first-token latency within target.",
+    },
+    {
+        icon: <IconShoppingCartFilled size={22} />,
+        accent: "#10B981",
+        metric: "Commerce",
+        title: "High-traffic storefronts",
+        description:
+            "Burst capacity for promotional events, integrated CDN, and signed checkout sessions — engineered for peak retail throughput.",
+    },
+    {
+        icon: <IconHexagonFilled size={22} />,
+        accent: "#06B6D4",
+        metric: "APIs",
+        title: "Backends and microservices",
+        description:
+            "REST and gRPC services with health checks, structured logging, and managed connections to Postgres, Redis, and Mongo.",
+    },
+    {
+        icon: <IconBoltFilled size={22} />,
+        accent: "#F59E0B",
+        metric: "Realtime",
+        title: "Realtime and WebSocket services",
+        description:
+            "Long-lived connections with sticky routing across regional pools, deployed through the same release pipeline as the rest of the stack.",
+    },
+    {
+        icon: <IconShieldCheckFilled size={22} />,
+        accent: "#E11D48",
+        metric: "Regulated",
+        title: "Compliance-bound workloads",
+        description:
+            "Private networking, SOC 2 controls, and bring-your-own-key encryption for environments requiring an end-to-end audit trail.",
+    },
 ];
 
 export default function AppDeployWorkloadsSection() {
-  return (
-    <section className="relative overflow-hidden bg-black py-16 lg:py-24">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, #fff 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-        <div className="absolute left-1/2 top-[12%] h-[380px] w-[900px] -translate-x-1/2 bg-white/[0.02] blur-[120px]" />
-      </div>
+    return (
+        <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
+            <Container>
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p
+                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
+                    >
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                        Use cases
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
+                        Built for the workloads you ship to production.
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-black/60 sm:text-[16.5px]">
+                        A single deployment pipeline, dashboard, and SLA — from
+                        early-stage products through regulated enterprise services.
+                    </p>
+                </div>
 
-      <Container>
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.55 }}
-          className="mx-auto max-w-2xl text-center"
-        >
-          <h2 className="text-3xl font-[500] tracking-tight text-white sm:text-4xl">
-            Built for every workload
-          </h2>
-          <p className="mt-3 text-sm leading-7 text-white/55">
-            From AI inference to enterprise SaaS, deploy with confidence.
-          </p>
-        </motion.div>
+                {/* 3x2 grid */}
+                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
+                    {WORKLOADS.map((w, i) => (
+                        <article
+                            key={w.title}
+                            className="group relative flex flex-col gap-4 bg-[#EEECE4] p-7 transition-colors hover:bg-[#F2EDDD]"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div
+                                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
+                                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                                >
+                                    {w.icon}
+                                </div>
+                                <span
+                                    className={`${MONO} text-[10.5px] tabular-nums text-black/30`}
+                                >
+                                    {String(i + 1).padStart(2, "0")}
+                                </span>
+                            </div>
 
-        <motion.div
-          className="mt-12 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-6"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: 0.07 } },
-          }}
-        >
-          {workloadCards.map((card, idx) => {
-            const isLastRow = idx >= 6;
-            const placementClass =
-              idx === 6
-                ? "lg:col-start-2"
-                : idx === 7
-                  ? "lg:col-start-4"
-                  : "";
-
-            return (
-              <motion.article
-                key={card.title}
-                variants={{
-                  hidden: { opacity: 0, y: 16 },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    transition: {
-                      duration: 0.45,
-                      ease: [0.25, 0.46, 0.45, 0.94],
-                    },
-                  },
-                }}
-                className={`group relative overflow-hidden rounded-[2px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_42%,rgba(255,255,255,0.08)_100%)] p-6 sm:p-7 lg:col-span-2 ${placementClass} ${
-                  isLastRow ? "sm:col-span-1" : ""
-                }`}
-              >
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(46,167,255,0.18),transparent_48%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                <h3 className="relative text-xl font-[500] text-white">
-                  {card.title}
-                </h3>
-                <p className="relative mt-3 text-sm leading-7 text-white/65">
-                  {card.description}
-                </p>
-              </motion.article>
-            );
-          })}
-        </motion.div>
-      </Container>
-    </section>
-  );
+                            <div>
+                                <p
+                                    className={`${MONO} mb-2 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50`}
+                                >
+                                    <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
+                                    {w.metric}
+                                </p>
+                                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-[#1A1814]">
+                                    {w.title}
+                                </h3>
+                                <p className="mt-2 text-[13.5px] leading-[1.6] text-black/60">
+                                    {w.description}
+                                </p>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </Container>
+        </section>
+    );
 }
-

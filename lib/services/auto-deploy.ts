@@ -32,6 +32,8 @@ export interface AutoDeployConfig {
   branch: string;
   framework: string;
   size?: string;
+  containerPort?: number;
+  healthcheckPath?: string;
   commitSha?: string;
   deliveryId?: string;  // For idempotency tracking
 }
@@ -51,7 +53,7 @@ export class AutoDeployService {
    * Handles token refresh, job update, and build triggering
    */
   static async deploy(config: AutoDeployConfig): Promise<AutoDeployResult> {
-    const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, size, commitSha, deliveryId } = config;
+    const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, size, containerPort, healthcheckPath, commitSha, deliveryId } = config;
     const idempotencyKey = `auto-deploy:${appId}:${branch}:${commitSha || 'HEAD'}:${deliveryId || 'no-delivery'}`;
 
     console.log(`[AutoDeploy] Starting auto-deploy for ${appName}`);
@@ -127,7 +129,9 @@ export class AutoDeployService {
             framework,
             size || 'small',
             'webhook',
-            envVars
+            envVars,
+            containerPort,
+            healthcheckPath,
           );
           console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
 

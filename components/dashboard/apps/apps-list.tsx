@@ -123,59 +123,30 @@ export function AppsList({
 
   return (
     <>
-      <div className="glass-panel overflow-hidden">
-        <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                Application Inventory
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                Managed deployments and build activity.
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-                Search active services, inspect build output, and take action on each deployment from
-                a single operational view.
-              </p>
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        {apps.length > 0 && (
+          <div className="border-b border-white/[0.06] px-5 py-3.5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex w-full max-w-xl items-center gap-2.5 border border-white/[0.08] bg-[#0d0e11] px-3 h-9 rounded-[5px]">
+              <Search className="h-3.5 w-3.5 text-white/40" />
+              <input
+                type="text"
+                placeholder="Search applications"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="font-[var(--font-geist-mono),ui-monospace,monospace] w-full bg-transparent text-[12px] text-white placeholder:text-white/30 focus:outline-none"
+              />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="border-white/10 bg-white/[0.05] text-white/70">
-                {apps.length} {apps.length === 1 ? "app" : "apps"}
-              </Badge>
-              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-                {runningCount} live
-              </Badge>
-              <Badge className="border-blue-500/20 bg-blue-500/10 text-blue-300">
-                {buildingCount} building
-              </Badge>
+            <div className="font-[var(--font-geist-mono),ui-monospace,monospace] flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-white/40">
+              <span className="px-2 py-0.5 border border-white/[0.06] bg-[#0d0e11] rounded-[3px]">
+                {filteredApps.length} visible
+              </span>
+              <span className="px-2 py-0.5 border border-white/[0.06] bg-[#0d0e11] rounded-[3px]">
+                Logs · metrics inline
+              </span>
             </div>
           </div>
-
-          {apps.length > 0 && (
-            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex w-full max-w-xl items-center gap-3 border border-white/[0.08] bg-white/[0.04] px-3.5 py-3">
-                <Search className="h-4 w-4 text-white/35" />
-                <input
-                  type="text"
-                  placeholder="Search applications"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  className="w-full bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-white/45">
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                  {filteredApps.length} visible
-                </span>
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                  Logs and metrics available inline
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
 
         <div className="px-5 py-5 sm:px-6 sm:py-6">
           {loading ? (
@@ -233,22 +204,40 @@ export function AppsList({
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] px-6 py-16 text-center">
-              <Code className="mb-4 h-10 w-10 text-white/20" />
-              <h3 className="text-base font-semibold text-white">No applications deployed</h3>
-              <p className="mt-2 max-w-md text-sm text-white/45">
-                Deploy your first repository-backed application to start tracking rollout activity,
-                runtime health, and build history here.
-              </p>
-              <Button
-                asChild
-                className="mt-5 border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
+            <div className="relative flex flex-col items-center justify-center border border-dashed border-white/[0.10] px-6 py-12 text-center rounded-[6px] overflow-hidden">
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background:
+                    "radial-gradient(circle at 30% 20%, rgba(0,149,255,0.04), transparent 50%)",
+                }}
+              />
+              <div
+                className="relative z-10 h-12 w-12 mb-4 inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
+                style={{ color: "#0095FF" }}
               >
-                <Link href="/dashboard/services/apps/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Deploy your first app
-                </Link>
-              </Button>
+                <Code className="h-5 w-5" />
+              </div>
+              <h3 className="relative z-10 text-[16px] font-semibold tracking-[-0.015em] text-white">
+                No applications deployed
+              </h3>
+              <p className="relative z-10 mt-2 max-w-md font-[var(--font-geist-mono),ui-monospace,monospace] text-[11px] text-white/45 leading-relaxed">
+                Deploy your first repository-backed application to start
+                tracking rollout activity, runtime health, and build history
+                here.
+              </p>
+              <Link
+                href="/dashboard/services/apps/new"
+                className="font-[var(--font-geist-mono),ui-monospace,monospace] relative z-10 mt-5 inline-flex items-center gap-2 h-9 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #0095FF, #0066B3)",
+                  color: "#ffffff",
+                  boxShadow: "0 8px 20px rgba(0,149,255,0.20)",
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Deploy your first app
+              </Link>
             </div>
           )}
         </div>

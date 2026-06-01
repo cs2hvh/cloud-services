@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
+
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 type FilterTab = {
   value: string;
   label: string;
+  nvidia?: boolean;
 };
 
 const DATABASE_TYPE_TABS: FilterTab[] = [
@@ -24,9 +27,9 @@ const DEFAULT_CPU_TABS: FilterTab[] = [
 
 const GPU_CPU_TABS: FilterTab[] = [
   { value: "all", label: "All GPU Types" },
-  { value: "h200", label: "H200" },
-  { value: "h100", label: "H100" },
-  { value: "l4os", label: "L4OS" },
+  { value: "h200", label: "H200", nvidia: true },
+  { value: "h100", label: "H100", nvidia: true },
+  { value: "l4os", label: "L4OS", nvidia: true },
 ];
 
 function normalizeValue(value?: string | null): string {
@@ -96,12 +99,15 @@ function FilterTabs({
               type="button"
               onClick={() => onChange(tab.value)}
               className={cn(
-                "cursor-pointer border px-3 py-1.5 text-[11px] font-medium transition-colors",
+                "cursor-pointer inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors",
                 isActive
                   ? "border-white bg-white text-black"
                   : "border-white/20 bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
               )}
             >
+              {tab.nvidia && (
+                <NvidiaLogo width={14} height={10} className={cn("opacity-95", isActive && "brightness-0")} />
+              )}
               {tab.label}
             </button>
           );
@@ -113,18 +119,97 @@ function FilterTabs({
 
 
 
+type ParsedSpecs = {
+  vcpu?: string;
+  memory?: string;
+  storage?: string;
+  network?: string;
+};
+
+type TableColumn = {
+  key: string;
+  header: string;
+  align?: "left" | "right";
+  render: (tier: PricingTier) => ReactNode;
+};
+
+function formatSizeToken(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(/(\d+(?:\.\d+)?)\s*(gb|tb|mb)/i);
+  if (!match) return undefined;
+  return `${match[1]} ${match[2].toUpperCase()}`;
+}
+
+function classifySpec(spec: string): "vcpu" | "memory" | "storage" | "network" | "other" {
+  const low = spec.toLowerCase();
+  if (/v?cpu|core/.test(low)) return "vcpu";
+  if (/ddr|ram|memory/.test(low)) return "memory";
+  if (/nvme|ssd|hdd|disk|storage/.test(low)) return "storage";
+  if (/gbit|gbps|mbit|mbps|fabric|network|gb\/s/.test(low)) return "network";
+  return "other";
+}
+
+function parseSpecs(tier: PricingTier): ParsedSpecs {
+  const result: ParsedSpecs = {};
+
+  for (const spec of tier.specs ?? []) {
+    switch (classifySpec(spec)) {
+      case "vcpu": {
+        const match = spec.match(/(\d+)/);
+        result.vcpu = match ? match[1] : spec.trim();
+        break;
+      }
+      case "memory":
+        result.memory = formatSizeToken(spec) ?? spec.trim();
+        break;
+      case "storage":
+        result.storage = formatSizeToken(spec) ?? spec.trim();
+        break;
+      case "network":
+        result.network = spec.trim();
+        break;
+    }
+  }
+
+  // Database/Kubernetes plans keep capacity inside features, e.g. "80GB storage".
+  if (!result.storage) {
+    const storageFeature = (tier.features ?? []).find((feature) => /storage|disk/i.test(feature));
+    result.storage = formatSizeToken(storageFeature);
+  }
+
+  return result;
+}
+
+function getGpuModel(tier: PricingTier): string | undefined {
+  if (tier.machineType) return tier.machineType.toUpperCase();
+  for (const feature of tier.features ?? []) {
+    const match = feature.match(/nvidia\s+([a-z0-9]+)/i);
+    if (match) return match[1].toUpperCase();
+  }
+  return undefined;
+}
+
+function getDatabaseEngineLabel(tier: PricingTier): string | undefined {
+  const type = normalizeDatabaseType(tier.subType || tier.name);
+  if (type === "mysql") return "MySQL";
+  if (type === "mongodb") return "MongoDB";
+  if (type === "postgres") return "PostgreSQL";
+  return undefined;
+}
+
+function getCpuTypeDisplay(tier: PricingTier): string | undefined {
+  const normalized = normalizeCpuType(tier.cpuType || tier.machineType || tier.name);
+  return normalized ? formatCpuTypeLabel(normalized) : undefined;
+}
+
 type PricingContentProps = {
   category?: ServiceCategory;
   billingCycle: "monthly" | "yearly";
-  expandedTierId: string;
-  setExpandedTierId: Dispatch<SetStateAction<string>>;
 };
 
 export function PricingContent({
   category,
   billingCycle,
-  expandedTierId,
-  setExpandedTierId,
 }: PricingContentProps) {
   const [databaseTypeFilter, setDatabaseTypeFilter] = useState("all");
   const [cpuTypeFilter, setCpuTypeFilter] = useState("all");
@@ -201,14 +286,151 @@ export function PricingContent({
     isKubernetesCategory,
   ]);
 
-  const featuredTier = filteredTiers.find((tier) => tier.isFeatured);
-  const listTiers = filteredTiers.filter((tier) => !tier.isFeatured);
-
   const formatPrice = (value: number) =>
     Number.isInteger(value) ? value.toString() : value.toFixed(2);
 
+  const formatHourly = (monthly: number) => {
+    const hourly = monthly / 720;
+    if (hourly === 0) return "0";
+    return hourly < 1 ? hourly.toFixed(3) : hourly.toFixed(2);
+  };
+
+  const getEffectiveMonthly = (tier: PricingTier) =>
+    billingCycle === "monthly" ? tier.price.monthly : tier.price.yearly / 12;
+
   const getTierId = (tier: PricingTier) =>
     tier.id ?? tier.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  const renderValue = (value?: string): ReactNode =>
+    value ? value : <span className="text-white/30">—</span>;
+
+  const planColumn: TableColumn = {
+    key: "plan",
+    header: "Plan",
+    render: (tier) => (
+      <div className="min-w-[160px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-white">{tier.name}</span>
+          {tier.isFeatured && (
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-black">
+              Most popular
+            </span>
+          )}
+        </div>
+        {tier.shortDescription && (
+          <p className="mt-1 max-w-xs text-xs text-white/50">{tier.shortDescription}</p>
+        )}
+      </div>
+    ),
+  };
+
+  const featuresColumn: TableColumn = {
+    key: "features",
+    header: "Features",
+    render: (tier) => (
+      <div className="flex max-w-md flex-wrap gap-x-4 gap-y-1">
+        {tier.features.map((feature) => (
+          <span key={feature} className="flex items-center gap-1.5 text-xs text-white/70">
+            <Check className="h-3 w-3 shrink-0 text-white/60" />
+            {feature}
+          </span>
+        ))}
+      </div>
+    ),
+  };
+
+  const specColumn = (
+    key: string,
+    header: string,
+    accessor: (parsed: ParsedSpecs) => string | undefined
+  ): TableColumn => ({
+    key,
+    header,
+    render: (tier) => renderValue(accessor(parseSpecs(tier))),
+  });
+
+  const vcpuColumn = specColumn("vcpu", "vCPU", (parsed) => parsed.vcpu);
+  const memoryColumn = specColumn("memory", "Memory", (parsed) => parsed.memory);
+  const storageColumn = specColumn("storage", "Storage", (parsed) => parsed.storage);
+  const networkColumn = specColumn("network", "Network", (parsed) => parsed.network);
+
+  const gpuColumn: TableColumn = {
+    key: "gpu",
+    header: "GPU",
+    render: (tier) => renderValue(getGpuModel(tier)),
+  };
+
+  const engineColumn: TableColumn = {
+    key: "engine",
+    header: "Engine",
+    render: (tier) => renderValue(getDatabaseEngineLabel(tier)),
+  };
+
+  const cpuTypeColumn: TableColumn = {
+    key: "cpu-type",
+    header: "CPU Type",
+    render: (tier) => renderValue(getCpuTypeDisplay(tier)),
+  };
+
+  const hourlyColumn: TableColumn = {
+    key: "hourly",
+    header: "$/hr",
+    align: "right",
+    render: (tier) => (
+      <span className="text-sm text-white/80">${formatHourly(getEffectiveMonthly(tier))}</span>
+    ),
+  };
+
+  const monthlyColumn: TableColumn = {
+    key: "monthly",
+    header: "$/month",
+    align: "right",
+    render: (tier) => (
+      <div>
+        <div className="text-base font-semibold text-white">
+          ${formatPrice(getEffectiveMonthly(tier))}
+        </div>
+        <div className="text-[10px] text-white/40">
+          {billingCycle === "monthly" ? "billed monthly" : "billed yearly"}
+        </div>
+      </div>
+    ),
+  };
+
+  const ctaColumn: TableColumn = {
+    key: "cta",
+    header: "",
+    align: "right",
+    render: (tier) => (
+      <a
+        href={tier.ctaLink}
+        className="inline-flex items-center justify-center whitespace-nowrap bg-white/10 px-3 py-2 text-xs text-white transition-colors hover:bg-white/15"
+      >
+        {tier.ctaText || tier.summary?.buttonText || "Get Started"}
+      </a>
+    ),
+  };
+
+  const columns: TableColumn[] = (() => {
+    switch (categoryId) {
+      case "compute":
+        return [planColumn, vcpuColumn, memoryColumn, storageColumn, networkColumn, hourlyColumn, monthlyColumn, ctaColumn];
+      case "gpu":
+      case "gpu-instance":
+        return [planColumn, gpuColumn, vcpuColumn, memoryColumn, storageColumn, networkColumn, hourlyColumn, monthlyColumn, ctaColumn];
+      case "database":
+        return [planColumn, engineColumn, cpuTypeColumn, storageColumn, hourlyColumn, monthlyColumn, ctaColumn];
+      case "kubernetes":
+        return [planColumn, vcpuColumn, memoryColumn, storageColumn, hourlyColumn, monthlyColumn, ctaColumn];
+      default:
+        return [planColumn, featuresColumn, hourlyColumn, monthlyColumn, ctaColumn];
+    }
+  })();
+
+  // Featured plans surface at the top of the table.
+  const orderedTiers = [...filteredTiers].sort(
+    (a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured))
+  );
 
   return (
     <div className="flex-1">
@@ -292,96 +514,6 @@ export function PricingContent({
           </div>
         )}
 
-        {featuredTier && (
-          <div className="space-y-3">
-            <p className="text-sm text-white/60">Most popular Startups</p>
-            <h3 className="text-xl md:text-2xl font-semibold">{featuredTier.name}</h3>
-            {/* featured -tier box */}
-            <div className="border border-white/10 bg-[radial-gradient(74.51%_74.08%_at_50%_50%,_#303030_0%,_#0D0D0D_100%)] p-6 md:p-8">
-              <div className="flex flex-col lg:flex-row gap-8">
-                <div className="flex-1 space-y-4">
-                  {featuredTier.shortDescription && (
-                    <p className="text-sm text-white/60 max-w-xl">
-                      {featuredTier.shortDescription}
-                    </p>
-                  )}
-                  {featuredTier.specs && featuredTier.specs.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
-                      {featuredTier.specs.map((spec, idx) => (
-                        <span key={spec} className="flex items-center">
-                          {spec}
-                          {idx < featuredTier.specs!.length - 1 && (
-                            <span className="mx-3 h-3 w-px bg-white/20" />
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-white/70">
-                    {featuredTier.features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-2">
-                        <Check className="w-3.5 h-3.5 text-white/70 mt-0.5 shrink-0" />
-                        <span>{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="lg:w-64 shrink-0">
-                  <div className="border border-white/15 bg-black/30 p-4 text-xs text-white/70">
-                    <div className="flex items-baseline justify-between mb-3">
-                      <span className="text-base text-white">{featuredTier.name}</span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between">
-                        <span>Billing</span>
-                        <span className="text-white">{featuredTier.summary?.billing || "Monthly/Yearly"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Support</span>
-                        <span className="text-white">{featuredTier.summary?.support || "Standard"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Provisioning</span>
-                        <span className="text-white">{featuredTier.summary?.provisioning || "Instant"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Guarantee</span>
-                        <span className="text-white">{featuredTier.summary?.guarantee || "60 days"}</span>
-                      </div>
-                    </div>
-                    <button className="mt-4 w-full bg-white/10 hover:bg-white/15 text-white text-xs py-2">
-                      {featuredTier.summary?.buttonText}
-                    </button>
-                    <p className="mt-2 text-[10px] text-white/40">
-                      Cancel anytime • Upgrade/downgrade instantly
-                    </p>
-                  </div>
-                  <div className="mt-4 text-right">
-                    <div className="text-2xl font-semibold">
-                      ${formatPrice(
-                        billingCycle === "monthly"
-                          ? featuredTier.price.monthly
-                          : featuredTier.price.monthly * 12
-                      )}
-                    </div>
-                    <div className="text-xs text-white/50">
-                      {billingCycle === "monthly"
-                        ? "per month billed monthly"
-                        : "per month billed yearly"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {filteredTiers.length === 0 && (
-          <div className="border border-white/10 bg-white/[0.02] px-5 py-4 text-sm text-white/70">
-            No plans match the selected filters.
-          </div>
-        )}
-
         <div className="space-y-2">
           <h3 className="text-lg md:text-xl font-semibold">
             {"Starts at just $" + (category?.startingPriceLabel ?? "$9")}
@@ -392,124 +524,54 @@ export function PricingContent({
           </p>
         </div>
 
-        <div className="space-y-3">
-          {listTiers.map((tier) => {
-            const tierId = getTierId(tier);
-            const isOpen = expandedTierId === tierId;
-            const priceValue =
-              billingCycle === "monthly"
-                ? tier.price.monthly
-                : tier.price.yearly / 12;
-
-            return (
-              <div key={tierId} className="border border-white/10 bg-white/[0.02]">
-                <button
-                  onClick={() =>
-                    setExpandedTierId((prev) => (prev === tierId ? "" : tierId))
-                  }
-                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-white">{tier.name}</p>
-                    {tier.shortDescription && (
-                      <p className="text-xs text-white/50">{tier.shortDescription}</p>
-                    )}
-                    {tier.specs && tier.specs.length > 0 && (
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-white/50">
-                        {tier.specs.map((spec, idx) => (
-                          <span key={spec} className="flex items-center">
-                            {spec}
-                            {idx < tier.specs!.length - 1 && (
-                              <span className="mx-2 h-3 w-px bg-white/20" />
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">
-                        ${formatPrice(priceValue)}
-                      </div>
-                      <div className="text-[10px] text-white/50">
-                        {billingCycle === "monthly"
-                          ? "per month billed monthly"
-                          : "per month billed yearly"}
-                      </div>
-                    </div>
-                    <ChevronDown
+        {orderedTiers.length === 0 ? (
+          <div className="border border-white/10 bg-white/[0.02] px-5 py-4 text-sm text-white/70">
+            No plans match the selected filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-white/10">
+            <table className="w-full min-w-[640px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.02]">
+                  {columns.map((column) => (
+                    <th
+                      key={column.key}
                       className={cn(
-                        "w-4 h-4 text-white/60 transition-transform duration-200",
-                        isOpen && "rotate-180"
+                        "px-4 py-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40",
+                        column.align === "right" && "text-right"
                       )}
-                    />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="border-t border-white/10 px-5 py-5">
-                    <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_0.7fr] gap-6">
-                      <div className="space-y-4">
-                        {tier.specs && tier.specs.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
-                            {tier.specs.map((spec, idx) => (
-                              <span key={spec} className="flex items-center">
-                                {spec}
-                                {idx < tier.specs!.length - 1 && (
-                                  <span className="mx-3 h-3 w-px bg-white/20" />
-                                )}
-                              </span>
-                            ))}
-                          </div>
+                    >
+                      {column.header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orderedTiers.map((tier) => (
+                  <tr
+                    key={getTierId(tier)}
+                    className={cn(
+                      "border-b border-white/[0.06] last:border-0",
+                      tier.isFeatured && "bg-white/[0.03]"
+                    )}
+                  >
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={cn(
+                          "px-4 py-4 align-middle text-sm text-white/80",
+                          column.align === "right" && "text-right"
                         )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-white/70">
-                          {tier.features.map((feature) => (
-                            <div key={feature} className="flex items-start gap-2">
-                              <Check className="w-3.5 h-3.5 text-white/70 mt-0.5 shrink-0" />
-                              <span>{feature}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      {tier.summary && (
-                        <div className="border border-white/15 bg-black/30 p-4 text-xs text-white/70">
-                          <div className="flex items-baseline justify-between mb-3">
-                            <span className="text-base text-white">{tier.name}</span>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span>Billing</span>
-                              <span className="text-white">{tier?.summary?.billing||"Monthly/Yearly"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Support</span>
-                              <span className="text-white">{tier?.summary?.support||"Standard"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Provisioning</span>
-                              <span className="text-white">{tier.summary.provisioning||"Instant"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Guarantee</span>
-                              <span className="text-white">{tier.summary.guarantee||"60 days"}</span>
-                            </div>
-                          </div>
-                          <button className="mt-4 w-full bg-white/10 hover:bg-white/15 text-white text-xs py-2">
-                            {tier.summary.buttonText}
-                          </button>
-                          <p className="mt-2 text-[10px] text-white/40">
-                            Cancel anytime • Upgrade/downgrade instantly
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                      >
+                        {column.render(tier)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

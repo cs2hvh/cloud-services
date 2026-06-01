@@ -18,7 +18,7 @@ const SECURITY_TOOL_VERSIONS = {
  * 
  * CURRENT JENKINS POD TEMPLATE "common-agent":
  * - Defined at: Jenkins → Manage Jenkins → Clouds → linode-kube → common-agent
- * - Pod spec includes: git, kaniko, kubectl, trivy, jnlp (auto-added)
+ * - Pod spec includes: git, buildkit, kubectl, trivy, jnlp (auto-added)
  */
 
 const JENKINS_CONTAINERS = {
@@ -33,15 +33,15 @@ const JENKINS_CONTAINERS = {
     purpose: 'Git operations, shell scripting',
     usedBySecurityStages: ['SECRET-SCAN', 'DEPENDENCY-SCAN', 'DOCKERFILE-LINT', 'STATIC-ANALYSIS', 'K8S-VALIDATION'],
   },
-  kaniko: {
-    name: 'kaniko',
-    image: 'gcr.io/kaniko-project/executor:v1.24.0-debug',
+  buildkit: {
+    name: 'buildkit',
+    image: 'moby/buildkit:latest',
     inJenkins: true,
     resources: {
-      requests: { memory: '3Gi', cpu: '500m' },
-      limits: { memory: '5Gi', cpu: '1' },
+      requests: { memory: '1.5Gi', cpu: '500m' },
+      limits: { memory: '2Gi', cpu: '1' },
     },
-    purpose: 'Docker image building (rootless)',
+    purpose: 'Docker image building with layer caching (BuildKit)',
     usedBySecurityStages: [],
   },
   kubectl: {
@@ -60,7 +60,7 @@ const JENKINS_CONTAINERS = {
     image: 'aquasec/trivy:0.48.0',
     inJenkins: true,
     resources: {
-      requests: { memory: '512Mi', cpu: '250m' },
+      requests: { memory: '256Mi', cpu: '100m' },
       limits: { memory: '1Gi', cpu: '500m' },
     },
     purpose: 'Container image vulnerability scanning',
@@ -323,7 +323,7 @@ const defaultConfig: SecurityConfig = {
  * Runs AFTER Docker image is built, BEFORE deployment
  * Uses dedicated 'trivy' container from Jenkins pod template (1Gi memory)
  */
-export function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}): string {
+function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}): string {
   const { failOnCritical = false, failOnHigh = false } = config;
   
   // Determine severity levels based on config
@@ -440,7 +440,7 @@ ${generateLoggingHelpers()}
  * Generate dependency vulnerability scan stage
  * Runs BEFORE Docker build to catch issues early
  */
-export function generateDependencyScanStage(language: 'node' | 'python' | 'docker'): string {
+function generateDependencyScanStage(language: 'node' | 'python' | 'docker'): string {
   // Generic dependency scan - auto-detect package manager
   if (language === 'docker') {
     return `
@@ -717,7 +717,7 @@ ${generateLoggingHelpers()}
  * Generate Dockerfile linting stage (Hadolint)
  * Works for BOTH user-provided and auto-generated Dockerfiles
  */
-export function generateDockerfileLintStage(): string {
+function generateDockerfileLintStage(): string {
   const hadolintVersion = SECURITY_TOOL_VERSIONS.hadolint.version;
   const hadolintSha256 = SECURITY_TOOL_VERSIONS.hadolint.sha256;
   
@@ -854,7 +854,7 @@ ${generateLoggingHelpers()}
  * - Users can add .gitleaks.toml to exclude specific patterns
  * - Platform business > false positive blocking
  */
-export function generateSecretScanStage(): string {
+function generateSecretScanStage(): string {
   const gitleaksVersion = SECURITY_TOOL_VERSIONS.gitleaks.version;
   const gitleaksSha256 = SECURITY_TOOL_VERSIONS.gitleaks.sha256;
   
@@ -1006,7 +1006,7 @@ TOML_EOF
  * Generate static code analysis stage (ESLint for Node, pylint for Python)
  * Checks for code quality and potential security issues
  */
-export function generateStaticAnalysisStage(language: 'node' | 'python' | 'docker'): string {
+function generateStaticAnalysisStage(language: 'node' | 'python' | 'docker'): string {
   // Generic security checks for unknown languages (works for Go, Rust, Elixir, PHP, Java, Ruby, etc.)
   if (language === 'docker') {
     return `
@@ -1268,7 +1268,7 @@ ${generateLoggingHelpers()}
  * Generate Kubernetes manifest validation stage (kubesec)
  * Checks for security misconfigurations in K8s manifests
  */
-export function generateK8sManifestValidationStage(): string {
+function generateK8sManifestValidationStage(): string {
   return `
     stage('Security: K8s Manifest Validation') {
       steps {
@@ -1451,4 +1451,5 @@ export function getContainerUsageReport() {
     recommendations,
   };
 }
+
 

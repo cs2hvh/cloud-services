@@ -133,10 +133,15 @@ export const createPlatformAppSchema = z.object({
   project_id: z.string().uuid("Project ID must be a valid UUID").optional(),
   
   env_vars: envVarListSchema.optional().default([]),
-  size: z.enum(["small", "medium", "large"]).optional().default("small"),
+  size: z.enum(["small", "medium", "large", "xlarge", "xxlarge"]).optional().default("small"),
   auto_deploy: z.boolean().optional().default(false),
   deploy_branch: z.string().optional(),
   container_port: z.number().int().min(1).max(65535).optional(),
+  healthcheck_path: z
+    .string()
+    .regex(/^\//, "Health check path must start with /")
+    .max(255, "Health check path must be at most 255 characters")
+    .optional(),
 });
 
 export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;
@@ -207,8 +212,8 @@ export type RollbackPlatformAppPayload = z.infer<typeof rollbackPlatformAppSchem
 
 export const resizePlatformAppSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
-  new_size: z.enum(["small", "medium", "large"], {
-    errorMap: () => ({ message: "Size must be small, medium, or large" }),
+  new_size: z.enum(["small", "medium", "large", "xlarge", "xxlarge"], {
+    errorMap: () => ({ message: "Size must be small, medium, large, xlarge, or xxlarge" }),
   }),
   container_port: z.number().int().min(1).max(65535).optional(),
 });

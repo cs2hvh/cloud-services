@@ -1,254 +1,323 @@
 "use client";
 
-import { motion } from "motion/react";
+// DatabaseControlPlaneSection — "Managed clusters, not hosted VMs"
+// Editorial 2x2 capability grid with per-card mini-visuals, plus a
+// realistic deploy-snippet panel below. Replaces the noisy cluster
+// topology diagram that read AI-generated.
+
 import {
-  Activity,
-  GitBranch,
-  Lock,
-  TimerReset,
+    Activity,
+    Check,
+    GitBranch,
+    Lock,
+    TimerReset,
+    type LucideIcon,
 } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
-const PLATFORM_SIGNALS = [
-  {
-    icon: TimerReset,
-    title: "Backups and recovery stay operational by default",
-    description: "Daily snapshots, retention policies, and point-in-time restore are handled at the platform layer.",
-  },
-  {
-    icon: GitBranch,
-    title: "Failover and replicas are built into the topology",
-    description: "Primary nodes, read replicas, and standby paths are designed as one managed cluster surface.",
-  },
-  {
-    icon: Lock,
-    title: "Networking and encryption are part of the deploy path",
-    description: "Private access, TLS, and encrypted storage are exposed as product defaults instead of add-ons.",
-  },
-  {
-    icon: Activity,
-    title: "Observability ships with the cluster",
-    description: "Health signals, lag, storage, and connection behavior are visible without external setup.",
-  },
-];
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
-const EVENT_STREAM = [
-  { label: "Replica sync healthy", detail: "Lag below 50 ms", tone: "blue" },
-  { label: "Snapshot policy active", detail: "PITR window protected", tone: "white" },
-  { label: "Private network attached", detail: "Ingress locked to trusted sources", tone: "white" },
-];
+type Capability = {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+    bullets: string[];
+    /** Renders a per-card visual element inside the card. */
+    visual: React.ReactNode;
+};
 
-function ClusterNode({
-  className,
-  eyebrow,
-  title,
-  detail,
-  pulse = false,
-}: {
-  className: string;
-  eyebrow: string;
-  title: string;
-  detail: string;
-  pulse?: boolean;
-}) {
-  return (
-    <motion.div
-      className={`absolute border border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.015))] px-3 py-3 backdrop-blur-sm ${className}`}
-      initial={{ opacity: 0, y: 14 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.45 }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38">
-            {eyebrow}
-          </div>
-          <div className="mt-1 text-[13px] font-medium leading-snug text-white">
-            {title}
-          </div>
-          <div className="mt-1 text-[11px] leading-5 text-white/48">
-            {detail}
-          </div>
+// ─── Per-card mini-visuals ─────────────────────────────────────
+
+function BackupsVisual() {
+    // 14-day snapshot timeline with the latest 7 highlighted
+    return (
+        <div className="flex items-end gap-[3px] h-10">
+            {Array.from({ length: 14 }).map((_, i) => {
+                const recent = i >= 7;
+                const heights = [12, 18, 14, 20, 16, 22, 17, 21, 19, 24, 18, 26, 22, 28];
+                return (
+                    <div
+                        key={i}
+                        className="flex-1 rounded-[1px]"
+                        style={{
+                            height: `${heights[i]}px`,
+                            background: recent
+                                ? "rgba(255,255,255,0.85)"
+                                : "rgba(255,255,255,0.18)",
+                        }}
+                    />
+                );
+            })}
         </div>
-        <span
-          className={`mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-[#0095FF] shadow-[0_0_18px_rgba(0,149,255,0.5)] ${
-            pulse ? "animate-pulse" : ""
-          }`}
-        />
-      </div>
-    </motion.div>
-  );
+    );
 }
 
-export default function DatabaseControlPlaneSection() {
-  return (
-    <section className="relative overflow-hidden bg-black py-16 lg:py-24">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.05),transparent_20%),radial-gradient(circle_at_82%_16%,rgba(0,149,255,0.08),transparent_20%),linear-gradient(180deg,#000000_0%,#05070b_48%,#000000_100%)]" />
-      </div>
-
-      <Container>
-        <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/52">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-            Managed Cluster Control Plane
-          </span>
-          <h2 className="mt-5 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
-            <span className="text-[#8ecaff]">Managed clusters</span>, not hosted VMs
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/52 lg:text-[15px]">
-            Backups, replicas, failover, and private access in one operating layer.
-          </p>
-        </div>
-
-        <div className="mt-14 grid gap-10 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] lg:gap-12">
-          <div>
-            <div className="space-y-6">
-              {PLATFORM_SIGNALS.map((signal) => (
-                <div key={signal.title} className="border-b border-white/[0.08] pb-6 last:border-b-0 last:pb-0">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/[0.08] bg-white/[0.03]">
-                      <signal.icon className="h-5 w-5 text-[#8ecaff]" />
-                    </div>
-                    <div>
-                      <h3 className="text-[16px] font-medium tracking-tight text-white">{signal.title}</h3>
-                      <p className="mt-2 text-[13px] leading-6 text-white/48">{signal.description}</p>
-                    </div>
-                  </div>
+function HaVisual() {
+    // Simple primary + 2 replicas topology
+    return (
+        <div className="flex items-center justify-between gap-3 h-10">
+            <div className="flex flex-col items-center gap-1">
+                <div className="h-6 w-6 rounded-[3px] border border-white/40 bg-white/[0.08] flex items-center justify-center">
+                    <span className={`${MONO} text-[8px] font-bold text-white/90`}>
+                        P
+                    </span>
                 </div>
-              ))}
-            </div>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {[
-                { label: "Backup policy", value: "Daily + PITR" },
-                { label: "Replication", value: "Read replicas" },
-                { label: "Access model", value: "Private by default" },
-              ].map((item) => (
-                <div key={item.label} className="border border-white/[0.08] bg-white/[0.02] px-4 py-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/34">{item.label}</div>
-                  <div className="mt-2 text-[15px] font-medium text-white/84">{item.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="border border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-4 sm:p-5">
-            <div className="flex flex-wrap items-center gap-2">
-              {["Encrypted at rest", "Replica-aware", "Failover ready"].map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-white/58"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                  {item}
+                <span className={`${MONO} text-[7.5px] uppercase tracking-[0.1em] text-white/45`}>
+                    Primary
                 </span>
-              ))}
             </div>
-
-            <div className="relative mt-5 aspect-[1.22/1] overflow-hidden border border-white/[0.07] bg-[#090b0f]">
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.05]"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(rgba(255,255,255,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.7) 1px, transparent 1px)",
-                  backgroundSize: "56px 56px",
-                }}
-              />
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(0,149,255,0.18),transparent_18%),radial-gradient(circle_at_28%_72%,rgba(255,255,255,0.06),transparent_20%)]" />
-
-              <svg
-                viewBox="0 0 1000 720"
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                aria-hidden="true"
-                preserveAspectRatio="none"
-              >
-                {[
-                  "M170 145 H370",
-                  "M500 190 V330",
-                  "M570 368 H760",
-                  "M500 420 L220 570",
-                  "M620 368 L820 188",
-                ].map((path) => (
-                  <path
-                    key={path}
-                    d={path}
-                    fill="none"
-                    stroke="rgba(142,202,255,0.35)"
-                    strokeWidth="2"
-                    strokeDasharray="8 10"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      from="36"
-                      to="0"
-                      dur="3.2s"
-                      repeatCount="indefinite"
-                    />
-                  </path>
+            <div className="flex-1 h-px bg-white/15" />
+            <div className="flex gap-2">
+                {["R1", "R2"].map((r) => (
+                    <div key={r} className="flex flex-col items-center gap-1">
+                        <div className="h-6 w-6 rounded-[3px] border border-white/20 bg-white/[0.03] flex items-center justify-center">
+                            <span className={`${MONO} text-[8px] font-medium text-white/65`}>
+                                {r}
+                            </span>
+                        </div>
+                        <span className={`${MONO} text-[7.5px] uppercase tracking-[0.1em] text-white/35`}>
+                            sync
+                        </span>
+                    </div>
                 ))}
-              </svg>
-
-              <ClusterNode
-                className="left-[6%] top-[10%] w-[27%]"
-                eyebrow="Application traffic"
-                title="Private clients and services"
-                detail="App traffic enters through trusted sources, internal networks, and service identities."
-              />
-              <ClusterNode
-                className="left-[38%] top-[10%] w-[24%]"
-                eyebrow="Routing layer"
-                title="Connection pooler"
-                detail="Manages client sessions and smooths spikes before they hit the primary node."
-                pulse
-              />
-              <ClusterNode
-                className="left-[34%] top-[45%] w-[28%]"
-                eyebrow="Primary cluster"
-                title="Write node"
-                detail="Handles transactions, backups, health checks, and coordinated engine operations."
-                pulse
-              />
-              <ClusterNode
-                className="left-[70%] top-[42%] w-[24%]"
-                eyebrow="Read scaling"
-                title="Replica group"
-                detail="Replica capacity is exposed for read-heavy apps, analytics, and regional workloads."
-              />
-              <ClusterNode
-                className="left-[8%] top-[72%] w-[29%]"
-                eyebrow="Recovery path"
-                title="Snapshot and PITR vault"
-                detail="Recovery points remain attached to the cluster lifecycle instead of separate scripts."
-              />
-              <ClusterNode
-                className="left-[72%] top-[12%] w-[22%]"
-                eyebrow="Observability"
-                title="Metrics and alerts"
-                detail="Lag, storage, CPU, and replication health stay visible as first-party signals."
-              />
             </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {EVENT_STREAM.map((event) => (
-                <div key={event.label} className="border border-white/[0.08] bg-white/[0.02] px-4 py-4">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        event.tone === "blue" ? "bg-[#0095FF]" : "bg-white/70"
-                      }`}
-                    />
-                    <div className="text-[12px] font-medium text-white/82">{event.label}</div>
-                  </div>
-                  <div className="mt-2 text-[11px] leading-5 text-white/42">{event.detail}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
-      </Container>
-    </section>
-  );
+    );
+}
+
+function SecurityVisual() {
+    // Concentric layers showing private network → TLS → cluster
+    return (
+        <div className="flex items-center gap-2 h-10">
+            {[
+                { label: "VPC", opacity: 0.18 },
+                { label: "TLS", opacity: 0.3 },
+                { label: "AES", opacity: 0.45 },
+                { label: "DB", opacity: 0.85 },
+            ].map((layer) => (
+                <div
+                    key={layer.label}
+                    className="flex-1 flex items-center justify-center rounded-[3px] border border-white/15 h-8"
+                    style={{ background: `rgba(255,255,255,${layer.opacity * 0.06})` }}
+                >
+                    <span
+                        className={`${MONO} text-[9px] font-semibold uppercase tracking-[0.1em]`}
+                        style={{ color: `rgba(255,255,255,${layer.opacity * 1.05})` }}
+                    >
+                        {layer.label}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function MetricsVisual() {
+    // Sparkline mini-chart
+    const points = [22, 28, 24, 32, 26, 36, 30, 40, 34, 38, 32, 44, 38, 42];
+    const max = Math.max(...points);
+    const w = 240;
+    const h = 40;
+    const step = w / (points.length - 1);
+    const path = points
+        .map((p, i) => `${i === 0 ? "M" : "L"}${i * step},${h - (p / max) * h}`)
+        .join(" ");
+    return (
+        <svg
+            viewBox={`0 0 ${w} ${h}`}
+            preserveAspectRatio="none"
+            className="w-full h-10"
+            aria-hidden="true"
+        >
+            <defs>
+                <linearGradient id="ctrl-spark-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                </linearGradient>
+            </defs>
+            <path d={`${path} L${w},${h} L0,${h} Z`} fill="url(#ctrl-spark-fill)" />
+            <path d={path} stroke="rgba(255,255,255,0.85)" strokeWidth="1.4" fill="none" />
+            {points.map((p, i) => (
+                <circle
+                    key={i}
+                    cx={i * step}
+                    cy={h - (p / max) * h}
+                    r={i === points.length - 1 ? 2.2 : 0.8}
+                    fill={i === points.length - 1 ? "#ffffff" : "rgba(255,255,255,0.5)"}
+                />
+            ))}
+        </svg>
+    );
+}
+
+const CAPABILITIES: Capability[] = [
+    {
+        icon: TimerReset,
+        title: "Backups & point-in-time recovery",
+        description:
+            "Automatic daily snapshots with up to 35-day point-in-time recovery. Restore to any second within your window.",
+        bullets: [
+            "Daily snapshots, 7-day retention by default",
+            "PITR up to 35 days on Pro / Enterprise",
+            "One-click restore to a fork or in place",
+        ],
+        visual: <BackupsVisual />,
+    },
+    {
+        icon: GitBranch,
+        title: "Multi-AZ high availability",
+        description:
+            "Synchronous primary with cross-zone standbys. Automatic failover in under 60 seconds, with no data loss.",
+        bullets: [
+            "Synchronous replication across zones",
+            "Sub-60-second automatic failover",
+            "Up to 15 read replicas with load balancing",
+        ],
+        visual: <HaVisual />,
+    },
+    {
+        icon: Lock,
+        title: "Private by default",
+        description:
+            "TLS in transit, AES-256 at rest, and VPC peering on every paid cluster. Public access is opt-in, never on by default.",
+        bullets: [
+            "TLS 1.3 endpoints + AES-256 storage",
+            "VPC peering with AWS, GCP, Azure",
+            "IP allowlists + role-based access",
+        ],
+        visual: <SecurityVisual />,
+    },
+    {
+        icon: Activity,
+        title: "Observability built in",
+        description:
+            "Query stats, slow log, replication lag, and connection metrics in the dashboard — no agents, no extra cost.",
+        bullets: [
+            "Slow query log + query statistics",
+            "Replication lag, storage, CPU, IOPS",
+            "Prometheus export for your own stack",
+        ],
+        visual: <MetricsVisual />,
+    },
+];
+
+function CapabilityCard({ c, index }: { c: Capability; index: number }) {
+    const Icon = c.icon;
+    return (
+        <article
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[linear-gradient(180deg,rgba(0,149,255,0.08),rgba(0,149,255,0.03))] p-7 transition-colors hover:border-white/[0.22] hover:bg-[linear-gradient(180deg,rgba(0,149,255,0.12),rgba(0,149,255,0.05))]"
+            style={{
+                boxShadow:
+                    "inset 0 1px 0 rgba(0,149,255,0.12), 0 12px 32px -14px rgba(0,149,255,0.25)",
+            }}
+        >
+            <div className="flex items-start justify-between">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/80">
+                    <Icon className="h-5 w-5" strokeWidth={1.6} />
+                </div>
+                <span
+                    className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+                >
+                    {String(index + 1).padStart(2, "0")}
+                </span>
+            </div>
+
+            <div>
+                <h3 className="text-[18px] font-semibold leading-[1.25] tracking-[-0.01em] text-white">
+                    {c.title}
+                </h3>
+                <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
+                    {c.description}
+                </p>
+            </div>
+
+            {/* Per-card mini-visual */}
+            <div className="rounded-[5px] border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                {c.visual}
+            </div>
+
+            {/* Bullets */}
+            <ul className="space-y-2">
+                {c.bullets.map((b) => (
+                    <li
+                        key={b}
+                        className="flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-white/70"
+                    >
+                        <Check
+                            className="mt-[3px] h-3.5 w-3.5 shrink-0 text-white/55"
+                            strokeWidth={2.2}
+                        />
+                        {b}
+                    </li>
+                ))}
+            </ul>
+        </article>
+    );
+}
+
+// ─── Section ───────────────────────────────────────────────────
+
+export default function DatabaseControlPlaneSection() {
+    return (
+        <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
+            {/* Top hairline */}
+            <div
+                aria-hidden="true"
+                className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            />
+
+            <Container className="relative z-10">
+                {/* Header */}
+                <div className="mx-auto max-w-[760px] text-center">
+                    <p
+                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                    >
+                        The control plane
+                    </p>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
+                        Managed clusters, not hosted VMs
+                    </h2>
+                    <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16.5px]">
+                        Backups, failover, encryption, and observability ship as
+                        product defaults — not scripts you cobble together after
+                        provisioning a server. One command, fully managed.
+                    </p>
+                </div>
+
+                {/* 2x2 capability grid with mini-visuals */}
+                <div className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+                    {CAPABILITIES.map((c, i) => (
+                        <CapabilityCard key={c.title} c={c} index={i} />
+                    ))}
+                </div>
+
+                {/* Bottom stat strip */}
+                <div className="mx-auto mt-12 grid max-w-[920px] grid-cols-2 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-4">
+                    {[
+                        { value: "<60s", label: "Failover" },
+                        { value: "35d", label: "PITR window" },
+                        { value: "15", label: "Read replicas" },
+                        { value: "6", label: "Engines" },
+                    ].map((s) => (
+                        <div
+                            key={s.label}
+                            className="flex flex-col items-center gap-2 bg-[#0D0D0F] px-4 py-5"
+                        >
+                            <span
+                                className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-white sm:text-[26px]`}
+                            >
+                                {s.value}
+                            </span>
+                            <span
+                                className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50`}
+                            >
+                                {s.label}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </Container>
+        </section>
+    );
 }

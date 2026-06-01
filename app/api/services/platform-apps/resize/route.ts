@@ -18,18 +18,20 @@ import {
   resolveBuildBackedOperationState,
 } from "@/lib/app-operations";
 
-// Size order for validation (upsize only)
 const SIZE_ORDER: Record<string, number> = {
   small: 1,
   medium: 2,
   large: 3,
+  xlarge: 4,
+  "xxlarge": 5,
 };
 
-// Size specifications for display/logging
 const SIZE_SPECS: Record<string, { cpu: string; memory: string; replicas: number }> = {
-  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1 },
-  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2 },
-  large: { cpu: "2 CPU", memory: "2GB", replicas: 3 },
+  small:     { cpu: "0.25 CPU", memory: "256 MB", replicas: 1 },
+  medium:    { cpu: "0.5 CPU",  memory: "512 MB", replicas: 2 },
+  large:     { cpu: "1 CPU",    memory: "1 GB",   replicas: 3 },
+  xlarge:    { cpu: "2 CPU",    memory: "2 GB",   replicas: 4 },
+  "xxlarge": { cpu: "4 CPU",    memory: "4 GB",   replicas: 6 },
 };
 
 /**
@@ -75,12 +77,11 @@ export async function POST(req: NextRequest) {
     const app = existing.data;
 
     const currentSize = app.size || "small";
-    // Validate upsize only
     if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
       return NextResponse.json(
-        { 
+        {
           error: "Invalid resize operation",
-          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is allowed.`,
+          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is supported.`,
           current_size: currentSize,
           requested_size: new_size,
         },
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Balance check — verify user can afford the new tier's hourly rate
-    const balanceCheck = await PlatformAppService.checkBalanceForResize(auth.user!.id, new_size as "small" | "medium" | "large");
+    const balanceCheck = await PlatformAppService.checkBalanceForResize(auth.user!.id, new_size);
     if (!balanceCheck.ok) {
       return NextResponse.json(
         {
@@ -120,8 +121,8 @@ export async function POST(req: NextRequest) {
         appStatus: app.status,
         appFailureReason:
           typeof app.last_failure_reason === "string" ? app.last_failure_reason : null,
-        currentSize: currentSize as 'small' | 'medium' | 'large',
-        targetSize: new_size as 'small' | 'medium' | 'large',
+        currentSize: currentSize as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge',
+        targetSize: new_size as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge',
         idempotencyKey: getIdempotencyKey(req.headers),
         onBeforeTrigger: async () => {
           const runtimeSync = await reconcileRuntimeEnv({
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest) {
             app.port ?? undefined,
             app.framework ?? undefined,
             operationId,
+            app.healthcheck_path ?? undefined,
           );
 
           // Trigger the resize job (separate from the main app build job)
@@ -232,8 +234,8 @@ export async function POST(req: NextRequest) {
           operationId: operation.operation.id,
           trigger: 'resize',
           resizeContext: {
-            previousSize: currentSize as 'small' | 'medium' | 'large',
-            targetSize: new_size as 'small' | 'medium' | 'large',
+            previousSize: currentSize as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge',
+            targetSize: new_size as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge',
           },
         });
       } catch (pollingError) {

@@ -114,7 +114,12 @@ const CloudService = () => {
         </div>
       </div> */}
       <ServicesHomeSectionFour plans={plans}/>
-      <ServicesHomeSectionSix cases={cases}/>
+      <ServicesHomeSectionSix
+        cases={cases}
+        eyebrow="Use cases"
+        heading="Security primitives, wired"
+        headingAccent="into every stack."
+      />
     </main>
   )
 }

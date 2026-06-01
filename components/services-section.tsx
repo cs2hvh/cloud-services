@@ -6,54 +6,62 @@ import { Container } from "@/components/ui/container";
 
 const figmaServices = [
   {
-    logoSrc: "/images/main-page/compute.png",
+    logoSrc: "/services-icon/COMPUTE .png",
     logoAlt: "Compute",
     title: "Compute",
     description:
       "Elastic virtual machines across 12 global regions. Scale from a single core to hundreds of vCPUs with predictable pricing.",
   },
   {
-    logoSrc: "/images/main-page/gpu aniamtion resized.png",
+    logoSrc: "/services-icon/GPU INSTANCES .png",
     logoAlt: "GPU Instances",
     title: "GPU Instances",
     description:
       "High-performance NVIDIA GPUs on demand. Train models, run inference, and accelerate compute-heavy workloads with bare-metal speed.",
   },
-  {
-    logoSrc: "/images/Features/database.png",
+
+ {
+    logoSrc: "/services-icon/iNFERENCE .png",
+    logoAlt: "A.I. Labs",
+    title: "A.I. Labs",
+    description:
+      "OpenAI-compatible inference for 50+ models. Fine-tune, embed, and host your own on dedicated GPUs — one API key for everything.",
+  },
+   {
+    logoSrc: "/services-icon/MANAGED DATABASE .png",
     logoAlt: "Managed Database",
     title: "Managed Database",
     description:
       "Fully managed PostgreSQL, MySQL, and Redis clusters with automated backups, failover, and point-in-time recovery built in.",
   },
-  {
-    logoSrc: "/images/Features/protection.png",
-    logoAlt: "DDoS Protection",
-    title: "DDoS Protection",
+   {
+    logoSrc: "/services-icon/APPLICATION DEPLOYMENT.png",
+    logoAlt: "App Deployment",
+    title: "App Deployment",
     description:
-      "Enterprise-grade threat mitigation at the edge. Always-on L3/L4/L7 protection that absorbs attacks before they reach your stack.",
+      "Git-push deployments to 100+ edge locations. Preview environments, automatic SSL, and instant rollbacks — zero config required.",
   },
   {
-    logoSrc: "/images/Features/ai-agent.png",
-    logoAlt: "AI Agents",
-    title: "AI Agents",
-    description:
-      "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
-  },
-  {
-    logoSrc: "/images/main-page/kubernetes.png",
+    logoSrc: "/services-icon/KUUBERNETS .png",
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
       "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
   },
   {
-    logoSrc: "/images/main-page/object-space.png",
+    logoSrc: "/services-icon/OBJECT STORAGE .png",
     logoAlt: "Object Storage",
     title: "Object Storage",
     description:
       "S3-compatible storage with 11 nines durability. Store, serve, and manage petabytes of data with predictable, low-cost pricing.",
   },
+  //  {
+  //   logoSrc: "/images/main-page/kubernetes.png",
+  //   logoAlt: "Kubernetes",
+  //   title: "Kubernetes",
+  //   description:
+  //     "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
+  // },
 ];
 
 const cardEntrance = {

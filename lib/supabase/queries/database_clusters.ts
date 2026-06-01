@@ -53,6 +53,19 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
+  update_pgvector_applied: async (clusterId: string) => {
+    const supabase = await createWorkerClient();
+    const { error } = await supabase
+      .from("database_cluster")
+      .update({ pgvector_applied_at: new Date().toISOString() })
+      .eq("id", clusterId);
+    if (error) {
+      console.error("[update_pgvector_applied] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  },
+
   update_status: async (
     cluster_id: string,
     status: string,

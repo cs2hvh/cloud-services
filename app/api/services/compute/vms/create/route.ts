@@ -2,11 +2,21 @@ import { NextRequest, after } from "next/server";
 import { Agent as UndiciAgent } from "undici";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
-import { addHostRoute } from "@/lib/proxmox-utils";
+import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
+import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
+import { postProvisionBilling } from "@/config/billing-flow";
+import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
+import { pickBestStorage } from "@/lib/proxmox/storage-picker";
+import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
+import { computeHostAvailability } from "@/lib/pricing/instance-plans";
+import {
+  findAvailableCustomImageByName,
+  ensureCustomTemplateOnHost,
+} from "@/lib/services/compute/custom-images";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +38,17 @@ interface DbReservation {
   error: string | null;
 }
 
+type ProxmoxFormValue = string | number | boolean | Array<string | number | boolean>;
+
 interface PoolItem {
   ip: string;
   mac?: string;
   poolId: number;
+  label?: string | null;
+  // When the host is in vMAC failover mode AND this IP comes from the
+  // routed BYOIP pool (i.e. no vMAC bound yet), we'll mint one via the
+  // OVH API after winning the IP lock and before VM creation.
+  needsVmac?: boolean;
 }
 
 function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
@@ -40,6 +57,15 @@ function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
     p.then((v) => { clearTimeout(id); resolve(v); })
      .catch((e) => { clearTimeout(id); reject(e); });
   });
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    const causeMessage = cause instanceof Error ? `: ${cause.message}` : cause ? `: ${String(cause)}` : "";
+    return `${error.message}${causeMessage}`;
+  }
+  return String(error);
 }
 
 type HostConfig = {
@@ -58,6 +84,14 @@ type HostConfig = {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  provider?: string | null;
+  server_series?: string | null;
+  network_mode?: string | null;
+  vm_private_cidr?: string | null;
+  vm_private_gateway?: string | null;
+  vm_private_ip_start?: number | null;
+  public_prefix_length?: number | null;
+  snippet_storage?: string | null;
 };
 
 async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig): Promise<ProxmoxAuthHeaders> {
@@ -70,16 +104,21 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
   if (rawUsername && password) {
     const username = rawUsername.includes("@") ? rawUsername : `${rawUsername}@pam`;
     const body = new URLSearchParams({ username, password });
-  const ticketRes = await withTimeout(
-    fetch(`${apiBase}/api2/json/access/ticket`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  let ticketRes: Response;
+  try {
+    ticketRes = await withTimeout(
+      fetch(`${apiBase}/api2/json/access/ticket`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        redirect: "follow",
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`Proxmox login request failed: ${errorMessage(error)}`);
+  }
   if (!ticketRes.ok) {
     const t = await ticketRes.text();
     throw new Error(`login failed (${ticketRes.status}): ${t}`);
@@ -113,15 +152,20 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
 }
 
 async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
-  const res = await withTimeout(
-    fetch(`${apiBase}${path}`, {
-      cache: "no-store",
-      redirect: "follow",
-      headers: init?.headers || {},
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  let res: Response;
+  try {
+    res = await withTimeout(
+      fetch(`${apiBase}${path}`, {
+        cache: "no-store",
+        redirect: "follow",
+        headers: init?.headers || {},
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`${path} request failed: ${errorMessage(error)}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${path} failed (${res.status}): ${text}`);
@@ -129,24 +173,145 @@ async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeader
   return res.json();
 }
 
-async function postForm<T = unknown>(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<T> {
+async function postForm<T = unknown>(apiBase: string, path: string, form: Record<string, ProxmoxFormValue>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<T> {
   const body = new URLSearchParams();
-  Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
-  const res = await withTimeout(
-    fetch(`${apiBase}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
+  Object.entries(form).forEach(([k, v]) => {
+    if (Array.isArray(v)) {
+      v.forEach((item) => body.append(k, String(item)));
+    } else {
+      body.append(k, String(v));
+    }
+  });
+  let res: Response;
+  try {
+    res = await withTimeout(
+      fetch(`${apiBase}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
+        body,
+        redirect: "follow",
+        // @ts-expect-error undici dispatcher
+        dispatcher,
+      })
+    );
+  } catch (error) {
+    throw new Error(`${path} request failed: ${errorMessage(error)}`);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${path} failed (${res.status}): ${text}`);
   }
   return res.json() as Promise<T>;
+}
+
+function buildLinuxGuestNetworkScript(args: {
+  publicIp: string;
+  privateIp: string;
+  privatePrefixLength: number;
+  privateGateway: string;
+  dnsPrimary: string;
+  dnsSecondary: string;
+}): string {
+  return [
+    "set -eu",
+    `PUB='${args.publicIp}'`,
+    `PRIV='${args.privateIp}'`,
+    `PREFIX='${args.privatePrefixLength}'`,
+    `GW='${args.privateGateway}'`,
+    `DNS1='${args.dnsPrimary}'`,
+    `DNS2='${args.dnsSecondary}'`,
+    "DEV=$(ip -o link show | awk -F': ' '$2 != \"lo\" && $0 ~ /link\\/ether/ {print $2; exit}')",
+    "[ -n \"$DEV\" ]",
+    "ip link set \"$DEV\" up",
+    "ip addr flush dev \"$DEV\" scope global || true",
+    "ip addr replace \"$PRIV/$PREFIX\" dev \"$DEV\"",
+    "ip addr replace \"$PUB/32\" dev \"$DEV\"",
+    "ip route replace default via \"$GW\" dev \"$DEV\" onlink src \"$PUB\"",
+    "if [ -d /etc/netplan ]; then",
+    "  mkdir -p /etc/netplan /etc/cloud/cloud.cfg.d",
+    "  cat > /etc/netplan/99-byoip.yaml <<NETEOF",
+    "network:",
+    "  version: 2",
+    "  ethernets:",
+    "    ${DEV}:",
+    "      match:",
+    "        name: \"${DEV}\"",
+    "      addresses:",
+    "        - ${PRIV}/${PREFIX}",
+    "        - ${PUB}/32",
+    "      nameservers:",
+    "        addresses:",
+    "          - ${DNS1}",
+    "          - ${DNS2}",
+    "      routes:",
+    "        - to: default",
+    "          via: ${GW}",
+    "          on-link: true",
+    "          from: ${PUB}",
+    "NETEOF",
+    "  chmod 600 /etc/netplan/99-byoip.yaml",
+    "  rm -f /etc/netplan/50-cloud-init.yaml",
+    "  echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg",
+    "  netplan generate",
+    "  netplan apply || true",
+    "fi",
+    "systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true",
+    "ip -4 addr show \"$DEV\"",
+    "ip route",
+  ].join("\n");
+}
+
+async function configureLinuxNetworkViaGuestAgent(args: {
+  apiBase: string;
+  node: string;
+  vmid: number;
+  auth: ProxmoxAuthHeaders;
+  dispatcher?: UndiciAgent;
+  script: string;
+  timeoutMs?: number;
+}): Promise<void> {
+  const timeoutMs = args.timeoutMs ?? 180000;
+  const start = Date.now();
+  let lastError = "";
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const exec = await postForm<ProxmoxResponse<{ pid?: number }>>(
+        args.apiBase,
+        `/api2/json/nodes/${encodeURIComponent(args.node)}/qemu/${args.vmid}/agent/exec`,
+        { command: ["/bin/bash", "-lc", args.script], "capture-output": 1 },
+        args.auth,
+        args.dispatcher
+      );
+      const pid = Number(exec.data?.pid);
+      if (!pid) throw new Error("guest agent exec did not return pid");
+
+      const statusDeadline = Date.now() + 60000;
+      while (Date.now() < statusDeadline) {
+        const statusJson = await fetchJson(
+          args.apiBase,
+          `/api2/json/nodes/${encodeURIComponent(args.node)}/qemu/${args.vmid}/agent/exec-status?pid=${encodeURIComponent(String(pid))}`,
+          args.auth,
+          args.dispatcher
+        );
+        const status = ((statusJson as ProxmoxResponse)?.data ?? statusJson) as Record<string, unknown>;
+        if (status.exited) {
+          const exitCode = Number(status.exitcode || 0);
+          if (exitCode === 0) return;
+          const out = status["out-data"] ? Buffer.from(String(status["out-data"]), "base64").toString("utf8") : "";
+          const err = status["err-data"] ? Buffer.from(String(status["err-data"]), "base64").toString("utf8") : "";
+          throw new Error(`guest network setup failed (${exitCode}): ${out || err}`);
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      throw new Error("guest network setup timed out");
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+
+  throw new Error(`QEMU guest agent did not configure networking: ${lastError}`);
 }
 
 async function waitTask(apiBase: string, node: string, upid: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent, timeoutMs = 180000): Promise<boolean> {
@@ -172,11 +337,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
   }
 
-  // Rate limit: max 5 VM creations per hour per user
+  // Rate limit: max 5 VM creations per 5 minutes per user
   const rl = await limitByUser(user.id, {
     prefix: "rl:vm-create",
     limit: 5,
-    windowMs: 3600_000,
+    windowMs: 300_000,
   });
   if (!rl.allowed) {
     return Response.json(
@@ -235,7 +400,7 @@ export async function POST(req: NextRequest) {
   // 1. Find all active hosts in the requested region
   const { data: regionHosts, error: regionErr } = await supabase
     .from("proxmox_hosts")
-    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb, shared_oversubscription_ratio, provider, server_series, network_mode, vm_private_cidr, vm_private_gateway, vm_private_ip_start, public_prefix_length, snippet_storage")
     .eq("region", region)
     .eq("is_active", true);
 
@@ -254,15 +419,55 @@ export async function POST(req: NextRequest) {
   }
   const hostname = rawHostname;
   const sshPassword = body.sshPassword as string | undefined;
-  const cpuCores = Number(body.cpuCores || 2);
-  const memoryMB = Number(body.memoryMB || 2048);
-  const diskGB = body.diskGB ? Number(body.diskGB) : undefined;
-  const os = body.os || "Ubuntu 24.04 LTS";
 
-  // Validate spec ranges
-  if (cpuCores < 1 || cpuCores > 32) return Response.json({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
-  if (memoryMB < 512 || memoryMB > 262144) return Response.json({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
-  if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return Response.json({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
+  // Resolve the spec from a plan slug if supplied; otherwise fall back
+  // to the legacy free-form cpuCores/memoryMB/diskGB body fields
+  // (kept for backward compatibility while the dashboard rolls over).
+  const planSlug = body.planSlug ? String(body.planSlug) : undefined;
+  let cpuCores: number;
+  let memoryMB: number;
+  let diskGB: number | undefined;
+  let planTier: "shared" | "dedicated" | null = null;
+  let planAllowedHostIds: string[] | null = null; // set when plan has a host whitelist
+  // When a plan is selected we bill the plan's ADVERTISED price (what the
+  // customer sees + agrees to), not the legacy spec formula. Only the
+  // free-form custom-specs path falls back to calculateHourlyCost().
+  let planHourlyUSD: number | null = null;
+
+  if (planSlug) {
+    const plan = await findPlanBySlug(supabase, planSlug);
+    if (!plan) {
+      return Response.json({ ok: false, error: `Unknown plan: ${planSlug}` }, { status: 400 });
+    }
+    if (!plan.isActive) {
+      return Response.json({ ok: false, error: `Plan ${planSlug} is no longer available` }, { status: 400 });
+    }
+    // Enforce region whitelist if the plan has one
+    if (plan.allowedRegions && plan.allowedRegions.length > 0 && !plan.allowedRegions.includes(region)) {
+      return Response.json({
+        ok: false,
+        error: `Plan ${planSlug} is not available in this region.`,
+      }, { status: 400 });
+    }
+    cpuCores = plan.vcpu;
+    memoryMB = plan.memoryMB;
+    diskGB = plan.diskGB;
+    planTier = plan.tier;
+    planHourlyUSD = plan.defaultHourlyUSD;
+    if (plan.allowedHostIds && plan.allowedHostIds.length > 0) {
+      planAllowedHostIds = plan.allowedHostIds;
+    }
+  } else {
+    cpuCores = Number(body.cpuCores || 2);
+    memoryMB = Number(body.memoryMB || 2048);
+    diskGB = body.diskGB ? Number(body.diskGB) : undefined;
+
+    // Validate spec ranges (only enforced on free-form path; plans are validated at admin write time)
+    if (cpuCores < 1 || cpuCores > 32) return Response.json({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
+    if (memoryMB < 512 || memoryMB > 262144) return Response.json({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
+    if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return Response.json({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
+  }
+  const os = body.os || "Ubuntu 24.04 LTS";
 
   // Determine if this is a Windows VM based on the OS name
   const osLower = String(os).toLowerCase();
@@ -300,13 +505,16 @@ export async function POST(req: NextRequest) {
   //   2) Available IPs
   //   3) Enough CPU/RAM/disk capacity
 
-  // Get templates that match the requested OS across all region hosts
+  // Get PUBLIC templates that match the requested OS across all region hosts.
+  // Custom images (owner_id set) are resolved separately below (lazy per‑host
+  // build), so the built‑in OS path only considers public templates.
   const regionHostIds = regionHosts.map(h => h.id);
   const { data: matchingTemplates } = await supabase
     .from("proxmox_templates")
     .select("vmid, name, host_id, os_type, os_display_name")
     .in("host_id", regionHostIds)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .is("owner_id", null);
 
   const templatesByHost = new Map<string, { vmid: number; name: string }>();
   for (const t of matchingTemplates || []) {
@@ -316,18 +524,38 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Get used resources per host
+  // Custom OS image? If the chosen "OS" is one of the user's available custom
+  // images, every region host becomes a candidate — the per‑host template is
+  // built lazily on the selected host right before cloning (vmid 0 = to build).
+  const customImage = await findAvailableCustomImageByName(supabase, user.id, String(os));
+  if (customImage) {
+    for (const h of regionHosts) {
+      templatesByHost.set(h.id, { vmid: 0, name: customImage.name });
+    }
+  }
+
+  // Get used resources per host, split by tier so we can apply CPU
+  // overcommit only to shared placements (dedicated keeps 1:1).
   const { data: serverUsage } = await supabase
     .from("servers")
-    .select("location, cpu_cores, memory_mb, disk_gb")
+    .select("location, cpu_cores, memory_mb, disk_gb, tier")
     .in("location", regionHostIds)
     .in("status", ["provisioning", "running", "stopped", "suspended"]);
 
-  const usedByHost = new Map<string, { cpu: number; mem: number; disk: number }>();
+  type HostUsage = {
+    sharedCpu: number;
+    dedicatedCpu: number;
+    mem: number;
+    disk: number;
+  };
+  const usedByHost = new Map<string, HostUsage>();
   for (const s of serverUsage || []) {
     const loc = String(s.location);
-    const prev = usedByHost.get(loc) || { cpu: 0, mem: 0, disk: 0 };
-    prev.cpu += Number(s.cpu_cores || 0);
+    const prev = usedByHost.get(loc) || { sharedCpu: 0, dedicatedCpu: 0, mem: 0, disk: 0 };
+    const tier = String((s as Record<string, unknown>).tier || "shared");
+    const cpu = Number(s.cpu_cores || 0);
+    if (tier === "dedicated") prev.dedicatedCpu += cpu;
+    else prev.sharedCpu += cpu;
     prev.mem += Number(s.memory_mb || 0);
     prev.disk += Number(s.disk_gb || 0);
     usedByHost.set(loc, prev);
@@ -340,12 +568,13 @@ export async function POST(req: NextRequest) {
 
   const { data: pools } = await supabase
     .from("public_ip_pools")
-    .select("id, mac, host_id, label")
-    .in("host_id", regionHostIds)
-    .or("label.is.null,label.not.ilike.*IPXO*");
+    .select("id, mac, host_id, label, is_active")
+    .in("host_id", regionHostIds);
   const poolIds = (pools || []).map((p: Record<string, unknown>) => Number(p.id));
   const macByPool = new Map<number, string | undefined>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), p.mac as string | undefined]));
   const hostByPool = new Map<number, string>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), String(p.host_id)]));
+  const labelByPool = new Map<number, string | null>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.label as string | null) || null]));
+  const activeByPool = new Map<number, boolean>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), (p.is_active as boolean | null) !== false]));
 
   // Build available IP list per host
   const ipCandidatesByHost = new Map<string, PoolItem[]>();
@@ -359,11 +588,46 @@ export async function POST(req: NextRequest) {
       const ip = String((r as Record<string, unknown>).ip);
       const mac = macByPool.get(poolId);
       const hostId = hostByPool.get(poolId);
+      const label = labelByPool.get(poolId);
+      const host = regionHosts.find((h) => h.id === hostId);
+      const routedMode = host?.network_mode === "ovh_hg_scale_routed" || host?.network_mode === "ovh_advance_gen3_routed" || host?.network_mode === "ovh_vrack_block";
+      const vmacMode = host?.network_mode === "ovh_failover_vmac";
+      const routedPool = isRoutedPool(mac, label);
+      if (!activeByPool.get(poolId)) continue;
+      // Routed BYOIP host modes must draw only from routed pools
+      if (routedMode && !routedPool) continue;
+      // Non-vMAC + non-routed hosts must NOT pick up routed-pool IPs
+      if (!routedMode && !vmacMode && routedPool) continue;
+      // For vMAC-mode hosts we accept BOTH:
+      //   - existing (mac, ip) vMAC pool rows (fast path)
+      //   - routed BYOIP pool IPs (we'll mint the vMAC on demand at
+      //     VM-create time, then save the new pool row)
+      const needsVmac = vmacMode && routedPool;
       if (!usedIpSet.has(ip) && hostId) {
         const list = ipCandidatesByHost.get(hostId) || [];
-        list.push({ ip, mac, poolId });
+        list.push({
+          ip,
+          mac: routedPool ? undefined : mac,
+          poolId,
+          label,
+          needsVmac,
+        });
         ipCandidatesByHost.set(hostId, list);
       }
+    }
+    // Dedupe per host: same IP can appear in BOTH the routed pool AND a
+    // vMAC pool (post on-demand allocation we keep the IP in both).
+    // Prefer the existing vMAC entry (needsVmac=false) so we reuse the
+    // already-provisioned MAC instead of asking OVH for a new one.
+    for (const [hostId, list] of ipCandidatesByHost.entries()) {
+      const bestByIp = new Map<string, typeof list[number]>();
+      for (const item of list) {
+        const existing = bestByIp.get(item.ip);
+        if (!existing || (!item.needsVmac && existing.needsVmac)) {
+          bestByIp.set(item.ip, item);
+        }
+      }
+      ipCandidatesByHost.set(hostId, [...bestByIp.values()]);
     }
   }
 
@@ -379,7 +643,15 @@ export async function POST(req: NextRequest) {
   const candidates: HostCandidate[] = [];
   const requestedDisk = diskGB || 20;
 
+  // Tier-aware capacity: shared placements use the oversubscribed pool
+  // (physical × ratio), dedicated reserves real cores 1:1. See
+  // computeHostAvailability for the full model.
+  const effectiveTier: "shared" | "dedicated" = planTier === "dedicated" ? "dedicated" : "shared";
+
   for (const h of regionHosts) {
+    // Honor plan's host whitelist (if any)
+    if (planAllowedHostIds && !planAllowedHostIds.includes(h.id)) continue;
+
     // Must have matching template
     const tpl = templatesByHost.get(h.id);
     if (!tpl) continue;
@@ -388,11 +660,27 @@ export async function POST(req: NextRequest) {
     const ips = ipCandidatesByHost.get(h.id);
     if (!ips || ips.length === 0) continue;
 
-    // Must have enough capacity
-    const used = usedByHost.get(h.id) || { cpu: 0, mem: 0, disk: 0 };
-    const freeCpu = (h.total_cpu_cores || 0) - used.cpu;
-    const freeMem = (h.total_memory_mb || 0) - used.mem;
-    const freeDisk = (h.total_disk_gb || 0) - used.disk;
+    const used = usedByHost.get(h.id) || { sharedCpu: 0, dedicatedCpu: 0, mem: 0, disk: 0 };
+    const ratio = (h as Record<string, unknown>).shared_oversubscription_ratio
+      ? Number((h as Record<string, unknown>).shared_oversubscription_ratio)
+      : undefined;
+
+    const avail = computeHostAvailability({
+      totalCpuCores: h.total_cpu_cores || 0,
+      totalMemoryMB: h.total_memory_mb || 0,
+      totalDiskGB: h.total_disk_gb || 0,
+      sharedRatio: ratio,
+      usage: {
+        dedicatedVcpuUsed: used.dedicatedCpu,
+        sharedVcpuUsed: used.sharedCpu,
+        memoryMBUsed: used.mem,
+        diskGBUsed: used.disk,
+      },
+    });
+
+    const freeCpu = effectiveTier === "dedicated" ? avail.dedicatedVcpu : avail.sharedVcpu;
+    const freeMem = avail.memoryMB;
+    const freeDisk = avail.diskGB;
 
     if (freeCpu < cpuCores) continue;
     if (freeMem < memoryMB) continue;
@@ -448,10 +736,36 @@ export async function POST(req: NextRequest) {
   const cfg = selected.host as unknown as HostConfig;
   const selectedTemplate = selected.template;
   const ipPrimary = allocatedIp.ip;
-  const macAddress = allocatedIp.mac;
+  let macAddress = allocatedIp.mac;
   const hostId = cfg.id;
 
-  if (!macAddress) {
+  // On-demand vMAC minting: if the IP we won the lock for came from the
+  // routed BYOIP pool on a vMAC-mode host, we don't have a MAC yet. The
+  // 5-minute Redis IP lock comfortably covers the ~30-90s OVH provisioning.
+  if (allocatedIp.needsVmac) {
+    try {
+      const supabaseAdmin = await createWorkerClient();
+      const { mac } = await allocateVmacForIp({
+        supabase: supabaseAdmin,
+        host: { id: cfg.id, host_url: cfg.host_url, provider: cfg.provider },
+        ip: ipPrimary,
+      });
+      macAddress = mac;
+    } catch (e) {
+      if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error("[VM Create] On-demand vMAC failed:", errMsg);
+      return Response.json({
+        ok: false,
+        error:
+          `Could not allocate a vMAC for ${ipPrimary}: ${errMsg}. ` +
+          `If this persists, check that the BYOIP block is attached as additional IPs on the OVH server.`,
+      }, { status: 502 });
+    }
+  }
+
+  const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
+  if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
     console.error("[VM Create] No MAC address for IP:", ipPrimary);
     return Response.json({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
   }
@@ -468,7 +782,10 @@ export async function POST(req: NextRequest) {
     location: region,
   };
 
-  const hourlyCost = calculateHourlyCost(serverSpecs);
+  // Plan-based servers bill the advertised catalog price; free-form custom
+  // specs fall back to the spec formula.
+  const hourlyCost =
+    planHourlyUSD != null ? planHourlyUSD : calculateHourlyCost(serverSpecs);
   const minimumHours = 1;
 
   // Balance check — user must have at least 1 hour of credit before provisioning
@@ -482,21 +799,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const gateway = cfg.gateway_ip || undefined;
-  const dns1 = cfg.dns_primary || "8.8.8.8";
-  const dns2 = cfg.dns_secondary || "1.1.1.1";
-
-  if (!gateway) {
-    console.error("[VM Create] Gateway missing on host:", hostId);
-    return Response.json({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
-  }
-
   const node = cfg.node;
-  const storage = cfg.storage || "local";
-  const bridge = cfg.bridge || "vmbr0";
+  // Auto-pick the storage with the most free space that can fit the
+  // requested disk. The host's configured `cfg.storage` is used as the
+  // fallback if the Proxmox API is unreachable or no storage fits.
+  const requestedDiskGB = diskGB || 20;
+  const storagePick = await pickBestStorage({
+    hostUrl: cfg.host_url,
+    username: cfg.username || "root",
+    password: cfg.password || "",
+    node: cfg.node,
+    requiredGB: requestedDiskGB,
+    allowInsecure: !!cfg.allow_insecure_tls,
+    fallback: cfg.storage || "local",
+  });
+  const storage = storagePick.storage;
+  if (storagePick.reason === "fallback-no-fit") {
+    if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
+    return Response.json({
+      ok: false,
+      error: `No storage with ${requestedDiskGB} GB free on the selected host. Please reduce the disk size or try a different region.`,
+    }, { status: 409 });
+  }
+  console.log(
+    `[VM Create] storage=${storage} (${storagePick.reason}) — required ${requestedDiskGB} GB`
+  );
 
   // Reserve DB record to avoid reuse
   let reservationId: number | null = null;
+  let billingServiceId: string | null = null;
   const db: DbReservation = { saved: false, id: null, error: null };
 
   try {
@@ -526,6 +857,8 @@ export async function POST(req: NextRequest) {
         cpu_cores: cpuCores,
         memory_mb: memoryMB,
         disk_gb: diskGB || 20,
+        tier: planTier ?? "shared",
+        plan_slug: planSlug ?? null,
         status: "provisioning",
         details: {
           provisioning: {
@@ -540,7 +873,7 @@ export async function POST(req: NextRequest) {
         hourly_cost: hourlyCost,
         billing_start: billingStart.toISOString(),
       })
-      .select("id")
+      .select("id, billing_service_id")
       .single();
 
     if (insertErr) {
@@ -553,6 +886,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
     }
     reservationId = (inserted as Record<string, unknown>)?.id as number ?? null;
+    billingServiceId = ((inserted as Record<string, unknown>)?.billing_service_id as string) ?? null;
     db.saved = true;
     db.id = reservationId;
     // IP is now tracked in the servers table — release the Redis lock
@@ -569,7 +903,9 @@ export async function POST(req: NextRequest) {
   // Determine connection type for immediate response
   const isDebian = osLower.includes("debian");
   const isCentos = osLower.includes("centos");
-  const ciuser = isWindows ? "admin" : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+  const ciuser = customImage
+    ? customImage.default_user
+    : isWindows ? "admin" : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
   const provisioningStarted = new Date().toISOString();
 
   // Helper to update provisioning stage (triggers Supabase realtime events)
@@ -587,11 +923,20 @@ export async function POST(req: NextRequest) {
   // Schedule background provisioning — runs after response is sent
   after(async () => {
   try {
+    // For a custom image, lazily build the per‑host template (first use in this
+    // region) and clone from it; built‑in OSes use the selected template vmid.
+    let templateVmid = selectedTemplate.vmid;
+    if (customImage) {
+      await updateStage(
+        'preparing',
+        15,
+        'Preparing your custom image — first use in this region can take a few minutes...'
+      );
+      templateVmid = await ensureCustomTemplateOnHost({ image: customImage, hostId: cfg.id });
+    }
+
     await updateStage('cloning', 25, 'Creating disk image...');
     const auth = await proxmoxAuthCookie(apiBase, dispatcher, cfg);
-
-    // Use the template VMID from smart selection
-    const templateVmid = selectedTemplate.vmid;
 
     // Next VMID
     const nextIdJson = await fetchJson(apiBase, "/api2/json/cluster/nextid", auth, dispatcher);
@@ -614,8 +959,22 @@ export async function POST(req: NextRequest) {
     await updateStage('configuring', 50, 'Configuring hardware...');
 
     // Configure — different approach for Windows vs Linux
-    const ipConfig0 = `ip=${ipPrimary}/32,gw=${gateway}`;
-    const nameservers = `${dns1}${dns2 ? ` ${dns2}` : ""}`;
+    const networkPlan = buildVmNetworkPlan({
+      host: cfg,
+      publicIp: ipPrimary,
+      vmid: newid,
+      reservationId: reservationId || newid,
+      isWindows,
+    });
+    if (networkPlan.networkSnippetFilename && networkPlan.networkSnippetContent) {
+      await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.networkSnippetFilename, networkPlan.networkSnippetContent);
+    }
+    if (networkPlan.vendorSnippetFilename && networkPlan.vendorSnippetContent) {
+      await writeCloudInitSnippet(cfg as Parameters<typeof writeCloudInitSnippet>[0], networkPlan.vendorSnippetFilename, networkPlan.vendorSnippetContent);
+    }
+    const ipConfig0 = networkPlan.ipconfig0;
+    const nameservers = networkPlan.nameservers;
+    const bridge = networkPlan.bridge;
 
     // Bandwidth rate limit (MBps) based on vCPU count
     const rateMBps = cpuCores <= 2 ? 4 : cpuCores <= 4 ? 8 : cpuCores <= 6 ? 15 : 30;
@@ -625,9 +984,11 @@ export async function POST(req: NextRequest) {
       sockets: 1,
       cores: cpuCores,
       memory: memoryMB,
+      agent: "enabled=1",
       onboot: 1,
+      ciupgrade: 0,
       nameserver: nameservers,
-      net0: `virtio=${macAddress},bridge=${bridge},rate=${rateMBps}`,
+      net0: `${macAddress ? `virtio=${macAddress}` : "virtio"},bridge=${bridge},rate=${rateMBps}`,
       ipconfig0: ipConfig0,
       cipassword: sshPassword,
     };
@@ -647,9 +1008,15 @@ export async function POST(req: NextRequest) {
     if (isWindows) {
       configPayload.ciuser = "admin";
     } else {
-      configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
-      // Apply vendor cloud-init snippet to enable SSH password auth on Linux VMs
-      configPayload.cicustom = "vendor=local:snippets/linux-cloud-init.yml";
+      configPayload.ciuser = customImage
+        ? customImage.default_user
+        : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
+      const vendorSnippet = networkPlan.cicustomVendor || `vendor=${networkPlan.snippetStorage}:snippets/linux-cloud-init.yml`;
+      const cicustom = buildCiCustomValue({
+        networkSnippet: networkPlan.cicustomNetwork,
+        vendorSnippet,
+      });
+      if (cicustom) configPayload.cicustom = cicustom;
     }
     
     await postForm(
@@ -739,8 +1106,9 @@ export async function POST(req: NextRequest) {
 
     await updateStage('networking', 70, 'Setting up network...');
 
-    // Add host route for this VM's IP (OVH routed IP model)
-    await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], ipPrimary, bridge);
+    if (networkPlan.addHostRoute) {
+      await addHostRoute(cfg as Parameters<typeof addHostRoute>[0], ipPrimary, bridge);
+    }
 
     await updateStage('booting', 85, 'Starting server...');
 
@@ -753,6 +1121,29 @@ export async function POST(req: NextRequest) {
     );
     const startUpid = startRes.data;
     if (startUpid) await waitTask(apiBase, node, startUpid, auth, dispatcher, 60000).catch(() => {});
+
+    if (process.env.PROXMOX_USE_GUEST_AGENT_NETWORK === "1" && (networkPlan.mode === "ovh_hg_scale_routed" || networkPlan.mode === "ovh_advance_gen3_routed")) {
+      if (!networkPlan.privateIp || !networkPlan.privateGateway || !networkPlan.privatePrefixLength) {
+        throw new Error("Missing routed BYOIP network plan values");
+      }
+      await updateStage('networking', 90, 'Applying routed BYOIP network inside server...');
+      const dnsServers = networkPlan.nameservers.split(/\s+/).filter(Boolean);
+      await configureLinuxNetworkViaGuestAgent({
+        apiBase,
+        node,
+        vmid: newid,
+        auth,
+        dispatcher,
+        script: buildLinuxGuestNetworkScript({
+          publicIp: ipPrimary,
+          privateIp: networkPlan.privateIp,
+          privatePrefixLength: networkPlan.privatePrefixLength,
+          privateGateway: networkPlan.privateGateway,
+          dnsPrimary: dnsServers[0] || "8.8.8.8",
+          dnsSecondary: dnsServers[1] || "1.1.1.1",
+        }),
+      });
+    }
 
     await updateStage('verifying', 95, 'Verifying server status...');
 
@@ -771,6 +1162,7 @@ export async function POST(req: NextRequest) {
           vmid: newid,
           status: vmStatus,
           details: {
+            network: networkPlan.details,
             provisioning: {
               stage: 'complete',
               progress: 100,
@@ -782,8 +1174,30 @@ export async function POST(req: NextRequest) {
         })
         .eq("id", reservationId);
     }
+
+    // Start metered billing now that the VM is live. The 5-min cron meters
+    // active_compute hourly (prorated) with the standard grace lifecycle.
+    // Best-effort: a failure here is logged but never tears down a live VM.
+    if (billingServiceId) {
+      try {
+        await postProvisionBilling({
+          userId: user.id,
+          initialCost: 0,
+          hourlyRate: hourlyCost,
+          serviceId: billingServiceId,
+          serviceType: "compute",
+          addActive: BillingCredits.addActiveCompute,
+        });
+      } catch (billingErr) {
+        console.error(
+          "[VM Create] failed to register compute billing meter:",
+          billingErr instanceof Error ? billingErr.message : billingErr
+        );
+      }
+    }
   } catch (e: unknown) {
-    console.error("[VM Create] Provisioning failed:", e instanceof Error ? e.message : e);
+    const failureMessage = errorMessage(e);
+    console.error("[VM Create] Provisioning failed:", failureMessage, e);
     try {
       if (reservationId != null) {
         await supabase
@@ -794,7 +1208,7 @@ export async function POST(req: NextRequest) {
               provisioning: {
                 stage: 'failed',
                 progress: 0,
-                message: 'Deployment failed. Our team has been notified.',
+                message: failureMessage,
                 started_at: provisioningStarted,
                 failed_at: new Date().toISOString(),
               }

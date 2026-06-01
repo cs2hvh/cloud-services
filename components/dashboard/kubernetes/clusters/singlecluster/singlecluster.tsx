@@ -5,20 +5,23 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
-  CheckCircle2,
-  Clock3,
-  Cpu,
+  ChevronRight,
   Download,
   FolderOpen,
-  HardDrive,
-  LucideIcon,
-  MemoryStick,
   Server,
   Settings,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+
+// ─── Design tokens ────────────────────────────────────────────────
+const SERIF_STYLE: CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const ACCENT_BRIGHT = "#33adff";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -182,7 +185,6 @@ function SingleCluster({
   const [clusterFailed, setClusterFailed] = useState(false);
   const [nodesData, setNodesData] = useState<NodeInfo | null>(null);
   const [ready, setReady] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [clusterLifecycleStatus, setClusterLifecycleStatus] =
     useState<Row["status"] | null>(null);
 
@@ -243,7 +245,7 @@ function SingleCluster({
   const steps = useMemo(
     () =>
       [
-        { key: "createDropletStatus", label: "1. Create droplets" },
+        { key: "createDropletStatus", label: "1. Provision nodes" },
         { key: "createStatus", label: "2. Create cluster" },
         { key: "connectStatus", label: "3. Connect cluster" },
         { key: "verifyStatus", label: "4. Verify cluster" },
@@ -344,7 +346,7 @@ function SingleCluster({
       }
 
       if (!createDropletRes.ok) {
-        throw new Error("Failed to create droplets.");
+        throw new Error("Failed to create nodes.");
       }
 
       const createDropletData = await createDropletRes.json();
@@ -395,7 +397,7 @@ function SingleCluster({
 
       while (counter < actions.length) {
         if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
-          throw new Error("Droplet creation timed out after 10 minutes.");
+          throw new Error("Node creation timed out after 10 minutes.");
         }
 
         const checkStatusRes = await fetch(
@@ -479,7 +481,7 @@ function SingleCluster({
         throw new Error("Failed to start Kubernetes cluster provisioning.");
       }
 
-      toast.success("Droplets created. Cluster provisioning started.");
+      toast.success("Nodes created. Cluster provisioning started.");
       await pollOnce();
     } catch (error) {
       console.error("[startDropletCreation] Error:", error);
@@ -614,7 +616,6 @@ function SingleCluster({
         setNodesData(nodes);
         setReady(true);
       }
-      setLastUpdated(new Date());
     } catch (err: unknown) {
       console.log(err, ".........98");
       if (err instanceof Error) {
@@ -917,143 +918,137 @@ function SingleCluster({
     : ready
       ? "Ready"
       : "Provisioning";
-  const clusterStatusClassName = clusterFailed
-    ? "border-red-500/20 bg-red-500/10 text-red-300"
+  const statusMeta = clusterFailed
+    ? { color: "#f87171", label: "Failed", pulse: false, spin: false }
     : ready
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-      : "border-amber-500/20 bg-amber-500/10 text-amber-300";
+      ? { color: "#4ade80", label: "Ready", pulse: true, spin: false }
+      : { color: "#fbbf24", label: clusterStatusLabel, pulse: false, spin: true };
   const totalNodes = nodesData?.length || 0;
+  const cpuTotal = clusterData?.clusterInfo?.node_config?.cpu || 0;
+  const ramTotal = clusterData?.clusterInfo?.node_config?.ram || 0;
+  const storageTotal = clusterData?.clusterInfo?.node_config?.storage || 0;
 
   if (loading && !ready) {
     return (
-      <div className="flex-1 bg-black min-h-screen flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <div className="h-8 w-48 animate-pulse bg-white/[0.04] rounded-[5px]" />
+        <div className="h-16 w-2/3 animate-pulse bg-white/[0.04] rounded-[5px]" />
+        <div className="h-24 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
+        <div className="h-64 animate-pulse border border-white/[0.06] bg-[#111216] rounded-[6px]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <div className="mx-auto max-w-7xl">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <div className="glass-panel overflow-hidden">
-            <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <Link
-                  href="/dashboard/services/kubernetes"
-                  className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to clusters
-                </Link>
-                <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
-                  Kubernetes Service
-                </p>
-                <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  {ready
-                    ? "Cluster operations and lifecycle controls."
-                    : "Provisioning cluster infrastructure."}
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
-                  {ready
-                    ? "Review kubeconfig access, node capacity, monitoring, and project assignment from a single operator view."
-                    : "We are validating control plane creation, node connectivity, and readiness checks before the cluster becomes available."}
-                </p>
-              </div>
+    <div className="mx-auto max-w-[1600px] text-white">
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
+        <div className="max-w-3xl min-w-0">
+          <Link
+            href="/dashboard/services/kubernetes"
+            className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to clusters
+          </Link>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:min-w-[420px]">
-                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Status
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-blue-300" />
-                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${clusterStatusClassName}`}>
-                      {clusterStatusLabel}
-                    </span>
-                  </div>
-                </div>
-                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Nodes
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-white">
-                    <Server className="h-4 w-4 text-blue-300" />
-                    {totalNodes}
-                  </div>
-                </div>
-                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                    Sync
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-sm font-medium text-white/80">
-                    <Clock3 className="h-4 w-4 text-blue-300" />
-                    {lastUpdated ? lastUpdated.toLocaleTimeString() : "Pending"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-white/[0.06] px-5 py-3 sm:px-6">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 font-mono text-white/60">
-                  {clusterId}
-                </span>
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-                  {ready ? "Cluster ready for workloads" : "Provisioning checks in progress"}
-                </span>
-              </div>
-            </div>
+          <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
+            <span>Kubernetes</span>
+            <ChevronRight className="h-3 w-3 text-white/20" />
+            <span className="text-white/65 truncate">{clusterId}</span>
           </div>
-        </motion.div>
 
-        {clusterFailed && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/20 rounded-xl p-8 mb-6"
-          >
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-red-500/20 rounded-lg">
-                <AlertTriangle className="w-6 h-6 text-red-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-semibold text-red-400 mb-2">
-                  Cluster Creation Failed
-                </h3>
-                <p className="text-white/70 mb-4">
-                  An error occurred during cluster creation. The droplets have
-                  been automatically cleaned up to prevent unnecessary charges.
-                </p>
-                <p className="text-white/60 text-sm mb-6">
-                  Please delete this failed cluster record and try creating a
-                  new cluster. If the issue persists, contact support.
-                </p>
-                <button
-                  onClick={handleDeleteClusterClick}
-                  className="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Failed Cluster
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
+          <h1 className="text-[32px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
+            {ready ? "Cluster" : "Provisioning"}{" "}
+            <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
+              {ready ? "operations" : "infrastructure"}
+            </span>
+          </h1>
+          <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
+            {ready
+              ? "Review kubeconfig access, node capacity, monitoring, and project assignment from a single operator view."
+              : "Validating control plane creation, node connectivity, and readiness checks before the cluster becomes available."}
+          </p>
+        </div>
 
-        {ready === false &&
-          !clusterFailed &&
-          (clusterLifecycleStatus === "pending"||clusterLifecycleStatus === "creating") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="glass-panel p-6 md:p-8 space-y-5"
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`${MONO} inline-flex items-center gap-1.5 h-10 px-3.5 border bg-[#111216] text-[11px] uppercase tracking-[0.14em] rounded-[5px]`}
+            style={{ borderColor: `${statusMeta.color}33`, color: statusMeta.color }}
           >
+            {statusMeta.spin ? (
+              <Spinner />
+            ) : (
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: statusMeta.color, boxShadow: `0 0 6px ${statusMeta.color}` }}
+              />
+            )}
+            {statusMeta.label}
+          </span>
+        </div>
+      </header>
+
+      {/* ── Stats strip ───────────────────────────────────── */}
+      <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+        <StatCell
+          label="Nodes"
+          value={String(totalNodes)}
+          hint="control + workers"
+          accent={ACCENT}
+        />
+        <StatCell
+          label="vCPU"
+          value={String(cpuTotal)}
+          suffix="vCPU"
+          hint="Total allocated"
+          accent="#a78bfa"
+        />
+        <StatCell
+          label="Memory"
+          value={String(ramTotal)}
+          suffix="MB"
+          hint="Total RAM"
+        />
+        <StatCell
+          label="Storage"
+          value={String(storageTotal)}
+          suffix="GB"
+          hint="Total disk"
+        />
+      </section>
+
+      {clusterFailed && (
+        <section className="mb-10 border border-rose-500/25 bg-rose-500/[0.04] rounded-[6px] p-5 flex items-start gap-4">
+          <div className="h-10 w-10 shrink-0 inline-flex items-center justify-center border border-rose-500/25 bg-rose-500/[0.08] rounded-[6px]">
+            <AlertTriangle className="h-5 w-5 text-rose-300" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[15px] font-semibold text-rose-200">
+              Cluster creation failed
+            </h3>
+            <p className={`${MONO} mt-1.5 text-[11.5px] text-white/55 leading-relaxed max-w-2xl`}>
+              An error occurred during cluster creation. The droplets have been
+              automatically cleaned up to prevent unnecessary charges. Please
+              delete this failed cluster record and try creating a new cluster.
+            </p>
+            <button
+              onClick={handleDeleteClusterClick}
+              className={`${MONO} mt-4 h-10 inline-flex items-center gap-1.5 px-3.5 border border-rose-500/25 bg-rose-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.10] rounded-[5px] transition-colors`}
+            >
+              <Trash2 className="h-3 w-3" />
+              Delete failed cluster
+            </button>
+          </div>
+        </section>
+      )}
+
+      {ready === false &&
+        !clusterFailed &&
+        (clusterLifecycleStatus === "pending" || clusterLifecycleStatus === "creating") && (
+        <section className="mb-10">
+          <SectionHead index="—" title="Provisioning" accent="progress" />
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
             {steps.map((s, idx) => {
               const done = status[s.key];
               const inProgress = !done && idx === currentIndex;
@@ -1067,170 +1062,163 @@ function SingleCluster({
               );
             })}
 
-            <div className="flex items-center justify-between text-xs text-white/60 pt-2">
-              <div className="flex items-center gap-2">
-                {!allDone ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Spinner />
-                    <span>Checking status every minute...</span>
+            <div className="pt-3 border-t border-white/[0.04] flex items-center gap-2">
+              {!allDone ? (
+                <>
+                  <Spinner />
+                  <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+                    Provisioning
                   </span>
-                ) : (
-                  <span className="text-green-400 font-medium">
-                    All steps complete.
-                  </span>
-                )}
-              </div>
-              <div>
-                {lastUpdated ? (
-                  <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-                ) : (
-                  <span>Waiting for first update...</span>
-                )}
-              </div>
+                </>
+              ) : (
+                <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-emerald-300`}>
+                  All steps complete
+                </span>
+              )}
             </div>
+          </div>
+        </section>
+      )}
 
-          </motion.div>
-        )}
-
-        {ready && (
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-3 border border-white/[0.08] bg-white/[0.04] p-1">
-              <TabsTrigger
-                value="cluster"
-                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
-              >
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Cluster
-              </TabsTrigger>
-              <TabsTrigger
-                value="insight"
-                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
-              >
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Insight
-              </TabsTrigger>
-              <TabsTrigger
-                value="settings"
-                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </TabsTrigger>
-            </TabsList>
-
-            {/* CLUSTER TAB */}
-            <TabsContent value="cluster" className="mt-6 space-y-4">
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-panel p-6 space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-white">
-                    Kubeconfig
-                  </h3>
-                  <button
-                    onClick={() => {
-                      downloadKubeconfig(
-                        clusterId,
-                        clusterData?.clusterInfo?.kubeconfig || ""
-                      );
-                    }}
-                    className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+      {ready && (
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+        >
+          {/* ── Pill nav ─────────────────────────────────── */}
+          <div className="mb-10 border-b border-white/[0.06]">
+            <TabsList className="bg-transparent p-0 h-auto flex flex-wrap items-center gap-1 -mb-px">
+              {[
+                { value: "cluster", label: "Cluster", icon: FolderOpen },
+                { value: "insight", label: "Insight", icon: BarChart3 },
+                { value: "settings", label: "Settings", icon: Settings },
+              ].map((t) => {
+                const Icon = t.icon;
+                const isActive = activeTab === t.value;
+                return (
+                  <TabsTrigger
+                    key={t.value}
+                    value={t.value}
+                    className={`${MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] rounded-none bg-transparent transition-colors data-[state=active]:bg-transparent data-[state=active]:shadow-none ${
+                      isActive ? "text-white" : "text-white/45 hover:text-white/75"
+                    }`}
                   >
-                    <Download className="h-4 w-4" />
-                    Download kubeconfig
-                  </button>
-                </div>
-                <p className="text-sm text-white/60">
+                    <Icon className="h-3 w-3" />
+                    {t.label}
+                    {isActive && (
+                      <span
+                        className="absolute left-2 right-2 -bottom-px h-[2px]"
+                        style={{
+                          background: ACCENT,
+                          boxShadow: `0 0 8px ${ACCENT}`,
+                        }}
+                      />
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </div>
+
+          {/* ── CLUSTER TAB ────────────────────────────── */}
+          <TabsContent value="cluster" className="mt-0 space-y-12">
+            <section>
+              <SectionHead index="01" title="Kube" accent="config" />
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 flex flex-wrap items-center justify-between gap-4">
+                <p className={`${MONO} text-[11.5px] text-white/55 leading-relaxed max-w-xl`}>
                   This file contains credentials for accessing your cluster.
                   Store it securely and avoid committing it to version control.
                 </p>
-              </motion.section>
+                <button
+                  onClick={() => {
+                    downloadKubeconfig(
+                      clusterId,
+                      clusterData?.clusterInfo?.kubeconfig || ""
+                    );
+                  }}
+                  className={`${MONO} inline-flex h-10 items-center gap-1.5 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
+                  style={{
+                    background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                    color: "#ffffff",
+                    boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                  }}
+                >
+                  <Download className="h-3 w-3" />
+                  Download kubeconfig
+                </button>
+              </div>
+            </section>
 
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="glass-panel p-6 space-y-4"
-              >
-                <h3 className="text-base font-semibold text-white">
-                  Cluster Resources
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <StatCard
-                    icon={Cpu}
-                    label="vCPU"
-                    value={`${clusterData?.clusterInfo?.node_config?.cpu || 0} vCPU`}
-                    sub="Total allocated"
-                  />
-                  <StatCard
-                    icon={MemoryStick}
-                    label="Memory"
-                    value={`${clusterData?.clusterInfo?.node_config?.ram || 0} MB`}
-                    sub="Total RAM"
-                  />
-                  <StatCard
-                    icon={HardDrive}
-                    label="Storage"
-                    value={`${clusterData?.clusterInfo?.node_config?.storage || 0} GB`}
-                    sub="Total disk"
-                  />
-                </div>
-              </motion.section>
-
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="glass-panel p-6 space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-white">Nodes</h3>
-                  <div className="text-xs text-white/60">
-                    {nodesData?.length || 0} total
-                  </div>
-                </div>
+            <section>
+              <SectionHead
+                index="02"
+                title="The"
+                accent="nodes"
+                meta={`${nodesData?.length || 0} total`}
+              />
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="text-left text-white/70">
-                      <tr className="border-b border-white/10">
-                        <th className="py-3 pr-4 font-medium">Public IP</th>
-                        <th className="py-3 pr-4 font-medium">Role</th>
-                        <th className="py-3 pr-4 font-medium">Private IP</th>
-                        <th className="py-3 pr-4 text-right font-medium">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="border-b border-white/[0.06]">
+                        <th className={`${MONO} text-left px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40 font-medium`}>
+                          Public IP
+                        </th>
+                        <th className={`${MONO} text-left px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40 font-medium`}>
+                          Role
+                        </th>
+                        <th className={`${MONO} text-left px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40 font-medium`}>
+                          Private IP
+                        </th>
+                        <th className={`${MONO} text-right px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-white/40 font-medium`}>
                           Action
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-white/[0.04]">
                       {nodesData?.map((n, index) => (
                         <tr
                           key={index}
-                          className="hover:bg-white/5 transition-colors"
+                          className="hover:bg-white/[0.02] transition-colors"
                         >
-                          <td className="py-3 pr-4 font-medium text-white">
+                          <td className={`${MONO} px-5 py-3 text-[12.5px] font-medium text-white tabular-nums`}>
                             {n.public_ip}
                           </td>
-                          <td className="py-3 pr-4 text-white/70">
-                            {index === 0 ? "control-plane" : "worker"}
+                          <td className="px-5 py-3">
+                            <span
+                              className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] font-semibold`}
+                              style={{ color: index === 0 ? ACCENT : "#a78bfa" }}
+                            >
+                              <span
+                                className="h-1 w-1 rounded-full"
+                                style={{
+                                  background: index === 0 ? ACCENT : "#a78bfa",
+                                  boxShadow: `0 0 5px ${index === 0 ? ACCENT : "#a78bfa"}`,
+                                }}
+                              />
+                              {index === 0 ? "control-plane" : "worker"}
+                            </span>
                           </td>
-                          <td className="py-3 pr-4 text-white/70">
+                          <td className={`${MONO} px-5 py-3 text-[12.5px] text-white/55 tabular-nums`}>
                             {n.private_ip}
                           </td>
-                          <td className="py-3 pr-0 text-right">
+                          <td className="px-5 py-3 text-right">
                             <button
                               onClick={() =>
                                 handleDeleteNodeClick(n.droplet_id, index)
                               }
                               disabled={loading}
-                              className="cursor-pointer inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={`${MONO} inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.12em] text-rose-300/70 hover:text-rose-300 transition-colors disabled:opacity-50`}
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                              <Trash2 className="h-3 w-3" />
+                              Delete
                             </button>
                           </td>
                         </tr>
@@ -1238,122 +1226,106 @@ function SingleCluster({
                     </tbody>
                   </table>
                 </div>
-              </motion.section>
-            </TabsContent>
+              </div>
+            </section>
+          </TabsContent>
 
-            {/* INSIGHT TAB */}
-            <TabsContent value="insight" className="mt-6 space-y-4">
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-panel p-6 space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">
-                      Node Monitoring
-                    </h3>
-                    <p className="text-sm text-white/60 mt-1">
-                      View real-time metrics for your cluster nodes
+          {/* ── INSIGHT TAB ────────────────────────────── */}
+          <TabsContent value="insight" className="mt-0 space-y-8">
+            <section>
+              <SectionHead index="01" title="Node" accent="monitoring" />
+              <div className="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <p className={`${MONO} text-[11.5px] text-white/55`}>
+                  Real-time metrics for your cluster nodes.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Select
+                    value={selectedNodeForInsight}
+                    onValueChange={setSelectedNodeForInsight}
+                  >
+                    <SelectTrigger className={`${MONO} h-10 w-full sm:w-[220px] border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 rounded-[5px]`}>
+                      <SelectValue placeholder="Select a node" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#0d0e11] border-white/[0.08] text-white">
+                      {nodesData?.map((node, index) => (
+                        <SelectItem
+                          key={node.droplet_id}
+                          value={node.droplet_id}
+                        >
+                          {node.public_ip} ({index === 0 ? "control-plane" : "worker"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    value={String(insightTimeRange)}
+                    onValueChange={(val) => setInsightTimeRange(Number(val))}
+                  >
+                    <SelectTrigger className={`${MONO} h-10 w-full sm:w-[160px] border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 rounded-[5px]`}>
+                      <SelectValue placeholder="Time range" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#0d0e11] border-white/[0.08] text-white">
+                      <SelectItem value="1">Last 1 hour</SelectItem>
+                      <SelectItem value="6">Last 6 hours</SelectItem>
+                      <SelectItem value="12">Last 12 hours</SelectItem>
+                      <SelectItem value="24">Last 24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {insightLoading ? (
+                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] flex items-center justify-center py-20">
+                  <div className="flex flex-col items-center gap-3">
+                    <Spinner />
+                    <p className={`${MONO} text-[11px] text-white/55`}>
+                      Loading monitoring data
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <Select
-                      value={selectedNodeForInsight}
-                      onValueChange={setSelectedNodeForInsight}
-                    >
-                      <SelectTrigger className="w-full sm:w-[200px] bg-white/10 border-white/20 text-white">
-                        <SelectValue placeholder="Select a node" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {nodesData?.map((node, index) => (
-                          <SelectItem
-                            key={node.droplet_id}
-                            value={node.droplet_id}
-                          >
-                            {node.public_ip} (
-                            {index === 0 ? "control-plane" : "worker"})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select
-                      value={String(insightTimeRange)}
-                      onValueChange={(val) => setInsightTimeRange(Number(val))}
-                    >
-                      <SelectTrigger className="w-full sm:w-[140px] bg-white/10 border-white/20 text-white">
-                        <SelectValue placeholder="Time range" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Last 1 hour</SelectItem>
-                        <SelectItem value="6">Last 6 hours</SelectItem>
-                        <SelectItem value="12">Last 12 hours</SelectItem>
-                        <SelectItem value="24">Last 24 hours</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-
-                {insightLoading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-white/60 text-sm">
-                        Loading monitoring data...
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <GraphCard
-                      title="CPU Usage"
-                      data={insightGraphsData.cpu}
-                      color="#3b82f6"
-                    />
-                    <GraphCard
-                      title="Memory Free"
-                      data={insightGraphsData.memory}
-                      color="#a855f7"
-                    />
-                    <GraphCard
-                      title="Disk Free"
-                      data={insightGraphsData.disk}
-                      color="#ec4899"
-                    />
-                  </div>
-                )}
-              </motion.section>
-            </TabsContent>
-
-            {/* SETTINGS TAB */}
-            <TabsContent value="settings" className="mt-6 space-y-4">
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-panel p-6 space-y-6"
-              >
-                <div>
-                  <h3 className="text-base font-semibold text-white mb-1">
-                    Project Assignment
-                  </h3>
-                  <p className="text-sm text-white/60">
-                    Assign this cluster to a different project
-                  </p>
+              ) : (
+                <div className="space-y-4">
+                  <GraphCard
+                    title="CPU usage"
+                    data={insightGraphsData.cpu}
+                    color={ACCENT}
+                  />
+                  <GraphCard
+                    title="Memory free"
+                    data={insightGraphsData.memory}
+                    color="#a78bfa"
+                  />
+                  <GraphCard
+                    title="Disk free"
+                    data={insightGraphsData.disk}
+                    color="#22d3ee"
+                  />
                 </div>
+              )}
+            </section>
+          </TabsContent>
 
-                <div className="flex flex-col sm:flex-row gap-4">
+          {/* ── SETTINGS TAB ──────────────────────────── */}
+          <TabsContent value="settings" className="mt-0 space-y-12">
+            <section>
+              <SectionHead index="01" title="Project" accent="assignment" />
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
+                <p className={`${MONO} text-[11.5px] text-white/55 leading-relaxed`}>
+                  Assign this cluster to a different project.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Select
                     value={selectedProjectId}
                     onValueChange={setSelectedProjectId}
                   >
-                    <SelectTrigger className="w-full sm:flex-1 bg-white/10 border-white/20 text-white">
+                    <SelectTrigger className={`${MONO} h-10 w-full sm:flex-1 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 rounded-[5px]`}>
                       <SelectValue
                         placeholder="Select a project"
                         className="text-white"
                       />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-[#0d0e11] border-white/[0.08] text-white">
                       {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
@@ -1366,62 +1338,66 @@ function SingleCluster({
                   <button
                     onClick={updateClusterProject}
                     disabled={loading || !selectedProjectId}
-                    className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${MONO} inline-flex h-10 items-center gap-1.5 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
+                    style={{
+                      background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                      color: "#ffffff",
+                      boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                    }}
                   >
-                    {loading ? <Spinner /> : <Check className="h-4 w-4" />}
-                    Update Project
+                    {loading ? <Spinner /> : <Check className="h-3 w-3" />}
+                    Update
                   </button>
                 </div>
-              </motion.section>
+              </div>
+            </section>
 
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="rounded-2xl bg-red-900/20 shadow-lg ring-1 ring-red-500/50 p-6 space-y-4"
-              >
+            <section>
+              <SectionHead index="02" title="Danger" accent="zone" />
+              <div className="border border-rose-500/25 bg-rose-500/[0.03] rounded-[6px] p-5">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5" />
+                  <div className="h-9 w-9 shrink-0 inline-flex items-center justify-center border border-rose-500/25 bg-rose-500/[0.08] rounded-[6px]">
+                    <AlertTriangle className="h-4 w-4 text-rose-300" />
+                  </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-semibold text-red-400 mb-1">
-                      Danger Zone
+                    <h3 className="text-[14px] font-semibold text-rose-200">
+                      Delete this cluster
                     </h3>
-                    <p className="text-sm text-red-300/80">
+                    <p className={`${MONO} mt-1.5 text-[11.5px] text-white/55 leading-relaxed max-w-2xl`}>
                       Deleting this cluster will permanently remove all nodes
                       and data. This action cannot be undone.
                     </p>
+                    <button
+                      onClick={handleDeleteClusterClick}
+                      disabled={loading}
+                      className={`${MONO} mt-4 h-10 inline-flex items-center gap-1.5 px-3.5 border border-rose-500/25 bg-rose-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.10] rounded-[5px] transition-colors disabled:opacity-50`}
+                    >
+                      {loading ? <Spinner /> : <Trash2 className="h-3 w-3" />}
+                      Delete cluster
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleDeleteClusterClick}
-                  disabled={loading}
-                  className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-red-600 text-white px-6 py-2.5 text-sm font-medium transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? <Spinner /> : <Trash2 className="h-4 w-4" />}
-                  Delete Cluster
-                </button>
-              </motion.section>
-            </TabsContent>
-          </Tabs>
-        )}
-      </div>
+              </div>
+            </section>
+          </TabsContent>
+        </Tabs>
+      )}
 
       {/* Delete Node Confirmation Dialog */}
       <AlertDialog open={deleteNodeDialog} onOpenChange={setDeleteNodeDialog}>
-        <AlertDialogContent className="bg-slate-900 border-slate-700">
+        <AlertDialogContent className="bg-[#0d0e11] border border-white/[0.08] rounded-[6px]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">
-              Delete Node
+            <AlertDialogTitle className="text-white text-[16px] font-semibold">
+              Delete node
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-300">
+            <AlertDialogDescription className={`${MONO} text-[11.5px] text-white/55 leading-relaxed`}>
               Are you sure you want to delete this node? This action cannot be
               undone.
             </AlertDialogDescription>
             {nodeToDelete && (
-              <div className="mt-2 p-2 bg-slate-800 rounded text-sm">
-                <span className="text-slate-400">Node IP: </span>
-                <span className="text-white font-mono">
+              <div className={`${MONO} mt-3 border border-white/[0.06] bg-[#111216] rounded-[5px] px-3 py-2 text-[12px]`}>
+                <span className="text-white/45 uppercase tracking-[0.1em] text-[10px]">Node IP </span>
+                <span className="text-white tabular-nums ml-1">
                   {
                     nodesData?.find(
                       (n) => n.droplet_id === nodeToDelete.droplet_id
@@ -1432,14 +1408,14 @@ function SingleCluster({
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-slate-700 text-white hover:bg-slate-600">
+            <AlertDialogCancel className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onDeleteNode}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className={`${MONO} h-10 px-3.5 border border-rose-500/25 bg-rose-500/[0.08] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.15] rounded-[5px]`}
             >
-              Delete Node
+              Delete node
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1450,33 +1426,33 @@ function SingleCluster({
         open={deleteClusterDialog}
         onOpenChange={setDeleteClusterDialog}
       >
-        <AlertDialogContent className="bg-slate-900 border-slate-700">
+        <AlertDialogContent className="bg-[#0d0e11] border border-white/[0.08] rounded-[6px]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">
-              Delete Cluster
+            <AlertDialogTitle className="text-white text-[16px] font-semibold">
+              Delete cluster
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-300">
+            <AlertDialogDescription className={`${MONO} text-[11.5px] text-white/55 leading-relaxed`}>
               Are you sure you want to delete this entire cluster? This will
-              permanently remove.
+              permanently remove:
             </AlertDialogDescription>
-            <ul className="mt-2 ml-4 list-disc text-sm text-slate-300 space-y-1">
+            <ul className={`${MONO} mt-3 ml-4 list-disc text-[11.5px] text-white/55 space-y-1`}>
               <li>
                 All {nodesData?.length || 0} nodes (control plane and workers)
               </li>
               <li>All cluster data and configurations</li>
               <li>All associated resources</li>
-              <li>This action cannot be undone!</li>
+              <li>This action cannot be undone</li>
             </ul>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="cursor-pointer bg-slate-700 text-white hover:bg-slate-600">
+            <AlertDialogCancel className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onDeleteCluster}
-              className="cursor-pointer bg-red-600 text-white hover:bg-red-700"
+              className={`${MONO} h-10 px-3.5 border border-rose-500/25 bg-rose-500/[0.08] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.15] rounded-[5px]`}
             >
-              Delete Cluster
+              Delete cluster
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1485,7 +1461,88 @@ function SingleCluster({
   );
 }
 
-/* --- UI bits --- */
+// ─── UI helpers ────────────────────────────────────────────────
+
+function SectionHead({
+  index,
+  title,
+  accent,
+  meta,
+}: {
+  index: string;
+  title: string;
+  accent: string;
+  meta?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
+      <div className="flex items-baseline gap-3">
+        <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>{index}</span>
+        <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
+          {title}{" "}
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
+            {accent}
+          </span>
+        </h2>
+      </div>
+      {meta && (
+        <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>{meta}</span>
+      )}
+    </div>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  suffix,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  hint?: string;
+  accent?: string;
+}) {
+  const dotColor = accent ?? "rgba(255,255,255,0.35)";
+  return (
+    <div className="px-5 py-5 flex flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{
+            background: dotColor,
+            boxShadow: accent ? `0 0 6px ${dotColor}` : "none",
+          }}
+        />
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+          {label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span
+          style={SERIF_STYLE}
+          className="text-[28px] sm:text-[34px] leading-none font-bold tabular-nums tracking-[-0.03em] text-white"
+        >
+          {value}
+        </span>
+        {suffix && (
+          <span
+            style={SERIF_STYLE}
+            className="text-[14px] text-white/45 font-medium"
+          >
+            {suffix}
+          </span>
+        )}
+      </div>
+      {hint && (
+        <p className={`${MONO} text-[10.5px] text-white/40 mt-auto truncate`}>{hint}</p>
+      )}
+    </div>
+  );
+}
+
 function StepRow({
   label,
   done,
@@ -1495,19 +1552,23 @@ function StepRow({
   done: boolean;
   inProgress: boolean;
 }) {
+  const dotColor = done ? "#4ade80" : inProgress ? ACCENT : "rgba(255,255,255,0.25)";
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
-          done ? "bg-green-500" : inProgress ? "bg-blue-500" : "bg-white/20"
-        }`}
+        className="flex h-5 w-5 items-center justify-center rounded-full transition-colors"
+        style={{
+          background: done ? `${dotColor}22` : inProgress ? `${dotColor}1f` : "transparent",
+          border: `1px solid ${done ? `${dotColor}55` : inProgress ? `${dotColor}55` : "rgba(255,255,255,0.12)"}`,
+          color: dotColor,
+        }}
       >
-        {done && <Check className="h-4 w-4 text-white" />}
+        {done && <Check className="h-3 w-3" />}
         {inProgress && <Spinner />}
       </div>
       <span
-        className={`text-sm transition-colors ${
-          done ? "text-white" : inProgress ? "text-white" : "text-white/60"
+        className={`${MONO} text-[12px] uppercase tracking-[0.08em] transition-colors ${
+          done ? "text-white" : inProgress ? "text-white" : "text-white/45"
         }`}
       >
         {label}
@@ -1519,7 +1580,7 @@ function StepRow({
 function Spinner() {
   return (
     <svg
-      className="h-4 w-4 animate-spin"
+      className="h-3 w-3 animate-spin"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
@@ -1543,33 +1604,6 @@ function Spinner() {
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-white/10 p-2">
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <div className="text-sm font-medium text-white/70">{label}</div>
-          <div className="text-lg font-semibold text-white">{value}</div>
-          <div className="text-xs text-white/50">{sub}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function GraphCard({
   title,
   data,
@@ -1581,18 +1615,17 @@ function GraphCard({
 }) {
   if (!data || !data.labels || data.labels.length === 0) {
     return (
-      <div className="rounded-xl bg-white/5 p-6 ring-1 ring-white/10">
-        <h4 className="text-sm font-semibold text-white mb-4">{title}</h4>
-        <div className="flex items-center justify-center h-[300px]">
-          <div className="text-center">
-            <p className="text-white/50 text-sm">No data available</p>
-          </div>
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
+        <h4 className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/55 mb-4`}>
+          {title}
+        </h4>
+        <div className="flex items-center justify-center h-[280px]">
+          <p className={`${MONO} text-[11px] text-white/40`}>No data available</p>
         </div>
       </div>
     );
   }
 
-  // Transform data for recharts
   const chartData = data.labels.map((label, index) => {
     const point: Record<string, string | number> = { time: label };
     data.datasets.forEach((dataset) => {
@@ -1601,7 +1634,6 @@ function GraphCard({
     return point;
   });
 
-  // Calculate statistics
   const mainDataset = data.datasets[0];
   const values = mainDataset.data;
   const latest = values[values.length - 1];
@@ -1610,24 +1642,30 @@ function GraphCard({
   const min = Math.min(...values);
 
   return (
-    <div className="rounded-xl bg-white/5 p-4 md:p-6 ring-1 ring-white/10 w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-        <h4 className="text-base font-semibold text-white">{title}</h4>
-        <div className="flex items-center gap-3 sm:gap-4 text-xs">
+    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+          />
+          <h4 className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
+            {title}
+          </h4>
+        </div>
+        <div className={`${MONO} flex items-center gap-4 text-[10.5px] tabular-nums`}>
           <div>
-            <span className="text-white/50">Current: </span>
-            <span className="text-white font-semibold">
-              {latest.toFixed(2)}
-            </span>
+            <span className="text-white/40 uppercase tracking-[0.1em]">Current </span>
+            <span className="text-white font-semibold ml-1">{latest.toFixed(2)}</span>
           </div>
           <div>
-            <span className="text-white/50">Avg: </span>
-            <span className="text-white font-semibold">{avg.toFixed(2)}</span>
+            <span className="text-white/40 uppercase tracking-[0.1em]">Avg </span>
+            <span className="text-white font-semibold ml-1">{avg.toFixed(2)}</span>
           </div>
         </div>
       </div>
 
-      <div className="h-[300px] md:h-[400px] w-full">
+      <div className="h-[280px] md:h-[360px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
@@ -1635,27 +1673,29 @@ function GraphCard({
           >
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.1)"
+              stroke="rgba(255,255,255,0.05)"
             />
             <XAxis
               dataKey="time"
-              tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 10 }}
+              tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
               interval="preserveStartEnd"
               minTickGap={50}
+              stroke="rgba(255,255,255,0.08)"
             />
             <YAxis
-              tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 10 }}
+              tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
               width={50}
               domain={["auto", "auto"]}
+              stroke="rgba(255,255,255,0.08)"
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "rgba(0,0,0,0.9)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: "8px",
-                fontSize: "12px",
+                backgroundColor: "#0d0e11",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "5px",
+                fontSize: "11px",
               }}
-              labelStyle={{ color: "rgba(255,255,255,0.8)" }}
+              labelStyle={{ color: "rgba(255,255,255,0.65)" }}
               itemStyle={{ color: color }}
             />
             {data.datasets.map((dataset) => (
@@ -1673,14 +1713,14 @@ function GraphCard({
         </ResponsiveContainer>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/10">
-        <div className="text-xs">
-          <span className="text-white/50">Min: </span>
-          <span className="text-green-400 font-semibold">{min.toFixed(2)}</span>
+      <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/[0.04]">
+        <div className={`${MONO} text-[10.5px] tabular-nums`}>
+          <span className="text-white/40 uppercase tracking-[0.1em]">Min </span>
+          <span className="text-emerald-300 font-semibold ml-1">{min.toFixed(2)}</span>
         </div>
-        <div className="text-xs text-right">
-          <span className="text-white/50">Max: </span>
-          <span className="text-red-400 font-semibold">{max.toFixed(2)}</span>
+        <div className={`${MONO} text-[10.5px] text-right tabular-nums`}>
+          <span className="text-white/40 uppercase tracking-[0.1em]">Max </span>
+          <span className="text-rose-300 font-semibold ml-1">{max.toFixed(2)}</span>
         </div>
       </div>
     </div>

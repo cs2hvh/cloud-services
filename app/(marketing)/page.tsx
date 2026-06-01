@@ -5,15 +5,17 @@ import { Hero } from "@/components/hero";
 import { ServicesSection } from "@/components/services-section";
 import { DomainSearchSection } from "@/components/domain-search-section";
 import { ComplianceCta } from "@/components/compliance-cta";
-import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
+import { ClustersSection } from "@/components/clusters-section";
+import { ComputeSection } from "@/components/compute-section";
+import { ModelTrainingPipelineSection } from "@/components/model-training-pipeline-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 // import FeatureSection from "@/components/feature-section";
 
 export const metadata: Metadata = {
   title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
   description:
-    "Deploy VMs, Kubernetes, managed databases, GPU instances, and AI agents across 12 global regions. 99.99% uptime SLA. Provision your entire infrastructure in seconds.",
+    "Deploy GPU instances, VMs, Kubernetes, managed databases, storage, apps, and AI agents from one production cloud control plane.",
   alternates: {
     canonical: siteConfig.url,
   },
@@ -91,7 +93,7 @@ const jsonLd = {
       isPartOf: { "@id": `${siteConfig.url}/#website` },
       about: { "@id": `${siteConfig.url}/#organization` },
       description:
-        "Deploy virtual machines, Kubernetes clusters, GPU instances, managed databases, and AI agents. Enterprise cloud infrastructure with 99.99% uptime SLA across 12 global regions.",
+        "Deploy virtual machines, Kubernetes clusters, GPU instances, managed databases, storage, apps, and AI agents from one production cloud control plane.",
       breadcrumb: {
         "@type": "BreadcrumbList",
         itemListElement: [
@@ -130,17 +132,23 @@ export default function Home() {
         {/* Figma Services Section */}
         <ServicesSection />
 
+        {/* AI Model Training Pipeline */}
+        <ModelTrainingPipelineSection />
+
         {/* Everything you build */}
         <EverythingSection />
+
+        {/* Reserved & Cluster GPUs — talk to sales */}
+        <ClustersSection />
+
+        {/* Compute lineup — VPS / Dedicated / Bare Metal */}
+        <ComputeSection />
 
         {/* Domain Search */}
         <DomainSearchSection />
 
         {/* Global Network */}
         <GlobalNetworkSection />
-
-        {/* Why Trust Us */}
-        <WhyTrustUs />
 
         {/* Compliance CTA */}
         <ComplianceCta />

@@ -22,6 +22,7 @@ import type {
   UpdateDatabaseStatusRequest,
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+import { applyPgvectorIfPending } from "./pgvector";
 
 async function getClusterInternalImpl(
   request: GetDatabaseClusterRequest
@@ -171,10 +172,23 @@ async function getClusterInternalImpl(
               console.error("[getCluster] Failed to create notification:", notifErr);
             }
 
-            return {
-              success: true,
-              data: decryptClusterData(updatedRead.data, encryptionKey),
-            };
+            const decryptedOnline = decryptClusterData(updatedRead.data, encryptionKey);
+            // Cluster just came online — enable pgvector if the customer opted in.
+            const onlineRaw = updatedRead.data as Record<string, unknown>;
+            const onlineConn = (decryptedOnline as Record<string, unknown>).public_connection as
+              | { uri?: string }
+              | undefined;
+            await applyPgvectorIfPending({
+              clusterId: String(onlineRaw.id ?? request.clusterId),
+              engine: onlineRaw.engine as string | null,
+              enabled: !!onlineRaw.pgvector_enabled,
+              alreadyApplied: !!onlineRaw.pgvector_applied_at,
+              uri: onlineConn?.uri ?? null,
+              caCertificate: (decryptedOnline as Record<string, unknown>).ca_certificate as
+                | string
+                | null,
+            });
+            return { success: true, data: decryptedOnline };
           }
         }
       }
@@ -190,9 +204,24 @@ async function getClusterInternalImpl(
     }
 
     const encryptionKey = process.env.ENCRYPTION_KEY!;
+    const decryptedLatest = decryptClusterData(supabaseReadLatest.data, encryptionKey);
+    // Retry pgvector enable on later status checks if a prior attempt failed
+    // (no-op once applied, not opted in, or not a PG cluster).
+    const latestRaw = supabaseReadLatest.data as Record<string, unknown>;
+    const latestConn = (decryptedLatest as Record<string, unknown>).public_connection as
+      | { uri?: string }
+      | undefined;
+    await applyPgvectorIfPending({
+      clusterId: String(latestRaw.id ?? request.clusterId),
+      engine: latestRaw.engine as string | null,
+      enabled: !!latestRaw.pgvector_enabled,
+      alreadyApplied: !!latestRaw.pgvector_applied_at,
+      uri: latestConn?.uri ?? null,
+      caCertificate: (decryptedLatest as Record<string, unknown>).ca_certificate as string | null,
+    });
     return {
       success: true,
-      data: decryptClusterData(supabaseReadLatest.data, encryptionKey),
+      data: decryptedLatest,
     };
   } catch (err: unknown) {
     return {

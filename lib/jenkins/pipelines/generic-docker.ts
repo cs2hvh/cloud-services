@@ -7,9 +7,9 @@
  * 3. No framework-specific auto-generation needed
  * 
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
- * Just builds the existing Dockerfile with Kaniko and deploys to K8s
+ * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -24,6 +24,7 @@ export function createDockerfilePipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -36,26 +37,8 @@ export function createDockerfilePipeline(
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
   
-  const sizeKey = (size || 'small').toLowerCase();
-  let cpuRequest = '500m';
-  let cpuLimit = '1';
-  let memoryRequest = '512Mi';
-  let memoryLimit = '1Gi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  // Dockerfile apps are unknown runtimes — floor at medium to be safe
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
 
   // Normalize port — handles null/undefined passed from callers even though signature has = 3000
   const port = containerPort ?? 3000;
@@ -199,8 +182,8 @@ ${generateSecurityStages({ language: 'docker' })}
 
             # ── ARG Detection ──────────────────────────────────────────
             # Detect ARG instructions that expect build-time values.
-            # Platform does NOT pass --build-arg to Kaniko, so any ARG
-            # without a default value will silently resolve to empty.
+            # Platform does NOT pass --opt build-arg to BuildKit for generic Dockerfiles,
+            # so any ARG without a default value will silently resolve to empty.
             echo "Checking for build-time ARG instructions..."
             ARG_LINES=$(grep -n "^ARG " Dockerfile 2>/dev/null || true)
             if [ -n "$ARG_LINES" ]; then
@@ -287,46 +270,7 @@ ${generateSecurityStages({ language: 'docker' })}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS')]) {
-
-            sh '''
-              echo "STAGE: Build Docker Image"
-              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
-              mkdir -p /kaniko/.docker
-              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
-
-              cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "$AUTH"
-    }
-  }
-}
-EOF
-
-              echo 'Executing Kaniko build'
-              /kaniko/executor \\
-                --context=$WORKSPACE \\
-                --dockerfile=Dockerfile \\
-                --destination=$DOCKER_IMAGE_VERSION \\
-                --destination=$DOCKER_IMAGE_LATEST \\
-                --cache=true \\
-                --cache-repo=hav0ky/${appName}-cache \\
-                --use-new-run \\
-                --digest-file=image-digest.txt
-
-              echo 'Image build completed successfully'
-            '''
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName)}
 
 ${generateImageScanStage({ language: 'docker' })}
 
@@ -436,20 +380,7 @@ ${envFromSection}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
             echo "Generating Kubernetes service manifest"

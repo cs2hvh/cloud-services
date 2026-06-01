@@ -58,7 +58,7 @@ Full production pipeline with Docker build and Kubernetes deployment.
 - Node.js apps with existing Dockerfile
 
 **Requirements:**
-- Kubernetes cluster with Kaniko support
+- Kubernetes cluster with BuildKit support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - **Repository must have Dockerfile**
@@ -98,7 +98,7 @@ Simplified pipeline that auto-generates Dockerfile for Express apps.
 - Quick Express deployments
 
 **Requirements:**
-- Kubernetes cluster with Kaniko support
+- Kubernetes cluster with BuildKit support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - Repository must have `package.json` with `start` script
@@ -150,7 +150,7 @@ Pipeline for Python web applications with auto-Dockerfile.
 - Python web apps
 
 **Requirements:**
-- Kubernetes cluster with Kaniko support
+- Kubernetes cluster with BuildKit support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - Repository must have `requirements.txt`
@@ -233,7 +233,7 @@ All apps are exposed via NGINX Ingress Controller on ports 80/443 using ClusterI
 **Jenkins Server:**
 ```bash
 # No Docker installation needed!
-# Kaniko runs in Kubernetes pods on the control-plane node
+# BuildKit runs in Kubernetes pods on the control-plane node
 
 # Jenkins only needs:
 # 1. Kubernetes plugin installed

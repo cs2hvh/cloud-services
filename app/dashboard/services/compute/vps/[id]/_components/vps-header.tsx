@@ -1,315 +1,320 @@
 'use client';
 
+// VPS detail header — server avatar with status indicator dot + mono
+// name + meta strip + monochrome action buttons. Provisioning + failed
+// banners stack underneath.
+
+import { AlertTriangle, Clock, Copy, Globe, HardDrive, Loader2, MapPin, Play, Power, RotateCw, Terminal } from 'lucide-react';
 import Link from 'next/link';
-import { AnimatePresence, motion } from 'motion/react';
+import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Loader2,
-  Play,
-  Power,
-  RotateCw,
-} from 'lucide-react';
+import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
+import { type ServerData } from './types';
 
-import { type ServerData, statusColor } from './types';
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
+const ACCENT_BRIGHT = '#33adff';
 
 interface VpsHeaderProps {
-  server: ServerData;
-  uptime: string;
-  actingPower: boolean;
-  memGB: number;
-  monthlyCost: number;
-  accessCmd: string;
-  onPowerAction: (action: 'start' | 'stop' | 'reboot') => void;
+    server: ServerData;
+    uptime: string;
+    actingPower: boolean;
+    memGB: number;
+    monthlyCost: number;
+    accessCmd: string;
+    onPowerAction: (action: 'start' | 'stop' | 'reboot') => void;
+}
+
+function statusMeta(status: string) {
+    switch (status) {
+        case 'running':      return { dot: '#4ade80', label: 'Running',   ring: '#4ade80' };
+        case 'stopped':      return { dot: '#52525b', label: 'Stopped',   ring: '#52525b' };
+        case 'provisioning': return { dot: '#0095FF', label: 'Deploying', ring: '#0095FF' };
+        case 'suspended':    return { dot: '#fbbf24', label: 'Suspended', ring: '#fbbf24' };
+        case 'failed':       return { dot: '#f87171', label: 'Failed',    ring: '#f87171' };
+        case 'error':        return { dot: '#f87171', label: 'Error',     ring: '#f87171' };
+        default:             return { dot: '#52525b', label: status,      ring: '#52525b' };
+    }
+}
+
+async function copy(text: string, label: string) {
+    try {
+        await navigator.clipboard.writeText(text);
+        toast.success(`${label} copied`);
+    } catch {
+        toast.error(`Failed to copy ${label}`);
+    }
 }
 
 export function VpsHeader({
-  server,
-  uptime,
-  actingPower,
-  memGB,
-  monthlyCost,
-  accessCmd,
-  onPowerAction,
+    server,
+    uptime,
+    actingPower,
+    onPowerAction,
 }: VpsHeaderProps) {
-  const isRunning = server.status === 'running';
-  const stopped = server.status === 'stopped';
-  const isProvisioning = server.status === 'provisioning';
-  const isFailed = server.status === 'failed' || server.status === 'error';
-  const provisioning = server.details?.provisioning;
-  const progress = provisioning?.progress || 10;
+    const isRunning = server.status === 'running';
+    const stopped = server.status === 'stopped';
+    const isProvisioning = server.status === 'provisioning';
+    const isFailed = server.status === 'failed' || server.status === 'error';
+    const provisioning = server.details?.provisioning;
+    const progress = provisioning?.progress || 10;
 
-  const summaryCards = [
-    {
-      label: 'Compute',
-      value: `${server.cpu_cores} vCPU`,
-      meta: `${memGB} GB RAM`,
-    },
-    {
-      label: 'Storage',
-      value: `${server.disk_gb} GB`,
-      meta: 'NVMe volume',
-    },
-    {
-      label: 'Rate',
-      value: `$${monthlyCost.toFixed(2)}/mo`,
-      meta: `$${(server.hourly_cost || 0).toFixed(4)}/hr`,
-    },
-    {
-      label: 'Placement',
-      value: server.displayRegion || server.region || 'Pending',
-      meta: `VMID ${server.vmid ?? 'Pending'}`,
-    },
-  ];
+    const status = statusMeta(server.status);
 
-  return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="mb-6"
-      >
-        <div className="mb-4 flex items-center gap-3 text-[13px] text-white/35">
-          <Link
-            href="/dashboard/services/compute/vps"
-            className="inline-flex items-center gap-2 text-white/55 transition-colors hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to virtual servers
-          </Link>
-          <span className="text-white/12">/</span>
-          <Link
-            href="/dashboard/services/compute"
-            className="hover:text-white/60 transition-colors"
-          >
-            Compute
-          </Link>
-          <span className="text-white/12">/</span>
-          <span className="text-white/60">Virtual servers</span>
-          <span className="text-white/12">/</span>
-          <span className="font-mono text-xs text-white/55">{server.name}</span>
-        </div>
+    return (
+        <>
+            {/* Breadcrumb-style back link */}
+            <Link
+                href="/dashboard/services/compute/vps"
+                className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors mb-5`}
+            >
+                ← All servers
+            </Link>
 
-        <div className="glass-panel overflow-hidden">
-          <div className="h-px w-full bg-gradient-to-r from-cyan-400/45 via-cyan-300/10 to-transparent" />
-          <div className="px-5 py-5 sm:px-6 sm:py-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0 max-w-3xl">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">
-                    Virtual machine
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusColor(server.status)}`}
-                  >
-                    {isProvisioning && <Loader2 className="h-3 w-3 animate-spin" />}
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        isRunning
-                          ? 'bg-emerald-300'
-                          : isProvisioning
-                            ? 'bg-cyan-300'
-                            : isFailed
-                              ? 'bg-red-300'
-                              : 'bg-white/40'
-                      }`}
-                    />
-                    {server.status}
-                  </span>
+            {/* Identity row */}
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between mb-5 pb-6 border-b border-white/[0.06]">
+                <div className="flex items-center gap-4 min-w-0 flex-1">
+                    {/* Server avatar with status indicator */}
+                    <div className="relative shrink-0">
+                        <div
+                            className="h-14 w-14 rounded-[8px] border flex items-center justify-center"
+                            style={{
+                                background: 'linear-gradient(135deg, #16181d, #1a1c23)',
+                                borderColor: 'rgba(255,255,255,0.09)',
+                                color: ACCENT,
+                            }}
+                        >
+                            <OsImg name={server.os} size={28} className="h-7 w-7" />
+                        </div>
+                        {/* Status indicator dot */}
+                        <span
+                            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ${isRunning ? 'animate-pulse' : ''}`}
+                            style={{
+                                background: status.dot,
+                                border: '3px solid #08090b',
+                                boxShadow: `0 0 8px ${status.ring}`,
+                            }}
+                        />
+                    </div>
+
+                    {/* Name + meta */}
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-3 flex-wrap mb-2">
+                            <h1
+                                className={`${MONO} text-[24px] sm:text-[28px] leading-none tracking-[-0.02em] text-white font-semibold truncate`}
+                            >
+                                {server.name}
+                            </h1>
+                            <span
+                                className={`${MONO} inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9.5px] uppercase tracking-[0.12em] font-semibold`}
+                                style={{
+                                    background: isRunning ? 'rgba(74,222,128,0.08)' : `${status.dot}15`,
+                                    color: status.dot,
+                                    border: `1px solid ${status.dot}38`,
+                                }}
+                            >
+                                <span
+                                    className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'animate-pulse' : ''}`}
+                                    style={{ background: status.dot, boxShadow: `0 0 6px ${status.dot}` }}
+                                />
+                                {status.label}
+                            </span>
+                        </div>
+
+                        <div className={`${MONO} flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-white/45`}>
+                            <span className="inline-flex items-center gap-1.5 text-white/65">
+                                <OsImg name={server.os} size={13} className="h-[13px] w-[13px] opacity-90" />
+                                {server.os}
+                            </span>
+                            {(server.displayRegion || server.region) && (
+                                <>
+                                    <span className="text-white/15">·</span>
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <MapPin className="h-3 w-3 opacity-70" />
+                                        {server.displayRegion || server.region}
+                                    </span>
+                                </>
+                            )}
+                            {server.ip && (
+                                <>
+                                    <span className="text-white/15">·</span>
+                                    <span className="inline-flex items-center gap-1.5 text-white/80">
+                                        <Globe className="h-3 w-3 opacity-70" />
+                                        {server.ip}
+                                        <button
+                                            type="button"
+                                            onClick={() => copy(server.ip, 'IP address')}
+                                            className="text-white/25 hover:text-[#0095FF] transition-colors"
+                                            title="Copy IP"
+                                        >
+                                            <Copy className="h-3 w-3" />
+                                        </button>
+                                    </span>
+                                </>
+                            )}
+                            {server.vmid && (
+                                <>
+                                    <span className="text-white/15">·</span>
+                                    <span className="inline-flex items-center gap-1.5 text-white/35">
+                                        <HardDrive className="h-3 w-3 opacity-70" />
+                                        VMID {server.vmid}
+                                    </span>
+                                </>
+                            )}
+                            {isRunning && (
+                                <>
+                                    <span className="text-white/15">·</span>
+                                    <span className="inline-flex items-center gap-1.5 text-white/65">
+                                        <Clock className="h-3 w-3 opacity-70" />
+                                        Up {uptime}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                  {server.name}
-                </h1>
-
-                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-white/44">
-                  <span>{server.os}</span>
-                  {(server.displayRegion || server.region) && (
-                    <>
-                      <span className="text-white/15">•</span>
-                      <span>{server.displayRegion || server.region}</span>
-                    </>
-                  )}
-                  {server.ip && (
-                    <>
-                      <span className="text-white/15">•</span>
-                      <span className="font-mono text-white/58">{server.ip}</span>
-                    </>
-                  )}
-                  {isRunning && (
-                    <>
-                      <span className="text-white/15">•</span>
-                      <span className="font-mono text-emerald-300/75">{uptime}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+                {/* Power actions */}
                 {!isProvisioning && !isFailed && (
-                  <>
-                    {stopped ? (
-                      <Button
-                        onClick={() => onPowerAction('start')}
-                        disabled={actingPower}
-                        size="sm"
-                        className="border border-emerald-500/25 bg-emerald-500/90 font-semibold text-slate-950 hover:bg-emerald-400"
-                      >
-                        {actingPower ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <div className="flex items-center gap-2 shrink-0">
+                        <ActionBtn icon={<Terminal className="h-3.5 w-3.5" />} label="Console" onClick={() => undefined} />
+                        {stopped ? (
+                            <ActionBtn
+                                icon={actingPower ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                                label="Start"
+                                onClick={() => onPowerAction('start')}
+                                disabled={actingPower}
+                                primary
+                            />
                         ) : (
-                          <Play className="mr-2 h-4 w-4" />
+                            <>
+                                <ActionBtn
+                                    icon={actingPower ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+                                    label="Reboot"
+                                    onClick={() => onPowerAction('reboot')}
+                                    disabled={actingPower}
+                                />
+                                <ActionBtn
+                                    icon={<Power className="h-3.5 w-3.5" />}
+                                    label="Stop"
+                                    onClick={() => onPowerAction('stop')}
+                                    disabled={actingPower}
+                                    danger
+                                />
+                            </>
                         )}
-                        Start VM
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          onClick={() => onPowerAction('reboot')}
-                          disabled={actingPower}
-                          size="sm"
-                          variant="outline"
-                          className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08] hover:text-white"
-                        >
-                          {actingPower ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <RotateCw className="mr-2 h-4 w-4" />
-                          )}
-                          Reboot
-                        </Button>
-                        <Button
-                          onClick={() => onPowerAction('stop')}
-                          disabled={actingPower}
-                          size="sm"
-                          variant="outline"
-                          className="border-red-500/15 bg-red-500/[0.06] text-red-400 hover:border-red-500/25 hover:bg-red-500/[0.12]"
-                        >
-                          <Power className="mr-2 h-4 w-4" />
-                          Stop
-                        </Button>
-                      </>
-                    )}
-                  </>
+                    </div>
                 )}
-              </div>
             </div>
 
-            <div className="mt-5 grid gap-5 border-t border-white/[0.06] pt-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {summaryCards.map((card) => (
-                  <div key={card.label} className="min-w-0 border-l border-white/[0.06] pl-4 first:border-l-0 first:pl-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/34">
-                      {card.label}
+            {/* Provisioning banner */}
+            {isProvisioning && (
+                <div className="mb-5 border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4">
+                    <div className="mb-2.5 flex items-center justify-between">
+                        <div className={`${MONO} flex items-center gap-2 text-[11.5px] text-white/75`}>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: ACCENT }} />
+                            Provisioning virtual machine
+                        </div>
+                        <span className={`${MONO} text-[12px] font-semibold text-white tabular-nums`}>
+                            {progress}%
+                        </span>
                     </div>
-                    <div className="mt-2 text-base font-medium text-white">{card.value}</div>
-                    <div className="mt-1 text-sm text-white/42">{card.meta}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-white/[0.06] pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/34">
-                  Access
-                </div>
-                <div className="mt-2 truncate font-mono text-sm text-white/78">
-                  {accessCmd}
-                </div>
-                <div className="mt-1 text-sm text-white/42">
-                  {isRunning ? 'Ready for direct access.' : 'Available after the instance is online.'}
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/34">
-                      Placement
+                    <div className="h-[2px] overflow-hidden bg-white/[0.06]">
+                        <div
+                            className="h-full transition-all duration-700"
+                            style={{ width: `${progress}%`, background: ACCENT, boxShadow: `0 0 8px rgba(0,149,255,0.4)` }}
+                        />
                     </div>
-                    <div className="mt-2 text-sm font-medium text-white">
-                      {server.displayRegion || server.region || 'Pending'}
-                    </div>
-                    <div className="mt-1 text-sm text-white/42">
-                      VMID {server.vmid ?? 'Pending'} on {server.node || 'unassigned node'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <AnimatePresence>
-        {isProvisioning && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -8, height: 0 }}
-            className="mb-6 overflow-hidden"
-          >
-            <div className="glass-panel overflow-hidden border-cyan-500/10">
-              <div className="h-px w-full bg-gradient-to-r from-cyan-400/45 via-cyan-300/10 to-transparent" />
-              <div className="relative px-6 py-5">
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-cyan-500/[0.04] to-transparent" />
-                <div className="relative">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
-                      <span className="text-sm font-medium text-cyan-200">
-                        Provisioning virtual machine
-                      </span>
-                    </div>
-                    <span className="font-mono text-sm font-semibold text-cyan-200 tabular-nums">
-                      {progress}%
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden bg-white/[0.06]">
-                    <motion.div
-                      className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-300"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progress}%` }}
-                      transition={{ duration: 0.8, ease: 'easeOut' }}
-                    />
-                  </div>
-                  <p className="mt-3 text-[13px] text-white/42">
-                    {provisioning?.message || 'Allocating compute, storage, and network resources.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isFailed && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="mb-6"
-          >
-            <div className="glass-panel overflow-hidden border-red-500/15">
-              <div className="h-px w-full bg-gradient-to-r from-red-400/45 via-red-300/10 to-transparent" />
-              <div className="relative px-6 py-5">
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-500/[0.04] to-transparent" />
-                <div className="relative flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-red-500/20 bg-red-500/10">
-                    <AlertTriangle className="h-5 w-5 text-red-300" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-red-300">Provisioning failed</p>
-                    <p className="mt-1 text-[13px] leading-relaxed text-white/45">
-                      {provisioning?.message || 'The instance could not be provisioned. Review the error state or retry the deployment.'}
+                    <p className={`${MONO} mt-2.5 text-[10.5px] text-white/45`}>
+                        {provisioning?.message || 'Allocating compute, storage, and network resources.'}
                     </p>
-                  </div>
                 </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
+            )}
+
+            {/* Failed banner */}
+            {isFailed && (
+                <div className="mb-5 border border-red-500/20 bg-red-500/[0.04] rounded-[6px] px-5 py-4 flex items-start gap-3">
+                    <div className="h-9 w-9 shrink-0 flex items-center justify-center border border-red-500/25 bg-red-500/[0.06] rounded-[5px]">
+                        <AlertTriangle className="h-4 w-4 text-red-300" />
+                    </div>
+                    <div>
+                        <p className="text-[13px] font-semibold text-red-200">Provisioning failed</p>
+                        <p className={`${MONO} mt-1 text-[11.5px] text-white/55 leading-relaxed`}>
+                            {provisioning?.message || 'The instance could not be provisioned. Review the error state or retry the deployment.'}
+                        </p>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+// ─── Action button ──────────────────────────────────────────────
+
+function ActionBtn({
+    icon,
+    label,
+    onClick,
+    disabled,
+    primary,
+    danger,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    primary?: boolean;
+    danger?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className="inline-flex items-center gap-2 h-9 px-3.5 text-[12px] font-medium rounded-[5px] border transition-all disabled:opacity-50"
+            style={
+                primary
+                    ? {
+                          background: ACCENT,
+                          borderColor: ACCENT,
+                          color: '#ffffff',
+                          boxShadow: '0 6px 18px rgba(0,149,255,0.15)',
+                      }
+                    : {
+                          background: '#111216',
+                          borderColor: 'rgba(255,255,255,0.08)',
+                          color: 'rgba(255,255,255,0.78)',
+                      }
+            }
+            onMouseEnter={(e) => {
+                if (disabled) return;
+                if (primary) {
+                    e.currentTarget.style.background = ACCENT_BRIGHT;
+                    e.currentTarget.style.borderColor = ACCENT_BRIGHT;
+                } else if (danger) {
+                    e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)';
+                    e.currentTarget.style.color = '#f87171';
+                    e.currentTarget.style.background = 'rgba(248,113,113,0.05)';
+                } else {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)';
+                    e.currentTarget.style.background = '#16181d';
+                    e.currentTarget.style.color = '#ffffff';
+                }
+            }}
+            onMouseLeave={(e) => {
+                if (disabled) return;
+                if (primary) {
+                    e.currentTarget.style.background = ACCENT;
+                    e.currentTarget.style.borderColor = ACCENT;
+                } else {
+                    e.currentTarget.style.background = '#111216';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.78)';
+                }
+            }}
+        >
+            {icon}
+            {label}
+        </button>
+    );
 }

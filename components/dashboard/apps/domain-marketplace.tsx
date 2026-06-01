@@ -4,12 +4,52 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { ChevronDown, ChevronUp, Loader2, Search, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { SearchResults } from './domain-marketplace/search-results';
 import { TldSelector } from './domain-marketplace/tld-selector';
 import type { MarketplaceSummary, SearchResultItem } from './domain-marketplace/types';
+
+type RegistrantContact = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  address1: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+};
+
+const EMPTY_CONTACT: RegistrantContact = {
+  firstName: '', lastName: '', email: '', phone: '',
+  companyName: '', address1: '', city: '', state: '', zip: '', country: '',
+};
+
+function contactHasData(c: RegistrantContact): boolean {
+  return Object.values(c).some((v) => v.trim() !== '');
+}
+
+function toApiContact(c: RegistrantContact) {
+  const trimmed = Object.fromEntries(
+    Object.entries(c).map(([k, v]) => [k, v.trim()])
+  ) as RegistrantContact;
+  if (!contactHasData(trimmed)) return undefined;
+  return Object.fromEntries(
+    Object.entries(trimmed).filter(([, v]) => v !== '')
+  );
+}
 
 export interface DomainMarketplaceTabProps {
   sourceAppId?: string;
@@ -65,6 +105,9 @@ export function DomainMarketplaceTab({
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [requestingDomain, setRequestingDomain] = useState<string | null>(null);
+  const [confirmingItem, setConfirmingItem] = useState<SearchResultItem | null>(null);
+  const [contact, setContact] = useState<RegistrantContact>(EMPTY_CONTACT);
+  const [showContactForm, setShowContactForm] = useState(false);
   const [showTldPanel, setShowTldPanel] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -99,21 +142,90 @@ export function DomainMarketplaceTab({
     void loadSummary();
   }, []);
 
-  const lastAutoSearched = useRef<string | null>(null);
-  useEffect(() => {
-    const autoQuery = initialQuery?.trim();
-    if (
-      autoQuery &&
-      summary?.configured &&
-      query.trim() === autoQuery &&
-      lastAutoSearched.current !== autoQuery
-    ) {
-      lastAutoSearched.current = autoQuery;
-      void handleSearch();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery, summary, query]);
+  // ─── Search execution ────────────────────────────────────────
+  //
+  // We support two modes:
+  //   • Auto-search (debounced ~350ms) — fires as the user types. Stays
+  //     silent: no toasts, keeps last results visible while loading.
+  //   • Explicit search — pressing Enter or clicking the button. Syncs
+  //     the URL and surfaces validation errors as toasts.
+  //
+  // Both paths funnel through `runSearch`. An AbortController per call
+  // cancels in-flight requests when the user keeps typing.
+  const lastSearchedRef = useRef<string | null>(null);
+  const lastSearchedTldsRef = useRef<string>('');
+  const abortRef = useRef<AbortController | null>(null);
 
+  const runSearch = async (
+    cleanQuery: string,
+    tlds: string[],
+    options: { silent?: boolean; syncUrl?: boolean } = {}
+  ) => {
+    if (!cleanQuery) return;
+    if (tlds.length === 0) return;
+
+    // Cancel any in-flight search.
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    setSearching(true);
+    try {
+      const res = await fetch('/api/domains/market/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: cleanQuery, tlds }),
+        signal: ctrl.signal,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (!options.silent) toast.error(data?.message || data?.error || 'Domain search failed');
+        return;
+      }
+      const items = (data?.data?.results || []) as SearchResultItem[];
+      setResults(items);
+      lastSearchedRef.current = cleanQuery;
+      lastSearchedTldsRef.current = tlds.join(',');
+      if (options.syncUrl) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('domain', cleanQuery);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+    } catch (err) {
+      // Aborted searches are expected when the user keeps typing.
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      if (!options.silent) toast.error('Domain search failed');
+    } finally {
+      // Only clear the spinner if we're still the active request.
+      if (abortRef.current === ctrl) setSearching(false);
+    }
+  };
+
+  // Auto-search: react to typing. Debounced 350ms. Min 2 characters.
+  useEffect(() => {
+    if (!summary?.configured) return;
+    if (selectedTlds.length === 0) return;
+    const cleanQuery = normalizeDomainQuery(query);
+    if (!cleanQuery || cleanQuery.length < 2) return;
+    // Skip if nothing changed since last successful search.
+    const tldsKey = selectedTlds.join(',');
+    if (
+      cleanQuery === lastSearchedRef.current &&
+      tldsKey === lastSearchedTldsRef.current
+    ) {
+      return;
+    }
+    const t = setTimeout(() => {
+      void runSearch(cleanQuery, selectedTlds, { silent: true });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, selectedTlds, summary]);
+
+  // Cancel the in-flight search on unmount.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Explicit search (Enter / button click). Validates loudly, syncs URL.
   const handleSearch = async ({
     syncUrl = false,
     searchValue,
@@ -130,44 +242,31 @@ export function DomainMarketplaceTab({
       toast.error('Select at least one TLD to search');
       return;
     }
-
-    setSearching(true);
-    setResults([]);
-    try {
-      lastAutoSearched.current = cleanQuery;
-      const res = await fetch('/api/domains/market/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: cleanQuery, tlds: selectedTlds }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Domain search failed');
-        return;
-      }
-      const items = (data?.data?.results || []) as SearchResultItem[];
-      setResults(items);
-      if (syncUrl) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('domain', cleanQuery);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-      }
-      if (items.length === 0) toast.info('No results for this query');
-    } catch {
-      toast.error('Domain search failed');
-    } finally {
-      setSearching(false);
-    }
+    await runSearch(cleanQuery, selectedTlds, { silent: false, syncUrl });
   };
 
-  const handleRequestPurchase = async (domain: string) => {
+  // Step 1: open the confirmation dialog
+  const handleRequestPurchase = (domain: string) => {
+    const item = results.find((r) => r.domainName === domain) ?? { domainName: domain } as SearchResultItem;
+    setConfirmingItem(item);
+    setContact(EMPTY_CONTACT);
+    setShowContactForm(false);
+  };
+
+  // Step 2: user confirmed — fire the API
+  const handleConfirmPurchase = async () => {
+    if (!confirmingItem) return;
+    const domain = confirmingItem.domainName;
     setRequestingDomain(domain);
+    setConfirmingItem(null);
     try {
-      const body: { domain: string; idempotency_key: string; app_id?: string } = {
+      const body: Record<string, unknown> = {
         domain,
         idempotency_key: `${sourceAppId || 'global'}:${domain}:${Date.now()}`,
       };
       if (sourceAppId) body.app_id = sourceAppId;
+      const apiContact = toApiContact(contact);
+      if (apiContact) body.registrant_contact = apiContact;
 
       const res = await fetch('/api/domains/market/purchase-requests', {
         method: 'POST',
@@ -179,9 +278,10 @@ export function DomainMarketplaceTab({
         toast.error(data?.message || data?.error || 'Failed to submit request');
         return;
       }
+      const contactEmail = contact.email.trim() || userEmail;
       toast.success(`Domain purchased: ${domain}`, {
-        description: userEmail
-          ? `An ICANN contact verification email will be sent to ${userEmail} — click the link before activating the domain.`
+        description: contactEmail
+          ? `An ICANN contact verification email will be sent to ${contactEmail} — click the link before activating the domain.`
           : 'Check your email for an ICANN verification link and click it before activating the domain.',
         duration: 8000,
       });
@@ -197,8 +297,8 @@ export function DomainMarketplaceTab({
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel overflow-hidden">
-        <div className="h-px w-full bg-gradient-to-r from-cyan-400/45 via-cyan-300/10 to-transparent" />
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        <div className="h-px w-full bg-gradient-to-r from-[#0095FF]/45 via-[#0095FF]/10 to-transparent" />
         <div className="grid gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/36">
@@ -225,7 +325,7 @@ export function DomainMarketplaceTab({
               <Button
                 onClick={() => void handleSearch({ syncUrl: true })}
                 disabled={isSearchDisabled}
-                className="h-12 shrink-0 rounded-none border border-cyan-400/25 bg-cyan-500/90 px-7 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/25"
+                className="h-12 shrink-0 rounded-none border border-[#0095FF]/30 bg-[#0095FF] px-7 text-sm font-semibold text-white hover:bg-[#0095FF] disabled:bg-white/[0.07] disabled:text-white/25"
               >
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
               </Button>
@@ -234,7 +334,7 @@ export function DomainMarketplaceTab({
             {querySuggestions.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
-                  <Sparkles className="h-3 w-3 text-cyan-300/80" />
+                  <Sparkles className="h-3 w-3 text-[#0095FF]" />
                   Related Searches
                 </span>
                 {querySuggestions.map((suggestion) => (
@@ -247,7 +347,7 @@ export function DomainMarketplaceTab({
                     }}
                     className={`border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       suggestion === normalizedQuery
-                        ? 'border-cyan-400/25 bg-cyan-500/12 text-cyan-200'
+                        ? 'border-[#0095FF]/30 bg-[#0095FF]/[0.10] text-[#82adfb]'
                         : 'border-white/[0.07] bg-white/[0.04] text-white/55 hover:border-white/[0.14] hover:text-white/78'
                     }`}
                   >
@@ -284,7 +384,7 @@ export function DomainMarketplaceTab({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+                <ShieldCheck className="h-3.5 w-3.5 text-[#0095FF]" />
                 Marketplace
               </div>
               <div className="mt-2 text-sm font-medium text-white">
@@ -320,7 +420,7 @@ export function DomainMarketplaceTab({
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="glass-panel overflow-hidden">
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
               <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
                 <h3 className="text-sm font-semibold text-white/92">TLD Filters</h3>
                 <p className="mt-1 text-sm text-white/45">
@@ -344,6 +444,93 @@ export function DomainMarketplaceTab({
         requestingDomain={requestingDomain}
         onRequestPurchase={handleRequestPurchase}
       />
+
+      {/* Purchase confirmation dialog */}
+      <Dialog open={!!confirmingItem} onOpenChange={(open) => { if (!open) setConfirmingItem(null); }}>
+        <DialogContent className="max-w-lg border-white/10 bg-zinc-900 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Confirm Purchase</DialogTitle>
+            <DialogDescription className="text-white/55">
+              <span className="font-mono font-medium text-white/85">{confirmingItem?.domainName}</span>
+              {confirmingItem?.purchasePrice != null && (
+                <span className="ml-2 text-white/55">
+                  · ${confirmingItem.purchasePrice}/yr
+                  {confirmingItem.renewalPrice != null && confirmingItem.renewalPrice !== confirmingItem.purchasePrice
+                    ? ` (renews $${confirmingItem.renewalPrice}/yr)`
+                    : ''}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Collapsible registrant contact */}
+          <div className="mt-1 border border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() => setShowContactForm((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white/70 hover:bg-white/[0.04] transition-colors"
+            >
+              <span className="font-medium">
+                Registrant Contact
+                <span className="ml-2 text-[11px] font-normal text-white/40">Optional — WHOIS / ICANN records</span>
+              </span>
+              {showContactForm
+                ? <ChevronUp className="h-4 w-4 shrink-0 text-white/40" />
+                : <ChevronDown className="h-4 w-4 shrink-0 text-white/40" />}
+            </button>
+
+            {showContactForm && (
+              <div className="border-t border-white/[0.07] px-4 pb-4 pt-3">
+                <p className="mb-3 text-xs text-white/40">
+                  Leave blank to use your account email and platform address defaults.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['firstName', 'First Name', 'col-span-1'],
+                    ['lastName', 'Last Name', 'col-span-1'],
+                    ['email', 'Email', 'col-span-2'],
+                    ['phone', 'Phone (e.g. +1.2025551234)', 'col-span-1'],
+                    ['companyName', 'Company (optional)', 'col-span-1'],
+                    ['address1', 'Address', 'col-span-2'],
+                    ['city', 'City', 'col-span-1'],
+                    ['state', 'State / Province', 'col-span-1'],
+                    ['zip', 'ZIP / Postal Code', 'col-span-1'],
+                    ['country', 'Country Code (e.g. US)', 'col-span-1'],
+                  ] as const).map(([field, label, span]) => (
+                    <div key={field} className={span}>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/38">
+                        {label}
+                      </label>
+                      <input
+                        type={field === 'email' ? 'email' : 'text'}
+                        value={contact[field]}
+                        onChange={(e) => setContact((prev) => ({ ...prev, [field]: e.target.value }))}
+                        className="h-9 w-full border border-white/[0.08] bg-black/20 px-3 text-sm text-white placeholder:text-white/20 focus:border-white/20 focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              className="rounded-none border-white/10 text-white hover:bg-white/[0.06]"
+              onClick={() => setConfirmingItem(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-none bg-[#0095FF] text-white hover:bg-[#0095FF]"
+              onClick={() => void handleConfirmPurchase()}
+            >
+              Confirm Purchase
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

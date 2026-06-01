@@ -39,6 +39,7 @@ interface AppRecord extends Record<string, unknown> {
   output_directory: string | null;
   size: string | null;
   last_failure_reason: string | null;
+  healthcheck_path: string | null;
 }
 
 // UI-friendly format (matches existing App type)
@@ -62,6 +63,7 @@ export interface App {
   output_directory?: string;
   size?: string;
   last_failure_reason?: string | null;
+  healthcheck_path?: string | null;
   can_rollback?: boolean;
   serving_build_number?: number | null;
   last_operation_build_number?: number | null;
@@ -100,6 +102,7 @@ function transformApp(record: AppRecord): App {
     output_directory: record.output_directory || undefined,
     size: record.size || undefined,
     last_failure_reason: record.last_failure_reason,
+    healthcheck_path: record.healthcheck_path,
     can_rollback: false, // Can't determine from real-time, set to false
     serving_build_number: null,
     last_operation_build_number: null,

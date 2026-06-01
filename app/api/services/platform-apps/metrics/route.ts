@@ -78,6 +78,11 @@ export async function GET(req: NextRequest) {
             megabytes: Math.round(p.memory / 1024 / 1024),
             display: `${Math.round(p.memory / 1024 / 1024)}Mi`,
           },
+          network: {
+            receive_bytes_5m: Math.round(p.networkReceiveBytes ?? 0),
+            transmit_bytes_5m: Math.round(p.networkTransmitBytes ?? 0),
+            total_bytes_5m: Math.round((p.networkReceiveBytes ?? 0) + (p.networkTransmitBytes ?? 0)),
+          },
         })),
         total: {
           cpu: {
@@ -89,6 +94,11 @@ export async function GET(req: NextRequest) {
             bytes: metrics.totalMemory,
             megabytes: Math.round(metrics.totalMemory / 1024 / 1024),
             display: `${Math.round(metrics.totalMemory / 1024 / 1024)}Mi`,
+          },
+          network: {
+            receive_bytes_5m: metrics.totalNetworkReceiveBytes,
+            transmit_bytes_5m: metrics.totalNetworkTransmitBytes,
+            total_bytes_5m: metrics.totalNetworkReceiveBytes + metrics.totalNetworkTransmitBytes,
           },
         },
       },

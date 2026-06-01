@@ -1,6 +1,6 @@
 /**
  * Python Pipeline - Django, Flask, FastAPI
- * Auto-creates Dockerfile, builds with Kaniko
+ * Auto-creates Dockerfile, builds with BuildKit
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
  * DEPLOYMENT CONTRACT:
@@ -8,7 +8,7 @@
  * 2. Create Environment Secret stage
  * 3. Deploy to Kubernetes stage
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generatePythonDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -24,31 +24,13 @@ export function createPythonPipeline(
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
+  healthcheckPath?: string,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
-  const sizeKey = (size || 'small').toLowerCase();
-  let cpuRequest = '250m';
-  let cpuLimit = '500m';
-  let memoryRequest = '256Mi';
-  let memoryLimit = '512Mi';
-  let replicas = 1;
-
-  if (sizeKey === 'medium') {
-    cpuRequest = '500m';
-    cpuLimit = '1';
-    memoryRequest = '512Mi';
-    memoryLimit = '1Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1';
-    cpuLimit = '2';
-    memoryRequest = '1Gi';
-    memoryLimit = '2Gi';
-    replicas = 3;
-  }
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
 
   // Use provided container port or default to 8000 for Python apps (FastAPI/Flask/Django)
   const port = containerPort ?? 8000;
@@ -70,7 +52,7 @@ export function createPythonPipeline(
   <actions/>
   <description>
     Python deployment pipeline for ${name}
-    Supports Django, Flask, FastAPI, builds with Kaniko
+    Supports Django, Flask, FastAPI, builds with BuildKit
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
@@ -216,53 +198,7 @@ ${generatePythonDockerfileStage()}
       }
     }
 
-    stage('Build Docker Image') {
-      steps {
-        container('kaniko') {
-          script {
-            echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
-            withCredentials([usernamePassword(
-              credentialsId: 'dockerhublogin',
-              usernameVariable: 'DOCKER_USER',
-              passwordVariable: 'DOCKER_PASS'
-            )]) {
-              sh(
-                script: '''
-                  mkdir -p /kaniko/.docker
-                AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
-
-                cat <<EOF > /kaniko/.docker/config.json
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "\$AUTH"
-    }
-  }
-}
-EOF
-
-                echo 'Executing Kaniko build'
-                /kaniko/executor \\
-                  --context=\${WORKSPACE} \\
-                  --dockerfile=Dockerfile \\
-                  --destination=\${DOCKER_IMAGE_VERSION} \\
-                  --destination=\${DOCKER_IMAGE_LATEST} \\
-                  --cache=true \\
-                  --cache-repo=hav0ky/${appName}-cache \\
-                  --use-new-run \\
-                  --digest-file=image-digest.txt
-                
-                echo 'Image build completed successfully'
-                ''',
-                returnStatus: false,
-                returnStdout: false
-              )
-            }
-          }
-        }
-      }
-    }
+${generateBuildKitStage(appName)}
 
 ${generateImageScanStage({ language: 'python' })}
 
@@ -342,20 +278,7 @@ ${defaultEnvYaml}
           limits:
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
-        livenessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          tcpSocket:
-            port: ${port}
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 6
+${generateProbeYaml(port, healthcheckPath)}
 DEPLOY_EOF
 
               echo 'Generating Kubernetes service manifest'

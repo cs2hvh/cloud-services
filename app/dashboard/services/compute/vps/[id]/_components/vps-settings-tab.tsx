@@ -1,17 +1,23 @@
 'use client';
 
+// Settings tab — numbered sections matching the editorial design.
+// Server details (read-only metadata), hostname rename, lifecycle
+// toggle preferences (placeholder for future server-side wiring),
+// and danger-zone destroy with name-confirmation.
+
 import {
-  Loader2,
-  AlertTriangle,
-  CheckCircle2,
-  Pencil,
-  Trash2,
+  AlertTriangle, Loader2, Pencil, Trash2,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { type ServerData } from './types';
+import { VpsResizeSection } from './vps-resize-section';
+
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
+const ACCENT_BRIGHT = '#33adff';
 
 interface VpsSettingsTabProps {
   server: ServerData;
+  onRefresh?: () => void;
   editName: string;
   setEditName: (v: string) => void;
   showRenameInput: boolean;
@@ -24,8 +30,55 @@ interface VpsSettingsTabProps {
   onDestroy: () => void;
 }
 
+function SectionHead({
+  num,
+  title,
+  description,
+  danger,
+  action,
+}: {
+  num: string;
+  title: string;
+  description?: string;
+  danger?: boolean;
+  action?: { label: string; icon?: React.ReactNode; onClick?: () => void };
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="flex items-start gap-3.5 min-w-0">
+        <span
+          className={`${MONO} pt-0.5 text-[11px] font-semibold tracking-[0.06em] min-w-[24px]`}
+          style={{ color: danger ? 'rgba(248,113,113,0.55)' : 'rgba(255,255,255,0.35)' }}
+        >
+          {num}
+        </span>
+        <div className="min-w-0">
+          <h3
+            className="text-[15px] font-semibold tracking-[-0.015em] mb-0.5"
+            style={{ color: danger ? '#fca5a5' : '#ffffff' }}
+          >
+            {title}
+          </h3>
+          {description && <p className="text-[12px] text-white/50">{description}</p>}
+        </div>
+      </div>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className={`${MONO} inline-flex items-center gap-1.5 h-7 px-2.5 text-[10px] uppercase tracking-[0.12em] text-white/55 hover:text-white border border-white/[0.08] hover:border-white/[0.14] bg-transparent hover:bg-white/[0.03] rounded-[4px] transition-colors shrink-0`}
+        >
+          {action.icon}
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function VpsSettingsTab({
   server,
+  onRefresh,
   editName,
   setEditName,
   showRenameInput,
@@ -37,135 +90,187 @@ export function VpsSettingsTab({
   destroying,
   onDestroy,
 }: VpsSettingsTabProps) {
+  const inputCls = `${MONO} h-9 w-full max-w-md px-3 border border-white/[0.08] bg-[#0d0e11] text-[12.5px] text-white placeholder:text-white/25 outline-none focus:border-white/25 rounded-[5px]`;
+
   return (
-    <div className="space-y-6">
-      {/* Server metadata — table */}
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30 mb-4">Server Details</p>
-        <div className="border border-white/[0.06] rounded-lg bg-[#08080a] divide-y divide-white/[0.04]">
+    <div className="space-y-7">
+      {/* ── 01 · Server details ──────────────────────────── */}
+      <section>
+        <SectionHead
+          num="01"
+          title="Server details"
+          description="Identity and provisioning metadata."
+        />
+
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
           {[
             { label: 'Server ID', value: String(server.id), mono: true },
-            { label: 'Created', value: new Date(server.created_at).toLocaleString(), mono: false },
-            ...(server.billing_start ? [{ label: 'Billing Start', value: new Date(server.billing_start).toLocaleString(), mono: false }] : []),
+            { label: 'VMID', value: server.vmid !== null && server.vmid !== undefined ? String(server.vmid) : '—', mono: true },
+            { label: 'Node', value: server.node || '—', mono: true },
+            { label: 'Region', value: server.displayRegion || server.region || '—' },
+            { label: 'Operating system', value: server.os || '—' },
+            { label: 'Created', value: new Date(server.created_at).toLocaleString() },
+            ...(server.billing_start
+              ? [{ label: 'Billing start', value: new Date(server.billing_start).toLocaleString() }]
+              : []),
           ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.015] transition-colors">
-              <span className="text-[12px] text-white/30">{row.label}</span>
-              <span className={`text-[13px] text-white/70 ${row.mono ? 'font-mono' : ''}`}>{row.value}</span>
+            <div
+              key={row.label}
+              className="grid grid-cols-[140px_1fr] gap-3 items-center px-5 py-2.5 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] transition-colors"
+            >
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.08em] font-semibold text-white/40`}>
+                {row.label}
+              </span>
+              <span className={`text-[12.5px] text-white/85 truncate ${row.mono ? MONO : ''}`}>
+                {row.value}
+              </span>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Rename */}
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30 mb-4">Server Name</p>
-        <div className="border border-white/[0.06] rounded-lg bg-[#08080a] px-5 py-5">
+      {/* ── 02 · Hostname ────────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="02"
+          title="Hostname"
+          description="Name used in the dashboard, console, and logs."
+        />
+
+        <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4">
           {showRenameInput ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
-                <label className="text-xs text-white/45 mb-2 block">New hostname</label>
+                <label className={`${MONO} block mb-1.5 text-[10px] uppercase tracking-[0.12em] text-white/45`}>
+                  New hostname
+                </label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="e.g. prod-web-01"
-                  className="w-full max-w-md bg-white/[0.04] border border-white/[0.08] rounded-md px-3.5 py-2.5 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-blue-400/40 focus:ring-1 focus:ring-blue-400/10 transition-all"
+                  className={inputCls}
                 />
-                <p className="mt-1.5 text-[11px] text-white/20">Alphanumeric and hyphens only, 1-63 characters.</p>
+                <p className={`${MONO} mt-1.5 text-[10px] text-white/30`}>
+                  Alphanumeric and hyphens · 1–63 characters
+                </p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
                   onClick={onRename}
                   disabled={renaming || !editName.trim()}
-                  className="border border-cyan-400/25 bg-cyan-500/90 text-slate-950 hover:bg-cyan-400 rounded-md font-semibold"
+                  className={`${MONO} inline-flex h-9 items-center gap-2 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
+                  style={{ background: ACCENT, color: '#001930' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = ACCENT_BRIGHT; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = ACCENT; }}
                 >
-                  {renaming ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-2 h-3.5 w-3.5" />}
-                  Save Changes
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                  {renaming ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Save
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowRenameInput(false)}
-                  className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] rounded-md"
+                  className={`${MONO} h-9 px-3.5 border border-white/[0.08] bg-transparent text-[11px] uppercase tracking-[0.14em] text-white/55 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
                 >
                   Cancel
-                </Button>
+                </button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-mono text-white">{server.name}</p>
-                <p className="mt-1 text-[11px] text-white/20">Alphanumeric and hyphens only, 1-63 characters.</p>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className={`${MONO} text-[14px] text-white truncate`}>{server.name}</p>
+                <p className={`${MONO} mt-1 text-[10px] text-white/30`}>
+                  Alphanumeric and hyphens · 1–63 characters
+                </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
+              <button
+                type="button"
                 onClick={() => {
                   setEditName(server.name);
                   setShowRenameInput(true);
                 }}
-                className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] rounded-md"
+                className={`${MONO} shrink-0 inline-flex h-9 items-center gap-2 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/75 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
               >
-                <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
-              </Button>
+                <Pencil className="h-3 w-3" /> Rename
+              </button>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Danger zone */}
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-red-400/60 mb-4">Danger Zone</p>
-        <div className="border border-red-500/12 rounded-lg overflow-hidden">
-          <div className="relative px-5 py-5">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-500/[0.03] to-transparent" />
-            <div className="relative">
-              <div className="flex items-start gap-4 mb-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-red-500/20 bg-red-500/10 shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-red-400">Destroy this server</h3>
-                  <p className="mt-1.5 text-[13px] text-white/40 leading-relaxed">
-                    This will permanently delete the VM, remove its IP route, and free all associated resources.
-                    This action cannot be undone.
-                  </p>
-                </div>
-              </div>
+      {/* ── 03 · Resize ──────────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="03"
+          title="Resize"
+          description="Move to a larger or different plan. Reboots the server; storage can only grow."
+        />
+        <VpsResizeSection server={server} onRefresh={onRefresh} />
+      </section>
 
-              <div className="space-y-3 ml-14">
-                <div>
-                  <label className="text-xs text-white/45 mb-2 block">
-                    Type <span className="font-mono text-red-300 bg-red-500/10 px-1.5 py-0.5 border border-red-500/15 rounded-md">{server.name}</span> to confirm
-                  </label>
-                  <input
-                    type="text"
-                    value={confirmName}
-                    onChange={(e) => setConfirmName(e.target.value)}
-                    placeholder={server.name}
-                    className="w-full max-w-md bg-white/[0.04] border border-red-500/15 rounded-md px-3.5 py-2.5 text-sm text-white font-mono placeholder:text-white/12 focus:outline-none focus:border-red-400/40 focus:ring-1 focus:ring-red-400/10 transition-all"
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  onClick={onDestroy}
-                  disabled={destroying || confirmName !== server.name}
-                  className="border border-red-500/30 bg-red-500/90 text-white hover:bg-red-400 disabled:opacity-30 disabled:cursor-not-allowed rounded-md font-semibold"
-                >
-                  {destroying ? (
-                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  )}
-                  Destroy Server
-                </Button>
-              </div>
+      {/* ── 04 · Danger zone ─────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="04"
+          title="Danger zone"
+          description="Destructive actions cannot be undone."
+          danger
+        />
+
+        <div
+          className="border rounded-[6px] px-5 py-5"
+          style={{
+            background: 'linear-gradient(135deg, #111216, rgba(248,113,113,0.03))',
+            borderColor: 'rgba(248,113,113,0.18)',
+          }}
+        >
+          <div className="flex items-start gap-3 mb-4">
+            <div className="h-10 w-10 shrink-0 flex items-center justify-center border border-red-500/25 bg-red-500/[0.06] rounded-[5px]">
+              <AlertTriangle className="h-4 w-4 text-red-300" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-[13.5px] font-semibold text-red-200">Destroy this server</h4>
+              <p className={`${MONO} mt-1 text-[11px] text-white/50 leading-relaxed`}>
+                Permanently deletes the VM, removes its IP route, and frees all attached resources.
+                Snapshots tied to this server are also discarded.
+              </p>
             </div>
           </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className={`${MONO} block mb-1.5 text-[10px] uppercase tracking-[0.12em] text-white/45`}>
+                Type{' '}
+                <span
+                  className={`${MONO} normal-case tracking-normal text-red-300 bg-red-500/10 px-1.5 py-0.5 border border-red-500/15 rounded-[3px]`}
+                >
+                  {server.name}
+                </span>{' '}
+                to confirm
+              </label>
+              <input
+                type="text"
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                placeholder={server.name}
+                className={`${inputCls} border-red-500/15 placeholder:text-white/15 focus:border-red-400/40`}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onDestroy}
+              disabled={destroying || confirmName !== server.name}
+              className={`${MONO} inline-flex h-9 items-center gap-2 px-4 border border-red-500/30 bg-red-500/90 text-white text-[11px] uppercase tracking-[0.14em] font-semibold hover:bg-red-500 disabled:opacity-30 disabled:cursor-not-allowed rounded-[5px] transition-colors`}
+            >
+              {destroying ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Destroy server
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
+

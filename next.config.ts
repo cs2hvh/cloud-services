@@ -6,6 +6,12 @@ if (!supabaseUrl) {
 }
 const supabaseWs = supabaseUrl.replace("https://", "wss://");
 
+// Inference gateway origin — the dashboard's Playground page fetches against
+// this from the browser, so it must be in connect-src. Override via env when
+// the gateway moves to ahurasense.com (see docs/inference/migration-ahurasense.md).
+const inferenceApiOrigin =
+  process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.cs2hvh.com";
+
 // Content-Security-Policy: restrict script sources and data exfiltration targets.
 // 'unsafe-inline' is required because Next.js injects inline scripts for hydration.
 // connect-src is the key defense: even if XSS runs, stolen cookies cannot be sent
@@ -19,7 +25,7 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com",
   "font-src 'self'",
-  `connect-src 'self' ${supabaseUrl} ${supabaseWs}`,
+  `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin}`,
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -29,8 +35,10 @@ const cspDirectives = [
 const contentSecurityPolicy = cspDirectives.join("; ");
 
 const nextConfig: NextConfig = {
+  // Produces a self-contained build under .next/standalone for Docker
+  output: 'standalone',
   // Keep native Node.js modules out of the webpack bundle
-  serverExternalPackages: ["ssh2"],
+  serverExternalPackages: ["ssh2", "ioredis", "bullmq"],
 
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,

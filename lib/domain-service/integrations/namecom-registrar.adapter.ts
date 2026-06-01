@@ -268,6 +268,57 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
     });
   }
 
+  /**
+   * Set the registrant contact for a domain, merging user-supplied fields with
+   * platform defaults from PLATFORM_CONTACT_* env vars.
+   * User-supplied values take precedence; platform env vars fill any gaps.
+   * Name.com requires a complete contact object — partial objects fail validation.
+   */
+  async setRegistrantContact(
+    domainName: string,
+    contact: {
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      companyName?: string;
+      address1?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+      country?: string;
+    }
+  ): Promise<void> {
+    const phone = contact.phone || process.env.PLATFORM_CONTACT_PHONE;
+    const address1 = contact.address1 || process.env.PLATFORM_CONTACT_ADDRESS;
+    const city = contact.city || process.env.PLATFORM_CONTACT_CITY;
+    const state = contact.state || process.env.PLATFORM_CONTACT_STATE;
+    const zip = contact.zip || process.env.PLATFORM_CONTACT_ZIP;
+    const country = contact.country || process.env.PLATFORM_CONTACT_COUNTRY;
+
+    if (!phone || !address1 || !city || !state || !zip || !country) {
+      throw new Error(
+        "setRegistrantContact: address fields not fully provided and PLATFORM_CONTACT_* env vars are incomplete. " +
+        "Either supply address in the contact object or set PLATFORM_CONTACT_PHONE/ADDRESS/CITY/STATE/ZIP/COUNTRY."
+      );
+    }
+
+    await this.setContacts(domainName, {
+      registrant: {
+        email: contact.email,
+        ...(contact.firstName ? { firstName: contact.firstName } : {}),
+        ...(contact.lastName ? { lastName: contact.lastName } : {}),
+        ...(contact.companyName ? { companyName: contact.companyName } : {}),
+        phone,
+        address1,
+        city,
+        state,
+        zip,
+        country,
+      },
+    });
+  }
+
   async listDomains(params?: { page?: number; perPage?: number }): Promise<NameComListDomainsResponse> {
     const search = new URLSearchParams();
 

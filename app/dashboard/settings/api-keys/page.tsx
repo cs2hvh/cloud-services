@@ -42,6 +42,13 @@ type ApiKey = {
   created_at: string;
 };
 
+// Editorial design tokens (match the rest of the dashboard).
+const SERIF_STYLE = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+} as const;
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,8 +164,23 @@ export default function ApiKeysPage() {
   };
 
   return (
-    <div className="flex-1 bg-black min-h-screen [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
-      <div className="max-w-6xl mx-auto p-6 sm:p-8">
+    <div className="relative flex-1 bg-[#08090b] min-h-screen text-white [&_button]:cursor-pointer [&_a]:cursor-pointer [&_[role=tab]]:cursor-pointer">
+      {/* Editorial canvas — aurora glow + dotted grid */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -top-[300px] -right-[200px] h-[800px] w-[800px] blur-[60px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+      </div>
+      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
         {/* Global Error Banner */}
         <AnimatePresence>
           {error && !showCreateDialog && (
@@ -184,19 +206,23 @@ export default function ApiKeysPage() {
         >
           <div className="flex items-start justify-between mb-6">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-white/5 border border-white/10 rounded-lg">
-                  <Key className="h-6 w-6 text-white" />
-                </div>
-                <h1 className="text-3xl font-bold text-white">API Keys</h1>
-              </div>
-              <p className="text-white/60 max-w-2xl">
-                Securely authenticate your applications with personal access tokens. Generate keys for CI/CD, automation, and integrations.
+              <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-2`}>
+                Developer access
+              </p>
+              <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+                API{" "}
+                <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
+                  keys
+                </span>
+              </h1>
+              <p className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
+                Authenticate applications with personal access tokens — for CI/CD,
+                automation, and integrations.
               </p>
             </div>
             <Button 
               onClick={() => setShowCreateDialog(true)}
-              className="bg-white text-black hover:bg-white/90 flex items-center gap-2"
+              className="bg-[#0095FF] text-white hover:bg-[#33adff] flex items-center gap-2"
               disabled={keys.length >= 10}
             >
               <Plus className="h-4 w-4" />
@@ -290,7 +316,7 @@ export default function ApiKeysPage() {
                         <Button
                           size="sm"
                           onClick={() => copyToClipboard(newKeyValue, "new")}
-                          className="bg-white text-black hover:bg-white/90"
+                          className="bg-[#0095FF] text-white hover:bg-[#33adff]"
                         >
                           {copiedId === "new" ? (
                             <>
@@ -312,7 +338,7 @@ export default function ApiKeysPage() {
                 <DialogFooter>
                   <Button 
                     onClick={() => setNewKeyValue(null)}
-                    className="bg-white text-black hover:bg-white/90 w-full"
+                    className="bg-[#0095FF] text-white hover:bg-[#33adff] w-full"
                   >
                     I&apos;ve Saved My Key Securely
                   </Button>
@@ -359,7 +385,7 @@ export default function ApiKeysPage() {
                   </p>
                   <Button 
                     onClick={() => setShowCreateDialog(true)}
-                    className="bg-white text-black hover:bg-white/90"
+                    className="bg-[#0095FF] text-white hover:bg-[#33adff]"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Create Your First Key
@@ -579,7 +605,7 @@ export default function ApiKeysPage() {
               <Button 
                 onClick={createKey} 
                 disabled={creating || !newKeyName.trim() || newKeyName.trim().length < 3}
-                className="bg-white text-black hover:bg-white/90"
+                className="bg-[#0095FF] text-white hover:bg-[#33adff]"
               >
                 {creating ? (
                   <>

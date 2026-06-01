@@ -1,774 +1,829 @@
-import Image from "next/image";
+"use client";
+
+// GpuServicePage — marketing page for the GPU cloud service.
+// Built around our real GPU lineup (B200, B200, H100, A100, L40S) with
+// per-hour pricing, a cream contrast section for workloads, and a
+// multi-node cluster CTA for enterprise.
+
 import Link from "next/link";
+import { ArrowRight, Brain } from "lucide-react";
 import {
-  ArrowRight,
-  BrainCircuit,
-  Cpu,
-  Gauge,
-  Globe,
-  Network,
-  Shield,
-  Workflow,
-  type LucideIcon,
-} from "lucide-react";
+    IconSparklesFilled,
+    IconBoltFilled,
+    IconPhotoFilled,
+    IconReceiptFilled,
+    IconCloudDataConnectionFilled,
+    IconStackFilled,
+    IconCloudComputingFilled,
+} from "@tabler/icons-react";
 
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
+import PixelBlast from "@/components/hero/pixel-blast";
+import { ClustersSection } from "@/components/clusters-section";
 import type { Tables } from "@/lib/supabase/types";
 
 type Product = Tables<"products">;
 
-type GpuTier = {
-  id: string;
-  name: string;
-  machineType: string;
-  shortDescription: string;
-  monthlyPrice: number | null;
-  billingPeriod: string;
-  specs: string[];
-  features: string[];
-  highlighted?: boolean;
-  ctaText: string;
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const BRAND = "#0095FF";
+
+// ─── GPU lineup ────────────────────────────────────────────────
+type GpuRow = {
+    id: string;
+    name: string;
+    arch: string;
+    archTier: "blackwell" | "hopper" | "ampere" | "ada";
+    memory: string;
+    memoryType: string;
+    perfFp8: string;
+    bandwidth: string;
+    pricePerHour: number;
+    stock: "available" | "limited" | "request";
+    href: string;
+    description: string;
+    featured?: boolean;
 };
 
-type Insight = {
-  title: string;
-  description: string;
-  icon: LucideIcon;
+const GPUS: GpuRow[] = [
+    {
+        id: "b200",
+        name: "B200",
+        arch: "Blackwell",
+        archTier: "blackwell",
+        memory: "192 GB",
+        memoryType: "HBM3e",
+        perfFp8: "10 PFLOPS",
+        bandwidth: "8 TB/s",
+        pricePerHour: 5.49,
+        stock: "limited",
+        href: "/dashboard/services/gpu/deploy?gpu=b200-180",
+        description: "Frontier-grade Blackwell silicon for the largest training and inference runs.",
+        featured: true,
+    },
+    {
+        id: "b200 sxm",
+        name: "B200 SXM",
+        arch: "Hopper",
+        archTier: "hopper",
+        memory: "141 GB",
+        memoryType: "HBM3e",
+        perfFp8: "3,958 TFLOPS",
+        bandwidth: "4.8 TB/s",
+        pricePerHour: 3.99,
+        stock: "limited",
+        href: "/dashboard/services/gpu/deploy?gpu=b200-141",
+        description: "Big-memory Hopper for retrieval-heavy training and long-context inference.",
+    },
+    {
+        id: "h100-sxm",
+        name: "H100 SXM",
+        arch: "Hopper",
+        archTier: "hopper",
+        memory: "80 GB",
+        memoryType: "HBM3",
+        perfFp8: "3,958 TFLOPS",
+        bandwidth: "3.35 TB/s",
+        pricePerHour: 2.99,
+        stock: "available",
+        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
+        description: "The flagship workhorse — balanced for pretraining, fine-tuning, and serving.",
+    },
+    {
+        id: "h100-nvl",
+        name: "H100 NVL",
+        arch: "Hopper",
+        archTier: "hopper",
+        memory: "94 GB",
+        memoryType: "HBM3",
+        perfFp8: "3,958 TFLOPS",
+        bandwidth: "3.9 TB/s",
+        pricePerHour: 2.59,
+        stock: "available",
+        href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
+        description: "PCIe-form H100 paired for inference and mid-scale fine-tuning.",
+    },
+    {
+        id: "a100",
+        name: "A100 SXM",
+        arch: "Ampere",
+        archTier: "ampere",
+        memory: "80 GB",
+        memoryType: "HBM2e",
+        perfFp8: "312 TFLOPS bf16",
+        bandwidth: "2 TB/s",
+        pricePerHour: 1.89,
+        stock: "available",
+        href: "/dashboard/services/gpu/deploy?gpu=a100-80",
+        description: "Proven Ampere class for general-purpose AI and HPC workloads.",
+    },
+    {
+        id: "l40s",
+        name: "L40S",
+        arch: "Ada Lovelace",
+        archTier: "ada",
+        memory: "48 GB",
+        memoryType: "GDDR6",
+        perfFp8: "733 TFLOPS",
+        bandwidth: "864 GB/s",
+        pricePerHour: 1.49,
+        stock: "available",
+        href: "/dashboard/services/gpu/deploy?gpu=l40s-48",
+        description: "Cost-efficient Ada Lovelace for inference, embeddings, and diffusion.",
+    },
+];
+
+const ARCH_TONE: Record<GpuRow["archTier"], string> = {
+    blackwell: "#a78bfa",
+    hopper: "#0095FF",
+    ampere: "#4ade80",
+    ada: "#fbbf24",
 };
 
-const heroTags = [
-  "Premium GPU Cloud",
-  "Model Training",
-  "Fine-tuning",
-  "Inference APIs",
-] as const;
+const STOCK_META: Record<
+    GpuRow["stock"],
+    { color: string; label: string }
+> = {
+    available: { color: "#4ade80", label: "In stock" },
+    limited: { color: "#fbbf24", label: "Limited" },
+    request: { color: "#a78bfa", label: "On request" },
+};
 
-const heroStats = [
-  { value: "H100 to H200", label: "Premium accelerator tiers for training and serving." },
-  { value: "Private fabric", label: "Fast networking and local NVMe for GPU-heavy jobs." },
-  { value: "Single node to fleet", label: "Start small, then expand into larger AI rollout paths." },
-] as const;
+// ─── Workload categories (for the cream section) ──────────────
+type Workload = {
+    icon: React.ReactNode;
+    accent: string;
+    title: string;
+    description: string;
+    recommended: string[];
+};
 
-const lifecycleStages = [
-  {
-    id: "01",
-    title: "Train & Pretrain",
-    description:
-      "Train frontier models with high-performance GPUs, fast local NVMe, and private interconnects.",
-    image: "/images/main-page/gpu-ai-infrastructure-user-v1.png",
-    icon: BrainCircuit,
-  },
-  {
-    id: "02",
-    title: "Fine-tune & Adapt",
-    description:
-      "Adapt models to your data with efficient GPU instances, repeatable environments, and cleaner tuning workflows.",
-    image: "/images/main-page/gpu aniamtion resized.png",
-    icon: Gauge,
-  },
-  {
-    id: "03",
-    title: "Evaluate & Validate",
-    description:
-      "Benchmark performance, run eval pipelines, and validate quality before pushing models into production paths.",
-    image: "/images/main-page/gpu-ai-infrastructure-calm-v1.png",
-    icon: Shield,
-  },
-  {
-    id: "04",
-    title: "Deploy & Infer",
-    description:
-      "Serve inference workloads with low latency, strong networking, and room to scale as traffic grows.",
-    image: "/images/main-page/service-home-gpu-section-3.png",
-    icon: Workflow,
-  },
-] as const;
-
-const lifecycleBenefits = [
-  {
-    title: "Unified GPU Platform",
-    description: "One consistent platform across the full model lifecycle.",
-    icon: BrainCircuit,
-  },
-  {
-    title: "High Performance Infrastructure",
-    description: "Latest GPU tiers, fast networking, and scalable local storage.",
-    icon: Gauge,
-  },
-  {
-    title: "Elastic Scale",
-    description: "Expand or contract around workload demand without awkward rebuilds.",
-    icon: Cpu,
-  },
-  {
-    title: "Enterprise Ready",
-    description: "Secure, reliable, and built for production AI operations.",
-    icon: Shield,
-  },
-] as const;
-
-const operatingModes = [
-  {
-    title: "Single GPU nodes",
-    description:
-      "For notebooks, eval loops, prototyping, and teams that need direct access to premium accelerators without cluster overhead.",
-  },
-  {
-    title: "Scale-out training",
-    description:
-      "For distributed tuning, checkpoint-heavy experiments, and larger training jobs that need more memory and throughput.",
-  },
-  {
-    title: "Production inference",
-    description:
-      "For chat, speech, image, and multimodal APIs where latency, steady rollout, and cost discipline all matter.",
-  },
+const WORKLOADS: Workload[] = [
+    {
+        icon: <Brain className="h-5 w-5" strokeWidth={1.7} />,
+        accent: "#8B5CF6",
+        title: "LLM training & pretraining",
+        description:
+            "Frontier model training, full fine-tunes, and large-scale pretraining on multi-node clusters with NVLink fabric.",
+        recommended: ["B200", "B200 SXM"],
+    },
+    {
+        icon: <IconSparklesFilled size={20} />,
+        accent: "#0095FF",
+        title: "Fine-tuning & adaptation",
+        description:
+            "LoRA, QLoRA, full-parameter tunes, and RLHF on 7B → 70B+ models with shared NVMe checkpoint volumes.",
+        recommended: ["H100 SXM", "H100 NVL"],
+    },
+    {
+        icon: <IconBoltFilled size={20} />,
+        accent: "#F59E0B",
+        title: "Production inference",
+        description:
+            "High-throughput LLM serving with vLLM, TGI, or TensorRT-LLM. Sub-100ms first-token latency at scale.",
+        recommended: ["L40S", "H100 NVL", "B200 SXM"],
+    },
+    {
+        icon: <IconPhotoFilled size={20} />,
+        accent: "#10B981",
+        title: "Diffusion, vision & multimodal",
+        description:
+            "SDXL, FLUX, SVD, vision encoders, and embedding pipelines on memory-flexible Ada and Hopper class GPUs.",
+        recommended: ["L40S", "A100 SXM"],
+    },
 ];
 
-const platformSignals: Insight[] = [
-  {
-    title: "Private networking by default",
-    description:
-      "Keep training nodes, storage, and downstream services on private links instead of stitching public networking together.",
-    icon: Network,
-  },
-  {
-    title: "Region-aware deployment",
-    description:
-      "Place workloads close to users, data gravity, or compliance requirements without rebuilding the stack for each region.",
-    icon: Globe,
-  },
-  {
-    title: "Premium hardware mix",
-    description:
-      "Build around NVIDIA H100 and H200 tiers, efficient inference nodes, and AMD-ready fleet planning for custom deployments.",
-    icon: Cpu,
-  },
-  {
-    title: "Operational guardrails",
-    description:
-      "Provisioning, network isolation, backups, and platform controls are easier to reason about than ad hoc GPU procurement.",
-    icon: Shield,
-  },
+// ─── Platform features ────────────────────────────────────────
+const PLATFORM_FEATURES: Array<{
+    icon: React.ReactNode;
+    accent: string;
+    title: string;
+    description: string;
+}> = [
+    {
+        icon: <IconReceiptFilled size={20} />,
+        accent: "#10B981",
+        title: "Per-second billing",
+        description:
+            "Pay only for time the GPU is up. Stop a pod, billing stops within the second.",
+    },
+    {
+        icon: <IconCloudDataConnectionFilled size={20} />,
+        accent: "#0095FF",
+        title: "NVLink + InfiniBand fabric",
+        description:
+            "900 GB/s GPU-to-GPU bandwidth on SXM nodes, 3.2 Tbps east-west on reserved clusters.",
+    },
+    {
+        icon: <IconStackFilled size={20} />,
+        accent: "#F59E0B",
+        title: "Persistent NVMe volumes",
+        description:
+            "Checkpoint, dataset, and weight volumes that survive pod restarts and follow your jobs.",
+    },
+    {
+        icon: <IconCloudComputingFilled size={20} />,
+        accent: "#8B5CF6",
+        title: "Single pod to 1,000+ GPUs",
+        description:
+            "Start with a single accelerator, scale into reserved multi-node clusters when you need to.",
+    },
 ];
 
-const workloadCases = [
-  {
-    title: "LLM training and fine-tuning",
-    description:
-      "Model adaptation, eval pipelines, checkpoint-heavy workflows, and larger context experiments.",
-  },
-  {
-    title: "Inference APIs",
-    description:
-      "Real-time serving for chat, copilots, search, summarization, and multimodal production traffic.",
-  },
-  {
-    title: "Vision and media AI",
-    description:
-      "Image generation, embeddings, video processing, segmentation, ranking, and GPU-heavy media pipelines.",
-  },
-  {
-    title: "Scientific and simulation workloads",
-    description:
-      "Accelerated compute for numerical models, simulation, genomics, HPC-style jobs, and research pipelines.",
-  },
+// ─── FAQ ──────────────────────────────────────────────────────
+const FAQS = [
+    {
+        question: "How fast can I get a GPU?",
+        answer:
+            "On-demand pods provision in under 90 seconds for available capacity (H100, A100, L40S). Limited-stock SKUs like B200 and B200 typically provision in a few minutes. Reserved multi-node clusters are provisioned in under 24 hours after sales handoff.",
+    },
+    {
+        question: "What's included in the per-hour price?",
+        answer:
+            "The GPU(s), bundled vCPU and system RAM, the container disk, public IP, ingress and egress bandwidth (with a generous monthly allowance), and persistent NVMe storage up to a quota. Egress beyond the allowance and reserved capacity are billed separately.",
+    },
+    {
+        question: "Can I run multi-node training jobs?",
+        answer:
+            "Yes. SXM nodes are NVLink-fabric-connected within a chassis (900 GB/s GPU-to-GPU). Reserved clusters add InfiniBand or RoCE east-west networking (up to 3.2 Tbps) across nodes — purpose-built for distributed training with FSDP, DeepSpeed, or NVIDIA's Megatron-LM stack.",
+    },
+    {
+        question: "How does reserved pricing work?",
+        answer:
+            "Commit to capacity for 1 month to 3 years and save up to 60% off the on-demand rate. Reserved capacity is dedicated, region-pinned, and SLA-backed. Talk to sales for a quote tailored to your training schedule.",
+    },
+    {
+        question: "Do you support spot pricing for interruptible jobs?",
+        answer:
+            "Yes. Spot pods are roughly 50–70% cheaper than on-demand and are interruptible with 60 seconds of notice. Best fit for fault-tolerant training with checkpointing, hyperparameter sweeps, and batch inference.",
+    },
+    {
+        question: "Which frameworks are pre-installed?",
+        answer:
+            "CUDA 12.4, PyTorch 2.x, JAX, TensorFlow, vLLM, TGI, TensorRT-LLM, and common scientific stacks ship in base images. You can also bring your own Docker image from any public or private registry.",
+    },
 ];
 
-const faqs = [
-  {
-    question: "What workloads is this page designed for?",
-    answer:
-      "This page is built for AI and ML teams running training, fine-tuning, evaluation, inference, multimodal services, rendering, and accelerated research workflows.",
-  },
-  {
-    question: "Do you support both NVIDIA and AMD GPU planning?",
-    answer:
-      "Yes. The service direction covers premium NVIDIA classes for mainstream demand and AMD-oriented fleet planning for teams with specific accelerator preferences or procurement requirements.",
-  },
-  {
-    question: "Can I start with one GPU and grow later?",
-    answer:
-      "Yes. The page now frames single-node development, scale-out training, and production inference as connected stages so teams can start lean and expand cleanly.",
-  },
-  {
-    question: "Where do GPU launches go after sign-in?",
-    answer:
-      "GPU calls to action route into the compute deployment flow, which is how GPU infrastructure is currently surfaced in the dashboard.",
-  },
-];
+// ─── Subcomponents ────────────────────────────────────────────
 
-const fallbackGpuTiers: GpuTier[] = [
-  {
-    id: "gpu-h200",
-    name: "H200 Cluster",
-    machineType: "H200",
-    shortDescription:
-      "High-memory GPU capacity for larger training runs, retrieval-heavy systems, and high-throughput inference.",
-    monthlyPrice: 2899,
-    billingPeriod: "per node/month",
-    specs: ["16 vCPU", "128 GB RAM", "1.6 TB NVMe", "200 Gbit/s fabric"],
-    features: ["1x NVIDIA H200", "Private networking", "Snapshot backups", "Priority support"],
-    highlighted: true,
-    ctaText: "Deploy H200",
-  },
-  {
-    id: "gpu-h100",
-    name: "H100 Cluster",
-    machineType: "H100",
-    shortDescription:
-      "Balanced flagship tier for model training, high-volume inference, and serious research workloads.",
-    monthlyPrice: 2199,
-    billingPeriod: "per node/month",
-    specs: ["16 vCPU", "96 GB RAM", "1 TB NVMe", "100 Gbit/s fabric"],
-    features: ["1x NVIDIA H100", "Multi-node ready", "Managed monitoring", "Daily backups"],
-    ctaText: "Deploy H100",
-  },
-  {
-    id: "gpu-l40s",
-    name: "L40S Inference",
-    machineType: "L40S",
-    shortDescription:
-      "Efficient GPU profile for visual AI, embeddings, retrieval, and inference services that need stronger cost discipline.",
-    monthlyPrice: 899,
-    billingPeriod: "per node/month",
-    specs: ["8 vCPU", "48 GB RAM", "500 GB NVMe", "25 Gbit/s network"],
-    features: ["1x L40S-class GPU", "Fast provisioning", "Managed upgrades", "Standard support"],
-    ctaText: "Deploy L40S",
-  },
-];
-
-function mapGpuProducts(products: Product[]): GpuTier[] {
-  if (!products.length) {
-    return fallbackGpuTiers;
-  }
-
-  return products.slice(0, 4).map((product, index) => ({
-    id: product.id,
-    name: product.name ?? `GPU Tier ${index + 1}`,
-    machineType: product.machine_type ?? product.slug?.toUpperCase() ?? "GPU",
-    shortDescription:
-      product.short_description ??
-      product.description ??
-      "GPU capacity designed for AI training, fine-tuning, and production inference.",
-    monthlyPrice: typeof product.price === "number" ? product.price : null,
-    billingPeriod: product.billing_period ?? "per node/month",
-    specs: product.specs?.length
-      ? product.specs.slice(0, 4)
-      : [
-          `${product.resources.cpu} vCPU`,
-          `${product.resources.ram} GB RAM`,
-          `${product.resources.storage} GB NVMe`,
-        ],
-    features: product.features?.length
-      ? product.features.slice(0, 4)
-      : ["Premium GPU capacity", "Private networking", "Fast provisioning", "Platform support"],
-    highlighted: product.is_highlighted ?? product.is_featured ?? false,
-    ctaText: product.cta_text ?? `Deploy ${product.machine_type ?? product.name ?? "GPU"}`,
-  }));
-}
-
-function formatMonthlyPrice(price: number | null) {
-  if (price === null) {
-    return "Custom";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(price);
-}
-
-function SectionHeading({
-  label,
-  title,
-  description,
-}: {
-  label: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="max-w-3xl">
-      <div className="inline-flex items-center gap-2 border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] uppercase tracking-[0.26em] text-white/58">
-        <span className="h-1.5 w-1.5 bg-[#4c9eff]" />
-        {label}
-      </div>
-      <h2 className="mt-5 text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl lg:text-5xl">
-        {title}
-      </h2>
-      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-export function GpuServicePage({ featuredProducts }: { featuredProducts: Product[] }) {
-  const gpuTiers = mapGpuProducts(featuredProducts);
-
-  return (
-    <main className="overflow-hidden bg-[#020202] text-white">
-      <section className="relative isolate min-h-[92svh] border-b border-white/[0.08] pt-16 sm:pt-20">
-        <div className="absolute inset-0">
-          <Image
-            src="/images/main-page/gpu-ai-infrastructure-v1.png"
-            alt=""
-            fill
-            priority
-            className="object-cover opacity-30"
+function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
+    const tone = ARCH_TONE[gpu.archTier];
+    const stock = STOCK_META[gpu.stock];
+    return (
+      <article
+        className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors ${
+          gpu.featured
+            ? "border-white/[0.18] bg-[#13161B]"
+            : "border-white/[0.10] bg-[#111316] hover:border-white/[0.22] hover:bg-[#161A1F]"
+        }`}
+        style={{
+          boxShadow: gpu.featured
+            ? "inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 32px -12px rgba(0,0,0,0.75)"
+            : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
+        }}
+      >
+        {gpu.featured && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
+            style={{ background: BRAND, opacity: 0.55 }}
           />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,2,2,0.92)_0%,rgba(2,2,2,0.78)_34%,rgba(2,2,2,0.62)_56%,rgba(2,2,2,0.72)_100%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(76,158,255,0.10),transparent_22%),radial-gradient(circle_at_82%_18%,rgba(255,255,255,0.08),transparent_16%),linear-gradient(180deg,rgba(2,2,2,0.16),rgba(2,2,2,0.86)_72%,#020202)]" />
-          <div
-            className="absolute inset-0 opacity-[0.035]"
-            style={{
-              backgroundImage:
-                "linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)",
-              backgroundSize: "150px 150px",
-            }}
-          />
+        )}
+
+        {/* Header — index + NVIDIA mark + arch dot */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
+            >
+              {String(index + 1).padStart(2, "0")}
+            </span>
+
+            <NvidiaLogo width={42} height={17} className="opacity-95" />
+          </div>
+
+          <h3 className="text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
+            {gpu.name}
+          </h3>
         </div>
 
-        <Container className="relative pb-12 sm:pb-14 lg:pb-16">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(400px,0.86fr)] lg:items-center">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-3 border border-white/12 bg-white/[0.05] px-4 py-2 text-[11px] uppercase tracking-[0.3em] text-white/68 backdrop-blur-xl">
-                <span className="h-2 w-2 bg-[#4c9eff]" />
-                GPU Cloud for AI and ML
-              </div>
+        <p
+          className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}
+        >
+          {gpu.memory} {gpu.memoryType}
+        </p>
 
-              <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-white/38">
-                {heroTags.map((tag, index) => (
-                  <span key={tag} className="inline-flex items-center gap-4">
-                    {tag}
-                    {index !== heroTags.length - 1 ? <span className="h-px w-4 bg-white/12" /> : null}
-                  </span>
-                ))}
-              </div>
+        <p className="mt-4 text-[13px] leading-[1.6] text-white/60">
+          {gpu.description}
+        </p>
 
-              <h1 className="mt-6 text-[2.7rem] font-semibold leading-[0.96] tracking-[-0.06em] text-white sm:text-[4.2rem] lg:text-[4.9rem]">
-                Premium GPU infrastructure
-                <span className="mt-2 block bg-[linear-gradient(120deg,#ffffff_0%,#eff4fb_35%,#c6ddff_72%,#7cb0ff_100%)] bg-clip-text text-transparent">
-                  for training, fine-tuning, and production inference
+        {/* Spec rows */}
+        <ul className="mt-5 space-y-2 border-t border-white/[0.06] pt-4">
+          <li className="flex items-baseline justify-between">
+            <span
+              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
+            >
+              Performance
+            </span>
+            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
+              {gpu.perfFp8}
+            </span>
+          </li>
+          <li className="flex items-baseline justify-between">
+            <span
+              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
+            >
+              Bandwidth
+            </span>
+            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
+              {gpu.bandwidth}
+            </span>
+          </li>
+        </ul>
+
+        {/* Footer — price + stock + CTA */}
+        <div className="mt-6 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-5">
+          <div>
+            <p
+              className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/45`}
+            >
+              From
+            </p>
+            <p
+              className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}
+            >
+              ${gpu.pricePerHour.toFixed(2)}
+              <span className="ml-1 text-[11px] font-normal text-white/55">
+                /GPU·hr
+              </span>
+            </p>
+            <p
+              className={`${MONO} mt-2 inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em]`}
+              style={{ color: stock.color }}
+            >
+              <span
+                className="h-1 w-1 rounded-full"
+                style={{
+                  background: stock.color,
+                  boxShadow: `0 0 4px ${stock.color}`,
+                }}
+              />
+              {stock.label}
+            </p>
+          </div>
+          <Link
+            href={gpu.href}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
+              gpu.featured
+                ? "border border-white bg-white text-black hover:bg-white/90"
+                : "border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white hover:text-black"
+            }`}
+          >
+            Deploy
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </article>
+    );
+}
+
+function WorkloadCard({ w, index }: { w: Workload; index: number }) {
+    return (
+        <article
+            className="group relative flex flex-col gap-5 overflow-hidden rounded-[10px] border border-black/10 bg-[#EEECE4] p-7 transition-colors hover:border-black/20"
+        >
+            {/* Accent hover glow */}
+            <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                style={{ background: `radial-gradient(circle at 30% 0%, ${w.accent}12, transparent 60%)` }}
+            />
+
+            <div className="relative flex items-start justify-between">
+                <div
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all group-hover:brightness-110"
+                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
+                >
+                    {w.icon}
+                </div>
+                <span
+                    className={`${MONO} text-[10.5px] tabular-nums`}
+                    style={{ color: `${w.accent}70` }}
+                >
+                    {String(index + 1).padStart(2, "0")}
                 </span>
-              </h1>
-
-              <p className="mt-5 max-w-2xl text-[15px] leading-7 text-white/66 sm:text-base">
-                Launch AI workloads on premium accelerator tiers with private networking,
-                fast NVMe, and a cleaner path from experiments to shipping products.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <AuthAwareServiceCta
-                  service="gpu"
-                  intent="new"
-                  className="inline-flex h-11 items-center justify-center bg-white px-6 text-sm font-medium text-black transition-transform duration-300 hover:-translate-y-0.5 hover:bg-[#efefef]"
-                >
-                  Deploy GPU Infrastructure
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </AuthAwareServiceCta>
-                <Link
-                  href="/solutions/ai-ml"
-                  className="inline-flex h-11 items-center justify-center border border-[#4c9eff]/25 bg-white/[0.05] px-6 text-sm font-medium text-white/82 backdrop-blur-xl transition-colors hover:border-[#4c9eff]/45 hover:bg-white/[0.09] hover:text-white"
-                >
-                  Explore AI &amp; ML Solutions
-                </Link>
-              </div>
-
-              <div className="mt-10 grid gap-5 border-t border-white/10 pt-6 md:grid-cols-3">
-                {heroStats.map((stat) => (
-                  <div key={stat.value} className="relative pl-4">
-                    <div className="absolute left-0 top-1 h-10 w-px bg-gradient-to-b from-[#4c9eff]/70 via-white/35 to-transparent" />
-                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/88">
-                      {stat.value}
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-white/54">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
             </div>
-
             <div className="relative">
-              <div className="relative mx-auto aspect-[0.88] w-full max-w-[31rem]">
-                <div className="absolute inset-x-[14%] top-4 h-px bg-gradient-to-r from-transparent via-white/24 to-transparent" />
-                <div className="absolute inset-x-[18%] bottom-6 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
-                <div className="absolute inset-x-0 top-[8%] bottom-[12%]">
-                  <Image
-                    src="/images/main-page/gpu aniamtion resized.png"
-                    alt="Premium GPU cluster visualization"
-                    fill
-                    priority
-                    className="object-contain"
-                  />
-                </div>
-
-                <div className="absolute left-0 top-[20%] max-w-[10rem] border-l border-[#4c9eff]/35 pl-4">
-                  <div className="text-[10px] uppercase tracking-[0.24em] text-white/36">Fine-tuning</div>
-                  <div className="mt-2 text-sm leading-6 text-white/78">
-                    Custom runtimes, eval loops, and checkpoint-heavy jobs.
-                  </div>
-                </div>
-
-                <div className="absolute right-0 top-[25%] max-w-[10.5rem] border-l border-white/16 pl-4">
-                  <div className="text-[10px] uppercase tracking-[0.24em] text-white/36">Inference</div>
-                  <div className="mt-2 text-sm leading-6 text-white/74">
-                    Lower-latency serving paths with cleaner rollout posture.
-                  </div>
-                </div>
-
-                <div className="absolute left-[8%] right-[8%] bottom-0 grid gap-4 border-t border-white/10 pt-4 sm:grid-cols-3">
-                  {[
-                    { title: "Nodes", detail: "Direct GPU access" },
-                    { title: "Fleet", detail: "Scale-out training" },
-                    { title: "APIs", detail: "Serving motion" },
-                  ].map((item) => (
-                    <div key={item.title}>
-                      <div className="text-[11px] uppercase tracking-[0.22em] text-white/34">{item.title}</div>
-                      <div className="mt-2 text-sm text-white/72">{item.detail}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="relative border-b border-white/[0.08] py-20 sm:py-24 lg:py-32">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.04),transparent_24%),radial-gradient(circle_at_78%_70%,rgba(120,120,120,0.05),transparent_24%)]" />
-        <div className="relative mt-14 overflow-hidden">
-          <div className="relative min-h-[42rem] overflow-hidden sm:min-h-[46rem] lg:min-h-[50rem]">
-            <Image
-              src="/images/main-page/gpu-ai-infrastructure-user-v1.png"
-              alt="GPU datacenter corridor"
-              fill
-              className="object-cover object-center"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(4,4,5,0.96)_0%,rgba(4,4,5,0.92)_28%,rgba(4,4,5,0.54)_58%,rgba(4,4,5,0.16)_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,4,5,0.08),rgba(4,4,5,0.18)_42%,rgba(4,4,5,0.76)_84%,#020202_100%)]" />
-
-            <div className="relative px-[clamp(20px,5vw,80px)] pt-8 sm:pt-10 lg:pt-12">
-              <div className="inline-flex items-center gap-2 border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] uppercase tracking-[0.26em] text-white/56 backdrop-blur-xl">
-                <span className="h-1.5 w-1.5 bg-[#0095FF]" />
-                AI Lifecycle
-              </div>
-              <div className="mt-6 max-w-[36rem]">
-                <h3 className="max-w-[14ch] text-[2.55rem] font-semibold leading-[0.98] tracking-[-0.065em] text-white sm:text-[3.45rem] lg:text-[4.25rem]">
-                  One <span className="text-[#0095FF]">GPU</span> platform that supports the real stages of an AI product.
+                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1814]">
+                    {w.title}
                 </h3>
-                <p className="mt-6 max-w-[30rem] text-base leading-8 text-white/70 sm:text-[1.05rem]">
-                  From model training to production inference, built for scale, performance, and reliability at every stage.
+                <p className="mt-2.5 text-[13.5px] leading-[1.6] text-black/60">
+                    {w.description}
                 </p>
-              </div>
             </div>
-
-            <div className="relative z-10 px-[clamp(20px,5vw,80px)] pb-8 pt-[13rem] sm:pb-10 sm:pt-[15rem] lg:pb-12 lg:pt-[17rem]">
-              <div className="rounded-[26px] border border-white/10 bg-[#090909]/94 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:p-5 lg:p-6">
-                <div className="grid gap-0 lg:grid-cols-4">
-                  {lifecycleStages.map((stage, index) => (
-                    <article
-                      key={stage.id}
-                      className={`relative px-4 py-4 sm:px-5 sm:py-5 ${index < lifecycleStages.length - 1 ? "lg:border-r lg:border-white/10" : ""}`}
-                    >
-                      {index < lifecycleStages.length - 1 ? (
-                        <ArrowRight className="absolute -right-3 top-7 hidden h-5 w-5 text-[#0095FF]/80 lg:block" />
-                      ) : null}
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#0095FF]/20 bg-[#0095FF]/[0.08]">
-                        <stage.icon className="h-6 w-6 text-[#0095FF]" />
-                      </div>
-                      <div className="mt-5 text-[1.65rem] font-semibold tracking-[-0.05em] text-[#0095FF]">
-                        {stage.id}
-                      </div>
-                      <h4 className="mt-2 text-2xl font-medium tracking-[-0.03em] text-white">
-                        {stage.title}
-                      </h4>
-                      <p className="mt-4 min-h-[6.5rem] text-[15px] leading-7 text-white/62">
-                        {stage.description}
-                      </p>
-                      <div className="relative mt-5 aspect-[1.4] overflow-hidden rounded-[18px] border border-white/10 bg-black/20">
-                        <Image
-                          src={stage.image}
-                          alt={stage.title}
-                          fill
-                          className="object-cover"
-                        />
-                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,6,0.04),rgba(5,5,6,0.2)_100%)]" />
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-0 rounded-[24px] border border-white/10 bg-[#090909]/92 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:p-5 lg:grid-cols-4 lg:p-6">
-                {lifecycleBenefits.map((benefit, index) => (
-                  <article
-                    key={benefit.title}
-                    className={`flex gap-4 px-4 py-4 sm:px-5 ${index < lifecycleBenefits.length - 1 ? "lg:border-r lg:border-white/10" : ""}`}
-                  >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#0095FF]/18 bg-[#0095FF]/[0.08]">
-                      <benefit.icon className="h-5 w-5 text-[#0095FF]" />
-                    </div>
-                    <div>
-                      <h4 className="text-[1.45rem] font-medium tracking-[-0.03em] text-white">
-                        {benefit.title}
-                      </h4>
-                      <p className="mt-3 text-[15px] leading-7 text-white/60">
-                        {benefit.description}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative border-b border-white/[0.08] py-20 sm:py-24 lg:py-32">
-        <Container className="relative">
-          <div className="grid gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:items-start">
-            <div>
-              <SectionHeading
-                label="Operating Modes"
-                title="Choose the deployment shape that matches the workload stage"
-                description="Single-node development, scale-out training, and production inference each have a different runtime posture."
-              />
-
-              <div className="mt-8 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.2em] text-white/38">
-                {["H100", "H200", "B200-class planning", "AMD-ready fleet"].map((item, index) => (
-                  <span key={item} className="inline-flex items-center gap-3">
-                    {item}
-                    {index !== 3 ? <span className="h-px w-5 bg-white/12" /> : null}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-6">
-              {operatingModes.map((mode, index) => (
-                <article key={mode.title} className="border-t border-white/10 pt-6 sm:pt-7">
-                  <div className="grid gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
-                    <div className="text-[11px] uppercase tracking-[0.24em] text-white/34">
-                      Mode {String(index + 1).padStart(2, "0")}
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-semibold tracking-[-0.04em] text-white">{mode.title}</h3>
-                      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
-                        {mode.description}
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="relative border-b border-white/[0.08] py-20 sm:py-24 lg:py-32">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_24%,rgba(255,255,255,0.06),transparent_22%),radial-gradient(circle_at_82%_78%,rgba(76,158,255,0.08),transparent_24%)]" />
-        <Container className="relative">
-          <div className="grid gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:items-start">
-            <div>
-              <SectionHeading
-                label="GPU Fleet"
-                title="Premium GPU tiers without the card wall"
-                description="The fleet area is now a cleaner line-separated product list with pricing, specs, and deployment actions."
-              />
-            </div>
-
-            <div className="space-y-8">
-              {gpuTiers.map((tier, index) => (
-                <article
-                  key={tier.id}
-                  className={`border-t pt-7 ${index === gpuTiers.length - 1 ? "border-b pb-7" : "border-white/10"} ${index === gpuTiers.length - 1 ? "border-white/10" : ""}`}
+            <div className="relative mt-auto flex items-center gap-2 border-t border-black/10 pt-4">
+                <span
+                    className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}
                 >
-                  <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto] xl:items-start">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-[0.24em] text-white/34">{tier.machineType}</div>
-                      <h3 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-white">{tier.name}</h3>
-                      <p className="mt-4 max-w-md text-sm leading-7 text-white/62">{tier.shortDescription}</p>
-                    </div>
-
-                    <div className="space-y-5">
-                      <div className="flex flex-wrap gap-2">
-                        {tier.specs.slice(0, 4).map((spec) => (
-                          <span
-                            key={spec}
-                            className="inline-flex border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/74"
-                          >
-                            {spec}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {tier.features.slice(0, 4).map((feature) => (
-                          <div key={feature} className="flex items-start gap-3">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-[#9ccaff]" />
-                            <span className="text-sm leading-6 text-white/62">{feature}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="xl:text-right">
-                      {tier.highlighted ? (
-                        <div className="mb-4 inline-flex border border-[#4c9eff]/35 bg-[#4c9eff]/12 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#9fcbff]">
-                          Featured
-                        </div>
-                      ) : null}
-                      <div className="text-[11px] uppercase tracking-[0.2em] text-white/36">Starting at</div>
-                      <div className="mt-2 text-4xl font-semibold tracking-[-0.06em] text-white">
-                        {formatMonthlyPrice(tier.monthlyPrice)}
-                      </div>
-                      <div className="mt-2 text-[12px] text-white/46">{tier.billingPeriod}</div>
-                      <AuthAwareServiceCta
-                        service="gpu"
-                        intent="new"
-                        className="mt-6 inline-flex h-11 items-center justify-center gap-2 bg-white px-5 text-sm font-medium text-black transition-colors hover:bg-[#efefef]"
-                      >
-                        {tier.ctaText}
-                        <ArrowRight className="h-4 w-4" />
-                      </AuthAwareServiceCta>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="relative border-b border-white/[0.08]">
-        <div className="relative min-h-[58svh] sm:min-h-[66svh]">
-          <Image
-            src="/images/main-page/gpu-ai-infrastructure-user-v1.png"
-            alt="Premium GPU infrastructure for AI and ML"
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,2,2,0.28),rgba(2,2,2,0.48)_34%,rgba(2,2,2,0.84)_82%,#020202_100%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(255,255,255,0.06),transparent_20%)]" />
-
-          <Container className="relative flex min-h-[58svh] flex-col justify-end py-14 sm:min-h-[66svh] sm:py-16">
-            <div className="max-w-3xl">
-              <div className="text-[11px] uppercase tracking-[0.28em] text-white/46">Infrastructure Visual</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl lg:text-5xl">
-                A cleaner visual break in the middle of the page
-              </h2>
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-white/66 sm:text-base">
-                The imagery now carries more of the narrative weight so the page feels less boxed-in and more like a premium AI infrastructure surface.
-              </p>
-            </div>
-          </Container>
-        </div>
-      </section>
-
-      <section className="relative border-b border-white/[0.08] py-20 sm:py-24 lg:py-32">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent_24%,rgba(76,158,255,0.04)_100%)]" />
-        <Container className="relative">
-          <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-            <div>
-              <SectionHeading
-                label="Platform Signals"
-                title="Why AI teams want more than raw GPU inventory"
-                description="Hardware matters, but the surrounding platform determines how quickly teams can move from experiment to stable product behavior."
-              />
-            </div>
-
-            <div className="space-y-6">
-              {platformSignals.map((item) => (
-                <article key={item.title} className="border-t border-white/10 pt-6 sm:pt-7">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-[#4c9eff]/28 bg-[#4c9eff]/[0.08]">
-                      <item.icon className="h-5 w-5 text-[#9ccaff]" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold tracking-[-0.03em] text-white">{item.title}</h3>
-                      <p className="mt-3 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              ))}
-
-              <div className="border-t border-white/10 pt-7">
-                <div className="text-[11px] uppercase tracking-[0.24em] text-white/34">Use Cases</div>
-                <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                  {workloadCases.map((item) => (
-                    <div key={item.title}>
-                      <h4 className="text-base font-medium text-white">{item.title}</h4>
-                      <p className="mt-2 text-sm leading-6 text-white/58">{item.description}</p>
-                    </div>
-                  ))}
+                    Recommended
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {w.recommended.map((gpu) => (
+                        <span
+                            key={gpu}
+                            className={`${MONO} inline-flex items-center gap-1 rounded-[3px] border border-black/15 bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-black/75`}
+                        >
+                            <NvidiaLogo width={10} height={7} className="opacity-90" />
+                            {gpu}
+                        </span>
+                    ))}
                 </div>
-              </div>
             </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="relative border-b border-white/[0.08] py-20 sm:py-24 lg:py-28">
-        <Container>
-          <div className="grid gap-x-12 gap-y-8 lg:grid-cols-2">
-            <SectionHeading
-              label="FAQ"
-              title="Questions buyers usually ask before launching GPU infrastructure"
-              description="The FAQ is now simplified into an open text layout instead of another stack of boxed accordions."
-            />
-
-            <div className="space-y-6">
-              {faqs.map((item) => (
-                <article key={item.question} className="border-t border-white/10 pt-6">
-                  <h3 className="text-lg font-medium text-white">{item.question}</h3>
-                  <p className="mt-3 text-sm leading-7 text-white/60">{item.answer}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="relative py-20 sm:py-24 lg:py-28">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(76,158,255,0.12),transparent_30%),linear-gradient(180deg,rgba(2,2,2,0),#020202_72%)]" />
-        <Container className="relative">
-          <div className="grid gap-10 border border-white/10 bg-white/[0.03] p-8 sm:p-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
-            <div>
-              <div className="inline-flex items-center gap-2 border border-white/10 bg-black/24 px-3 py-1.5 text-[11px] uppercase tracking-[0.24em] text-white/60">
-                <span className="h-1.5 w-1.5 bg-[#4c9eff]" />
-                Launch GPU Infrastructure
-              </div>
-              <h2 className="mt-5 max-w-2xl text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl lg:text-5xl">
-                Start with one node, or plan a larger AI fleet with room to grow
-              </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
-                The page now supports both motions: immediate GPU deployment and a clearer architectural path for teams building real AI products.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-              <AuthAwareServiceCta
-                service="gpu"
-                intent="new"
-                className="inline-flex h-11 items-center justify-center gap-2 bg-white px-6 text-sm font-medium text-black transition-colors hover:bg-[#efefef]"
-              >
-                Deploy GPU Infrastructure
-                <ArrowRight className="h-4 w-4" />
-              </AuthAwareServiceCta>
-              <Link
-                href="/solutions/ai-ml"
-                className="inline-flex h-11 items-center justify-center border border-white/12 bg-white/[0.04] px-6 text-sm font-medium text-white/84 transition-colors hover:bg-white/[0.08] hover:text-white"
-              >
-                Explore AI &amp; ML Solutions
-              </Link>
-            </div>
-          </div>
-        </Container>
-      </section>
-    </main>
-  );
+        </article>
+    );
 }
+
+// ─── Main page ────────────────────────────────────────────────
+
+export function GpuServicePage(
+//     {
+//     featuredProducts: _featuredProducts,
+// }: {
+//     featuredProducts?: Product[];
+// }
+) {
+    //commented out featuredProducts for now since the GPU lineup is curated from real SKUs and doesn't need to be overridden from the database. Can re-add as a prop if we want to do limited-time promotions or highlight specific SKUs in the future, but for now it's simpler to keep the source of truth for the lineup in this component.
+    // featuredProducts kept in signature for backwards-compat with the page route;
+    // current lineup is curated from real GPU presets shipped in the dashboard.
+
+    return (
+        <main className="bg-[#04060a] text-white">
+            {/* ─── 1. HERO ──────────────────────────────────────────── */}
+            <section className="relative isolate flex min-h-screen flex-col justify-center overflow-hidden bg-[#04060a] pb-16 pt-28 sm:pb-20 sm:pt-32 lg:pb-24">
+                {/* PixelBlast brand-blue ambient backdrop */}
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 z-0 opacity-[0.55]"
+                >
+                    <PixelBlast
+                        variant="circle"
+                        color={BRAND}
+                        pixelSize={5}
+                        patternScale={3}
+                        patternDensity={0.7}
+                        pixelSizeJitter={0.4}
+                        enableRipples={false}
+                        speed={0.3}
+                        edgeFade={0.4}
+                        transparent
+                    />
+                </div>
+
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[920px] text-center">
+                        <p
+                            className={`${MONO} mb-6 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/65`}
+                        >
+                            GPU Cloud
+                        </p>
+                        <h1 className="text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
+                            The AI developer
+                            <br />
+                            <span className="text-white/55">cloud, <span className="text-blue-500">on demand.</span></span>
+                        </h1>
+                        <p className="mx-auto mt-7 max-w-[660px] text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
+                            Pods for building. Clusters for scaling. Reserved capacity for
+                            shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
+                            second, NVLink-ready, in 12 regions.
+                        </p>
+
+                        <div className="cursor-pointer mt-10 flex flex-wrap items-center justify-center gap-3">
+                            <AuthAwareServiceCta
+                                service="gpu"
+                                intent="new"
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                            >
+                                Launch a GPU
+                                <ArrowRight className="h-4 w-4" />
+                            </AuthAwareServiceCta>
+                            <Link
+                                href="#lineup"
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
+                            >
+                                See the lineup
+                            </Link>
+                        </div>
+
+                        {/* Stat strip */}
+                        <div className="mx-auto mt-14 grid max-w-[820px] grid-cols-2 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-4">
+                            {[
+                                { value: "<90s", label: "Provisioning" },
+                                { value: "12", label: "Regions" },
+                                { value: "99.99%", label: "Uptime SLA" },
+                                { value: "1s", label: "Billing increment" },
+                            ].map((s) => (
+                                <div
+                                    key={s.label}
+                                    className="flex flex-col items-center gap-2 bg-[#04060a] px-4 py-5"
+                                >
+                                    <span
+                                        className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-white sm:text-[26px]`}
+                                    >
+                                        {s.value}
+                                    </span>
+                                    <span
+                                        className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50`}
+                                    >
+                                        {s.label}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </Container>
+            </section>
+
+            {/* ─── 2. GPU LINEUP ────────────────────────────────────── */}
+            <section
+                id="lineup"
+                className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28"
+            >
+                <div
+                    aria-hidden="true"
+                    className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                />
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[760px] text-center">
+                        <p
+                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                        >
+                            The lineup
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                            Every NVIDIA class, ready to deploy
+                        </h2>
+                        <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                            From Ada Lovelace inference at $1.49 / GPU·hr to Blackwell B200 for
+                            frontier training — every node is NVLink-capable, NVMe-backed, and
+                            billed by the second.
+                        </p>
+                    </div>
+
+                    <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+                        {GPUS.map((gpu, i) => (
+                            <GpuCard key={gpu.id} gpu={gpu} index={i} />
+                        ))}
+                    </div>
+
+                    <div className="mt-10 flex flex-col items-center justify-center gap-3 border-t border-white/[0.08] pt-8 sm:flex-row sm:gap-5">
+                        <p
+                            className={`${MONO} text-[10.5px] uppercase tracking-[0.18em] text-white/45`}
+                        >
+                            Reserved capacity available · 1mo+ commitments
+                        </p>
+                        <Link
+                            href="/dashboard/services/gpu/enterprise"
+                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                        >
+                            Talk to sales
+                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </Link>
+                    </div>
+                </Container>
+            </section>
+
+            {/* ─── 3. HOW IT WORKS ──────────────────────────────────── */}
+            <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
+                <div
+                    aria-hidden="true"
+                    className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                />
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[760px] text-center">
+                        <p
+                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                        >
+                            How it works
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                            From zero to inference in four steps
+                        </h2>
+                        <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                            No replatforming. No lock-in. No hyperscaler tax. Bring your
+                            container, your framework, your code — we handle the rest.
+                        </p>
+                    </div>
+
+                  <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-white/[0.10] bg-white/[0.08] md:grid-cols-2 lg:grid-cols-4">
+                        {[
+                            {
+                                step: "01",
+                                title: "Spin up",
+                                description:
+                                    "Pick a GPU, pick a region, pick a base image. Pod is ready with SSH and a public IP in under 90 seconds.",
+                            },
+                            {
+                                step: "02",
+                                title: "Build",
+                                description:
+                                    "Train, fine-tune, or batch-process. Your containers, your framework, your weights — persistent NVMe volumes follow your jobs.",
+                            },
+                            {
+                                step: "03",
+                                title: "Deploy",
+                                description:
+                                    "Push to production with templated inference endpoints, blue-green rollouts, and built-in TLS + auto-scaling.",
+                            },
+                            {
+                                step: "04",
+                                title: "Scale",
+                                description:
+                                    "Single pod to thousand-GPU clusters across 12 regions. Reserve capacity for predictable load, burst on demand for spikes.",
+                            },
+                        ].map((s) => (
+                            <article
+                                key={s.step}
+                                className="flex flex-col gap-4 bg-[#0D0D0F] p-7"
+                            >
+                                <p
+                                    className={`${MONO} text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/45 tabular-nums`}
+                                >
+                                    {s.step}
+                                </p>
+                                <h3 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-white">
+                                    {s.title}
+                                </h3>
+                                <p className="text-[13px] leading-[1.6] text-white/60">
+                                    {s.description}
+                                </p>
+                            </article>
+                        ))}
+                    </div> 
+                    {/* <ProcessFlow/> */}
+                </Container>
+            </section>
+
+            {/* ─── 4. WHITE/CREAM CONTRAST — WORKLOADS ──────────────── */}
+            <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-32">
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[760px] text-center">
+                        <p
+                            className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
+                        >
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                            Workloads
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
+                            Picked for the work you actually do
+                        </h2>
+                        <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-black/60 sm:text-[16px]">
+                            Not sure which GPU to start with? Match the workload to the
+                            silicon — and start with a single node, scale to a cluster
+                            when the job demands it.
+                        </p>
+                    </div>
+
+                    <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-5">
+                        {WORKLOADS.map((w, i) => (
+                            <WorkloadCard key={w.title} w={w} index={i} />
+                        ))}
+                    </div>
+
+                    {/* Inline platform features strip on cream bg */}
+                    <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[10px] border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-4">
+                        {PLATFORM_FEATURES.map((f) => (
+                                <div
+                                    key={f.title}
+                                    className="flex flex-col gap-3 bg-[#EEECE4] p-6"
+                                >
+                                    <div
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-[6px] border"
+                                        style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
+                                    >
+                                        {f.icon}
+                                    </div>
+                                    <h4 className="text-[15px] font-semibold leading-tight tracking-[-0.01em] text-black">
+                                        {f.title}
+                                    </h4>
+                                    <p className="text-[12.5px] leading-[1.55] text-black/60">
+                                        {f.description}
+                                    </p>
+                                </div>
+                        ))}
+                    </div>
+                </Container>
+            </section>
+
+            {/* ─── 4. CLUSTERS / ENTERPRISE — shared homepage section ── */}
+            <ClustersSection />
+
+            {/* ─── 5. FAQ ───────────────────────────────────────────── */}
+            <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
+                <div
+                    aria-hidden="true"
+                    className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                />
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[760px] text-center">
+                        <p
+                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                        >
+                            FAQ
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                            Common questions
+                        </h2>
+                    </div>
+
+                    <div className="mx-auto mt-12 max-w-[840px] divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                        {FAQS.map((f, i) => (
+                            <details
+                                key={f.question}
+                                className="group px-2 py-5 sm:px-4"
+                                open={i === 0}
+                            >
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <span
+                                            className={`${MONO} w-6 shrink-0 text-[11px] tabular-nums text-white/30`}
+                                        >
+                                            {String(i + 1).padStart(2, "0")}
+                                        </span>
+                                        <span className="text-[14.5px] font-medium text-white/90 sm:text-[15.5px]">
+                                            {f.question}
+                                        </span>
+                                    </div>
+                                    <ArrowRight className="h-4 w-4 shrink-0 text-white/30 transition-transform group-open:rotate-90" />
+                                </summary>
+                                <div className="mt-3 pl-10 pr-6">
+                                    <p className="text-[13.5px] leading-[1.7] text-white/55">
+                                        {f.answer}
+                                    </p>
+                                </div>
+                            </details>
+                        ))}
+                    </div>
+                </Container>
+            </section>
+
+            {/* ─── 6. FINAL CTA ─────────────────────────────────────── */}
+            <section className="relative overflow-hidden bg-[#04060a] py-20 sm:py-24 lg:py-28">
+                {/* Subtle PixelBlast accent */}
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 z-0 opacity-[0.35]"
+                >
+                    <PixelBlast
+                        variant="circle"
+                        color={BRAND}
+                        pixelSize={5}
+                        patternScale={3}
+                        patternDensity={0.55}
+                        enableRipples={false}
+                        speed={0.25}
+                        edgeFade={0.5}
+                        transparent
+                    />
+                </div>
+
+                <Container className="relative z-10">
+                    <div className="mx-auto max-w-[760px] text-center">
+                        <p
+                            className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/65`}
+                        >
+                            <NvidiaLogo width={16} height={11} className="opacity-95" />
+                            Ready when you are
+                        </p>
+                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
+                            The AI developer cloud
+                        </h2>
+                        <p className="mx-auto mt-5 max-w-[580px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                            No replatforming. No lock-in. No hyperscaler tax. Pick a GPU,
+                            pick a region, and you&apos;re running.
+                        </p>
+
+                        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+                            <AuthAwareServiceCta
+                                service="gpu"
+                                intent="new"
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90`}
+                            >
+                                Get started
+                                <ArrowRight className="h-4 w-4" />
+                            </AuthAwareServiceCta>
+                            <Link
+                                href="/dashboard/services/gpu/enterprise"
+                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
+                            >
+                                Request a demo
+                            </Link>
+                        </div>
+                    </div>
+                </Container>
+            </section>
+        </main>
+    );
+}
+
+export default GpuServicePage;

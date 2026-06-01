@@ -14,6 +14,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 import {
   getDigitalOceanHeaders,
@@ -133,6 +134,7 @@ export const clusterLifecycleOperations = {
         names: nodeNames,
         region: request.region,
         size: request.node_pool.size,
+        // Use an LTS image slug that is broadly available across regions.
         image: "ubuntu-24-04-x64",
         backups: false,
         ipv6: true,
@@ -401,6 +403,28 @@ export const clusterLifecycleOperations = {
           action: "created",
           metadata: { serviceName: request.name },
         });
+
+        try {
+          const recipient =
+            request.user_email || (await resolveUserEmail(request.owner_id));
+          await sendServiceAlertEmail({
+            serviceType: "kubernetes",
+            userEmail: recipient,
+            serviceName: request.name,
+            alertTitle: "Kubernetes cluster creation started",
+            summary: `Your Kubernetes cluster "${request.name}" is being provisioned. We'll let you know once all nodes are ready and the cluster is online.`,
+            severity: "info",
+            metadata: {
+              Operation: "Create Kubernetes cluster",
+              Cluster: request.name,
+              Region: request.region,
+              "Kubernetes version": request.version,
+              Nodes: request.node_pool.count,
+            },
+          });
+        } catch (emailErr) {
+          console.error("[K8s Create] Failed to send email:", emailErr);
+        }
       }
 
       // Return the persisted DB record so the response shape is identical to GET /kubernetes/{id}
@@ -513,6 +537,24 @@ export const clusterLifecycleOperations = {
           error: "Failed to load updated cluster",
           errorCode: "UPDATE_FAILED",
         };
+      }
+
+      try {
+        const recipient = await resolveUserEmail(String(cluster.owner_id));
+        await sendServiceAlertEmail({
+          serviceType: "kubernetes",
+          userEmail: recipient,
+          serviceName: String(cluster.cluster_name),
+          alertTitle: "Kubernetes cluster updated",
+          summary: `The configuration of your Kubernetes cluster "${cluster.cluster_name}" was updated.`,
+          severity: "info",
+          metadata: {
+            Operation: "Update Kubernetes cluster",
+            Cluster: String(cluster.cluster_name),
+          },
+        });
+      } catch (emailErr) {
+        console.error("[K8s Update] Failed to send email:", emailErr);
       }
 
       return {
@@ -685,6 +727,24 @@ export const clusterLifecycleOperations = {
         })
       );
 
+      try {
+        const recipient = await resolveUserEmail(String(cluster.owner_id));
+        await sendServiceAlertEmail({
+          serviceType: "kubernetes",
+          userEmail: recipient,
+          serviceName: clusterName,
+          alertTitle: "Kubernetes cluster deleted",
+          summary: `Your Kubernetes cluster "${clusterName}" was deleted successfully along with its nodes.`,
+          severity: "warning",
+          metadata: {
+            Operation: "Delete Kubernetes cluster",
+            Cluster: clusterName,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[K8s Delete] Failed to send email:", emailErr);
+      }
+
       return {
         success: true,
         clusterId: cluster.cluster_id,
@@ -822,6 +882,27 @@ export const clusterLifecycleOperations = {
         metadata: { serviceName: request.name },
       });
 
+      try {
+        const recipient =
+          request.userEmail || (await resolveUserEmail(request.ownerId));
+        await sendServiceAlertEmail({
+          serviceType: "kubernetes",
+          userEmail: recipient,
+          serviceName: request.name,
+          alertTitle: "Kubernetes cluster creation started",
+          summary: `Your Kubernetes cluster "${request.name}" has been initialized and provisioning will begin shortly. We'll let you know once it is online.`,
+          severity: "info",
+          metadata: {
+            Operation: "Create Kubernetes cluster",
+            Cluster: request.name,
+            Region: request.region,
+            "Kubernetes version": request.version,
+            Nodes: request.nodeCount,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[K8s Init] Failed to send email:", emailErr);
+      }
 
       return { success: true, clusterId };
     } catch (error) {
@@ -892,7 +973,7 @@ export const clusterLifecycleOperations = {
     } catch (doErr: unknown) {
       const doRes = (doErr as { response?: { data?: unknown; status?: number } })?.response;
       console.error("[addNode] DigitalOcean API error:", doRes?.status, JSON.stringify(doRes?.data));
-      return { success: false, error: `DigitalOcean API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
+      return { success: false, error: `API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
     }
 
     if (response.status !== 202) {
@@ -960,6 +1041,24 @@ export const clusterLifecycleOperations = {
       });
     } catch (auditErr) {
       console.error("[KubernetesService.addNode] Failed to create audit log:", auditErr);
+    }
+
+    try {
+      const recipient = userEmail || (await resolveUserEmail(userId));
+      await sendServiceAlertEmail({
+        serviceType: "kubernetes",
+        userEmail: recipient ?? undefined,
+        serviceName: "Kubernetes cluster",
+        alertTitle: "Kubernetes node added",
+        summary: `A new worker node is being added to your Kubernetes cluster. It will join the cluster once provisioning completes.`,
+        severity: "info",
+        metadata: {
+          Operation: "Add Kubernetes node",
+          "Nodes added": 1,
+        },
+      });
+    } catch (emailErr) {
+      console.error("[KubernetesService.addNode] Failed to send email:", emailErr);
     }
 
     return { success: true, dropletData: response.data, vmPassword: vmPasswordEncrypted };
@@ -1073,6 +1172,25 @@ export const clusterLifecycleOperations = {
       });
     } catch (auditErr) {
       console.error("[KubernetesService.removeNode] Failed to create audit log:", auditErr);
+    }
+
+    try {
+      const recipient = userEmail || (await resolveUserEmail(userId));
+      await sendServiceAlertEmail({
+        serviceType: "kubernetes",
+        userEmail: recipient ?? undefined,
+        serviceName: String(data.cluster_name),
+        alertTitle: "Kubernetes node removed",
+        summary: `A worker node was removed from your Kubernetes cluster "${data.cluster_name}".`,
+        severity: "warning",
+        metadata: {
+          Operation: "Remove Kubernetes node",
+          Cluster: String(data.cluster_name),
+          "Nodes removed": 1,
+        },
+      });
+    } catch (emailErr) {
+      console.error("[KubernetesService.removeNode] Failed to send email:", emailErr);
     }
 
     return {

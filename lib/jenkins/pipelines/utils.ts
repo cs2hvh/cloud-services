@@ -1,17 +1,87 @@
 /**
  * Shared utilities for pipeline generation
- * 
+ *
  * PLATFORM DEPLOYMENT CONTRACT:
  * 1. Build stage - builds the container image
  * 2. Runtime secret sync is handled by backend API/Kubernetes service (NOT Jenkins templates)
  * 3. Deploy to Kubernetes stage - deploys the application
- * 
+ *
  * All pipelines MUST follow this order. No exceptions.
  */
 
 export interface EnvVar {
   key: string;
   value: string;
+}
+
+export interface AppSizeSpec {
+  cpuRequest: string;
+  cpuLimit: string;
+  memoryRequest: string;
+  memoryLimit: string;
+  replicas: number;
+}
+
+const SIZE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge'] as const;
+
+const APP_SIZE_SPECS: Record<string, AppSizeSpec> = {
+  small:   { cpuRequest: '250m', cpuLimit: '500m', memoryRequest: '256Mi', memoryLimit: '512Mi', replicas: 1 },
+  medium:  { cpuRequest: '500m', cpuLimit: '1',    memoryRequest: '512Mi', memoryLimit: '1Gi',   replicas: 2 },
+  large:   { cpuRequest: '1',    cpuLimit: '2',    memoryRequest: '1Gi',   memoryLimit: '2Gi',   replicas: 3 },
+  xlarge:  { cpuRequest: '2',    cpuLimit: '4',    memoryRequest: '2Gi',   memoryLimit: '4Gi',   replicas: 4 },
+  'xxlarge': { cpuRequest: '4', cpuLimit: '8',    memoryRequest: '4Gi',   memoryLimit: '8Gi',   replicas: 6 },
+};
+
+/**
+ * Resolve K8s resource spec for a given app size key.
+ * @param sizeKey - Requested size ('small' | 'medium' | 'large' | 'xlarge' | 'xxlarge')
+ * @param minSize - Floor size — when the requested size ranks below this, the floor is used.
+ *                  Use 'medium' for runtimes that need more base resources (JVM, SSR).
+ */
+export function resolveAppSize(sizeKey: string, minSize: string = 'small'): AppSizeSpec {
+  const key = (sizeKey || 'small').toLowerCase();
+  const min = (minSize || 'small').toLowerCase();
+  const keyIdx = SIZE_ORDER.indexOf(key as typeof SIZE_ORDER[number]);
+  const minIdx = SIZE_ORDER.indexOf(min as typeof SIZE_ORDER[number]);
+  const effectiveKey = keyIdx >= minIdx ? key : min;
+  return APP_SIZE_SPECS[effectiveKey] ?? APP_SIZE_SPECS.small;
+}
+
+/**
+ * Generate liveness + readiness probe YAML for a K8s container spec.
+ *
+ * Always uses tcpSocket probes (port-open check). This keeps deployments
+ * resilient — a misconfigured healthcheck_path never crashes the pod.
+ * The healthcheckPath parameter is accepted but ignored here; it is stored
+ * in the database for display and future soft-check use only.
+ *
+ * @param port               - Container port (TypeScript value, baked into XML at codegen time)
+ * @param healthcheckPath    - Stored but not used for K8s probes (reserved for future use)
+ * @param options.readinessInitialDelay - Seconds before first readiness check (default 15)
+ * @param options.livenessInitialDelay  - Seconds before first liveness check (default 30)
+ */
+export function generateProbeYaml(
+  port: number | string,
+  healthcheckPath?: string | null,
+  options?: { readinessInitialDelay?: number; livenessInitialDelay?: number },
+): string {
+  const readinessDelay = options?.readinessInitialDelay ?? 15;
+  const livenessDelay  = options?.livenessInitialDelay  ?? 30;
+
+  return `        readinessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${readinessDelay}
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          tcpSocket:
+            port: ${port}
+          initialDelaySeconds: ${livenessDelay}
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3`;
 }
 
 /**
@@ -100,84 +170,86 @@ export function generateRuntimeDefaultEnvYaml(
           value: "production"`;
 }
 
-// =============================================================================
-// DEPRECATED FUNCTIONS - Keep for backward compatibility during migration
-// Remove after all pipelines are updated
-// =============================================================================
-
 /**
- * @deprecated Use generateRuntimeDefaultEnvYaml('node', containerPort) instead
+ * Generate the complete 'Build Docker Image' stage using BuildKit instead of Kaniko.
+ *
+ * BuildKit advantages over Kaniko:
+ *  - 60% less memory (1.5 GB vs 4–6 GB per build)
+ *  - Better layer caching with registry cache export/import
+ *  - Faster builds via parallelised dependency resolution
+ *
+ * @param appName       - Full app name (e.g. "myapp-app") used for the cache registry ref
+ * @param buildOpts     - Zero or more `--opt` flags to append (e.g. build args)
+ * @param extraScript   - Optional shell snippet inserted after the buildkitd readiness wait
+ *                        (use this to pass a package-manager detection script)
  */
-export function generateDefaultEnvYaml(containerPort: number | string): string {
-  return generateRuntimeDefaultEnvYaml('node', containerPort);
-}
-
-/**
- * @deprecated Use generateRuntimeDefaultEnvYaml('python', containerPort) instead
- */
-export function generatePythonDefaultEnvYaml(containerPort: number | string): string {
-  return generateRuntimeDefaultEnvYaml('python', containerPort);
-}
-
-/**
- * @deprecated Use generateEnvSecret + generateEnvFromSection instead
- * This function embeds secrets directly in deployment YAML which is insecure
- */
-export function generateEnvYaml(
-  containerPort: number | string,
-  userEnvVars: EnvVar[] = []
+export function generateBuildKitStage(
+  appName: string,
+  buildOpts: string[] = [],
+  extraScript: string = '',
 ): string {
-  const defaultEnvVars: EnvVar[] = [
-    { key: 'PORT', value: String(containerPort) },
-    { key: 'NODE_ENV', value: 'production' },
-  ];
-  
-  const userKeys = new Set(userEnvVars.map(e => e.key));
-  const mergedEnvVars = [
-    ...defaultEnvVars.filter(d => !userKeys.has(d.key)),
-    ...userEnvVars,
-  ];
-  
-  const envYaml = mergedEnvVars.map(env => {
-    const escapedValue = env.value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$');
-    return `        - name: ${env.key}
-          value: "${escapedValue}"`;
-  }).join('\n');
-  
-  return envYaml;
-}
+  const optLines = buildOpts.length > 0
+    ? buildOpts.map(o => `                ${o} \\\\`).join('\n') + '\n'
+    : '';
+  const extraBlock = extraScript
+    ? `\n              # Detect runtime tooling before build\n${extraScript}\n`
+    : '';
 
-/**
- * @deprecated Use generateEnvSecret + generateEnvFromSection instead
- */
-export function generatePythonEnvYaml(
-  containerPort: number | string,
-  userEnvVars: EnvVar[] = []
-): string {
-  const defaultEnvVars: EnvVar[] = [
-    { key: 'PORT', value: String(containerPort) },
-    { key: 'PYTHONUNBUFFERED', value: '1' },
-  ];
-  
-  const userKeys = new Set(userEnvVars.map(e => e.key));
-  const mergedEnvVars = [
-    ...defaultEnvVars.filter(d => !userKeys.has(d.key)),
-    ...userEnvVars,
-  ];
-  
-  const envYaml = mergedEnvVars.map(env => {
-    const escapedValue = env.value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$');
-    return `        - name: ${env.key}
-          value: "${escapedValue}"`;
-  }).join('\n');
-  
-  return envYaml;
+  return `    stage('Build Docker Image') {
+      steps {
+        container('buildkit') {
+          withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS')]) {
+
+            sh '''
+              echo "STAGE: Build Docker Image"
+              echo "Building image: $DOCKER_IMAGE_VERSION (and tagging latest)"
+
+              BUILDKIT_READY=0
+              for i in $(seq 1 30); do
+                if buildctl debug workers >/dev/null 2>&1; then
+                  BUILDKIT_READY=1
+                  break
+                fi
+                echo "Waiting for buildkitd... ($i/30)"
+                sleep 2
+              done
+              [ "$BUILDKIT_READY" = "1" ] || { echo "ERROR: buildkitd not ready"; cat /tmp/buildkitd.log 2>/dev/null; exit 1; }
+              echo "buildkitd ready"
+${extraBlock}
+              mkdir -p ~/.docker
+              AUTH=$(echo -n "$DOCKER_USER:$DOCKER_PASS" | base64)
+              cat > ~/.docker/config.json <<CREDSEOF
+{
+  "auths": {
+    "https://index.docker.io/v1/": {
+      "auth": "$AUTH"
+    }
+  }
+}
+CREDSEOF
+
+              echo "Executing BuildKit build"
+              buildctl build \\\\
+                --frontend dockerfile.v0 \\\\
+                --local context=$WORKSPACE \\\\
+                --local dockerfile=$WORKSPACE \\\\
+                --output type=image,name=$DOCKER_IMAGE_VERSION,push=true \\\\
+                --output type=image,name=$DOCKER_IMAGE_LATEST,push=true \\\\
+${optLines}                --export-cache type=registry,ref=hav0ky/${appName}-cache:buildcache,mode=max \\\\
+                --import-cache type=registry,ref=hav0ky/${appName}-cache:buildcache \\\\
+                --metadata-file buildkit-meta.json
+
+              grep -o '"containerimage.digest":"[^"]*"' buildkit-meta.json 2>/dev/null \\\\
+                | head -1 | sed 's/.*"containerimage.digest":"//;s/"//g' > image-digest.txt || true
+
+              echo "Image build completed successfully"
+            '''
+          }
+        }
+      }
+    }`;
 }
 
 /**

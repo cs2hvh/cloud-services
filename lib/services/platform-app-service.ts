@@ -15,6 +15,7 @@ import { ensureBalance } from "@/config/billing-flow";
 import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
 import { DatabaseIntegrationService } from "@/lib/services/database-integration";
 import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
+import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
 
 export interface CreateAppRequest {
   name: string;
@@ -28,10 +29,11 @@ export interface CreateAppRequest {
   output_directory?: string;
   project_id?: string;
   env_vars?: Array<{ key: string; value: string }>;
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   auto_deploy?: boolean;
   deploy_branch?: string;
   container_port?: number;
+  healthcheck_path?: string;
   userId: string;
   userEmail?: string;
   auditContext?: {
@@ -84,7 +86,7 @@ export interface DeleteAppResult {
 export interface ResizeAppOptions {
   appId: string;
   userId: string;
-  newSize: 'small' | 'medium' | 'large';
+  newSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   audit_context?: {
     ip_address?: string;
     user_agent?: string;
@@ -370,7 +372,7 @@ export class PlatformAppService {
       }
 
       // 4. Check billing
-      const instanceSize = (request.size || 'small') as "small" | "medium" | "large";
+      const instanceSize = (request.size || 'small') as "small" | "medium" | "large" | "xlarge" | "xxlarge";
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
         await getRatesForPlatformApp(instanceSize);
 
@@ -423,6 +425,7 @@ export class PlatformAppService {
         deploy_branch: request.deploy_branch || request.branch || 'main',
         project_id: request.project_id,
         container_port: request.container_port,
+        healthcheck_path: request.healthcheck_path,
         idempotencyKey: request.idempotencyKey ?? null,
       };
 
@@ -510,6 +513,29 @@ export class PlatformAppService {
         );
       } catch (notifErr) {
         console.error('[PlatformAppService.createApp] Notification failed:', notifErr);
+      }
+
+      // 9b. Send confirmation email
+      try {
+        const recipient =
+          request.userEmail || (await resolveUserEmail(request.userId));
+        await sendServiceAlertEmail({
+          serviceType: "app",
+          userEmail: recipient,
+          serviceName: request.name,
+          alertTitle: "Application deployment started",
+          summary: `Your application "${request.name}" has been created and the initial deployment is in progress. Billing activates after the first successful deployment.`,
+          severity: "info",
+          metadata: {
+            Operation: "Create application",
+            Application: request.name,
+            Framework: request.framework,
+            Repository: request.repository_name,
+            Branch: request.branch || 'main',
+          },
+        });
+      } catch (emailErr) {
+        console.error('[PlatformAppService.createApp] Email failed:', emailErr);
       }
 
       // 10. Register webhook if auto_deploy enabled
@@ -814,6 +840,27 @@ export class PlatformAppService {
         console.error('[PlatformAppService.deleteApp] Failed to create notification:', notifError);
       }
 
+      // 7. Send confirmation email
+      try {
+        const recipient =
+          audit_context?.user_email || (await resolveUserEmail(userId));
+        await sendServiceAlertEmail({
+          serviceType: "app",
+          userEmail: recipient,
+          serviceName: appName ?? "Application",
+          alertTitle: "Application deleted",
+          summary: `Your application "${appName ?? "Application"}" was deleted successfully along with its deployments.`,
+          severity: "warning",
+          metadata: {
+            Operation: "Delete application",
+            Application: appName ?? "Application",
+            Repository: repoName ?? "Unknown",
+          },
+        });
+      } catch (emailErr) {
+        console.error('[PlatformAppService.deleteApp] Email failed:', emailErr);
+      }
+
       const warning = [deploymentDeletion.warning, billingWarning].filter(Boolean).join("; ") || undefined;
       return { success: true, appName, warning };
 
@@ -866,11 +913,13 @@ export class PlatformAppService {
       throw error;
     }
 
-    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large';
+    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
     const SIZE_ORDER: Record<string, number> = {
       small: 1,
       medium: 2,
       large: 3,
+      xlarge: 4,
+      'xxlarge': 5,
     };
 
     // Validate upsize only
@@ -920,6 +969,28 @@ export class PlatformAppService {
       }
     }
 
+    // Confirmation email
+    try {
+      const recipient =
+        audit_context?.user_email || (await resolveUserEmail(userId));
+      await sendServiceAlertEmail({
+        serviceType: "app",
+        userEmail: recipient,
+        serviceName: app.name,
+        alertTitle: "Application resized",
+        summary: `Your application "${app.name}" was resized from ${currentSize} to ${newSize}.`,
+        severity: "info",
+        metadata: {
+          Operation: "Resize application",
+          Application: app.name,
+          "Previous size": currentSize,
+          "New size": newSize,
+        },
+      });
+    } catch (emailErr) {
+      console.warn('[PlatformAppService.resizeApp] Email failed:', emailErr);
+    }
+
     return {
       success: true,
       appId,
@@ -935,7 +1006,7 @@ export class PlatformAppService {
    */
   static async checkBalanceForResize(
     userId: string,
-    newSize: 'small' | 'medium' | 'large'
+    newSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge'
   ): Promise<{ ok: boolean; balance?: number; required?: number }> {
     let hourlyRate: number;
     try {

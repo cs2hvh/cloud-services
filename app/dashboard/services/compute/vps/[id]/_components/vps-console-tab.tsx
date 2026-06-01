@@ -30,7 +30,7 @@ export function VpsConsoleTab({
 }: VpsConsoleTabProps) {
   if (!isRunning) {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 flex flex-col items-center justify-center text-center">
+      <div className="border border-white/[0.06] bg-[#111216] p-16 flex flex-col items-center justify-center text-center">
         <div className="h-14 w-14 rounded-xl border border-white/[0.08] bg-white/[0.03] flex items-center justify-center mb-4">
           <Monitor className="h-6 w-6 text-white/20" />
         </div>
@@ -42,7 +42,7 @@ export function VpsConsoleTab({
 
   if (consoleState === 'idle') {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 flex flex-col items-center justify-center text-center">
+      <div className="border border-white/[0.06] bg-[#111216] p-16 flex flex-col items-center justify-center text-center">
         <div className="h-14 w-14 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] flex items-center justify-center mb-4">
           <Monitor className="h-6 w-6 text-emerald-400" />
         </div>
@@ -53,7 +53,7 @@ export function VpsConsoleTab({
         </p>
         <button
           onClick={onLaunchConsole}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-cyan-400/25 bg-cyan-500/90 text-slate-950 text-sm font-semibold hover:bg-cyan-400 transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 border border-blue-400/25 bg-blue-500/90 text-slate-950 text-sm font-semibold hover:bg-blue-400 transition-colors"
         >
           <Terminal className="h-4 w-4" /> Launch Console
         </button>
@@ -63,8 +63,8 @@ export function VpsConsoleTab({
 
   if (consoleState === 'loading') {
     return (
-      <div className="border border-white/[0.06] rounded-lg bg-[#08080a] p-16 flex flex-col items-center justify-center text-center">
-        <Loader2 className="h-8 w-8 text-cyan-400 animate-spin mb-4" />
+      <div className="border border-white/[0.06] bg-[#111216] p-16 flex flex-col items-center justify-center text-center">
+        <Loader2 className="h-8 w-8 text-[#0095FF] animate-spin mb-4" />
         <p className="text-sm font-semibold text-white/60">Starting console session...</p>
         <p className="text-[12px] text-white/25 mt-1">Establishing secure VNC connection to your server.</p>
       </div>
@@ -73,7 +73,7 @@ export function VpsConsoleTab({
 
   if (consoleState === 'error') {
     return (
-      <div className="border border-red-500/15 rounded-lg bg-[#08080a] p-16 flex flex-col items-center justify-center text-center">
+      <div className="border border-red-500/15 bg-[#0d0e11] p-16 flex flex-col items-center justify-center text-center">
         <div className="h-14 w-14 rounded-xl border border-red-500/20 bg-red-500/[0.06] flex items-center justify-center mb-4">
           <Monitor className="h-6 w-6 text-red-400" />
         </div>
@@ -81,7 +81,7 @@ export function VpsConsoleTab({
         <p className="text-[12px] text-white/30 mt-1 mb-5">{consoleError}</p>
         <button
           onClick={onLaunchConsole}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white/70 text-sm font-medium hover:bg-white/[0.08] transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-white/[0.08] bg-white/[0.04] text-white/70 text-sm font-medium hover:bg-white/[0.08] transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Retry
         </button>

@@ -78,23 +78,40 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="border border-dashed border-white/[0.1] bg-white/[0.02]"
+        className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-14 text-center overflow-hidden"
       >
-        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
-            <Archive className="h-6 w-6" />
-          </div>
-          <h3 className="mt-5 text-lg font-semibold text-white">No buckets yet</h3>
-          <p className="mt-2 max-w-lg text-sm leading-6 text-white/45">
-            Create your first object storage bucket to store files, static assets, and
-            application data without operational clutter.
-          </p>
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(0,149,255,0.04), transparent 50%)",
+          }}
+        />
+        <div
+          className="relative z-10 h-12 w-12 mb-5 mx-auto inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
+          style={{ color: "#0095FF" }}
+        >
+          <Archive className="h-5 w-5" />
+        </div>
+        <h3 className="relative z-10 text-[18px] font-semibold tracking-[-0.015em] text-white">
+          No buckets yet
+        </h3>
+        <p className="relative z-10 mt-2 max-w-md mx-auto font-[var(--font-geist-mono),ui-monospace,monospace] text-[11.5px] text-white/45 leading-relaxed">
+          Create your first object storage bucket to store files, static
+          assets, and application data.
+        </p>
+        <div className="relative z-10 mt-5">
           <Link
             href="/dashboard/services/object-storage/new"
-            className="mt-6 inline-flex items-center gap-2 border border-blue-400/25 bg-blue-500/90 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+            className="font-[var(--font-geist-mono),ui-monospace,monospace] inline-flex items-center gap-2 h-10 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all"
+            style={{
+              background: "linear-gradient(135deg, #0095FF, #0066B3)",
+              color: "#ffffff",
+              boxShadow: "0 8px 20px rgba(0,149,255,0.20)",
+            }}
           >
-            <Plus className="h-4 w-4" />
-            Create Bucket
+            <Plus className="h-3.5 w-3.5" />
+            Create bucket
           </Link>
         </div>
       </motion.div>
@@ -103,7 +120,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="overflow-hidden border border-white/[0.08] bg-white/[0.02]">
+      <div className="overflow-hidden border border-white/[0.06] bg-[#111216] rounded-[6px]">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/[0.08]">
             <thead className="bg-white/[0.04]">
