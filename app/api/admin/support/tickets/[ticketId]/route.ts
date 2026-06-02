@@ -9,6 +9,7 @@ import {
   supportTicketIdParamSchema,
 } from "@/lib/validation/support";
 import { sendSupportTicketReplyEmail } from "@/lib/support/email";
+import { sanitizeSupportRichText } from "@/lib/support/richtext";
 
 type RouteParams = { params: Promise<{ ticketId: string }> };
 
@@ -137,7 +138,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const nextStatus = validation.data.status;
-    const reply = validation.data.reply || "";
+    const reply = sanitizeSupportRichText(validation.data.reply || "");
     let replyCreatedAt: string | null = null;
 
     if (reply.length > 0) {

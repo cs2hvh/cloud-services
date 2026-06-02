@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, ChevronRight, Globe, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ExternalLink, Globe, RefreshCw } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -204,7 +204,11 @@ export default function DomainDetailPage() {
     () => domainData.connections.filter((c) => c.sslStatus === 'issuing').map((c) => c.id),
     [domainData.connections]
   );
-  useAutoSslRefresh(issuingConnectionIds, domainData.loadDomainContext);
+  // Background SSL poll must not flip the page loading indicator.
+  const silentRefreshForSsl = useCallback(() => {
+    void loadDomainContext({ silent: true });
+  }, [loadDomainContext]);
+  useAutoSslRefresh(issuingConnectionIds, silentRefreshForSsl);
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings()]);
@@ -248,9 +252,20 @@ export default function DomainDetailPage() {
                 <Globe className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h1 className={`${MONO} text-[22px] sm:text-[26px] leading-none tracking-[-0.01em] text-white font-semibold truncate`}>
-                  {domainName}
-                </h1>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className={`${MONO} text-[22px] sm:text-[26px] leading-tight tracking-[-0.01em] text-white font-semibold truncate`}>
+                    {domainName}
+                  </h1>
+                  <a
+                    href={`https://${domainName}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Visit https://${domainName}`}
+                    className="shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-[5px] border border-white/[0.08] text-white/35 hover:text-white/80 hover:bg-white/[0.05] transition-colors"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
                 <div className={`${MONO} mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-white/45`}>
                   <StatusPill status={overallStatus} />
                   <span className="text-white/15">·</span>

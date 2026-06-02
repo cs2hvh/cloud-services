@@ -231,7 +231,7 @@ export function DomainCard({
           onCheck={anyOperationRunning ? undefined : onCheckSsl}
           checkingId={checkingSslId}
           variant="card"
-          dnsMessage={domain.dns_ready === false ? domain.dns_message : undefined}
+          dnsMessage={domain.dns_message}
         />
       )}
 

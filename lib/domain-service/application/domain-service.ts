@@ -657,7 +657,9 @@ export class DomainService {
       if (issuingTooLong) {
         const message = dnsKnownNotReady
           ? "SSL setup timed out: DNS is not pointing to the platform. Verify your DNS records point to the correct IP, then re-activate."
-          : "SSL setup timed out. The domain is unreachable. Re-activate the domain to retry.";
+          : dnsStatus?.ready
+          ? "SSL certificate issuance timed out. DNS is configured correctly — re-activate the domain to issue a new certificate."
+          : "SSL setup timed out. Re-activate the domain to retry.";
         await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
         await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
         return { ssl_status: "failed", dns_ready: !dnsKnownNotReady, dns_message: message };
@@ -695,16 +697,33 @@ export class DomainService {
       };
     }
 
-    if (isFakeCert && domain.ssl_status !== "failed") {
-      if (issuingTooLong) {
-        const message =
-          "Secure connection setup timed out. The domain is reachable but not fully trusted yet. Re-activate the domain to retry.";
-        await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
-        await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
-        return { ssl_status: "failed", dns_ready: true, dns_message: message };
+    if (isFakeCert) {
+      if (domain.ssl_status !== "failed") {
+        if (issuingTooLong) {
+          const message = dnsKnownNotReady
+            ? "SSL setup timed out: DNS is not pointing to the platform. Verify your DNS records point to the correct IP, then re-activate."
+            : "Secure connection setup timed out. The domain is reachable but the SSL certificate was not issued — re-activate to retry.";
+          await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
+          await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
+          return { ssl_status: "failed", dns_ready: !dnsKnownNotReady, dns_message: message };
+        }
+        // Still within issuing window. Surface DNS problems early so users don't wait 20 min.
+        if (dnsKnownNotReady) {
+          await this.deps.domains
+            .updateLastError(domain.id, `DNS not ready: ${dnsStatus!.message}`)
+            .catch(() => {});
+          return { ssl_status: "issuing", dns_ready: false, dns_message: dnsStatus!.message };
+        }
+        return { ssl_status: "issuing", dns_ready: true };
       }
-      // Keep as "issuing" — cert-manager has not finished yet.
-      return { ssl_status: "issuing", dns_ready: true };
+      // Already failed: domain is reachable (serving fallback cert). Guide user to re-activate.
+      return {
+        ssl_status: "failed" as const,
+        dns_ready: !dnsKnownNotReady,
+        dns_message: dnsKnownNotReady
+          ? dnsStatus!.message
+          : "The domain is reachable but the SSL certificate could not be issued. Re-activate to retry.",
+      };
     }
 
     return { ssl_status: domain.ssl_status, dns_ready: true };

@@ -352,7 +352,11 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
           toast.info('Certificate is still being issued. Check again in a minute.');
         }
       } else if (data.ssl_status === 'failed') {
-        toast.error('Secure connection failed. Verify DNS settings and re-activate the domain.');
+        if (data.dns_ready === true && data.dns_message) {
+          toast.error(data.dns_message);
+        } else {
+          toast.error('Secure connection failed. Verify DNS settings and re-activate the domain.');
+        }
       }
       await fetchDomains();
     } catch {
