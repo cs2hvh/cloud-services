@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 
 // Time range options for log filtering
 const TIME_RANGES = [
@@ -253,7 +254,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
       `=== ${instanceLog.displayName} ===\n${instanceLog.logs}`
     ).join('\n\n');
     
-    navigator.clipboard.writeText(allLogs);
+    void copyToClipboard(allLogs);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [filteredLogs]);

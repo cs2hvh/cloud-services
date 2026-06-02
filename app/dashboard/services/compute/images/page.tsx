@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
+import { useConfirm } from "@/components/ui/confirm";
 
 const SERIF_STYLE: React.CSSProperties = { fontFamily: 'var(--font-nunito), system-ui, sans-serif' };
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
@@ -43,6 +44,7 @@ const STATUS_META: Record<string, { color: string; label: string; pulse?: boolea
 };
 
 export default function CustomImagesPage() {
+  const confirm = useConfirm();
   const [images, setImages] = useState<CustomImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
@@ -70,7 +72,12 @@ export default function CustomImagesPage() {
   const available = images.filter((i) => i.status === 'available').length;
 
   const onDelete = async (img: CustomImage) => {
-    if (!confirm(`Delete image "${img.name}"?\n\nThe image and its prepared templates are removed. Servers already created from it keep running.`)) {
+    if (!(await confirm({
+      title: `Delete image "${img.name}"?`,
+      description: "The image and its prepared templates are removed. Servers already created from it keep running.",
+      confirmText: "Delete image",
+      danger: true,
+    }))) {
       return;
     }
     try {

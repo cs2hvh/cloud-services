@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import { motion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -95,7 +96,7 @@ export default function InferencePrivateHostingSection() {
           />
           <div className="relative w-full">
             <Image
-              src="/ailabs/raod.png"
+              src={assetUrl("/ailabs/raod.png")}
               alt="Single-tenant request path — your traffic stays in your lane"
               width={1920}
               height={760}

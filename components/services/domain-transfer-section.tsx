@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -260,7 +261,7 @@ export default function DomainTransferSection() {
       <Container className="relative z-10 ">
         <div className="relative mx-auto w-full max-w-[980px] overflow-hidden rounded-2xl bg-[#C6D5E3] px-6 py-7 sm:px-12 sm:py-9 lg:px-20 lg:py-11">
           <Image
-            src="/images/main-page/service-home-domain-sec-1-bg.png"
+            src={assetUrl("/images/main-page/service-home-domain-sec-1-bg.png")}
             alt=""
             fill
             className="object-cover"
@@ -436,7 +437,7 @@ export default function DomainTransferSection() {
                 </p>
                 <div className="relative mt-5 h-[170px] w-full max-w-[280px]">
                   <Image
-                    src="/images/main-page/service-home-domain-sec-1.svg"
+                    src={assetUrl("/images/main-page/service-home-domain-sec-1.svg")}
                     alt="Domain transfer illustration"
                     fill
                     className="object-contain object-left"

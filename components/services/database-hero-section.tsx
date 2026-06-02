@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -129,7 +130,7 @@ export default function DatabaseHeroSection({
           <div className="relative">
             <div className="relative mx-auto aspect-square w-full max-w-[360px] sm:max-w-[430px] lg:max-w-[520px]">
               <Image
-                src="/images/main-page/service-home-db-section-1.png"
+                src={assetUrl("/images/main-page/service-home-db-section-1.png")}
                 alt="Database infrastructure"
                 fill
                 priority

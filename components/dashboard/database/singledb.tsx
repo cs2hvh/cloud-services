@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import api from "@/lib/axios/axios";
 import { Tables } from "@/lib/supabase/types";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
@@ -149,7 +150,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       toast.success(`${label} copied to clipboard!`);
     } catch {
       toast.error(`Failed to copy ${label.toLowerCase()}`);

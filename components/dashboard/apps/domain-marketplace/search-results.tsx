@@ -87,7 +87,7 @@ function SectionHeader({
   action,
 }: {
   title: string;
-  caption: string;
+  caption?: string;
   count: number;
   action?: ReactNode;
 }) {
@@ -95,7 +95,7 @@ function SectionHeader({
     <div className="flex flex-col gap-2 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div>
         <p className="text-sm font-medium text-white">{title}</p>
-        <p className="mt-1 text-sm text-white/42">{caption}</p>
+        {caption && <p className="mt-1 text-sm text-white/42">{caption}</p>}
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs tabular-nums text-white/35">
@@ -257,10 +257,7 @@ export function SearchResults({
       <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/34">
-            Search Results
-          </p>
-          <p className="mt-1 text-sm font-medium text-white">
-            Best matches, premium options, and unavailable names are grouped separately.
+            Search results
           </p>
         </div>
 
@@ -281,11 +278,7 @@ export function SearchResults({
 
       {featuredResults.length > 0 && (
         <div>
-          <SectionHeader
-            title="Best matches"
-            caption="Strongest available options from your selected extensions."
-            count={featuredResults.length}
-          />
+          <SectionHeader title="Best matches" count={featuredResults.length} />
           <div>
             {featuredResults.map((item, index) => (
               <ResultRow
@@ -302,11 +295,7 @@ export function SearchResults({
 
       {premiumResults.length > 0 && (
         <div className="border-t border-white/[0.06]">
-          <SectionHeader
-            title="Premium names"
-            caption="Higher-value domains that still match this search."
-            count={premiumResults.length}
-          />
+          <SectionHeader title="Premium names" count={premiumResults.length} />
           <div>
             {premiumResults.map((item) => (
               <ResultRow
@@ -324,7 +313,6 @@ export function SearchResults({
         <div className="border-t border-white/[0.06]">
           <SectionHeader
             title="Taken names"
-            caption="Close matches that are currently unavailable."
             count={unavailableResults.length}
             action={
               <button
@@ -394,10 +382,9 @@ function EmptySearchState() {
                         see every match.
                     </h3>
                     <p className="mt-4 max-w-[440px] text-[13.5px] leading-[1.65] text-white/55">
-                        Drop in a keyword (<span className="text-white/80">brandname</span>) or a
-                        full domain (<span className="text-white/80">brand.dev</span>) — we look up
-                        availability across 500+ TLDs, with pricing, premium status, and renewal
-                        cost surfaced upfront.
+                        Enter a keyword (<span className="text-white/80">brandname</span>) or full
+                        domain (<span className="text-white/80">brand.dev</span>) to check
+                        availability across 500+ extensions — pricing and renewal cost upfront.
                     </p>
 
                     <div className="mt-7">

@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import { motion } from "motion/react";
 
@@ -17,7 +18,7 @@ export default function ObjectStorageReleaseSection() {
         {/* Spiral line-art background — blurred, right-center */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <Image
-            src="/a159e753bfb39b7a12ae7b90c019690a05bab577 (1).png"
+            src={assetUrl("/a159e753bfb39b7a12ae7b90c019690a05bab577 (1).png")}
             alt=""
             fill
             sizes="100vw"
@@ -40,7 +41,7 @@ export default function ObjectStorageReleaseSection() {
               }}
             >
               <Image
-                src="/e1d5f04fa8af10806f332bf618d0ac4818dbcb78.png"
+                src={assetUrl("/e1d5f04fa8af10806f332bf618d0ac4818dbcb78.png")}
                 alt="Megaphone"
                 fill
                 sizes="(min-width: 1024px) 111px, 90px"

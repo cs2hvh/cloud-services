@@ -1,7 +1,8 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
@@ -13,6 +14,12 @@ import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atm
 import { ModelTrainingPipelineSection } from "@/components/model-training-pipeline-section";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
+
+function WorkloadImg({ src }: { src: string }) {
+    return <Image src={`${CDN}/${src}`} alt="" width={28} height={28} className="h-full w-full object-contain" />;
+}
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -113,80 +120,6 @@ function ObjectStorageIcon() {
     );
 }
 
-/* ──────── Workload glyphs (cream section) ──────── */
-
-function LLMGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            {[8, 12, 16, 20, 24].map((y, i) => (
-                <line key={y} x1="3" y1={y} x2="29" y2={y} strokeOpacity={0.30 + i * 0.06} />
-            ))}
-            <circle cx="8" cy="8" r="1.3" fill="currentColor" />
-            <circle cx="14" cy="12" r="1.3" fill="#0095FF" />
-            <circle cx="19" cy="16" r="1.3" fill="currentColor" />
-            <circle cx="24" cy="20" r="1.3" fill="#0095FF" />
-            <circle cx="27" cy="24" r="1.3" fill="currentColor" />
-        </svg>
-    );
-}
-
-function VisionGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <rect x="3" y="6" width="26" height="20" rx="1.5" fill="currentColor" fillOpacity="0.08" />
-            <path d="M3 11h26M3 22h26M11 6v20M22 6v20" strokeOpacity="0.3" />
-            <circle cx="16" cy="16" r="4" fill="#0095FF" fillOpacity="0.25" stroke="#0095FF" />
-            <circle cx="16" cy="16" r="1.4" fill="#0095FF" />
-        </svg>
-    );
-}
-
-function AudioGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 16h2l1.5-7 3 14 3-10 2 6 2-4 2 2 3 0" />
-            <circle cx="3" cy="16" r="0.9" fill="currentColor" />
-            <circle cx="22" cy="17" r="1.2" fill="#0095FF" />
-            <circle cx="27" cy="13" r="0.9" fill="currentColor" />
-        </svg>
-    );
-}
-
-function RagGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <circle cx="16" cy="16" r="11" strokeOpacity="0.4" />
-            <circle cx="7" cy="13" r="1.4" fill="currentColor" />
-            <circle cx="13" cy="6" r="1.4" fill="currentColor" />
-            <circle cx="22" cy="9" r="1.4" fill="currentColor" />
-            <circle cx="25" cy="17" r="1.4" fill="currentColor" />
-            <circle cx="21" cy="24" r="1.4" fill="currentColor" />
-            <circle cx="11" cy="22" r="1.4" fill="currentColor" />
-            <circle cx="16" cy="16" r="2.5" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
-            <path d="M16 16l-3-9M16 16l9-1M16 16l-5 6M16 16l6 6" strokeOpacity="0.3" />
-        </svg>
-    );
-}
-
-function AgentGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" strokeLinecap="round">
-            <circle cx="16" cy="16" r="3" fill="#0095FF" fillOpacity="0.30" stroke="#0095FF" />
-            <path d="M16 5v4M16 23v4M5 16h4M23 16h4M8.5 8.5l3 3M20.5 20.5l3 3M8.5 23.5l3-3M20.5 11.5l3-3" />
-        </svg>
-    );
-}
-
-function RankingGlyph() {
-    return (
-        <svg viewBox="0 0 32 32" fill="none" className="h-full w-full" stroke="currentColor" strokeWidth={1.3}>
-            <rect x="3" y="5" width="26" height="3.5" rx="0.6" fill="currentColor" />
-            <rect x="3" y="11" width="20" height="3.5" rx="0.6" fill="#0095FF" />
-            <rect x="3" y="17" width="14" height="3.5" rx="0.6" fill="currentColor" fillOpacity="0.55" />
-            <rect x="3" y="23" width="8" height="3.5" rx="0.6" fill="currentColor" fillOpacity="0.35" />
-        </svg>
-    );
-}
 
 /* ──────── Lifecycle flow nodes ──────── */
 
@@ -443,37 +376,37 @@ type Workload = { glyph: React.ReactNode; metric: string; title: string; descrip
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <LLMGlyph />,
+        glyph: <WorkloadImg src="KvX_t8HD7Z16.png" />,
         metric: "Foundation",
         title: "LLM training and fine-tuning",
         description: "Pretrain or specialize models from 7B to 400B+. NVLink islands, optimized data loaders, and checkpoint-resume across regions.",
     },
     {
-        glyph: <VisionGlyph />,
+        glyph: <WorkloadImg src="AP8z8hENyf8Z.png" />,
         metric: "Vision",
         title: "Computer vision and multimodal",
         description: "Detection, segmentation, video understanding, and image generation on memory-rich GPUs sized for high-resolution input.",
     },
     {
-        glyph: <AudioGlyph />,
+        glyph: <WorkloadImg src="9IGgOPvGSIUO.png" />,
         metric: "Audio",
         title: "Speech, audio, and voice agents",
         description: "Low-latency TTS and STT, voice cloning, and real-time conversational pipelines with sub-100ms inference loops.",
     },
     {
-        glyph: <RagGlyph />,
+        glyph: <WorkloadImg src="L3LB0nm9Orxv.png" />,
         metric: "Retrieval",
         title: "Retrieval-augmented generation",
         description: "pgvector, Qdrant, or your embedding store of choice — collocated with GPU inference and the rest of your stack.",
     },
     {
-        glyph: <AgentGlyph />,
+        glyph: <WorkloadImg src="sz29dk3pnJAZ.png" />,
         metric: "Agents",
         title: "Agent and tool-use systems",
         description: "Long-running agents with tool calling, state management, and scheduled execution — wired into managed databases.",
     },
     {
-        glyph: <RankingGlyph />,
+        glyph: <WorkloadImg src="ZanBuI0Vrccb.png" />,
         metric: "Ranking",
         title: "Recommendation and ranking",
         description: "Two-tower models, deep learning rankers, and feature stores backed by Postgres and Redis on the same private network.",
@@ -876,7 +809,6 @@ function Stack() {
 }
 
 function Workloads() {
-    const [gridHovered, setGridHovered] = useState(false);
     return (
         <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-28">
             {/* ─── Warm paper grain ─── */}
@@ -888,21 +820,17 @@ function Workloads() {
                         <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
                         Workloads
                     </p>
-                    <h2 className={`text-3xl font-semibold leading-[1.05] tracking-[-0.02em] transition-colors duration-300 sm:text-4xl lg:text-[48px] ${gridHovered ? "text-[#0095FF]" : "text-[#1A1814]"}`}>
+                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
                         Sized to what AI teams{" "}
-                        <span style={ACCENT_FONT} className={gridHovered ? "text-[#0095FF]" : "text-[#0066B3]"}>
+                        <span style={ACCENT_FONT} className="text-[#0095FF]">
                             actually run.
                         </span>
                     </h2>
                 </div>
 
-                <div
-                    className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3"
-                    onMouseEnter={() => setGridHovered(true)}
-                    onMouseLeave={() => setGridHovered(false)}
-                >
+                <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-[8px] border border-black/[0.10] bg-black/[0.10] sm:grid-cols-2 lg:grid-cols-3">
                     {WORKLOADS.map((w, i) => (
-                        <article key={w.title} className="flex flex-col gap-4 bg-[#EEECE4] p-7">
+                        <article key={w.title} className="group flex flex-col gap-4 bg-[#EEECE4] p-7">
                             <div className="flex items-start justify-between">
                                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-[7px] border border-black/[0.12] bg-[#1A1814] text-[#EEECE4]">
                                     <div className="h-[26px] w-[26px]">{w.glyph}</div>
@@ -940,9 +868,9 @@ export function AiMlLanding() {
                 description="Training, fine-tuning, and inference on NVIDIA GPUs — with the data layer wired in."
                 primaryAction={{ label: "Talk to AI engineering", href: "/contact" }}
                 secondaryAction={{ label: "Browse GPU lineup", href: "/services/gpu" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/gpu aniamtion resized.png",
+                    src: "https://ahurasense.cs2hvh.com/images/2026-06/9SxfcNyy77s6.png",
                     alt: "GPU cluster",
                     priority: true,
                 }}

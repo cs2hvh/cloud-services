@@ -46,14 +46,15 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       hourlyRate: 0.01,
     });
 
-    // Mock billing functions
-    const { ensureBalance, postProvisionBilling } = await import('@/config/billing-flow');
-    vi.mocked(ensureBalance).mockResolvedValue({ ok: true, balance: 100 });
+    // Mock billing functions (C2/C3 reservation primitives)
+    const { reserveProvision, settleProvision, releaseProvision } = await import('@/config/billing-flow');
+    vi.mocked(reserveProvision).mockResolvedValue({ ok: true, balance: 100, reservation: { userId: mockUser.id, reserved: 0 } });
+    vi.mocked(settleProvision).mockResolvedValue(undefined);
+    vi.mocked(releaseProvision).mockResolvedValue(undefined);
 
     // Mock ObjectSpaces
     const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
     vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
-    vi.mocked(postProvisionBilling).mockResolvedValue({ success: true } as any);
 
     // Mock Billing.add_active_objectspace
     const { Billing } = await import('@/lib/supabase/queries/billing');
@@ -439,8 +440,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
 
   describe('Billing Checks', () => {
     it('TC-OBJ-096: should return 402 when insufficient credits', async () => {
-      const { ensureBalance } = await import('@/config/billing-flow');
-      vi.mocked(ensureBalance).mockResolvedValue({ ok: false, balance: 5 });
+      const { reserveProvision } = await import('@/config/billing-flow');
+      vi.mocked(reserveProvision).mockResolvedValue({ ok: false, balance: 5, reservation: { userId: mockUser.id, reserved: 0 } });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -453,7 +454,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       expect(data.error).toBe('Insufficient credits');
     });
 
-    it('TC-OBJ-097: should call postProvisionBilling after successful creation', async () => {
+    it('TC-OBJ-097: should call settleProvision after successful creation', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
         success: true,
@@ -461,7 +462,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
         accessKey: mockDigitalOceanSpacesKey,
       });
 
-      const { postProvisionBilling } = await import('@/config/billing-flow');
+      const { settleProvision } = await import('@/config/billing-flow');
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -471,7 +472,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       const response = await POST(request as NextRequest);
       await expectResponseStatus(response, 201);
 
-      expect(postProvisionBilling).toHaveBeenCalled();
+      expect(settleProvision).toHaveBeenCalled();
     });
   });
 

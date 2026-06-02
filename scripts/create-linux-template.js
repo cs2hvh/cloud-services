@@ -218,7 +218,12 @@ packages:
   - qemu-guest-agent
 runcmd:
   - systemctl enable qemu-guest-agent
-  - systemctl start qemu-guest-agent`;
+  # RHEL/CentOS/Alma/Rocky ship qemu-guest-agent with guest-exec blacklisted in
+  # /etc/sysconfig/qemu-ga (BLACKLIST_RPC). Re-enable guest-exec + guest-exec-status
+  # so the platform can run in-guest commands (password reset, network fallback).
+  # Debian/Ubuntu allow it by default and have no such file (the test fails -> true).
+  - "[ -f /etc/sysconfig/qemu-ga ] && sed -i 's/,guest-exec-status//g; s/,guest-exec//g' /etc/sysconfig/qemu-ga || true"
+  - systemctl restart qemu-guest-agent || systemctl start qemu-guest-agent`;
 
   await ssh("mkdir -p /var/lib/vz/snippets");
   await ssh("pvesm set " + S + " --content images,iso,vztmpl,snippets,rootdir 2>/dev/null || true");

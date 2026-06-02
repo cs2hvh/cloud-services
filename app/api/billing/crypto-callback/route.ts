@@ -37,20 +37,38 @@ export async function POST(request: Request) {
     }
 
     const secretKey = process.env.CRGATEWAY_API_SECRET;
+    if (!secretKey) {
+        // Fail CLOSED (H5): without the shared secret we cannot authenticate the
+        // gateway, so we must never forward an unverified deposit to the crediting
+        // RPC. The previous `if (secretKey)` guard let an anonymous, well-formed
+        // POST through whenever the secret was unset.
+        console.error('[CryptoCallback] CRGATEWAY_API_SECRET not configured — rejecting callback');
+        return NextResponse.json({ success: false, message: 'Callback not configured' }, { status: 503 });
+    }
+
     const headerSignature = request.headers.get('x-ungateway-signature');
     const receivedSignature = headerSignature || parsed.data.signature;
 
-    if (secretKey) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { signature, ...dataWithoutSignature } = parsed.data;
-        const computedSignature = crypto
-            .createHmac('sha256', secretKey)
-            .update(JSON.stringify(dataWithoutSignature))
-            .digest('hex');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { signature, ...dataWithoutSignature } = parsed.data;
+    const computedSignature = crypto
+        .createHmac('sha256', secretKey)
+        .update(JSON.stringify(dataWithoutSignature))
+        .digest('hex');
 
-        if (computedSignature !== receivedSignature) {
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    // Constant-time comparison to avoid leaking the HMAC byte-by-byte via timing.
+    const signaturesMatch = (() => {
+        try {
+            const a = Buffer.from(computedSignature, 'hex');
+            const b = Buffer.from(receivedSignature, 'hex');
+            return a.length === b.length && crypto.timingSafeEqual(a, b);
+        } catch {
+            return false;
         }
+    })();
+
+    if (!signaturesMatch) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     const { payment_id, status, amount_received_usd } = parsed.data;

@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from "next/image";
 
@@ -17,37 +18,37 @@ const FEATURES: Feature[] = [
         title: "Auto-scaling node pools",
         description:
             "Pools scale on pending pods and resource pressure. Mix on-demand and spot, scale to zero when idle.",
-        image: "/images/kubernetes-ui/auto scaling.png",
+        image: assetUrl("/images/kubernetes-ui/auto scaling.png"),
     },
     {
         title: "Multi-region clusters",
         description:
             "Stretch one cluster across regions with topology-aware scheduling and automated failover when an AZ disappears.",
-        image: "/images/kubernetes-ui/Multi region clusters png.png",
+        image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
     },
     {
         title: "GitOps ready",
         description:
             "Argo CD or Flux installable from the dashboard. Wire any branch to any cluster; drift is reconciled automatically.",
-        image: "/images/kubernetes-ui/gitops%20ready.png",
+        image: assetUrl("/images/kubernetes-ui/gitops%20ready.png"),
     },
     {
         title: "Fully managed control plane",
         description:
             "API server, scheduler, etcd, and controllers — patched, monitored, backed up. You pay only for workers.",
-        image: "/images/kubernetes-ui/fully managed.png",
+        image: assetUrl("/images/kubernetes-ui/fully managed.png"),
     },
     {
         title: "Built-in load balancing",
         description:
             "L4/L7 ingress with automatic TLS, sticky sessions, and DDoS protection. No manual cert renewals.",
-        image: "/images/kubernetes-ui/Built%20in%20load%20balancing%20png.png",
+        image: assetUrl("/images/kubernetes-ui/Built%20in%20load%20balancing%20png.png"),
     },
     {
         title: "Observability built in",
         description:
             "Cluster, node, and pod metrics plus container logs in the dashboard. Prometheus and OTel exporters for your own stack.",
-        image: "/images/kubernetes-ui/auto scaling.png",
+        image: assetUrl("/images/kubernetes-ui/auto scaling.png"),
     },
 ];
 

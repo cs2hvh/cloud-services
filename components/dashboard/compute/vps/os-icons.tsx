@@ -145,6 +145,8 @@ export function osIconFor(osName: string | null | undefined) {
 // Brand OS artwork in /public/os. Only a handful ship as PNGs; every other
 // distro falls back to the monochrome glyph above. The space in the Windows
 // filename is URL-encoded.
+// Served from local public/ (not the CDN) so these functional dashboard icons
+// always load regardless of CDN/asset-base config.
 const OS_PNG: { match: string; src: string }[] = [
     { match: "ubuntu", src: "/os/ubuntu.png" },
     { match: "debian", src: "/os/Debian.png" },

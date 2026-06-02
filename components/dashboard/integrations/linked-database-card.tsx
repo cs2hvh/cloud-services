@@ -1,4 +1,5 @@
 'use client';
+import { assetUrl } from "@/lib/asset-url";
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -39,13 +40,13 @@ export function LinkedDatabaseCard({
   const getEngineLogoPath = () => {
     switch (database.engine) {
       case 'pg':
-        return '/images/database-logos/postgresql.png';
+        return assetUrl('/images/database-logos/postgresql.png');
       case 'mysql':
-        return '/images/database-logos/mysql.svg';
+        return assetUrl('/images/database-logos/mysql.svg');
       case 'mongodb':
-        return '/images/database-logos/mongodb.png';
+        return assetUrl('/images/database-logos/mongodb.png');
       default:
-        return '/images/database-logos/postgresql.png';
+        return assetUrl('/images/database-logos/postgresql.png');
     }
   };
 

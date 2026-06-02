@@ -72,7 +72,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         );
     }
 
-    const result = await RunPodService.getUserPod(podId, user.id);
+    // syncUserPod self-heals connection info (public IP / SSH command) from the
+    // live RunPod resource when it's missing, so SSH details land without
+    // depending on the background reconcile cron. Falls back to the DB row.
+    const result = await RunPodService.syncUserPod(podId, user.id);
     if (!result.success) {
         return Response.json(
             { ok: false, error: result.error || "Pod not found" },

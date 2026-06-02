@@ -8,7 +8,13 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
-import { postProvisionBilling } from "@/config/billing-flow";
+import {
+  reserveProvision,
+  settleProvision,
+  releaseProvision,
+  type ProvisionReservation,
+} from "@/config/billing-flow";
+import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
 import { pickBestStorage } from "@/lib/proxmox/storage-picker";
 import { findPlanBySlug } from "@/lib/pricing/plan-catalog";
@@ -148,7 +154,7 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
     } catch {}
   }
 
-  throw new Error("Missing Proxmox credentials in DB");
+  throw new Error("Error");
 }
 
 async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
@@ -788,10 +794,19 @@ export async function POST(req: NextRequest) {
     planHourlyUSD != null ? planHourlyUSD : calculateHourlyCost(serverSpecs);
   const minimumHours = 1;
 
-  // Balance check — user must have at least 1 hour of credit before provisioning
+  // Atomically reserve 1h of cost BEFORE provisioning (free-fleet gate, C2). The
+  // hold is refunded on success (settleProvision in after()); net upfront charge is
+  // $0 and the cron meters hourly as before. Every non-settle exit below refunds it
+  // exactly once via releaseProvision.
+  let reservation: ProvisionReservation | undefined;
   const minimumBalance = hourlyCost * minimumHours;
-  const hasFunds = await BillingCredits.hasSufficientBalance(user.id, minimumBalance);
-  if (!hasFunds) {
+  const reservationResult = await reserveProvision({
+    userId: user.id,
+    initialCost: 0,
+    hourlyRate: hourlyCost,
+  });
+  reservation = reservationResult.reservation;
+  if (!reservationResult.ok) {
     if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
     return Response.json(
       { ok: false, error: `Insufficient balance. You need at least $${minimumBalance.toFixed(2)} to create this server.` },
@@ -816,6 +831,7 @@ export async function POST(req: NextRequest) {
   const storage = storagePick.storage;
   if (storagePick.reason === "fallback-no-fit") {
     if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
+    await releaseProvision(reservation);
     return Response.json({
       ok: false,
       error: `No storage with ${requestedDiskGB} GB free on the selected host. Please reduce the disk size or try a different region.`,
@@ -840,6 +856,7 @@ export async function POST(req: NextRequest) {
     if (existing) {
       // Release IP lock since we can't use this IP
       if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+      await releaseProvision(reservation);
       return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
     }
 
@@ -879,6 +896,7 @@ export async function POST(req: NextRequest) {
     if (insertErr) {
       // Release IP lock on failure
       if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+      await releaseProvision(reservation);
       db.error = insertErr.message;
       if (insertErr.message?.toLowerCase().includes("duplicate") || (insertErr as unknown as Record<string, unknown>).code === "23505") {
         return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
@@ -894,6 +912,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // Release IP lock on error
     if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+    await releaseProvision(reservation);
     const error = e instanceof Error ? e : new Error(String(e));
     db.error = error?.message || String(e);
     console.error("[VM Create] DB reservation failed:", db.error);
@@ -1180,8 +1199,8 @@ export async function POST(req: NextRequest) {
     // Best-effort: a failure here is logged but never tears down a live VM.
     if (billingServiceId) {
       try {
-        await postProvisionBilling({
-          userId: user.id,
+        await settleProvision({
+          reservation: reservationResult.reservation,
           initialCost: 0,
           hourlyRate: hourlyCost,
           serviceId: billingServiceId,
@@ -1189,11 +1208,24 @@ export async function POST(req: NextRequest) {
           addActive: BillingCredits.addActiveCompute,
         });
       } catch (billingErr) {
+        // Meter registration failed: the VM is live but unmetered. Tear it down so
+        // it can't run free (M4), then refund the reservation hold.
         console.error(
-          "[VM Create] failed to register compute billing meter:",
+          "[VM Create] failed to register compute billing meter — tearing down VM:",
           billingErr instanceof Error ? billingErr.message : billingErr
         );
+        if (reservationId != null) {
+          try {
+            await destroyServer(Number(reservationId));
+          } catch (teardownErr) {
+            console.error("[VM Create] VM teardown after billing failure also failed:", teardownErr);
+          }
+        }
+        await releaseProvision(reservation);
       }
+    } else {
+      // No billing service id resolved — can't meter; refund the hold.
+      await releaseProvision(reservation);
     }
   } catch (e: unknown) {
     const failureMessage = errorMessage(e);
@@ -1217,6 +1249,8 @@ export async function POST(req: NextRequest) {
           .eq("id", reservationId);
       }
     } catch {}
+    // Provisioning failed before billing was registered — refund the hold.
+    await releaseProvision(reservation);
   }
   }); // end after()
 

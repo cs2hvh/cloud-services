@@ -180,6 +180,25 @@ export interface InferenceEventEmailData {
   preview?: string;
 }
 
+export interface VpsPasswordResetEmailData {
+  /** Recipient display name for the greeting. */
+  recipientName: string;
+  /** The server's hostname / label. */
+  serverName: string;
+  /** Public IP to connect to. */
+  ipAddress: string;
+  /** OS account whose password was reset (e.g. "ubuntu", "admin"). */
+  loginUsername: string;
+  /** The newly generated password — shown only in this email, never stored. */
+  password: string;
+  /** Access protocol. */
+  protocol: "SSH" | "RDP";
+  /** Connection port (22 / 3389). */
+  port: number;
+  /** Optional dashboard link to the server. */
+  actionUrl?: string;
+}
+
 export interface EmailTemplateDataMap {
   otp: OtpEmailData;
   forgotPassword: ForgotPasswordEmailData;
@@ -195,6 +214,7 @@ export interface EmailTemplateDataMap {
   supportTicketCreated: SupportTicketCreatedEmailData;
   supportTicketReply: SupportTicketReplyEmailData;
   inferenceEvent: InferenceEventEmailData;
+  vpsPasswordReset: VpsPasswordResetEmailData;
 }
 
 export type EmailTemplateId = keyof EmailTemplateDataMap;

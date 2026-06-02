@@ -12,6 +12,7 @@ import { SystemAlertEmailTemplate } from "@/lib/email/templates/alerts/system-al
 import { SupportTicketCreatedEmailTemplate } from "@/lib/email/templates/support/support-ticket-created";
 import { SupportTicketReplyEmailTemplate } from "@/lib/email/templates/support/support-ticket-reply";
 import { InferenceEventEmailTemplate } from "@/lib/email/templates/inference/inference-event";
+import { VpsPasswordResetEmailTemplate } from "@/lib/email/templates/compute/vps-password-reset";
 import type { EmailTemplateRegistry } from "@/lib/email/types";
 
 export const emailTemplates: EmailTemplateRegistry = {
@@ -201,5 +202,21 @@ export const emailTemplates: EmailTemplateRegistry = {
       { name: "category", value: "inference" },
       { name: "event", value: event.replace(/\./g, "-") },
     ],
+  },
+  vpsPasswordReset: {
+    subject: ({ serverName }) => `AhuraSense | Password reset for ${serverName}`,
+    previewText: ({ protocol, serverName }) => `New ${protocol} password for ${serverName}.`,
+    render: (data) => <VpsPasswordResetEmailTemplate {...data} />,
+    text: ({ recipientName, serverName, ipAddress, loginUsername, password, protocol, port }) =>
+      [
+        `Hi ${recipientName},`,
+        `The password for your server ${serverName} has been reset.`,
+        `IP: ${ipAddress}`,
+        `Username: ${loginUsername}`,
+        `Password: ${password}`,
+        `Connect via ${protocol} on port ${port}.`,
+        `This password is shown only in this email and is not stored. Change it after signing in.`,
+      ].join("\n"),
+    tags: () => [{ name: "category", value: "compute" }],
   },
 };

@@ -1,17 +1,12 @@
 "use client";
 
-import {
-    IconDeviceDesktopFilled,
-    IconSparklesFilled,
-    IconShoppingCartFilled,
-    IconHexagonFilled,
-    IconBoltFilled,
-    IconShieldCheckFilled,
-} from "@tabler/icons-react";
+import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 type Workload = {
     icon: React.ReactNode;
@@ -23,7 +18,7 @@ type Workload = {
 
 const WORKLOADS: Workload[] = [
     {
-        icon: <IconDeviceDesktopFilled size={22} />,
+        icon: <Image src={`${CDN}/kUFKPAhOyXuK.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#0095FF",
         metric: "Web & SaaS",
         title: "Customer-facing web applications",
@@ -31,7 +26,7 @@ const WORKLOADS: Workload[] = [
             "Server-rendered and static frameworks deployed to the edge, with preview environments for every pull request and zero-downtime releases.",
     },
     {
-        icon: <IconSparklesFilled size={22} />,
+        icon: <Image src={`${CDN}/94Jsio4lQctX.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#8B5CF6",
         metric: "AI / ML",
         title: "Model inference services",
@@ -39,7 +34,7 @@ const WORKLOADS: Workload[] = [
             "GPU-backed runtimes with request-rate autoscaling and warm pools to keep cold-start and first-token latency within target.",
     },
     {
-        icon: <IconShoppingCartFilled size={22} />,
+        icon: <Image src={`${CDN}/emEwqaZ3Z2-W.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#10B981",
         metric: "Commerce",
         title: "High-traffic storefronts",
@@ -47,7 +42,7 @@ const WORKLOADS: Workload[] = [
             "Burst capacity for promotional events, integrated CDN, and signed checkout sessions — engineered for peak retail throughput.",
     },
     {
-        icon: <IconHexagonFilled size={22} />,
+        icon: <Image src={`${CDN}/gGH2bwxbWv4Y.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#06B6D4",
         metric: "APIs",
         title: "Backends and microservices",
@@ -55,7 +50,7 @@ const WORKLOADS: Workload[] = [
             "REST and gRPC services with health checks, structured logging, and managed connections to Postgres, Redis, and Mongo.",
     },
     {
-        icon: <IconBoltFilled size={22} />,
+        icon: <Image src={`${CDN}/Yc9TnetOkVnB.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#F59E0B",
         metric: "Realtime",
         title: "Realtime and WebSocket services",
@@ -63,7 +58,7 @@ const WORKLOADS: Workload[] = [
             "Long-lived connections with sticky routing across regional pools, deployed through the same release pipeline as the rest of the stack.",
     },
     {
-        icon: <IconShieldCheckFilled size={22} />,
+        icon: <Image src={`${CDN}/iVQiU0c0eLkY.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#E11D48",
         metric: "Regulated",
         title: "Compliance-bound workloads",
@@ -101,10 +96,7 @@ export default function AppDeployWorkloadsSection() {
                             className="group relative flex flex-col gap-4 bg-[#EEECE4] p-7 transition-colors hover:bg-[#F2EDDD]"
                         >
                             <div className="flex items-start justify-between">
-                                <div
-                                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
-                                    style={{ background: `${w.accent}18`, borderColor: `${w.accent}40`, color: w.accent }}
-                                >
+                                <div className="inline-flex h-14 w-14 items-center justify-center rounded-[10px] bg-[#1A1814]">
                                     {w.icon}
                                 </div>
                                 <span

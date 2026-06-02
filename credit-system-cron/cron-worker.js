@@ -47,6 +47,7 @@ export const VALID_TABLE_NAMES = [
   "active_inference_vector",
   "active_compute",
   "active_custom_image",
+  "active_gpu_pods",
 ];
 
 const TABLE_TO_SERVICE_TYPE = {
@@ -58,7 +59,23 @@ const TABLE_TO_SERVICE_TYPE = {
   active_inference_vector: "inference_vector",
   active_compute: "compute",
   active_custom_image: "custom_image",
+  active_gpu_pods: "gpu_pod",
 };
+
+// Customer-facing label — keeps internal codenames (spectrum / objectspace) out
+// of the transaction descriptions customers see. Mirrors lib/billing/service-label.ts.
+const SERVICE_LABEL = {
+  database: "Database",
+  kubernetes: "Kubernetes",
+  objectspace: "Object Storage",
+  spectrum: "DDoS Protection",
+  platform_apps: "App",
+  gpu_pod: "GPU pod",
+  compute: "Virtual server",
+  custom_image: "Custom image",
+  inference_vector: "Vector store",
+};
+const serviceLabel = (t) => SERVICE_LABEL[t] || String(t).replace(/_/g, " ");
 
 const BILLING_SERVICE_TABLES = Object.keys(TABLE_TO_SERVICE_TYPE);
 
@@ -506,6 +523,15 @@ async function startGraceLifecycleForInsufficientCredit({
 
       if (insertError) {
         if (insertError.code === "23505") {
+          return;
+        }
+        if (insertError.code === "23514") {
+          console.error(
+            `CRITICAL: billing.service_lifecycle CHECK rejected table "${tableName}" (23514). ` +
+            `The grace/auto-delete allowlist is out of sync with the metered tables — grace will NOT ` +
+            `run and this service will accrue unbilled usage. Extend service_lifecycle_table_check + ` +
+            `notification_outbox_table_check to include "${tableName}".`
+          );
           return;
         }
         if (isGraceSchemaUnavailable(insertError)) {
@@ -957,7 +983,7 @@ async function recordUsageTransaction({
         status: "completed",
         type: "usage",
         balance_after: balanceAfter,
-        description: `${serviceType.replace("_", " ")} usage charge`,
+        description: `${serviceLabel(serviceType)} usage charge`,
         service_id: serviceId,
         service_type: serviceType,
         period_start: periodStart,
@@ -1240,7 +1266,15 @@ export async function billSingleService(tableName, svc) {
   const periodStart = last
     ? last.toISOString()
     : parseBillingTimestamp(created_at)?.toISOString() || null;
-  const periodEnd = now.toISOString();
+  // M5: advance the meter cursor by exactly the window we billed, not to `now`.
+  // When the elapsed window was capped to MAX_HOURS_PER_BILLING (e.g. a >24h cron
+  // outage), advancing to `now` silently writes off the (elapsed - cap) hours;
+  // advancing by the billed window leaves the remainder to be billed next cycle.
+  const cursorBase = last || parseBillingTimestamp(created_at);
+  const periodEndDate = cursorBase
+    ? new Date(Math.min(cursorBase.getTime() + hoursUsed * 60 * 60 * 1000, now.getTime()))
+    : now;
+  const periodEnd = periodEndDate.toISOString();
   const billedAtIso = periodEnd;
   const expectedLastBilledAtIso = last ? last.toISOString() : null;
 
@@ -1307,7 +1341,7 @@ export async function billSingleService(tableName, svc) {
       cost: finalCost,
       status,
       timestamp: billedAtIso,
-      note: "Timestamp may be advanced without deduction for this period",
+      note: "Meter cursor preserved (last_billed_at not advanced) — usage will be re-billed next cycle",
     });
 
     if (status === "insufficient_credit") {

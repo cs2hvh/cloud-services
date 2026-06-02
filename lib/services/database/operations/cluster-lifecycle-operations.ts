@@ -1,7 +1,12 @@
 import axios from "axios";
 import { NextRequest } from "next/server";
 
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import {
+  reserveProvision,
+  settleProvision,
+  releaseProvision,
+  type ProvisionReservation,
+} from "@/config/billing-flow";
 import { Encryption } from "@/config/functions";
 import { getRatesForDatabase } from "@/config/pricing";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -33,18 +38,27 @@ export const clusterLifecycleOperations = {
     request: CreateDatabaseClusterRequest,
     req?: NextRequest
   ): Promise<CreateDatabaseClusterResult> {
+    let settled = false;
+    let reservation: ProvisionReservation | undefined;
     try {
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
         await getRatesForDatabase(request.plan_id);
 
-      const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
-      if (!balCheck.ok) {
+      // Atomically reserve (setup + 1h) BEFORE provisioning so concurrent creates
+      // can't all pass a stale balance read and spawn an unbilled fleet.
+      const reservationResult = await reserveProvision({
+        userId: request.owner_id,
+        initialCost: INITIAL_COST,
+        hourlyRate: HOURLY_RATE,
+      });
+      reservation = reservationResult.reservation;
+      if (!reservationResult.ok) {
         return {
           success: false,
           error: "Insufficient credits",
           errorCode: "INSUFFICIENT_BALANCE",
-          balance: balCheck.balance,
-          required: INITIAL_COST,
+          balance: reservationResult.balance,
+          required: INITIAL_COST + HOURLY_RATE,
         };
       }
 
@@ -136,15 +150,24 @@ export const clusterLifecycleOperations = {
       const providerClusterId = database.data.database.id as string;
       const billingServiceId = (supabaseData.data?.id as string | undefined) ?? providerClusterId;
       try {
-        await postProvisionBilling({
-          userId: request.owner_id,
+        await settleProvision({
+          reservation: reservationResult.reservation,
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
           serviceId: billingServiceId,
           serviceType: "database",
           addActive: Billing.add_active_database,
         });
+        settled = true;
       } catch (billingErr) {
+        // Meter registration failed: the cluster is live but unmetered. Tear the
+        // upstream cluster down (best-effort) so it can't run free; the outer
+        // finally refunds the reservation.
+        await axios
+          .delete(`https://api.digitalocean.com/v2/databases/${providerClusterId}`, {
+            headers: getDigitalOceanHeaders(),
+          })
+          .catch(() => {});
         const billingMessage =
           billingErr instanceof Error
             ? billingErr.message
@@ -270,6 +293,12 @@ export const clusterLifecycleOperations = {
         error: err instanceof Error ? err.message : "Unknown error occurred",
         errorCode: "UNKNOWN_ERROR",
       };
+    } finally {
+      // Any exit that did not settle (early-return failure, throw, insufficient
+      // balance) refunds the reservation exactly once. No-op once settled.
+      if (!settled) {
+        await releaseProvision(reservation);
+      }
     }
   },
 

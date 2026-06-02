@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -40,7 +41,7 @@ export function ConfirmingPayment({ payment }: ConfirmingPaymentProps) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Image
-                  src={`/currencies/${payment.currency.toLowerCase()}.svg`}
+                  src={assetUrl(`/currencies/${payment.currency.toLowerCase()}.svg`)}
                   alt={payment.currency}
                   className="w-9 h-9"
                 />

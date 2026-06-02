@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { type ServerData } from './types';
 import { VpsResizeSection } from './vps-resize-section';
+import { VpsPasswordResetSection } from './vps-password-reset-section';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const ACCENT = '#0095FF';
@@ -210,10 +211,20 @@ export function VpsSettingsTab({
         <VpsResizeSection server={server} onRefresh={onRefresh} />
       </section>
 
-      {/* ── 04 · Danger zone ─────────────────────────────── */}
+      {/* ── 04 · Access password ─────────────────────────── */}
       <section>
         <SectionHead
           num="04"
+          title="Access password"
+          description="Reset the SSH/RDP login password. A new password is generated and emailed to you — it's never shown here."
+        />
+        <VpsPasswordResetSection server={server} />
+      </section>
+
+      {/* ── 05 · Danger zone ─────────────────────────────── */}
+      <section>
+        <SectionHead
+          num="05"
           title="Danger zone"
           description="Destructive actions cannot be undone."
           danger

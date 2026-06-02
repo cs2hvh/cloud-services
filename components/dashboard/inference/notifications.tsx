@@ -7,6 +7,8 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/ui/confirm";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
 import {
   ACCENT,
@@ -118,6 +120,7 @@ export function NotificationsSettings({
   canMutate: boolean;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [config, setConfig] = useState(initialConfig);
   const [deliveries] = useState(initialDeliveries);
   const [emailDraft, setEmailDraft] = useState("");
@@ -166,7 +169,7 @@ export function NotificationsSettings({
   const copySecret = async () => {
     if (!secretDraft) return;
     try {
-      await navigator.clipboard.writeText(secretDraft);
+      await copyToClipboard(secretDraft);
       toast.success("Secret copied — paste into your webhook receiver");
     } catch {
       toast.error("Copy failed");
@@ -313,12 +316,12 @@ export function NotificationsSettings({
           title="Email"
           subtitle="Sent to the addresses you list below. Max 5. Uses our standard email template — no per-recipient customization."
           enabled={config.email_recipients.length > 0}
-          onToggle={() => {
+          onToggle={async () => {
             // Email "enabled" is implicit (any recipients = enabled). Toggle
             // off clears the list.
             if (!canMutate) return;
             if (config.email_recipients.length > 0) {
-              if (confirm("Remove all email recipients?")) {
+              if (await confirm({ title: "Remove all email recipients?", confirmText: "Remove", danger: true })) {
                 setConfig((c) => ({ ...c, email_recipients: [] }));
               }
             }

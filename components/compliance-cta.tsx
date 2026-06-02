@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { ArrowRight } from "lucide-react";
@@ -38,7 +39,7 @@ export function ComplianceCta() {
 
           <div className="flex justify-center lg:justify-end">
             <Image
-              src="/images/Complince/chip-on-brain.svg"
+              src={assetUrl("/images/Complince/chip-on-brain.svg")}
               alt="Brain with chip"
               width={520}
               height={520}

@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 
 interface NvidiaLogoProps {
@@ -15,7 +16,7 @@ export function NvidiaLogo({
 }: NvidiaLogoProps) {
     return (
         <Image
-            src="/nvidia/Nvidia-Logo.png"
+            src={assetUrl("/nvidia/Nvidia-Logo.png")}
             alt="NVIDIA"
             width={width}
             height={height}

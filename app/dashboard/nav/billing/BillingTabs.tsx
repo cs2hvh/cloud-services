@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 // Billing & payments — editorial pill-tab nav (Balance / Coupons /
 // Transactions), big Nunito balance hero, top-up form + recurring
 // card, coupon redemption, and a clean transactions table. All
@@ -548,7 +549,7 @@ function BalanceTab({
                                 icon={
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img
-                                        src="/currencies/usdt_trc20.svg"
+                                        src={assetUrl("/currencies/usdt_trc20.svg")}
                                         alt="USDT"
                                         className="h-5 w-5"
                                     />

@@ -2,7 +2,13 @@
 // Mirrors the lib/services/database/operations/cluster-lifecycle-operations.ts shape:
 // validate → ensureBalance → reserve DB row → call upstream → wire billing → audit.
 
-import { ensureBalance, postProvisionBilling, closeActiveBilling } from "@/config/billing-flow";
+import {
+  reserveProvision,
+  settleProvision,
+  releaseProvision,
+  closeActiveBilling,
+  type ProvisionReservation,
+} from "@/config/billing-flow";
 import { Encryption } from "@/config/functions";
 import { BillingCredits } from "@/lib/billing/credits";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -93,6 +99,7 @@ interface PodRowDb {
     owner_id: string;
     runpod_pod_id: string | null;
     status: PodStatus;
+    billing_service_id: string;
 }
 
 function isRunPodError(e: unknown): e is RunPodError {
@@ -130,6 +137,8 @@ function podStatusFromRunPod(pod: RunPodPodResource): PodStatus {
 // ─── Operations ─────────────────────────────────────────────────────────────
 export const podLifecycleOperations = {
     async createPod(req: CreatePodRequest): Promise<ServiceResult<CreatePodResult>> {
+        let settled = false;
+        let reservation: ProvisionReservation | undefined;
         try {
             // 1. Input validation
             if (!req.name || !/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?$/.test(req.name)) {
@@ -283,10 +292,18 @@ export const podLifecycleOperations = {
                 };
             }
 
-            // 4. Balance gate (1 hour of credit required to start)
+            // 4. Balance gate — atomically HOLD 1h of cost BEFORE provisioning so
+            //    concurrent creates can't all pass a stale read and spawn a free
+            //    fleet. The hold is refunded on success (settleProvision) — net
+            //    upfront charge is $0, the cron meters hourly as before.
             const minRequired = hourlyCostUsd * MIN_HOURS_BALANCE_FOR_CREATE;
-            const balCheck = await ensureBalance(req.ownerId, minRequired);
-            if (!balCheck.ok) {
+            const reservationResult = await reserveProvision({
+                userId: req.ownerId,
+                initialCost: 0,
+                hourlyRate: hourlyCostUsd,
+            });
+            reservation = reservationResult.reservation;
+            if (!reservationResult.ok) {
                 return {
                     success: false,
                     error: `Insufficient credits. You need at least $${minRequired.toFixed(4)}.`,
@@ -340,7 +357,7 @@ export const podLifecycleOperations = {
                     runpod_cost_per_hr: observedPerHr,
                     billing_start: billingStart.toISOString(),
                 })
-                .select("id")
+                .select("id, billing_service_id")
                 .single();
             if (insErr) {
                 return {
@@ -350,6 +367,9 @@ export const podLifecycleOperations = {
                 };
             }
             const podId = (inserted as { id: number }).id;
+            const billingServiceId = (
+                inserted as { billing_service_id: string }
+            ).billing_service_id;
 
             // 7. Call RunPod (with full rollback on failure)
             //
@@ -450,20 +470,21 @@ export const podLifecycleOperations = {
             // 9. Wire billing — no upfront deduct; cron handles hourly. If active-row insert fails,
             //    we cannot leave a billed-but-unbilled pod, so we tear down RunPod + mark failed.
             try {
-                await postProvisionBilling({
-                    userId: req.ownerId,
+                await settleProvision({
+                    reservation: reservationResult.reservation,
                     initialCost: 0,
                     hourlyRate: hourlyCostUsd,
-                    serviceId: String(podId),
+                    serviceId: billingServiceId,
                     serviceType: "gpu_pod",
                     addActive: async ({ userId, serviceId, hourlyRate }) => {
                         await BillingCredits.addActiveGpuPod({
                             userId,
-                            serviceId: Number(serviceId),
+                            serviceId, // gpu_pods.billing_service_id (UUID)
                             hourlyRate,
                         });
                     },
                 });
+                settled = true;
             } catch (billingErr) {
                 console.error("[GPU:createPod] Billing wire-up failed:", billingErr);
                 try {
@@ -524,6 +545,13 @@ export const podLifecycleOperations = {
                 error: e instanceof Error ? e.message : String(e),
                 errorCode: "SERVER",
             };
+        } finally {
+            // Any non-settle exit (validation/capacity/RunPod/billing failure or
+            // throw) refunds the 1h hold exactly once. No-op once settled, and a
+            // no-op before the reservation is taken (reservation is undefined).
+            if (!settled) {
+                await releaseProvision(reservation);
+            }
         }
     },
 
@@ -534,11 +562,16 @@ export const podLifecycleOperations = {
             const supabase = await createServiceClient();
             const { data: row, error: getErr } = await supabase
                 .from("gpu_pods")
-                .select("id, owner_id, runpod_pod_id, status")
+                .select("id, owner_id, runpod_pod_id, status, billing_service_id, container_disk_gb, volume_gb, hourly_cost_usd")
                 .eq("id", req.podId)
                 .maybeSingle();
             if (getErr) throw new Error(getErr.message);
             const pod = row as PodRowDb | null;
+            const podMeter = row as {
+                container_disk_gb?: number | null;
+                volume_gb?: number | null;
+                hourly_cost_usd?: number | null;
+            } | null;
             if (!pod) {
                 return { success: false, error: "Pod not found", errorCode: "NOT_FOUND" };
             }
@@ -583,6 +616,30 @@ export const podLifecycleOperations = {
                 .from("gpu_pods")
                 .update({ status: newStatus })
                 .eq("id", req.podId);
+
+            // M3: re-rate the meter. A stopped pod releases the GPU upstream but
+            // keeps its disk, so meter storage-only while stopped; restore the full
+            // rate on start. (No change on restart — the pod stays running.)
+            try {
+                if (req.action === "stop") {
+                    const storageOnly = storagePerHour({
+                        containerDiskGb: Number(podMeter?.container_disk_gb ?? 0),
+                        volumeGb: Number(podMeter?.volume_gb ?? 0),
+                    });
+                    await BillingCredits.updateActiveGpuPodRate({
+                        serviceId: pod.billing_service_id,
+                        hourlyRate: Math.round(storageOnly * 10000) / 10000,
+                    });
+                } else if (req.action === "start") {
+                    await BillingCredits.updateActiveGpuPodRate({
+                        serviceId: pod.billing_service_id,
+                        hourlyRate: Number(podMeter?.hourly_cost_usd ?? 0),
+                    });
+                }
+            } catch (rateErr) {
+                console.warn("[GPU:powerPod] failed to re-rate meter:", rateErr);
+            }
+
             await supabase.from("gpu_pod_events").insert({
                 pod_id: req.podId,
                 event_type: req.action,
@@ -607,7 +664,7 @@ export const podLifecycleOperations = {
             const supabase = await createServiceClient();
             const { data: row, error: getErr } = await supabase
                 .from("gpu_pods")
-                .select("id, owner_id, runpod_pod_id, status")
+                .select("id, owner_id, runpod_pod_id, status, billing_service_id")
                 .eq("id", req.podId)
                 .maybeSingle();
             if (getErr) throw new Error(getErr.message);
@@ -639,11 +696,11 @@ export const podLifecycleOperations = {
             try {
                 await closeActiveBilling({
                     userId: req.ownerId,
-                    serviceId: String(req.podId),
+                    serviceId: pod.billing_service_id,
                     serviceType: "gpu_pod",
                     closeActive: async () => {
                         const result = await BillingCredits.closeActiveGpuPod({
-                            serviceId: req.podId,
+                            serviceId: pod.billing_service_id,
                         });
                         finalCharge = result.finalCharge;
                         return result;

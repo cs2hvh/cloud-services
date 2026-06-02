@@ -9,6 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useVMMetrics } from '@/hooks/use-vm-metrics';
 import { ArrowLeft, Server } from 'lucide-react';
@@ -193,7 +194,7 @@ export default function VMDetailPage() {
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       toast.success(`${label} copied`);
     } catch {
       toast.error(`Failed to copy ${label}`);

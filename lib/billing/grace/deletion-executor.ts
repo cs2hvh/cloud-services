@@ -7,6 +7,7 @@ import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { SpectrumService } from "@/lib/services/spectrum-service";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { deleteCustomImage } from "@/lib/services/compute/custom-images";
+import { podLifecycleOperations } from "@/lib/services/runpod/operations/pod-lifecycle-operations";
 
 type ServiceDeletionOutcome = {
   success: boolean;
@@ -267,6 +268,37 @@ export async function executeGraceDeletion(params: {
         }
         await deleteCustomImage({ imageId: String(img.id), ownerId: String(img.owner_id) });
         return { success: true, message: "Custom image deleted" };
+      }
+
+      case "active_gpu_pods": {
+        // service_id is gpu_pods.billing_service_id. Resolve the pod and tear it
+        // down (RunPod delete + billing close + terminal state) via the same helper
+        // the user-initiated destroy uses. ownerId is read from the pod row so the
+        // helper's ownership check passes in this admin/grace context.
+        const supabase = await createServiceClient();
+        const { data: pod } = await supabase
+          .from("gpu_pods")
+          .select("id, owner_id, status")
+          .eq("billing_service_id", params.serviceId)
+          .maybeSingle();
+        if (!pod) {
+          return { success: true, alreadyDeleted: true, message: "GPU pod already deleted" };
+        }
+        if (pod.status === "terminated") {
+          return { success: true, alreadyDeleted: true, message: "GPU pod already terminated" };
+        }
+        const result = await podLifecycleOperations.destroyPod({
+          podId: Number(pod.id),
+          ownerId: String(pod.owner_id),
+        });
+        if (!result.success && result.errorCode !== "NOT_FOUND") {
+          return { success: false, message: result.error ?? "GPU pod deletion failed" };
+        }
+        return {
+          success: true,
+          alreadyDeleted: !result.success && result.errorCode === "NOT_FOUND",
+          message: "GPU pod deleted",
+        };
       }
 
       default:

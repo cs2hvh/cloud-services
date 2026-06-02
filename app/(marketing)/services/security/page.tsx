@@ -1,4 +1,5 @@
 
+import { assetUrl } from "@/lib/asset-url";
 import React from 'react'
 import ServicesHomeSectionFour from '@/components/serviceshome/section-4';
 import { ServiceHeroSection } from '@/components/services/service-hero-section';
@@ -9,35 +10,35 @@ import ServicesHomeSectionSix from '@/components/serviceshome/section-6';
 // 		title: "Latest GPU Hardware",
 // 		description:
 // 			"Access NVIDIA H100, A100, and RTX 4090 GPUs for maximum performance. Updated regularly with the latest hardware.",
-// 		iconSrc: "/images/main-page/service-home-gpu-1.svg",
+// 		iconSrc: assetUrl("/images/main-page/service-home-gpu-1.svg"),
 // 		iconAlt: "GPU hardware",
 // 	},
 // 	{
 // 		title: "Multi-GPU Support",
 // 		description:
 // 			"Scale from single GPU to multi-node clusters with NVLink interconnect for distributed training workloads.",
-// 		iconSrc: "/images/main-page/service-home-gpu-2.svg",
+// 		iconSrc: assetUrl("/images/main-page/service-home-gpu-2.svg"),
 // 		iconAlt: "Multi GPU",
 // 	},
 // 	{
 // 		title: "Fast Storage",
 // 		description:
 // 			"High-bandwidth NVMe storage optimized for training data. Local SSD for maximum IOPS.",
-// 		iconSrc: "/images/main-page/service-home-gpu-3.svg",
+// 		iconSrc: assetUrl("/images/main-page/service-home-gpu-3.svg"),
 // 		iconAlt: "Fast storage",
 // 	},
 // 	{
 // 		title: "Spot Instances",
 // 		description:
 // 			"Save up to 90% with spot instances for fault-tolerant workloads. Automatic checkpointing included.",
-// 		iconSrc: "/images/main-page/service-home-gpu-4.svg",
+// 		iconSrc: assetUrl("/images/main-page/service-home-gpu-4.svg"),
 // 		iconAlt: "Spot instances",
 // 	},
 // 	{
 // 		title: "Pre-configured Environments",
 // 		description:
 // 			"Start faster with pre-installed CUDA, cuDNN, PyTorch, TensorFlow, and other ML frameworks.",
-// 		iconSrc: "/images/main-page/service-home-gpu-5.svg",
+// 		iconSrc: assetUrl("/images/main-page/service-home-gpu-5.svg"),
 // 		iconAlt: "Preconfigured environments",
 // 	},
 // ];
@@ -101,15 +102,15 @@ const CloudService = () => {
         description="Enterprise-grade security with DDoS protection, web application firewalls, and comprehensive compliance certifications for regulated industries."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/Features/protection.png", alt: "security infrastructure" }}
+        backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
+        illustration={{ src: assetUrl("/images/Features/protection.png"), alt: "security infrastructure" }}
       />
       {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <ComputeMarqueeSection />
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
-            backgroundImage="/images/compute-page/curve-feature-section-bg.png"
-            curveImage="/images/main-page/service-home-security-section-3.png"
+            backgroundImage={assetUrl("/images/compute-page/curve-feature-section-bg.png")}
+            curveImage={assetUrl("/images/main-page/service-home-security-section-3.png")}
           />
         </div>
       </div> */}

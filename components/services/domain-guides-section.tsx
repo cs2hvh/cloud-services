@@ -1,15 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, LucideRoute } from "lucide-react";
-import {
-    IconBookFilled,
-    IconAbc,
-    IconArrowsExchange,
-    IconSitemapFilled,
-} from "@tabler/icons-react";
+import { ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 type Guide = {
     index: string;
@@ -30,7 +27,7 @@ const GUIDES: Guide[] = [
         description:
             "How registration, registries, and DNS actually work — written for engineers, not marketers.",
         href: "/signup",
-        icon: <IconBookFilled size={24} />,
+        icon: <Image src={`${CDN}/hhcFqmCjddcl.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         readTime: "6 min read",
         accent: "#0095FF",
     },
@@ -41,7 +38,7 @@ const GUIDES: Guide[] = [
         description:
             "Practical guidance for choosing names that are memorable, defensible, and available.",
         href: "/services/domain#search",
-        icon: <LucideRoute size={24} />,
+        icon: <Image src={`${CDN}/RHvsQbvKUBR9.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         readTime: "5 min read",
         accent: "#8B5CF6",
     },
@@ -52,7 +49,7 @@ const GUIDES: Guide[] = [
         description:
             "Step-by-step transfer playbook with zero-downtime DNS pre-staging and rollback safeguards.",
         href: "/dashboard/domains/transfer",
-        icon: <IconArrowsExchange size={24} />,
+        icon: <Image src={`${CDN}/Un6QwAr5oAVC.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         readTime: "8 min read",
         accent: "#06B6D4",
     },
@@ -63,7 +60,7 @@ const GUIDES: Guide[] = [
         description:
             "DNS records, DNSSEC, WHOIS privacy, registrar lock, auto-renew, and bulk management at scale.",
         href: "/dashboard/domains",
-        icon: <IconSitemapFilled size={24} />,
+        icon: <Image src={`${CDN}/WPlvg6Bm_CyX.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         readTime: "10 min read",
         accent: "#10B981",
     },
@@ -91,10 +88,7 @@ function GuideCard({ guide }: { guide: Guide }) {
 
             {/* Top — icon + role pill + index */}
             <div className="relative flex items-start justify-between">
-                <div
-                    className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border transition-all group-hover:brightness-110"
-                    style={{ background: `${guide.accent}18`, borderColor: `${guide.accent}40`, color: guide.accent }}
-                >
+                <div className="inline-flex h-12 w-12 items-center justify-center transition-all group-hover:brightness-110">
                     {guide.icon}
                 </div>
                 <div className="flex items-center gap-2">

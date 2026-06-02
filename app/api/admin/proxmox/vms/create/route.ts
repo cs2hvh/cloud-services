@@ -96,7 +96,7 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
   return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } };
   }
 
-  throw new Error("Missing Proxmox credentials");
+  throw new Error("Error");
 }
 
 async function fetchJson(apiBase: string, path: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {

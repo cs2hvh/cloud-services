@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import * as React from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -190,7 +191,7 @@ function ResetPasswordContent() {
     <div className="relative min-h-svh w-full overflow-hidden bg-[#04060b] antialiased">
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/signin-signup-bg.png')" }}
+        style={{ backgroundImage: `url('${assetUrl("/signin-signup-bg.png")}')` }}
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.52)_65%,rgba(0,0,0,0.82)_100%)]" />
 
@@ -410,7 +411,7 @@ export default function ResetPasswordPage() {
         <div className="relative flex min-h-svh items-center justify-center bg-[#04060b]">
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: "url('/signin-signup-bg.png')" }}
+            style={{ backgroundImage: `url('${assetUrl("/signin-signup-bg.png")}')` }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.52)_65%,rgba(0,0,0,0.82)_100%)]" />
           <Icons.spinner className="relative z-10 h-6 w-6 animate-spin text-white" />

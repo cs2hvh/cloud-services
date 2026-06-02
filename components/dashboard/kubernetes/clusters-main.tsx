@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // Kubernetes overview — editorial canvas with a large animated cluster
 // mesh visualization in the hero corner, magazine-style horizontal
@@ -40,32 +41,32 @@ const FEATURES = [
   {
     title: "Fully managed control plane",
     desc: "We run etcd, the API server, and scheduler. You focus on workloads.",
-    image: "/images/kubernetes-ui/fully managed.png",
+    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Auto-scaling node pools",
     desc: "Pools scale up under load and back down idle — pay for what you use.",
-    image: "/images/kubernetes-ui/auto scaling nodespng.png",
+    image: assetUrl("/images/kubernetes-ui/auto scaling nodespng.png"),
   },
   {
     title: "Multi-region clusters",
     desc: "Spread node pools across regions for low-latency global delivery.",
-    image: "/images/kubernetes-ui/Multi region clusters png.png",
+    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "Built-in load balancing",
     desc: "Layer-4 and layer-7 LBs are first-class objects in the cluster.",
-    image: "/images/kubernetes-ui/Built in load balancing png.png",
+    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "GitOps-ready",
     desc: "Native ArgoCD and Flux compatibility — declarative deploys out of the box.",
-    image: "/images/kubernetes-ui/gitops ready.png",
+    image: assetUrl("/images/kubernetes-ui/gitops ready.png"),
   },
   {
     title: "99.99% uptime",
     desc: "HA control planes with three replicas, automatic failover, and rolling upgrades.",
-    image: "/images/kubernetes-ui/11 nine.png",
+    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -185,12 +186,6 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
               >
                 <Plus className="h-3.5 w-3.5" />
                 New cluster
-              </Link>
-              <Link
-                href="#inventory"
-                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-              >
-                View inventory
               </Link>
             </div>
           </div>

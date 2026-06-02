@@ -1,4 +1,5 @@
 'use client';
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from 'next/image';
 import { DATABASE_ENGINES, type DatabaseEngineType } from './types';
@@ -6,19 +7,19 @@ import { DATABASE_ENGINES, type DatabaseEngineType } from './types';
 // Logo paths and metadata for each engine
 const ENGINE_LOGOS: Record<DatabaseEngineType, { path: string; alt: string; width: number; height: number }> = {
   pg: {
-    path: '/images/database-logos/postgresql.png',
+    path: assetUrl('/images/database-logos/postgresql.png'),
     alt: 'PostgreSQL',
     width: 64,
     height: 64,
   },
   mysql: {
-    path: '/images/database-logos/mysql.svg',
+    path: assetUrl('/images/database-logos/mysql.svg'),
     alt: 'MySQL',
     width: 80,
     height: 40,
   },
   mongodb: {
-    path: '/images/database-logos/mongodb.png',
+    path: assetUrl('/images/database-logos/mongodb.png'),
     alt: 'MongoDB',
     width: 64,
     height: 64,

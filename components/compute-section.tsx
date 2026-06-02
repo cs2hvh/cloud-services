@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 // ComputeSection — three-tier compute lineup (Shared VPS, Dedicated CPU,
 // Bare Metal) with hero illustration on the right and silicon partner
 // strip at the bottom. Same brand-blue PixelBlast ambient backdrop as
@@ -240,7 +241,7 @@ export function ComputeSection() {
                             />
                             <div className="relative h-5 w-12 shrink-0">
                                 <Image
-                                    src="/images/compute-page/intel.png"
+                                    src={assetUrl("/images/compute-page/intel.png")}
                                     alt="Intel"
                                     fill
                                     className="object-contain opacity-80"
@@ -249,7 +250,7 @@ export function ComputeSection() {
                             </div>
                             <div className="relative h-5 w-12 shrink-0 bg-white border border-white/10 rounded-[4px] px-0.5">
                                 <Image
-                                    src="/images/compute-page/amd.png"
+                                    src={assetUrl("/images/compute-page/amd.png")}
                                     alt="AMD Ryzen"
                                     fill
                                     className="object-contain opacity-80 "
@@ -273,7 +274,7 @@ export function ComputeSection() {
                         />
                         <div className="cs-float relative h-full w-full">
                             <Image
-                                src="/COMPUTE_YOUR_WAY.png"
+                                src={assetUrl("/COMPUTE_YOUR_WAY.png")}
                                 alt="Compute infrastructure"
                                 fill
                                 className="object-contain"

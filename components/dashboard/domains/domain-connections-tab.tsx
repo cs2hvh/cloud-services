@@ -31,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DomainAttachAction, type DomainAppOption } from './domain-attach-action';
 import type { DomainConnection, DomainConnectionItem } from './domain-detail-types';
@@ -42,7 +43,7 @@ import { SslStatusBadge } from '@/components/ui/ssl-status-badge';
 function CopyBtn({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    navigator.clipboard.writeText(value);
+    void copyToClipboard(value);
     toast.success(`${label} copied`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm";
 
 type Plan = {
     slug: string;
@@ -58,6 +59,7 @@ type RegionRef = { slug: string; label: string };
 type HostRef = { id: string; name: string; region: string | null };
 
 export function PlanPricingManager() {
+    const confirm = useConfirm();
     const [plans, setPlans] = useState<Plan[]>([]);
     const [drafts, setDrafts] = useState<Record<string, Draft>>({});
     const [newDraft, setNewDraft] = useState<Draft | null>(null);
@@ -174,7 +176,7 @@ export function PlanPricingManager() {
     }, [newDraft, load]);
 
     const deleteRow = useCallback(async (slug: string) => {
-        if (!confirm(`Delete plan "${slug}"?\n\nWill be refused if any active server references it.`)) return;
+        if (!(await confirm({ title: `Delete plan "${slug}"?`, description: "Will be refused if any active server references it.", confirmText: "Delete plan", danger: true }))) return;
         try {
             const res = await fetch(`/api/admin/pricing/plans?slug=${encodeURIComponent(slug)}`, { method: "DELETE" });
             const data = await res.json();

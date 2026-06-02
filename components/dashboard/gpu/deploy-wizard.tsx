@@ -29,7 +29,6 @@ import {
 import { generateIdempotencyKey } from "@/lib/idempotency";
 import { storagePerHour } from "@/lib/services/runpod/helpers";
 
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { SoftwareIcon } from "./software-icons";
 import type { InventoryRowClient, StockStatus } from "./types";
 
@@ -334,7 +333,7 @@ export default function DeployWizard({
     function handleLaunch() {
         if (issues.length > 0) {
             setAttempted(true);
-            toast.error("Please complete the highlighted fields");
+            toast.error("Complete the  fields");
             requestAnimationFrame(() => {
                 document
                     .querySelector('[data-deploy-error="true"]')
@@ -775,15 +774,8 @@ export default function DeployWizard({
                                                       }
                                             }
                                         >
-                                            <span
-                                                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center border"
-                                                style={
-                                                    isSelected
-                                                        ? { borderColor: BORDER_ACCENT, background: "rgba(0,149,255,0.18)" }
-                                                        : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }
-                                                }
-                                            >
-                                                <SoftwareIcon name={t.name} image={t.image} size={20} />
+                                            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center">
+                                                <SoftwareIcon name={t.name} image={t.image} size={26} />
                                             </span>
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-[13px] font-semibold text-white truncate">{t.name}</p>
@@ -1294,12 +1286,9 @@ function GpuCard({
             {/* Top — name + arch + vram pill */}
             <div className="mb-1 flex items-start justify-between gap-2.5">
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <NvidiaLogo width={18} height={13} className="shrink-0 opacity-95" />
-                        <h3 className="text-[14.5px] font-medium tracking-[-0.015em] text-white">
-                            {row.displayName}
-                        </h3>
-                    </div>
+                    <h3 className="text-[14.5px] font-semibold tracking-[-0.015em] text-[#76B900]">
+                        {row.displayName}
+                    </h3>
                     <div className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/35`}>
                         <span className="text-white/55">{vendor}</span>
                         <span className="opacity-40">·</span>
@@ -1322,7 +1311,6 @@ function GpuCard({
                         /GPU·hr
                     </span>
                 </div>
-                <Sparkline color={stock.color} />
             </div>
 
             {/* Bottom — stock dot + tier + max */}
@@ -1357,21 +1345,6 @@ function GpuCard({
                 }
             `}</style>
         </button>
-    );
-}
-
-function Sparkline({ color }: { color: string }) {
-    // Deterministic-ish pseudo-random sparkline so the grid doesn't shimmer
-    // on every re-render. Purely decorative — RunPod doesn't expose price
-    // history on the inventory endpoint.
-    const points = [16, 12, 14, 9, 11, 7, 9, 12, 8];
-    const path = points
-        .map((p, i) => `${(i * 60) / (points.length - 1)},${p}`)
-        .join(" ");
-    return (
-        <svg width="60" height="22" viewBox="0 0 60 22" className="opacity-70 shrink-0">
-            <polyline fill="none" stroke={color} strokeWidth="1.2" points={path} />
-        </svg>
     );
 }
 
@@ -1418,6 +1391,16 @@ function DiskField({
     onChange: (n: number) => void;
 }) {
     const pct = Math.min(100, Math.max(0, ((value - min) / Math.max(1, max - min)) * 100));
+    const [raw, setRaw] = useState(String(value));
+    useEffect(() => {
+        setRaw(String(value));
+    }, [value]);
+    const commit = (s: string) => {
+        const n = parseInt(s, 10);
+        const clamped = Number.isNaN(n) ? min : Math.min(max, Math.max(min, n));
+        onChange(clamped);
+        setRaw(String(clamped));
+    };
     return (
         <div className="border border-white/[0.06] bg-[#0d0e11] p-3.5">
             <div className="flex items-baseline justify-between gap-2 mb-2">
@@ -1425,9 +1408,21 @@ function DiskField({
                     {label}
                 </span>
                 <div className="flex items-baseline gap-1">
-                    <span style={SERIF_STYLE} className="text-[22px] leading-none text-white font-bold tabular-nums">
-                        {value}
-                    </span>
+                    <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        step={10}
+                        value={raw}
+                        onChange={(e) => {
+                            setRaw(e.target.value);
+                            const n = parseInt(e.target.value, 10);
+                            if (!Number.isNaN(n) && n >= min && n <= max) onChange(n);
+                        }}
+                        onBlur={(e) => commit(e.target.value)}
+                        style={SERIF_STYLE}
+                        className="w-[58px] bg-transparent text-right text-[22px] leading-none text-white font-bold tabular-nums outline-none focus:text-[#0095FF] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
                     <span className={`${MONO} text-[10.5px] text-white/40`}>GB</span>
                 </div>
             </div>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import {
   Dialog,
   DialogContent,
@@ -142,7 +143,7 @@ export default function ApiKeysPage() {
 
   async function copyToClipboard(text: string, id: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {

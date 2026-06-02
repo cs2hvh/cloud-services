@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -284,7 +285,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const navLinks = [
     { href: "/pricing", label: "Pricing" },
     // { href: "/resources", label: "Resources" },
-    { href: "/terms", label: "Legal" },
     { href: "/api-docs", label: "Docs" },
   ];
 
@@ -545,7 +545,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                     </div>
                     <div className="relative overflow-hidden">
                       <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
-                        <Image src="/images/main-page/solutions-navbar-1.png" alt="Solutions" fill className="object-contain object-right" />
+                        <Image src={assetUrl("/images/main-page/solutions-navbar-1.png")} alt="Solutions" fill className="object-contain object-right" />
                       </div>
                     </div>
                   </div>
@@ -597,7 +597,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                     </div>
                     <div className="relative overflow-hidden">
                       <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
-                        <Image src="/images/main-page/solutions-navbar-1.png" alt="Products" fill className="object-contain object-right" />
+                        <Image src={assetUrl("/images/main-page/solutions-navbar-1.png")} alt="Products" fill className="object-contain object-right" />
                       </div>
                     </div>
                   </div>
@@ -661,7 +661,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                     </div>
                     <div className="relative overflow-hidden">
                       <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
-                        <Image src="/images/main-page/solutions-navbar-1.png" alt="A.I. Labs" fill className="object-contain object-right" />
+                        <Image src={assetUrl("/images/main-page/solutions-navbar-1.png")} alt="A.I. Labs" fill className="object-contain object-right" />
                       </div>
                     </div>
                   </div>

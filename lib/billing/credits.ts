@@ -54,7 +54,7 @@ export const BillingCredits = {
 
   addActiveGpuPod: async (params: {
     userId: string;
-    serviceId: number;
+    serviceId: string; // gpu_pods.billing_service_id (UUID) — the billing spine is UUID-keyed
     hourlyRate: number;
   }) => {
     const supabase = await createServiceClient();
@@ -71,7 +71,7 @@ export const BillingCredits = {
     if (error) throw new Error(`Failed to insert active_gpu_pods: ${error.message}`);
   },
 
-  closeActiveGpuPod: async (params: { serviceId: number }): Promise<{ finalCharge: number }> => {
+  closeActiveGpuPod: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
     const supabase = await createServiceClient();
     const { data: row, error: getErr } = await supabase
       .schema("billing")
@@ -100,6 +100,20 @@ export const BillingCredits = {
       .eq("service_id", params.serviceId);
 
     return { finalCharge };
+  },
+
+  // M3: re-rate a live GPU meter (e.g. storage-only while stopped, full rate on
+  // start). The hourly cron reads hourly_rate from active_gpu_pods, so this changes
+  // what the pod is charged going forward without closing/reopening the meter.
+  updateActiveGpuPodRate: async (params: { serviceId: string; hourlyRate: number }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_gpu_pods")
+      .update({ hourly_rate: params.hourlyRate })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active");
+    if (error) throw new Error(`Failed to update active_gpu_pods rate: ${error.message}`);
   },
 
   // ── Managed vector collections (service_id = collection UUID) ──────────────

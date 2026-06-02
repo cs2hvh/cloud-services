@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // ServicesConstellation — central Compute hub with 4 service satellites.
 // Connections rendered as clean straight beams with a bright accent
@@ -14,12 +15,12 @@
 import Image from "next/image";
 
 const ICONS = {
-    compute: "/dashboard-services-icons/da%20compute.png",
-    kubernetes: "/dashboard-services-icons/da%20kuubernetes.png",
-    database: "/dashboard-services-icons/da%20database.png",
-    apps: "/dashboard-services-icons/da%20application%20deployment.png",
-    storage: "/dashboard-services-icons/da%20object%20storage.png",
-    ddos: "/dashboard-services-icons/da%20ddos%20preotection.png",
+    compute: assetUrl("/dashboard-services-icons/da%20compute.png"),
+    kubernetes: assetUrl("/dashboard-services-icons/da%20kuubernetes.png"),
+    database: assetUrl("/dashboard-services-icons/da%20database.png"),
+    apps: assetUrl("/dashboard-services-icons/da%20application%20deployment.png"),
+    storage: assetUrl("/dashboard-services-icons/da%20object%20storage.png"),
+    ddos: assetUrl("/dashboard-services-icons/da%20ddos%20preotection.png"),
 } as const;
 
 const ACCENT = "#0095FF";

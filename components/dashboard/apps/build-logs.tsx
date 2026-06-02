@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { BuildInfo } from '@/components/dashboard/apps/types';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -221,7 +222,7 @@ export function BuildLogsPanel({
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const copyLogs = () => {
-    navigator.clipboard.writeText(filteredLogs || buildLogs);
+    void copyToClipboard(filteredLogs || buildLogs);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

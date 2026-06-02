@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -43,7 +44,7 @@ export default function ModelHostingHeroSection({
       </div>
 
       <Container className="relative z-10">
-        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-20">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
           {/* ── LEFT: copy ── */}
           <div>
             <motion.div
@@ -142,9 +143,9 @@ export default function ModelHostingHeroSection({
                   "radial-gradient(55% 50% at 50% 50%, rgba(0,149,255,0.40), transparent 70%)",
               }}
             />
-            <div className="relative aspect-square w-full">
+            <div className="relative aspect-square w-full lg:scale-125">
               <Image
-                src="/ailabs/model_hosting.png"
+                src="https://ahurasense.cs2hvh.com/images/2026-06/0MKYzTDtGsPe.png"
                 alt="Model hosting infrastructure"
                 fill
                 priority

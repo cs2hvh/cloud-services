@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { type ServerData } from './types';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
@@ -39,7 +40,7 @@ function statusMeta(status: string) {
 
 async function copy(text: string, label: string) {
     try {
-        await navigator.clipboard.writeText(text);
+        await copyToClipboard(text);
         toast.success(`${label} copied`);
     } catch {
         toast.error(`Failed to copy ${label}`);

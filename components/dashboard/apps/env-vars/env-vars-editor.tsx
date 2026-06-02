@@ -15,6 +15,7 @@ import {
   parseEnvContent,
   isSensitiveKey,
 } from './env-vars-types';
+import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
 import { EnvVarsWarnings } from './env-vars-warnings';
 import { EnvVarsToolbar } from './env-vars-toolbar';
 import { EnvVarsUpload } from './env-vars-upload';
@@ -148,7 +149,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars, onReveal, 
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await safeCopyToClipboard(text);
       setCopiedField(label);
       setTimeout(() => setCopiedField(null), 2000);
       toast.success(`Copied ${label}`);

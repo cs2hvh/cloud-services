@@ -66,7 +66,16 @@ export async function GET(_req: NextRequest) {
             { status: statusFromErrorCode(result.errorCode) }
         );
     }
-    return Response.json({ ok: true, pods: result.data });
+    // L7: strip upstream-provider identifiers (RunPod pod id + data-center id) from
+    // the customer-facing payload — customers must never see the provider. The fields
+    // remain on the internal DTO for reconcile/status logic.
+    const pods = (result.data ?? []).map((p) => {
+        const safe = { ...(p as unknown as Record<string, unknown>) };
+        delete safe.runpodPodId;
+        delete safe.dataCenterId;
+        return safe;
+    });
+    return Response.json({ ok: true, pods });
 }
 
 /**

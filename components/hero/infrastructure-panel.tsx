@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // InfrastructurePanel — editorial "live infrastructure" preview for the
 // hero right column. Shows a mock of the user's running workloads across
@@ -29,13 +30,13 @@ interface ResourceRow {
 // Service icons live in /public/dashboard-services-icons/
 // (filenames contain spaces — URL-encoded here)
 const ICONS = {
-    compute: "/dashboard-services-icons/da%20compute.png",
-    kubernetes: "/dashboard-services-icons/da%20kuubernetes.png",
-    database: "/dashboard-services-icons/da%20database.png",
-    apps: "/dashboard-services-icons/da%20application%20deployment.png",
-    storage: "/dashboard-services-icons/da%20object%20storage.png",
-    ddos: "/dashboard-services-icons/da%20ddos%20preotection.png",
-    firewall: "/dashboard-services-icons/da%20ip%20firewall.png",
+    compute: assetUrl("/dashboard-services-icons/da%20compute.png"),
+    kubernetes: assetUrl("/dashboard-services-icons/da%20kuubernetes.png"),
+    database: assetUrl("/dashboard-services-icons/da%20database.png"),
+    apps: assetUrl("/dashboard-services-icons/da%20application%20deployment.png"),
+    storage: assetUrl("/dashboard-services-icons/da%20object%20storage.png"),
+    ddos: assetUrl("/dashboard-services-icons/da%20ddos%20preotection.png"),
+    firewall: assetUrl("/dashboard-services-icons/da%20ip%20firewall.png"),
 } as const;
 
 const RESOURCES: ResourceRow[] = [

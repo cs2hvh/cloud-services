@@ -18,6 +18,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ import {
   MONO,
 } from "@/components/dashboard/inference/chrome";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 import { INFERENCE_API_BASE, SERVING_IMAGE_URI } from "@/lib/inference/branding";
 import {
   formatCents,
@@ -56,6 +58,7 @@ export function ExpandedRow({
   job: FineTuneJob;
   onChanged?: () => void;
 }) {
+  const confirm = useConfirm();
   const hp = (j.hyperparams ?? {}) as Record<string, unknown>;
 
   // ── Hosted-serving lifecycle state (Phase 11.B Tier 1) ─────────
@@ -93,7 +96,7 @@ export function ExpandedRow({
   };
 
   const stopHosted = async () => {
-    if (!confirm("Stop the serving instance? You'll stop being billed for it immediately. The model will return to self-serve mode.")) return;
+    if (!(await confirm({ title: "Stop the serving instance?", description: "You'll stop being billed for it immediately. The model will return to self-serve mode.", confirmText: "Stop instance", danger: true }))) return;
     setSubmittingHosted(true);
     try {
       const r = await fetch(`/api/inference/fine-tuning/jobs/${j.id}/serving-pod`, {
@@ -145,7 +148,7 @@ export function ExpandedRow({
   -e BASE_MODEL="${baseShort}" \\
   -e ADAPTER_DOWNLOAD_URL="${data.url}" \\
   ${SERVING_IMAGE_URI}`;
-      await navigator.clipboard.writeText(fullCmd);
+      await copyToClipboard(fullCmd);
       toast.success("Serve command copied (6-hour validity)");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't generate URL");
@@ -204,7 +207,7 @@ export function ExpandedRow({
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(modelCallId);
+                    void copyToClipboard(modelCallId);
                     toast.success("Copied");
                   }}
                   className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
@@ -222,7 +225,7 @@ export function ExpandedRow({
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(adapterR2);
+                    void copyToClipboard(adapterR2);
                     toast.success("Copied");
                   }}
                   className={`${MONO} text-[10px] text-white/45 hover:text-white/85`}
@@ -558,7 +561,7 @@ console.log(response.choices[0].message.content);`,
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(snippets[lang]);
+      await copyToClipboard(snippets[lang]);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {

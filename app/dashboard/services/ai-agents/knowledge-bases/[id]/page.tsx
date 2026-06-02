@@ -1,5 +1,6 @@
 'use client';
 
+import { assetUrl } from "@/lib/asset-url";
 import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -465,7 +466,7 @@ export default function KnowledgeBaseDetailsPage({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-12 text-center">
-              <Image src="/dashboard-icons/documents.png" alt="" width={48} height={48} className="opacity-25"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/documents.png")} alt="" width={48} height={48} className="opacity-25"  unoptimized />
               <p className="mt-4 text-white/55">No documents yet</p>
               <p className="mt-1 text-sm text-white/40">Upload documents to get started</p>
             </div>

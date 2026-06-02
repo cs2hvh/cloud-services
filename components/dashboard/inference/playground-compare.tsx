@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { safeRandomUUID } from "@/lib/utils/safe-uuid";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 import {
   ChevronDown,
   Eraser,
@@ -339,7 +340,7 @@ export const PlaygroundCompare = forwardRef<
 
   const copyTurnContent = async (content: string) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyToClipboard(content);
       toast.success("Copied to clipboard");
     } catch {
       toast.error("Copy failed");

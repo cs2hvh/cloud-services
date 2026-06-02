@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // Network · DDoS protection overview — editorial canvas (aurora +
 // dotted grid), Nunito-accent title, horizontal stats strip,
@@ -34,32 +35,32 @@ const FEATURES = [
   {
     title: "Layer-4 mitigation",
     desc: "TCP/UDP attack absorption at Cloudflare's edge — terabit-scale capacity, always-on.",
-    image: "/images/kubernetes-ui/fully managed.png",
+    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Anycast routing",
     desc: "Single anycast IP fronts your service from 300+ data centres, soaking attack traffic globally.",
-    image: "/images/kubernetes-ui/Global CDN Integration.png",
+    image: assetUrl("/images/kubernetes-ui/Global CDN Integration.png"),
   },
   {
     title: "IP allowlist & firewall",
     desc: "Per-app IP rules enforce who can reach your origin — block, allow, or challenge inline.",
-    image: "/images/kubernetes-ui/Built in load balancing png.png",
+    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "Proxy protocol support",
     desc: "Preserve client source IPs end-to-end via PROXY v1/v2 — no NAT hops, real audit trails.",
-    image: "/images/kubernetes-ui/gitops ready.png",
+    image: assetUrl("/images/kubernetes-ui/gitops ready.png"),
   },
   {
     title: "Multi-region failover",
     desc: "Route around regional outages automatically — origin pools live in any supported region.",
-    image: "/images/kubernetes-ui/Multi region clusters png.png",
+    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "99.99% uptime SLA",
     desc: "Always-on protection with audit logs, real-time alerting, and per-application metrics.",
-    image: "/images/kubernetes-ui/11 nine.png",
+    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -146,12 +147,6 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
               >
                 <Plus className="h-3.5 w-3.5" />
                 Protect application
-              </Link>
-              <Link
-                href="#inventory"
-                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-              >
-                View inventory
               </Link>
             </div>
           </div>

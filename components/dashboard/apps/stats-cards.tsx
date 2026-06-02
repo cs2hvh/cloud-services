@@ -1,5 +1,6 @@
 'use client';
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -21,7 +22,7 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-2xl font-bold text-white">{totalApps}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard-icons/total-apps.png" alt="Total Apps" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+              <Image src={assetUrl("/dashboard-icons/total-apps.png")} alt="Total Apps" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </CardContent>
@@ -35,7 +36,7 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-2xl font-bold text-white">{activeDeployments}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard-icons/healthy.png" alt="Active Deployments" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+              <Image src={assetUrl("/dashboard-icons/healthy.png")} alt="Active Deployments" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </CardContent>
@@ -49,7 +50,7 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-2xl font-bold text-white">{totalBuilds}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard-icons/active-builds.png" alt="Total Builds" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+              <Image src={assetUrl("/dashboard-icons/active-builds.png")} alt="Total Builds" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </CardContent>
@@ -63,7 +64,7 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-2xl font-bold text-white">{successRate}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard-icons/sucess-rate.png" alt="Success Rate" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
+              <Image src={assetUrl("/dashboard-icons/sucess-rate.png")} alt="Success Rate" width={44} height={44} className="h-11 w-11 object-contain" unoptimized />
             </div>
           </div>
         </CardContent>

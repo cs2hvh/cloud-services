@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -364,13 +367,13 @@ const SCENARIOS: Scenario[] = [
 type FlowNode = { icon: React.ReactNode; label: string; sub: string };
 
 const FLOW: FlowNode[] = [
-    { icon: <NodeCode />, label: "git push", sub: "Source of truth" },
-    { icon: <NodeBuild />, label: "Build", sub: "Buildpack · Docker" },
-    { icon: <NodeImage />, label: "Image", sub: "Signed · scanned" },
-    { icon: <NodeRegistry />, label: "Registry", sub: "Private · cached" },
-    { icon: <NodeScheduler />, label: "Scheduler", sub: "Pick the right node" },
-    { icon: <NodePod />, label: "Pod", sub: "Healthy · routable" },
-    { icon: <NodeMesh />, label: "Service mesh", sub: "mTLS · routed" },
+    { icon: <Image src={`${CDN}/cE8QY0xcPujT.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "git push", sub: "Source of truth" },
+    { icon: <Image src={`${CDN}/J9AYbboJ01ws.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Build", sub: "Buildpack · Docker" },
+    { icon: <Image src={`${CDN}/NK4IVIM5SyCj.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Image", sub: "Signed · scanned" },
+    { icon: <Image src={`${CDN}/pY9A6E-4WQ36.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Registry", sub: "Private · cached" },
+    { icon: <Image src={`${CDN}/DdAI95G-7CND.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Scheduler", sub: "Pick the right node" },
+    { icon: <Image src={`${CDN}/UA5xOZdoiNZr.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Pod", sub: "Healthy · routable" },
+    { icon: <Image src={`${CDN}/gCeeq2Zaw69B.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Service mesh", sub: "mTLS · routed" },
 ];
 
 type BoundaryItem = { title: string; detail: string };
@@ -433,37 +436,37 @@ type Workload = { glyph: React.ReactNode; metric: string; title: string; descrip
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <MicroservicesGlyph />,
+        glyph: <Image src={`${CDN}/8rebbH60LsGR.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Services",
         title: "Production microservices",
         description: "50+ services with mTLS, canary rollouts, ingress, and per-namespace quotas. SRE-friendly defaults from day one.",
     },
     {
-        glyph: <AiWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/4htLSu3rX6Lw.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "AI / ML",
         title: "Training and inference fleets",
         description: "Distributed training on InfiniBand-tuned topologies, autoscaling inference pools, GPU-aware schedulers, weight cache in object storage.",
     },
     {
-        glyph: <BatchGlyph />,
+        glyph: <Image src={`${CDN}/YNyFlFIDdvJb.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Batch",
         title: "Batch jobs and pipelines",
         description: "Argo Workflows, Airflow on K8s, parallel jobs with retry semantics — backed by spot node pools where it makes sense.",
     },
     {
-        glyph: <StatefulGlyph />,
+        glyph: <Image src={`${CDN}/md4uQBHMIx8Z.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Stateful",
         title: "StatefulSets and operators",
         description: "Run Postgres, Kafka, Elasticsearch, and your own operators with first-class PVCs, headless services, and pod-disruption budgets.",
     },
     {
-        glyph: <EdgeWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/V6oCfyxsVA9S.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Edge",
         title: "Edge and regional fanout",
         description: "Multi-cluster federation across regions, mesh peering, and policy that follows the workload — for low-latency global apps.",
     },
     {
-        glyph: <CiCdGlyph />,
+        glyph: <Image src={`${CDN}/3qUfmBw68G3d.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "GitOps",
         title: "GitOps & platform delivery",
         description: "Flux or Argo CD wired in, Helm and Kustomize-aware, drift detection per app — your platform team ships through the same pipe.",
@@ -561,9 +564,10 @@ function RequestFlow() {
                         { v: "<5min", l: "Push to live" },
                         { v: "Zero", l: "Downtime deploys" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -637,7 +641,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -682,7 +686,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -729,7 +733,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -893,13 +897,14 @@ function Stack() {
                             { v: "24×7", l: "On-call SRE" },
                             { v: "Zero", l: "etcd babysitting" },
                         ].map((m) => (
-                            <div key={m.l} className="flex items-baseline justify-center gap-2.5 bg-[#0F1114] px-4 py-5">
+                            <div key={m.l} className="group relative flex items-baseline justify-center gap-2.5 overflow-hidden bg-[#0F1114] px-4 py-5">
                                 <span className={`${MONO} text-[16px] font-bold tabular-nums text-white`}>
                                     {m.v}
                                 </span>
                                 <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>
                                     {m.l}
                                 </span>
+                                <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                             </div>
                         ))}
                     </div>
@@ -968,9 +973,9 @@ export function KubernetesSolutionLanding() {
                 description="Managed control plane, auto-scaling pools, service mesh, GitOps — your team ships features, not etcd patches."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-kubernetes.png",
+                    src: assetUrl("/images/main-page/solution-home-kubernetes.png"),
                     alt: "Kubernetes cluster infrastructure",
                     priority: true,
                 }}

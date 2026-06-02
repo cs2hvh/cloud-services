@@ -16,6 +16,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
 export type DiagnosticStatus = "pass" | "fail" | "warn";
 
@@ -72,7 +73,7 @@ export function Diagnostics({
       ),
     ].join("\n");
     try {
-      await navigator.clipboard.writeText(bundle);
+      await copyToClipboard(bundle);
       toast.success("Diagnostic bundle copied — paste in chat or a bug report");
     } catch {
       toast.error("Copy failed");

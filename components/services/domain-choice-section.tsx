@@ -1,18 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import {
-    IconShieldLockFilled,
-    IconGlobeFilled,
-    IconArrowsExchange,
-    IconTagsFilled,
-    IconLockFilled,
-    IconLayoutGridFilled,
-} from "@tabler/icons-react";
 
 import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 type Feature = {
     icon: React.ReactNode;
@@ -24,7 +19,7 @@ type Feature = {
 
 const FEATURES: Feature[] = [
     {
-        icon: <IconShieldLockFilled size={24} />,
+        icon: <Image src={`${CDN}/mTgXy-xKvU2d.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#0095FF",
         role: "Privacy",
         title: "WHOIS privacy, free forever",
@@ -32,7 +27,7 @@ const FEATURES: Feature[] = [
             "Your real contact details stay out of public WHOIS records — on every supported TLD, on every domain, without an upcharge.",
     },
     {
-        icon: <IconGlobeFilled size={24} />,
+        icon: <Image src={`${CDN}/teTEanL7TWN6.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#06B6D4",
         role: "DNS",
         title: "Anycast DNS, 200+ edge locations",
@@ -40,7 +35,7 @@ const FEATURES: Feature[] = [
             "Sub-30ms authoritative resolution worldwide, with templated records for AhuraCloud apps, compute, and storage.",
     },
     {
-        icon: <IconArrowsExchange size={24} />,
+        icon: <Image src={`${CDN}/FMz5TJvIRBFJ.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#8B5CF6",
         role: "Transfer",
         title: "Lossless transfers in under an hour",
@@ -48,7 +43,7 @@ const FEATURES: Feature[] = [
             "Inbound transfers from any ICANN-accredited registrar with pre-flight validation, DNS pre-staging, and zero downtime.",
     },
     {
-        icon: <IconTagsFilled size={24} />,
+        icon: <Image src={`${CDN}/b98EUnV7jGwt.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#10B981",
         role: "TLDs",
         title: "200+ TLDs under one invoice",
@@ -56,7 +51,7 @@ const FEATURES: Feature[] = [
             "Generic, premium, and country-code extensions — register, renew, and transfer across your portfolio from one billing relationship.",
     },
     {
-        icon: <IconLockFilled size={24} />,
+        icon: <Image src={`${CDN}/IOctX8Z4WDhv.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#F59E0B",
         role: "Safety",
         title: "Registrar lock and auto-renew",
@@ -64,7 +59,7 @@ const FEATURES: Feature[] = [
             "Block unauthorized transfers by default and never lose a domain to a missed renewal — with reminders 90, 30, and 7 days out.",
     },
     {
-        icon: <IconLayoutGridFilled size={24} />,
+        icon: <Image src={`${CDN}/163WGLotJAqN.png`} alt="" width={48} height={48} className="h-12 w-12 object-contain" />,
         accent: "#3B82F6",
         role: "Operations",
         title: "Portfolio-grade operations",
@@ -93,10 +88,7 @@ function FeatureCard({ f, index }: { f: Feature; index: number }) {
             />
 
             <div className="relative flex items-start justify-between">
-                <div
-                    className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border transition-all group-hover:brightness-110"
-                    style={{ background: `${f.accent}18`, borderColor: `${f.accent}40`, color: f.accent }}
-                >
+                <div className="inline-flex h-12 w-12 items-center justify-center transition-all group-hover:brightness-110">
                     {f.icon}
                 </div>
                 <div className="flex items-center gap-2">

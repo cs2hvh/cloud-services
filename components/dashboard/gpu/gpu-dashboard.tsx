@@ -402,6 +402,27 @@ export default function GpuDashboard() {
             </section>
 
             <div className="space-y-14">
+                {/* ── Active pods (surfaced first) ─────────────────── */}
+                <section>
+                    <SectionHead
+                        eyebrow="Cluster inventory"
+                        title="Your"
+                        accent="pods"
+                        accentBlue
+                        rightMeta={
+                            pods.length > 0
+                                ? `${runningCount} running · ${pods.length} total`
+                                : undefined
+                        }
+                        link={
+                            pods.length > 0
+                                ? { label: "Deploy another", href: "/dashboard/services/gpu/deploy" }
+                                : undefined
+                        }
+                    />
+                    <ActivePodsTable loading={podsLoading} pods={pods} />
+                </section>
+
                 {/* ── Featured GPUs ────────────────────────────────── */}
                 <section>
                     <SectionHead
@@ -433,26 +454,6 @@ export default function GpuDashboard() {
                             <WorkloadCard key={w.title} index={i + 1} {...w} />
                         ))}
                     </div>
-                </section>
-
-                {/* ── Active pods ──────────────────────────────────── */}
-                <section>
-                    <SectionHead
-                        eyebrow="Cluster inventory"
-                        title="Your"
-                        accent="pods"
-                        rightMeta={
-                            pods.length > 0
-                                ? `${runningCount} running · ${pods.length} total`
-                                : undefined
-                        }
-                        link={
-                            pods.length > 0
-                                ? { label: "Deploy another", href: "/dashboard/services/gpu/deploy" }
-                                : undefined
-                        }
-                    />
-                    <ActivePodsTable loading={podsLoading} pods={pods} />
                 </section>
             </div>
         </div>
@@ -527,13 +528,16 @@ function SectionHead({
     accent,
     link,
     rightMeta,
+    accentBlue,
 }: {
     eyebrow: string;
     title: string;
     accent: string;
     link?: { label: string; href: string };
     rightMeta?: string;
+    accentBlue?: boolean;
 }) {
+    const accentClass = accentBlue ? "text-[#0095FF]" : "text-white/55";
     return (
         <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
             <div>
@@ -542,10 +546,10 @@ function SectionHead({
                 </p>
                 <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
                     {title}{" "}
-                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                    <span style={SERIF_STYLE} className={`font-normal ${accentClass}`}>
                         {accent}
                     </span>
-                    <span className="text-white/55 font-normal">.</span>
+                    <span className={`font-normal ${accentClass}`}>.</span>
                 </h2>
             </div>
             {link && (
@@ -728,8 +732,21 @@ function FeaturedGpuCard({
                     </div>
                 )}
                 <span
-                    className={`${MONO} inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] font-semibold transition-colors`}
-                    style={{ color: row.featured ? ACCENT_BRIGHT : ACCENT }}
+                    className={`${MONO} inline-flex items-center gap-1 h-7 px-3 rounded-[5px] text-[10px] uppercase tracking-[0.12em] font-semibold transition-all`}
+                    style={
+                        row.requestOnly
+                            ? {
+                                  border: "1px solid rgba(0,149,255,0.35)",
+                                  background: "rgba(0,149,255,0.08)",
+                                  color: ACCENT_BRIGHT,
+                              }
+                            : {
+                                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                                  color: "#fff",
+                                  boxShadow:
+                                      "0 4px 12px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)",
+                              }
+                    }
                 >
                     {row.requestOnly ? "Request" : "Deploy"}
                     <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />

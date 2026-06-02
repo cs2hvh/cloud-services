@@ -1,12 +1,13 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
-import { GitBranch, Hammer } from "lucide-react";
-import { IconGlobeFilled } from "@tabler/icons-react";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 type Step = {
     icon: React.ReactNode;
@@ -19,7 +20,7 @@ type Step = {
 
 const STEPS: Step[] = [
     {
-        icon: <GitBranch className="h-[18px] w-[18px]" strokeWidth={1.7} />,
+        icon: <Image src={`${CDN}/PmAbaIfuwv4y.png`} alt="" width={40} height={40} className="h-10 w-10 object-contain" />,
         accent: "#0095FF",
         label: "01",
         title: "Connect a repository",
@@ -28,7 +29,7 @@ const STEPS: Step[] = [
         line: "$ git push origin main",
     },
     {
-        icon: <Hammer className="h-[18px] w-[18px]" strokeWidth={1.7} />,
+        icon: <Image src={`${CDN}/dEIyU-j2gprv.png`} alt="" width={40} height={40} className="h-10 w-10 object-contain" />,
         accent: "#F59E0B",
         label: "02",
         title: "Managed build pipeline",
@@ -37,7 +38,7 @@ const STEPS: Step[] = [
         line: "→ build · next.js detected · cache hit 87%",
     },
     {
-        icon: <IconGlobeFilled size={18} />,
+        icon: <Image src={`${CDN}/U6swXNJ-rqG0.png`} alt="" width={40} height={40} className="h-10 w-10 object-contain" />,
         accent: "#10B981",
         label: "03",
         title: "Released to the edge",
@@ -89,7 +90,7 @@ export default function AppDeployHowSection() {
                                 }}
                             />
                             <Image
-                                src="/app/shelf aniamtion.png"
+                                src={assetUrl("/app/shelf aniamtion.png")}
                                 alt="Deployment workflow"
                                 width={760}
                                 height={760}
@@ -141,16 +142,9 @@ export default function AppDeployHowSection() {
                                         />
                                     )}
 
-                                    {/* Icon tile */}
-                                    <div
-                                        className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border"
-                                        style={{ background: `${step.accent}18`, borderColor: `${step.accent}40`, color: step.accent }}
-                                    >
+                                    {/* Icon */}
+                                    <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center bg-[#0D0D0F]">
                                         {step.icon}
-                                        <span
-                                            className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full"
-                                            style={{ background: step.accent }}
-                                        />
                                     </div>
 
                                     {/* Content */}

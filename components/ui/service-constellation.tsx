@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
@@ -17,13 +18,13 @@ interface NodeDef {
 
 const NODES: NodeDef[] = [
   { id: "hub",      label: "Platform",    x: 50, y: 46 },
-  { id: "security", label: "Security",    imageSrc: "/images/Features/protection.png",             x: 50, y: 10 },
-  { id: "gpu",      label: "GPU Compute", imageSrc: "/images/main-page/gpu aniamtion resized.png", x: 18, y: 28 },
-  { id: "ai",       label: "AI / ML",     imageSrc: "/images/Features/ai-agent.png",               x: 82, y: 28 },
-  { id: "k8s",      label: "Kubernetes",  imageSrc: "/images/main-page/kubernetes.png",            x: 18, y: 66 },
-  { id: "deploy",   label: "App Deploy",  imageSrc: "/images/main-page/app-deploy.png",            x: 82, y: 66 },
-  { id: "db",       label: "Database",    imageSrc: "/images/Features/database.png",               x: 35, y: 84 },
-  { id: "storage",  label: "Storage",     imageSrc: "/images/main-page/object-space.png",          x: 65, y: 84 },
+  { id: "security", label: "Security",    imageSrc: assetUrl("/images/Features/protection.png"),             x: 50, y: 10 },
+  { id: "gpu",      label: "GPU Compute", imageSrc: assetUrl("/images/main-page/gpu aniamtion resized.png"), x: 18, y: 28 },
+  { id: "ai",       label: "AI / ML",     imageSrc: assetUrl("/images/Features/ai-agent.png"),               x: 82, y: 28 },
+  { id: "k8s",      label: "Kubernetes",  imageSrc: assetUrl("/images/main-page/kubernetes.png"),            x: 18, y: 66 },
+  { id: "deploy",   label: "App Deploy",  imageSrc: assetUrl("/images/main-page/app-deploy.png"),            x: 82, y: 66 },
+  { id: "db",       label: "Database",    imageSrc: assetUrl("/images/Features/database.png"),               x: 35, y: 84 },
+  { id: "storage",  label: "Storage",     imageSrc: assetUrl("/images/main-page/object-space.png"),          x: 65, y: 84 },
 ];
 
 const CONNECTIONS = [

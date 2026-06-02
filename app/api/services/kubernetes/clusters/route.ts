@@ -98,6 +98,13 @@ export async function POST(req: NextRequest) {
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
+  // L8: a non-admin may only create clusters owned by themselves. ownerId was
+  // previously trusted from the client unchecked, letting any authenticated user
+  // attribute a cluster's audit log / notifications / provisioning job to a victim.
+  if (derivedRole !== "admin" && parsed.data.ownerId !== auth.user?.id) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   const totalNodes = Math.max(parsed.data.nodes.length, 1);
 
   // Billing: dynamic from admin pricing and scaled by total nodes (workers + control plane)

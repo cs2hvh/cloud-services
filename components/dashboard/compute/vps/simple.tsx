@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { RegionFlag } from "@/components/ui/region-flag";
 import { useRouter } from "next/navigation";
 import {
     ArrowRight,
@@ -51,60 +52,12 @@ const PASSWORD_PATTERNS = {
 } as const;
 const PASSWORD_MIN_LENGTH = 12;
 
-// Region slug → ISO 3166-1 alpha-2 country code (flagcdn renders SVGs).
-const REGION_CC: Record<string, string> = {
-    india: "in", in: "in", blr: "in", bom: "in", del: "in",
-    france: "fr", fr: "fr", par: "fr",
-    germany: "de", de: "de", fra: "de", ger: "de",
-    uk: "gb", gb: "gb", "united-kingdom": "gb", britain: "gb", lon: "gb",
-    us: "us", usa: "us", "united-states": "us",
-    "us-east": "us", "us-west": "us", "us-central": "us", nyc: "us",
-    singapore: "sg", sg: "sg", sgp: "sg",
-    netherlands: "nl", nl: "nl", ams: "nl",
-    australia: "au", au: "au", syd: "au",
-    canada: "ca", ca: "ca", tor: "ca", mtl: "ca",
-    japan: "jp", jp: "jp", tok: "jp", tyo: "jp",
-    brazil: "br", br: "br", sao: "br",
-    uae: "ae", ae: "ae", dxb: "ae",
-    poland: "pl", pl: "pl",
-    sweden: "se", se: "se",
-    ireland: "ie", ie: "ie",
-    italy: "it", it: "it",
-    spain: "es", es: "es",
-};
-
-function flagCodeFor(id: string): string | null {
-    if (!id) return null;
-    const tokens = id.toLowerCase().split(/[-_/\s]+/).filter(Boolean);
-    for (const t of [...tokens].reverse()) {
-        if (REGION_CC[t]) return REGION_CC[t];
-    }
-    return REGION_CC[id.toLowerCase()] ?? null;
-}
-
-function FlagImg({ id, size = 22 }: { id: string; size?: number }) {
-    const code = flagCodeFor(id);
-    if (!code) {
-        return (
-            <MapPin
-                className="text-white/40"
-                style={{ width: size * 0.7, height: size * 0.7 }}
-            />
-        );
-    }
-    const w = size;
-    const h = Math.round(size * (2 / 3));
-    return (
-        <Image
-            src={`https://flagcdn.com/${size * 2}x${h * 2}/${code}.png`}
-            alt=""
-            width={w}
-            height={h}
-            className="object-cover"
-            style={{ width: w, height: h }}
-            unoptimized
-        />
-    );
+// Region flag — thin wrapper over the shared <RegionFlag/>. The slug/city/
+// country → ISO map lives in lib/regions/country so every location picker uses
+// the same logic. Passing both the slug and the display name makes it resolve
+// city-named regions (e.g. "Frankfurt", "Mumbai") too.
+function FlagImg({ id, name, size = 22 }: { id: string; name?: string; size?: number }) {
+    return <RegionFlag region={id} name={name} size={size} />;
 }
 
 interface Region {
@@ -1108,7 +1061,7 @@ function RegionCard({
                 )}
             </div>
             <div className="flex items-center gap-2 min-w-0">
-                <FlagImg id={region.id} size={18} />
+                <FlagImg id={region.id} name={region.name} size={18} />
                 <span className="text-[13.5px] font-semibold tracking-[-0.005em] text-white truncate">
                     {region.name}
                 </span>

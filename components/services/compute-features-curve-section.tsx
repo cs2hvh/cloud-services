@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 
 type ComputeFeaturesCurveSectionProps = {
@@ -7,8 +8,8 @@ type ComputeFeaturesCurveSectionProps = {
 };
 
 const ComputeFeaturesCurveSection = ({
-  backgroundImage = "/images/compute-page/curve-feature-section-bg.png",
-  curveImage = "/images/compute-page/curv-logo-and-content.png",
+  backgroundImage = assetUrl("/images/compute-page/curve-feature-section-bg.png"),
+  curveImage = assetUrl("/images/compute-page/curv-logo-and-content.png"),
   className = "",
 }: ComputeFeaturesCurveSectionProps) => {
   return (

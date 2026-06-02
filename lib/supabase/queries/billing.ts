@@ -1,6 +1,7 @@
 import { createServiceClient } from "../server";
 import { Promocode } from "../types";
 import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
+import { serviceLabel } from "@/lib/billing/service-label";
 
 interface PromocodeRedemptionEntry {
   userId?: string;
@@ -900,7 +901,7 @@ export const Billing = {
             serviceType: type,
             periodStart: lastBilledAt,
             periodEnd: new Date().toISOString(),
-            description: `Final prorated ${type.replace("_", " ")} usage charge`,
+            description: `Final prorated ${serviceLabel(type)} usage charge`,
           });
         } catch (txnError) {
           console.warn(
@@ -912,12 +913,34 @@ export const Billing = {
         if (params.failOnInsufficient) {
           throw new Error("Insufficient balance");
         }
-        // If not failing hard, skip deduction and proceed to cleanup
+        // If not failing hard, skip deduction and proceed to cleanup.
         newBalance = null;
         console.warn(
           `[Billing.close_active_service] Deduction skipped due to error`,
           { error: error instanceof Error ? error.message : String(error) }
         );
+        // L5: record the unpaid final charge as a 'failed' usage row (arrears)
+        // instead of silently dropping it, so the owed amount stays observable and
+        // can be settled on a later top-up rather than written off.
+        try {
+          await Billing.save_transaction({
+            userId: row.user_id,
+            amount: charge,
+            status: "failed",
+            type: "usage",
+            balanceAfter: null,
+            serviceId: params.serviceId,
+            serviceType: type,
+            periodStart: lastBilledAt,
+            periodEnd: new Date().toISOString(),
+            description: `Unpaid final prorated ${serviceLabel(type)} usage charge (insufficient balance at teardown)`,
+          });
+        } catch (txnError) {
+          console.warn(
+            "[Billing.close_active_service] Failed to record arrears transaction:",
+            txnError instanceof Error ? txnError.message : String(txnError)
+          );
+        }
       }
     }
 
@@ -1145,6 +1168,154 @@ export const Billing = {
       .eq("stripe_invoice_id", stripeInvoiceId)
       .maybeSingle();
     return data ?? null;
+  },
+
+  // --- Atomic Stripe webhook idempotency (C5) ---------------------------------
+  // The webhook MUST claim a session/invoice BEFORE crediting the balance, or a
+  // concurrent / retried Stripe delivery double-credits real money (Billing.topup
+  // is an unconditional atomic increment with no idempotency of its own). We use
+  // the partial UNIQUE index on stripe_session_id / stripe_invoice_id as the lock:
+  // exactly one caller's INSERT of a 'pending' row succeeds; every other concurrent
+  // caller gets a 23505 unique-violation and must NOT credit. The winner then
+  // credits and flips the row to 'completed'. On failure the winner deletes its own
+  // 'pending' claim so a later Stripe retry can re-claim and credit (a 'completed'
+  // row is never touched, so a successful top-up is never repeated).
+  claim_session_transaction: async (params: {
+    userId: string;
+    stripeSessionId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }): Promise<boolean> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert({
+        user_id: params.userId,
+        stripe_session_id: params.stripeSessionId,
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        status: "pending",
+        type: params.type ?? "topup",
+        description: params.description ?? null,
+      });
+    if (!error) return true;
+    if (error.code === "23505") return false; // already claimed by a concurrent/prior delivery
+    throw new Error(`Failed to claim session transaction: ${error.message}`);
+  },
+
+  claim_invoice_transaction: async (params: {
+    userId: string;
+    stripeInvoiceId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }): Promise<boolean> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert({
+        user_id: params.userId,
+        stripe_invoice_id: params.stripeInvoiceId,
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        status: "pending",
+        type: params.type ?? "recurring",
+        description: params.description ?? null,
+      });
+    if (!error) return true;
+    if (error.code === "23505") return false;
+    throw new Error(`Failed to claim invoice transaction: ${error.message}`);
+  },
+
+  mark_session_transaction_completed: async (params: {
+    stripeSessionId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        status: "completed",
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        type: params.type ?? "topup",
+        balance_after: params.balanceAfter ?? null,
+        description: params.description ?? null,
+        receipt_url: params.receiptUrl ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("stripe_session_id", params.stripeSessionId)
+      .neq("status", "completed");
+    if (error) throw new Error(`Failed to complete session transaction: ${error.message}`);
+  },
+
+  mark_invoice_transaction_completed: async (params: {
+    stripeInvoiceId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        status: "completed",
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        type: params.type ?? "recurring",
+        balance_after: params.balanceAfter ?? null,
+        description: params.description ?? null,
+        receipt_url: params.receiptUrl ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("stripe_invoice_id", params.stripeInvoiceId)
+      .neq("status", "completed");
+    if (error) throw new Error(`Failed to complete invoice transaction: ${error.message}`);
+  },
+
+  mark_session_transaction_failed: async (stripeSessionId: string, _description?: string): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .delete()
+      .eq("stripe_session_id", stripeSessionId)
+      .eq("status", "pending");
+    if (error) console.warn(`[Billing] Failed to clear pending session claim ${stripeSessionId}: ${error.message}`);
+  },
+
+  mark_invoice_transaction_failed: async (stripeInvoiceId: string, _description?: string): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .delete()
+      .eq("stripe_invoice_id", stripeInvoiceId)
+      .eq("status", "pending");
+    if (error) console.warn(`[Billing] Failed to clear pending invoice claim ${stripeInvoiceId}: ${error.message}`);
   },
 
   get_recurring_topup: async (userId: string): Promise<RecurringTopupRecord | null> => {

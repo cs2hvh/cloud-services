@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
 // ─── Lightweight regex-based syntax highlighter ───────────────────────────────
 
@@ -168,7 +169,7 @@ const Documentation = () => {
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
 
   const handleCopy = (code: string, label: string) => {
-    navigator.clipboard.writeText(code);
+    void copyToClipboard(code);
     setCopiedLabel(label);
     toast.success("Code copied to clipboard");
     setTimeout(() => setCopiedLabel(null), 2000);

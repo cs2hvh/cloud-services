@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -76,7 +77,7 @@ export default function HomePopup() {
                 {/* Top half — photo */}
                 <div className="relative h-[200px] overflow-hidden sm:flex-1">
                   <Image
-                    src="/ailabs/B200-GPU-Stack.png"
+                    src="https://ahurasense.cs2hvh.com/images/2026-06/If67bS30r5fO.png"
                     alt="NVIDIA B300 GPU"
                     fill
                     className="object-cover object-center"
@@ -164,12 +165,6 @@ export default function HomePopup() {
                     first-class support for FP4 reasoning workloads.
                   </p>
 
-                  {/* Urgency strip */}
-                  <div className="flex items-center rounded-[5px] border border-orange-500/20 bg-orange-500/[0.06] px-4 py-2.5">
-                    <p className={`${MONO} text-[9.5px] font-semibold uppercase leading-[1.5] tracking-[0.14em] text-orange-400`}>
-                      Limited reserved capacity — allocations filling fast
-                    </p>
-                  </div>
                 </div>
 
                 {/* CTAs */}

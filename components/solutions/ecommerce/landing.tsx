@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -263,13 +266,13 @@ const HERO_STATS = [
 ];
 
 const CHECKOUT_FLOW = [
-    { icon: <NodeBrowser />, label: "Shopper", sub: "Any device" },
-    { icon: <NodeEdge />, label: "Edge POP", sub: "Static + CDN" },
-    { icon: <NodeWaf />, label: "WAF + TLS", sub: "PCI, bots" },
-    { icon: <NodeLb />, label: "Load balancer", sub: "Health-aware" },
-    { icon: <NodeStore />, label: "Storefront", sub: "App replicas" },
-    { icon: <NodePayment />, label: "Payment API", sub: "PCI-scoped" },
-    { icon: <NodeDb />, label: "Order DB", sub: "HA + PITR" },
+    { icon: <Image src={`${CDN}/_lw6RHm6l_NE.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Shopper", sub: "Any device" },
+    { icon: <Image src={`${CDN}/JbsJSt92S2co.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Edge POP", sub: "Static + CDN" },
+    { icon: <Image src={`${CDN}/Wyt0AA5SyrV1.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "WAF + TLS", sub: "PCI, bots" },
+    { icon: <Image src={`${CDN}/A1_SEVxXJBYE.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Load balancer", sub: "Health-aware" },
+    { icon: <Image src={`${CDN}/YAvlqv0BIN1S.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Storefront", sub: "App replicas" },
+    { icon: <Image src={`${CDN}/WENfw3SUCwtd.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Payment API", sub: "PCI-scoped" },
+    { icon: <Image src={`${CDN}/5GeuR3mipWSD.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Order DB", sub: "HA + PITR" },
 ];
 
 type Scenario = {
@@ -376,42 +379,42 @@ type StackPiece = {
 
 const STACK: StackPiece[] = [
     {
-        icon: <ComputeIcon />,
+        icon: <Image src={`${CDN}/n-N_R3c_SkMN.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Compute & App Platform",
         description: "Scale storefront replicas behind a load balancer. Push-to-deploy App Platform for rapid iteration, root VPS for custom runtimes.",
         role: "Runtime",
         capabilities: ["Push-to-deploy", "Rolling deploys", "Auto-scale", "Root on VPS"],
     },
     {
-        icon: <DatabaseIcon />,
+        icon: <Image src={`${CDN}/GE-bvJy7dPjS.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Managed Postgres · MySQL · Redis",
         description: "Orders, catalog, sessions — every data primitive a real commerce platform needs. Daily backups, PITR, read replicas, and connection pooling.",
         role: "Data plane",
         capabilities: ["Postgres HA", "MySQL · MongoDB", "Redis sessions", "PITR backups"],
     },
     {
-        icon: <BucketIcon />,
+        icon: <Image src={`${CDN}/qQWF2NQhm08B.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Object storage for product media",
         description: "S3-compatible store for product images, videos, and exports. Free egress inside the region. Pair with the CDN for global delivery.",
         role: "Storage",
         capabilities: ["S3-compatible", "$5 / 250 GB", "Lifecycle rules", "Free in-region"],
     },
     {
-        icon: <CdnIcon />,
+        icon: <Image src={`${CDN}/gdlAueC4beRI.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Global CDN & image optimization",
         description: "200+ edge locations serving storefronts and media with sub-50ms latency. Pair with object storage for product images — free in-region egress.",
         role: "Delivery",
         capabilities: ["200+ locations", "Sub-50ms latency", "Free in-region", "CDN included"],
     },
     {
-        icon: <ShieldIcon />,
+        icon: <Image src={`${CDN}/LT1-2xakZl3S.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "WAF, TLS & DDoS protection",
         description: "PCI-scoped WAF with OWASP rule sets, bot scoring, and L3/L4 absorption. Free wildcard certificates with automatic renewal.",
         role: "Security",
         capabilities: ["PCI WAF", "OWASP rules", "Bot scoring", "Free wildcard TLS"],
     },
     {
-        icon: <CacheIcon />,
+        icon: <Image src={`${CDN}/oTUPvC8PP5HU.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Redis for sessions & cart",
         description: "Managed Redis HA keeps cart state and checkout sessions fast. Persistence, eviction policies, and automatic failover configured for you.",
         role: "Cache",
@@ -428,37 +431,37 @@ type Workload = {
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <StorefrontGlyph />,
+        glyph: <Image src={`${CDN}/W-xBsIRlYTnP.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Storefront",
         title: "Marketing & product pages",
         description: "Static-first builds cached at the edge. ISR for catalog updates without a full redeploy. Lighthouse 100s out of the box.",
     },
     {
-        glyph: <CartGlyph />,
+        glyph: <Image src={`${CDN}/eDjrGWx7Ij7l.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Checkout",
         title: "Resilient checkout flows",
         description: "Cart state in Redis, order writes to Postgres HA, payment API in a PCI-scoped network segment — all on the same private VPC.",
     },
     {
-        glyph: <SpikeGlyph />,
+        glyph: <Image src={`${CDN}/uVrLW3zLu5lS.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Flash sales",
         title: "Traffic spike handling",
         description: "Auto-scale compute behind a health-aware load balancer. WAF absorbs bot floods before they reach the origin.",
     },
     {
-        glyph: <MediaGlyph />,
+        glyph: <Image src={`${CDN}/vZo680B68-Wj.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Media",
         title: "Product images & video",
         description: "Object storage for originals, CDN delivery across 200+ edge locations. Free in-region egress, and no surprise bandwidth bill between services.",
     },
     {
-        glyph: <InventoryGlyph />,
+        glyph: <Image src={`${CDN}/eSJFZinzuvk3.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Inventory",
         title: "Real-time inventory & orders",
         description: "Postgres with read replicas for catalog reads, replication for reporting, and row-level locking for concurrent order writes.",
     },
     {
-        glyph: <AnalyticsGlyph />,
+        glyph: <Image src={`${CDN}/kKxIO2gB-ulO.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Analytics",
         title: "Customer analytics & ML",
         description: "Stream events to object storage, query with read replicas, or route to an ML service for recommendations and personalization.",
@@ -560,9 +563,10 @@ function CheckoutFlow() {
                         { v: "Free", l: "In-region egress" },
                         { v: "PCI", l: "Payment network scope" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -637,7 +641,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -683,7 +687,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -730,7 +734,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -913,7 +917,7 @@ function FinalCta() {
                         <div className="flex flex-col gap-3">
                             <Link
                                 href="/contact"
-                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:bg-white/90`}
+                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white`}
                             >
                                 Talk to a solutions engineer
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -946,9 +950,9 @@ export function EcommerceLanding() {
                 description="Compute, managed databases, object storage, CDN, WAF, and Redis — one network, one bill. Sized for Black-Friday-grade spikes."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-ecom.png",
+                    src: assetUrl("/images/main-page/solution-home-ecom.png"),
                     alt: "Ecommerce infrastructure",
                     priority: true,
                 }}

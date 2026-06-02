@@ -5,18 +5,9 @@
 // per-hour pricing, a cream contrast section for workloads, and a
 // multi-node cluster CTA for enterprise.
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Brain } from "lucide-react";
-import {
-    IconSparklesFilled,
-    IconBoltFilled,
-    IconPhotoFilled,
-    IconReceiptFilled,
-    IconCloudDataConnectionFilled,
-    IconStackFilled,
-    IconCloudComputingFilled,
-} from "@tabler/icons-react";
-
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
@@ -169,7 +160,7 @@ const WORKLOADS: Workload[] = [
         recommended: ["B200", "B200 SXM"],
     },
     {
-        icon: <IconSparklesFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/WakrGYPcdvwA.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#0095FF",
         title: "Fine-tuning & adaptation",
         description:
@@ -177,7 +168,7 @@ const WORKLOADS: Workload[] = [
         recommended: ["H100 SXM", "H100 NVL"],
     },
     {
-        icon: <IconBoltFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/eAbXy9-DMjGQ.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#F59E0B",
         title: "Production inference",
         description:
@@ -185,7 +176,7 @@ const WORKLOADS: Workload[] = [
         recommended: ["L40S", "H100 NVL", "B200 SXM"],
     },
     {
-        icon: <IconPhotoFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/wChs3ApCVclw.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#10B981",
         title: "Diffusion, vision & multimodal",
         description:
@@ -202,28 +193,28 @@ const PLATFORM_FEATURES: Array<{
     description: string;
 }> = [
     {
-        icon: <IconReceiptFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/aZvIjwmjp41E.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#10B981",
         title: "Per-second billing",
         description:
             "Pay only for time the GPU is up. Stop a pod, billing stops within the second.",
     },
     {
-        icon: <IconCloudDataConnectionFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/A1FRZu4j8rJN.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#0095FF",
         title: "NVLink + InfiniBand fabric",
         description:
             "900 GB/s GPU-to-GPU bandwidth on SXM nodes, 3.2 Tbps east-west on reserved clusters.",
     },
     {
-        icon: <IconStackFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/FbkzuXTq_dvC.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#F59E0B",
         title: "Persistent NVMe volumes",
         description:
             "Checkpoint, dataset, and weight volumes that survive pod restarts and follow your jobs.",
     },
     {
-        icon: <IconCloudComputingFilled size={20} />,
+        icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/y_aRdADzVfCf.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
         accent: "#8B5CF6",
         title: "Single pod to 1,000+ GPUs",
         description:

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import {
   Select,
   SelectContent,
@@ -182,7 +183,7 @@ function CustomPanel({
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard.writeText(currentNameservers.join('\n'));
+                void copyToClipboard(currentNameservers.join('\n'));
                 toast.success('Copied to clipboard.');
               }}
               className="flex items-center gap-1 rounded px-1 text-[11px] text-white/30 transition-colors hover:text-white/60"

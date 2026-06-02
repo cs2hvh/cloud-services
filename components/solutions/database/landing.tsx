@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -372,13 +375,13 @@ const SCENARIOS: Scenario[] = [
 type FlowNode = { icon: React.ReactNode; label: string; sub: string };
 
 const FLOW: FlowNode[] = [
-    { icon: <NodeApp />, label: "App request", sub: "API · worker · UI" },
-    { icon: <NodePool />, label: "Connection pool", sub: "PgBouncer" },
-    { icon: <NodePrimary />, label: "Primary", sub: "Writes · single source" },
-    { icon: <NodeReadReplica />, label: "Read replicas", sub: "Scale reads" },
-    { icon: <NodeCache />, label: "Cache layer", sub: "Redis · sub-ms" },
-    { icon: <NodeSnapshot />, label: "PITR + snapshots", sub: "35-day window" },
-    { icon: <NodeAudit />, label: "Audit & insights", sub: "Slow query · access" },
+    { icon: <Image src={`${CDN}/L4AKlR-E99P9.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "App request", sub: "API · worker · UI" },
+    { icon: <Image src={`${CDN}/lPPyrQWAe1Ll.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Connection pool", sub: "PgBouncer" },
+    { icon: <Image src={`${CDN}/GyD6nVQdHhHt.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Primary", sub: "Writes · single source" },
+    { icon: <Image src={`${CDN}/PDdff_WWNEBf.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Read replicas", sub: "Scale reads" },
+    { icon: <Image src={`${CDN}/GlaPmi_tyI-1.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Cache layer", sub: "Redis · sub-ms" },
+    { icon: <Image src={`${CDN}/-M7NqG_Y5UhL.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "PITR + snapshots", sub: "35-day window" },
+    { icon: <Image src={`${CDN}/u2eCUamSio0m.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Audit & insights", sub: "Slow query · access" },
 ];
 
 type StackPiece = {
@@ -391,42 +394,42 @@ type StackPiece = {
 
 const STACK: StackPiece[] = [
     {
-        icon: <PostgresIcon />,
+        icon: <Image src={`${CDN}/wRSL1c98v0xf.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Managed Postgres & MySQL",
         description: "Fully managed engines with automatic patching, version upgrades, connection pooling, and health probes. Bring your schema — we run the database.",
         role: "Engine",
         capabilities: ["Postgres 14–17", "MySQL · MariaDB", "Auto patching", "Pooled connections"],
     },
     {
-        icon: <ReplicaIcon />,
+        icon: <Image src={`${CDN}/34HKuE3TVISP.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Read replicas & HA standby",
         description: "Synchronous HA pair for writes, async read replicas for scale and analytics. Failover is automatic, sub-second, and observable.",
         role: "Topology",
         capabilities: ["Sync HA pair", "Async read replicas", "Sub-sec failover", "Lag dashboards"],
     },
     {
-        icon: <BackupIcon />,
+        icon: <Image src={`${CDN}/Qk44N3HwnGc5.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Backups & point-in-time recovery",
         description: "Daily snapshots plus WAL streaming to object storage. Restore to any second in the last 35 days, into a new or existing instance.",
         role: "Recovery",
         capabilities: ["Daily snapshots", "Continuous WAL", "35-day PITR", "Cross-region copy"],
     },
     {
-        icon: <CacheIcon />,
+        icon: <Image src={`${CDN}/zaTUf7FeZ56K.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Managed Redis cache",
         description: "Sub-millisecond key-value store for sessions, rate limits, queues, and hot reads. Cluster mode, HA, eviction policies of your choice.",
         role: "Cache",
         capabilities: ["Redis 7", "HA pair", "Cluster mode", "Eviction policies"],
     },
     {
-        icon: <VectorIcon />,
+        icon: <Image src={`${CDN}/GzrrNbJ0F5TB.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "pgvector & semantic search",
         description: "First-class pgvector on every Postgres instance. Build retrieval, recommendation, and similarity search next to the rest of your data.",
         role: "Vector",
         capabilities: ["pgvector", "HNSW indexes", "Hybrid search", "GPU-friendly"],
     },
     {
-        icon: <ObservabilityIcon />,
+        icon: <Image src={`${CDN}/q6p7P9z2IRn7.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Performance insights & audit",
         description: "Query insights, slow query logs, connection stats, plan history, and audit trails wired into a single dashboard — no extra agent.",
         role: "Insights",
@@ -438,37 +441,37 @@ type Workload = { glyph: React.ReactNode; metric: string; title: string; descrip
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <OltpGlyph />,
+        glyph: <Image src={`${CDN}/KIwCvvixRa2X.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "OLTP",
         title: "Transactional app databases",
         description: "Row-shaped reads and writes for SaaS, fintech, marketplaces — connection pooling, prepared statements, HA failover for live traffic.",
     },
     {
-        glyph: <AnalyticsGlyph />,
+        glyph: <Image src={`${CDN}/Yw9p_uV67aPb.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "OLAP",
         title: "Analytics and reporting",
         description: "Large memory tier for aggregation queries, columnar extensions, replicas dedicated to BI tools so production stays interactive.",
     },
     {
-        glyph: <TimeseriesGlyph />,
+        glyph: <Image src={`${CDN}/uiek_CuXLe0v.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Series",
         title: "Time-series and telemetry",
         description: "TimescaleDB or pg_partman partitioning, hypertables, retention policies, compression — observability and metrics at write-rate scale.",
     },
     {
-        glyph: <VectorWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/B7bQioA-22KJ.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Vector",
         title: "Vector search and retrieval",
         description: "pgvector + HNSW indexes for RAG, semantic search, dedupe, recommendation — collocated with your transactional data, one network hop away.",
     },
     {
-        glyph: <CacheWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/Sp3wxgzKrKZk.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Cache",
         title: "Sessions, queues, and rate limits",
         description: "Redis primitives for session storage, sliding-window rate limits, job queues, and feature flags — all in the same private VPC.",
     },
     {
-        glyph: <MultiRegionGlyph />,
+        glyph: <Image src={`${CDN}/16S0UhFjBokj.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Geo",
         title: "Multi-region and DR-ready",
         description: "Asynchronous replication across regions, off-region snapshots, audited promotion — for compliance contracts and DR runbooks.",
@@ -566,9 +569,10 @@ function RequestFlow() {
                         { v: "<60s", l: "HA failover" },
                         { v: "35d", l: "PITR window" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -642,7 +646,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -687,7 +691,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -734,7 +738,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -903,9 +907,9 @@ export function DatabaseLanding() {
                 description="Managed Postgres, MySQL, and Redis with HA standby, replicas, PITR, and pgvector — on your private VPC."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-db.svg",
+                    src: assetUrl("/images/main-page/solution-home-db.svg"),
                     alt: "Managed database infrastructure",
                     priority: true,
                 }}

@@ -1,5 +1,7 @@
 'use client';
 
+import { assetUrl } from "@/lib/asset-url";
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -322,7 +324,7 @@ export default function AgentDetailsPage({
     if (!agent) return;
     const url = `${window.location.origin}/api/v1/agents/${agent.endpoint_id}/chat`;
     try {
-      await navigator.clipboard.writeText(url);
+      await copyToClipboard(url);
       toast.success('Endpoint URL copied');
     } catch {
       toast.error('Failed to copy');
@@ -344,7 +346,7 @@ export default function AgentDetailsPage({
   const copyRequestExample = async () => {
     if (!agent) return;
     try {
-      await navigator.clipboard.writeText(getRequestExampleCurl());
+      await copyToClipboard(getRequestExampleCurl());
       toast.success('cURL example copied');
     } catch {
       toast.error('Failed to copy');
@@ -411,7 +413,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{stats.total_messages}</p>
               </div>
-              <Image src="/dashboard-icons/messages.png" alt="Messages" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/messages.png")} alt="Messages" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -420,7 +422,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Conversations</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{stats.total_conversations}</p>
               </div>
-              <Image src="/dashboard-icons/agents.png" alt="Conversations" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/agents.png")} alt="Conversations" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -429,7 +431,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Tokens Used</p>
                 <p className="mt-3 text-2xl font-semibold text-white">{(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}</p>
               </div>
-              <Image src="/dashboard-icons/model.png" alt="Tokens" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/model.png")} alt="Tokens" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
           <div className="glass-panel p-5">
@@ -438,7 +440,7 @@ export default function AgentDetailsPage({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total Cost</p>
                 <p className="mt-3 text-2xl font-semibold text-white">${stats.total_cost.toFixed(4)}</p>
               </div>
-              <Image src="/dashboard-icons/agent-api-keys.png" alt="Cost" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/agent-api-keys.png")} alt="Cost" width={32} height={32} className="shrink-0 opacity-80"  unoptimized />
             </div>
           </div>
         </div>

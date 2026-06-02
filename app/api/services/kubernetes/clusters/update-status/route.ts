@@ -7,6 +7,7 @@ import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
 import { postProvisionBilling } from "@/config/billing-flow";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 async function activateKubernetesBillingOnReady(params: {
   clusterId: string;
@@ -93,6 +94,19 @@ export async function POST(req: NextRequest) {
 
     if (fetchError || !cluster) {
       return NextResponse.json({ error: "Cluster not found" }, { status: 404 });
+    }
+
+    // Ownership gate (M1): only the cluster owner — or an admin — may change its
+    // status or trigger billing activation. This route is the owner's browser
+    // lifecycle callback; without this, any authenticated user could POST a
+    // victim's cluster_id with status="ready" to activate billing against the
+    // victim (owner_id is read from the stored row) or drive arbitrary status
+    // transitions on someone else's cluster.
+    if (cluster.owner_id !== auth.user.id) {
+      const adminCheck = await requireAdmin();
+      if (!adminCheck.ok) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
     }
 
     if (status || typeof create_droplet === "boolean") {

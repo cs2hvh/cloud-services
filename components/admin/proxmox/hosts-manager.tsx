@@ -13,8 +13,10 @@ import {
   Server, Cpu, MemoryStick, HardDrive, Globe, Sparkles, Settings2, X,
 } from 'lucide-react';
 
+import { useConfirm } from "@/components/ui/confirm";
 import { VmacSyncPanel } from './vmac-sync-panel';
 import { AutoSetupPanel } from './auto-setup-panel';
+import { WindowsTemplatePanel } from './windows-template-panel';
 
 const SERVER_SERIES_OPTIONS = [
   { value: 'generic', label: 'Generic / existing setup' },
@@ -142,6 +144,7 @@ type PanelMode = 'closed' | 'add' | 'edit';
 type AddTab = 'auto' | 'manual';
 
 export function ProxmoxHostsManager() {
+  const confirm = useConfirm();
   const [hosts, setHosts] = useState<HostData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -273,7 +276,7 @@ export function ProxmoxHostsManager() {
 
   // Delete host
   const handleDelete = useCallback(async (hostId: string, hostName: string) => {
-    if (!confirm(`Are you sure you want to delete host "${hostName}"? This will also delete all associated IP pools and templates.`)) {
+    if (!(await confirm({ title: `Delete host "${hostName}"?`, description: "This will also delete all associated IP pools and templates.", confirmText: "Delete host", danger: true }))) {
       return;
     }
 
@@ -288,9 +291,12 @@ export function ProxmoxHostsManager() {
       // If there are existing servers, ask for confirmation to force delete
       if (!res.ok && data.requiresForce) {
         const serverCount = data.serverCount || 0;
-        const forceConfirm = confirm(
-          `This host has ${serverCount} existing server(s). Do you want to delete the host AND all its servers?\n\nThis action cannot be undone!`
-        );
+        const forceConfirm = await confirm({
+          title: "Delete host and all its servers?",
+          description: `This host has ${serverCount} existing server(s). The host AND all its servers will be deleted. This action cannot be undone.`,
+          confirmText: "Force delete",
+          danger: true,
+        });
 
         if (!forceConfirm) {
           return;
@@ -1204,6 +1210,17 @@ function HostListItem({
               </div>
             </div>
           )}
+
+          <WindowsTemplatePanel
+            hostId={host.id}
+            hostName={host.name}
+            hasWindows={(host.proxmox_templates ?? []).some(
+              (t) =>
+                (t.os_type || '').toLowerCase().startsWith('windows') ||
+                /windows/i.test(t.os_display_name || t.name || '')
+            )}
+            onBuilt={loadHosts}
+          />
 
           {host.provider === 'ovh' && (
             <VmacSyncPanel hostId={host.id} hostUrl={host.host_url} onPoolsChanged={loadHosts} />

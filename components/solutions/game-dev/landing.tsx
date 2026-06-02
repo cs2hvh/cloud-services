@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -379,13 +382,13 @@ const SCENARIOS: Scenario[] = [
 type FlowNode = { icon: React.ReactNode; label: string; sub: string };
 
 const FLOW: FlowNode[] = [
-    { icon: <NodePlayer />, label: "Player", sub: "Console · PC · Mobile" },
-    { icon: <NodeEdge />, label: "Edge POP", sub: "Closest hop" },
-    { icon: <NodeDdos />, label: "DDoS shield", sub: "L3–L7 scrub" },
-    { icon: <NodeMatch />, label: "Matchmaker", sub: "Lobby · skill" },
-    { icon: <NodeGameServer />, label: "Game server", sub: "Tick loop" },
-    { icon: <NodeState />, label: "Session state", sub: "Redis · DB" },
-    { icon: <NodeAssets />, label: "Asset CDN", sub: "Builds · patches" },
+    { icon: <Image src={`${CDN}/oIXRhJWQYfkV.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Player", sub: "Console · PC · Mobile" },
+    { icon: <Image src={`${CDN}/FQm_PDgTL5Sj.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Edge POP", sub: "Closest hop" },
+    { icon: <Image src={`${CDN}/Gj8w5tgJY1gz.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "DDoS shield", sub: "L3–L7 scrub" },
+    { icon: <Image src={`${CDN}/ZKBNJMBGAsek.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Matchmaker", sub: "Lobby · skill" },
+    { icon: <Image src={`${CDN}/0ok35m6u4LiM.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Game server", sub: "Tick loop" },
+    { icon: <Image src={`${CDN}/0z1tWT3v-RYl.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Session state", sub: "Redis · DB" },
+    { icon: <Image src={`${CDN}/l5ORR46q0CzA.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Asset CDN", sub: "Builds · patches" },
 ];
 
 type StackPiece = {
@@ -398,49 +401,49 @@ type StackPiece = {
 
 const STACK: StackPiece[] = [
     {
-        icon: <GameServerIcon />,
+        icon: <Image src={`${CDN}/AfPfwggTmwQg.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Dedicated game servers",
         description: "High-frequency CPUs (5+ GHz turbo), pinned cores, low-jitter NICs — sized for sub-10 ms tick rates and authoritative simulation.",
         role: "Runtime",
         capabilities: ["5+ GHz turbo", "Pinned cores", "Low-jitter NIC", "Sub-10 ms"],
     },
     {
-        icon: <K8sIcon />,
+        icon: <Image src={`${CDN}/QhfR-8qQpzj7.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Kubernetes orchestration",
         description: "Run server pods as fleets, auto-scale node pools on CCU, rolling updates without dropping matches. Game-server-aware lifecycle.",
         role: "Orchestration",
         capabilities: ["Fleet pods", "Auto-scale by CCU", "Rolling deploys", "Lifecycle hooks"],
     },
     {
-        icon: <MatchmakerIcon />,
+        icon: <Image src={`${CDN}/H3WAOOIfMkGC.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Matchmaker & lobby services",
         description: "Stateless matchmaking workers, regional queues, skill / latency / party-aware bucketing — wired into Redis for session pinning.",
         role: "Sessions",
         capabilities: ["Skill bucketing", "Regional queues", "Party-aware", "Redis-pinned"],
     },
     {
-        icon: <StateCacheIcon />,
+        icon: <Image src={`${CDN}/fz3hqHc3ADda.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Player data & state cache",
         description: "Managed Postgres for profiles, inventory, leaderboards. Redis HA for room state, presence, and rate limits — same private VPC.",
         role: "Data plane",
         capabilities: ["Postgres HA", "Redis HA", "Read replicas", "PITR backup"],
     },
     {
-        icon: <AssetBucketIcon />,
+        icon: <Image src={`${CDN}/rd-B_A0HnGE2.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Asset & patch storage",
         description: "S3-compatible buckets for builds, textures, audio, and delta patches. Versioned, lifecycle-managed, signed URLs for download.",
         role: "Storage",
         capabilities: ["Versioned", "Signed URLs", "Lifecycle rules", "Delta patches"],
     },
     {
-        icon: <EdgeIcon />,
+        icon: <Image src={`${CDN}/VU9pjh5EiK4g.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Global CDN & DDoS shield",
         description: "150+ POPs deliver patches and assets. L3–L7 absorption scrubs volumetric and protocol attacks before they reach game servers.",
         role: "Delivery",
         capabilities: ["150+ POPs", "L3–L7 scrub", "Brotli · HTTP/3", "Image optimization"],
     },
     {
-        icon: <GpuAiIcon />,
+        icon: <Image src={`${CDN}/USBt3nQq0n0v.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "GPU & AI inference",
         description: "Serverless GPU and an OpenAI-compatible inference gateway power in-game AI — NPC behaviour, matchmaking ranking, anti-cheat ML, voice and chat moderation, and generative content. Fine-tune open-weight models on your own telemetry, in the same private network.",
         role: "Intelligence",
@@ -452,37 +455,37 @@ type Workload = { glyph: React.ReactNode; metric: string; title: string; descrip
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <ShooterGlyph />,
+        glyph: <Image src={`${CDN}/1j1tbw6ggv5z.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Competitive",
         title: "Real-time shooters and MOBAs",
         description: "Authoritative servers, 60–128 Hz tick, deterministic netcode, sub-10 ms simulation cost — across pinned cores on bare-metal-class hosts.",
     },
     {
-        glyph: <MmoGlyph />,
+        glyph: <Image src={`${CDN}/f0mnN8tgXerl.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "MMO",
         title: "Persistent worlds and MMOs",
         description: "Sharded world servers, persistence to HA Postgres, region-pinned characters, hot-spare failover for live shards on patch days.",
     },
     {
-        glyph: <MobileGlyph />,
+        glyph: <Image src={`${CDN}/TXZsBNkpNRDZ.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Mobile",
         title: "Mobile and casual multiplayer",
         description: "Stateless room servers, fast cold-start, reconnect-friendly sessions. Lighter compute, deep regional spread, edge-friendly assets.",
     },
     {
-        glyph: <BattleRoyaleGlyph />,
+        glyph: <Image src={`${CDN}/16L8JkXkqKF5.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Battle royale",
         title: "Battle royale and 100-player lobbies",
         description: "Burst-spawn fleets for events and launches. Pre-warmed pools, sub-second match start, fleet drain handled by lifecycle hooks.",
     },
     {
-        glyph: <RacingGlyph />,
+        glyph: <Image src={`${CDN}/l7Ttfx3uqI9w.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Sim",
         title: "Racing and simulation",
         description: "Deterministic physics, lockstep netcode, dedicated CPU. Replay storage in object buckets, telemetry streamed for live spectators.",
     },
     {
-        glyph: <TurnBasedGlyph />,
+        glyph: <Image src={`${CDN}/2Mf1FddQOMeU.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Async",
         title: "Turn-based and async multiplayer",
         description: "Long-running matches stored in Postgres, push notifications via webhooks, free of stateful sticky sessions — autoscale cheaply.",
@@ -585,9 +588,10 @@ function RequestFlow() {
                         { v: "60–128Hz", l: "Update rate" },
                         { v: "Zero", l: "Cold-start drops" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -662,7 +666,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -708,7 +712,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -755,7 +759,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -925,9 +929,9 @@ export function GameDevLanding() {
                 description="Dedicated game servers, matchmaker, state cache, asset CDN, L3–L7 DDoS shield, and GPU for in-game AI — sized for sub-10 ms ticks."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-game-dev.svg",
+                    src: assetUrl("/images/main-page/solution-home-game-dev.svg"),
                     alt: "Game hosting infrastructure",
                     priority: true,
                 }}

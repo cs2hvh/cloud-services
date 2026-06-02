@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Stack glyphs (32×32, layered + blue accent)
@@ -337,13 +340,13 @@ const SCENARIOS: Scenario[] = [
 type FlowNode = { icon: React.ReactNode; label: string; sub: string };
 
 const FLOW: FlowNode[] = [
-    { icon: <NodeClient />, label: "Client", sub: "App · browser · SDK" },
-    { icon: <NodeEdge />, label: "Edge POP", sub: "Cache · TLS" },
-    { icon: <NodeBucket />, label: "Bucket", sub: "S3-compatible" },
-    { icon: <NodeHot />, label: "Hot tier", sub: "ms latency" },
-    { icon: <NodeWarm />, label: "Warm tier", sub: "After 30d" },
-    { icon: <NodeReplica />, label: "Replica region", sub: "Async copy" },
-    { icon: <NodeArchive />, label: "Archive", sub: "Cold · WORM" },
+    { icon: <Image src={`${CDN}/3ipmDv_D3F7T.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Client", sub: "App · browser · SDK" },
+    { icon: <Image src={`${CDN}/Jrl8uiWuofnX.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Edge POP", sub: "Cache · TLS" },
+    { icon: <Image src={`${CDN}/TTg0qKJLC7t1.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Bucket", sub: "S3-compatible" },
+    { icon: <Image src={`${CDN}/NCBxDsNO4KtS.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Hot tier", sub: "ms latency" },
+    { icon: <Image src={`${CDN}/F-cf09Alvu0P.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Warm tier", sub: "After 30d" },
+    { icon: <Image src={`${CDN}/y7ntx0u1RxfH.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Replica region", sub: "Async copy" },
+    { icon: <Image src={`${CDN}/tTF-KKbW0bbX.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Archive", sub: "Cold · WORM" },
 ];
 
 type StackPiece = {
@@ -356,7 +359,7 @@ type StackPiece = {
 
 const STACK: StackPiece[] = [
     {
-        icon: <BucketIcon />,
+        icon: <Image src={`${CDN}/unb1ZGAUGCiH.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Object storage",
         description:
             "S3-compatible engine — drop in any AWS SDK or existing tool. $5 for 250 GB, $0.01/GB after. Free egress in-region, multipart upload, presigned URLs, versioning.",
@@ -364,7 +367,7 @@ const STACK: StackPiece[] = [
         capabilities: ["S3 API · v4 sig", "Multipart upload", "Versioning", "Presigned URLs"],
     },
     {
-        icon: <BlockIcon />,
+        icon: <Image src={`${CDN}/HagKZNtfP4i2.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Block storage",
         description:
             "NVMe-backed block volumes for databases, caches, and stateful workloads. Replicated within the AZ, snapshotted on schedule, resizable without downtime.",
@@ -372,7 +375,7 @@ const STACK: StackPiece[] = [
         capabilities: ["NVMe-backed", "AZ replication", "Live resize", "Per-volume IOPS"],
     },
     {
-        icon: <LifecycleIcon />,
+        icon: <Image src={`${CDN}/SfHS6ITApuX0.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Lifecycle & tiering",
         description:
             "Policy-driven movement between hot, warm, cold, and archive tiers. Expire stale objects, transition by prefix or tag, never touch the bill manually.",
@@ -380,7 +383,7 @@ const STACK: StackPiece[] = [
         capabilities: ["Hot · warm · cold · archive", "Prefix rules", "Tag rules", "Auto-expire"],
     },
     {
-        icon: <EdgeIcon />,
+        icon: <Image src={`${CDN}/_nH_hWpN4FxS.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Global CDN & edge delivery",
         description:
             "150+ POPs in front of every bucket. Smart invalidation under 10 s, HTTP/3, brotli, image and video optimization included — for users, not for invoices.",
@@ -388,7 +391,7 @@ const STACK: StackPiece[] = [
         capabilities: ["150+ POPs", "<10 s purge", "HTTP/3 · Brotli", "Image · video opt"],
     },
     {
-        icon: <BackupIcon />,
+        icon: <Image src={`${CDN}/ET00ASTMk79s.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Backups, snapshots & PITR",
         description:
             "Scheduled snapshots for buckets and volumes, point-in-time recovery for databases, cross-region copies for DR. Restore to new or existing resources.",
@@ -396,7 +399,7 @@ const STACK: StackPiece[] = [
         capabilities: ["Scheduled snapshots", "PITR for DBs", "Cross-region copy", "Selective restore"],
     },
     {
-        icon: <ComplianceIcon />,
+        icon: <Image src={`${CDN}/8FkdukSiHVez.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Compliance & immutability",
         description:
             "Object lock (WORM) in compliance or governance modes, AES-256 at rest, TLS in transit, fine-grained IAM, audit log streaming, KMS-managed keys.",
@@ -409,37 +412,37 @@ type Workload = { glyph: React.ReactNode; metric: string; title: string; descrip
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <MediaGlyph />,
+        glyph: <Image src={`${CDN}/CA14UjtMbs3s.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Media",
         title: "Video, audio, and image hosting",
         description: "Origin storage for streaming, image-on-the-fly resizing, signed URLs for paywalls, CDN delivery to 150+ POPs.",
     },
     {
-        glyph: <UploadsGlyph />,
+        glyph: <Image src={`${CDN}/HMS5co0Zzr9_.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Uploads",
         title: "User-generated content & uploads",
         description: "Direct browser uploads via presigned URLs, virus scanning hooks, lifecycle expiry on abandoned drafts.",
     },
     {
-        glyph: <BackupWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/IJpcyqtygId1.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Backups",
         title: "Database & application backups",
         description: "Scheduled snapshots of Postgres, MySQL, Redis, and VPS volumes. Cross-region copies for DR, WORM mode for ransomware protection.",
     },
     {
-        glyph: <DataLakeGlyph />,
+        glyph: <Image src={`${CDN}/J846vEjhrtj7.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Lake",
         title: "Data lake and analytics exports",
         description: "Parquet, ORC, and JSON sitting in object storage — queryable from Spark, DuckDB, Trino, or your warehouse of choice.",
     },
     {
-        glyph: <MlDatasetGlyph />,
+        glyph: <Image src={`${CDN}/DaK-QxjQF_wW.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "ML",
         title: "ML datasets and model weights",
         description: "Versioned dataset blobs, checkpoint streaming during training, weight cache next to GPU pods — sub-millisecond hops.",
     },
     {
-        glyph: <ComplianceWorkloadGlyph />,
+        glyph: <Image src={`${CDN}/npYcFDjDi3Ix.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Records",
         title: "Compliance & immutable records",
         description: "Object lock with governance or compliance retention, audit trail per object, fine-grained IAM, KMS for at-rest encryption keys.",
@@ -537,9 +540,10 @@ function RequestFlow() {
                         { v: "<50ms", l: "First byte (cached)" },
                         { v: "Zero", l: "In-region egress" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -613,7 +617,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -658,7 +662,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -705,7 +709,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -874,9 +878,9 @@ export function StorageLanding() {
                 description="S3-compatible objects, NVMe block, lifecycle tiering, CDN, immutable backups, and cross-region replication — on one private network."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-storage.png",
+                    src: assetUrl("/images/main-page/solution-home-storage.png"),
                     alt: "Storage infrastructure",
                     priority: true,
                 }}

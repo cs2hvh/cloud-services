@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import { getDatabaseErrorMessage } from "../error-messages";
 import { supportsDashboardLogicalDatabases } from "../engine-capabilities";
 
@@ -291,7 +292,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
   };
 
   const copyToClipboard = async (text: string, label: string) => {
-    await navigator.clipboard.writeText(text);
+    await safeCopyToClipboard(text);
     toast.success(`${label} copied to clipboard!`);
   };
 

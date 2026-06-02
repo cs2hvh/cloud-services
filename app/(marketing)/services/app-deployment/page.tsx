@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import AppDeployHowSection from "@/components/services/app-deploy-how-section";
 import AppDeployWorkloadsSection from "@/components/services/app-deploy-workloads-section";
@@ -17,8 +18,8 @@ const AppDeploymentHome = async () => {
         description="Deploy applications directly from Git with managed builds, zero-downtime releases, and instant rollbacks. Production infrastructure without the operational overhead."
         primaryAction={{ label: "Deploy Your App", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/app-deploy.png", alt: "App Deployment infrastructure" }}
+        backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
+        illustration={{ src: assetUrl("/images/main-page/app-deploy.png"), alt: "App Deployment infrastructure" }}
       />
       <AppDeployHowSection />
       <AppDeployFrameworksSection />

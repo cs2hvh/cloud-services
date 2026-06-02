@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const SERIF_STYLE: React.CSSProperties = {
   fontFamily: "var(--font-nunito), system-ui, sans-serif",
@@ -171,7 +172,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
+    void safeCopyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };

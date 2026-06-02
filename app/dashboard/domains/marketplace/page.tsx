@@ -98,9 +98,8 @@ export default function DomainMarketplacePage() {
                 </h1>
               </div>
               <p className="max-w-[460px] text-[14.5px] leading-[1.6] text-white/55 lg:pb-3">
-                Search across 500+ extensions, compare pricing side-by-side, and
-                register through our managed ICANN-accredited backend — WHOIS
-                privacy included on every domain.
+                Search 500+ extensions, compare pricing, and register with WHOIS
+                privacy on every domain.
               </p>
             </div>
           </header>

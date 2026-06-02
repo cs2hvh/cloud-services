@@ -64,6 +64,7 @@ import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
+import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
 import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
 import { applyLiveBuildStatus } from '@/lib/app-operations/core/live-build-status';
 import { toast } from 'sonner';
@@ -1083,7 +1084,7 @@ export default function AppDetailPage() {
   }, [fetchApp, refetchDeployments, refetchDetails]);
 
   const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
+    void safeCopyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };

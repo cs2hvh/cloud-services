@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // App deploy — single-page editorial form matching the database/VPS
 // pattern. Numbered sections on the left (Source → Repository → Identity
@@ -122,9 +123,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
     // ── Provider ────────────────────────────────────────────────
     const [gitProviders, setGitProviders] = useState<GitProvider[]>([
-        { id: "github", name: "GitHub", icon: "/github.png", connected: false },
-        { id: "gitlab", name: "GitLab", icon: "/gitlab.png", connected: false },
-        { id: "bitbucket", name: "Bitbucket", icon: "/BitBucket.png", connected: false },
+        { id: "github", name: "GitHub", icon: assetUrl("/github.png"), connected: false },
+        { id: "gitlab", name: "GitLab", icon: assetUrl("/gitlab.png"), connected: false },
+        { id: "bitbucket", name: "Bitbucket", icon: assetUrl("/BitBucket.png"), connected: false },
     ]);
     const [loadingProviders, setLoadingProviders] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
@@ -562,7 +563,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
+            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -587,8 +588,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 <p
                     className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
                 >
-                    Connect a Git provider, pick a repository, and we&apos;ll
-                    detect the framework and build it.
+                    Connect a repo — we detect the framework and build it.
                 </p>
 
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
@@ -598,7 +598,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="01"
                             title="Source provider"
-                            desc="Connect an approved Git provider. We only request read access to the repos you select."
+                            desc="Read-only access to the repos you pick."
                             status={sourceOk ? "done" : "idle"}
                             statusLabel={
                                 sourceOk && selectedProviderData
@@ -780,7 +780,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="02"
                             title="Repository"
-                            desc="Pick the repo to deploy. Branch can be changed below."
+                            desc="Pick a repo and branch."
                             status={repoOk ? "done" : sourceOk ? "active" : "idle"}
                             statusLabel={
                                 selectedRepoData
@@ -1068,7 +1068,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="03"
                             title="Application identity"
-                            desc="Name shown across dashboards, build logs, and DNS."
+                            desc="Shown in dashboards, logs, and DNS."
                             status={
                                 identityOk ? "done" : appName ? "active" : "idle"
                             }
@@ -1151,7 +1151,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="04"
                             title="Build profile"
-                            desc="Framework or pipeline. Auto-detected from your repo when possible."
+                            desc="Auto-detected from your repo."
                             status={
                                 buildOk
                                     ? "done"
@@ -1351,7 +1351,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="05"
                             title="Instance size"
-                            desc="Compute and memory for the running container."
+                            desc="Compute and memory tier."
                             status="done"
                             statusLabel={
                                 size.charAt(0).toUpperCase() + size.slice(1)
@@ -1465,7 +1465,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Section
                             num="06"
                             title="Environment variables"
-                            desc="Encrypted at rest. Injected into your container at runtime."
+                            desc="Encrypted, injected at runtime."
                             status={envVars.length > 0 ? "done" : "idle"}
                             statusLabel={
                                 envVars.length > 0

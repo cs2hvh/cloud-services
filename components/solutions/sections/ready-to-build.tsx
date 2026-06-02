@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
@@ -27,7 +28,7 @@ export function ReadyToBuild({
   description,
   formFields,
   buttonText,
-  backgroundImage = "/images/main-page/ready-to-secure-bg.svg",
+  backgroundImage = assetUrl("/images/main-page/ready-to-secure-bg.svg"),
   className,
   consultationService,
   onSubmitAction,

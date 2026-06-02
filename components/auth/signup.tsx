@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import * as React from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -214,10 +215,10 @@ export default function SignUpMultiStep({
                   <Icons.gitHub className="h-8 w-8" />
                 </button>
                 <button type="button" aria-label="Sign up with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
-                  <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
+                  <Image src={assetUrl("/gitlab.png")} alt="GitLab" width={32} height={32} className="h-8 w-8" />
                 </button>
                 <button type="button" aria-label="Sign up with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
-                  <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
+                  <Image src={assetUrl("/BitBucket.png")} alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
                 </button>
                 <button type="button" aria-label="Sign up with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
                   <Icons.google className="h-8 w-8" />

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
     ArrowUpRight,
     Copy,
-    HardDrive,
+    Cpu,
     Loader2,
     Pause,
     Play,
@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
+import { useConfirm } from "@/components/ui/confirm";
 import type { GpuPodSummaryClient, PodStatus } from "./types";
 
 // ─── Design tokens ────────────────────────────────────────────────
@@ -58,6 +60,7 @@ function statusMeta(status: PodStatus): {
 }
 
 export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
+    const confirm = useConfirm();
     const [acting, setActing] = useState<Record<number, boolean>>({});
 
     async function copyToClipboard(
@@ -68,7 +71,7 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
         e.preventDefault();
         e.stopPropagation();
         try {
-            await navigator.clipboard.writeText(text);
+            await safeCopyToClipboard(text);
             toast.success(`${label} copied`);
         } catch {
             toast.error(`Failed to copy ${label}`);
@@ -104,11 +107,12 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
     async function destroyPod(e: React.MouseEvent, podId: number, name: string) {
         e.preventDefault();
         e.stopPropagation();
-        if (
-            !confirm(
-                `Destroy pod "${name}"? Billing will stop after the final prorated charge.`,
-            )
-        ) {
+        if (!(await confirm({
+            title: `Destroy pod "${name}"?`,
+            description: "Billing will stop after the final prorated charge.",
+            confirmText: "Destroy pod",
+            danger: true,
+        }))) {
             return;
         }
         setActing((s) => ({ ...s, [podId]: true }));
@@ -146,7 +150,7 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
 
     if (pods.length === 0) {
         return (
-            <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-12 text-center overflow-hidden">
+            <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-7 text-center overflow-hidden">
                 <div
                     className="pointer-events-none absolute inset-0"
                     style={{
@@ -155,20 +159,24 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
                     }}
                 />
                 <div
-                    className="relative z-10 mx-auto mb-5 h-12 w-12 inline-flex items-center justify-center border border-white/[0.14] bg-[#16181d] rounded-[8px]"
-                    style={{ color: ACCENT }}
+                    className="relative z-10 mx-auto mb-3.5 h-10 w-10 inline-flex items-center justify-center rounded-full"
+                    style={{
+                        color: ACCENT,
+                        background: "rgba(0,149,255,0.10)",
+                        border: "1px solid rgba(0,149,255,0.22)",
+                    }}
                 >
-                    <HardDrive className="h-5 w-5" />
+                    <Cpu className="h-[18px] w-[18px]" />
                 </div>
-                <h3 className="relative z-10 text-[16px] font-semibold tracking-[-0.015em] text-white">
+                <h3 className="relative z-10 text-[15px] font-semibold tracking-[-0.015em] text-white">
                     No active pods
                 </h3>
                 <p
-                    className={`${MONO} relative z-10 mt-2 max-w-sm mx-auto text-[11px] text-white/45 leading-relaxed`}
+                    className={`${MONO} relative z-10 mt-1.5 max-w-sm mx-auto text-[11px] text-white/45 leading-relaxed`}
                 >
                     Deploy your first GPU pod from the featured list above.
                 </p>
-                <div className="relative z-10 mt-5">
+                <div className="relative z-10 mt-4">
                     <Link
                         href="/dashboard/services/gpu/deploy"
                         className={`${MONO} inline-flex items-center gap-2 h-9 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}

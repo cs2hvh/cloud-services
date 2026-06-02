@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import SingleBucket from "@/components/dashboard/object-storage/bucket-info";
 import BucketSettings from "@/components/dashboard/object-storage/bucket-settings";
 import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
 // ─── Design tokens ─────────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = {
@@ -68,7 +69,7 @@ function statusMeta(status: string | null): {
 async function copy(text: string, label: string) {
     if (!text) return;
     try {
-        await navigator.clipboard.writeText(text);
+        await copyToClipboard(text);
         toast.success(`${label} copied`);
     } catch {
         toast.error(`Failed to copy ${label}`);

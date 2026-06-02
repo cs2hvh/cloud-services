@@ -141,10 +141,10 @@ function isActive(pathname: string, item: { href: string; matchPrefix?: boolean 
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
         <div className="px-2.5 mb-2 flex items-center gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
                 {children}
             </p>
-            <span className="flex-1 h-px bg-white/[0.05]" aria-hidden />
+            <span className="flex-1 h-px bg-gradient-to-r from-white/[0.09] to-transparent" aria-hidden />
         </div>
     );
 }
@@ -188,7 +188,7 @@ function NavRow({
                 className={`group relative flex items-center gap-2.5 pl-9 pr-2.5 py-1.5 text-[13px] transition-colors ${
                     active
                         ? "text-white"
-                        : "text-white/55 hover:text-white/85"
+                        : "text-white/60 hover:text-white/90"
                 }`}
             >
                 <span
@@ -210,21 +210,15 @@ function NavRow({
         <Link
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`group relative flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[4px] transition-colors ${
+            className={`group relative flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[5px] transition-all duration-150 ${
                 active
-                    ? "bg-white/[0.05] text-white"
-                    : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
+                    ? "bg-white text-[#0a0b0e] font-medium shadow-sm"
+                    : "text-white/65 hover:bg-white/[0.04] hover:text-white"
             }`}
         >
-            {active && (
-                <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#0095FF] rounded-r"
-                    style={{ boxShadow: "0 0 8px rgba(0,149,255,0.65)" }}
-                />
-            )}
             <Icon
-                className={`h-3.5 w-3.5 shrink-0 ${
-                    active ? "text-[#0095FF]" : "text-white/45 group-hover:text-white/70"
+                className={`h-3.5 w-3.5 shrink-0 transition-colors ${
+                    active ? "text-[#0a0b0e]" : "text-white/50 group-hover:text-white/85"
                 }`}
                 strokeWidth={1.75}
             />
@@ -253,30 +247,24 @@ function GroupRow({
             <button
                 type="button"
                 onClick={onToggle}
-                className={`group relative flex w-full items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[4px] transition-colors ${
+                className={`group relative flex w-full items-center gap-2.5 px-2.5 py-1.5 text-[13px] rounded-[5px] transition-all duration-150 ${
                     active
-                        ? "bg-white/[0.05] text-white"
-                        : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
+                        ? "bg-white text-[#0a0b0e] font-medium shadow-sm"
+                        : "text-white/65 hover:bg-white/[0.04] hover:text-white"
                 }`}
             >
-                {active && (
-                    <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#0095FF] rounded-r"
-                        style={{ boxShadow: "0 0 8px rgba(0,149,255,0.65)" }}
-                    />
-                )}
                 <Icon
-                    className={`h-3.5 w-3.5 shrink-0 ${
-                        active ? "text-[#0095FF]" : "text-white/45 group-hover:text-white/70"
+                    className={`h-3.5 w-3.5 shrink-0 transition-colors ${
+                        active ? "text-[#0a0b0e]" : "text-white/50 group-hover:text-white/85"
                     }`}
                     strokeWidth={1.75}
                 />
                 <span className="truncate flex-1 text-left">{group.label}</span>
                 {badge}
                 <ChevronDown
-                    className={`h-3 w-3 text-white/30 transition-transform duration-200 ${
-                        expanded ? "" : "-rotate-90"
-                    }`}
+                    className={`h-3 w-3 transition-transform duration-200 ${
+                        active ? "text-[#0a0b0e]/45" : "text-white/30"
+                    } ${expanded ? "" : "-rotate-90"}`}
                 />
             </button>
             <div
@@ -429,7 +417,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
             { label: "Notifications", href: "/dashboard/services/inference/notifications", icon: Bell, matchPrefix: true },
             { label: "Audit Log", href: "/dashboard/services/inference/audit", icon: ShieldCheck, matchPrefix: true },
-            { label: "Members", href: "/dashboard/services/inference/members", icon: Users, matchPrefix: true },
             { label: "Service health", href: "/dashboard/services/inference/diagnostics", icon: Activity, matchPrefix: true },
             { label: "Settings", href: "/dashboard/services/inference/settings", icon: Settings, matchPrefix: true },
         ],
@@ -481,28 +468,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     const content = (
         <>
             {/* Brand block */}
-            <div className="flex h-14 items-center justify-between px-4 border-b border-white/[0.06]">
+            <div className="relative flex h-14 items-center justify-center px-4 border-b border-white/[0.06]">
                 <Link
                     href="/dashboard"
-                    className="inline-flex items-center gap-2 text-[20px] font-normal text-white leading-none tracking-tight font-[family-name:var(--font-nunito)]"
+                    className="group inline-flex items-center text-[20px] font-semibold text-white leading-none tracking-[-0.025em] font-[family-name:var(--font-nunito)]"
                 >
-                    <span className="relative inline-flex h-1.5 w-1.5">
-                        <span
-                            className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-                            style={{ background: "#0095FF" }}
-                        />
-                        <span
-                            className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                            style={{ background: "#0095FF", boxShadow: "0 0 6px #0095FF" }}
-                        />
-                    </span>
-                    ahura<span className="text-[#0095FF]">sense</span>
+                    <span>ahura</span><span className="bg-gradient-to-r from-[#0095FF] to-[#4db8ff] bg-clip-text text-transparent group-hover:from-[#36b3ff] group-hover:to-[#7cd0ff] transition-all">sense</span>
                 </Link>
                 {isMobile && (
                     <button
                         type="button"
                         onClick={() => setIsMobileOpen(false)}
-                        className="h-7 w-7 rounded-md text-white/55 hover:bg-white/[0.05] hover:text-white flex items-center justify-center transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md text-white/55 hover:bg-white/[0.05] hover:text-white flex items-center justify-center transition-colors"
                         aria-label="Close sidebar"
                     >
                         <X className="h-4 w-4" />
@@ -622,9 +599,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             expanded={gpuExpanded}
                             onToggle={() => setGpuExpanded((p) => !p)}
                         />
-                        <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
+                        {/* A.I. Labs brought up — grouped with the other compute/AI verticals */}
                         <GroupRow group={inferenceGroup} pathname={pathname} expanded={inferenceExpanded} onToggle={() => setInferenceExpanded((p) => !p)} />
-                        {standaloneServices.map((it) => (
+                        {/* Core managed services: Database, Application Deploy, Kubernetes */}
+                        {standaloneServices.slice(0, 3).map((it) => (
+                            <NavRow key={it.href} item={it} pathname={pathname} />
+                        ))}
+                        {/* Domains moved down — below Kubernetes */}
+                        <GroupRow group={domainsGroup} pathname={pathname} expanded={domainsExpanded} onToggle={() => setDomainsExpanded((p) => !p)} />
+                        {/* Remaining managed services: Object Storage, DDoS Protection */}
+                        {standaloneServices.slice(3).map((it) => (
                             <NavRow key={it.href} item={it} pathname={pathname} />
                         ))}
                     </div>
@@ -731,7 +715,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 />
             )}
             <aside
-                className={`flex flex-col w-[256px] h-[100dvh] bg-[#0a0b0e] border-r border-white/[0.07] ${
+                className={`flex flex-col w-[256px] h-[100dvh] bg-gradient-to-b from-[#0b0c10] to-[#08090b] border-r border-white/[0.07] ${
                     isMobile
                         ? `fixed inset-y-0 left-0 z-50 transition-transform duration-300 ${
                               isMobileOpen ? "translate-x-0" : "-translate-x-full"

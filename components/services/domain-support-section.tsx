@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -17,7 +18,7 @@ const supportCards: SupportCard[] = [
   {
     title: "99.99% Reliability",
     subtitle: "Instant help anytime",
-    icon: "/images/main-page/domain-sec-6-security.svg",
+    icon: assetUrl("/images/main-page/domain-sec-6-security.svg"),
     iconWidth: 74,
     iconHeight: 58,
     muted: true,
@@ -25,14 +26,14 @@ const supportCards: SupportCard[] = [
   {
     title: "Dedicated Support",
     subtitle: "Speak with experts",
-    icon: "/images/main-page/domain-sec-6-online.svg",
+    icon: assetUrl("/images/main-page/domain-sec-6-online.svg"),
     iconWidth: 74,
     iconHeight: 58,
   },
   {
     title: "Live Chat",
     subtitle: "Instant help anytime",
-    icon: "/images/main-page/domain-sec-6-chat.svg",
+    icon: assetUrl("/images/main-page/domain-sec-6-chat.svg"),
     iconWidth: 54,
     iconHeight: 54,
     muted: true,

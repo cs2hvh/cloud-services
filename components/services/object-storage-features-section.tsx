@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { useRef } from "react";
 import Image from "next/image";
@@ -10,19 +11,19 @@ const LEFT_FEATURES = [
     title: "S3-Compatible API",
     description:
       "Use existing S3 SDKs and tools seamlessly. Drop-in replacement for AWS S3 with full bucket and object API support.",
-    image: "/images/kubernetes-ui/s3 Compatible API.png",
+    image: assetUrl("/images/kubernetes-ui/s3 Compatible API.png"),
   },
    {
     title: "Lifecycle Management",
     description:
       "Automate object transitions between storage tiers. Set expiration policies and archival rules for compliance and cost optimization.",
-    image: "/images/kubernetes-ui/life cycle.png",
+    image: assetUrl("/images/kubernetes-ui/life cycle.png"),
   },
   {
     title: "Versioning & Immutability",
     description:
       "Protect against accidental deletions with object versioning. Enable immutability locks for compliance requirements.",
-    image: "/images/kubernetes-ui/versoning.png",
+    image: assetUrl("/images/kubernetes-ui/versoning.png"),
   },
  
 ];
@@ -32,13 +33,13 @@ const RIGHT_FEATURES = [
     title: "Global CDN Integration",
     description:
       "Automatic edge caching across 200+ locations worldwide. Deliver content to users with sub-50ms latency globally.",
-    image: "/images/kubernetes-ui/Global CDN Integration.png",
+    image: assetUrl("/images/kubernetes-ui/Global CDN Integration.png"),
   },
   {
     title: "11 Nines Durability",
     description:
       "99.999999999% data durability with automatic replication across multiple data centers. Your data is always safe.",
-    image: "/images/kubernetes-ui/11 nine.png",
+    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ];
 

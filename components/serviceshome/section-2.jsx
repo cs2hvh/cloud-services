@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 
 const defaultItems = [
@@ -5,35 +6,35 @@ const defaultItems = [
 		title: "Latest GPU Hardware",
 		description:
 			"Access NVIDIA H100, A100, and RTX 4090 GPUs for maximum performance. Updated regularly with the latest hardware.",
-		iconSrc: "/images/Features/gpu.png",
+		iconSrc: assetUrl("/images/Features/gpu.png"),
 		iconAlt: "GPU hardware",
 	},
 	{
 		title: "Multi-GPU Support",
 		description:
 			"Scale from single GPU to multi-node clusters with NVLink interconnect for distributed training workloads.",
-		iconSrc: "/images/Features/multi-gpu.png",
+		iconSrc: assetUrl("/images/Features/multi-gpu.png"),
 		iconAlt: "Multi GPU",
 	},
 	{
 		title: "Fast Storage",
 		description:
 			"High-bandwidth NVMe storage optimized for training data. Local SSD for maximum IOPS.",
-		iconSrc: "/images/Features/storage.png",
+		iconSrc: assetUrl("/images/Features/storage.png"),
 		iconAlt: "Fast storage",
 	},
 	{
 		title: "Spot Instances",
 		description:
 			"Save up to 90% with spot instances for fault-tolerant workloads. Automatic checkpointing included.",
-		iconSrc: "/images/Features/spot.png",
+		iconSrc: assetUrl("/images/Features/spot.png"),
 		iconAlt: "Spot instances",
 	},
 	{
 		title: "Pre-configured Environments",
 		description:
 			"Start faster with pre-installed CUDA, cuDNN, PyTorch, TensorFlow, and other ML frameworks.",
-		iconSrc: "/images/Features/env.png",
+		iconSrc: assetUrl("/images/Features/env.png"),
 		iconAlt: "Preconfigured environments",
 	},
 ];

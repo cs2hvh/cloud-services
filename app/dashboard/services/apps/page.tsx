@@ -1,12 +1,12 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
+import Image from "next/image";
 
-// Applications overview — editorial canvas (aurora + dotted grid),
-// Nunito-accent title, mono labels, brand-blue accent. Magazine-style
-// horizontal stats strip, floating PNG feature illustrations, and a
-// clean app inventory.
+// Applications overview — editorial canvas (aurora + dotted grid), Nunito
+// blue-accent title, mono labels. Hero + horizontal stats strip + the app
+// deployments list + floating PNG feature illustrations.
 
 import { ChevronRight, Loader2, Plus } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -31,32 +31,32 @@ const FEATURES = [
   {
     title: "Auto-detect from repo",
     desc: "Next.js, Vite, Vue, SvelteKit, Django, FastAPI — we read your repo and build it.",
-    image: "/images/kubernetes-ui/gitops ready.png",
+    image: assetUrl("/images/kubernetes-ui/gitops ready.png"),
   },
   {
     title: "Fully managed runtime",
     desc: "Container builds, TLS certificates, health checks, and zero-downtime rollouts.",
-    image: "/images/kubernetes-ui/fully managed.png",
+    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Auto-scaling instances",
     desc: "Scales up under load and back down idle. Pay per second, not per slot.",
-    image: "/images/kubernetes-ui/auto scaling nodespng.png",
+    image: assetUrl("/images/kubernetes-ui/auto scaling nodespng.png"),
   },
   {
     title: "Built-in load balancing",
     desc: "Layer-7 routing with sticky sessions, blue-green deploys, and instant rollback.",
-    image: "/images/kubernetes-ui/Built in load balancing png.png",
+    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "Global CDN",
     desc: "Static assets served from 150+ edge POPs with brotli compression by default.",
-    image: "/images/kubernetes-ui/Global CDN Integration.png",
+    image: assetUrl("/images/kubernetes-ui/Global CDN Integration.png"),
   },
   {
     title: "99.99% uptime",
     desc: "Multi-AZ replicas, automatic failover, and per-revision lifecycle tracking.",
-    image: "/images/kubernetes-ui/11 nine.png",
+    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -230,7 +230,7 @@ export default function ApplicationDeploymentPage() {
           <div className="max-w-2xl">
             <h1 className="text-[40px] sm:text-[52px] leading-[1.02] tracking-[-0.03em] text-white font-semibold">
               Deploy and operate{" "}
-              <span style={SERIF_STYLE} className="text-white/55 font-normal">
+              <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                 application workloads
               </span>
               .
@@ -262,12 +262,6 @@ export default function ApplicationDeploymentPage() {
               >
                 <Plus className="h-3.5 w-3.5" />
                 Deploy application
-              </Link>
-              <Link
-                href="#inventory"
-                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-              >
-                View inventory
               </Link>
             </div>
           </div>
@@ -306,30 +300,9 @@ export default function ApplicationDeploymentPage() {
           />
         </section>
 
-        {/* ── Platform features ───────────────────────────── */}
-        <SectionHead
-          eyebrow="Why platform apps"
-          title="Engineered"
-          accent="for production"
-          link={{ label: "Read the docs", href: "#" }}
-        />
-        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
-          {FEATURES.map((f, i) => (
-            <FeatureCell key={f.title} index={i} {...f} />
-          ))}
-        </div>
-
-        <style>{`
-          @keyframes floaty {
-            0%, 100% { transform: translateY(0px); }
-            50%      { transform: translateY(-6px); }
-          }
-        `}</style>
-
-        {/* ── Inventory ───────────────────────────────────── */}
-        <div id="inventory">
+        {/* ── Deployments ─────────────────────────────────── */}
+        <div>
           <SectionHead
-            eyebrow="Application inventory"
             title="Your"
             accent="deployments"
             rightMeta={
@@ -351,6 +324,27 @@ export default function ApplicationDeploymentPage() {
             onUpdateApps={handleUpdateApps}
           />
         </div>
+
+        {/* ── Platform features ───────────────────────────── */}
+        <div className="mt-16">
+          <SectionHead
+            eyebrow="Why platform apps"
+            title="Engineered"
+            accent="for production"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
+            {FEATURES.map((f, i) => (
+              <FeatureCell key={f.title} index={i} {...f} />
+            ))}
+          </div>
+        </div>
+
+        <style>{`
+          @keyframes floaty {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-6px); }
+          }
+        `}</style>
       </div>
     </div>
   );
@@ -365,7 +359,7 @@ function SectionHead({
   link,
   rightMeta,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   accent: string;
   link?: { label: string; href: string };
@@ -374,14 +368,16 @@ function SectionHead({
   return (
     <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-        >
-          {eyebrow}
-        </p>
+        {eyebrow && (
+          <p
+            className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
+          >
+            {eyebrow}
+          </p>
+        )}
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
+          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
             {accent}
           </span>
           <span className="text-white/55 font-normal">.</span>
@@ -500,3 +496,4 @@ function FeatureCell({
     </div>
   );
 }
+

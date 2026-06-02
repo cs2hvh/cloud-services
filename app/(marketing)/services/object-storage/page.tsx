@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix, {
@@ -7,19 +8,16 @@ import ObjectStorageFeaturesSection from "@/components/services/object-storage-f
 import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
 import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
 import { getStorageCategories } from "@/lib/helpers/storage-categories";
-import {
-  IconArchiveFilled,
-  IconReportAnalyticsFilled,
-  IconStackFilled,
-  IconVideoFilled,
-} from "@tabler/icons-react";
+import Image from "next/image";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 const GpuHome = async () => {
   const categories = await getStorageCategories();
 
   const cases: UseCase[] = [
     {
-      iconNode: <IconVideoFilled size={20} />,
+      iconNode: <Image src={`${CDN}/Xx01oM6sKEUA.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       accent: "#8B5CF6",
       metric: "Media",
       title: "Media & content delivery",
@@ -27,7 +25,7 @@ const GpuHome = async () => {
         "Origin storage for images, video, audio, and static assets — with CDN cache egress free and signed URLs for paid content.",
     },
     {
-      iconNode: <IconArchiveFilled size={20} />,
+      iconNode: <Image src={`${CDN}/hobPxjZ-XM5_.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       accent: "#F59E0B",
       metric: "Backup & DR",
       title: "Backups and disaster recovery",
@@ -35,7 +33,7 @@ const GpuHome = async () => {
         "Versioned snapshots, lifecycle transitions to Archive, cross-region replication, and object lock for compliance.",
     },
     {
-      iconNode: <IconReportAnalyticsFilled size={20} />,
+      iconNode: <Image src={`${CDN}/e9LMMg6VeZvk.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       accent: "#0095FF",
       metric: "Analytics",
       title: "Data lakes and analytics",
@@ -43,7 +41,7 @@ const GpuHome = async () => {
         "S3-compatible object store for log aggregation, training datasets, and analytics pipelines. Works with every S3 tool.",
     },
     {
-      iconNode: <IconStackFilled size={20} />,
+      iconNode: <Image src={`${CDN}/NZY84e3-oBNx.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       accent: "#10B981",
       metric: "App data",
       title: "Application storage",
@@ -86,8 +84,8 @@ const GpuHome = async () => {
         description="S3-compatible object storage with 99.999% durability, automatic scaling, and built-in CDN. Store and serve any amount of data securely."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/object-space.png", alt: "Object Storage infrastructure" }}
+         backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
+        illustration={{ src: assetUrl("/images/main-page/object-space.png"), alt: "Object Storage infrastructure" }}
       />
       <ObjectStoragePricingSection categories={categories || undefined} />
       <ObjectStorageFeaturesSection />

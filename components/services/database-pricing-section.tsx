@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from "next/image";
 import { useState } from "react";
@@ -28,7 +29,7 @@ const ENGINE_PRICING: EnginePricingProfile[] = [
   {
     key: "postgresql",
     name: "PostgreSQL",
-    image: "/images/database-logos/postgresql.png",
+    image: assetUrl("/images/database-logos/postgresql.png"),
     logoStyle: "icon",
     accent: "#8ecaff",
     aliases: ["postgresql", "postgres", "pg"],
@@ -41,7 +42,7 @@ const ENGINE_PRICING: EnginePricingProfile[] = [
   {
     key: "mysql",
     name: "MySQL",
-    image: "/images/database-logos/mysql.svg",
+    image: assetUrl("/images/database-logos/mysql.svg"),
     logoStyle: "wordmark",
     accent: "#9ad0ff",
     aliases: ["mysql"],
@@ -54,7 +55,7 @@ const ENGINE_PRICING: EnginePricingProfile[] = [
   {
     key: "mongodb",
     name: "MongoDB",
-    image: "/images/database-logos/mongodb.png",
+    image: assetUrl("/images/database-logos/mongodb.png"),
     logoStyle: "wordmark",
     accent: "#9ae6b4",
     aliases: ["mongodb", "mongo"],
@@ -67,7 +68,7 @@ const ENGINE_PRICING: EnginePricingProfile[] = [
   {
     key: "redis",
     name: "Redis",
-    image: "/images/database-logos/redis.png",
+    image: assetUrl("/images/database-logos/redis.png"),
     logoStyle: "wordmark",
     accent: "#f7b4b4",
     aliases: ["redis"],

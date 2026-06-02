@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // Object Storage overview — editorial canvas with horizontal stats
 // strip, floating PNG feature illustrations, and a clean bucket
@@ -33,32 +34,32 @@ const FEATURES = [
   {
     title: "S3-compatible API",
     desc: "Drop-in for the AWS S3 SDK. Bring your existing tooling — boto3, aws-cli, MinIO clients.",
-    image: "/images/kubernetes-ui/s3 Compatible API.png",
+    image: assetUrl("/images/kubernetes-ui/s3 Compatible API.png"),
   },
   {
     title: "11 nines durability",
     desc: "Objects replicated across multiple nodes per region. Designed for 99.999999999% durability.",
-    image: "/images/11 nINES dURABILITY.png",
+    image: assetUrl("/images/11 nINES dURABILITY.png"),
   },
   {
     title: "Lifecycle policies",
     desc: "Auto-transition cold objects to archival storage and expire stale data on a schedule.",
-    image: "/images/Life cycle policiese.png",
+    image: assetUrl("/images/Life cycle policiese.png"),
   },
   {
     title: "Object versioning",
     desc: "Per-object version history with point-in-time restore and soft-delete protection.",
-    image: "/images/kubernetes-ui/versoning.png",
+    image: assetUrl("/images/kubernetes-ui/versoning.png"),
   },
   {
     title: "Global CDN",
     desc: "Serve public assets from 150+ edge POPs with brotli compression and range requests.",
-    image: "/images/Global CDN Integration.png",
+    image: assetUrl("/images/Global CDN Integration.png"),
   },
   {
     title: "Multi-region replication",
     desc: "Replicate buckets across regions for low-latency reads and disaster recovery.",
-    image: "/images/kubernetes-ui/Multi region clusters png.png",
+    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
 ] as const;
 
@@ -142,12 +143,6 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
               >
                 <Plus className="h-3.5 w-3.5" />
                 New bucket
-              </Link>
-              <Link
-                href="#inventory"
-                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-              >
-                View inventory
               </Link>
             </div>
           </div>

@@ -5,21 +5,17 @@
 // realistic deploy-snippet panel below. Replaces the noisy cluster
 // topology diagram that read AI-generated.
 
-import {
-    Activity,
-    Check,
-    GitBranch,
-    Lock,
-    TimerReset,
-    type LucideIcon,
-} from "lucide-react";
+import { Check } from "lucide-react";
+import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
+
 type Capability = {
-    icon: LucideIcon;
+    icon: React.ReactNode;
     title: string;
     description: string;
     bullets: string[];
@@ -155,7 +151,7 @@ function MetricsVisual() {
 
 const CAPABILITIES: Capability[] = [
     {
-        icon: TimerReset,
+        icon: <Image src={`${CDN}/G_SQrmWf_1CX.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         title: "Backups & point-in-time recovery",
         description:
             "Automatic daily snapshots with up to 35-day point-in-time recovery. Restore to any second within your window.",
@@ -167,7 +163,7 @@ const CAPABILITIES: Capability[] = [
         visual: <BackupsVisual />,
     },
     {
-        icon: GitBranch,
+        icon: <Image src={`${CDN}/JQHnMGifrJTA.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         title: "Multi-AZ high availability",
         description:
             "Synchronous primary with cross-zone standbys. Automatic failover in under 60 seconds, with no data loss.",
@@ -179,7 +175,7 @@ const CAPABILITIES: Capability[] = [
         visual: <HaVisual />,
     },
     {
-        icon: Lock,
+        icon: <Image src={`${CDN}/laBNTBFYwaDd.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         title: "Private by default",
         description:
             "TLS in transit, AES-256 at rest, and VPC peering on every paid cluster. Public access is opt-in, never on by default.",
@@ -191,7 +187,7 @@ const CAPABILITIES: Capability[] = [
         visual: <SecurityVisual />,
     },
     {
-        icon: Activity,
+        icon: <Image src={`${CDN}/bUhrrMo2T_ba.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         title: "Observability built in",
         description:
             "Query stats, slow log, replication lag, and connection metrics in the dashboard — no agents, no extra cost.",
@@ -205,7 +201,6 @@ const CAPABILITIES: Capability[] = [
 ];
 
 function CapabilityCard({ c, index }: { c: Capability; index: number }) {
-    const Icon = c.icon;
     return (
         <article
             className="group relative flex flex-col gap-5 overflow-hidden rounded-[8px] border border-white/[0.10] bg-[linear-gradient(180deg,rgba(0,149,255,0.08),rgba(0,149,255,0.03))] p-7 transition-colors hover:border-white/[0.22] hover:bg-[linear-gradient(180deg,rgba(0,149,255,0.12),rgba(0,149,255,0.05))]"
@@ -215,8 +210,8 @@ function CapabilityCard({ c, index }: { c: Capability; index: number }) {
             }}
         >
             <div className="flex items-start justify-between">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] border border-white/[0.12] bg-white/[0.04] text-white/80">
-                    <Icon className="h-5 w-5" strokeWidth={1.6} />
+                <div className="inline-flex h-11 w-11 items-center justify-center">
+                    {c.icon}
                 </div>
                 <span
                     className={`${MONO} text-[10.5px] tabular-nums text-white/30`}

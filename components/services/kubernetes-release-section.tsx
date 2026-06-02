@@ -1,15 +1,12 @@
 "use client";
 
-import {
-    IconStackFilled,
-    IconBoltFilled,
-    IconCloudFilled,
-    IconLockFilled,
-} from "@tabler/icons-react";
+import Image from "next/image";
 
 import { Container } from "@/components/ui/container";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 type Capability = {
     icon: React.ReactNode;
@@ -125,7 +122,7 @@ function GitOpsVisual({ accent }: { accent: string }) {
 
 const CAPABILITIES: Capability[] = [
     {
-        icon: <IconStackFilled size={20} />,
+        icon: <Image src={`${CDN}/fv0H5n0YcDZu.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#0095FF",
         title: "Managed control plane",
         description:
@@ -138,7 +135,7 @@ const CAPABILITIES: Capability[] = [
         visual: <ControlPlaneVisual accent="#0095FF" />,
     },
     {
-        icon: <IconBoltFilled size={20} />,
+        icon: <Image src={`${CDN}/WTkck4J04oe7.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#10B981",
         title: "Cluster autoscaler, built-in",
         description:
@@ -151,7 +148,7 @@ const CAPABILITIES: Capability[] = [
         visual: <AutoscaleVisual accent="#10B981" />,
     },
     {
-        icon: <IconCloudFilled size={20} />,
+        icon: <Image src={`${CDN}/eHbcX9rRnOG4.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#06B6D4",
         title: "Multi-zone HA",
         description:
@@ -164,7 +161,7 @@ const CAPABILITIES: Capability[] = [
         visual: <MultiZoneVisual accent="#06B6D4" />,
     },
     {
-        icon: <IconLockFilled size={20} />,
+        icon: <Image src={`${CDN}/Ew8yteON8cMO.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
         accent: "#8B5CF6",
         title: "GitOps + RBAC out of the box",
         description:
@@ -197,15 +194,8 @@ function CapabilityCard({ c, index }: { c: Capability; index: number }) {
             />
 
             <div className="relative flex items-start justify-between">
-                <div
-                    className="relative inline-flex h-11 w-11 items-center justify-center rounded-[6px] border transition-all"
-                    style={{ background: `${c.accent}18`, borderColor: `${c.accent}40`, color: c.accent }}
-                >
+                <div className="inline-flex h-11 w-11 items-center justify-center">
                     {c.icon}
-                    <span
-                        className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full"
-                        style={{ background: c.accent }}
-                    />
                 </div>
                 <span
                     className={`${MONO} text-[10.5px] tabular-nums`}

@@ -7,6 +7,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { RegionFlag } from "@/components/ui/region-flag";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -68,15 +69,15 @@ type ProductResources = {
 const CPU_META: Record<CpuType, { label: string; description: string }> = {
   basic: {
     label: "Basic",
-    description: "Shared CPU · dev and lower-throughput workloads.",
+    description: "Shared CPU · dev & low-traffic.",
   },
   general_purpose: {
     label: "General Purpose",
-    description: "Dedicated CPU · steady production traffic.",
+    description: "Dedicated CPU · production.",
   },
   storage_optimized: {
     label: "Storage Optimized",
-    description: "Higher storage tier · data-heavy workloads.",
+    description: "Dedicated CPU · storage-heavy.",
   },
 };
 
@@ -290,7 +291,7 @@ const DatabaseSelect = ({
 
       if (!validateEngineVersion(payload.engine, payload.version)) {
         toast.error(
-          `Version ${payload.version} is not valid for ${payload.engine}`,
+          `Version ${payload.version} isn't available for the selected engine.`,
         );
         return;
       }
@@ -343,7 +344,7 @@ const DatabaseSelect = ({
         />
       </div>
 
-      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
         {/* Back link */}
         <div className="mb-6">
           <Link
@@ -371,8 +372,7 @@ const DatabaseSelect = ({
         <p
           className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
         >
-          Pick an engine, choose a region, and we handle replication, TLS, and
-          connection strings. Per-second billing.
+          Managed clusters with built-in replication, TLS, and backups.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
@@ -382,7 +382,7 @@ const DatabaseSelect = ({
             <Section
               num="01"
               title="Cluster identity"
-              desc="A stable name for dashboards, billing, and connection strings."
+              desc="Used in connection strings and billing."
               status={isNameValid ? "done" : state.selectedName ? "active" : "idle"}
               statusLabel={isNameValid ? "Valid" : state.selectedName ? "Check" : "Required"}
             >
@@ -423,7 +423,7 @@ const DatabaseSelect = ({
             <Section
               num="02"
               title="Engine"
-              desc="Select your database engine. Version is selectable after picking."
+              desc="Choose engine and version."
               status={isEngineValid ? "done" : "idle"}
               statusLabel={
                 isEngineValid && selectedDbTypeInfo
@@ -535,7 +535,7 @@ const DatabaseSelect = ({
             <Section
               num="03"
               title="Region"
-              desc="Where the primary node is provisioned. Replicas can be added later."
+              desc="Primary node location · replicas added later."
               status={isRegionValid ? "done" : "idle"}
               statusLabel={
                 isRegionValid && selectedLocationData
@@ -568,7 +568,7 @@ const DatabaseSelect = ({
             <Section
               num="04"
               title="Plan & sizing"
-              desc="Compute and memory tier. Storage scales with the chosen plan."
+              desc="Compute, memory, and storage tier."
               status={isPlanValid ? "done" : isEngineValid ? "active" : "idle"}
               statusLabel={
                 selectedPlan
@@ -628,11 +628,18 @@ const DatabaseSelect = ({
                   No plans available for {CPU_META[selectedCpuType].label.toLowerCase()} profile.
                 </div>
               ) : (
-                <div
-                  className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[6px] overflow-hidden"
-                >
+                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                  {/* Column header (desktop) */}
+                  <div className="hidden md:grid grid-cols-[20px_minmax(0,1.6fr)_minmax(54px,0.55fr)_minmax(72px,0.7fr)_minmax(92px,0.78fr)_minmax(108px,150px)] gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.015]">
+                    <span />
+                    <PlanColHead>Plan</PlanColHead>
+                    <PlanColHead align="right">vCPU</PlanColHead>
+                    <PlanColHead align="right">Memory</PlanColHead>
+                    <PlanColHead align="right">Storage</PlanColHead>
+                    <PlanColHead align="right">Monthly</PlanColHead>
+                  </div>
                   {availablePlans.map((plan, idx) => (
-                    <PlanCard
+                    <PlanRow
                       key={plan.id}
                       plan={plan}
                       featured={idx === 1}
@@ -650,7 +657,7 @@ const DatabaseSelect = ({
             <Section
               num="05"
               title="Project & billing"
-              desc="Resource group for IAM, billing, and quotas."
+              desc="Billing and access group."
               status={isProjectValid ? "done" : "idle"}
               statusLabel={
                 selectedProjectData?.name ?? "Required"
@@ -706,7 +713,7 @@ const DatabaseSelect = ({
             <Section
               num="06"
               title="Review and confirm"
-              desc="Provisioning begins immediately after confirmation."
+              desc="Provisioning starts on confirm."
               status={termsAccepted ? "done" : "idle"}
               statusLabel={termsAccepted ? "Accepted" : "Required"}
             >
@@ -1215,16 +1222,13 @@ function RegionCard({
         )}
       </div>
       <div className="flex items-center gap-2 min-w-0">
-        {countryCode && (
-          <Image
-            src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
-            alt={country}
-            width={18}
-            height={12}
-            className="rounded-sm shrink-0"
-            unoptimized
-          />
-        )}
+        <RegionFlag
+          code={countryCode || null}
+          name={city}
+          country={country}
+          size={18}
+          className="shrink-0"
+        />
         <div className="min-w-0">
           <div className="text-[13.5px] font-semibold tracking-[-0.005em] text-white truncate">
             {city}
@@ -1238,7 +1242,25 @@ function RegionCard({
   );
 }
 
-function PlanCard({
+function PlanColHead({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <span
+      className={`${MONO} text-[9.5px] uppercase tracking-[0.16em] font-semibold text-white/35 ${
+        align === "right" ? "text-right" : ""
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function PlanRow({
   plan,
   featured,
   selected,
@@ -1252,84 +1274,110 @@ function PlanCard({
   const resources = getProductResources(plan);
   const discount = getDiscountPercent(plan);
   const effective = getEffectivePrice(plan);
+
+  const Radio = (
+    <span
+      aria-hidden
+      className="relative h-[15px] w-[15px] rounded-full shrink-0"
+      style={{ border: `1.5px solid ${selected ? ACCENT : "rgba(255,255,255,0.18)"}` }}
+    >
+      {selected && (
+        <span
+          className="absolute inset-[3px] rounded-full block"
+          style={{ background: ACCENT, boxShadow: "0 0 6px rgba(0,149,255,0.6)" }}
+        />
+      )}
+    </span>
+  );
+
+  const Popular = featured ? (
+    <span
+      className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold px-1.5 py-px rounded-[3px] shrink-0`}
+      style={{ background: ACCENT_DIM, color: ACCENT, border: "1px solid rgba(0,149,255,0.25)" }}
+    >
+      Popular
+    </span>
+  ) : null;
+
+  const Price = (
+    <span className="flex flex-col items-end leading-none">
+      {effective === null || effective === 0 ? (
+        <span style={SERIF_STYLE} className="text-[16px] font-bold text-white">
+          Free
+        </span>
+      ) : (
+        <span style={SERIF_STYLE} className="text-[16px] font-bold tabular-nums text-white">
+          <span className="text-white/45 text-[12px] font-medium">$</span>
+          {effective.toFixed(effective < 10 ? 2 : 0)}
+          <span className={`${MONO} text-[9px] text-white/35 font-medium ml-0.5`}>/mo</span>
+        </span>
+      )}
+      {discount > 0 && (
+        <span className={`${MONO} mt-1 text-[8.5px] uppercase tracking-[0.1em] text-emerald-300`}>
+          Save {discount}%
+        </span>
+      )}
+    </span>
+  );
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="relative text-left px-5 py-4 bg-[#111216] hover:bg-[#16181d] transition-colors flex flex-col gap-2.5 min-h-[170px]"
-      style={
-        selected
-          ? {
-              background: "#16181d",
-              boxShadow: `inset 0 0 0 1px ${ACCENT}`,
-            }
-          : undefined
-      }
+      className="relative group w-full text-left transition-colors border-b border-white/[0.04] last:border-b-0"
+      style={selected ? { background: ACCENT_DIM } : { background: "transparent" }}
+      onMouseEnter={(e) => {
+        if (!selected) e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) e.currentTarget.style.background = "transparent";
+      }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span
-          className="text-[13.5px] font-semibold tracking-[-0.005em]"
-          style={{ color: selected ? ACCENT : "#ffffff" }}
-        >
-          {plan.name}
+      {selected && (
+        <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: ACCENT }} />
+      )}
+
+      {/* Desktop row */}
+      <div className="hidden md:grid grid-cols-[20px_minmax(0,1.6fr)_minmax(54px,0.55fr)_minmax(72px,0.7fr)_minmax(92px,0.78fr)_minmax(108px,150px)] gap-3 px-5 py-3.5 items-center">
+        {Radio}
+        <span className="flex items-center gap-2 min-w-0">
+          <span
+            className="text-[13px] text-white truncate"
+            style={selected ? { color: ACCENT_BRIGHT } : undefined}
+          >
+            {plan.name}
+          </span>
+          {Popular}
         </span>
-        {featured && (
-          <span
-            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold px-1.5 py-px rounded-[3px]`}
-            style={{
-              background: ACCENT_DIM,
-              color: ACCENT,
-              border: "1px solid rgba(0,149,255,0.25)",
-            }}
-          >
-            Popular
-          </span>
-        )}
+        <span className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}>
+          {resources.cpu || 1}
+        </span>
+        <span className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}>
+          {resources.ram || 1}
+          <span className="ml-1 text-white/45 text-[11px]">GB</span>
+        </span>
+        <span className={`${MONO} text-right text-[13px] text-white/90 tabular-nums`}>
+          {resources.storage || 0}
+          <span className="ml-1 text-white/45 text-[11px]">GB</span>
+        </span>
+        <span className="text-right">{Price}</span>
       </div>
-      <div className={`${MONO} text-[11px] flex flex-col gap-1`}>
-        <div className="flex justify-between text-white/45">
-          <span>vCPU</span>
-          <span className="text-white/85 font-medium">
-            {resources.cpu || 1}
-          </span>
+
+      {/* Mobile row */}
+      <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {Radio}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] text-white truncate">{plan.name}</span>
+              {Popular}
+            </div>
+            <div className={`${MONO} mt-0.5 text-[10.5px] text-white/45`}>
+              {resources.cpu || 1} vCPU · {resources.ram || 1} GB · {resources.storage || 0} GB
+            </div>
+          </div>
         </div>
-        <div className="flex justify-between text-white/45">
-          <span>Memory</span>
-          <span className="text-white/85 font-medium">
-            {resources.ram || 1} GB
-          </span>
-        </div>
-        <div className="flex justify-between text-white/45">
-          <span>Storage</span>
-          <span className="text-white/85 font-medium">
-            {resources.storage || 0} GB
-          </span>
-        </div>
-      </div>
-      <div className="mt-auto pt-2 border-t border-white/[0.05] flex items-baseline justify-between gap-2">
-        {effective === null || effective === 0 ? (
-          <span
-            style={SERIF_STYLE}
-            className="text-[18px] font-bold tracking-[-0.01em] text-white"
-          >
-            Free
-          </span>
-        ) : (
-          <span style={SERIF_STYLE} className="text-[18px] font-bold tracking-[-0.01em] text-white">
-            <span className="text-white/45 text-[13px] font-medium">$</span>
-            {effective.toFixed(effective < 10 ? 2 : 0)}
-            <span className={`${MONO} text-[9.5px] text-white/35 font-medium ml-0.5`}>
-              /mo
-            </span>
-          </span>
-        )}
-        {discount > 0 && (
-          <span
-            className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold text-emerald-300`}
-          >
-            Save {discount}%
-          </span>
-        )}
+        {Price}
       </div>
     </button>
   );

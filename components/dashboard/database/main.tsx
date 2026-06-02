@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 // Managed databases overview — editorial canvas (aurora + dotted grid),
 // Nunito accent title, mono labels, subtle rounded corners, brand-blue
@@ -150,32 +151,32 @@ const FEATURES = [
   {
     title: "Fully managed engines",
     desc: "Patches, minor upgrades, and replication topology — handled. You get a connection string.",
-    image: "/images/kubernetes-ui/fully managed.png",
+    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Point-in-time recovery",
     desc: "Continuous WAL streaming with 7–35 day retention. Restore to any second in the window.",
-    image: "/images/kubernetes-ui/life cycle.png",
+    image: assetUrl("/images/kubernetes-ui/life cycle.png"),
   },
   {
     title: "Auto-scaling storage",
     desc: "Disks grow with your data — no manual resizes, no downtime, no surprise outages.",
-    image: "/images/kubernetes-ui/auto scaling nodespng.png",
+    image: assetUrl("/images/kubernetes-ui/auto scaling nodespng.png"),
   },
   {
     title: "Connection pooling",
     desc: "Managed PgBouncer / ProxySQL with transactional and session modes baked in.",
-    image: "/images/kubernetes-ui/Built in load balancing png.png",
+    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "Multi-region replicas",
     desc: "Read replicas in any supported region, with cross-region streaming replication.",
-    image: "/images/kubernetes-ui/Multi region clusters png.png",
+    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "99.99% uptime SLA",
     desc: "Multi-AZ standby, automatic failover, and per-cluster lifecycle audit logs.",
-    image: "/images/kubernetes-ui/11 nine.png",
+    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -332,12 +333,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
               >
                 <Plus className="h-3.5 w-3.5" />
                 New cluster
-              </Link>
-              <Link
-                href="#inventory"
-                className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-              >
-                View inventory
               </Link>
             </div>
           </div>

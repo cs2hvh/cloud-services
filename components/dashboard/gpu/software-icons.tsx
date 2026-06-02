@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 // Brand/software icons for GPU container-image templates. Resolves a template's
 // name (+ image ref) to a real logo: brand SVG/PNG assets in /public/software,
 // the shared NvidiaLogo for CUDA, and a node-graph glyph for ComfyUI. Falls
@@ -40,9 +41,9 @@ export function SoftwareIcon({
     const hay = `${name ?? ""} ${image ?? ""}`.toLowerCase();
 
     // Frameworks first — "PyTorch + CUDA 12.1" should read as PyTorch, not CUDA.
-    if (/pytorch|torch/.test(hay)) return <Img src="/software/pytorch.svg" size={size} className={className} />;
-    if (/tensorflow|tflow|\btf\b/.test(hay)) return <Img src="/software/tensorflow.svg" size={size} className={className} />;
-    if (/vllm/.test(hay)) return <Img src="/software/vllm.png" size={size} className={className} />;
+    if (/pytorch|torch/.test(hay)) return <Img src={assetUrl("/software/pytorch.svg")} size={size} className={className} />;
+    if (/tensorflow|tflow|\btf\b/.test(hay)) return <Img src={assetUrl("/software/tensorflow.svg")} size={size} className={className} />;
+    if (/vllm/.test(hay)) return <Img src={assetUrl("/software/vllm.png")} size={size} className={className} />;
     if (/comfyui|comfy/.test(hay)) {
         return (
             <Workflow
@@ -62,10 +63,10 @@ export function SoftwareIcon({
             </span>
         );
     }
-    if (/ubuntu/.test(hay)) return <Img src="/software/ubuntu.svg" size={size} className={className} />;
-    if (/python|conda|jupyter/.test(hay)) return <Img src="/software/python.svg" size={size} className={className} />;
+    if (/ubuntu/.test(hay)) return <Img src={assetUrl("/software/ubuntu.svg")} size={size} className={className} />;
+    if (/python|conda|jupyter/.test(hay)) return <Img src={assetUrl("/software/python.svg")} size={size} className={className} />;
     // Custom / bring-your-own Docker image.
-    if (/custom|docker|registry|image/.test(hay)) return <Img src="/software/docker.svg" size={size} className={className} />;
+    if (/custom|docker|registry|image/.test(hay)) return <Img src={assetUrl("/software/docker.svg")} size={size} className={className} />;
 
     return (
         <Box

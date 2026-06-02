@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Trash2, RefreshCw, } from 'lucide-react';
+import { useConfirm } from "@/components/ui/confirm";
 // import { Agent as UndiciAgent } from 'undici';
 
 interface Server {
@@ -42,6 +43,7 @@ interface Server {
 // }
 
 export function ServersManager() {
+  const confirm = useConfirm();
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<number | null>(null);
@@ -68,7 +70,7 @@ export function ServersManager() {
   }, [loadServers]);
 
   const handleDelete = useCallback(async (server: Server) => {
-    if (!confirm(`Delete server "${server.name}"? This will:\n1. Delete the VM from Proxmox (VMID ${server.vmid})\n2. Remove the database record\n\nThis action cannot be undone!`)) {
+    if (!(await confirm({ title: `Delete server "${server.name}"?`, description: `This deletes the VM from Proxmox (VMID ${server.vmid}) and removes the database record. This action cannot be undone.`, confirmText: "Delete server", danger: true }))) {
       return;
     }
 

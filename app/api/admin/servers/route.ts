@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createWorkerClient } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/supabase/auth";
 import { Agent as UndiciAgent } from "undici";
 import { removeHostRoute, type ProxmoxHost } from "@/lib/proxmox-utils";
 
@@ -87,7 +88,7 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | unde
     } catch {}
   }
 
-  throw new Error("Missing Proxmox credentials in DB");
+  throw new Error("Error");
 }
 
 async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
@@ -135,29 +136,11 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Proxm
   throw new Error("task timeout");
 }
 
-// Check if user is admin
-async function requireAdmin(): Promise<{ ok: boolean }> {
-  try {
-    const supabase = await createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const email = userData?.user?.email || "";
-
-    if (!email) return { ok: false };
-
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (adminEmails.length > 0 && !adminEmails.includes(email.toLowerCase())) {
-      return { ok: false };
-    }
-
-    return { ok: true };
-  } catch {
-    return { ok: false };
-  }
-}
+// Admin gate uses the shared, FAIL-CLOSED requireAdmin() from @/lib/supabase/auth
+// (ADMIN_EMAILS allowlist + user_profiles.roles fallback). The previous local copy
+// fell through to { ok: true } when ADMIN_EMAILS was unset — a fail-open privilege
+// escalation that let ANY authenticated user list every tenant's servers and DELETE
+// any VM (the GET/DELETE handlers use a service-role client that bypasses RLS).
 
 export async function GET() {
   const auth = await requireAdmin();

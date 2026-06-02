@@ -31,7 +31,7 @@ const cspDirectives = [
   // Block inline event-handler attributes (onclick, onerror, etc.) even when inline scripts are allowed.
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com",
+  "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com",
   "font-src 'self'",
   `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin}`,
   "frame-src 'none'",
@@ -109,6 +109,15 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 2678400, // 31 days
     remotePatterns: [
       {
+        // R2 CDN that mirrors public/ assets (see lib/asset-url.ts). Allowlisted
+        // so next/image can still optimize the CDN-sourced images.
+        protocol: "https",
+        hostname: "ahurasense.cs2hvh.com",
+        port: "",
+        pathname: "/**",
+        search: "",
+      },
+      {
         protocol: "https",
         hostname: "samatva.blr1.cdn.digitaloceanspaces.com",
         port: "",
@@ -130,6 +139,12 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "flagcdn.com",
+        port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "ahurasense.cs2hvh.com",
         port: "",
         pathname: "/**",
       },

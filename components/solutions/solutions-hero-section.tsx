@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -92,7 +93,7 @@ export function SolutionsHeroSection() {
                         <div className="pointer-events-none absolute left-1/2 top-1/2 h-[60%] w-[60%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(0,149,255,0.18)_0%,rgba(0,149,255,0.05)_50%,transparent_75%)] blur-[32px]" />
                         <div className="relative mx-auto h-[clamp(280px,40vw,540px)] w-[clamp(280px,40vw,540px)] max-w-[540px]">
                             <Image
-                                src="/solution/solution-hero-bulb-idea.svg"
+                                src={assetUrl("/solution/solution-hero-bulb-idea.svg")}
                                 alt="Solutions illustration"
                                 fill
                                 priority

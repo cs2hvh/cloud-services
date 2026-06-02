@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -10,49 +11,49 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 const SOLUTIONS = [
     {
-        icon: "/solution/secondsection/AI.svg",
+        icon: assetUrl("/solution/secondsection/AI.svg"),
         title: "AI & Machine Learning",
         subtitle: "Train & Deploy Models",
         href: "/solutions/ai-ml",
     },
     {
-        icon: "/solution/secondsection/Monitor.svg",
+        icon: assetUrl("/solution/secondsection/Monitor.svg"),
         title: "Web Hosting & SaaS",
         subtitle: "Modern Web Apps",
         href: "/solutions/web-hosting",
     },
     {
-        icon: "/solution/secondsection/Shopping%20Bag.svg",
+        icon: assetUrl("/solution/secondsection/Shopping%20Bag.svg"),
         title: "Ecommerce Infrastructure",
         subtitle: "Scalable Storefronts",
         href: "/solutions/ecommerce",
     },
     {
-        icon: "/solution/secondsection/Game%20Controller.svg",
+        icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
         title: "Game Development",
         subtitle: "Low-Latency Servers",
         href: "/solutions/game-dev",
     },
     {
-        icon: "/solution/secondsection/Database.svg",
+        icon: assetUrl("/solution/secondsection/Database.svg"),
         title: "Database Applications",
         subtitle: "Data-Heavy Apps",
         href: "/solutions/database",
     },
     {
-        icon: "/solution/secondsection/Protect.svg",
+        icon: assetUrl("/solution/secondsection/Protect.svg"),
         title: "Enterprise Security",
         subtitle: "Compliance & Governance",
         href: "/solutions/security",
     },
     {
-        icon: "/solution/secondsection/Kubernetes.svg",
+        icon: assetUrl("/solution/secondsection/Kubernetes.svg"),
         title: "Cloud-Native Kubernetes",
         subtitle: "Microservices Platform",
         href: "/solutions/kubernetes",
     },
     {
-        icon: "/solution/secondsection/Stack.svg",
+        icon: assetUrl("/solution/secondsection/Stack.svg"),
         title: "Storage & Backup",
         subtitle: "Durable Object Storage",
         href: "/solutions/storage",

@@ -1,5 +1,6 @@
 'use client';
 
+import { assetUrl } from "@/lib/asset-url";
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -120,9 +121,9 @@ export default function KnowledgeBasesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Knowledge Bases</p><p className="mt-3 text-2xl font-semibold text-white">{knowledgeBases.length}</p><p className="mt-1 text-sm text-white/45">Provisioned retrieval sources</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src="/dashboard-icons/knowledge-base.png" alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
-        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Documents</p><p className="mt-3 text-2xl font-semibold text-white">{totalDocuments}</p><p className="mt-1 text-sm text-white/45">Indexed source documents</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src="/dashboard-icons/documents.png" alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
-        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Chunks</p><p className="mt-3 text-2xl font-semibold text-white">{totalChunks}</p><p className="mt-1 text-sm text-white/45">Retrieval-ready embeddings</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src="/dashboard-icons/chunks.png" alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
+        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Knowledge Bases</p><p className="mt-3 text-2xl font-semibold text-white">{knowledgeBases.length}</p><p className="mt-1 text-sm text-white/45">Provisioned retrieval sources</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
+        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Documents</p><p className="mt-3 text-2xl font-semibold text-white">{totalDocuments}</p><p className="mt-1 text-sm text-white/45">Indexed source documents</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src={assetUrl("/dashboard-icons/documents.png")} alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
+        <div className="glass-panel overflow-hidden"><div className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Chunks</p><p className="mt-3 text-2xl font-semibold text-white">{totalChunks}</p><p className="mt-1 text-sm text-white/45">Retrieval-ready embeddings</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05]"><Image src={assetUrl("/dashboard-icons/chunks.png")} alt="" width={20} height={20} className="opacity-80"  unoptimized /></div></div></div></div>
       </div>
 
       <div className="glass-panel overflow-hidden">
@@ -139,7 +140,7 @@ export default function KnowledgeBasesPage() {
                 <div key={kb.id} className="border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]">
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/[0.08] bg-white/[0.04]"><Image src="/dashboard-icons/knowledge-base.png" alt="" width={24} height={24} className="opacity-80"  unoptimized /></div>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-white/[0.08] bg-white/[0.04]"><Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="" width={24} height={24} className="opacity-80"  unoptimized /></div>
                       <div className="min-w-0 space-y-3">
                         <h3 className="text-lg font-semibold text-white">{kb.name}</h3>
                         {kb.description && <p className="max-w-3xl text-sm leading-6 text-white/50">{kb.description}</p>}
@@ -184,7 +185,7 @@ export default function KnowledgeBasesPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-16 text-center">
-              <Image src="/dashboard-icons/knowledge-base.png" alt="" width={48} height={48} className="opacity-25"  unoptimized />
+              <Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="" width={48} height={48} className="opacity-25"  unoptimized />
               <h3 className="mt-5 text-lg font-semibold text-white">No knowledge bases yet</h3>
               <p className="mt-2 max-w-md text-sm leading-6 text-white/45">Create a knowledge base to store documents that your agents can search, ground, and reference during conversations.</p>
               <Button asChild className="mt-6 border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">

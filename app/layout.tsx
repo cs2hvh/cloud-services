@@ -1,9 +1,11 @@
+import { assetUrl } from "@/lib/asset-url";
 import type { Metadata, Viewport } from "next";
-import { Open_Sans, Nunito, Salsa, Geist_Mono } from "next/font/google";
+import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
 import { OfflineBanner } from "@/components/offline-banner";
+import { ConfirmProvider } from "@/components/ui/confirm";
 
 const openSans = Open_Sans({
   variable: "--font-open-sans",
@@ -17,6 +19,13 @@ const nunito = Nunito({
 
 const salsa = Salsa({
   variable: "--font-salsa",
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const anticDidone = Antic_Didone({
+  variable: "--font-antic-didone",
   weight: "400",
   subsets: ["latin"],
   display: "swap",
@@ -82,9 +91,9 @@ export const metadata: Metadata = {
     site: siteConfig.social.twitter,
   },
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
+    icon: assetUrl("/favicon.ico"),
+    shortcut: assetUrl("/favicon.ico"),
+    apple: assetUrl("/favicon.ico"),
   },
   alternates: {
     canonical: siteConfig.url,
@@ -98,9 +107,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable} ${anticDidone.variable}`}>
         <OfflineBanner />
-        {children}
+        <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster
           position="top-right"
           theme="dark"

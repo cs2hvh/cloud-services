@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { assetUrl } from "@/lib/asset-url";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -226,7 +227,7 @@ export default function NewKnowledgeBasePage() {
                 <div className="mt-4 space-y-3">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04]">
-                      <Image src="/dashboard-icons/documents.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
+                      <Image src={assetUrl("/dashboard-icons/documents.png")} alt="" width={16} height={16} className="opacity-75"  unoptimized />
                     </div>
                     <div>
                       <div className="text-sm font-medium text-white">Upload documents after creation</div>
@@ -237,7 +238,7 @@ export default function NewKnowledgeBasePage() {
                   </div>
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04]">
-                      <Image src="/dashboard-icons/agents.png" alt="" width={16} height={16} className="opacity-75"  unoptimized />
+                      <Image src={assetUrl("/dashboard-icons/agents.png")} alt="" width={16} height={16} className="opacity-75"  unoptimized />
                     </div>
                     <div>
                       <div className="text-sm font-medium text-white">Attach to one or more agents</div>
@@ -282,7 +283,7 @@ export default function NewKnowledgeBasePage() {
                 </>
               ) : (
                 <>
-                  <Image src="/dashboard-icons/knowledge-base.png" alt="" width={16} height={16} className="opacity-80 mr-2"  unoptimized />
+                  <Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="" width={16} height={16} className="opacity-80 mr-2"  unoptimized />
                   Create Knowledge Base
                 </>
               )}

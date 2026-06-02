@@ -7,7 +7,6 @@
 // row.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -16,7 +15,6 @@ import {
     Copy,
     HardDrive,
     Loader2,
-    MapPin,
     MoreHorizontal,
     Plus,
     Power,
@@ -30,8 +28,11 @@ import {
 import { toast } from 'sonner';
 
 import { createClient } from '@/lib/supabase/client';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { ServerStackIcon } from '@/components/dashboard/compute/vps/section-icons';
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
+import { RegionFlag } from '@/components/ui/region-flag';
+import { useConfirm } from '@/components/ui/confirm';
 
 // ─── Design tokens ─────────────────────────────────────────────────
 
@@ -207,28 +208,10 @@ function regionFor(opts: {
     return { countryCode: null, city: label, country: '—' };
 }
 
+// flagcdn only serves discrete 4:3 sizes; RegionFlag snaps to a valid one so the
+// image never 404s (the old inline math produced e.g. 36x24, which flagcdn rejects).
 function FlagImg({ code, size = 16 }: { code: string | null; size?: number }) {
-    if (!code) {
-        return (
-            <MapPin
-                className="text-white/40"
-                style={{ width: size, height: size }}
-            />
-        );
-    }
-    const w = size;
-    const h = Math.round(size * (2 / 3));
-    return (
-        <Image
-            src={`https://flagcdn.com/${size * 2}x${h * 2}/${code}.png`}
-            alt=""
-            width={w}
-            height={h}
-            className="rounded-sm object-cover shrink-0"
-            style={{ width: w, height: h }}
-            unoptimized
-        />
-    );
+    return <RegionFlag code={code} size={size} className="shrink-0" />;
 }
 
 interface HostRegionRow {
@@ -790,6 +773,7 @@ function ServerRow({
     onRefresh: () => void;
     host?: HostRegionRow;
 }) {
+    const confirm = useConfirm();
     const [menuOpen, setMenuOpen] = useState(false);
     const [busy, setBusy] = useState<PowerAction | 'delete' | null>(null);
     const router = useRouter();
@@ -817,7 +801,7 @@ function ServerRow({
         e.preventDefault();
         e.stopPropagation();
         try {
-            await navigator.clipboard.writeText(server.ip);
+            await copyToClipboard(server.ip);
             toast.success('IP copied');
         } catch {
             toast.error('Failed to copy');
@@ -852,11 +836,12 @@ function ServerRow({
 
     const remove = async () => {
         setMenuOpen(false);
-        if (
-            !confirm(
-                `Delete "${server.name}"?\n\nThis action cannot be undone. The VM and its disk will be destroyed.`,
-            )
-        )
+        if (!(await confirm({
+            title: `Delete "${server.name}"?`,
+            description: "This action cannot be undone. The VM and its disk will be destroyed.",
+            confirmText: "Delete",
+            danger: true,
+        })))
             return;
         setBusy('delete');
         try {

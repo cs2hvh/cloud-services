@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 
 type MarqueeProps = {
@@ -62,7 +63,7 @@ const ComputeMarqueeSection = ({
   rows = 1,
   speedSeconds = 28,
   rotateDeg = -3.9,
-  backgroundImage = "/images/compute-page/Marquee-bg.png",
+  backgroundImage = assetUrl("/images/compute-page/Marquee-bg.png"),
   backgroundFit = "contain",
   heightClassName = "aspect-[1437/422]",
   className = "",

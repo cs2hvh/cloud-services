@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
@@ -414,7 +415,7 @@ export default function HeroClient() {
                             }}
                         />
                         <Image
-                            src="/herof.png"
+                            src="https://ahurasense.cs2hvh.com/images/2026-06/zo5fOr7aMqrS.png"
                             alt="Ahura Cloud infrastructure"
                             fill
                             priority

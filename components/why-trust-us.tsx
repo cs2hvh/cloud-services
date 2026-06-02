@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import { Container } from "@/components/ui/container";
 import { motion } from "motion/react";
@@ -14,7 +15,7 @@ const trustFeatures = [
         can be adapted to any type of solution.
       </>
     ),
-    iconSrc: "/images/whyTrustUs/configure.svg",
+    iconSrc: assetUrl("/images/whyTrustUs/configure.svg"),
   },
   {
     title: "Volume",
@@ -25,13 +26,13 @@ const trustFeatures = [
         encryption operations every day.
       </>
     ),
-    iconSrc: "/images/whyTrustUs/volume.svg",
+    iconSrc: assetUrl("/images/whyTrustUs/volume.svg"),
   },
   {
     title: "Write and Deploy in Seconds",
     description:
       "Built so developers spend less time and money on data security and compliance.",
-    iconSrc: "/images/whyTrustUs/write-and-deploy.svg",
+    iconSrc: assetUrl("/images/whyTrustUs/write-and-deploy.svg"),
   },
   {
     title: "Globally Distributed",
@@ -42,19 +43,19 @@ const trustFeatures = [
         multiple regions to optimize uptime.
       </>
     ),
-    iconSrc: "/images/whyTrustUs/gloabal.png",
+    iconSrc: assetUrl("/images/whyTrustUs/gloabal.png"),
   },
   {
     title: "Enclave-backed",
     description:
       "Built on isolated, hardened, and highly constrained secure enclaves.",
-    iconSrc: "/images/whyTrustUs/enclave-backend.svg",
+    iconSrc: assetUrl("/images/whyTrustUs/enclave-backend.svg"),
   },
   {
     title: "Ultra-Low Latency",
     description:
       "Encryption and decryption operations introduce a minimal latency penalty.",
-    iconSrc: "/images/whyTrustUs/latency.svg",
+    iconSrc: assetUrl("/images/whyTrustUs/latency.svg"),
   },
 ];
 
@@ -108,7 +109,7 @@ export function WhyTrustUs() {
               <div className="relative border border-white/[0.08] overflow-hidden">
                 <div className="absolute inset-0">
                   <Image
-                    src="/images/Complince/why-trust-us-bg.png"
+                    src={assetUrl("/images/Complince/why-trust-us-bg.png")}
                     alt=""
                     fill
                     className="object-cover object-center"

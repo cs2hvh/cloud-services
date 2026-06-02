@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Copy, Check, Shield, Lock, AlertCircle } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -18,7 +19,7 @@ const SpectrumAppInfo = ({ spectrumApp }: SpectrumAppInfoProps) => {
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    void safeCopyToClipboard(text);
     setCopiedItem(label);
     toast.success(`${label} copied to clipboard`);
     setTimeout(() => setCopiedItem(null), 2000);

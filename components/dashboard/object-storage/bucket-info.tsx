@@ -21,6 +21,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import { getErrorMessage } from "@/config/functions";
 import Documentation from "./api-docs";
 
@@ -67,7 +68,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
 
     const copyToClipboard = (text: string, label: string) => {
         if (!text) return;
-        navigator.clipboard.writeText(text);
+        void safeCopyToClipboard(text);
         setCopiedItem(label);
         toast.success(`${label} copied`);
         setTimeout(() => setCopiedItem(null), 1800);

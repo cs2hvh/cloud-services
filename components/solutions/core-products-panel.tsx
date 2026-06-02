@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -8,56 +9,56 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 const PRODUCTS = [
     {
-        icon: "/solution/thirdsecion/icon-1.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-1.svg"),
         title: "Compute",
         subtitle: "General Purpose VMs",
         description: "Reliable VMs for everyday workloads and quick scaling.",
         href: "/services/compute",
     },
     {
-        icon: "/solution/thirdsecion/icon-2.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-2.svg"),
         title: "GPU Instance",
         subtitle: "Accelerated compute",
         description: "High-performance GPUs for training, inference, rendering and HPC.",
         href: "/services/gpu",
     },
     {
-        icon: "/solution/thirdsecion/icon-3.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-3.svg"),
         title: "Database",
         subtitle: "Managed",
         description: "Fully managed databases with backups, upgrades and monitoring.",
         href: "/services/database",
     },
     {
-        icon: "/solution/thirdsecion/icon-4.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-4.svg"),
         title: "Security",
         subtitle: "Protect apps & data",
         description: "Identity, network and workload controls for secure-by-default cloud.",
         href: "/services/security",
     },
     {
-        icon: "/solution/thirdsecion/icon-5.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-5.svg"),
         title: "Kubernetes",
         subtitle: "Managed",
         description: "Production Kubernetes without the operational overhead.",
         href: "/services/kubernetes",
     },
     {
-        icon: "/solution/thirdsecion/icon-6.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-6.svg"),
         title: "Object Storage",
         subtitle: "S3 Compatible",
         description: "Durable object storage for media, backups, logs and artifacts.",
         href: "/services/object-storage",
     },
     {
-        icon: "/solution/thirdsecion/icon-7.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-7.svg"),
         title: "AI Agents",
         subtitle: "API Based",
         description: "Composable AI agents that connect tools, data and workflows via APIs.",
         href: "/services/app-deployment",
     },
     {
-        icon: "/solution/thirdsecion/icon-8.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-8.svg"),
         title: "App Deployment",
         subtitle: "Ship faster",
         description: "Build, deploy and scale apps with streamlined release workflows.",

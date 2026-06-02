@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from "next/image";
 import { useState } from "react";
@@ -30,7 +31,7 @@ const ENGINES: EngineDefinition[] = [
     name: "PostgreSQL",
     family: "Relational",
     version: "16",
-    image: "/images/database-logos/postgresql.png",
+    image: assetUrl("/images/database-logos/postgresql.png"),
     logoStyle: "icon",
     accent: "#8ecaff",
     fit: "Application core",
@@ -50,7 +51,7 @@ const ENGINES: EngineDefinition[] = [
     name: "MySQL",
     family: "Relational",
     version: "8.4",
-    image: "/images/database-logos/mysql.svg",
+    image: assetUrl("/images/database-logos/mysql.svg"),
     logoStyle: "wordmark",
     accent: "#93c5fd",
     fit: "Web scale",
@@ -70,7 +71,7 @@ const ENGINES: EngineDefinition[] = [
     name: "MongoDB",
     family: "Document",
     version: "7.0",
-    image: "/images/database-logos/mongodb.png",
+    image: assetUrl("/images/database-logos/mongodb.png"),
     logoStyle: "wordmark",
     accent: "#86efac",
     fit: "Flexible product data",
@@ -90,7 +91,7 @@ const ENGINES: EngineDefinition[] = [
     name: "Redis",
     family: "In-memory",
     version: "7.2",
-    image: "/images/database-logos/redis.png",
+    image: assetUrl("/images/database-logos/redis.png"),
     logoStyle: "wordmark",
     accent: "#fca5a5",
     fit: "Low-latency data",

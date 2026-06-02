@@ -337,7 +337,7 @@ const SpectrumAppCreate = ({
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 max-w-[1560px] mx-auto">
+            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
@@ -366,8 +366,8 @@ const SpectrumAppCreate = ({
                 <p
                     className={`${MONO} max-w-2xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
                 >
-                    Route Layer-4 traffic through a global anycast network with
-                    always-on DDoS mitigation. Configure the listener and origin below.
+                    Route Layer-4 traffic through a global anycast edge with
+                    always-on DDoS mitigation.
                 </p>
 
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-10 items-start">
@@ -378,7 +378,7 @@ const SpectrumAppCreate = ({
                             <Section
                                 num="00"
                                 title="Application owner"
-                                desc="Assign this Spectrum application to a customer account."
+                                desc="Assign this app to a customer account."
                                 status={ownerOk ? "done" : "idle"}
                                 statusLabel={
                                     selectedUserObj
@@ -491,7 +491,7 @@ const SpectrumAppCreate = ({
                         <Section
                             num="01"
                             title="Application protocol"
-                            desc="Layer-4 protocol the Spectrum listener will serve."
+                            desc="Layer-4 protocol for the listener."
                             status={appTypeOk ? "done" : "idle"}
                             statusLabel={
                                 formData.appType
@@ -568,7 +568,7 @@ const SpectrumAppCreate = ({
                         <Section
                             num="02"
                             title="DNS name"
-                            desc="Hostname your service will be reachable under on the Cloudflare zone."
+                            desc="Hostname your service is reachable under."
                             status={
                                 domainOk
                                     ? "done"
@@ -639,7 +639,7 @@ const SpectrumAppCreate = ({
                             <Section
                                 num="03"
                                 title="Edge port"
-                                desc="Port Cloudflare anycast addresses will listen on for inbound connections."
+                                desc="Port the edge listens on for inbound connections."
                                 status={edgePortOk ? "done" : "idle"}
                                 statusLabel={
                                     edgePortOk
@@ -817,7 +817,7 @@ const SpectrumAppCreate = ({
                         <Section
                             num="06"
                             title="Project"
-                            desc="Resource group for IAM, billing, and quotas."
+                            desc="Billing and access group."
                             status={projectOk ? "done" : "idle"}
                             statusLabel={
                                 selectedProject?.name ?? "Required"
@@ -866,7 +866,7 @@ const SpectrumAppCreate = ({
                         <Section
                             num="07"
                             title="Review and confirm"
-                            desc="Provisioning begins immediately after confirmation."
+                            desc="Provisioning starts on confirm."
                             status={termsAccepted ? "done" : "idle"}
                             statusLabel={
                                 termsAccepted ? "Accepted" : "Required"

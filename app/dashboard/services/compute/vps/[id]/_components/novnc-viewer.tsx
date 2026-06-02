@@ -9,6 +9,7 @@ import {
   Clipboard,
   Loader2,
 } from 'lucide-react';
+import { readFromClipboard } from '@/lib/utils/safe-clipboard';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -141,7 +142,8 @@ export function NoVncViewer({ wsUrl, vncPassword, serverName, onDisconnect }: No
 
   const pasteClipboard = async () => {
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readFromClipboard();
+      if (text == null) return;
       if (text && rfbRef.current) {
         rfbRef.current.clipboardPasteFrom(text);
       }

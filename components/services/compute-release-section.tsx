@@ -95,9 +95,9 @@ function ServerCard({ server, index }: { server: Server; index: number }) {
     const isFeatured = !!server.featured;
     return (
         <article
-            className={`group relative flex flex-col rounded-[8px] border p-7 transition-colors hover:border-[#0095FF]/55 ${
+            className={`group relative flex flex-col rounded-[8px] border p-7 transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF] hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${
                 isFeatured
-                    ? "border-white/[0.18] bg-[#13161B] hover:bg-[#161A1F]"
+                    ? "border-white/[0.10] bg-[#13161B] hover:bg-[#161A1F]"
                     : "border-white/[0.10] bg-[#111316] hover:bg-[#161A1F]"
             }`}
             style={{
@@ -106,14 +106,6 @@ function ServerCard({ server, index }: { server: Server; index: number }) {
                     : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
             }}
         >
-            {/* Subtle left accent stripe on featured */}
-            {isFeatured && (
-                <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px]"
-                    style={{ background: "#0095FF", opacity: 0.55 }}
-                />
-            )}
 
             {/* Header — index + badge */}
             <div className="flex items-center gap-3">

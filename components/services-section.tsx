@@ -1,19 +1,20 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
 
 const figmaServices = [
   {
-    logoSrc: "/services-icon/COMPUTE .png",
+    logoSrc: assetUrl("/services-icon/COMPUTE .png"),
     logoAlt: "Compute",
     title: "Compute",
     description:
       "Elastic virtual machines across 12 global regions. Scale from a single core to hundreds of vCPUs with predictable pricing.",
   },
   {
-    logoSrc: "/services-icon/GPU INSTANCES .png",
+    logoSrc: assetUrl("/services-icon/GPU INSTANCES .png"),
     logoAlt: "GPU Instances",
     title: "GPU Instances",
     description:
@@ -21,42 +22,42 @@ const figmaServices = [
   },
 
  {
-    logoSrc: "/services-icon/iNFERENCE .png",
+    logoSrc: assetUrl("/services-icon/iNFERENCE .png"),
     logoAlt: "A.I. Labs",
     title: "A.I. Labs",
     description:
       "OpenAI-compatible inference for 50+ models. Fine-tune, embed, and host your own on dedicated GPUs — one API key for everything.",
   },
    {
-    logoSrc: "/services-icon/MANAGED DATABASE .png",
+    logoSrc: assetUrl("/services-icon/MANAGED DATABASE .png"),
     logoAlt: "Managed Database",
     title: "Managed Database",
     description:
       "Fully managed PostgreSQL, MySQL, and Redis clusters with automated backups, failover, and point-in-time recovery built in.",
   },
    {
-    logoSrc: "/services-icon/APPLICATION DEPLOYMENT.png",
+    logoSrc: assetUrl("/services-icon/APPLICATION DEPLOYMENT.png"),
     logoAlt: "App Deployment",
     title: "App Deployment",
     description:
       "Git-push deployments to 100+ edge locations. Preview environments, automatic SSL, and instant rollbacks — zero config required.",
   },
   {
-    logoSrc: "/services-icon/KUUBERNETS .png",
+    logoSrc: assetUrl("/services-icon/KUUBERNETS .png"),
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
       "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
   },
   {
-    logoSrc: "/services-icon/OBJECT STORAGE .png",
+    logoSrc: assetUrl("/services-icon/OBJECT STORAGE .png"),
     logoAlt: "Object Storage",
     title: "Object Storage",
     description:
       "S3-compatible storage with 11 nines durability. Store, serve, and manage petabytes of data with predictable, low-cost pricing.",
   },
   //  {
-  //   logoSrc: "/images/main-page/kubernetes.png",
+  //   logoSrc: assetUrl("/images/main-page/kubernetes.png"),
   //   logoAlt: "Kubernetes",
   //   title: "Kubernetes",
   //   description:
@@ -89,7 +90,7 @@ export function ServicesSection() {
       {/* Full-bleed background for the entire section */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#0a0a0a] to-black">
         <Image
-          src="/images/main-page/our-service.png"
+          src={assetUrl("/images/main-page/our-service.png")}
           alt=""
           fill
           className="object-cover opacity-90"

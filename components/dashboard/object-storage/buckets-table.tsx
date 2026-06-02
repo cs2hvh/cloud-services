@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
+import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 
 interface BucketsTableProps {
   buckets: ObjectSpaceBucket[];
@@ -67,7 +68,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
   );
 
   const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
+    void safeCopyToClipboard(text);
     setCopiedId(text);
     toast.success(type + " copied to clipboard");
     setTimeout(() => setCopiedId(null), 2000);

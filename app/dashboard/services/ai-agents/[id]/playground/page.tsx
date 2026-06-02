@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import { safeRandomUUID } from "@/lib/utils/safe-uuid";
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -232,7 +233,7 @@ export default function PlaygroundPage({
     if (!agent) return;
     const url = `${window.location.origin}/api/v1/agents/${agent.endpoint_id}/chat`;
     try {
-      await navigator.clipboard.writeText(url);
+      await copyToClipboard(url);
       toast.success('Endpoint URL copied');
     } catch {
       toast.error('Failed to copy');

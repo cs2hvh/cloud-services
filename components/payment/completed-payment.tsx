@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -46,7 +47,7 @@ export function CompletedPayment({ payment }: CompletedPaymentProps) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Image
-                  src={`/currencies/${payment.currency.toLowerCase()}.svg`}
+                  src={assetUrl(`/currencies/${payment.currency.toLowerCase()}.svg`)}
                   alt={payment.currency}
                   className="w-9 h-9"
                 />

@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
@@ -25,7 +26,7 @@ export default function DatabaseShowcaseSection() {
           <div className="absolute -inset-6 bg-[#0095FF]/[0.03] rounded-3xl blur-3xl pointer-events-none" />
 
           <Image
-            src="/images/main-page/service-home-db-section-3.png"
+            src={assetUrl("/images/main-page/service-home-db-section-3.png")}
             alt="Database Management Dashboard"
             width={2400}
             height={1200}

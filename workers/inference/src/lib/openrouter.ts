@@ -113,7 +113,12 @@ export async function resolveUpstreamKey(
   orgId: string,
   byokProvider: string | undefined
 ): Promise<string> {
-  if (billing === "platform") return env.OPENROUTER_PLATFORM_KEY;
+  if (billing === "platform") {
+    if (!env.OPENROUTER_PLATFORM_KEY) {
+      throw new Error("Platform inference key is not configured");
+    }
+    return env.OPENROUTER_PLATFORM_KEY;
+  }
 
   const provider = (byokProvider ?? "openrouter") as
     | "openrouter"

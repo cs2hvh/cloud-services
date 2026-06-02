@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
@@ -124,7 +125,7 @@ export default function FineTuningHeroSection({
                 }}
               />
               <Image
-                src="/ailabs/training.png"
+                src={assetUrl("/ailabs/training.png")}
                 alt="Model fine-tuning illustration"
                 fill
                 priority

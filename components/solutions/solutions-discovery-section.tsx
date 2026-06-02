@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -38,7 +39,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "AI & Machine Learning",
         description: "Train, fine-tune, and serve models with accelerated compute and managed orchestration.",
-        icon: "/solution/secondsection/AI.svg",
+        icon: assetUrl("/solution/secondsection/AI.svg"),
         outcomes: ["Faster experimentation", "Low-latency inference", "Cost controls"],
         products: ["GPU Instances", "AI Agents", "Kubernetes", "Object Storage"],
         href: "/solutions/ai-ml",
@@ -46,7 +47,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Web Hosting & SaaS Deployment",
         description: "Launch modern web apps with reliable compute, managed services, and smooth deployments.",
-        icon: "/solution/secondsection/Monitor.svg",
+        icon: assetUrl("/solution/secondsection/Monitor.svg"),
         outcomes: ["Quick launches", "Horizontal scalability", "Operational simplicity"],
         products: ["Compute", "Application Deployment", "Database", "Security"],
         href: "/solutions/web-hosting",
@@ -54,7 +55,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Ecommerce Infrastructure",
         description: "Deliver fast storefronts and resilient checkout flows with secure, scalable building blocks.",
-        icon: "/solution/secondsection/Shopping%20Bag.svg",
+        icon: assetUrl("/solution/secondsection/Shopping%20Bag.svg"),
         outcomes: ["High uptime", "Performance under load", "Secure transactions"],
         products: ["Compute", "Database", "Security", "Object Storage"],
         href: "/solutions/ecommerce",
@@ -62,7 +63,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Game Development",
         description: "Low-latency servers, scalable backends, and storage for assets and telemetry.",
-        icon: "/solution/secondsection/Game%20Controller.svg",
+        icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
         outcomes: ["Low ping", "Burst scale", "Operational visibility"],
         products: ["Compute", "Kubernetes", "Object Storage", "Security"],
         href: "/solutions/game-dev",
@@ -70,7 +71,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Database-Driven Applications",
         description: "Build data-heavy apps with managed databases and secure networking.",
-        icon: "/solution/secondsection/Database.svg",
+        icon: assetUrl("/solution/secondsection/Database.svg"),
         outcomes: ["Reliability", "High availability", "Easy scaling"],
         products: ["Database", "Compute", "Security", "Object Storage"],
         href: "/solutions/database",
@@ -78,7 +79,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Secure Enterprise Cloud",
         description: "Harden workloads with identity controls, network segmentation, and governance.",
-        icon: "/solution/secondsection/Protect.svg",
+        icon: assetUrl("/solution/secondsection/Protect.svg"),
         outcomes: ["Least-privilege access", "Audit readiness", "Defense in depth"],
         products: ["Security", "Kubernetes", "Database", "Object Storage"],
         href: "/solutions/security",
@@ -86,7 +87,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Cloud-Native Kubernetes Platforms",
         description: "Run microservices with managed Kubernetes and modern delivery practices.",
-        icon: "/solution/secondsection/Kubernetes.svg",
+        icon: assetUrl("/solution/secondsection/Kubernetes.svg"),
         outcomes: ["Faster releases", "Safer rollouts", "Consistent environments"],
         products: ["Kubernetes", "Application Deployment", "Security", "Database"],
         href: "/solutions/kubernetes",
@@ -94,7 +95,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     {
         title: "Storage & Backup Solutions",
         description: "Store and protect critical data, backups, media, and build artifacts at scale.",
-        icon: "/solution/secondsection/Stack.svg",
+        icon: assetUrl("/solution/secondsection/Stack.svg"),
         outcomes: ["Durability", "Simpler backups", "Lower storage costs"],
         products: ["Object Storage", "Security", "Database", "Compute"],
         href: "/solutions/storage",
@@ -112,7 +113,7 @@ type ProductCardData = {
 
 const PRODUCT_CARDS: ProductCardData[] = [
     {
-        icon: "/solution/thirdsecion/icon-1.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-1.svg"),
         title: "Compute",
         subtitle: "General Purpose VMs",
         description: "Reliable VMs for everyday workloads and quick scaling.",
@@ -120,7 +121,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["Instant provisioning", "Global regions", "Flexible sizing", "Root access"],
     },
     {
-        icon: "/solution/thirdsecion/icon-2.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-2.svg"),
         title: "GPU Instance",
         subtitle: "Accelerated compute",
         description: "High-performance GPUs for training, inference, rendering and HPC.",
@@ -128,7 +129,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["NVIDIA GPUs", "Bare-metal speed", "Jupyter ready", "CUDA support"],
     },
     {
-        icon: "/solution/thirdsecion/icon-3.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-3.svg"),
         title: "Database",
         subtitle: "Managed",
         description: "Fully managed databases with backups, upgrades and monitoring.",
@@ -136,7 +137,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["PostgreSQL", "MySQL", "Redis", "Auto-backups"],
     },
     {
-        icon: "/solution/thirdsecion/icon-4.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-4.svg"),
         title: "Security",
         subtitle: "Protect apps & data",
         description: "Identity, network and workload controls for secure-by-default cloud.",
@@ -144,7 +145,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["DDoS protection", "Firewall", "Encryption", "IAM controls"],
     },
     {
-        icon: "/solution/thirdsecion/icon-5.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-5.svg"),
         title: "Kubernetes",
         subtitle: "Managed",
         description: "Production Kubernetes without the operational overhead.",
@@ -152,7 +153,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["Auto-scaling", "Rolling updates", "Service mesh", "Monitoring"],
     },
     {
-        icon: "/solution/thirdsecion/icon-6.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-6.svg"),
         title: "Object Storage",
         subtitle: "S3 Compatible",
         description: "Durable object storage for media, backups, logs and artifacts.",
@@ -160,7 +161,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["S3 compatible", "11 nines durability", "CDN integration", "Versioning"],
     },
     {
-        icon: "/solution/thirdsecion/icon-7.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-7.svg"),
         title: "AI Agents",
         subtitle: "API Based",
         description: "Composable AI agents that connect tools, data and workflows via APIs.",
@@ -168,7 +169,7 @@ const PRODUCT_CARDS: ProductCardData[] = [
         features: ["Vector databases", "Model gateways", "Observability", "Workflows"],
     },
     {
-        icon: "/solution/thirdsecion/icon-8.svg",
+        icon: assetUrl("/solution/thirdsecion/icon-8.svg"),
         title: "Application Deployment",
         subtitle: "Ship faster",
         description: "Build, deploy and scale apps with streamlined release workflows.",

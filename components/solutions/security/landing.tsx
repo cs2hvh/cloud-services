@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -916,9 +917,9 @@ export function SecurityLanding() {
                 description="WAF, DDoS, zero-trust networking, identity controls, compliance automation, and immutable audit logs — one security posture, one provider."
                 primaryAction={{ label: "Talk to a security engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore controls", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-security.png",
+                    src: assetUrl("/images/main-page/solution-home-security.png"),
                     alt: "Enterprise security infrastructure",
                     priority: true,
                 }}

@@ -1,4 +1,5 @@
 import React from "react";
+import { assetUrl } from "@/lib/asset-url";
 import { Database } from "lucide-react";
 import Image from "next/image";
 
@@ -34,7 +35,7 @@ export const DatabaseIcon = ({ engine, className = "h-8 w-8" }: DatabaseIconProp
     return (
       <div className={`${className} text-blue-500 flex items-center justify-center`}>
         <Image
-          src="/kafka.png"
+          src={assetUrl("/kafka.png")}
           alt="Kafka Icon"
           width={20}
           height={20}

@@ -391,7 +391,7 @@ export function DomainMarketplaceTab({
                 {summaryLoading ? 'Checking availability source' : summary?.configured ? 'Marketplace active' : 'Config pending'}
               </div>
               <div className="mt-1 text-sm text-white/45">
-                {summary?.notes || 'Search and registration requests run through the managed registrar connection.'}
+                {summary?.notes || 'WHOIS privacy included on every registration.'}
               </div>
             </div>
 
@@ -401,9 +401,6 @@ export function DomainMarketplaceTab({
               </div>
               <div className="mt-2 text-sm font-medium text-white">
                 {selectedTlds.length} extensions selected
-              </div>
-              <div className="mt-1 text-sm text-white/45">
-                Compare registration and renewal pricing before you request a domain.
               </div>
             </div>
           </div>

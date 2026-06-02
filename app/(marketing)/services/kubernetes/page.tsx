@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import KubernetesReleaseSection from "@/components/services/kubernetes-release-section";
 import KubernetesFeaturesSection from "@/components/services/kubernetes-features-section";
@@ -7,35 +8,37 @@ import ServicesHomeSectionSix, {
   type UseCase,
 } from "@/components/serviceshome/section-6";
 import { getKubernetesCategories } from "@/lib/helpers/kubernetes-categories";
-import { Boxes, Brain, GitMerge, ShieldCheck } from "lucide-react";
+import Image from "next/image";
+
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 const KubernetesPage = async () => {
   const categories = await getKubernetesCategories();
 
   const cases: UseCase[] = [
     {
-      icon: Boxes,
+      iconNode: <Image src={`${CDN}/Ome-MzN09ykb.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       metric: "Microservices",
       title: "Microservices and APIs",
       description:
         "Run dozens of services on one cluster with namespace isolation, mTLS via a service mesh, and HPA based on request volume.",
     },
     {
-      icon: Brain,
+      iconNode: <Image src={`${CDN}/T8k0Ylj2ere9.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       metric: "AI / ML",
       title: "Training and inference at scale",
       description:
         "GPU node pools with CUDA preinstalled, spot pricing for training, and warm pools to keep inference latency predictable.",
     },
     {
-      icon: GitMerge,
+      iconNode: <Image src={`${CDN}/Ro-vKuEy9kks.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       metric: "Platform teams",
       title: "Internal developer platforms",
       description:
         "Multi-tenant clusters with RBAC, network policies, and per-namespace quotas. Argo CD or Flux wired in from day one.",
     },
     {
-      icon: ShieldCheck,
+      iconNode: <Image src={`${CDN}/FiShhqQFLbPW.png`} alt="" width={44} height={44} className="h-11 w-11 object-contain" />,
       metric: "Regulated",
       title: "Compliance-bound workloads",
       description:
@@ -84,8 +87,8 @@ const KubernetesPage = async () => {
         description="Production Kubernetes clusters with a free managed control plane, multi-zone HA, autoscaling node pools, and GitOps wired in from the first push."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/kubernetes.png", alt: "Kubernetes infrastructure" }}
+        backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
+        illustration={{ src: assetUrl("/images/main-page/kubernetes.png"), alt: "Kubernetes infrastructure" }}
       />
       <KubernetesReleaseSection />
       <KubernetesFeaturesSection />

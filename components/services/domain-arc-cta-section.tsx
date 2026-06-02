@@ -1,4 +1,5 @@
 import { Container } from "@/components/ui/container";
+import { assetUrl } from "@/lib/asset-url";
 
 export default function fDomainArcCtaSection() {
   return (
@@ -17,7 +18,7 @@ export default function fDomainArcCtaSection() {
           <span
             style={{
               backgroundImage:
-                "url('/images/main-page/domain-sec-7-circle.svg')",
+                `url('${assetUrl("/images/main-page/domain-sec-7-circle.svg")}')`,
             }}
             className="inline-flex rounded-full max-w-[158px] max-h-[41px]  bg-[#171C2B] px-4 py-1 text-xs font-medium text-white shadow-[0_0_24px_rgba(69,132,255,0.75)]"
           >

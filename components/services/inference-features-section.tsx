@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 
 import { motion } from "motion/react";
@@ -280,7 +281,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 1: HERO — Drop-in compatibility (6 cols × 2 rows) ── */}
           <Tile className="lg:col-span-6 lg:row-span-2" delay={0.0} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <ImageBadge src="/inference/sdk-icon.png" alt="SDK compatible" />
+              <ImageBadge src={assetUrl("/inference/sdk-icon.png")} alt="SDK compatible" />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 Drop-in
               </span>
@@ -320,7 +321,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 2: TALL — Semantic cache (3 cols × 2 rows) ── */}
           <Tile className="lg:col-span-3 lg:row-span-2" delay={0.05} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <ImageBadge src="/inference/semantic-icon.png" alt="Semantic cache" size={70} />
+              <ImageBadge src={assetUrl("/inference/semantic-icon.png")} alt="Semantic cache" size={70} />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 Cache
               </span>
@@ -393,7 +394,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 3: TALL — BYOK (3 cols × 2 rows) ── */}
           <Tile className="lg:col-span-3 lg:row-span-2" delay={0.1} inView={inView}>
             <div className="flex items-start justify-between gap-4">
-              <ImageBadge src="/inference/byok.png" alt="Bring your own key" />
+              <ImageBadge src={assetUrl("/inference/byok.png")} alt="Bring your own key" />
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
                 BYOK
               </span>
@@ -434,7 +435,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 4: WIDE — Spend control (6 cols × 1 row) ── */}
           <Tile className="lg:col-span-6 lg:row-span-1" delay={0.15} inView={inView}>
             <div className="flex items-start gap-5">
-              <ImageBadge src="/inference/per-key.png" alt="Per-key spend caps" />
+              <ImageBadge src={assetUrl("/inference/per-key.png")} alt="Per-key spend caps" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-[15px] font-semibold tracking-tight text-white">
@@ -488,7 +489,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 5: STD — Zero Data Retention (3 cols × 1 row) ── */}
           <Tile className="lg:col-span-3 lg:row-span-1" delay={0.2} inView={inView}>
             <div className="flex items-start gap-4">
-              <ImageBadge src="/inference/ZeroData Retention.png" alt="Zero Data Retention" />
+              <ImageBadge src={assetUrl("/inference/ZeroData Retention.png")} alt="Zero Data Retention" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
@@ -508,7 +509,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 6: STD — Observability (3 cols × 1 row) ── */}
           <Tile className="lg:col-span-3 lg:row-span-1" delay={0.25} inView={inView}>
             <div className="flex items-start gap-4">
-              <ImageBadge src="/inference/usage-audit.png" alt="Usage and audit" />
+              <ImageBadge src={assetUrl("/inference/usage-audit.png")} alt="Usage and audit" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
@@ -528,7 +529,7 @@ export default function InferenceFeaturesSection() {
           {/* ── Tile 7: WIDE — Routing presets + webhooks (6 cols × 1 row) ── */}
           <Tile className="lg:col-span-6 lg:row-span-1" delay={0.3} inView={inView}>
             <div className="flex items-start gap-5">
-              <ImageBadge src="/inference/routing-icon.png" alt="Routing presets and webhooks" />
+              <ImageBadge src={assetUrl("/inference/routing-icon.png")} alt="Routing presets and webhooks" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
                   <h3 className="text-[15px] font-semibold tracking-tight text-white">

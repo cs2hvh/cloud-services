@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
@@ -61,12 +62,12 @@ export default function InferenceHeroSection({
               A.I. Labs — Inference
             </div>
 
-            <h1 className="mt-6 max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
-              Every model.
+            <h1 className="mt-6 max-w-3xl text-4xl leading-[0.96] tracking-tight sm:text-5xl lg:text-[5.15rem]" style={{ fontFamily: "var(--font-antic-didone), 'Didot', 'Bodoni MT', serif" }}>
+              <span className="text-white">Every Model,</span>
               <span className="block text-[#0095FF]">One API.</span>
             </h1>
 
-            <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]">
+            <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]" style={{ fontFamily: "var(--font-nunito), sans-serif" }}>
               One OpenAI- and Anthropic-compatible endpoint for 50+ models. Streaming, tools, BYOK, and semantic cache — zero markup.
             </p>
 
@@ -75,6 +76,7 @@ export default function InferenceHeroSection({
                 <Link
                   href={primaryAction.href}
                   className="inline-flex h-11 items-center gap-2 bg-white px-6 text-sm font-medium text-black transition hover:bg-[#0095FF] hover:text-white"
+                  style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                 >
                   {primaryAction.label}
                   <ArrowRight className="h-4 w-4" />
@@ -85,6 +87,7 @@ export default function InferenceHeroSection({
                 <Link
                   href={secondaryAction.href}
                   className="inline-flex h-11 items-center gap-2 border border-white/[0.12] bg-white/[0.04] px-6 text-sm font-medium text-white/78 transition hover:bg-white/[0.08] hover:text-white"
+                  style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                 >
                   {secondaryAction.label}
                 </Link>
@@ -124,7 +127,7 @@ export default function InferenceHeroSection({
                 }}
               />
               <Image
-                src="/ailabs/inference.png"
+                src={assetUrl("/ailabs/inference.png")}
                 alt="Inference API illustration"
                 fill
                 priority

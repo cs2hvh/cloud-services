@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
@@ -38,7 +39,7 @@ export function ReferenceDeployment({
   environments,
   tags,
   actions,
-  backgroundImage = "/images/main-page/ref-dply-bg.svg",
+  backgroundImage = assetUrl("/images/main-page/ref-dply-bg.svg"),
   className,
 }: ReferenceDeploymentProps) {
   const [isRouting, setIsRouting] = useState(false);

@@ -757,8 +757,10 @@ export async function buildCustomImageTemplate(
         ostype,
         scsihw: "virtio-scsi-pci",
         net0: `virtio,bridge=${bridge}`,
+        // SPICE display (qxl) for all OS; keep the serial port so cloud-init
+        // still has a serial console for logging.
         serial0: "socket",
-        vga: "serial0",
+        vga: "qxl",
         agent: "enabled=1",
       },
       auth,
@@ -885,4 +887,120 @@ export async function createVNCProxy(
     dispatcher
   );
   return result;
+}
+
+export interface GuestExecResult {
+  exitcode: number;
+  out: string;
+  err: string;
+}
+
+/**
+ * Run a command inside a running VM via the QEMU guest agent and wait for it
+ * to finish. The agent must be installed + running in the guest (our templates
+ * install qemu-guest-agent; the Windows golden installs it via the setup guide).
+ *
+ * `command` is the argv array (e.g. ["/bin/bash","-lc", script] or
+ * ["cmd.exe","/c", cmd]). It is sent as repeated `command=` params, which is
+ * how the Proxmox /agent/exec API expects an argv. Output is base64 in the
+ * status response. Throws if the agent never returns a pid or the exec times out.
+ */
+export async function runGuestExec(
+  host: ProxmoxHost,
+  vmid: number,
+  command: string[],
+  auth: ProxmoxAuth,
+  dispatcher?: any,
+  opts: { maxWaitMs?: number; pollIntervalMs?: number } = {}
+): Promise<GuestExecResult> {
+  const maxWaitMs = opts.maxWaitMs ?? 60000;
+  const pollIntervalMs = opts.pollIntervalMs ?? 1500;
+  const apiBase = host.host_url.replace(/\/$/, "");
+
+  // Start the exec. `command` must be appended once per argv element. We do NOT
+  // send capture-output — Proxmox captures stdout/stderr by default and rejects
+  // the param ("property is not defined in schema") on current PVE versions.
+  const formData = new URLSearchParams();
+  for (const arg of command) formData.append("command", arg);
+
+  const res = await withTimeout(
+    fetch(`${apiBase}/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/agent/exec`, {
+      method: "POST",
+      body: formData,
+      redirect: "follow",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        ...(auth.headers as any),
+      },
+      dispatcher,
+    } as any)
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Proxmox guest exec error: ${res.status} ${text}`);
+  }
+  const json = (await res.json()) as any;
+  const pid = Number((json?.data ?? json)?.pid);
+  if (!pid) throw new Error("guest agent did not return a pid (is the agent running?)");
+
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const statusJson = await fetchJson(
+      host,
+      `/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/agent/exec-status?pid=${encodeURIComponent(String(pid))}`,
+      auth,
+      dispatcher
+    );
+    const status = (statusJson?.data ?? statusJson) as Record<string, any>;
+    if (status?.exited) {
+      return {
+        exitcode: Number(status.exitcode || 0),
+        out: status["out-data"] ? Buffer.from(String(status["out-data"]), "base64").toString("utf8") : "",
+        err: status["err-data"] ? Buffer.from(String(status["err-data"]), "base64").toString("utf8") : "",
+      };
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  throw new Error("guest agent exec timed out");
+}
+
+/**
+ * Reset the login password of a VM's primary account via the guest agent.
+ * The VM must be RUNNING. Does not reboot or touch anything else on the VM.
+ *
+ * - Linux: pipes "user:password" (base64-encoded so the password never appears
+ *   as a shell argument — fully injection-safe) into `chpasswd` as root.
+ * - Windows: `net user <user> "<password>"`. The caller MUST pass a password
+ *   free of cmd metacharacters (we generate one without " ' ` % ^ & $ < > |).
+ */
+export async function resetVmPassword(
+  host: ProxmoxHost,
+  vmid: number,
+  opts: { username: string; password: string; isWindows: boolean },
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<void> {
+  const { username, password, isWindows } = opts;
+  let result: GuestExecResult;
+  if (isWindows) {
+    result = await runGuestExec(
+      host,
+      vmid,
+      ["cmd.exe", "/c", `net user ${username} "${password}"`],
+      auth,
+      dispatcher
+    );
+  } else {
+    const b64 = Buffer.from(`${username}:${password}`, "utf8").toString("base64");
+    result = await runGuestExec(
+      host,
+      vmid,
+      ["/bin/bash", "-lc", `printf '%s' '${b64}' | base64 -d | chpasswd`],
+      auth,
+      dispatcher
+    );
+  }
+  if (result.exitcode !== 0) {
+    throw new Error(`password reset command failed (${result.exitcode}): ${result.out || result.err}`.trim());
+  }
 }

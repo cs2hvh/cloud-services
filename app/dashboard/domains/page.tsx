@@ -17,6 +17,7 @@ import {
   Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 
 // ─── Design tokens ─────────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = { fontFamily: 'var(--font-nunito), system-ui, sans-serif' };
@@ -114,7 +115,7 @@ function isExpiringSoon(expiresAt: string | null, days: number): boolean {
 }
 
 function copyDomain(domain: string) {
-  navigator.clipboard.writeText(domain);
+  void copyToClipboard(domain);
   toast.success('Domain copied');
 }
 

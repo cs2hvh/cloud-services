@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -67,7 +68,7 @@ export function PendingPayment({ payment }: PendingPaymentProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Image
-                src={`/currencies/${currencySymbol}.svg`}
+                src={assetUrl(`/currencies/${currencySymbol}.svg`)}
                 alt={payment.currency}
                 className="w-10 h-10"
               />
@@ -100,7 +101,7 @@ export function PendingPayment({ payment }: PendingPaymentProps) {
                   level="H"
                   includeMargin={true}
                   imageSettings={{
-                    src: `/currencies/${currencySymbol}.svg`,
+                    src: assetUrl(`/currencies/${currencySymbol}.svg`),
                     height: 40,
                     width: 40,
                     excavate: true,

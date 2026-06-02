@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
@@ -28,7 +29,7 @@ export default function AppDeployShowcaseSection() {
             <div className="absolute -inset-4 bg-[#0095FF]/[0.02] rounded-3xl blur-2xl pointer-events-none" />
 
             <Image
-              src="/images/main-page/service-home-app-section-3.png"
+              src={assetUrl("/images/main-page/service-home-app-section-3.png")}
               alt="App Deployment Dashboard"
               width={2400}
               height={1200}

@@ -17,6 +17,7 @@ import {
   StatCell,
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
 export interface CatalogModel {
   model_id: string;
@@ -274,7 +275,7 @@ function ModelCard({ model }: { model: CatalogModel }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(model.model_id);
+    await copyToClipboard(model.model_id);
     setCopied(true);
     toast.success(`Copied "${model.model_id}"`);
     setTimeout(() => setCopied(false), 1800);

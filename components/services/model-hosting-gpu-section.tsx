@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
-import { ArrowUpRight, Cpu, Gauge, Timer, Zap } from "lucide-react";
+import Image from "next/image";
+import { ArrowUpRight, Gauge, Timer, Zap } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 
@@ -245,19 +246,13 @@ export default function ModelHostingGpuSection() {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4 sm:px-8">
               <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-[10px] border"
-                  style={{
-                    background: `linear-gradient(135deg, ${ACCENT}30, ${ACCENT}08)`,
-                    borderColor: `${ACCENT}50`,
-                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 14px ${ACCENT}30`,
-                  }}
-                >
-                  <Cpu
-                    className="h-4.5 w-4.5 text-white"
-                    strokeWidth={1.6}
-                  />
-                </div>
+                <Image
+                  src="https://ahurasense.cs2hvh.com/images/2026-06/cenN-AJ8OsnN.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 shrink-0 object-contain"
+                />
                 <div>
                   <p className="font-mono text-[16px] font-semibold tracking-tight text-[#0095FF]">
                     {selected.sku}

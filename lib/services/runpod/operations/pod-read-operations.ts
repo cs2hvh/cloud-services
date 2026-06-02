@@ -5,6 +5,7 @@
 
 import { closeActiveBilling } from "@/config/billing-flow";
 import { BillingCredits } from "@/lib/billing/credits";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
@@ -136,6 +137,14 @@ function podStatusFromRunPod(pod: RunPodPodResource): PodStatus {
     return "provisioning";
 }
 
+// SSH is password/key auth as `root` against the pod's public IP + the public
+// port that maps to container port 22. Null until RunPod assigns a public IP.
+function deriveSshCommand(pod: RunPodPodResource): string | null {
+    const sshPort = pod.portMappings?.["22"];
+    if (pod.publicIp && sshPort) return `ssh root@${pod.publicIp} -p ${sshPort}`;
+    return null;
+}
+
 export const podReadOperations = {
     async listUserPods(
         ownerId: string
@@ -204,6 +213,96 @@ export const podReadOperations = {
     },
 
     /**
+     * Self-healing single-pod sync. The detail page calls this on load. If the
+     * pod is still provisioning, or running without complete connection info
+     * (public IP + SSH command), we fetch the live RunPod resource ONCE and
+     * persist status + connection fields — so SSH details appear within seconds
+     * of the pod booting, independent of the background reconcile cron. Upstream
+     * calls are cooled down per-pod so rapid re-fetches don't hammer RunPod, and
+     * once the info is captured it stops calling upstream entirely.
+     */
+    async syncUserPod(
+        podId: number,
+        ownerId: string
+    ): Promise<ServiceResult<GpuPodDetail>> {
+        const base = await this.getUserPod(podId, ownerId);
+        if (!base.success || !base.data) return base;
+        const pod = base.data;
+
+        // No upstream once the pod is gone or already fully wired up.
+        const terminal: string[] = ["terminated", "stopped", "interrupted", "failed"];
+        if (!pod.runpodPodId || terminal.includes(pod.status)) return base;
+        if (pod.status === "running" && pod.publicIp && pod.sshCommand) return base;
+
+        // Bound upstream calls — the detail page can re-fetch quickly.
+        const cd = await limitByUser(`pod-${podId}`, {
+            prefix: "rl:gpu-podsync",
+            limit: 1,
+            windowMs: 8_000,
+        });
+        if (!cd.allowed) return base;
+
+        let upstream: RunPodPodResource | null = null;
+        try {
+            upstream = await RunPodClient.rest<RunPodPodResource>(
+                "GET",
+                `/pods/${pod.runpodPodId}`
+            );
+        } catch {
+            // Disappearance / transient errors are left to the reconcile sweep.
+            return base;
+        }
+        if (!upstream) return base;
+
+        const newStatus = podStatusFromRunPod(upstream);
+        const patch: Record<string, unknown> = {};
+        if (newStatus !== pod.status) patch.status = newStatus;
+
+        const upIp = upstream.publicIp || null;
+        if (upIp && upIp !== pod.publicIp) patch.public_ip = upIp;
+
+        const upPorts = upstream.portMappings || null;
+        if (
+            upPorts &&
+            Object.keys(upPorts).length > 0 &&
+            JSON.stringify(upPorts) !== JSON.stringify(pod.portMappings)
+        ) {
+            patch.port_mappings = upPorts;
+        }
+
+        const upSsh = deriveSshCommand(upstream);
+        if (upSsh && upSsh !== pod.sshCommand) patch.ssh_command = upSsh;
+
+        if (
+            Array.isArray(upstream.ports) &&
+            upstream.ports.length > 0 &&
+            JSON.stringify(upstream.ports) !== JSON.stringify(pod.ports)
+        ) {
+            patch.ports = upstream.ports;
+        }
+
+        if (Object.keys(patch).length === 0) return base;
+
+        const supabase = await createServiceClient();
+        await supabase.from("gpu_pods").update(patch).eq("id", podId);
+
+        // Return fresh data so the caller sees it without a second round-trip.
+        return {
+            success: true,
+            data: {
+                ...pod,
+                status: (patch.status as PodStatus) ?? pod.status,
+                publicIp: (patch.public_ip as string) ?? pod.publicIp,
+                portMappings:
+                    (patch.port_mappings as Record<string, number>) ??
+                    pod.portMappings,
+                sshCommand: (patch.ssh_command as string) ?? pod.sshCommand,
+                ports: (patch.ports as string[]) ?? pod.ports,
+            },
+        };
+    },
+
+    /**
      * Walk every pod whose DB status implies "should be present on RunPod"
      * and reconcile against the upstream resource. Detects:
      *   - status drift (provisioning → running, running → stopped, etc.)
@@ -211,7 +310,9 @@ export const podReadOperations = {
      *   - manually-deleted pods (also 404)
      *
      * Side-effects:
-     *   - updates gpu_pods.status, public_ip, port_mappings
+     *   - updates gpu_pods.status + connection info (public_ip, port_mappings,
+     *     ssh_command, ports) — refreshed every pass so SSH details land once
+     *     RunPod assigns the public IP (which lags the RUNNING transition)
      *   - on disappearance: closes billing + marks 'interrupted' or 'terminated'
      *   - writes gpu_pod_events
      */
@@ -227,7 +328,7 @@ export const podReadOperations = {
             const { data: rows, error } = await supabase
                 .from("gpu_pods")
                 .select(
-                    "id, owner_id, runpod_pod_id, status, interruptible, name"
+                    "id, owner_id, runpod_pod_id, status, interruptible, name, billing_service_id, public_ip, port_mappings, ssh_command, ports"
                 )
                 .in("status", ["provisioning", "running", "restarting", "stopped"])
                 .not("runpod_pod_id", "is", null);
@@ -240,6 +341,11 @@ export const podReadOperations = {
                 status: PodStatus;
                 interruptible: boolean;
                 name: string;
+                billing_service_id: string;
+                public_ip: string | null;
+                port_mappings: Record<string, number> | null;
+                ssh_command: string | null;
+                ports: string[] | null;
             }>) {
                 counter.checked += 1;
                 let upstream: RunPodPodResource | null = null;
@@ -257,11 +363,11 @@ export const podReadOperations = {
                         try {
                             await closeActiveBilling({
                                 userId: r.owner_id,
-                                serviceId: String(r.id),
+                                serviceId: r.billing_service_id,
                                 serviceType: "gpu_pod",
                                 closeActive: () =>
                                     BillingCredits.closeActiveGpuPod({
-                                        serviceId: r.id,
+                                        serviceId: r.billing_service_id,
                                     }),
                             });
                         } catch (billErr) {
@@ -299,22 +405,51 @@ export const podReadOperations = {
 
                 if (!upstream) continue;
                 const newStatus = podStatusFromRunPod(upstream);
-                if (newStatus !== r.status) {
-                    await supabase
-                        .from("gpu_pods")
-                        .update({
-                            status: newStatus,
-                            public_ip: upstream.publicIp || null,
-                            port_mappings: upstream.portMappings || null,
-                        })
-                        .eq("id", r.id);
+
+                // Build an incremental patch. Connection details (public IP, port
+                // mappings, SSH command, ports) are refreshed on EVERY pass while
+                // the pod is alive — RunPod assigns them a little AFTER it first
+                // reports RUNNING, so capturing them only on the status transition
+                // misses them permanently (the pod then sits 'running' forever with
+                // null connection info). We never blank a known-good value if the
+                // upstream momentarily returns nothing.
+                const patch: Record<string, unknown> = {};
+                if (newStatus !== r.status) patch.status = newStatus;
+
+                const upIp = upstream.publicIp || null;
+                if (upIp && upIp !== r.public_ip) patch.public_ip = upIp;
+
+                const upPorts = upstream.portMappings || null;
+                if (
+                    upPorts &&
+                    Object.keys(upPorts).length > 0 &&
+                    JSON.stringify(upPorts) !== JSON.stringify(r.port_mappings)
+                ) {
+                    patch.port_mappings = upPorts;
+                }
+
+                const upSsh = deriveSshCommand(upstream);
+                if (upSsh && upSsh !== r.ssh_command) patch.ssh_command = upSsh;
+
+                if (
+                    Array.isArray(upstream.ports) &&
+                    upstream.ports.length > 0 &&
+                    JSON.stringify(upstream.ports) !== JSON.stringify(r.ports)
+                ) {
+                    patch.ports = upstream.ports;
+                }
+
+                if (Object.keys(patch).length === 0) continue;
+
+                await supabase.from("gpu_pods").update(patch).eq("id", r.id);
+                if (patch.status) {
                     await supabase.from("gpu_pod_events").insert({
                         pod_id: r.id,
                         event_type: "status_change",
                         message: `Status: ${r.status} → ${newStatus}`,
                     });
-                    counter.updated += 1;
                 }
+                counter.updated += 1;
             }
             return { success: true, data: counter };
         } catch (e) {

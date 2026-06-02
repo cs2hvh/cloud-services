@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
     ArrowLeft,
     CheckCircle,
-    ChevronRight,
     Layers,
     Loader2,
     Send,
@@ -26,28 +25,10 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
 
-const INPUT_CLASS =
-    "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white placeholder:text-white/30 rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
-
 const TEXTAREA_CLASS =
     "block w-full resize-y border border-white/[0.08] bg-[#0d0e11] px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
 
-const SELECT_CLASS =
-    "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors appearance-none";
-
-const SELECT_OPTION_STYLE: CSSProperties = {
-    backgroundColor: "#0d0e11",
-    color: "#ffffff",
-};
-
-const GPU_CHOICES = ["H100 SXM", "H100 PCIe", "H100 NVL", "H200", "B200", "Mixed / not sure"];
-const DURATIONS = [
-    { value: "1-week", label: "1 week" },
-    { value: "1-month", label: "1 month" },
-    { value: "3-months", label: "3 months" },
-    { value: "6-months", label: "6 months" },
-    { value: "1-year", label: "1 year+" },
-];
+const GPU_CHOICES = ["H100 SXM", "H100 PCIe", "H100 NVL", "H200", "B200", "B300", "Mixed / not sure"];
 type PlanType = {
     value: string;
     label: string;
@@ -96,11 +77,12 @@ export default function EnterpriseInquiryForm() {
 
     const [planType, setPlanType] = useState("reserved");
     const [gpus, setGpus] = useState<string[]>(["H100 SXM"]);
-    const [gpuCount, setGpuCount] = useState(16);
-    const [duration, setDuration] = useState("1-month");
     const [workload, setWorkload] = useState("");
-    const [region, setRegion] = useState("");
     const [extra, setExtra] = useState("");
+    // Sizing/region are no longer collected as structured fields (the workload
+    // description covers them); send valid defaults so the API contract holds.
+    const gpuCount = 16;
+    const duration = "1-month";
 
     function toggleGpu(g: string) {
         setGpus((prev) =>
@@ -128,7 +110,7 @@ export default function EnterpriseInquiryForm() {
                     gpuCount,
                     duration,
                     workload: workload.trim(),
-                    region: region.trim() || null,
+                    region: null,
                     extra: extra.trim() || null,
                 }),
             });
@@ -207,10 +189,9 @@ export default function EnterpriseInquiryForm() {
                     Back to GPU Cloud
                 </Link>
 
-                <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
-                    <span>GPU Cloud</span>
-                    <ChevronRight className="h-3 w-3 text-white/20" />
-                    <span className="text-white/65">Reserved & Clusters</span>
+                <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+                    <span className="h-px w-4" style={{ background: ACCENT }} />
+                    GPU Cloud · Reserved &amp; Clusters
                 </div>
 
                 <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold max-w-3xl">
@@ -369,55 +350,9 @@ export default function EnterpriseInquiryForm() {
                     </div>
                 </section>
 
-                {/* ── 03 Sizing ───────────────────────────────────── */}
+                {/* ── 03 Workload ─────────────────────────────────── */}
                 <section>
-                    <SectionHead index="03" title="Sizing &" accent="region" />
-                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 grid gap-4 sm:grid-cols-3">
-                        <FieldWrap label="Target GPU count">
-                            <input
-                                type="number"
-                                min={1}
-                                max={4096}
-                                value={gpuCount}
-                                onChange={(e) =>
-                                    setGpuCount(
-                                        Math.max(
-                                            1,
-                                            Math.min(4096, parseInt(e.target.value || "1", 10))
-                                        )
-                                    )
-                                }
-                                className={INPUT_CLASS}
-                            />
-                        </FieldWrap>
-                        <FieldWrap label="Duration">
-                            <select
-                                value={duration}
-                                onChange={(e) => setDuration(e.target.value)}
-                                className={SELECT_CLASS}
-                            >
-                                {DURATIONS.map((d) => (
-                                    <option style={SELECT_OPTION_STYLE} key={d.value} value={d.value}>
-                                        {d.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </FieldWrap>
-                        <FieldWrap label="Region preference">
-                            <input
-                                type="text"
-                                value={region}
-                                onChange={(e) => setRegion(e.target.value)}
-                                placeholder="e.g. US-East, EU, no preference"
-                                className={INPUT_CLASS}
-                            />
-                        </FieldWrap>
-                    </div>
-                </section>
-
-                {/* ── 04 Workload ─────────────────────────────────── */}
-                <section>
-                    <SectionHead index="04" title="Workload &" accent="context" />
+                    <SectionHead index="03" title="Workload &" accent="context" />
                     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
                         <FieldWrap label="Workload description">
                             <textarea
@@ -501,9 +436,6 @@ export default function EnterpriseInquiryForm() {
                         <div className="flex flex-col">
                             <DetailRow label="Plan" value={PLAN_TYPES.find((p) => p.value === planType)?.label ?? "—"} />
                             <DetailRow label="GPUs" value={gpus.length ? gpus.join(", ") : "—"} />
-                            <DetailRow label="Count" value={`${gpuCount}×`} />
-                            <DetailRow label="Duration" value={DURATIONS.find((d) => d.value === duration)?.label ?? "—"} />
-                            {region.trim() && <DetailRow label="Region" value={region.trim()} />}
                         </div>
                     </div>
                     <div className="border border-white/[0.06] bg-[#111216] rounded-[8px] p-5">
@@ -541,13 +473,12 @@ function SectionHead({
     return (
         <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
             <div className="flex items-baseline gap-3">
-                <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>{index}</span>
+                <span className={`${MONO} text-[10.5px] tabular-nums`} style={{ color: ACCENT }}>{index}</span>
                 <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
                     {title}{" "}
-                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                    <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                         {accent}
                     </span>
-                    <span className="text-white/55 font-normal">.</span>
                 </h2>
             </div>
             {meta && (

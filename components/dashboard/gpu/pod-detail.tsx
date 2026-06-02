@@ -6,10 +6,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
+import { useConfirm } from "@/components/ui/confirm";
 import {
     AlertTriangle,
     ArrowLeft,
-    ChevronRight,
     Copy,
     Loader2,
     Pause,
@@ -20,7 +21,6 @@ import {
     XCircle,
 } from "lucide-react";
 
-import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import type { CloudType, PodStatus } from "./types";
 
 interface GpuPodDetailFromApi {
@@ -59,6 +59,33 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
 
+// Derive a clean GPU model name + VRAM + architecture from the catalog id
+// (e.g. "a100-sxm4-80gb-80" → { name: "A100", vramGb: 80, arch: "Ampere" }).
+function gpuInfo(catalogId: string): {
+    name: string;
+    vramGb: number | null;
+    arch: string | null;
+} {
+    const parts = catalogId.split("-");
+    const vramMatch = catalogId.match(/(\d+)\s*gb/i);
+    const vramGb = vramMatch ? Number(vramMatch[1]) : null;
+    const stop = new Set(["sxm", "sxm4", "sxm5", "pcie", "nvl"]);
+    const nameTokens: string[] = [];
+    for (const p of parts) {
+        if (stop.has(p.toLowerCase()) || /\d+\s*gb/i.test(p)) break;
+        nameTokens.push(p);
+    }
+    const name = (nameTokens.join(" ") || parts[0] || catalogId).toUpperCase();
+    const n = catalogId.toLowerCase();
+    const arch =
+        /(b100|b200|b300|gb200|rtx pro|rtx 50)/.test(n) ? "Blackwell" :
+        /(h100|h200|gh200)/.test(n) ? "Hopper" :
+        /(a100|a40|a6000|a5000|a4000|rtx 30|rtx a)/.test(n) ? "Ampere" :
+        /(l4|l40|rtx 40|ada)/.test(n) ? "Ada Lovelace" :
+        /(mi300|mi325)/.test(n) ? "CDNA 3" : null;
+    return { name, vramGb, arch };
+}
+
 function statusMeta(status: PodStatus): { color: string; label: string; pulse: boolean } {
     switch (status) {
         case "running":
@@ -83,6 +110,8 @@ export default function GpuPodDetail() {
     const router = useRouter();
     const supabase = createClient();
     const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+    const confirm = useConfirm();
 
     const podId = Number(params.id);
     const [pod, setPod] = useState<GpuPodDetailFromApi | null>(null);
@@ -126,9 +155,24 @@ export default function GpuPodDetail() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [podId]);
 
+    // Keep syncing until the pod is fully connectable. RunPod assigns the public
+    // IP a little after it reports RUNNING, and the realtime channel only fires
+    // on DB writes — so while connection info is still missing we poll, and the
+    // GET endpoint self-heals it from the live RunPod resource.
+    useEffect(() => {
+        if (!pod) return;
+        const needsSync =
+            pod.status === "provisioning" ||
+            pod.status === "restarting" ||
+            (pod.status === "running" && !pod.sshCommand);
+        if (!needsSync) return;
+        const t = setInterval(() => refresh(), 8000);
+        return () => clearInterval(t);
+    }, [pod, refresh]);
+
     const copy = async (text: string, label: string) => {
         try {
-            await navigator.clipboard.writeText(text);
+            await copyToClipboard(text);
             toast.success(`${label} copied`);
         } catch {
             toast.error(`Copy failed`);
@@ -156,9 +200,14 @@ export default function GpuPodDetail() {
 
     async function destroyPod() {
         if (!pod) return;
-        if (!confirm(`Destroy pod "${pod.name}"? Billing will stop after the final prorated charge.`)) {
-            return;
-        }
+        const ok = await confirm({
+            title: `Destroy pod "${pod.name}"?`,
+            description:
+                "This permanently deletes the pod and all data on it. Billing stops after the final prorated charge.",
+            confirmText: "Destroy pod",
+            danger: true,
+        });
+        if (!ok) return;
         setActing(true);
         try {
             const res = await fetch(`/api/services/gpu/pods/${podId}`, {
@@ -211,6 +260,7 @@ export default function GpuPodDetail() {
     const isStopped = pod.status === "stopped";
     const isTerminal = pod.status === "terminated" || pod.status === "failed";
     const monthlyEst = (pod.hourlyCostUsd || 0) * 730;
+    const gpu = gpuInfo(pod.gpuCatalogId);
     const provisioning = pod.details?.provisioning as
         | { stage?: string; progress?: number; message?: string }
         | undefined;
@@ -228,10 +278,9 @@ export default function GpuPodDetail() {
                         Back to GPU Cloud
                     </Link>
 
-                    <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
-                        <span>GPU Cloud</span>
-                        <ChevronRight className="h-3 w-3 text-white/20" />
-                        <span className="text-white/65 truncate">{pod.name}</span>
+                    <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+                        <span className="h-px w-4" style={{ background: ACCENT }} />
+                        GPU Cloud · Pod
                     </div>
 
                     <h1 className={`${MONO} text-[28px] sm:text-[36px] leading-[1.05] tracking-[-0.015em] text-white font-semibold truncate`}>
@@ -239,9 +288,9 @@ export default function GpuPodDetail() {
                     </h1>
 
                     <div className={`${MONO} mt-3 text-[11.5px] text-white/45 flex flex-wrap items-center gap-1.5`}>
-                        <NvidiaLogo width={18} height={13} className="opacity-95" />
                         <span className="text-white/75 tabular-nums font-medium">
-                            {pod.gpuCount}× {pod.gpuCatalogId.toUpperCase()}
+                            {pod.gpuCount}× {gpu.name}
+                            {gpu.vramGb ? ` · ${gpu.vramGb} GB` : ""}
                         </span>
                         <span className="text-white/15">·</span>
                         <span>{pod.cloudType === "SECURE" ? "Secure cloud" : "Community"}</span>
@@ -353,29 +402,59 @@ export default function GpuPodDetail() {
 
             {/* ── Stats strip ───────────────────────────────────── */}
             <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
+                {/* GPU — prominent model name */}
+                <div className="px-5 py-5 flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5">
+                        <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: ACCENT, boxShadow: `0 0 6px ${ACCENT}` }}
+                        />
+                        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                            GPU
+                        </span>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                        <span
+                            style={SERIF_STYLE}
+                            className="text-[19px] leading-none font-medium tabular-nums text-white/45"
+                        >
+                            {pod.gpuCount}×
+                        </span>
+                        <span
+                            style={SERIF_STYLE}
+                            className="text-[38px] sm:text-[42px] leading-none font-bold tracking-[-0.035em] text-white"
+                        >
+                            {gpu.name}
+                        </span>
+                    </div>
+                    <p className={`${MONO} text-[10.5px] text-white/40 mt-auto truncate`}>
+                        {[gpu.arch, pod.cloudType === "SECURE" ? "Secure cloud" : "Community"]
+                            .filter(Boolean)
+                            .join(" · ")}
+                    </p>
+                </div>
+
                 <StatCell
-                    label="GPUs"
-                    value={`${pod.gpuCount}×`}
-                    suffix={pod.gpuCatalogId.split("-")[0].toUpperCase()}
-                    hint={pod.gpuCatalogId}
-                    accent="#a78bfa"
+                    label="Total VRAM"
+                    value={gpu.vramGb ? String(gpu.vramGb * pod.gpuCount) : "—"}
+                    suffix={gpu.vramGb ? "GB" : undefined}
+                    hint={gpu.vramGb ? `${gpu.vramGb} GB × ${pod.gpuCount} GPU` : "GPU memory"}
+                    accent={ACCENT}
                 />
                 <StatCell
-                    label="Container disk"
-                    value={`${pod.containerDiskGb}`}
+                    label="Storage"
+                    value={`${pod.containerDiskGb + pod.volumeGb}`}
                     suffix="GB"
-                    hint={pod.volumeGb > 0 ? `+ ${pod.volumeGb} GB volume` : "ephemeral"}
+                    hint={
+                        pod.volumeGb > 0
+                            ? `${pod.containerDiskGb} GB disk + ${pod.volumeGb} GB volume`
+                            : `${pod.containerDiskGb} GB ephemeral`
+                    }
                 />
                 <StatCell
                     label="Hourly cost"
                     value={`$${pod.hourlyCostUsd.toFixed(2)}`}
                     hint={`≈ $${monthlyEst.toFixed(0)}/mo`}
-                    accent={ACCENT}
-                />
-                <StatCell
-                    label="Cloud"
-                    value={pod.cloudType === "SECURE" ? "Secure" : "Community"}
-                    hint={pod.dataCenterId || "—"}
                 />
             </section>
 
@@ -405,17 +484,6 @@ export default function GpuPodDetail() {
                             value={pod.ports.length > 0 ? pod.ports.join(", ") : "—"}
                             mono
                         />
-                        <Row
-                            label="Port mappings"
-                            value={
-                                pod.portMappings && Object.keys(pod.portMappings).length > 0
-                                    ? Object.entries(pod.portMappings)
-                                          .map(([k, v]) => `${k}→${v}`)
-                                          .join(", ")
-                                    : "—"
-                            }
-                            mono
-                        />
                     </div>
                 </section>
 
@@ -423,8 +491,7 @@ export default function GpuPodDetail() {
                 <section>
                     <SectionHead index="02" title="Pod" accent="configuration" />
                     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.04]">
-                        <Row label="Image" value={pod.imageName} mono />
-                        <Row label="Template" value={pod.templateId || "—"} />
+                        <Row label="Image" value={customerImage(pod.imageName, pod.templateId)} />
                         <Row
                             label="Pricing mode"
                             value={pod.interruptible ? "Spot (interruptible)" : "On-demand"}
@@ -435,22 +502,38 @@ export default function GpuPodDetail() {
                             mono
                         />
                         <Row
-                            label="RunPod ID"
-                            value={pod.runpodPodId || "—"}
-                            mono
-                            onCopy={
-                                pod.runpodPodId
-                                    ? () => copy(pod.runpodPodId!, "RunPod ID")
-                                    : undefined
-                            }
+                            label="Network volume"
+                            value={pod.networkVolumeId ? "Attached" : "—"}
                         />
-                        <Row label="Network volume" value={pod.networkVolumeId || "—"} mono />
                         <Row label="Created" value={new Date(pod.createdAt).toLocaleString()} />
                     </div>
                 </section>
             </div>
         </div>
     );
+}
+
+// Customer-safe image label — never leak our internal registry / build infra
+// to customers. Managed images resolve to a friendly stack name; a customer's
+// own public image is shown verbatim.
+function customerImage(imageName: string, templateId: string | null): string {
+    const internal = /ghcr\.io|cs2hvh|\/gpu-/i.test(imageName);
+    if (!internal) return imageName;
+    const slug =
+        templateId || imageName.split("/").pop()?.split(":")[0] || "Managed image";
+    const pretty = slug
+        .replace(/^gpu-/i, "")
+        .replace(/-(\d+)-(\d+)/g, " $1.$2")
+        .replace(/\bcuda\b/gi, "CUDA")
+        .replace(/\bpytorch\b/gi, "PyTorch")
+        .replace(/\btensorflow\b/gi, "TensorFlow")
+        .replace(/\bvllm\b/gi, "vLLM")
+        .replace(/\bcomfyui\b/gi, "ComfyUI")
+        .replace(/\bubuntu\b/gi, "Ubuntu")
+        .replace(/[-_]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return pretty || "Managed image";
 }
 
 // ─── Subcomponents ─────────────────────────────────────────────────
@@ -520,15 +603,14 @@ function SectionHead({
     return (
         <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
             <div className="flex items-baseline gap-3">
-                <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>
+                <span className={`${MONO} text-[10.5px] tabular-nums`} style={{ color: ACCENT }}>
                     {index}
                 </span>
                 <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
                     {title}{" "}
-                    <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                    <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                         {accent}
                     </span>
-                    <span className="text-white/55 font-normal">.</span>
                 </h2>
             </div>
             {meta && (

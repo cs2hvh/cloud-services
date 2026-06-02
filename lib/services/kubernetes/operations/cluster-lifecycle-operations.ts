@@ -5,7 +5,14 @@
 import axios from "axios";
 import { NextRequest } from "next/server";
 
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import {
+  ensureBalance,
+  postProvisionBilling,
+  reserveProvision,
+  settleProvision,
+  releaseProvision,
+  type ProvisionReservation,
+} from "@/config/billing-flow";
 import { Encryption, generateStrongPassword } from "@/config/functions";
 import { getRatesForKubernetes, getRatesForKubernetesExisting } from "@/config/pricing";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -86,6 +93,8 @@ export const clusterLifecycleOperations = {
     let clusterId: string | null = null;
     let INITIAL_COST = 0;
     let HOURLY_RATE = 0;
+    let settled = false;
+    let reservation: ProvisionReservation | undefined;
 
     try {
       const totalNodes = Math.max(request.node_pool.count, 1);
@@ -96,8 +105,15 @@ export const clusterLifecycleOperations = {
         INITIAL_COST = rates.initialCost;
         HOURLY_RATE = rates.hourlyRate;
 
-        const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
-        if (!balCheck.ok) {
+        // Atomically reserve (setup + 1h) BEFORE provisioning so concurrent
+        // creates can't all pass a stale read and spawn an unbilled fleet.
+        const reservationResult = await reserveProvision({
+          userId: request.owner_id,
+          initialCost: INITIAL_COST,
+          hourlyRate: HOURLY_RATE,
+        });
+        reservation = reservationResult.reservation;
+        if (!reservationResult.ok) {
           return {
             success: false,
             error: "Insufficient credits",
@@ -335,14 +351,15 @@ export const clusterLifecycleOperations = {
       // Post-provision billing (skipped for admin internal clusters)
       if (!request.skipBilling) {
         try {
-          await postProvisionBilling({
-            userId: request.owner_id,
+          await settleProvision({
+            reservation: reservation!,
             initialCost: INITIAL_COST,
             hourlyRate: HOURLY_RATE,
             serviceId: clusterId,
             serviceType: "kubernetes",
             addActive: Billing.add_active_kubernetes,
           });
+          settled = true;
         } catch (billingErr) {
           const billingMessage =
             billingErr instanceof Error ? billingErr.message : String(billingErr);
@@ -471,6 +488,13 @@ export const clusterLifecycleOperations = {
         error: errorMessage,
         errorCode: "CREATE_FAILED",
       };
+    } finally {
+      // Any non-settle exit (insufficient balance, provision failure, throw)
+      // refunds the reservation exactly once. No-op once settled or when billing
+      // was skipped (admin internal clusters → reservation undefined).
+      if (!settled) {
+        await releaseProvision(reservation);
+      }
     }
   },
 

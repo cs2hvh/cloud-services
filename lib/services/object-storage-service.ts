@@ -11,7 +11,12 @@ import { Billing } from "@/lib/supabase/queries/billing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
 import { AuditLogService } from "@/lib/audit";
 import { getRatesForObjectStorage } from "@/config/pricing";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import {
+  reserveProvision,
+  settleProvision,
+  releaseProvision,
+  type ProvisionReservation,
+} from "@/config/billing-flow";
 import { Encryption } from "@/config/functions";
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
 import { updateBucketACL, updateBucketCORS, updateBucketVersioning } from "@/lib/aws/s3-operations";
@@ -151,6 +156,8 @@ export class ObjectStorageService {
 
     console.log(`[ObjectStorageService.createBucket] Creating bucket ${name} for user ${owner_id}`);
 
+    let settled = false;
+    let reservation: ProvisionReservation | undefined;
     try {
       // 0. Duplicate check (keep user-facing 409 behavior)
       const existing = await ObjectSpaces.get_bucket_by_name(name);
@@ -163,12 +170,13 @@ export class ObjectStorageService {
       // 1. Get pricing
       const { initialCost, hourlyRate } = await getRatesForObjectStorage();
 
-      // 2. Check user balance
-      const balCheck = await ensureBalance(owner_id, initialCost);
-      if (!balCheck.ok) {
+      // 2. Atomically reserve (setup + 1h) BEFORE provisioning (free-fleet gate).
+      const reservationResult = await reserveProvision({ userId: owner_id, initialCost, hourlyRate });
+      reservation = reservationResult.reservation;
+      if (!reservationResult.ok) {
         const error = new Error('Insufficient credits') as Error & { code?: string; balance?: number };
         error.code = 'INSUFFICIENT_BALANCE';
-        error.balance = balCheck.balance;
+        error.balance = reservationResult.balance;
         throw error;
       }
 
@@ -193,14 +201,15 @@ export class ObjectStorageService {
       // 4. Set up billing
       const serviceId = result.data?.id ?? name;
       try {
-        await postProvisionBilling({
-          userId: owner_id,
+        await settleProvision({
+          reservation: reservationResult.reservation,
           initialCost,
           hourlyRate,
           serviceId,
           serviceType: "objectspace",
           addActive: Billing.add_active_objectspace,
         });
+        settled = true;
         console.log(`[ObjectStorageService.createBucket] Billing setup complete`);
       } catch (billingErr) {
         console.error(`[ObjectStorageService.createBucket] Billing setup failed:`, billingErr);
@@ -304,6 +313,12 @@ export class ObjectStorageService {
       }
 
       throw error; // Re-throw for caller to handle
+    } finally {
+      // Any non-settle exit (insufficient balance, creation/billing failure,
+      // throw) refunds the reservation exactly once. No-op once settled.
+      if (!settled) {
+        await releaseProvision(reservation);
+      }
     }
   }
 

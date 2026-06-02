@@ -1,3 +1,4 @@
+import { assetUrl } from "@/lib/asset-url";
 import {
   Search,
   Monitor,
@@ -57,7 +58,7 @@ export default function DomainWhyChooseSection() {
       <div
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
-          backgroundImage: "url('/images/main-page/domain-sec-5-bg.svg')",
+          backgroundImage: `url('${assetUrl("/images/main-page/domain-sec-5-bg.svg")}')`,
         }}
         aria-hidden="true"
       />

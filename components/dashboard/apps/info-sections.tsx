@@ -1,10 +1,11 @@
 'use client';
+import { assetUrl } from "@/lib/asset-url";
 
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const FRAMEWORKS = [
-  { name: 'Next.js', icon: '/next.svg' },
+  { name: 'Next.js', icon: assetUrl('/next.svg') },
   { name: 'React', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg' },
   { name: 'Vue.js', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vuejs/vuejs-original.svg' },
   { name: 'Node.js', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg' },
@@ -18,7 +19,7 @@ const FRAMEWORKS = [
 const GIT_PROVIDERS = [
   {
     name: 'GitHub',
-    icon: '/github.png',
+    icon: assetUrl('/github.png'),
     description: 'Deploy directly from your GitHub repositories with automatic builds on every push.',
     features: [
       'Public and private repositories',
@@ -29,7 +30,7 @@ const GIT_PROVIDERS = [
   },
   {
     name: 'GitLab',
-    icon: '/gitlab.png',
+    icon: assetUrl('/gitlab.png'),
     description: 'Seamless integration with GitLab repositories and CI/CD pipelines.',
     features: [
       'GitLab.com and self-hosted',
@@ -40,7 +41,7 @@ const GIT_PROVIDERS = [
   },
   {
     name: 'Bitbucket',
-    icon: '/BitBucket.png',
+    icon: assetUrl('/BitBucket.png'),
     description: 'Deploy from Bitbucket repositories with support for Bitbucket Pipelines.',
     features: [
       'Bitbucket Cloud integration',

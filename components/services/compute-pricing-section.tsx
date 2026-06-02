@@ -1,5 +1,6 @@
 "use client";
 
+import { assetUrl } from "@/lib/asset-url";
 import { useState } from "react";
 import Image from "next/image";
 import {
@@ -478,7 +479,7 @@ function BareMetalPlanCard({ plan, index }: { plan: BareMetalPlan; index: number
           </p>
           <div className="mt-2 flex items-center gap-2">
             <Image
-              src={isIntel ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
+              src={isIntel ? assetUrl("/images/compute-page/intel.png") : assetUrl("/images/compute-page/amd.png")}
               alt={isIntel ? "Intel" : "AMD"}
               width={22}
               height={22}
@@ -568,7 +569,7 @@ export default function ComputePricingSection({
               <div className="mt-6 flex flex-wrap gap-3">
                 <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
                   <Image
-                    src="/images/compute-page/amd.png"
+                    src={assetUrl("/images/compute-page/amd.png")}
                     alt="AMD"
                     width={60}
                     height={22}
@@ -578,7 +579,7 @@ export default function ComputePricingSection({
                 </div>
                 <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
                   <Image
-                    src="/images/compute-page/intel.png"
+                    src={assetUrl("/images/compute-page/intel.png")}
                     alt="Intel"
                     width={52}
                     height={22}
@@ -738,7 +739,7 @@ export default function ComputePricingSection({
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-2.5">
                             <Image
-                              src={isIntel ? "/images/compute-page/intel.png" : "/images/compute-page/amd.png"}
+                              src={isIntel ? assetUrl("/images/compute-page/intel.png") : assetUrl("/images/compute-page/amd.png")}
                               alt={isIntel ? "Intel" : "AMD"}
                               width={22}
                               height={22}

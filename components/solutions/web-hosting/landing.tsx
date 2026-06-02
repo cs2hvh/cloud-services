@@ -1,5 +1,7 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -10,6 +12,7 @@ import { HeroStats } from "@/components/solutions/shared/hero-stats";
 import { ACCENT_FONT, Aurora, Eclipse, PaperGrain } from "@/components/brand/atmosphere";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
 
 /* ──────────────────────────────────────────────────────────────
    Custom inline illustrations (32×32 — layered + accent fills)
@@ -465,14 +468,16 @@ type FlowNode = {
     sub: string;
 };
 
+const FLOW_CDN = "https://ahurasense.cs2hvh.com/images/2026-06";
+
 const FLOW: FlowNode[] = [
-    { icon: <NodeUser />, label: "Visitor", sub: "Anywhere" },
-    { icon: <NodeEdge />, label: "Edge POP", sub: "Static + cache" },
-    { icon: <NodeShield />, label: "WAF + TLS", sub: "OWASP, bots" },
-    { icon: <NodeLB />, label: "Load balancer", sub: "Health-aware" },
-    { icon: <NodeApp />, label: "App replicas", sub: "Auto-scale" },
-    { icon: <NodeDB />, label: "Database", sub: "Postgres + Redis" },
-    { icon: <NodeStore />, label: "Object store", sub: "Media, backups" },
+    { icon: <Image src={`${FLOW_CDN}/y12g_eusQwWj.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Visitor", sub: "Anywhere" },
+    { icon: <Image src={`${FLOW_CDN}/liLNO7z5heiO.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Edge POP", sub: "Static + cache" },
+    { icon: <Image src={`${FLOW_CDN}/CwdsD58kLnBc.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "WAF + TLS", sub: "OWASP, bots" },
+    { icon: <Image src={`${FLOW_CDN}/GN9YEozIVoG7.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Load balancer", sub: "Health-aware" },
+    { icon: <Image src={`${FLOW_CDN}/ttzRXIJack0D.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "App replicas", sub: "Auto-scale" },
+    { icon: <Image src={`${FLOW_CDN}/Z_ukRjroMpK2.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Database", sub: "Postgres + Redis" },
+    { icon: <Image src={`${FLOW_CDN}/KaAn5Sb0oAt5.png`} alt="" width={42} height={42} className="h-[42px] w-[42px] object-contain" />, label: "Object store", sub: "Media, backups" },
 ];
 
 type StackPiece = {
@@ -485,42 +490,42 @@ type StackPiece = {
 
 const STACK: StackPiece[] = [
     {
-        icon: <ComputeIcon />,
+        icon: <Image src={`${CDN}/IT0HPOLZ48VS.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Compute & App Platform",
         description: "VPS plus push-to-deploy App Platform side by side, on the same network. Bring a container, a repo, or roll your own.",
         role: "Runtime",
         capabilities: ["Push-to-deploy", "Any container", "Rolling deploys", "Root on VPS"],
     },
     {
-        icon: <DatabaseIcon />,
+        icon: <Image src={`${CDN}/7Tmz5-TnMRox.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Managed Postgres · MySQL · Redis",
         description: "Daily backups, point-in-time recovery, read replicas, and connection pooling — every primitive a real app expects.",
         role: "Data plane",
         capabilities: ["Postgres", "MySQL · MariaDB", "Redis HA", "PITR backups"],
     },
     {
-        icon: <BucketIcon />,
+        icon: <Image src={`${CDN}/2wq-DtD23WJ2.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Object storage",
         description: "S3-compatible. $5 for 250 GB, $0.01/GB after. Free egress inside the region — no surprises on the bill.",
         role: "Storage",
         capabilities: ["S3-compatible", "$5 / 250 GB", "Lifecycle rules", "Free in-region"],
     },
     {
-        icon: <EdgeIcon />,
+        icon: <Image src={`${CDN}/X78vw4EKLTZW.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "Global CDN & edge cache",
         description: "150+ POPs in front of every site and bucket. Smart invalidation, HTTP/3, brotli, image optimization included.",
         role: "Delivery",
         capabilities: ["150+ POPs", "HTTP/3 · Brotli", "Image optimization", "<10 s purge"],
     },
     {
-        icon: <ShieldIcon />,
+        icon: <Image src={`${CDN}/Bd6sTPbEvba2.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "TLS, WAF & DDoS protection",
         description: "Free wildcard certificates, automatic renewal, OWASP rule sets, bot scoring, and L3/L4 absorption at the edge.",
         role: "Security",
         capabilities: ["Free wildcard TLS", "OWASP rule sets", "Bot scoring", "L3/L4 absorption"],
     },
     {
-        icon: <PipelineIcon />,
+        icon: <Image src={`${CDN}/7posUmmb_Y0k.png`} alt="" width={32} height={32} className="h-full w-full object-contain" />,
         title: "CI/CD with preview envs",
         description: "Push to deploy. Each branch gets a URL, env vars, and database. Promote a preview to production with one click.",
         role: "Pipeline",
@@ -537,37 +542,37 @@ type Workload = {
 
 const WORKLOADS: Workload[] = [
     {
-        glyph: <HighTrafficGlyph />,
+        glyph: <Image src={`${CDN}/m3y7JXyn1Pyl.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Marketing",
         title: "High-traffic marketing sites",
         description: "Static-first builds, edge HTML caching, ISR for updates without a redeploy. Lighthouse 100s out of the box.",
     },
     {
-        glyph: <MultiTenantGlyph />,
+        glyph: <Image src={`${CDN}/M54216erlpBQ.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "SaaS",
         title: "Multi-tenant SaaS platforms",
         description: "Per-tenant databases or shared schema, background workers, scheduled jobs, and a managed queue — same VPC.",
     },
     {
-        glyph: <CommerceGlyph />,
+        glyph: <Image src={`${CDN}/Vh4k8CtnVjzC.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Commerce",
         title: "Online stores and checkouts",
         description: "Object storage for product media, Postgres for catalog and orders, Redis for sessions and carts, CDN for the storefront.",
     },
     {
-        glyph: <CmsGlyph />,
+        glyph: <Image src={`${CDN}/hdepaV3zhhLG.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "CMS",
         title: "WordPress & headless content",
         description: "Sized memory for PHP-FPM, MySQL or MariaDB managed for you, S3 offload for media, edge cache that survives editorial spikes.",
     },
     {
-        glyph: <ApiGlyph />,
+        glyph: <Image src={`${CDN}/n3a2cxrGF0ta.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "API",
         title: "API backends & mobile origins",
         description: "Horizontally scaled compute behind a regional load balancer, rate limiting at the edge, observability you can read at a glance.",
     },
     {
-        glyph: <InternalToolsGlyph />,
+        glyph: <Image src={`${CDN}/QBJNqd9uncI7.png`} alt="" width={26} height={26} className="h-full w-full object-contain" />,
         metric: "Internal",
         title: "Internal tools & admin apps",
         description: "Retool-style dashboards, status pages, admin consoles — IP-restricted, SSO-fronted, on the same pipeline as the main site.",
@@ -765,9 +770,10 @@ function RequestFlow() {
                         { v: "<10s", l: "Cache invalidation" },
                         { v: "Zero", l: "Egress in-region" },
                     ].map((m) => (
-                        <div key={m.l} className="flex items-baseline justify-center gap-2 bg-[#0D0D0F] px-4 py-5">
+                        <div key={m.l} className="group relative flex items-baseline justify-center gap-2 overflow-hidden bg-[#0D0D0F] px-4 py-5">
                             <span className={`${MONO} text-[18px] font-bold tabular-nums text-white`}>{m.v}</span>
                             <span className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45`}>{m.l}</span>
+                            <span aria-hidden className="pointer-events-none absolute bottom-0 left-1/2 h-[2px] w-0 -translate-x-1/2 bg-[#0095FF] transition-[width] duration-300 group-hover:w-1/2" />
                         </div>
                     ))}
                 </div>
@@ -842,7 +848,7 @@ function Scenarios() {
                             </div>
                             <Link
                                 href={featured.cta.href}
-                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-white/90`}
+                                className={`${MONO} mt-6 inline-flex h-11 items-center gap-1.5 rounded-[5px] bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#0095FF] hover:text-white`}
                             >
                                 {featured.cta.label}
                                 <ArrowRight className="h-3.5 w-3.5" />
@@ -888,7 +894,7 @@ function Scenarios() {
                     {others.map((s) => (
                         <article
                             key={s.name}
-                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814]"
+                            className="relative flex flex-col overflow-hidden rounded-[10px] border border-black/[0.10] bg-[#EEECE4] text-[#1A1814] transition-all duration-200 hover:-translate-y-1 hover:border-[#0095FF]"
                         >
                             <div className="border-b border-black/[0.08] p-6">
                                 <p className={`${MONO} mb-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-black/45`}>
@@ -935,7 +941,7 @@ function Scenarios() {
 
                                 <Link
                                     href={s.cta.href}
-                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:bg-[#1A1814] hover:text-[#EEECE4]`}
+                                    className={`${MONO} mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[5px] border border-[#1A1814] bg-transparent text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#1A1814] transition-colors hover:border-black hover:bg-black hover:text-white`}
                                 >
                                     {s.cta.label}
                                     <ArrowRight className="h-3 w-3" />
@@ -1157,9 +1163,9 @@ export function WebHostingLanding() {
                 description="VPS, App Platform, managed databases, object storage, CDN, and WAF — one network, one bill."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}
                 secondaryAction={{ label: "Explore capabilities", href: "#stack" }}
-                backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+                backgroundImage={{ src: assetUrl("/images/hero/service-hero-bg.png"), alt: "" }}
                 illustration={{
-                    src: "/images/main-page/solution-home-web-host.png",
+                    src: assetUrl("/images/main-page/solution-home-web-host.png"),
                     alt: "Web hosting infrastructure",
                     priority: true,
                 }}

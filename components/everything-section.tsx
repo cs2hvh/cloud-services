@@ -1,4 +1,5 @@
 "use client";
+import { assetUrl } from "@/lib/asset-url";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -23,8 +24,8 @@ const TABS = [
       "Reserved pricing up to 60% off for committed capacity",
       "Direct SSH access · idle pods stop billing instantly",
     ],
-    imageSrc: "/ailabs/B200-GPU-Stack.png",
-    imageAlt: "B200 GPU server stack",
+    imageSrc: "https://ahurasense.cs2hvh.com/images/2026-06/hNO7Moc7HasP.png",
+    imageAlt: "GPU server stack",
   },
   {
     id: "inference",
@@ -41,7 +42,7 @@ const TABS = [
       "Per-token billing · zero markup · spend caps + alerts",
       "Streaming · tool calling · structured outputs · batches",
     ],
-    imageSrc: "/ailabs/ai-labs.png",
+    imageSrc: assetUrl("/ailabs/ai-labs.png"),
     imageAlt: "A.I. Labs platform illustration",
   },
   {
@@ -57,7 +58,7 @@ const TABS = [
       "Built-in monitoring, logs, and alerting",
       "Full API, CLI, and Terraform provider support",
     ],
-    imageSrc: "/images/main-page/compute.png",
+    imageSrc: assetUrl("/images/main-page/compute.png"),
     imageAlt: "Global compute visualization",
   },
   {
@@ -73,7 +74,7 @@ const TABS = [
       "Zero-downtime failover and rolling upgrades",
       "Fine-grained access controls and audit logging",
     ],
-    imageSrc: "/images/Features/database.png",
+    imageSrc: assetUrl("/images/Features/database.png"),
     imageAlt: "Database illustration",
   },
   // {
@@ -89,7 +90,7 @@ const TABS = [
   //     "Real-time event streams and agent observability",
   //     "Production-ready orchestration and workflows",
   //   ],
-  //   imageSrc: "/images/Features/ai-agent.png",
+  //   imageSrc: assetUrl("/images/Features/ai-agent.png"),
   //   imageAlt: "AI agent illustration",
   // },
   {
@@ -105,7 +106,7 @@ const TABS = [
       "Integrated load balancing and ingress",
       "Multi-region clusters with cross-zone HA",
     ],
-    imageSrc: "/images/main-page/kubernetes.png",
+    imageSrc: assetUrl("/images/main-page/kubernetes.png"),
     imageAlt: "Kubernetes illustration",
   },
   {
@@ -121,7 +122,7 @@ const TABS = [
       "99.999999999% data durability guarantee",
       "Versioning, lifecycle rules, and immutability",
     ],
-    imageSrc: "/images/main-page/object-space.png",
+    imageSrc: assetUrl("/images/main-page/object-space.png"),
     imageAlt: "Object storage illustration",
   },
   {
@@ -137,7 +138,7 @@ const TABS = [
       "Automatic SSL, custom domains, and edge caching",
       "Instant rollbacks and deployment history",
     ],
-    imageSrc: "/images/main-page/app-deploy.png",
+    imageSrc: assetUrl("/images/main-page/app-deploy.png"),
     imageAlt: "App deployment illustration",
   },
 ] as const;

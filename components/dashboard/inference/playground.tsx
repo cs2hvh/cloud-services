@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { safeRandomUUID } from "@/lib/utils/safe-uuid";
+import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 import {
   Check,
   ChevronDown,
@@ -491,7 +492,7 @@ export function Playground({
 
   const copyTurn = async (content: string) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyToClipboard(content);
       toast.success("Copied to clipboard");
     } catch {
       toast.error("Copy failed");
@@ -618,7 +619,7 @@ ${streamOn
   }, [apiBase, apiKey, codeLang, modelId, streamOn, systemPrompt, userPrompt, temperature, topP, maxTokens, turns]);
 
   const copyCode = async () => {
-    await navigator.clipboard.writeText(codeSnippet);
+    await copyToClipboard(codeSnippet);
     setCodeCopied(true);
     toast.success("Code copied");
     setTimeout(() => setCodeCopied(false), 1800);

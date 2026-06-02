@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { copyToClipboard } from '@/lib/utils/safe-clipboard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -175,7 +176,11 @@ export default function ApiKeysPage() {
 
   const copyKey = async () => {
     if (!createdKey) return;
-    await navigator.clipboard.writeText(createdKey);
+    const ok = await copyToClipboard(createdKey);
+    if (!ok) {
+      toast.error('Copy failed — select the key and copy manually');
+      return;
+    }
     setCopied(true);
     toast.success('Copied');
     setTimeout(() => setCopied(false), 2000);

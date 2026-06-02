@@ -1,5 +1,6 @@
 
 'use client';
+import { assetUrl } from "@/lib/asset-url";
 import Link from 'next/link';
 
 import { useState, useEffect } from 'react';
@@ -68,11 +69,11 @@ interface ModelKey {
 }
 
 const STEPS = [
-  { id: 1, name: 'Basic Info', description: 'Name and description', icon: '/dashboard-icons/basic-info.png' },
-  { id: 2, name: 'Model', description: 'Choose AI model', icon: '/dashboard-icons/model.png' },
-  { id: 3, name: 'System Prompt', description: 'Define behavior', icon: '/dashboard-icons/system-prompt.png' },
-  { id: 4, name: 'Knowledge Base', description: 'Attach documents', icon: '/dashboard-icons/knowledge-base.png' },
-  { id: 5, name: 'Review', description: 'Review and create', icon: '/dashboard-icons/review.png' },
+  { id: 1, name: 'Basic Info', description: 'Name and description', icon: assetUrl('/dashboard-icons/basic-info.png') },
+  { id: 2, name: 'Model', description: 'Choose AI model', icon: assetUrl('/dashboard-icons/model.png') },
+  { id: 3, name: 'System Prompt', description: 'Define behavior', icon: assetUrl('/dashboard-icons/system-prompt.png') },
+  { id: 4, name: 'Knowledge Base', description: 'Attach documents', icon: assetUrl('/dashboard-icons/knowledge-base.png') },
+  { id: 5, name: 'Review', description: 'Review and create', icon: assetUrl('/dashboard-icons/review.png') },
 ];
 
 export default function NewAgentPage() {
@@ -252,7 +253,7 @@ export default function NewAgentPage() {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">Move through identity, model policy, prompt design, and knowledge attachment with a focused review before launch.</p>
           </div>
           <Image
-            src="/dashboard-services-icons/da ai aniamtion.png"
+            src={assetUrl("/dashboard-services-icons/da ai aniamtion.png")}
             alt=""
             width={160}
             height={160}
@@ -308,7 +309,7 @@ export default function NewAgentPage() {
           {currentStep === 1 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Image src="/dashboard-icons/basic-info.png" alt="Basic Info" width={36} height={36} className="opacity-80"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/basic-info.png")} alt="Basic Info" width={36} height={36} className="opacity-80"  unoptimized />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Basic Information</h2>
                   <p className="text-sm text-white/50">Give your agent a name and description</p>
@@ -345,7 +346,7 @@ export default function NewAgentPage() {
           {currentStep === 2 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Image src="/dashboard-icons/model.png" alt="Model" width={36} height={36} className="opacity-80"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/model.png")} alt="Model" width={36} height={36} className="opacity-80"  unoptimized />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Select Model</h2>
                   <p className="text-sm text-white/50">Choose the AI model for your agent</p>
@@ -619,7 +620,7 @@ export default function NewAgentPage() {
           {currentStep === 3 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Image src="/dashboard-icons/system-prompt.png" alt="System Prompt" width={36} height={36} className="opacity-80"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/system-prompt.png")} alt="System Prompt" width={36} height={36} className="opacity-80"  unoptimized />
                 <div>
                   <h2 className="text-xl font-semibold text-white">System Prompt</h2>
                   <p className="text-sm text-white/50">Define how your agent should behave</p>
@@ -688,7 +689,7 @@ export default function NewAgentPage() {
           {currentStep === 4 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Image src="/dashboard-icons/knowledge-base.png" alt="Knowledge Base" width={36} height={36} className="opacity-80"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="Knowledge Base" width={36} height={36} className="opacity-80"  unoptimized />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Knowledge Base (Optional)</h2>
                   <p className="text-sm text-white/50">
@@ -745,7 +746,7 @@ export default function NewAgentPage() {
                 </RadioGroup>
               ) : (
                 <div className="text-center py-8">
-                  <Image src="/dashboard-icons/knowledge-base.png" alt="No KBs" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
+                  <Image src={assetUrl("/dashboard-icons/knowledge-base.png")} alt="No KBs" width={48} height={48} className="opacity-25 mx-auto mb-4"  unoptimized />
                   <p className="text-white/50 mb-4">No knowledge bases found</p>
                   <Button variant="outline" asChild>
                     <Link href="/dashboard/services/ai-agents/knowledge-bases/new">
@@ -761,7 +762,7 @@ export default function NewAgentPage() {
           {currentStep === 5 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Image src="/dashboard-icons/review.png" alt="Review" width={36} height={36} className="opacity-80"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/review.png")} alt="Review" width={36} height={36} className="opacity-80"  unoptimized />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Review &amp; Create</h2>
                   <p className="text-sm text-white/50">Review your agent configuration</p>
@@ -864,7 +865,7 @@ export default function NewAgentPage() {
               </>
             ) : (
               <>
-                <Image src="/dashboard-icons/agents.png" alt="" width={16} height={16} className="mr-2"  unoptimized />
+                <Image src={assetUrl("/dashboard-icons/agents.png")} alt="" width={16} height={16} className="mr-2"  unoptimized />
                 Create Agent
               </>
             )}
@@ -881,10 +882,10 @@ export default function NewAgentPage() {
         </div>
         <div className="px-6 py-4">
           <div className="space-y-0.5">
-            <SummaryRow icon="/dashboard-icons/agents.png" label="Agent name" value={name || "—"} empty={!name} />
-            <SummaryRow icon="/dashboard-icons/model.png" label="Model" value={usePlatformBilling ? (selectedPlatformModel?.name || "—") : (selectedModelKey?.name || "—")} empty={!(usePlatformBilling ? selectedPlatformModel : selectedModelKey)} />
-            <SummaryRow icon="/dashboard-icons/model-keys.png" label="Billing" value={usePlatformBilling ? 'Platform billing' : 'Own API key'} />
-            <SummaryRow icon="/dashboard-icons/knowledge-base.png" label="Knowledge base" value={selectedKb?.name || 'None attached'} />
+            <SummaryRow icon={assetUrl("/dashboard-icons/agents.png")} label="Agent name" value={name || "—"} empty={!name} />
+            <SummaryRow icon={assetUrl("/dashboard-icons/model.png")} label="Model" value={usePlatformBilling ? (selectedPlatformModel?.name || "—") : (selectedModelKey?.name || "—")} empty={!(usePlatformBilling ? selectedPlatformModel : selectedModelKey)} />
+            <SummaryRow icon={assetUrl("/dashboard-icons/model-keys.png")} label="Billing" value={usePlatformBilling ? 'Platform billing' : 'Own API key'} />
+            <SummaryRow icon={assetUrl("/dashboard-icons/knowledge-base.png")} label="Knowledge base" value={selectedKb?.name || 'None attached'} />
           </div>
 
           <div className="my-3 border-t border-white/[0.05]" />
