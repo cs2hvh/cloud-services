@@ -221,7 +221,8 @@ export async function GET(request: NextRequest) {
                 refresh_token: encryptOAuthToken(data.session.provider_refresh_token || null),
                 expires_at: null, // GitHub OAuth tokens don't expire
                 updated_at: new Date().toISOString(),
-              });
+              }, { onConflict: "user_id" }); // upsert on the user_id unique key, not the PK,
+                                             // or returning users hit 23505 on github_tokens_user_id_key
 
             if (upsertError) {
               console.error("Failed to upsert GitHub token:", upsertError);
