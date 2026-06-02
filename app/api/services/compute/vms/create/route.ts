@@ -12,7 +12,6 @@ import {
   reserveProvision,
   settleProvision,
   releaseProvision,
-  type ProvisionReservation,
 } from "@/config/billing-flow";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { allocateVmacForIp, isRoutedPool } from "@/lib/proxmox/on-demand-vmac";
@@ -798,14 +797,13 @@ export async function POST(req: NextRequest) {
   // hold is refunded on success (settleProvision in after()); net upfront charge is
   // $0 and the cron meters hourly as before. Every non-settle exit below refunds it
   // exactly once via releaseProvision.
-  let reservation: ProvisionReservation | undefined;
   const minimumBalance = hourlyCost * minimumHours;
   const reservationResult = await reserveProvision({
     userId: user.id,
     initialCost: 0,
     hourlyRate: hourlyCost,
   });
-  reservation = reservationResult.reservation;
+  const reservation = reservationResult.reservation;
   if (!reservationResult.ok) {
     if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
     return Response.json(
