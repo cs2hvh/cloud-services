@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { 
-  Database, 
-  Plus, 
-  Loader2, 
-  RefreshCw,
+import {
   AlertTriangle,
-  Link2
+  Database,
+  Link2,
+  Loader2,
+  Plus,
+  RefreshCw,
 } from 'lucide-react';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 import { LinkedDatabaseCard } from './linked-database-card';
 import { LinkDatabaseModal } from './link-database-modal-v2';
 import { UnlinkConfirmationModal } from './unlink-confirmation-modal';
@@ -376,59 +376,69 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
 
   return (
     <>
-      <Card className="bg-white/5 border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Link2 className="w-5 h-5 text-blue-400" />
-            Database Integrations
-          </CardTitle>
+      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+        {/* Header */}
+        <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+            <Link2 className="h-3.5 w-3.5 text-white/45" />
+            <span className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
+              Database Integrations
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
               onClick={fetchLinkedDatabases}
               disabled={loading}
-              className="text-white/60 hover:text-white"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-white/[0.08] bg-[#0d0e11] text-white/45 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04] hover:text-white disabled:opacity-40"
+              aria-label="Refresh database integrations"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button
-              size="sm"
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
               onClick={() => setLinkModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10]"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="h-3.5 w-3.5" />
               Link Database
-            </Button>
+            </button>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+
+        {/* Content */}
+        <div className="px-5 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-white/50" />
+              <Loader2 className="h-5 w-5 animate-spin text-white/35" />
             </div>
           ) : error ? (
-            <div className="flex items-center gap-2 text-red-400 py-4">
-              <AlertTriangle className="w-5 h-5" />
-              <p>{error}</p>
+            <div className={`${MONO} flex items-center gap-2 border border-rose-500/20 bg-rose-500/[0.05] rounded-[5px] px-3 py-3 text-[11.5px] text-rose-300`}>
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              {error}
             </div>
           ) : linkedDatabases.length === 0 ? (
-            <div className="text-center py-8">
-              <Database className="w-12 h-12 text-white/20 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white/70 mb-2">No Databases Linked</h3>
-              <p className="text-sm text-white/50 mb-4">
-                Connect a database to automatically inject connection credentials
-              </p>
-              <Button
+            <div className="flex flex-col items-center py-10 gap-3">
+              <div className="h-10 w-10 rounded-[6px] bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+                <Database className="h-5 w-5 text-white/20" />
+              </div>
+              <div className="text-center">
+                <p className="text-[13px] font-medium text-white/55">No databases linked</p>
+                <p className={`${MONO} text-[11.5px] text-white/30 mt-1`}>
+                  Connect a database to inject credentials automatically
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={() => setLinkModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10]"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="h-3.5 w-3.5" />
                 Link Your First Database
-              </Button>
+              </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {linkedDatabases.map((db) => (
                 <LinkedDatabaseCard
                   key={db.integration_id}
@@ -442,17 +452,14 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
             </div>
           )}
 
-          {/* Info */}
           {linkedDatabases.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <p className="text-xs text-white/40">
-                Linked databases automatically inject connection environment variables into your app.
-                Changes trigger a redeploy if the app is running.
-              </p>
-            </div>
+            <p className={`${MONO} mt-4 pt-4 border-t border-white/[0.06] text-[10.5px] text-white/30`}>
+              Linked databases automatically inject connection environment variables into your app.
+              Changes trigger a redeploy if the app is running.
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Link Modal */}
       <LinkDatabaseModal

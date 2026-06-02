@@ -1,30 +1,18 @@
 'use client';
 
-import { AlertCircle, Check, Copy, Loader2, Plus } from 'lucide-react';
-
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { AlertCircle, Check, ChevronDown, Copy, Globe, Loader2, Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import type { AddDomainMode, DomainInventoryItem, VerificationInstructions } from './types';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface AddDomainDialogProps {
   open: boolean;
@@ -83,182 +71,228 @@ export function AddDomainDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-white text-black hover:bg-white/95 rounded-md px-3 py-1.5" disabled={disabled}>
-          <Plus className="mr-1 h-4 w-4" />
+        <button
+          disabled={disabled}
+          className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" />
           Add Domain
-        </Button>
+        </button>
       </DialogTrigger>
 
-      <DialogContent className="border-white/10 bg-zinc-900 text-white">
-        <DialogHeader>
-          <DialogTitle>Add Domain to App</DialogTitle>
-          <DialogDescription className="text-white/60">
-            Choose an existing account domain or add an external domain.
+      <DialogContent className="bg-[#0c0d11] border border-white/[0.08] rounded-[10px] text-white p-0 gap-0 overflow-hidden max-w-[440px] max-h-[90svh] flex flex-col [&_[data-slot=dialog-close]]:text-white/35 [&_[data-slot=dialog-close]]:hover:text-white/75 [&_[data-slot=dialog-close]]:hover:bg-white/[0.06]">
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-5 border-b border-white/[0.06] pr-14 flex-shrink-0">
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="h-7 w-7 rounded-[6px] bg-[#0095FF]/[0.12] border border-[#0095FF]/20 flex items-center justify-center flex-shrink-0">
+              <Globe className="h-3.5 w-3.5 text-[#0095FF]" />
+            </div>
+            <DialogTitle className="text-[15px] font-semibold text-white tracking-[-0.01em]">
+              Add Custom Domain
+            </DialogTitle>
+          </div>
+          <DialogDescription className="text-[13px] text-white/45 leading-relaxed pl-[38px]">
+            Connect a domain from your account or add an external one.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs
-          value={addMode}
-          onValueChange={(value) => setAddMode(value as AddDomainMode)}
-          className="space-y-4"
-        >
-          <TabsList className="grid w-full grid-cols-2 bg-black/30 border border-white/10">
-            <TabsTrigger value="existing" className="data-[state=active]:bg-white/10">
-              Existing Domain
-            </TabsTrigger>
-            <TabsTrigger value="external" className="data-[state=active]:bg-white/10">
+        {/* Body */}
+        <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
+          {/* Mode tabs */}
+          <div className="grid grid-cols-2 gap-1 p-1 bg-white/[0.03] rounded-[8px] border border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setAddMode('existing')}
+              className={`h-9 rounded-[6px] text-[13px] font-medium transition-all ${
+                addMode === 'existing'
+                  ? 'bg-[#0d0e11] text-white border border-white/[0.08] shadow-[0_1px_4px_rgba(0,0,0,0.5)]'
+                  : 'text-white/40 hover:text-white/65'
+              }`}
+            >
+              Account Domain
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddMode('external')}
+              className={`h-9 rounded-[6px] text-[13px] font-medium transition-all ${
+                addMode === 'external'
+                  ? 'bg-[#0d0e11] text-white border border-white/[0.08] shadow-[0_1px_4px_rgba(0,0,0,0.5)]'
+                  : 'text-white/40 hover:text-white/65'
+              }`}
+            >
               External Domain
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
 
-          <TabsContent value="existing" className="space-y-3">
-            {inventoryLoading ? (
-              <div className="flex items-center gap-2 text-sm text-white/60">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading account domains...
-              </div>
-            ) : existingDomainOptions.length === 0 ? (
-              <Alert className="border-yellow-500/30 bg-yellow-500/10">
-                <AlertCircle className="h-4 w-4 text-yellow-300" />
-                <AlertTitle className="text-yellow-200">No account domains yet</AlertTitle>
-                <AlertDescription className="text-yellow-100/90">
-                  Buy a domain in Marketplace or add an external domain in the next tab.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-white/70">Base domain</Label>
-                  <Select value={selectedExistingDomain} onValueChange={setSelectedExistingDomain}>
-                    <SelectTrigger className="border-white/20 bg-black/30 text-white">
-                      <SelectValue placeholder="Select domain" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {existingDomainOptions.map((item) => (
-                        <SelectItem key={item.domain} value={item.domain}>
-                          {item.domain} ({item.source})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+          {/* Existing domain mode */}
+          {addMode === 'existing' && (
+            <div className="space-y-4">
+              {inventoryLoading ? (
+                <div className="flex items-center gap-2.5 py-3 text-[13px] text-white/45">
+                  <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                  Loading your domains…
                 </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white/70">Subdomain (optional)</Label>
-                  <Input
-                    value={subdomainLabel}
-                    onChange={(e) => setSubdomainLabel(e.target.value)}
-                    placeholder="api"
-                    className="border-white/20 bg-black/30 text-white"
-                  />
-                  <p className="text-xs text-white/55">
-                    Leave empty to use the root domain (e.g. example.com).
-                  </p>
+              ) : existingDomainOptions.length === 0 ? (
+                <div className="flex gap-3 border border-amber-400/20 bg-amber-500/[0.06] rounded-[7px] px-4 py-3.5">
+                  <AlertCircle className="h-4 w-4 text-amber-300 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[13px] font-medium text-amber-200 leading-snug">
+                      No account domains yet
+                    </p>
+                    <p className="text-[12px] text-white/45 mt-1 leading-relaxed">
+                      Buy a domain in Marketplace or switch to External Domain.
+                    </p>
+                  </div>
                 </div>
-              </>
-            )}
-          </TabsContent>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-medium text-white/55">Base domain</label>
+                    <div className="relative">
+                      <select
+                        value={selectedExistingDomain}
+                        onChange={(e) => setSelectedExistingDomain(e.target.value)}
+                        className={`${MONO} w-full bg-[#0d0e11] border border-white/[0.08] text-white text-[13px] pl-3 pr-9 h-11 rounded-[7px] focus:outline-none focus:border-[#0095FF]/50 transition-colors appearance-none cursor-pointer`}
+                      >
+                        {existingDomainOptions.map((item) => (
+                          <option key={item.domain} value={item.domain} className="bg-[#0d0e11]">
+                            {item.domain} ({item.source})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+                    </div>
+                  </div>
 
-          <TabsContent value="external" className="space-y-3">
+                  <div className="space-y-2">
+                    <label className="text-[12px] font-medium text-white/55">
+                      Subdomain{' '}
+                      <span className="text-white/30 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      value={subdomainLabel}
+                      onChange={(e) => setSubdomainLabel(e.target.value)}
+                      placeholder="api"
+                      className={`${MONO} w-full bg-[#0d0e11] border border-white/[0.08] text-white text-[13px] px-3 h-11 rounded-[7px] placeholder:text-white/20 focus:outline-none focus:border-[#0095FF]/50 transition-colors`}
+                    />
+                    <p className="text-[12px] text-white/35 leading-relaxed">
+                      Leave empty to use the root domain (e.g.{' '}
+                      <span className={MONO}>example.com</span>).
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* External domain mode */}
+          {addMode === 'external' && (
             <div className="space-y-2">
-              <Label className="text-white/70">Domain</Label>
-              <Input
+              <label className="text-[12px] font-medium text-white/55">Domain name</label>
+              <input
                 value={externalDomain}
                 onChange={(e) => setExternalDomain(e.target.value)}
                 placeholder="example.com or app.example.com"
-                className="border-white/20 bg-black/30 text-white"
+                className={`${MONO} w-full bg-[#0d0e11] border border-white/[0.08] text-white text-[13px] px-3 h-11 rounded-[7px] placeholder:text-white/20 focus:outline-none focus:border-[#0095FF]/50 transition-colors`}
               />
-              <p className="text-xs text-white/55">
-                You&apos;ll need to add a short TXT record to prove you own this domain.
+              <p className="text-[12px] text-white/35 leading-relaxed">
+                You&apos;ll need to add a TXT record to verify ownership.
               </p>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
 
-        <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/65">
-          Target domain:{' '}
-          <span className="font-mono text-white">{selectedTargetDomain || '-'}</span>
-        </div>
+          {/* Target domain preview — inline hint */}
+          {selectedTargetDomain && (
+            <div className="flex min-w-0 items-center gap-2 px-3 py-2.5 bg-white/[0.03] rounded-[6px] border border-white/[0.05]">
+              <span className="text-[12px] text-white/35 flex-shrink-0">Connects as</span>
+              <span className={`${MONO} min-w-0 text-[12px] text-white/75 truncate`}>
+                {selectedTargetDomain}
+              </span>
+            </div>
+          )}
 
-        {verificationInstructions && (
-          <Alert className="border-cyan-500/30 bg-cyan-500/10">
-            <AlertCircle className="h-4 w-4 text-cyan-300" />
-            <AlertTitle className="text-cyan-200">One more step — verify ownership</AlertTitle>
-            <AlertDescription className="space-y-2 text-white/75">
-              <p>
-                Add the following TXT record at your DNS provider, then click Verify in the domain
-                card below.
+          {/* Verification instructions */}
+          {verificationInstructions && (
+            <div className="space-y-3 border border-[#0095FF]/20 bg-[#0095FF]/[0.05] rounded-[8px] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-[#0095FF] flex-shrink-0" />
+                <p className="text-[13px] font-semibold text-[#33adff]">
+                  One more step — verify ownership
+                </p>
+              </div>
+              <p className="text-[12.5px] text-white/55 leading-relaxed">
+                Add this TXT record at your DNS provider, then click Verify in the domain card below.
               </p>
-              <div className="space-y-2 rounded bg-black/30 p-3 font-mono text-xs">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/50">Record type</span>
-                  <span className="text-white">{verificationInstructions.record_type}</span>
+              <div className="bg-[#0c0d11] border border-white/[0.06] rounded-[6px] divide-y divide-white/[0.05] overflow-hidden">
+                <div className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <span className="text-[11.5px] text-white/40">Record type</span>
+                  <span className={`${MONO} text-[12px] text-white`}>
+                    {verificationInstructions.record_type}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/50">Record name</span>
+                <div className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <span className="text-[11.5px] text-white/40 flex-shrink-0">Record name</span>
                   <button
                     type="button"
-                    onClick={() =>
-                      onCopy(verificationInstructions.record_name, 'verification-name')
-                    }
-                    className="flex items-center gap-1 text-white hover:text-cyan-200"
+                    onClick={() => onCopy(verificationInstructions.record_name, 'verification-name')}
+                    className={`${MONO} flex min-w-0 items-center gap-1.5 text-left text-[12px] text-white hover:text-[#0095FF] transition-colors`}
                   >
-                    <span className="truncate max-w-[220px]">
+                    <span className="max-w-full break-all sm:max-w-[200px] sm:truncate">
                       {verificationInstructions.record_name}
                     </span>
                     {copiedField === 'verification-name' ? (
-                      <Check className="h-3 w-3" />
+                      <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
                     ) : (
-                      <Copy className="h-3 w-3" />
+                      <Copy className="h-3.5 w-3.5 text-white/30 flex-shrink-0" />
                     )}
                   </button>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/50">Record value</span>
+                <div className="flex flex-col gap-1.5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <span className="text-[11.5px] text-white/40 flex-shrink-0">Record value</span>
                   <button
                     type="button"
-                    onClick={() =>
-                      onCopy(verificationInstructions.record_value, 'verification-value')
-                    }
-                    className="flex items-center gap-1 text-white hover:text-cyan-200"
+                    onClick={() => onCopy(verificationInstructions.record_value, 'verification-value')}
+                    className={`${MONO} flex min-w-0 items-center gap-1.5 text-left text-[12px] text-white hover:text-[#0095FF] transition-colors`}
                   >
-                    <span className="truncate max-w-[220px]">
+                    <span className="max-w-full break-all sm:max-w-[200px] sm:truncate">
                       {verificationInstructions.record_value}
                     </span>
                     {copiedField === 'verification-value' ? (
-                      <Check className="h-3 w-3" />
+                      <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
                     ) : (
-                      <Copy className="h-3 w-3" />
+                      <Copy className="h-3.5 w-3.5 text-white/30 flex-shrink-0" />
                     )}
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-white/50">
-                DNS changes can take a few minutes to a few hours to take effect.
+              <p className="text-[11.5px] text-white/35">
+                DNS propagation can take a few minutes to a few hours.
               </p>
-            </AlertDescription>
-          </Alert>
-        )}
+            </div>
+          )}
+        </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
+        {/* Footer */}
+        <div className="px-6 pb-6 pt-4 border-t border-white/[0.06] flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
             onClick={onClose}
-            className="border-white/20 text-white hover:bg-white/10"
+            className="h-9 px-4 rounded-[5px] text-[13px] font-medium text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             {verificationInstructions ? 'Close' : 'Cancel'}
-          </Button>
+          </button>
           {!verificationInstructions && (
-            <Button
+            <button
+              type="button"
               onClick={onSubmit}
               disabled={adding || !selectedTargetDomain}
-              className="bg-white text-black hover:bg-white/90"
+              className="inline-flex h-9 min-w-[112px] items-center justify-center gap-2 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-4 text-[13px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {adding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {adding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Add Domain
-            </Button>
+            </button>
           )}
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

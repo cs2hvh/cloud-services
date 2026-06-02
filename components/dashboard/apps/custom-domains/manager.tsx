@@ -439,13 +439,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href="/dashboard/domains/marketplace"
-            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-white/[0.10] bg-[#0d0e11] px-3.5 text-[13px] font-medium text-white/70 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
           >
             Marketplace
           </Link>
           <Link
             href="/dashboard/domains"
-            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-white/[0.10] bg-[#0d0e11] px-3.5 text-[13px] font-medium text-white/70 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
           >
             Domains
           </Link>
@@ -589,13 +589,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel
-                className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}
+                className="h-10 px-3.5 rounded-[5px] border border-white/[0.10] bg-[#0d0e11] text-[13px] font-medium text-white/70 hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
                 disabled={removingId !== null}
               >
                 Keep it
               </AlertDialogCancel>
               <AlertDialogAction
-                className={`${MONO} h-10 px-3.5 border border-rose-500/25 bg-rose-500/[0.08] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.15] rounded-[5px]`}
+                className="h-10 px-3.5 rounded-[5px] border border-rose-500/25 bg-[#0d0e11] text-[13px] font-medium text-rose-200 hover:bg-rose-500/[0.10]"
                 disabled={removingId !== null}
                 onClick={() => {
                   if (removeConfirmId) void handleRemoveDomain(removeConfirmId);

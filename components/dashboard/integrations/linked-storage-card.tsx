@@ -1,20 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-
-import { Button } from '@/components/ui/button';
-import { 
-  Link2Off, 
-  Loader2,
-  Key,
+import {
+  Archive,
   ChevronDown,
   ChevronUp,
+  Key,
+  Link2Off,
+  Loader2,
   Pencil,
   RotateCw,
-  Archive,
 } from 'lucide-react';
 import { IntegrationBadge } from './integration-badge';
 import type { LinkedBucket } from './types';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface LinkedStorageCardProps {
   bucket: LinkedBucket;
@@ -25,118 +25,96 @@ interface LinkedStorageCardProps {
   retrying?: boolean;
 }
 
-/**
- * Card displaying a linked object storage bucket with unlink action
- */
-export function LinkedStorageCard({ 
+export function LinkedStorageCard({
   bucket,
   onUnlink,
   onEdit,
   onRetry,
   unlinking = false,
-  retrying = false 
+  retrying = false,
 }: LinkedStorageCardProps) {
   const [showEnvVars, setShowEnvVars] = useState(false);
 
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+    <div className="rounded-[5px] border border-white/[0.06] bg-[#0d0e11] overflow-hidden">
       <div className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          {/* Bucket Info */}
-          <div className="flex items-start gap-3 flex-1">
-            <div className="p-2 rounded-lg flex items-center justify-center h-10 w-10 bg-neutral-800">
-              <Archive className="h-5 w-5 text-neutral-300" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          {/* Bucket info */}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="h-9 w-9 rounded-[6px] bg-[#111216] border border-white/[0.06] flex items-center justify-center flex-shrink-0">
+              <Archive className="h-4 w-4 text-white/50" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-semibold text-white truncate">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5 min-w-0">
+                <span className={`${MONO} min-w-0 max-w-full text-[13px] font-semibold text-white truncate`}>
                   {bucket.bucket_name}
-                </h4>
+                </span>
                 <IntegrationBadge status={bucket.status} />
               </div>
-              <p className="text-sm text-white/50">
+              <p className={`${MONO} text-[11px] text-white/40`}>
                 {bucket.region}
                 {bucket.env_prefix && bucket.env_prefix !== 'CUSTOM' && (
-                  <span className="ml-2 text-white/40">{bucket.env_prefix}_*</span>
+                  <span className="ml-2 text-white/30">{bucket.env_prefix}_*</span>
                 )}
               </p>
-              <p className="text-xs text-white/40 mt-1">
+              <p className={`${MONO} text-[10.5px] text-white/30 mt-0.5`}>
                 Linked {new Date(bucket.linked_at).toLocaleDateString()}
               </p>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+          <div className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0 sm:justify-end">
+            <button
+              type="button"
               onClick={() => setShowEnvVars(!showEnvVars)}
-              className="text-white/60 hover:text-white"
+              className={`${MONO} inline-flex h-8 items-center gap-1 rounded-[5px] border border-white/[0.08] bg-[#0d0e11] px-2.5 text-[10.5px] text-white/55 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04] hover:text-white`}
             >
-              <Key className="w-4 h-4 mr-1" />
+              <Key className="h-3 w-3" />
               {bucket.injected_vars?.length || 0} vars
-              {showEnvVars ? (
-                <ChevronUp className="w-4 h-4 ml-1" />
-              ) : (
-                <ChevronDown className="w-4 h-4 ml-1" />
-              )}
-            </Button>
-            {/* Edit button — rename env var keys */}
+              {showEnvVars ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
             {onEdit && bucket.status === 'linked' && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => onEdit(bucket.bucket_id)}
-                className="text-white/60 hover:text-white hover:bg-white/10"
                 title="Edit env var names"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-white/[0.08] bg-[#0d0e11] text-white/45 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04] hover:text-white"
               >
-                <Pencil className="w-4 h-4" />
-              </Button>
+                <Pencil className="h-3 w-3" />
+              </button>
             )}
-            {/* Retry button — for failed integrations */}
             {onRetry && bucket.status === 'failed' && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => onRetry(bucket.bucket_id)}
                 disabled={retrying}
-                className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
                 title="Retry linking"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-amber-400/25 bg-[#0d0e11] text-amber-300 transition-colors hover:bg-amber-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {retrying ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RotateCw className="w-4 h-4" />
-                )}
-              </Button>
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
+              </button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onUnlink(bucket.bucket_id)}
               disabled={unlinking || bucket.status === 'pending'}
-              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-rose-500/25 bg-[#0d0e11] text-rose-300 transition-colors hover:bg-rose-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {unlinking ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Link2Off className="w-4 h-4" />
-              )}
-            </Button>
+              {unlinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2Off className="h-3 w-3" />}
+            </button>
           </div>
         </div>
 
-        {/* Injected Environment Variables */}
+        {/* Env vars panel */}
         {showEnvVars && bucket.injected_vars && bucket.injected_vars.length > 0 && (
           <div className="mt-3 pt-3 border-t border-white/[0.06]">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Key className="w-3 h-3 text-white/40" />
-              <p className="text-[11px] text-white/40 uppercase tracking-wide">Injected variables</p>
-            </div>
-            <div className="rounded border border-white/[0.06] bg-black/20 divide-y divide-white/[0.05] overflow-hidden">
+            <p className={`${MONO} text-[10px] uppercase tracking-[0.10em] text-white/35 mb-2`}>
+              Injected variables
+            </p>
+            <div className="rounded-[4px] border border-white/[0.06] bg-[#111216] divide-y divide-white/[0.04] overflow-hidden">
               {bucket.injected_vars.map((key) => (
-                <div key={key} className="px-2.5 py-1.5 font-mono text-[11px] text-white/60">
+                <div key={key} className={`${MONO} break-all px-3 py-1.5 text-[11px] text-white/55`}>
                   {key}
                 </div>
               ))}

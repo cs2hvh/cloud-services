@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Input } from '@/components/ui/input';
 import {
+  AlertTriangle,
   Eye,
   EyeOff,
   RotateCcw,
-  AlertTriangle,
   ShieldCheck,
 } from 'lucide-react';
 import type { EnvVarConfig } from './types';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface EnvConfigStepProps {
   envVarConfigs: EnvVarConfig[];
@@ -34,11 +35,8 @@ export function EnvConfigStep({
   const toggleReveal = (key: string) => {
     setRevealedKeys(prev => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -59,37 +57,29 @@ export function EnvConfigStep({
   const allValuesArePlaceholders = envVarConfigs.every(c => isPlaceholderValue(c.value));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Info banner */}
-      {allValuesArePlaceholders ? (
-        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
-          <ShieldCheck className="w-4 h-4 text-white/40 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-white/50 leading-relaxed">
-            Connection credentials are fetched securely from DigitalOcean at link time and never exposed in this UI.
-            You can rename the variable keys below.
-          </p>
-        </div>
-      ) : (
-        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
-          <ShieldCheck className="w-4 h-4 text-white/40 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-white/50 leading-relaxed">
-            Rename keys to match your app&apos;s expected variable names. Values shown are the actual credentials that will be injected.
-          </p>
-        </div>
-      )}
+      <div className={`${MONO} flex items-start gap-2.5 px-3 py-2.5 border border-white/[0.06] bg-white/[0.02] rounded-[6px]`}>
+        <ShieldCheck className="h-3.5 w-3.5 text-white/30 flex-shrink-0 mt-0.5" />
+        <p className="text-[11px] text-white/40 leading-relaxed">
+          {allValuesArePlaceholders
+            ? 'Credentials are fetched securely at link time and never exposed here. Rename the variable keys below.'
+            : "Rename keys to match your app's expected variable names. Values shown are the actual credentials."}
+        </p>
+      </div>
 
       {/* Conflict warning */}
       {conflicts.length > 0 && (
-        <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+        <div className={`${MONO} flex items-start gap-2.5 px-3 py-2.5 border border-amber-400/20 bg-amber-500/[0.05] rounded-[6px]`}>
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-amber-400 font-medium mb-0.5">Variable name conflicts</p>
-            <p className="text-xs text-amber-400/70 break-all">{conflicts.join(', ')}</p>
+            <p className="text-[11px] text-amber-200 font-semibold mb-0.5">Variable name conflicts</p>
+            <p className="text-[10.5px] text-amber-200/60 break-all">{conflicts.join(', ')}</p>
             {onResolveConflicts && (
               <button
                 type="button"
                 onClick={onResolveConflicts}
-                className="mt-1.5 text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                className="mt-1.5 text-[10.5px] text-amber-300 underline underline-offset-2 hover:text-amber-200"
               >
                 Force overwrite
               </button>
@@ -98,8 +88,12 @@ export function EnvConfigStep({
         </div>
       )}
 
-      {/* Variable rows — constrain height to prevent overflow */}
-      <div className="rounded-md border border-white/[0.08] overflow-hidden divide-y divide-white/[0.06] max-h-[280px] overflow-y-auto">
+      {/* Variable rows */}
+      <div className="border border-white/[0.06] rounded-[6px] overflow-hidden divide-y divide-white/[0.05] max-h-[280px] overflow-y-auto">
+        <div className={`${MONO} hidden sm:grid grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-3 px-3 py-2 bg-[#111216] text-[10px] uppercase tracking-[0.12em] text-white/30`}>
+          <span>Variable name</span>
+          <span>Injected value</span>
+        </div>
         {envVarConfigs.map((config, index) => {
           const hasConflict = conflictSet.has(config.customKey);
           const isModified = config.customKey !== config.originalKey;
@@ -109,21 +103,19 @@ export function EnvConfigStep({
           return (
             <div
               key={config.originalKey}
-              className={`flex items-center gap-3 px-3 py-2.5 ${hasConflict ? 'bg-amber-500/5' : 'bg-transparent'}`}
+              className={`flex flex-col gap-2.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3 ${hasConflict ? 'bg-amber-500/[0.04]' : 'bg-[#0d0e11]'}`}
             >
               {/* Key column */}
-              <div className="flex-1 min-w-0">
+              <div className="w-full min-w-0 sm:flex-1">
                 <div className="flex items-center gap-1.5">
-                  <Input
+                  <input
                     value={config.customKey}
                     onChange={(e) => handleKeyChange(index, e.target.value)}
                     disabled={disabled}
-                    className={`
-                      h-7 font-mono text-xs bg-white/[0.04] border-white/10 text-white/90 px-2
-                      focus:ring-0 focus:ring-offset-0
-                      ${hasConflict ? 'border-amber-500/50 text-amber-400' : ''}
-                    `}
                     spellCheck={false}
+                    className={`${MONO} h-7 w-full bg-[#111216] border text-[11.5px] text-white/90 px-2 rounded-[4px] focus:outline-none focus:border-[#0095FF]/50 transition-colors disabled:opacity-50 ${
+                      hasConflict ? 'border-amber-400/40 text-amber-300' : 'border-white/[0.08]'
+                    }`}
                   />
                   {isModified && (
                     <button
@@ -131,32 +123,32 @@ export function EnvConfigStep({
                       onClick={() => resetKey(index)}
                       disabled={disabled}
                       title="Reset to default"
-                      className="text-white/30 hover:text-white/60 flex-shrink-0"
+                      className="text-white/25 hover:text-white/55 flex-shrink-0 transition-colors"
                     >
-                      <RotateCcw className="w-3 h-3" />
+                      <RotateCcw className="h-3 w-3" />
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-white/30 mt-0.5 truncate">{config.description}</p>
+                <p className={`${MONO} text-[10px] text-white/30 mt-0.5 truncate`}>{config.description}</p>
               </div>
 
               {/* Value column */}
-              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+              <div className="flex w-full min-w-0 items-center gap-1.5 rounded-[4px] border border-white/[0.05] bg-[#111216]/60 px-2 py-1.5 sm:flex-1 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                 {isPlaceholder ? (
-                  <span className="text-[11px] text-white/30 italic font-mono truncate">
+                  <span className={`${MONO} text-[10.5px] text-white/25 italic`}>
                     Injected on link
                   </span>
                 ) : (
                   <>
-                    <span className="flex-1 font-mono text-[11px] text-white/50 truncate">
+                    <span className={`${MONO} flex-1 text-[11px] text-white/50 truncate`}>
                       {isRevealed ? config.value : '•'.repeat(Math.min(config.value.length, 20))}
                     </span>
                     <button
                       type="button"
                       onClick={() => toggleReveal(config.originalKey)}
-                      className="text-white/30 hover:text-white/60 flex-shrink-0"
+                      className="text-white/25 hover:text-white/55 flex-shrink-0 transition-colors"
                     >
-                      {isRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      {isRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </button>
                   </>
                 )}
@@ -166,7 +158,7 @@ export function EnvConfigStep({
         })}
       </div>
 
-      <p className="text-[11px] text-white/30">
+      <p className={`${MONO} text-[10.5px] text-white/30`}>
         {envVarConfigs.length} variable{envVarConfigs.length !== 1 ? 's' : ''} will be injected
       </p>
     </div>

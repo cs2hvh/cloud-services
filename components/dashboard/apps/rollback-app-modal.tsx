@@ -4,16 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { safeRandomUUID } from "@/lib/utils/safe-uuid";
 import { AlertTriangle, GitCommit, Loader2, RotateCcw } from 'lucide-react';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface RollbackAppModalProps {
   open: boolean;
@@ -59,11 +58,12 @@ export function RollbackAppModal({
     }
     return 'the current serving release';
   }, [currentBuildNumber]);
+
   const sameTargetAsCurrent =
     typeof currentBuildNumber === 'number' &&
     typeof targetBuildNumber === 'number' &&
     currentBuildNumber === targetBuildNumber;
-  // Unavailable when no valid target, or when target is the same as what's serving
+
   const rollbackUnavailable = targetBuildNumber === null || sameTargetAsCurrent;
 
   const handleRollback = async () => {
@@ -95,7 +95,7 @@ export function RollbackAppModal({
       toast.success(
         rolledBackBuild !== null
           ? `Rolled back to Build #${rolledBackBuild}`
-          : 'Rollback completed successfully'
+          : 'Rollback completed successfully',
       );
 
       if (payload?.warning) {
@@ -116,100 +116,116 @@ export function RollbackAppModal({
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="bg-zinc-900 border-white/10 text-white">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            <RotateCcw className="w-5 h-5 text-amber-300" />
-            Roll Back Application
-          </AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-4 text-sm text-white/70">
-              <p>
-                Roll back <span className="font-semibold text-white">{appName}</span> from{' '}
-                <span className="font-semibold text-white">{currentLabel}</span>
-                {rollbackUnavailable ? (
-                  <span>.</span>
-                ) : (
-                  <>
-                    {' '}to <span className="font-semibold text-white">{targetLabel}</span>.
-                  </>
-                )}
-              </p>
-              <div className="border border-white/10 bg-white/[0.04] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/45">Current serving release</span>
-                  <span className="font-mono text-white">{currentLabel}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="text-white/45">Rollback target</span>
-                  <span className="font-mono text-white">{targetLabel}</span>
-                </div>
-                {targetCommitSha ? (
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <span className="text-white/45">Target commit</span>
-                    <span className="inline-flex items-center gap-1 font-mono text-white">
-                      <GitCommit className="w-3.5 h-3.5 text-white/45" />
-                      {targetCommitSha.slice(0, 7)}
-                    </span>
-                  </div>
-                ) : null}
-                {currentSizeLabel ? (
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <span className="text-white/45">Runtime size after rollback</span>
-                    <span className="font-mono text-white capitalize">{currentSizeLabel}</span>
-                  </div>
-                ) : null}
-              </div>
-              {rollbackUnavailable ? (
-                <div className="flex items-start gap-2 border border-red-400/20 bg-red-500/10 p-3 text-red-200/85">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                  <span>
-                    No previous release different from the current serving release is available.
-                    Resize and same-image operations do not create rollback targets.
-                  </span>
-                </div>
-              ) : null}
-              <div className="flex items-start gap-2 border border-amber-400/20 bg-amber-500/10 p-3 text-amber-200/85">
-                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                <span>
-                  This only switches the serving release and restarts the application. It does not
-                  revert runtime size, environment variables, domains, or project assignment. No
-                  new build will be created.
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="bg-[#0c0d11] border border-white/[0.08] rounded-[10px] text-white p-0 gap-0 overflow-hidden max-w-[440px] flex flex-col max-h-[90svh] [&_[data-slot=dialog-close]]:text-white/35 [&_[data-slot=dialog-close]]:hover:text-white/75 [&_[data-slot=dialog-close]]:hover:bg-white/[0.06]"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-5 border-b border-white/[0.06] flex-shrink-0 pr-14">
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="h-7 w-7 rounded-[6px] bg-amber-500/[0.12] border border-amber-500/20 flex items-center justify-center flex-shrink-0">
+              <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+            </div>
+            <DialogTitle className="text-[15px] font-semibold text-white tracking-[-0.01em]">
+              Roll Back Application?
+            </DialogTitle>
+          </div>
+          <DialogDescription className="text-[13px] text-white/45 leading-relaxed pl-[38px]">
+            {rollbackUnavailable ? (
+              <>No previous release available for <span className="text-white/70 font-medium">{appName}</span>.</>
+            ) : (
+              <>Switch <span className="text-white/70 font-medium">{appName}</span> from{' '}
+              <span className="text-white/70">{currentLabel}</span> to{' '}
+              <span className="text-white/70">{targetLabel}</span>.</>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+          {/* Details table */}
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden divide-y divide-white/[0.04]">
+            <div className="flex items-center justify-between px-4 py-2.5 gap-3">
+              <span className={`${MONO} text-[10.5px] uppercase tracking-[0.10em] text-white/40`}>
+                Current serving release
+              </span>
+              <span className={`${MONO} text-[12px] text-white`}>{currentLabel}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5 gap-3">
+              <span className={`${MONO} text-[10.5px] uppercase tracking-[0.10em] text-white/40`}>
+                Rollback target
+              </span>
+              <span className={`${MONO} text-[12px] ${rollbackUnavailable ? 'text-white/35' : 'text-white'}`}>
+                {targetLabel}
+              </span>
+            </div>
+            {targetCommitSha ? (
+              <div className="flex items-center justify-between px-4 py-2.5 gap-3">
+                <span className={`${MONO} text-[10.5px] uppercase tracking-[0.10em] text-white/40`}>
+                  Target commit
+                </span>
+                <span className={`${MONO} text-[12px] text-white inline-flex items-center gap-1`}>
+                  <GitCommit className="h-3 w-3 text-white/35" />
+                  {targetCommitSha.slice(0, 7)}
                 </span>
               </div>
+            ) : null}
+            {currentSizeLabel ? (
+              <div className="flex items-center justify-between px-4 py-2.5 gap-3">
+                <span className={`${MONO} text-[10.5px] uppercase tracking-[0.10em] text-white/40`}>
+                  Runtime size after rollback
+                </span>
+                <span className={`${MONO} text-[12px] text-white capitalize`}>{currentSizeLabel}</span>
+              </div>
+            ) : null}
+          </div>
+
+          {rollbackUnavailable ? (
+            <div className={`${MONO} flex items-start gap-2 border border-rose-500/20 bg-rose-500/[0.05] rounded-[5px] px-3 py-3 text-[11px] text-rose-200/85`}>
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              <span>
+                No previous release different from the current serving release is available.
+                Resize and same-image operations do not create rollback targets.
+              </span>
             </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel
+          ) : null}
+
+          <div className={`${MONO} flex items-start gap-2 border border-amber-400/20 bg-amber-500/[0.05] rounded-[5px] px-3 py-3 text-[11px] text-amber-200/85`}>
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <span>
+              This only switches the serving release and restarts the application. It does not
+              revert runtime size, environment variables, domains, or project assignment. No new
+              build will be created.
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 pb-6 pt-4 border-t border-white/[0.06] flex-shrink-0 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
             disabled={isRollingBack}
-            className="cursor-pointer bg-white/10 border-white/20 text-white hover:bg-white/20"
+            className="h-9 px-4 rounded-[5px] text-[13px] font-medium text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-40"
           >
             Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault();
-              handleRollback();
-            }}
+          </button>
+          <button
+            type="button"
+            onClick={handleRollback}
             disabled={isRollingBack || rollbackUnavailable}
-            className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white"
+            className="inline-flex h-9 min-w-[152px] items-center justify-center gap-2 rounded-[5px] border border-amber-400/25 bg-[#0d0e11] px-4 text-[13px] font-medium text-amber-300 transition-colors hover:bg-amber-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isRollingBack ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Rolling Back...
-              </>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Roll Back Release
-              </>
+              <RotateCcw className="h-3.5 w-3.5" />
             )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            {isRollingBack ? 'Rolling Back…' : 'Roll Back Release'}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

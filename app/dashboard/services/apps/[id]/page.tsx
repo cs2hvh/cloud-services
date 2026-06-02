@@ -38,10 +38,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import {
   Select,
@@ -1204,9 +1201,9 @@ export default function AppDetailPage() {
             <p className="text-[15px] font-semibold text-white">{error || 'App not found'}</p>
             <Link
               href="/dashboard/services/apps"
-              className={`${APP_MONO} mt-6 inline-flex items-center gap-1.5 h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              className="mt-6 inline-flex h-10 items-center gap-2 rounded-[5px] border border-white/[0.10] bg-[#0d0e11] px-3.5 text-[13px] font-medium text-white/70 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
             >
-              <ArrowLeft className="h-3 w-3" />
+              <ArrowLeft className="h-3.5 w-3.5" />
               Back to Apps
             </Link>
           </div>
@@ -1234,9 +1231,9 @@ export default function AppDetailPage() {
           <div className="max-w-3xl min-w-0">
             <Link
               href="/dashboard/services/apps"
-              className={`${APP_MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+              className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-white/45 transition-colors hover:text-white"
             >
-              <ArrowLeft className="h-3 w-3" />
+              <ArrowLeft className="h-3.5 w-3.5" />
               Back to apps
             </Link>
 
@@ -1348,7 +1345,7 @@ export default function AppDetailPage() {
               type="button"
               onClick={() => setRollbackModalOpen(true)}
               disabled={deploymentMutationBlocked || !canRollback}
-              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+              className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-amber-400/25 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-amber-300 transition-colors hover:bg-amber-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               title={
                 canRollback
                   ? app?.rollback_target_build_number
@@ -1357,8 +1354,8 @@ export default function AppDetailPage() {
                   : 'No previous release available. Resize-only operations do not create rollback targets.'
               }
             >
-              <RotateCcw className="h-3 w-3" />
-              Rollback
+              <RotateCcw className="h-3.5 w-3.5" />
+              Roll back
             </button>
             <button
               type="button"
@@ -1366,18 +1363,18 @@ export default function AppDetailPage() {
                 if (app.name) fetchBuildInfo(app.name);
                 refetchDetails();
               }}
-              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-white/[0.10] bg-[#0d0e11] px-3.5 text-[13px] font-medium text-white/70 transition-colors hover:border-white/[0.16] hover:bg-white/[0.06] hover:text-white"
             >
-              <RefreshCw className="h-3 w-3" />
+              <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
             <button
               type="button"
               onClick={() => setDeleteModalOpen(true)}
               disabled={deploymentMutationBlocked}
-              className={`${APP_MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-rose-500/25 bg-rose-500/[0.06] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.10] rounded-[5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+              className="inline-flex h-10 items-center gap-2 rounded-[5px] border border-rose-500/25 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-rose-200 transition-colors hover:bg-rose-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
               Delete
             </button>
           </div>
@@ -1603,81 +1600,99 @@ export default function AppDetailPage() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-              <CardHeader className="border-b border-white/[0.06]">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Settings className="w-5 h-5" />
+            <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+              {/* Header */}
+              <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-3.5 w-3.5 text-white/45" />
+                  <span className={`${APP_MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
                     App Settings
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => setRollbackModalOpen(true)}
-                      disabled={deploymentMutationBlocked || !canRollback}
-                      variant="outline"
-                      className="rounded-none border-white/15 bg-transparent text-white hover:bg-white/10"
-                      title={
-                        canRollback
-                          ? app?.rollback_target_build_number
-                            ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
-                            : 'Rollback to the previous successful release'
-                          : 'No previous release available. Resize-only operations do not create rollback targets.'
-                      }
-                    >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Rollback Release
-                    </Button>
-                    <Button
-                      onClick={handleRedeploy}
-                      disabled={redeploying || deploymentMutationBlocked}
-                      className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {redeploying ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Redeploying...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 mr-2" />
-                          Redeploy
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                  </span>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-5 pt-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Build Command</p>
-                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
-                      {app.build_command || 'Default'}
-                    </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRollbackModalOpen(true)}
+                    disabled={deploymentMutationBlocked || !canRollback}
+                    title={
+                      canRollback
+                        ? app?.rollback_target_build_number
+                          ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                          : 'Rollback to the previous successful release'
+                        : 'No previous release available. Resize-only operations do not create rollback targets.'
+                    }
+                    className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-amber-400/25 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-amber-300 transition-colors hover:bg-amber-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Roll back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRedeploy}
+                    disabled={redeploying || deploymentMutationBlocked}
+                    className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {redeploying ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {redeploying ? 'Redeploying' : 'Redeploy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-5 space-y-5">
+                {/* Build info grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] px-4 py-3">
+                    <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`}>
+                      Build Command
+                    </span>
+                    <div className={`${APP_MONO} mt-2 border border-white/[0.06] bg-[#111216] rounded-[4px] px-3 py-2.5 text-[12px] text-white/70`}>
+                      {app.build_command || '—'}
+                    </div>
                   </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Output Directory</p>
-                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
-                      {app.output_directory || 'Default'}
-                    </p>
+                  <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] px-4 py-3">
+                    <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`}>
+                      Output Directory
+                    </span>
+                    <div className={`${APP_MONO} mt-2 border border-white/[0.06] bg-[#111216] rounded-[4px] px-3 py-2.5 text-[12px] text-white/70`}>
+                      {app.output_directory || '—'}
+                    </div>
                   </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Health Check Path</p>
-                    <div className="flex items-center gap-2">
-                      <p className="flex-1 border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
-                        {app.healthcheck_path || <span className="text-white/30">Not set · TCP socket probe</span>}
-                      </p>
+                  <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] px-4 py-3">
+                    <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`}>
+                      Health Check Path
+                    </span>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div
+                        className={`${APP_MONO} flex-1 border border-white/[0.06] bg-[#111216] rounded-[4px] px-3 py-2.5 text-[12px] ${
+                          app.healthcheck_path ? 'text-white/70' : 'text-white/30'
+                        }`}
+                      >
+                        {app.healthcheck_path || 'Not set · TCP socket probe'}
+                      </div>
                       {app.healthcheck_path && (
-                        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded ${
-                          healthPathStatus === 'checking'     ? 'bg-white/[0.06] text-white/40' :
-                          healthPathStatus === 'reachable'    ? 'bg-green-500/10 text-green-400' :
-                          healthPathStatus === 'unreachable'  ? 'bg-orange-500/10 text-orange-400' :
-                          'bg-white/[0.06] text-white/40'
-                        }`}>
-                          {healthPathStatus === 'checking'    ? 'Checking…' :
-                           healthPathStatus === 'reachable'   ? '✓ Reachable' :
-                           healthPathStatus === 'unreachable' ? '⚠ Not reachable' :
-                           ''}
+                        <span
+                          className={`${APP_MONO} shrink-0 text-[10px] uppercase tracking-[0.10em] px-2 py-1 border rounded-[4px] ${
+                            healthPathStatus === 'checking'
+                              ? 'border-white/[0.08] bg-white/[0.03] text-white/40'
+                              : healthPathStatus === 'reachable'
+                                ? 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300'
+                                : healthPathStatus === 'unreachable'
+                                  ? 'border-orange-400/25 bg-orange-500/[0.06] text-orange-300'
+                                  : 'border-white/[0.08] bg-white/[0.03] text-white/40'
+                          }`}
+                        >
+                          {healthPathStatus === 'checking'
+                            ? 'Checking…'
+                            : healthPathStatus === 'reachable'
+                              ? '✓ Reachable'
+                              : healthPathStatus === 'unreachable'
+                                ? '⚠ Unreachable'
+                                : ''}
                         </span>
                       )}
                     </div>
@@ -1717,62 +1732,70 @@ export default function AppDetailPage() {
                   }}
                 />
 
-                {/* Environment Variables - Using EnvVarsEditor */}
-                <div className="border-t border-white/10 pt-4">
-                  {/* Success/Error Messages */}
+                {/* Environment Variables */}
+                <div className="border-t border-white/[0.06] pt-5">
                   {envVarError && (
-                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                    <div
+                      className={`${APP_MONO} mb-4 flex items-center gap-2 border border-rose-500/25 bg-rose-500/[0.06] rounded-[5px] px-3 py-2.5 text-[11.5px] text-rose-300`}
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                       {envVarError}
                     </div>
                   )}
                   {envVarSuccess && (
-                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <div
+                      className={`${APP_MONO} mb-4 flex items-center gap-2 border border-emerald-400/25 bg-emerald-500/[0.06] rounded-[5px] px-3 py-2.5 text-[11.5px] text-emerald-300`}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
                       {envVarSuccess}
                     </div>
                   )}
 
-                  {/* Advanced Environment Variables Editor */}
                   {envVarsLoading ? (
-                    <div className="flex items-center gap-2 py-6 text-white/50 text-sm">
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                    <div className={`${APP_MONO} flex items-center gap-2 py-6 text-[11.5px] text-white/40`}>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Loading environment variables…
                     </div>
                   ) : (
-                    <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} appId={app?.id} onReveal={handleRevealVar} revealingKey={revealingKey} />
+                    <EnvVarsEditor
+                      value={editedEnvVars}
+                      onChange={handleEnvVarsChange}
+                      appId={app?.id}
+                      onReveal={handleRevealVar}
+                      revealingKey={revealingKey}
+                    />
                   )}
 
-                  {/* Save Button */}
                   {envVarsModified && (
                     <div className="mt-4 flex items-center gap-3">
-                      <Button
+                      <button
+                        type="button"
                         onClick={handleSaveEnvVars}
                         disabled={savingEnvVars || deploymentMutationBlocked}
-                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
+                        className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {savingEnvVars ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <>
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Changes
-                          </>
+                          <Save className="h-3.5 w-3.5" />
                         )}
-                      </Button>
-                      <span className="text-xs text-white/50">
-                        {envVarSuccess && envVarSuccess.toLowerCase().includes('applied') && envVarSuccess.toLowerCase().includes('immediately') ? (
-                          <span className="text-yellow-400">
+                        {savingEnvVars ? 'Saving' : 'Save Changes'}
+                      </button>
+                      <span className={`${APP_MONO} text-[10.5px] text-white/35`}>
+                        {envVarSuccess &&
+                        envVarSuccess.toLowerCase().includes('applied') &&
+                        envVarSuccess.toLowerCase().includes('immediately') ? (
+                          <span className="text-amber-300/75">
                             Runtime variables apply immediately. Build-time variables require a redeploy.
                           </span>
-                        ) : envVarSuccess && (envVarSuccess.includes('applied instantly') || envVarSuccess.includes('All changes applied')) ? (
-                          <span className="text-green-400">
+                        ) : envVarSuccess &&
+                          (envVarSuccess.includes('applied instantly') ||
+                            envVarSuccess.includes('All changes applied')) ? (
+                          <span className="text-emerald-300/75">
                             All changes applied immediately. No rebuild required.
                           </span>
                         ) : envVarSuccess && envVarSuccess.toLowerCase().includes('redeploy') ? (
-                          <span className="text-yellow-400">
+                          <span className="text-amber-300/75">
                             Changes require clicking &quot;Redeploy&quot; to take effect.
                           </span>
                         ) : (
@@ -1784,20 +1807,29 @@ export default function AppDetailPage() {
                 </div>
 
                 {/* Danger Zone */}
-                <div className="border-t border-white/10 pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h4>
-                  <Button
-                    variant="destructive"
-                    onClick={() => setDeleteModalOpen(true)}
-                    disabled={deploymentMutationBlocked}
-                    className="w-full rounded-none md:w-auto"
+                <div className="border-t border-white/[0.06] pt-5">
+                  <span
+                    className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-rose-400/60 mb-3 block`}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Application
-                  </Button>
+                    Danger Zone
+                  </span>
+                  <div className="border border-rose-500/15 bg-rose-500/[0.03] rounded-[5px] px-4 py-4">
+                    <p className={`${APP_MONO} text-[11.5px] text-white/50 mb-3`}>
+                      Permanently delete this app and all associated resources.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModalOpen(true)}
+                      disabled={deploymentMutationBlocked}
+                      className="inline-flex h-9 items-center gap-2 rounded-[5px] border border-rose-500/25 bg-[#0d0e11] px-3.5 text-[13px] font-medium text-rose-200 transition-colors hover:bg-rose-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Application
+                    </button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
         </div>
       </Tabs>

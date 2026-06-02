@@ -13,13 +13,12 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { SslStatusBadge, type SslStatus } from '@/components/ui/ssl-status-badge';
 
 import type { CustomDomain } from './types';
 import { looksInternal } from './utils';
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface DomainCardProps {
   domain: CustomDomain;
@@ -39,33 +38,61 @@ interface DomainCardProps {
   onCheckSsl: (id: string) => void;
 }
 
-function getStatusBadge(domain: CustomDomain) {
+type StatusConfig = {
+  dot: string;
+  border: string;
+  bg: string;
+  text: string;
+  label: string;
+  icon?: React.ReactNode;
+};
+
+function getStatusConfig(domain: CustomDomain): StatusConfig {
   switch (domain.status) {
     case 'active':
-      return (
-        <Badge className="border-green-500/30 bg-green-500/20 text-green-300">
-          <Check className="mr-1 h-3 w-3" />
-          Active
-        </Badge>
-      );
+      return {
+        dot: '#4ade80',
+        border: 'border-emerald-400/25',
+        bg: 'bg-emerald-500/[0.08]',
+        text: 'text-emerald-300',
+        label: 'Active',
+        icon: <Check className="h-2.5 w-2.5" />,
+      };
     case 'verified':
-      return (
-        <Badge className="border-cyan-500/30 bg-cyan-500/20 text-cyan-200">
-          <Shield className="mr-1 h-3 w-3" />
-          Verified
-        </Badge>
-      );
+      return {
+        dot: '#60a5fa',
+        border: 'border-blue-400/25',
+        bg: 'bg-blue-500/[0.08]',
+        text: 'text-blue-300',
+        label: 'Verified',
+        icon: <Shield className="h-2.5 w-2.5" />,
+      };
     case 'pending':
-      return (
-        <Badge className="border-yellow-500/30 bg-yellow-500/20 text-yellow-200">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Pending Verification
-        </Badge>
-      );
+      return {
+        dot: '#fbbf24',
+        border: 'border-amber-400/25',
+        bg: 'bg-amber-500/[0.08]',
+        text: 'text-amber-200',
+        label: 'Pending',
+        icon: <AlertCircle className="h-2.5 w-2.5" />,
+      };
     case 'failed':
-      return <Badge className="border-red-500/30 bg-red-500/20 text-red-200">Failed</Badge>;
+      return {
+        dot: '#f87171',
+        border: 'border-rose-500/25',
+        bg: 'bg-rose-500/[0.08]',
+        text: 'text-rose-300',
+        label: 'Failed',
+        icon: <AlertCircle className="h-2.5 w-2.5" />,
+      };
     default:
-      return <Badge className="border-white/20 bg-white/10 text-white/70">Unknown</Badge>;
+      return {
+        dot: 'rgba(255,255,255,0.3)',
+        border: 'border-white/[0.08]',
+        bg: 'bg-white/[0.04]',
+        text: 'text-white/50',
+        label: 'Unknown',
+      };
   }
 }
 
@@ -84,26 +111,30 @@ function DnsStatusPanel({ domain }: { domain: CustomDomain }) {
 
   return (
     <div
-      className={`mt-3 rounded border p-3 text-sm ${
+      className={`mx-4 mb-0 mt-3 border rounded-[4px] px-3 py-2.5 ${
         domain.dns_ready
-          ? 'border-green-500/30 bg-green-500/5 text-green-300'
-          : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-200'
+          ? 'border-emerald-500/25 bg-emerald-500/[0.05]'
+          : 'border-amber-400/25 bg-amber-500/[0.05]'
       }`}
     >
-      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-white/50">
+      <div className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40 mb-1`}>
         DNS Status
       </div>
-      <p className="text-sm font-medium">{friendlyMessage}</p>
+      <p
+        className={`${MONO} text-[11.5px] font-medium ${
+          domain.dns_ready ? 'text-emerald-300' : 'text-amber-200'
+        }`}
+      >
+        {friendlyMessage}
+      </p>
       {!domain.dns_ready && resolved && (
-        <p className="mt-2 text-xs text-white/55">
-          <span className="text-white/40">Currently resolves to:</span> {resolved}
+        <p className={`${MONO} mt-1.5 text-[10.5px] text-white/40`}>
+          <span className="text-white/30">Currently resolves to:</span> {resolved}
         </p>
       )}
     </div>
   );
 }
-
-
 
 function getNextAction(domain: CustomDomain) {
   if (domain.status === 'pending') {
@@ -181,211 +212,236 @@ export function DomainCard({
   onCheckSsl,
 }: DomainCardProps) {
   const nextAction = getNextAction(domain);
+  const statusConfig = getStatusConfig(domain);
 
   return (
-    <div className="border border-white/10 bg-black/20 p-4 mb-3 rounded-md hover:shadow-md transition-shadow">
+    <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] overflow-hidden">
       {/* Header row */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {domain.status === 'active' ? (
               <a
                 href={`https://${domain.domain}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm font-semibold text-white hover:text-cyan-200"
+                className={`${MONO} inline-flex min-w-0 items-center gap-1 text-[13px] font-semibold text-white hover:text-[#0095FF] transition-colors`}
               >
-                {domain.domain}
-                <ExternalLink className="h-3.5 w-3.5" />
+                <span className="truncate">{domain.domain}</span>
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
               </a>
             ) : (
-              <span className="text-sm font-semibold text-white">{domain.domain}</span>
+              <span className={`${MONO} min-w-0 max-w-full truncate text-[13px] font-semibold text-white`}>{domain.domain}</span>
             )}
 
             {domain.is_primary && (
-              <Badge className="border-yellow-500/30 bg-yellow-500/20 text-yellow-200">
-                <Star className="mr-1 h-3 w-3" />
+              <span
+                className={`${MONO} inline-flex items-center gap-1 px-2 py-0.5 border border-yellow-400/25 bg-yellow-500/[0.08] text-[10px] uppercase tracking-[0.12em] text-yellow-300 rounded-[20px]`}
+              >
+                <Star className="h-2.5 w-2.5" />
                 Primary
-              </Badge>
+              </span>
             )}
           </div>
 
           {domain.last_error && !looksInternal(domain.last_error) && (
-            <p className="mt-1 text-xs text-red-300">{domain.last_error}</p>
+            <p className={`${MONO} mt-1 text-[11px] text-rose-300`}>{domain.last_error}</p>
           )}
           {domain.last_error && looksInternal(domain.last_error) && (
-            <p className="mt-1 text-xs text-red-300">
+            <p className={`${MONO} mt-1 text-[11px] text-rose-300`}>
               There was an issue with this domain. Try again or contact support.
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2">{getStatusBadge(domain)}</div>
+        {/* Status badge */}
+        <span
+          className={`${MONO} inline-flex w-fit items-center gap-1.5 px-2.5 py-1 border ${statusConfig.border} ${statusConfig.bg} text-[10px] uppercase tracking-[0.12em] ${statusConfig.text} rounded-[20px] flex-shrink-0`}
+        >
+          {statusConfig.icon}
+          {statusConfig.label}
+        </span>
       </div>
 
       <DnsStatusPanel domain={domain} />
+
       {domain.status === 'active' && (
-        <SslStatusBadge
-          sslStatus={domain.ssl_status as SslStatus}
-          id={domain.id}
-          onCheck={anyOperationRunning ? undefined : onCheckSsl}
-          checkingId={checkingSslId}
-          variant="card"
-          dnsMessage={domain.dns_message}
-        />
+        <div className="px-4 mt-3">
+          <SslStatusBadge
+            sslStatus={domain.ssl_status as SslStatus}
+            id={domain.id}
+            onCheck={anyOperationRunning ? undefined : onCheckSsl}
+            checkingId={checkingSslId}
+            variant="card"
+            dnsMessage={domain.dns_message}
+          />
+        </div>
       )}
 
       {/* Next action */}
       {nextAction && (
-        <div className="mt-3 border border-white/10 bg-white/[0.03] p-3">
-          <p className="text-xs uppercase tracking-wide text-white/45">Next Step</p>
-          <p className="mt-1 text-sm font-medium text-white">{nextAction.title}</p>
-          <p className="mt-1 text-xs text-white/55">{nextAction.description}</p>
-          <div className="mt-2 flex items-center gap-2">
+        <div className="mx-4 mt-3 border border-white/[0.06] bg-[#111216] rounded-[4px] px-4 py-3">
+          <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>
+            Next Step
+          </span>
+          <p className={`${MONO} mt-1.5 text-[12px] font-semibold text-white`}>{nextAction.title}</p>
+          <p className={`${MONO} mt-1 text-[11px] text-white/50`}>{nextAction.description}</p>
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
             {nextAction.action === 'verify' && (
-              <Button
-                size="sm"
-                variant="outline"
+              <button
+                type="button"
                 onClick={() => onVerify(domain.id)}
                 disabled={anyOperationRunning}
-                className="border-white/20 text-white hover:bg-white/10"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {verifyingId === domain.id ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                  <RefreshCw className="h-3.5 w-3.5" />
                 )}
                 Verify
-              </Button>
+              </button>
             )}
 
             {nextAction.action === 'activate' && (
-              <Button
-                size="sm"
+              <button
+                type="button"
                 onClick={() => onActivate(domain.id)}
                 disabled={anyOperationRunning || appStatus !== 'running'}
-                className="bg-green-600 text-white hover:bg-green-700 rounded-md px-4 py-1.5"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {activatingId === domain.id ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Check className="mr-1 h-3.5 w-3.5" />
+                  <Check className="h-3.5 w-3.5" />
                 )}
                 Activate
-              </Button>
+              </button>
             )}
 
             {nextAction.action === 'set-primary' && (
-              <Button
-                size="sm"
-                variant="outline"
+              <button
+                type="button"
                 onClick={() => onSetPrimary(domain.id)}
                 disabled={anyOperationRunning}
-                className="border-white/20 text-white hover:bg-white/10"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {settingPrimaryId === domain.id ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Star className="mr-1 h-3.5 w-3.5" />
+                  <Star className="h-3.5 w-3.5" />
                 )}
                 Set Primary
-              </Button>
+              </button>
             )}
 
             {nextAction.action === 're-activate' && (
-              <Button
-                size="sm"
+              <button
+                type="button"
                 onClick={() => onActivate(domain.id)}
                 disabled={anyOperationRunning || appStatus !== 'running'}
-                className="bg-orange-600 text-white hover:bg-orange-700 rounded-md px-4 py-1.5"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#0095FF]/30 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-[#0095FF] transition-colors hover:bg-[#0095FF]/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {activatingId === domain.id ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                  <RefreshCw className="h-3.5 w-3.5" />
                 )}
                 Re-Activate
-              </Button>
+              </button>
             )}
           </div>
         </div>
       )}
 
-      {/* TXT verification instructions card */}
+      {/* TXT verification instructions */}
       {domain.status === 'pending' && (
-        <Alert className="mt-3 border-yellow-500/30 bg-yellow-500/10">
-          <AlertCircle className="h-4 w-4 text-yellow-300" />
-          <AlertTitle className="text-yellow-200">Ownership verification required</AlertTitle>
-          <AlertDescription className="space-y-2 text-xs text-white/75">
-            <p>
-              Add this TXT record at your DNS provider, then click <strong>Verify</strong>:
-            </p>
-            <div className="space-y-1.5 rounded bg-black/30 p-2 font-mono">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-white/50">Record type</span>
-                <span className="text-white">TXT</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-white/50">Record name</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onCopy(`ahuracloud-verify.${domain.domain}`, `pending-name-${domain.id}`)
-                  }
-                  className="flex items-center gap-1 text-white hover:text-yellow-100"
-                >
-                  <span className="truncate max-w-[190px]">{`ahuracloud-verify.${domain.domain}`}</span>
-                  {copiedField === `pending-name-${domain.id}` ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-white/50">Record value</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onCopy(domain.verification_token, `pending-token-${domain.id}`)
-                  }
-                  className="flex items-center gap-1 text-white hover:text-yellow-100"
-                >
-                  <span className="truncate max-w-[190px]">{domain.verification_token}</span>
-                  {copiedField === `pending-token-${domain.id}` ? (
-                    <Check className="h-3 w-3" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </button>
-              </div>
+        <div className="mx-4 mt-3 border border-amber-400/20 bg-amber-500/[0.04] rounded-[5px] px-4 py-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+            <span className={`${MONO} text-[11px] uppercase tracking-[0.10em] text-amber-300`}>
+              Ownership verification required
+            </span>
+          </div>
+          <p className={`${MONO} text-[11px] text-white/55`}>
+            Add this TXT record at your DNS provider, then click <strong className="text-white">Verify</strong>:
+          </p>
+          <div className="border border-white/[0.06] bg-[#111216] rounded-[4px] divide-y divide-white/[0.04]">
+            <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.10em] text-white/35`}>
+                Record type
+              </span>
+              <span className={`${MONO} text-[11.5px] text-white`}>TXT</span>
             </div>
-            <p className="text-white/45">DNS changes may take a few minutes to a few hours.</p>
-          </AlertDescription>
-        </Alert>
+            <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.10em] text-white/35 flex-shrink-0`}>
+                Record name
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  onCopy(`ahuracloud-verify.${domain.domain}`, `pending-name-${domain.id}`)
+                }
+                className={`${MONO} flex min-w-0 items-center gap-1.5 text-left text-[11.5px] text-white hover:text-[#0095FF] transition-colors`}
+              >
+                <span className="max-w-full break-all sm:max-w-[190px] sm:truncate">{`ahuracloud-verify.${domain.domain}`}</span>
+                {copiedField === `pending-name-${domain.id}` ? (
+                  <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                ) : (
+                  <Copy className="h-3 w-3 text-white/35 flex-shrink-0" />
+                )}
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.10em] text-white/35 flex-shrink-0`}>
+                Record value
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  onCopy(domain.verification_token, `pending-token-${domain.id}`)
+                }
+                className={`${MONO} flex min-w-0 items-center gap-1.5 text-left text-[11.5px] text-white hover:text-[#0095FF] transition-colors`}
+              >
+                <span className="max-w-full break-all sm:max-w-[190px] sm:truncate">{domain.verification_token}</span>
+                {copiedField === `pending-token-${domain.id}` ? (
+                  <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                ) : (
+                  <Copy className="h-3 w-3 text-white/35 flex-shrink-0" />
+                )}
+              </button>
+            </div>
+          </div>
+          <p className={`${MONO} text-[10px] text-white/35`}>
+            DNS changes may take a few minutes to a few hours.
+          </p>
+        </div>
       )}
 
       {/* Footer actions */}
-      <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
+      <div className="px-4 py-3 mt-3 border-t border-white/[0.06] flex items-center gap-2">
         <Link href={`/dashboard/domains/${encodeURIComponent(domain.domain)}`}>
-          <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
-            Manage Domain
-          </Button>
+          <span
+            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[5px] border border-white/[0.10] bg-white/[0.03] px-3 text-[12.5px] font-medium text-white/65 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Manage
+          </span>
         </Link>
 
-        <Button
-          size="sm"
-          variant="outline"
+        <button
+          type="button"
           onClick={() => onRemoveConfirm(domain.id)}
           disabled={anyOperationRunning}
-          className="ml-auto border-red-500/30 text-red-200 hover:bg-red-500/10"
+          className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-rose-500/25 bg-[#0d0e11] px-3 text-[12.5px] font-medium text-rose-200 transition-colors hover:bg-rose-500/[0.10] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {removingId === domain.id ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Trash2 className="h-3.5 w-3.5" />
           )}
-        </Button>
+          Remove
+        </button>
       </div>
     </div>
   );
