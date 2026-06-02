@@ -7,6 +7,11 @@ import { getUser } from "@/lib/supabase/auth";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { notFound } from "next/navigation";
 
+// Authenticated page — reads cookies via getUser(), so it must render per-request.
+// Without this, Next attempts static generation, getUser() throws DYNAMIC_SERVER_USAGE,
+// and the try/catch below swallows + logs it as a (harmless but noisy) build error.
+export const dynamic = "force-dynamic";
+
 const ActivitySuspense = async () => {
   try {
     const user = await getUser();
