@@ -165,6 +165,7 @@ export type PlatformApp = {
   updated_at: string | null;
   last_failure_reason?: string | null;
   healthcheck_path?: string | null;
+  custom_request_body_mb?: number | null;
 }
 
 export type Rule = {

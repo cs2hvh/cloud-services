@@ -34,12 +34,9 @@ import {
   RotateCcw,
   FolderOpen,
   Edit2,
-  ShoppingCart,
   Upload,
   type LucideIcon,
 } from 'lucide-react';
-import { BANDWIDTH_PACKS, BANDWIDTH_PACK_LIST, type BandwidthPackId } from '@/lib/services/platform-app-bandwidth/packs';
-import { useBandwidth } from '@/hooks/use-app-bandwidth';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,7 +61,6 @@ import { OperationLogsPanel } from '@/components/dashboard/apps/operation-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
-import { AppBandwidthCard } from '@/components/dashboard/apps/app-bandwidth-card';
 import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
@@ -77,6 +73,16 @@ import { DeploymentHistory } from '@/components/dashboard/apps/deployment-histor
 import { AppStatusBadge } from '@/components/dashboard/apps/app-status-badge';
 import { generateIdempotencyKey } from '@/lib/idempotency';
 import { getPlatformAppRetentionPolicy } from '@/lib/platform-apps/retention';
+import { AppProjectSection } from '@/components/dashboard/apps/app-project-section';
+import {
+  AppResizeSection,
+  PLATFORM_APP_SIZE_ORDER,
+  PLATFORM_APP_SIZE_SPECS,
+  type PlatformAppRates,
+  type SizeKey,
+} from '@/components/dashboard/apps/app-resize-section';
+import { AppBodyLimitSection } from '@/components/dashboard/apps/app-body-limit-section';
+import { AppOverviewTab } from '@/components/dashboard/apps/app-overview-tab';
 
 
 
@@ -110,46 +116,7 @@ interface AppDetail {
   // Failure tracking
   last_failure_reason?: string | null;
   healthcheck_path?: string | null;
-}
-
-type PlatformAppSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
-type SizeKey = PlatformAppSize;
-
-type PlatformAppRates = {
-  initialCost: number;
-  hourlyRate: number;
-  price: number;
-  quota?: {
-    totalBytes: number | null;
-    maxRequestBodyBytes: number | null;
-  };
-};
-
-const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
-
-const PLATFORM_APP_SIZE_SPECS: Record<
-  SizeKey,
-  { cpu: string; memory: string; replicas: number }
-> = {
-  small:     { cpu: '0.25 CPU', memory: '256 MB', replicas: 1 },
-  medium:    { cpu: '0.5 CPU',  memory: '512 MB', replicas: 2 },
-  large:     { cpu: '1 CPU',    memory: '1 GB',   replicas: 3 },
-  xlarge:    { cpu: '2 CPU',    memory: '2 GB',   replicas: 4 },
-  'xxlarge': { cpu: '4 CPU',    memory: '4 GB',   replicas: 6 },
-};
-
-function formatBytes(bytes?: number | null): string {
-  if (bytes === undefined) return '—';
-  if (bytes === null) return 'Unlimited';
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(unit <= 1 ? 0 : 1)} ${units[unit]}`;
+  custom_request_body_mb?: number | null;
 }
 
 const SECTION_META: Array<{
@@ -287,6 +254,7 @@ export default function AppDetailPage() {
   const prevBuildNumberRef = useRef<number | null>(null);
   // Tracks the last-seen resize operation id so we only call fetchApp() when a NEW resize completes
   const prevResizeOpIdRef = useRef<string | null>(null);
+  const resizeSectionRef = useRef<HTMLDivElement | null>(null);
   // Which build's logs the user is viewing — null means "show the active/latest build".
   // Separate from buildInfo so polling doesn't hijack the user's selection.
   const [viewingBuildNumber, setViewingBuildNumber] = useState<number | null>(null);
@@ -328,17 +296,7 @@ export default function AppDetailPage() {
   const [operationLogsLoading, setOperationLogsLoading] = useState(false);
   const [platformPricing, setPlatformPricing] = useState<Partial<Record<SizeKey, PlatformAppRates>>>({});
 
-  // Bandwidth pack purchase state (Settings tab)
-  const [selectedPack, setSelectedPack] = useState<BandwidthPackId | null>(null);
-  const [purchasing, setPurchasing] = useState(false);
-  const [packError, setPackError] = useState<string | null>(null);
-  const [packSuccess, setPackSuccess] = useState<string | null>(null);
-  const { data: bandwidthData, refetch: refetchBandwidth } = useBandwidth(appId, !!app);
-
-  // Project assignment state
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [editingProject, setEditingProject] = useState(false);
-  const [savingProject, setSavingProject] = useState(false);
+  // (project assignment and body limit state moved into extracted components)
 
   // Fetch detailed K8s info
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -770,9 +728,8 @@ export default function AppDetailPage() {
       setPendingResizeSize(null);
       // Refresh on both success and failure: failure reason and status are updated server-side
       fetchApp();
-      refetchBandwidth();
     }
-  }, [operationDeployments, fetchApp, refetchBandwidth]);
+  }, [operationDeployments, fetchApp]);
 
   useEffect(() => {
     if (operationDeployments.length === 0) {
@@ -861,13 +818,6 @@ export default function AppDetailPage() {
       .catch((msg: string) => setEnvVarError(typeof msg === 'string' ? msg : 'Failed to load environment variables'))
       .finally(() => setEnvVarsLoading(false));
   }, [activeTab, app?.id, envVarsLoaded, envVarsLoading]);
-
-  // Initialize project assignment when app data loads
-  useEffect(() => {
-    if (app?.project_id !== undefined) {
-      setProjectId(app.project_id || null);
-    }
-  }, [app?.project_id]);
 
   // Reveal the value for a single masked env var by fetching it on demand.
   const handleRevealVar = useCallback(async (key: string) => {
@@ -1125,78 +1075,12 @@ export default function AppDetailPage() {
     }
   };
 
-  const handlePurchasePack = async () => {
-    if (!app || !selectedPack) return;
-    setPurchasing(true);
-    setPackError(null);
-    setPackSuccess(null);
-    try {
-      const res = await fetch('/api/services/platform-apps/bandwidth/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_id: app.id, pack: selectedPack }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Purchase failed');
-      const pack = BANDWIDTH_PACKS[selectedPack];
-      setPackSuccess(`${pack.label} bandwidth added${data.restriction_lifted ? ' — traffic restored' : ''}`);
-      setSelectedPack(null);
-      refetchBandwidth();
-    } catch (err) {
-      setPackError(err instanceof Error ? err.message : 'Purchase failed');
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
   const handleRollbackSuccess = useCallback(async () => {
     setEnvVarError(null);
     setEnvVarSuccess('Rollback completed successfully');
     await Promise.all([refetchDeployments(), refetchDetails()]);
     await fetchApp();
   }, [fetchApp, refetchDeployments, refetchDetails]);
-
-  const handleSaveProject = async () => {
-    if (!app) return;
-
-    setSavingProject(true);
-
-    try {
-      const res = await fetch('/api/services/platform-apps/update-project', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_id: app.id, project_id: projectId }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to update project assignment');
-      }
-
-      toast.success('Project assignment updated successfully');
-      setEditingProject(false);
-      
-      // Update local state
-      setApp(prev => prev ? { ...prev, project_id: projectId } : null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update project assignment';
-      toast.error(message);
-    } finally {
-      setSavingProject(false);
-    }
-  };
-
-  const handleCancelProjectEdit = () => {
-    setProjectId(app?.project_id || null);
-    setEditingProject(false);
-  };
-
-  const getProjectName = (projectId: string | null) => {
-    if (!projectId) return "No project assigned";
-    const project = projects.find((p) => p.id === projectId);
-    return project?.name || "Unknown project";
-  };
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -1620,292 +1504,20 @@ export default function AppDetailPage() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
-            {/* Health & Metrics */}
-            {app.status === 'running' && (
-              <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-                <CardHeader className="border-b border-white/[0.06]">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Box className="w-5 h-5" />
-                    Health & Metrics
-                    {(detailsLoading || metricsLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 pt-5">
-                  {details || metrics ? (
-                    <>
-                      {/* Health Status */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Status</p>
-                          <Badge className={`rounded-none ${
-                            health?.status === 'healthy' || details?.pod?.phase === 'Running' ? 'bg-green-500/20 text-green-400' :
-                            health?.status === 'degraded' ? 'bg-orange-500/20 text-orange-400' :
-                            'bg-yellow-500/20 text-yellow-400'
-                          }`}>
-                            {health?.status || details?.pod?.phase || 'Unknown'}
-                          </Badge>
-                        </div>
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Instances</p>
-                          <p className="text-xl font-bold text-white">
-                            {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
-                          </p>
-                        </div>
-                        <div className={`border bg-white/[0.03] px-4 py-4 ${hasHighRestarts ? 'border-yellow-500/30' : 'border-white/[0.08]'}`}>
-                          <p className="text-xs text-white/40 mb-1">Restarts</p>
-                          <p className={`text-xl font-bold ${hasHighRestarts ? 'text-yellow-400' : 'text-white'}`}>
-                            {restartCount}
-                          </p>
-                          {hasHighRestarts && (
-                            <p className="text-xs text-yellow-400/70 mt-1">Repeatedly restarting</p>
-                          )}
-                        </div>
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <p className="text-xs text-white/40 mb-1">Uptime</p>
-                          <p className="text-sm text-white">{details?.pod?.uptime || '-'}</p>
-                        </div>
-                      </div>
-
-                      {/* Container Info: what image is actually running */}
-                      {details?.container && (
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                            <Box className="w-4 h-4" />
-                            Running Version
-                          </h5>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Image Tag</p>
-                              <p className="text-sm font-mono text-white">{details.container.imageTag || 'latest'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">State</p>
-                              <Badge className={`rounded-none text-xs ${
-                                details.container.state === 'Running' ? 'bg-green-500/20 text-green-400' :
-                                details.container.state?.includes('CrashLoop') ? 'bg-red-500/20 text-red-400' :
-                                'bg-yellow-500/20 text-yellow-400'
-                              }`}>
-                                {details.container.state?.includes('CrashLoop') ? 'Restarting' : details.container.state || 'Unknown'}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Ready</p>
-                              <Badge className={`rounded-none text-xs ${
-                                details.container.ready ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                              }`}>
-                                {details.container.ready ? 'Yes' : 'No'}
-                              </Badge>
-                            </div>
-                            {servingBuildNumber !== null && (
-                              <div>
-                                <p className="text-xs text-white/40 mb-1">Serving Build</p>
-                                <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
-                              </div>
-                            )}
-                            {lastOperationLabel && (
-                              <div>
-                                <p className="text-xs text-white/40 mb-1">Last Operation</p>
-                                <p className="text-sm text-white">
-                                  {lastOperationLabel}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-
-
-                      {/* Resource Usage */}
-                      {metrics && details?.container?.resources && (
-                        <div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs text-white/40 flex items-center gap-1">
-                                  <Cpu className="w-3.5 h-3.5" /> CPU Usage
-                                </p>
-                                <span className="text-sm font-mono text-white">
-                                  {(metrics.cpu_usage ?? 0).toFixed(2)}%
-                                </span>
-                              </div>
-                              <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
-                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                                <p>Allocated: {details.container.resources.requests?.cpu || '-'}</p>
-                                <p>Max: {details.container.resources.limits?.cpu || '-'}</p>
-                              </div>
-                            </div>
-                            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs text-white/40 flex items-center gap-1">
-                                  <HardDrive className="w-3.5 h-3.5" /> Memory Usage
-                                </p>
-                                <span className="text-sm font-mono text-white">
-                                  {(metrics.memory_mb ?? 0).toFixed(1)} Mi
-                                </span>
-                              </div>
-                              <Progress value={metrics.memory_usage ?? 0} className="h-2" />
-                              <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                                <p>Allocated: {details.container.resources.requests?.memory || '-'}</p>
-                                <p>Max: {details.container.resources.limits?.memory || '-'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Capacity */}
-                      {details?.deployment && (
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Running Instances</p>
-                              <p className="text-2xl font-bold text-white">{details.deployment.readyReplicas}/{details.deployment.replicas}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-white/40 mb-1">Status</p>
-                              <Badge className={`rounded-none ${
-                                details.deployment.readyReplicas >= details.deployment.replicas
-                                  ? 'bg-green-500/20 text-green-400'
-                                  : 'bg-yellow-500/20 text-yellow-400'
-                              }`}>
-                                {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Network Info */}
-                      {details?.network && (
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                          <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                            <Network className="w-4 h-4" />
-                            Network
-                          </h5>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Hostname</p>
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs font-mono text-white truncate flex-1">{details.network.ingressHost}</p>
-                                <button
-                                  onClick={() => copyToClipboard(details.network?.ingressHost || '', 'ingress-host')}
-                                  className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                                  title="Copy hostname"
-                                >
-                                  {copiedField === 'ingress-host' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">TLS</p>
-                              <Badge className={`rounded-none ${details.network.tlsEnabled ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                                {details.network.tlsEnabled ? 'Enabled' : 'Disabled'}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Service</p>
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs text-white truncate flex-1">{details.network.serviceName}</p>
-                                <button
-                                  onClick={() => copyToClipboard(details.network?.serviceName || '', 'service-name')}
-                                  className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                                  title="Copy service name"
-                                >
-                                  {copiedField === 'service-name' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-xs text-white/40 mb-1">Port</p>
-                              <p className="text-xs font-mono text-white">{details.network.servicePort}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Warning Events from K8s */}
-                      {details?.events && details.events.filter(e => e.type === 'Warning').length > 0 && (
-                        <div className="border border-yellow-500/20 bg-yellow-500/[0.04] px-4 py-4">
-                          <h5 className="text-sm font-semibold text-yellow-400/80 mb-3 flex items-center gap-1.5">
-                            <AlertTriangle className="w-4 h-4" />
-                            Recent Warnings
-                          </h5>
-                          <div className="space-y-2">
-                            {details.events.filter(e => e.type === 'Warning').map((event, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-xs text-yellow-200/70">
-                                <span className="font-mono text-yellow-400/60 shrink-0">{event.reason}</span>
-                                <span className="text-white/50">{event.message}</span>
-                                {event.count > 1 && (
-                                  <Badge className="rounded-none bg-yellow-500/10 text-yellow-400/60 text-[10px] ml-auto shrink-0">
-                                    �{event?.count}
-                                  </Badge>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-white/50">
-                      <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>Loading metrics...</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Bandwidth */}
-            {app.status === 'running' && (
-              <AppBandwidthCard appId={app.id} onManage={() => setActiveTab('settings')} />
-            )}
-
-            {/* Repository Info */}
-            <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-              <CardHeader className="border-b border-white/[0.06]">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <GitBranch className="w-5 h-5" />
-                  Repository
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Repository URL</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-mono text-white truncate flex-1">
-                        {app.repository_url}
-                      </p>
-                      <button
-                        onClick={() => copyToClipboard(app.repository_url, 'repo')}
-                        className="text-white/30 hover:text-white/70 transition-colors"
-                      >
-                        {copiedField === 'repo' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Git Provider</p>
-                    <p className="text-sm text-white capitalize">{app.git_provider}</p>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Auto Deploy</p>
-                    <Badge className={`rounded-none ${app.auto_deploy ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/50'}`}>
-                      {app.auto_deploy ? 'Enabled' : 'Disabled'}
-                    </Badge>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Deploy Branch</p>
-                    <p className="text-sm text-white">{app.deploy_branch || app.branch}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+            <AppOverviewTab
+              app={app}
+              details={details}
+              metrics={metrics}
+              health={health}
+              detailsLoading={detailsLoading}
+              metricsLoading={metricsLoading}
+              copiedField={copiedField}
+              onCopy={copyToClipboard}
+              onManageBandwidth={() => setActiveTab('settings')}
+              servingBuildNumber={servingBuildNumber}
+              lastOperationLabel={lastOperationLabel}
+            />
           </TabsContent>
-
           {/* Integrations Tab */}
           <TabsContent value="integrations" className="space-y-4">
             <AppIntegrationsSection 
@@ -2072,307 +1684,38 @@ export default function AppDetailPage() {
                   </div>
                 </div>
 
-                {/* Project Assignment */}
-                <div className="border-t border-white/10 pt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4 text-yellow-400" />
-                      <div>
-                        <p className="text-sm font-medium text-white">Project Assignment</p>
-                        <p className="text-xs text-white/50">Assign this app to a project for organization</p>
-                      </div>
-                    </div>
-                    {!editingProject && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingProject(true)}
-                        className="h-8 rounded-none text-white/70 hover:bg-white/10"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 mr-1" />
-                        Edit
-                      </Button>
-                    )}
-                  </div>
+                <AppProjectSection
+                  appId={app.id}
+                  initialProjectId={app.project_id ?? null}
+                  onSaved={(newId) => setApp(prev => prev ? { ...prev, project_id: newId } : null)}
+                />
 
-                  {editingProject ? (
-                    <div className="space-y-3">
-                      <Select
-                        value={projectId || "none"}
-                        onValueChange={(value) => setProjectId(value === "none" ? null : value)}
-                      >
-                        <SelectTrigger className="rounded-none bg-white/5 border-white/10 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-black border-white/10">
-                          <SelectItem value="none">No project</SelectItem>
-                          {projects.map((project) => (
-                            <SelectItem key={project.id} value={project.id}>
-                              {project.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          onClick={handleSaveProject}
-                          disabled={savingProject}
-                          className="rounded-none bg-green-600 hover:bg-green-700 text-white"
-                          size="sm"
-                        >
-                          {savingProject ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="w-3.5 h-3.5 mr-1" />
-                              Save
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={handleCancelProjectEdit}
-                          disabled={savingProject}
-                          className="rounded-none border-white/20 text-white hover:bg-white/10"
-                          size="sm"
-                        >
-                          <X className="w-3.5 h-3.5 mr-1" />
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm font-medium text-yellow-200">
-                        {getProjectName(projectId)}
-                      </span>
-                    </div>
-                  )}
+                <div ref={resizeSectionRef}>
+                  <AppResizeSection
+                    appSize={app.size ?? null}
+                    platformPricing={platformPricing}
+                    resizeInProgress={resizeInProgress}
+                    pendingResizeSize={pendingResizeSize}
+                    deploymentMutationBlocked={deploymentMutationBlocked}
+                    selectedSize={selectedSize}
+                    setSelectedSize={setSelectedSize}
+                    resizing={resizing}
+                    resizeError={resizeError}
+                    resizeSuccess={resizeSuccess}
+                    handleResize={handleResize}
+                  />
                 </div>
 
-                {/* Instance Size - Resize Section */}
-                <div className="border-t border-white/10 pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    <p className="text-sm font-medium text-white">Instance Size</p>
-                  </div>
-
-                  {/* Resize Messages */}
-                  {resizeError && (
-                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                      {resizeError}
-                    </div>
-                  )}
-                  {resizeSuccess && (
-                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
-                      <CheckCircle2 className="w-4 h-4" />
-                      {resizeSuccess}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
-                    {PLATFORM_APP_SIZE_ORDER.map((size) => {
-                      const specs = PLATFORM_APP_SIZE_SPECS[size];
-                      const monthlyPrice = platformPricing[size]?.price ?? 0;
-                      const quota = platformPricing[size]?.quota;
-                      const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
-                      const isPendingUpgrade = resizeInProgress && size === pendingResizeSize;
-                      const isCurrent = size === currentSize && !resizeInProgress;
-                      const isUpgrade =
-                        PLATFORM_APP_SIZE_ORDER.indexOf(size) >
-                        PLATFORM_APP_SIZE_ORDER.indexOf(resizeInProgress && pendingResizeSize ? pendingResizeSize : currentSize);
-                      const isSelected = selectedSize === size;
-                      const isDisabled = !isUpgrade || deploymentMutationBlocked;
-
-                      return (
-                        <div
-                          key={size}
-                          onClick={() => !isDisabled && setSelectedSize(isSelected ? null : size)}
-                          className={`relative border px-4 py-4 transition-all cursor-pointer ${
-                            isPendingUpgrade
-                              ? 'border-amber-500/40 bg-white/[0.05]'
-                              : isCurrent
-                              ? 'border-blue-500/40 bg-white/[0.05]'
-                              : isSelected
-                              ? 'border-green-500/40 bg-white/[0.05]'
-                              : isUpgrade
-                              ? 'border-white/20 bg-white/[0.03] hover:border-white/40'
-                              : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
-                          }`}
-                        >
-                          {isPendingUpgrade && (
-                            <Badge className="absolute -top-2 -right-2 rounded-none bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
-                              Upgrading…
-                            </Badge>
-                          )}
-                          {isCurrent && (
-                            <Badge className="absolute -top-2 -right-2 rounded-none bg-blue-500 text-white text-xs">
-                              Current
-                            </Badge>
-                          )}
-                          {isUpgrade && !isCurrent && !isPendingUpgrade && (
-                            <Badge className="absolute -top-2 -right-2 rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
-                              <ArrowUpCircle className="w-3 h-3 mr-1" />
-                              Upgrade
-                            </Badge>
-                          )}
-
-                          <h4 className="text-lg font-semibold text-white capitalize mb-2">{size}</h4>
-                          
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-2 text-white/70">
-                              <Cpu className="w-3 h-3" />
-                              <span>{specs.cpu}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/70">
-                              <HardDrive className="w-3 h-3" />
-                              <span>{specs.memory}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/70">
-                              <Layers className="w-3 h-3" />
-                              <span>{specs.replicas} instance{specs.replicas > 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/70">
-                              <Activity className="w-3 h-3" />
-                              <span>{formatBytes(quota?.totalBytes)} transfer</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/70">
-                              <Upload className="w-3 h-3" />
-                              <span>{formatBytes(quota?.maxRequestBodyBytes)} request body</span>
-                            </div>
-                          </div>
-
-                          <p className="mt-3 text-sm font-medium text-white/90">
-                            {monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}/mo` : 'Free'}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {selectedSize && (
-                    <div className="mt-4 flex items-center gap-3">
-                      <Button
-                        onClick={handleResize}
-                        disabled={resizing || deploymentMutationBlocked}
-                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {resizing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Resizing...
-                          </>
-                        ) : (
-                          <>
-                            <ArrowUpCircle className="w-4 h-4 mr-2" />
-                            Resize & Redeploy
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setSelectedSize(null)}
-                        className="rounded-none border-white/20 text-white hover:bg-white/10"
-                      >
-                        Cancel
-                      </Button>
-                      <span className="text-xs text-white/50">
-                        Your app will be redeployed with new resources.
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bandwidth Packs */}
-                <div className="border-t border-white/10 pt-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Activity className="w-4 h-4 text-blue-400" />
-                    <p className="text-sm font-medium text-white">Bandwidth Packs</p>
-                  </div>
-                  {bandwidthData && (
-                    <p className="text-xs text-white/40 mb-3">
-                      {bandwidthData.quota.totalBytes
-                        ? `${bandwidthData.percentUsed !== null ? bandwidthData.percentUsed.toFixed(1) : '0.0'}% of quota used this period`
-                        : 'No quota configured'}
-                      {bandwidthData.purchasedBytes > 0 && ` · ${(bandwidthData.purchasedBytes / 1073741824).toFixed(0)} GB purchased`}
-                      {resizeInProgress && pendingResizeSize && (
-                        <span className="text-amber-400/70"> · quota updates when upgrade completes</span>
-                      )}
-                    </p>
-                  )}
-
-                  {packError && (
-                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                      {packError}
-                    </div>
-                  )}
-                  {packSuccess && (
-                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
-                      <CheckCircle2 className="w-4 h-4" />
-                      {packSuccess}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {BANDWIDTH_PACK_LIST.map((pack) => {
-                      const isSelected = selectedPack === pack.id;
-                      return (
-                        <div
-                          key={pack.id}
-                          onClick={() => { setSelectedPack(isSelected ? null : pack.id); setPackError(null); setPackSuccess(null); }}
-                          className={`relative border px-4 py-4 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-green-500/40 bg-white/[0.05]'
-                              : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
-                          }`}
-                        >
-                          <h4 className="text-base font-semibold text-white mb-1">{pack.label}</h4>
-                          <p className="text-xs text-white/50">One-time for this billing period</p>
-                          <p className="mt-3 text-sm font-medium text-white/90">${pack.price.toFixed(2)}</p>
-                          {isSelected && (
-                            <Check className="absolute top-3 right-3 w-4 h-4 text-green-400" />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {selectedPack && (
-                    <div className="mt-4 flex items-center gap-3">
-                      <Button
-                        onClick={handlePurchasePack}
-                        disabled={purchasing}
-                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {purchasing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Purchasing...
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingCart className="w-4 h-4 mr-2" />
-                            Buy {BANDWIDTH_PACKS[selectedPack].label}
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => { setSelectedPack(null); setPackError(null); }}
-                        className="rounded-none border-white/20 text-white hover:bg-white/10"
-                      >
-                        Cancel
-                      </Button>
-                      <span className="text-xs text-white/50">
-                        Deducted from your credit balance.
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <AppBodyLimitSection
+                  app={app}
+                  onUpdate={(patch) => setApp(prev => prev ? { ...prev, ...patch } : null)}
+                  planMaxMb={platformPricing[currentSize]?.quota?.maxRequestBodyBytes != null ? Math.floor(platformPricing[currentSize]!.quota!.maxRequestBodyBytes! / (1024 * 1024)) : null}
+                  onUpgradePlan={() => {
+                    const nextSize = PLATFORM_APP_SIZE_ORDER[PLATFORM_APP_SIZE_ORDER.indexOf(currentSize) + 1] ?? null;
+                    if (nextSize) setSelectedSize(nextSize);
+                    resizeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                />
 
                 {/* Environment Variables - Using EnvVarsEditor */}
                 <div className="border-t border-white/10 pt-4">

@@ -206,7 +206,7 @@ export default function BandwidthTab() {
                           {quota > 0 && (
                             <p className="text-[10px] text-neutral-600 mt-0.5">
                               of {fmtBytes(quota)}
-                              {row.purchased_bytes > 0 ? ` incl. ${fmtBytes(row.purchased_bytes)} pack` : ""}
+                              {row.purchased_bytes > 0 ? ` incl. ${fmtBytes(row.purchased_bytes)} extra transfer` : ""}
                             </p>
                           )}
                         </td>
