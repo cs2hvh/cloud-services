@@ -37,6 +37,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: DEPLOY_HOST    # your secrets live in the environment named "DEPLOY_HOST"
     steps:
       - name: Deploy over SSH (password)
         uses: appleboy/ssh-action@v1.2.0
