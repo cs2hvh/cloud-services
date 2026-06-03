@@ -2,11 +2,11 @@
 
 // DashboardHeader — slim top bar. Left: a prominent search box that opens the
 // ⌘K command palette (keyboard-driven nav + quick actions). Right: notifications
-// (passed as children by the layout), billing, and profile.
+// (passed as children by the layout) and billing.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search, BadgeDollarSign, User } from "lucide-react";
+import { Search, BadgeDollarSign } from "lucide-react";
 import { CommandPalette } from "@/components/dashboard/command-palette";
 
 export function DashboardHeader({ children }: { children?: React.ReactNode }) {
@@ -51,13 +51,6 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
                     title="Billing"
                 >
                     <BadgeDollarSign className="h-4 w-4" />
-                </Link>
-                <Link
-                    href="/dashboard/nav/profile"
-                    className="h-8 w-8 rounded-[6px] text-white/45 hover:bg-white/[0.05] hover:text-white/85 flex items-center justify-center transition-colors"
-                    title="Profile"
-                >
-                    <User className="h-4 w-4" />
                 </Link>
             </div>
 

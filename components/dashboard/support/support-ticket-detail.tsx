@@ -7,11 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   ArrowLeft,
   ChevronRight,
+  Lock,
   MessageSquare,
   Paperclip,
   Pencil,
   RotateCcw,
   Save,
+  Send,
   XCircle,
 } from "lucide-react";
 import {
@@ -52,6 +54,9 @@ const SELECT_OPTION_STYLE: CSSProperties = {
 };
 
 const SELECT_CLASS_NAME =
+  "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30";
+
+const INPUT_CLASS_NAME =
   "h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30";
 
 function formatDateTime(date: string): string {
@@ -103,69 +108,38 @@ function getMessageIdentity(message: SupportTicketMessage): {
   return { name: "User", email: "—", avatar: null };
 }
 
-function StatCell({
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  accent?: string;
-}) {
-  const dotColor = accent ?? "rgba(255,255,255,0.35)";
+// ─── Small building blocks ────────────────────────────────────────
+function SectionLabel({ children, meta }: { children: React.ReactNode; meta?: React.ReactNode }) {
   return (
-    <div className="px-5 py-5 flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{
-            background: dotColor,
-            boxShadow: accent ? `0 0 6px ${dotColor}` : "none",
-          }}
-        />
-        <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-          {label}
-        </span>
-      </div>
-      <span
-        style={SERIF_STYLE}
-        className="text-[24px] sm:text-[28px] leading-[1.05] font-bold tabular-nums tracking-[-0.025em] text-white"
-      >
-        {value}
-      </span>
-      {hint && <p className={`${MONO} text-[10.5px] text-white/40 mt-auto`}>{hint}</p>}
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h2 className={`${MONO} text-[12px] font-semibold uppercase tracking-[0.16em] text-white/70`}>
+        {children}
+      </h2>
+      {meta && <span className={`${MONO} text-[11px] text-white/40 tabular-nums`}>{meta}</span>}
     </div>
   );
 }
 
-function SectionHead({
-  index,
-  title,
+function MetaRow({
+  label,
+  value,
   accent,
-  meta,
 }: {
-  index: string;
-  title: string;
-  accent: string;
-  meta?: React.ReactNode;
+  label: string;
+  value: string;
+  accent?: string;
 }) {
   return (
-    <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
-      <div className="flex items-baseline gap-3">
-        <span className={`${MONO} text-[10.5px] tabular-nums text-white/35`}>{index}</span>
-        <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">
-          {title}{" "}
-          <span style={SERIF_STYLE} className="text-white/55 font-normal">
-            {accent}
-          </span>
-          <span className="text-white/55 font-normal">.</span>
-        </h2>
-      </div>
-      {meta && (
-        <span className={`${MONO} text-[11px] text-white/45 tabular-nums`}>{meta}</span>
-      )}
+    <div className="px-4 py-3 flex items-center justify-between gap-3">
+      <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
+        {label}
+      </span>
+      <span
+        className={`${MONO} text-[11.5px] tabular-nums text-right`}
+        style={{ color: accent ?? "rgba(255,255,255,0.85)" }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -189,6 +163,10 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const [attachmentError, setAttachmentError] = useState("");
   const [attachmentUploading, setAttachmentUploading] = useState(false);
 
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState("");
+
   const selectedTopic = useMemo(
     () => SUPPORT_TOPICS.find((entry) => entry.id === topic) || null,
     [topic]
@@ -204,6 +182,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const canEdit = isSupportOpenStatus(ticket.status);
   const canReopen = canSupportStatusBeReopened(ticket.status);
   const canManageAttachments = canEdit;
+  const canReply = canEdit;
   const status = statusMeta(ticket.status);
 
   async function loadResources(nextTopic: string) {
@@ -311,6 +290,33 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
     }
   }
 
+  async function sendReply() {
+    const trimmed = replyText.trim();
+    if (trimmed.length < 2) {
+      setReplyError("Write a little more before sending.");
+      return;
+    }
+    setReplySending(true);
+    setReplyError("");
+    try {
+      const response = await fetch(`/api/support/tickets/${ticket.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to send message");
+      }
+      setReplyText("");
+      router.refresh();
+    } catch (error) {
+      setReplyError(error instanceof Error ? error.message : "Failed to send message");
+    } finally {
+      setReplySending(false);
+    }
+  }
+
   async function handleAddAttachments(files: FileList | null) {
     if (!files || files.length === 0) return;
     setAttachmentUploading(true);
@@ -351,111 +357,109 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
     }
   }
 
+  const topicPath = topicLabels
+    ? `${topicLabels.topicLabel} / ${topicLabels.subTopicLabel} / ${topicLabels.tertiaryTopicLabel}`
+    : `${ticket.topic} / ${ticket.sub_topic} / ${ticket.tertiary_topic}`;
+
+  // Title treatment shared with the list page: last word in brand blue, no trailing period.
+  const titleWords = ticket.subject.trim().split(/\s+/);
+  const titleLast = titleWords.pop() || ticket.subject;
+  const titleLead = titleWords.join(" ");
+
   return (
-    <div className="mx-auto max-w-[1600px] text-white">
-      {/* ── Hero ─────────────────────────────────────────── */}
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
-        <div className="max-w-3xl">
-          <Link
-            href="/dashboard/support"
-            className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Back to tickets
-          </Link>
+    <div className="w-full text-white">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <header className="mb-8">
+        <Link
+          href="/dashboard/support"
+          className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
+        >
+          <ArrowLeft className="h-3 w-3" />
+          Back to tickets
+        </Link>
 
-          <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
-            <span>Support</span>
-            <ChevronRight className="h-3 w-3 text-white/20" />
-            <span className="text-white/65 tabular-nums">{ticket.ticket_number}</span>
-          </div>
-
-          <h1
-            className="text-[32px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold"
-          >
-            {ticket.subject.split(" ").slice(0, -1).join(" ")}{" "}
-            <span style={SERIF_STYLE} className="text-white/55 font-normal">
-              {ticket.subject.split(" ").slice(-1)[0]}
-            </span>
-            <span className="text-white/55 font-normal">.</span>
-          </h1>
+        <div className={`${MONO} flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em] text-white/40 mb-2.5`}>
+          <span>Support</span>
+          <ChevronRight className="h-3 w-3 text-white/20" />
+          <span className="text-white/65 tabular-nums">{ticket.ticket_number}</span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span
-            className={`${MONO} inline-flex items-center gap-1.5 h-10 px-3.5 border bg-[#111216] text-[11px] uppercase tracking-[0.14em] rounded-[5px]`}
-            style={{ borderColor: `${status.color}33`, color: status.color }}
-          >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-[30px] sm:text-[38px] leading-[1.08] tracking-[-0.025em] text-white font-semibold break-words">
+              {titleLead && <>{titleLead} </>}
+              <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
+                {titleLast}
+              </span>
+            </h1>
+            <p className={`${MONO} mt-2 text-[11px] text-white/40 truncate`}>{topicPath}</p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
             <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: status.color, boxShadow: `0 0 6px ${status.color}` }}
-            />
-            {status.label}
-          </span>
-          {canEdit && !isEditing && (
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className={`${MONO} h-10 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              className={`${MONO} inline-flex items-center gap-1.5 h-9 px-3 border bg-[#111216] text-[11px] uppercase tracking-[0.12em] rounded-[5px]`}
+              style={{ borderColor: `${status.color}33`, color: status.color }}
             >
-              <Pencil className="h-3 w-3" />
-              Edit
-            </button>
-          )}
-          {canReopen && (
-            <button
-              type="button"
-              onClick={() => void handleReopenTicket()}
-              disabled={actionLoading}
-              className={`${MONO} inline-flex h-10 items-center gap-1.5 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
-              style={{
-                background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
-                color: "#ffffff",
-                boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
-              }}
-            >
-              <RotateCcw className="h-3 w-3" />
-              {actionLoading ? "Reopening" : "Reopen"}
-            </button>
-          )}
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: status.color, boxShadow: `0 0 6px ${status.color}` }}
+              />
+              {status.label}
+            </span>
+            {canEdit && !isEditing && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.12em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </button>
+            )}
+            {canReopen && (
+              <button
+                type="button"
+                onClick={() => void handleReopenTicket()}
+                disabled={actionLoading}
+                className={`${MONO} inline-flex h-9 items-center gap-1.5 px-3.5 text-[11px] uppercase tracking-[0.12em] font-semibold rounded-[5px] transition-all disabled:opacity-50`}
+                style={{
+                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                  color: "#ffffff",
+                  boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                }}
+              >
+                <RotateCcw className="h-3 w-3" />
+                {actionLoading ? "Reopening" : "Reopen"}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* ── Stats ─────────────────────────────────────────── */}
-      <section className="mb-12 border-y border-white/[0.06] grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/[0.06]">
-        <StatCell label="Created" value={formatDateTime(ticket.created_at)} hint="Ticket opened" />
-        <StatCell label="Latest activity" value={formatDateTime(ticket.latest_message_at)} hint="Most recent update" accent={ACCENT} />
-        <StatCell label="Messages" value={String(ticket.messages.length)} hint="Conversation entries" accent="#a78bfa" />
-        <StatCell label="Attachments" value={String(ticket.attachments.length)} hint="Uploaded files" />
-      </section>
-
-      <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
-        <div className="space-y-12">
-          {/* ── 01 Issue ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* ── Main column ─────────────────────────────────── */}
+        <div className="space-y-10 min-w-0">
+          {/* Issue */}
           <section>
-            <SectionHead index="01" title="Issue" accent="details" />
+            <SectionLabel>Issue</SectionLabel>
 
             {!isEditing ? (
-              <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-                    <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-2`}>
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.05]">
+                <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.05]">
+                  <div className="p-4">
+                    <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1.5`}>
                       Topic path
                     </p>
-                    <p className="text-[13px] text-white/85 leading-relaxed">
-                      {topicLabels
-                        ? `${topicLabels.topicLabel} / ${topicLabels.subTopicLabel} / ${topicLabels.tertiaryTopicLabel}`
-                        : `${ticket.topic} / ${ticket.sub_topic} / ${ticket.tertiary_topic}`}
-                    </p>
+                    <p className="text-[13px] text-white/85 leading-relaxed">{topicPath}</p>
                   </div>
-                  <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-                    <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-2`}>
+                  <div className="p-4">
+                    <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-1.5`}>
                       Affected resource
                     </p>
                     <p className="text-[13px] text-white/85 leading-relaxed">
@@ -463,8 +467,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                     </p>
                   </div>
                 </div>
-
-                <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
+                <div className="p-5">
                   <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-3`}>
                     Description
                   </p>
@@ -545,7 +548,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                   <input
                     value={subject}
                     onChange={(event) => setSubject(event.target.value)}
-                    className="h-10 w-full border border-white/[0.08] bg-[#0d0e11] px-3 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30"
+                    className={INPUT_CLASS_NAME}
                   />
                 </div>
 
@@ -616,19 +619,18 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
             )}
           </section>
 
-          {/* ── 02 Conversation ─────────────────────────── */}
+          {/* Conversation */}
           <section>
-            <SectionHead
-              index="02"
-              title="The"
-              accent="conversation"
+            <SectionLabel
               meta={`${ticket.messages.length} ${ticket.messages.length === 1 ? "message" : "messages"}`}
-            />
+            >
+              Conversation
+            </SectionLabel>
 
             {ticket.messages.length === 0 ? (
-              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-12 text-center">
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-6 py-10 text-center">
                 <MessageSquare className="h-5 w-5 text-white/30 mx-auto mb-3" />
-                <p className="text-[13px] text-white/55">No conversation messages yet.</p>
+                <p className="text-[13px] text-white/55">No replies yet. Start the conversation below.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -638,7 +640,8 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                   return (
                     <div
                       key={message.id}
-                      className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-4 sm:p-5"
+                      className="border border-white/[0.06] border-l-2 bg-[#111216] rounded-[6px] p-4 sm:p-5"
+                      style={{ borderLeftColor: actor.color }}
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2.5">
@@ -651,30 +654,23 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-white">{identity.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-[13px] font-medium text-white">{identity.name}</p>
+                              <span
+                                className={`${MONO} inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] font-semibold px-1.5 py-0.5 rounded-[3px]`}
+                                style={{ color: actor.color, background: `${actor.color}1a` }}
+                              >
+                                {actor.label}
+                              </span>
+                            </div>
                             <p className={`${MONO} truncate text-[10.5px] text-white/40`}>
                               {identity.email}
                             </p>
                           </div>
                         </div>
-                        <div className="shrink-0 flex flex-col items-end gap-1">
-                          <span
-                            className={`${MONO} inline-flex items-center gap-1 text-[9.5px] uppercase tracking-[0.12em] font-semibold`}
-                            style={{ color: actor.color }}
-                          >
-                            <span
-                              className="h-1 w-1 rounded-full"
-                              style={{
-                                background: actor.color,
-                                boxShadow: `0 0 5px ${actor.color}`,
-                              }}
-                            />
-                            {actor.label}
-                          </span>
-                          <p className={`${MONO} text-[10.5px] text-white/40 tabular-nums`}>
-                            {formatDateTime(message.created_at)}
-                          </p>
-                        </div>
+                        <p className={`${MONO} shrink-0 text-[10.5px] text-white/40 tabular-nums`}>
+                          {formatDateTime(message.created_at)}
+                        </p>
                       </div>
                       <div
                         className="prose prose-invert max-w-none text-[13.5px] text-white/85 prose-p:my-1.5 prose-li:my-0.5 leading-relaxed"
@@ -685,36 +681,90 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                 })}
               </div>
             )}
+
+            {/* Reply composer */}
+            <div className="mt-4">
+              {canReply ? (
+                <div className="border border-white/[0.08] bg-[#111216] rounded-[6px] p-3.5 focus-within:border-[#0095FF]/40 transition-colors">
+                  <textarea
+                    value={replyText}
+                    onChange={(event) => {
+                      setReplyText(event.target.value);
+                      if (replyError) setReplyError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                        event.preventDefault();
+                        void sendReply();
+                      }
+                    }}
+                    rows={3}
+                    placeholder="Write a reply to support…"
+                    className="w-full resize-y bg-transparent text-[13.5px] text-white placeholder:text-white/30 leading-relaxed outline-none min-h-[72px]"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-2.5">
+                    <span className={`${MONO} text-[10px] text-white/30`}>
+                      {replyError ? (
+                        <span className="text-rose-300">{replyError}</span>
+                      ) : (
+                        <>⌘ / Ctrl + Enter to send</>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void sendReply()}
+                      disabled={replySending || replyText.trim().length < 2}
+                      className={`${MONO} inline-flex h-9 items-center gap-1.5 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
+                      style={{
+                        background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                        color: "#ffffff",
+                        boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                      }}
+                    >
+                      <Send className="h-3 w-3" />
+                      {replySending ? "Sending" : "Send"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`${MONO} flex items-center gap-2 border border-white/[0.06] bg-[#0d0e11] rounded-[6px] px-4 py-3 text-[11px] text-white/45`}>
+                  <Lock className="h-3.5 w-3.5 shrink-0" />
+                  This ticket is {status.label.toLowerCase()}.
+                  {canReopen ? " Reopen it to add a reply." : " Replies are disabled."}
+                </div>
+              )}
+            </div>
           </section>
         </div>
 
-        {/* ── Right column ────────────────────────────── */}
-        <div className="space-y-10">
-          {/* ── 03 Metadata ─────────────────────────────── */}
+        {/* ── Sidebar ─────────────────────────────────────── */}
+        <div className="space-y-8">
+          {/* Details */}
           <section>
-            <SectionHead index="03" title="Ticket" accent="metadata" />
+            <SectionLabel>Details</SectionLabel>
             <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.04]">
+              <MetaRow label="Status" value={status.label} accent={status.color} />
               <MetaRow label="Created" value={formatDateTime(ticket.created_at)} />
-              <MetaRow label="Updated" value={formatDateTime(ticket.updated_at)} />
-              <MetaRow label="Latest activity" value={formatDateTime(ticket.latest_message_at)} />
+              <MetaRow label="Last activity" value={formatDateTime(ticket.latest_message_at)} />
+              <MetaRow label="Messages" value={String(ticket.messages.length)} />
+              <MetaRow label="Attachments" value={String(ticket.attachments.length)} />
               {ticket.resolved_at && (
                 <MetaRow label="Resolved" value={formatDateTime(ticket.resolved_at)} accent="#4ade80" />
               )}
             </div>
           </section>
 
-          {/* ── 04 Attachments ──────────────────────────── */}
+          {/* Attachments */}
           <section>
-            <SectionHead
-              index="04"
-              title="The"
-              accent="attachments"
+            <SectionLabel
               meta={ticket.attachments.length > 0 ? `${ticket.attachments.length} file${ticket.attachments.length === 1 ? "" : "s"}` : undefined}
-            />
+            >
+              Attachments
+            </SectionLabel>
 
             {canManageAttachments && (
               <label
-                className={`${MONO} mb-3 inline-flex h-10 cursor-pointer items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+                className={`${MONO} mb-3 inline-flex h-9 cursor-pointer items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
               >
                 <Paperclip className="h-3 w-3" />
                 {attachmentUploading ? "Uploading" : "Add attachment"}
@@ -737,9 +787,9 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
             )}
 
             {ticket.attachments.length === 0 ? (
-              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-8 text-center">
+              <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-6 text-center">
                 <Paperclip className="h-4 w-4 text-white/30 mx-auto mb-2" />
-                <p className="text-[12.5px] text-white/45">No attachments uploaded.</p>
+                <p className="text-[12px] text-white/45">No attachments.</p>
               </div>
             ) : (
               <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] divide-y divide-white/[0.04]">
@@ -762,7 +812,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                         {attachment.file_name}
                       </a>
                       <p className={`${MONO} text-[10px] text-white/40 tabular-nums truncate`}>
-                        {(attachment.file_size / 1024).toFixed(1)} KB · {attachment.mime_type}
+                        {(attachment.file_size / 1024).toFixed(1)} KB
                       </p>
                     </div>
                     {canManageAttachments && (
@@ -787,30 +837,6 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
           {formError}
         </div>
       )}
-    </div>
-  );
-}
-
-function MetaRow({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: string;
-}) {
-  return (
-    <div className="px-4 py-3 flex items-center justify-between gap-3">
-      <span className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
-        {label}
-      </span>
-      <span
-        className={`${MONO} text-[11.5px] tabular-nums`}
-        style={{ color: accent ?? "rgba(255,255,255,0.85)" }}
-      >
-        {value}
-      </span>
     </div>
   );
 }

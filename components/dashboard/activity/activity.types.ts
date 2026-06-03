@@ -1,8 +1,15 @@
 import { Plus, Trash2, RefreshCw, AlertTriangle, Zap } from "lucide-react";
-import type { Tables } from "@/lib/supabase/types";
 import type React from "react";
 
-export type ProjectLog = Tables<"project_logs">;
+// Activity row consumed by the timeline. Sourced from the audit log
+// (audits.audit_logs) via AuditLogService and mapped in the page server
+// component — not the legacy, empty project_logs table.
+export type ProjectLog = {
+  id: string;
+  event: string;
+  text: string;
+  created_at: string | null;
+};
 
 export type EventType = "create" | "delete" | "update" | "warn" | "other";
 

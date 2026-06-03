@@ -211,27 +211,6 @@ export function EverythingSection() {
             {/* Inner frame */}
             <div className="relative border border-white/[0.08] bg-[#0a0a0a] overflow-hidden">
 
-              {/* Corner brackets — top left */}
-              <div className="absolute top-3 left-3 w-5 h-5">
-                <div className="absolute top-0 left-0 w-full h-px bg-white/15" />
-                <div className="absolute top-0 left-0 h-full w-px bg-white/15" />
-              </div>
-              {/* Corner brackets — top right */}
-              <div className="absolute top-3 right-3 w-5 h-5">
-                <div className="absolute top-0 right-0 w-full h-px bg-white/15" />
-                <div className="absolute top-0 right-0 h-full w-px bg-white/15" />
-              </div>
-              {/* Corner brackets — bottom left */}
-              <div className="absolute bottom-3 left-3 w-5 h-5">
-                <div className="absolute bottom-0 left-0 w-full h-px bg-white/15" />
-                <div className="absolute bottom-0 left-0 h-full w-px bg-white/15" />
-              </div>
-              {/* Corner brackets — bottom right */}
-              <div className="absolute bottom-3 right-3 w-5 h-5">
-                <div className="absolute bottom-0 right-0 w-full h-px bg-white/15" />
-                <div className="absolute bottom-0 right-0 h-full w-px bg-white/15" />
-              </div>
-
               <div className="relative grid gap-10 lg:gap-12 p-8 sm:p-10 lg:p-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center min-h-[420px] lg:min-h-[480px]">
                 <AnimatePresence mode="wait">
                   <motion.div

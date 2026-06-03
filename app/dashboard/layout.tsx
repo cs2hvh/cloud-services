@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           card bg  #15171c — visible elevation when stacked on page
           border   white/[0.07] — present but subtle
       */}
-      <div className="flex h-screen bg-[#0c0d11] text-white">
+      <div className="flex h-screen bg-[#0c0d11] text-white [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_[role=button]]:cursor-pointer [&_[role=tab]]:cursor-pointer [&_[role=menuitem]]:cursor-pointer [&_[role=switch]]:cursor-pointer [&_summary]:cursor-pointer [&_select]:cursor-pointer [&_label[for]]:cursor-pointer">
         <AppSidebar projects={projects} user={user} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <DashboardHeader>

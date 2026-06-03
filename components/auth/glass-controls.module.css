@@ -72,8 +72,15 @@
 
 .inputShell {
   height: 44px; /* Figma: 44px desktop */
-  border-radius: 5px; /* Figma radius 5px */
-  background: rgba(15, 17, 24, 0.76);
+  border-radius: 8px;
+  background: rgba(13, 14, 17, 0.85);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Accent focus ring — premium, matches brand blue */
+.inputShell:focus-within {
+  border-color: rgba(0, 149, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 149, 255, 0.12);
 }
 
 

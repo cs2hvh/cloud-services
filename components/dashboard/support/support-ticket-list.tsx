@@ -115,13 +115,9 @@ export default function SupportTicketList({
                 <div className="max-w-2xl">
                     <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                         Support{" "}
-                        <span
-                            style={SERIF_STYLE}
-                            className="text-white/55 font-normal"
-                        >
+                        <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
                             tickets
                         </span>
-                        .
                     </h1>
                     <p
                         className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}

@@ -20,6 +20,7 @@ import api from "@/lib/axios/axios";
 import { Tables } from "@/lib/supabase/types";
 import { copyToClipboard as safeCopyToClipboard } from "@/lib/utils/safe-clipboard";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ServiceTabBar } from "@/components/dashboard/ui/service-tab-bar";
 import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { UsersDbsTab } from "./tabs/users-dbs-tab";
@@ -378,36 +379,12 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* ── Pill nav ───────────────────────────────────── */}
-        <div className="mb-10 border-b border-white/[0.06]">
-          <div className="flex flex-wrap items-center gap-1 -mb-px">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.value;
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => setActiveTab(tab.value)}
-                  className={`${MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] transition-colors ${
-                    isActive ? "text-white" : "text-white/45 hover:text-white/75"
-                  }`}
-                >
-                  <Icon className="h-3 w-3" />
-                  {tab.label}
-                  {isActive && (
-                    <span
-                      className="absolute left-2 right-2 -bottom-px h-[2px]"
-                      style={{
-                        background: ACCENT,
-                        boxShadow: `0 0 8px ${ACCENT}`,
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <ServiceTabBar
+          tabs={visibleTabs}
+          value={activeTab}
+          onChange={setActiveTab}
+          className="mb-10"
+        />
 
         <div>
           <TabsContent value="overview" className="mt-0">

@@ -12,11 +12,155 @@ import {
   Check,
   Copy,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { AppBandwidthCard } from '@/components/dashboard/apps/app-bandwidth-card';
 import { AppMetrics, AppHealth, AppDetails } from '@/hooks/use-app-metrics';
+
+// ─── Design tokens (match compute / database / object-storage) ──────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
+};
+const ACCENT = '#0095FF';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral';
+
+const TONE: Record<Tone, { color: string; bg: string; border: string }> = {
+  green: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)' },
+  amber: { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)', border: 'rgba(251,191,36,0.25)' },
+  red: { color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.25)' },
+  blue: { color: ACCENT, bg: 'rgba(0,149,255,0.10)', border: 'rgba(0,149,255,0.30)' },
+  neutral: { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
+};
+
+/* ─── Primitives ──────────────────────────────────────────────────── */
+
+function Panel({
+  icon: Icon,
+  title,
+  badge,
+  action,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: ACCENT }}>
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white truncate">{title}</h3>
+          {badge}
+        </div>
+        {action}
+      </header>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  const t = TONE[tone];
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] w-fit`}
+      style={{ color: t.color, background: t.bg, borderColor: t.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color, boxShadow: `0 0 5px ${t.color}` }} />
+      {children}
+    </span>
+  );
+}
+
+function Tile({
+  label,
+  children,
+  highlight,
+}: {
+  label: string;
+  children: React.ReactNode;
+  highlight?: Tone;
+}) {
+  const border = highlight ? TONE[highlight].border : 'rgba(255,255,255,0.06)';
+  return (
+    <div className="rounded-[6px] border bg-[#0d0e11] px-4 py-3.5" style={{ borderColor: border }}>
+      <p className={`${MONO} mb-2 text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className={`${MONO} mb-1.5 text-[9.5px] uppercase tracking-[0.12em] text-white/40`}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function CopyBtn({ active, onClick, title }: { active: boolean; onClick: () => void; title: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="shrink-0 text-white/25 transition-colors hover:text-white/70"
+      title={title}
+    >
+      {active ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
+function UsageMeter({
+  icon: Icon,
+  label,
+  reading,
+  value,
+  allocated,
+  max,
+}: {
+  icon: React.ElementType;
+  label: string;
+  reading: string;
+  value: number;
+  allocated: string;
+  max: string;
+}) {
+  const pct = Math.min(100, Math.max(0, value));
+  return (
+    <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-3.5">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <span className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-white/45`}>
+          <Icon className="h-3.5 w-3.5" /> {label}
+        </span>
+        <span style={SERIF_STYLE} className="text-[15px] font-bold tabular-nums tracking-[-0.02em] text-white">
+          {reading}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: ACCENT, boxShadow: pct > 2 ? `0 0 8px ${ACCENT}` : 'none' }}
+        />
+      </div>
+      <div className={`${MONO} mt-2.5 flex items-center gap-x-4 text-[10px] text-white/40`}>
+        <span>Allocated: <span className="text-white/60">{allocated}</span></span>
+        <span>Max: <span className="text-white/60">{max}</span></span>
+      </div>
+    </div>
+  );
+}
 
 interface AppDetail {
   id: string;
@@ -78,296 +222,213 @@ export function AppOverviewTab({
   const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
   const hasHighRestarts = restartCount >= 5;
 
+  const healthLabel = health?.status || details?.pod?.phase || 'Unknown';
+  const healthTone: Tone =
+    health?.status === 'healthy' || details?.pod?.phase === 'Running'
+      ? 'green'
+      : health?.status === 'degraded'
+      ? 'amber'
+      : 'amber';
+
+  const warnings = details?.events?.filter((e) => e.type === 'Warning') ?? [];
+
   return (
     <div className="space-y-4">
       {/* Health & Metrics */}
       {app.status === 'running' && (
-        <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-          <CardHeader className="border-b border-white/[0.06]">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Box className="w-5 h-5" />
-              Health &amp; Metrics
-              {(detailsLoading || metricsLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-5">
-            {details || metrics ? (
-              <>
-                {/* Health Status */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Status</p>
-                    <Badge
-                      className={`rounded-none ${
-                        health?.status === 'healthy' || details?.pod?.phase === 'Running'
-                          ? 'bg-green-500/20 text-green-400'
-                          : health?.status === 'degraded'
-                          ? 'bg-orange-500/20 text-orange-400'
-                          : 'bg-yellow-500/20 text-yellow-400'
-                      }`}
-                    >
-                      {health?.status || details?.pod?.phase || 'Unknown'}
-                    </Badge>
-                  </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Instances</p>
-                    <p className="text-xl font-bold text-white">
-                      {details?.deployment?.readyReplicas || health?.pod_count || 0}/
-                      {details?.deployment?.replicas || 1}
-                    </p>
-                  </div>
-                  <div
-                    className={`border bg-white/[0.03] px-4 py-4 ${
-                      hasHighRestarts ? 'border-yellow-500/30' : 'border-white/[0.08]'
-                    }`}
+        <Panel
+          icon={Box}
+          title="Health & Metrics"
+          badge={
+            (detailsLoading || metricsLoading) ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-white/40" />
+            ) : undefined
+          }
+        >
+          {details || metrics ? (
+            <div className="space-y-4">
+              {/* Top stat row */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Tile label="Status">
+                  <StatusPill tone={healthTone}>{healthLabel}</StatusPill>
+                </Tile>
+                <Tile label="Instances">
+                  <p style={SERIF_STYLE} className="text-[24px] font-bold leading-none tabular-nums tracking-[-0.03em] text-white">
+                    {details?.deployment?.readyReplicas || health?.pod_count || 0}
+                    <span className="text-white/30">/{details?.deployment?.replicas || 1}</span>
+                  </p>
+                </Tile>
+                <Tile label="Restarts" highlight={hasHighRestarts ? 'amber' : undefined}>
+                  <p
+                    style={SERIF_STYLE}
+                    className={`text-[24px] font-bold leading-none tabular-nums tracking-[-0.03em] ${hasHighRestarts ? 'text-amber-400' : 'text-white'}`}
                   >
-                    <p className="text-xs text-white/40 mb-1">Restarts</p>
-                    <p className={`text-xl font-bold ${hasHighRestarts ? 'text-yellow-400' : 'text-white'}`}>
-                      {restartCount}
-                    </p>
-                    {hasHighRestarts && (
-                      <p className="text-xs text-yellow-400/70 mt-1">Repeatedly restarting</p>
+                    {restartCount}
+                  </p>
+                  {hasHighRestarts && (
+                    <p className={`${MONO} mt-1.5 text-[9.5px] text-amber-400/70`}>Repeatedly restarting</p>
+                  )}
+                </Tile>
+                <Tile label="Uptime">
+                  <p className="text-[15px] font-medium text-white">{details?.pod?.uptime || '—'}</p>
+                </Tile>
+              </div>
+
+              {/* Running Version */}
+              {details?.container && (
+                <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-4">
+                  <h5 className={`${MONO} mb-4 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+                    <Box className="h-3.5 w-3.5" style={{ color: ACCENT }} />
+                    Running Version
+                  </h5>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4">
+                    <Field label="Image Tag">
+                      <p className={`${MONO} text-[13px] text-white`}>{details.container.imageTag || 'latest'}</p>
+                    </Field>
+                    <Field label="State">
+                      <StatusPill
+                        tone={
+                          details.container.state === 'Running'
+                            ? 'green'
+                            : details.container.state?.includes('CrashLoop')
+                            ? 'red'
+                            : 'amber'
+                        }
+                      >
+                        {details.container.state?.includes('CrashLoop')
+                          ? 'Restarting'
+                          : details.container.state || 'Unknown'}
+                      </StatusPill>
+                    </Field>
+                    <Field label="Ready">
+                      <StatusPill tone={details.container.ready ? 'green' : 'red'}>
+                        {details.container.ready ? 'Yes' : 'No'}
+                      </StatusPill>
+                    </Field>
+                    {servingBuildNumber !== null && (
+                      <Field label="Serving Build">
+                        <p className={`${MONO} text-[13px] font-semibold text-emerald-300`}>#{servingBuildNumber}</p>
+                      </Field>
+                    )}
+                    {lastOperationLabel && (
+                      <Field label="Last Operation">
+                        <p className="text-[13px] text-white">{lastOperationLabel}</p>
+                      </Field>
                     )}
                   </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Uptime</p>
-                    <p className="text-sm text-white">{details?.pod?.uptime || '-'}</p>
+                </div>
+              )}
+
+              {/* Resource Usage */}
+              {metrics && details?.container?.resources && (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <UsageMeter
+                    icon={Cpu}
+                    label="CPU Usage"
+                    reading={`${(metrics.cpu_usage ?? 0).toFixed(2)}%`}
+                    value={metrics.cpu_usage ?? 0}
+                    allocated={details.container.resources.requests?.cpu || '—'}
+                    max={details.container.resources.limits?.cpu || '—'}
+                  />
+                  <UsageMeter
+                    icon={HardDrive}
+                    label="Memory Usage"
+                    reading={`${(metrics.memory_mb ?? 0).toFixed(1)} Mi`}
+                    value={metrics.memory_usage ?? 0}
+                    allocated={details.container.resources.requests?.memory || '—'}
+                    max={details.container.resources.limits?.memory || '—'}
+                  />
+                </div>
+              )}
+
+              {/* Capacity */}
+              {details?.deployment && (
+                <div className="flex items-center justify-between gap-3 rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-4">
+                  <div>
+                    <p className={`${MONO} mb-1.5 text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>Running Instances</p>
+                    <p style={SERIF_STYLE} className="text-[28px] font-bold leading-none tabular-nums tracking-[-0.03em] text-white">
+                      {details.deployment.readyReplicas}
+                      <span className="text-white/30">/{details.deployment.replicas}</span>
+                    </p>
+                  </div>
+                  <StatusPill
+                    tone={details.deployment.readyReplicas >= details.deployment.replicas ? 'green' : 'amber'}
+                  >
+                    {details.deployment.readyReplicas >= details.deployment.replicas ? 'Healthy' : 'Scaling'}
+                  </StatusPill>
+                </div>
+              )}
+
+              {/* Network */}
+              {details?.network && (
+                <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-4">
+                  <h5 className={`${MONO} mb-4 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+                    <Network className="h-3.5 w-3.5" style={{ color: ACCENT }} />
+                    Network
+                  </h5>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4">
+                    <Field label="Hostname">
+                      <div className="flex items-center gap-1.5">
+                        <p className={`${MONO} flex-1 truncate text-[12px] text-white`}>{details.network.ingressHost}</p>
+                        <CopyBtn
+                          active={copiedField === 'ingress-host'}
+                          onClick={() => onCopy(details.network?.ingressHost || '', 'ingress-host')}
+                          title="Copy hostname"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="TLS">
+                      <StatusPill tone={details.network.tlsEnabled ? 'green' : 'amber'}>
+                        {details.network.tlsEnabled ? 'Enabled' : 'Disabled'}
+                      </StatusPill>
+                    </Field>
+                    <Field label="Service">
+                      <div className="flex items-center gap-1.5">
+                        <p className="flex-1 truncate text-[12px] text-white">{details.network.serviceName}</p>
+                        <CopyBtn
+                          active={copiedField === 'service-name'}
+                          onClick={() => onCopy(details.network?.serviceName || '', 'service-name')}
+                          title="Copy service name"
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Port">
+                      <p className={`${MONO} text-[13px] text-white`}>{details.network.servicePort}</p>
+                    </Field>
                   </div>
                 </div>
+              )}
 
-                {/* Container Info: what image is actually running */}
-                {details?.container && (
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                      <Box className="w-4 h-4" />
-                      Running Version
-                    </h5>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Image Tag</p>
-                        <p className="text-sm font-mono text-white">
-                          {details.container.imageTag || 'latest'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">State</p>
-                        <Badge
-                          className={`rounded-none text-xs ${
-                            details.container.state === 'Running'
-                              ? 'bg-green-500/20 text-green-400'
-                              : details.container.state?.includes('CrashLoop')
-                              ? 'bg-red-500/20 text-red-400'
-                              : 'bg-yellow-500/20 text-yellow-400'
-                          }`}
-                        >
-                          {details.container.state?.includes('CrashLoop')
-                            ? 'Restarting'
-                            : details.container.state || 'Unknown'}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Ready</p>
-                        <Badge
-                          className={`rounded-none text-xs ${
-                            details.container.ready
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-red-500/20 text-red-400'
-                          }`}
-                        >
-                          {details.container.ready ? 'Yes' : 'No'}
-                        </Badge>
-                      </div>
-                      {servingBuildNumber !== null && (
-                        <div>
-                          <p className="text-xs text-white/40 mb-1">Serving Build</p>
-                          <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
-                        </div>
-                      )}
-                      {lastOperationLabel && (
-                        <div>
-                          <p className="text-xs text-white/40 mb-1">Last Operation</p>
-                          <p className="text-sm text-white">{lastOperationLabel}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Resource Usage */}
-                {metrics && details?.container?.resources && (
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-white/40 flex items-center gap-1">
-                            <Cpu className="w-3.5 h-3.5" /> CPU Usage
-                          </p>
-                          <span className="text-sm font-mono text-white">
-                            {(metrics.cpu_usage ?? 0).toFixed(2)}%
+              {/* Warning events */}
+              {warnings.length > 0 && (
+                <div className="rounded-[6px] border border-amber-500/20 bg-amber-500/[0.04] px-4 py-4">
+                  <h5 className={`${MONO} mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-amber-400/85`}>
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Recent Warnings
+                  </h5>
+                  <div className="space-y-2">
+                    {warnings.map((event, idx) => (
+                      <div key={idx} className="flex items-start gap-2 text-[11px]">
+                        <span className={`${MONO} shrink-0 font-semibold text-amber-400/70`}>{event.reason}</span>
+                        <span className="text-white/55">{event.message}</span>
+                        {event.count > 1 && (
+                          <span className={`${MONO} ml-auto shrink-0 rounded-[3px] bg-amber-500/10 px-1.5 py-0.5 text-[9px] text-amber-400/70`}>
+                            ×{event?.count}
                           </span>
-                        </div>
-                        <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
-                        <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                          <p>Allocated: {details.container.resources.requests?.cpu || '-'}</p>
-                          <p>Max: {details.container.resources.limits?.cpu || '-'}</p>
-                        </div>
+                        )}
                       </div>
-                      <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-white/40 flex items-center gap-1">
-                            <HardDrive className="w-3.5 h-3.5" /> Memory Usage
-                          </p>
-                          <span className="text-sm font-mono text-white">
-                            {(metrics.memory_mb ?? 0).toFixed(1)} Mi
-                          </span>
-                        </div>
-                        <Progress value={metrics.memory_usage ?? 0} className="h-2" />
-                        <div className="mt-2 space-y-1 text-[11px] text-white/40 font-mono">
-                          <p>Allocated: {details.container.resources.requests?.memory || '-'}</p>
-                          <p>Max: {details.container.resources.limits?.memory || '-'}</p>
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                )}
-
-                {/* Capacity */}
-                {details?.deployment && (
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Running Instances</p>
-                        <p className="text-2xl font-bold text-white">
-                          {details.deployment.readyReplicas}/{details.deployment.replicas}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-white/40 mb-1">Status</p>
-                        <Badge
-                          className={`rounded-none ${
-                            details.deployment.readyReplicas >= details.deployment.replicas
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-yellow-500/20 text-yellow-400'
-                          }`}
-                        >
-                          {details.deployment.readyReplicas >= details.deployment.replicas
-                            ? 'Healthy'
-                            : 'Scaling'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Network Info */}
-                {details?.network && (
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
-                      <Network className="w-4 h-4" />
-                      Network
-                    </h5>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Hostname</p>
-                        <div className="flex items-center gap-1">
-                          <p className="text-xs font-mono text-white truncate flex-1">
-                            {details.network.ingressHost}
-                          </p>
-                          <button
-                            onClick={() =>
-                              onCopy(details.network?.ingressHost || '', 'ingress-host')
-                            }
-                            className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                            title="Copy hostname"
-                          >
-                            {copiedField === 'ingress-host' ? (
-                              <Check className="w-3 h-3 text-green-400" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">TLS</p>
-                        <Badge
-                          className={`rounded-none ${
-                            details.network.tlsEnabled
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-yellow-500/20 text-yellow-400'
-                          }`}
-                        >
-                          {details.network.tlsEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Service</p>
-                        <div className="flex items-center gap-1">
-                          <p className="text-xs text-white truncate flex-1">
-                            {details.network.serviceName}
-                          </p>
-                          <button
-                            onClick={() =>
-                              onCopy(details.network?.serviceName || '', 'service-name')
-                            }
-                            className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                            title="Copy service name"
-                          >
-                            {copiedField === 'service-name' ? (
-                              <Check className="w-3 h-3 text-green-400" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-white/40 mb-1">Port</p>
-                        <p className="text-xs font-mono text-white">{details.network.servicePort}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Warning Events from K8s */}
-                {details?.events &&
-                  details.events.filter((e) => e.type === 'Warning').length > 0 && (
-                    <div className="border border-yellow-500/20 bg-yellow-500/[0.04] px-4 py-4">
-                      <h5 className="text-sm font-semibold text-yellow-400/80 mb-3 flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4" />
-                        Recent Warnings
-                      </h5>
-                      <div className="space-y-2">
-                        {details.events
-                          .filter((e) => e.type === 'Warning')
-                          .map((event, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-start gap-2 text-xs text-yellow-200/70"
-                            >
-                              <span className="font-mono text-yellow-400/60 shrink-0">
-                                {event.reason}
-                              </span>
-                              <span className="text-white/50">{event.message}</span>
-                              {event.count > 1 && (
-                                <Badge className="rounded-none bg-yellow-500/10 text-yellow-400/60 text-[10px] ml-auto shrink-0">
-                                  ×{event?.count}
-                                </Badge>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-              </>
-            ) : (
-              <div className="text-center py-8 text-white/50">
-                <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>Loading metrics...</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-10 text-center">
+              <Activity className="mx-auto mb-2 h-7 w-7 text-white/25" />
+              <p className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/45`}>Loading metrics…</p>
+            </div>
+          )}
+        </Panel>
       )}
 
       {/* Bandwidth */}
@@ -375,57 +436,28 @@ export function AppOverviewTab({
         <AppBandwidthCard appId={app.id} onManage={onManageBandwidth} />
       )}
 
-      {/* Repository Info */}
-      <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-        <CardHeader className="border-b border-white/[0.06]">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <GitBranch className="w-5 h-5" />
-            Repository
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-              <p className="text-xs text-white/40 mb-1">Repository URL</p>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-mono text-white truncate flex-1">
-                  {app.repository_url}
-                </p>
-                <button
-                  onClick={() => onCopy(app.repository_url, 'repo')}
-                  className="text-white/30 hover:text-white/70 transition-colors"
-                >
-                  {copiedField === 'repo' ? (
-                    <Check className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+      {/* Repository */}
+      <Panel icon={GitBranch} title="Repository">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Tile label="Repository URL">
+            <div className="flex items-center gap-1.5">
+              <p className={`${MONO} flex-1 truncate text-[13px] text-white`}>{app.repository_url}</p>
+              <CopyBtn active={copiedField === 'repo'} onClick={() => onCopy(app.repository_url, 'repo')} title="Copy repository URL" />
             </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-              <p className="text-xs text-white/40 mb-1">Git Provider</p>
-              <p className="text-sm text-white capitalize">{app.git_provider}</p>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-              <p className="text-xs text-white/40 mb-1">Auto Deploy</p>
-              <Badge
-                className={`rounded-none ${
-                  app.auto_deploy
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-white/10 text-white/50'
-                }`}
-              >
-                {app.auto_deploy ? 'Enabled' : 'Disabled'}
-              </Badge>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-              <p className="text-xs text-white/40 mb-1">Deploy Branch</p>
-              <p className="text-sm text-white">{app.deploy_branch || app.branch}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </Tile>
+          <Tile label="Git Provider">
+            <p className="text-[13px] capitalize text-white">{app.git_provider || '—'}</p>
+          </Tile>
+          <Tile label="Auto Deploy">
+            <StatusPill tone={app.auto_deploy ? 'green' : 'neutral'}>
+              {app.auto_deploy ? 'Enabled' : 'Disabled'}
+            </StatusPill>
+          </Tile>
+          <Tile label="Deploy Branch">
+            <p className={`${MONO} text-[13px] text-white`}>{app.deploy_branch || app.branch || '—'}</p>
+          </Tile>
+        </div>
+      </Panel>
     </div>
   );
 }

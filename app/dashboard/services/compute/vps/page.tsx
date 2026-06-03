@@ -403,12 +403,6 @@ export default function VPSPage() {
                 {/* Hero */}
                 <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-10">
                     <div className="max-w-3xl">
-                        <div
-                            className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}
-                        >
-                            <span className="h-px w-4 bg-white/45" />
-                            Compute · Virtual Servers
-                        </div>
                         <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                             Your{' '}
                             <span
@@ -953,7 +947,7 @@ function ServerRow({
                     <p
                         className={`${MONO} text-[9.5px] text-white/40 truncate uppercase tracking-[0.08em] leading-[1.25]`}
                     >
-                        {region.country !== region.city && region.country !== '—'
+                        {region.country !== '—'
                             ? region.country
                             : ' '}
                     </p>

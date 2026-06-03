@@ -14,9 +14,36 @@ import {
   Lightbulb,
   ArrowRight,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+
+// ─── Design tokens (match app-overview-tab / app-bandwidth-card) ────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const SERIF_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
+};
+const ACCENT = '#0095FF';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral';
+
+const TONE: Record<Tone, { color: string; bg: string; border: string }> = {
+  green: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)' },
+  amber: { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)', border: 'rgba(251,191,36,0.25)' },
+  red: { color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.25)' },
+  blue: { color: ACCENT, bg: 'rgba(0,149,255,0.10)', border: 'rgba(0,149,255,0.30)' },
+  neutral: { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
+};
+
+function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  const t = TONE[tone];
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] w-fit`}
+      style={{ color: t.color, background: t.bg, borderColor: t.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color, boxShadow: `0 0 5px ${t.color}` }} />
+      {children}
+    </span>
+  );
+}
 
 type IssueSeverity = 'critical' | 'warning' | 'info';
 
@@ -51,11 +78,11 @@ function formatTimestamp(timestamp: string): string {
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
-  
+
   if (diffMins < 1) return 'Just now';
   if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
   if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  
+
   return date.toLocaleString();
 }
 
@@ -63,24 +90,24 @@ function getSeverityStyles(severity: IssueSeverity) {
   switch (severity) {
     case 'critical':
       return {
-        container: 'bg-red-500/10 border-red-500/30',
-        icon: <AlertCircle className="w-5 h-5 text-red-400" />,
-        badge: 'bg-red-500/20 text-red-400',
-        text: 'text-red-400',
+        tone: 'red' as Tone,
+        container: 'border-[rgba(248,113,113,0.25)] bg-[rgba(248,113,113,0.06)]',
+        icon: <AlertCircle className="h-4 w-4 text-[#f87171]" />,
+        text: 'text-[#f87171]',
       };
     case 'warning':
       return {
-        container: 'bg-yellow-500/10 border-yellow-500/30',
-        icon: <AlertTriangle className="w-5 h-5 text-yellow-400" />,
-        badge: 'bg-yellow-500/20 text-yellow-400',
-        text: 'text-yellow-400',
+        tone: 'amber' as Tone,
+        container: 'border-[rgba(251,191,36,0.25)] bg-[rgba(251,191,36,0.05)]',
+        icon: <AlertTriangle className="h-4 w-4 text-[#fbbf24]" />,
+        text: 'text-[#fbbf24]',
       };
     case 'info':
       return {
-        container: 'bg-blue-500/10 border-blue-500/30',
-        icon: <Info className="w-5 h-5 text-blue-400" />,
-        badge: 'bg-blue-500/20 text-blue-400',
-        text: 'text-blue-400',
+        tone: 'blue' as Tone,
+        container: 'border-[rgba(0,149,255,0.25)] bg-[rgba(0,149,255,0.05)]',
+        icon: <Info className="h-4 w-4 text-[#0095FF]" />,
+        text: 'text-[#0095FF]',
       };
   }
 }
@@ -88,73 +115,71 @@ function getSeverityStyles(severity: IssueSeverity) {
 function IssueCard({ issue, defaultExpanded = false }: { issue: PlatformIssue; defaultExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const styles = getSeverityStyles(issue.severity);
-  
+
   const hasDetails = issue.possibleCauses.length > 0 || issue.suggestedActions.length > 0;
 
   return (
-    <div className={`p-4 rounded-lg border ${styles.container}`}>
-      <div 
+    <div className={`rounded-[6px] border px-4 py-3.5 ${styles.container}`}>
+      <div
         className={`flex items-start gap-3 ${hasDetails ? 'cursor-pointer' : ''}`}
         onClick={() => hasDetails && setExpanded(!expanded)}
       >
-        {styles.icon}
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="font-medium text-white">{issue.title}</h4>
+        <span className="mt-0.5 shrink-0">{styles.icon}</span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-[13px] font-semibold tracking-[-0.01em] text-white">{issue.title}</h4>
             {issue.count > 1 && (
-              <Badge variant="outline" className="text-xs">
-                Occurred {issue.count}×
-              </Badge>
+              <StatusPill tone="neutral">Occurred {issue.count}×</StatusPill>
             )}
           </div>
-          
-          <p className="text-sm text-white/60 mt-1">
+
+          <p className="mt-1.5 text-[12px] leading-relaxed text-white/55">
             {issue.description}
           </p>
-          
-          <div className="flex items-center gap-2 mt-2 text-xs text-white/40">
-            <Clock className="w-3 h-3" />
+
+          <div className={`${MONO} mt-2.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-white/35`}>
+            <Clock className="h-3 w-3" />
             Last detected: {formatTimestamp(issue.lastDetected)}
           </div>
         </div>
 
         {hasDetails && (
-          <Button variant="ghost" size="sm" className="text-white/40 hover:text-white">
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
+          <button className="shrink-0 text-white/30 transition-colors hover:text-white/70">
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
         )}
       </div>
 
       {expanded && hasDetails && (
-        <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
+        <div className="mt-4 space-y-4 border-t border-white/[0.08] pt-4">
           {issue.possibleCauses.length > 0 && (
             <div>
-              <h5 className="text-sm font-medium text-white/70 mb-2 flex items-center gap-2">
-                <Lightbulb className="w-4 h-4" />
+              <h5 className={`${MONO} mb-2.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+                <Lightbulb className="h-3.5 w-3.5" style={{ color: ACCENT }} />
                 Possible Causes
               </h5>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {issue.possibleCauses.map((cause, idx) => (
-                  <li key={idx} className="text-sm text-white/50 flex items-start gap-2">
-                    <span className="text-white/30">•</span>
+                  <li key={idx} className="flex items-start gap-2 text-[12px] text-white/55">
+                    <span className="text-white/25">•</span>
                     {cause}
                   </li>
                 ))}
               </ul>
             </div>
           )}
-          
+
           {issue.suggestedActions.length > 0 && (
             <div>
-              <h5 className="text-sm font-medium text-white/70 mb-2 flex items-center gap-2">
-                <ArrowRight className="w-4 h-4" />
+              <h5 className={`${MONO} mb-2.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/55`}>
+                <ArrowRight className="h-3.5 w-3.5" style={{ color: ACCENT }} />
                 What to Do
               </h5>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {issue.suggestedActions.map((action, idx) => (
-                  <li key={idx} className="text-sm text-white/50 flex items-start gap-2">
-                    <span className={styles.text}>{idx + 1}.</span>
+                  <li key={idx} className="flex items-start gap-2 text-[12px] text-white/55">
+                    <span className={`${MONO} shrink-0 font-semibold ${styles.text}`}>{idx + 1}.</span>
                     {action}
                   </li>
                 ))}
@@ -187,7 +212,7 @@ export function AppIssues({ appId, appName: _appName, appStatus: _appStatus }: A
         const data = await res.json();
         throw new Error(data.error || 'Failed to fetch issues');
       }
-      
+
       const data = await res.json();
       setIssues(data.issues || []);
       // actionableIssues available in data.actionableIssues if needed
@@ -202,7 +227,7 @@ export function AppIssues({ appId, appName: _appName, appStatus: _appStatus }: A
 
   useEffect(() => {
     fetchIssues();
-    
+
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchIssues, 30000);
     return () => clearInterval(interval);
@@ -213,62 +238,61 @@ export function AppIssues({ appId, appName: _appName, appStatus: _appStatus }: A
   const infoIssues = issues.filter(i => i.severity === 'info');
 
   return (
-    <Card className="bg-white/5 border-white/10">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
-            Issues
-            {summary?.hasCriticalIssues && (
-              <Badge className="bg-red-500/20 text-red-400">
-                <AlertCircle className="w-3 h-3 mr-1" />
-                {summary.criticalCount} Critical
-              </Badge>
-            )}
-            {summary?.hasIssues && !summary.hasCriticalIssues && (
-              <Badge className="bg-yellow-500/20 text-yellow-400">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                {summary.warningCount} Warning{summary.warningCount > 1 ? 's' : ''}
-              </Badge>
-            )}
-          </CardTitle>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchIssues}
-            disabled={loading}
-            className="border-white/20"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+    <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: ACCENT }}>
+            <AlertTriangle className="h-3.5 w-3.5" />
+          </span>
+          <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white truncate">Issues</h3>
+          {summary?.hasCriticalIssues && (
+            <StatusPill tone="red">
+              {summary.criticalCount} Critical
+            </StatusPill>
+          )}
+          {summary?.hasIssues && !summary.hasCriticalIssues && (
+            <StatusPill tone="amber">
+              {summary.warningCount} Warning{summary.warningCount > 1 ? 's' : ''}
+            </StatusPill>
+          )}
         </div>
-      </CardHeader>
-      
-      <CardContent>
+
+        <button
+          onClick={fetchIssues}
+          disabled={loading}
+          className="shrink-0 text-white/25 transition-colors hover:text-white/70 disabled:opacity-40"
+          title="Refresh issues"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </header>
+
+      <div className="p-5">
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          <div className="mb-4 rounded-[6px] border border-[rgba(248,113,113,0.25)] bg-[rgba(248,113,113,0.06)] px-4 py-3 text-[12px] text-[#f87171]">
             {error}
           </div>
         )}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-white/50" />
+            <Loader2 className="h-6 w-6 animate-spin text-white/40" />
           </div>
         ) : criticalAndWarnings.length === 0 ? (
-          <div className="text-center py-8 text-white/50">
-            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-400/50" />
-            <p className="font-medium text-green-400/70">No issues detected</p>
-            <p className="text-sm mt-1">Your application is running smoothly</p>
+          <div className="py-10 text-center">
+            <span className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.06)]">
+              <CheckCircle2 className="h-6 w-6 text-[#4ade80]" />
+            </span>
+            <p className="text-[15px] font-semibold text-white">No issues detected</p>
+            <p className={`${MONO} mt-1.5 text-[11px] uppercase tracking-[0.12em] text-white/35`}>Your application is running smoothly</p>
           </div>
         ) : (
           <div className="space-y-3">
             {criticalAndWarnings.map((issue, idx) => (
-              <IssueCard 
-                key={issue.id} 
-                issue={issue} 
-                defaultExpanded={idx === 0 && issue.severity === 'critical'} 
+              <IssueCard
+                key={issue.id}
+                issue={issue}
+                defaultExpanded={idx === 0 && issue.severity === 'critical'}
               />
             ))}
           </div>
@@ -276,25 +300,25 @@ export function AppIssues({ appId, appName: _appName, appStatus: _appStatus }: A
 
         {/* Activity Log (info events) - collapsed by default */}
         {infoIssues.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-white/10">
-            <button 
+          <div className="mt-6 border-t border-white/[0.06] pt-4">
+            <button
               onClick={() => setShowInfo(!showInfo)}
-              className="flex items-center gap-2 text-sm text-white/50 hover:text-white/70 transition-colors"
+              className={`${MONO} flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.1em] text-white/45 transition-colors hover:text-white/70`}
             >
-              {showInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {showInfo ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               Recent Activity ({infoIssues.length})
             </button>
-            
+
             {showInfo && (
               <div className="mt-3 space-y-2">
                 {infoIssues.map((issue) => (
-                  <div 
+                  <div
                     key={issue.id}
-                    className="flex items-center gap-3 p-2 rounded-lg bg-white/5 text-sm"
+                    className="flex items-center gap-3 rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-2.5 text-[12px]"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-green-400/50" />
-                    <span className="text-white/60">{issue.title}</span>
-                    <span className="text-white/30 text-xs ml-auto">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[#4ade80]" />
+                    <span className="text-white/65">{issue.title}</span>
+                    <span className={`${MONO} ml-auto shrink-0 text-[10px] uppercase tracking-[0.1em] text-white/30`}>
                       {formatTimestamp(issue.lastDetected)}
                     </span>
                   </div>
@@ -303,7 +327,7 @@ export function AppIssues({ appId, appName: _appName, appStatus: _appStatus }: A
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

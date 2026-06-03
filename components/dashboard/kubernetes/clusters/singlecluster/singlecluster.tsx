@@ -30,7 +30,8 @@ import {
   transformDiskData,
   transformMemoryData,
 } from "@/config/functions";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ServiceTabBar } from "@/components/dashboard/ui/service-tab-bar";
 import {
   Select,
   SelectContent,
@@ -1087,39 +1088,16 @@ function SingleCluster({
           className="w-full"
         >
           {/* ── Pill nav ─────────────────────────────────── */}
-          <div className="mb-10 border-b border-white/[0.06]">
-            <TabsList className="bg-transparent p-0 h-auto flex flex-wrap items-center gap-1 -mb-px">
-              {[
-                { value: "cluster", label: "Cluster", icon: FolderOpen },
-                { value: "insight", label: "Insight", icon: BarChart3 },
-                { value: "settings", label: "Settings", icon: Settings },
-              ].map((t) => {
-                const Icon = t.icon;
-                const isActive = activeTab === t.value;
-                return (
-                  <TabsTrigger
-                    key={t.value}
-                    value={t.value}
-                    className={`${MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] rounded-none bg-transparent transition-colors data-[state=active]:bg-transparent data-[state=active]:shadow-none ${
-                      isActive ? "text-white" : "text-white/45 hover:text-white/75"
-                    }`}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {t.label}
-                    {isActive && (
-                      <span
-                        className="absolute left-2 right-2 -bottom-px h-[2px]"
-                        style={{
-                          background: ACCENT,
-                          boxShadow: `0 0 8px ${ACCENT}`,
-                        }}
-                      />
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-          </div>
+          <ServiceTabBar
+            tabs={[
+              { value: "cluster", label: "Cluster", icon: FolderOpen },
+              { value: "insight", label: "Insight", icon: BarChart3 },
+              { value: "settings", label: "Settings", icon: Settings },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+            className="mb-10"
+          />
 
           {/* ── CLUSTER TAB ────────────────────────────── */}
           <TabsContent value="cluster" className="mt-0 space-y-12">

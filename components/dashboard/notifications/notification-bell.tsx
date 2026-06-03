@@ -45,11 +45,14 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="cursor-pointer relative text-slate-400 hover:text-white hover:bg-slate-800/50"
+          className="cursor-pointer relative text-white/55 hover:text-white hover:bg-white/[0.06] rounded-[6px]"
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white animate-pulse">
+            <span
+              className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white ring-2 ring-[#0d0e11]"
+              style={{ background: "#0095FF", boxShadow: "0 0 10px rgba(0,149,255,0.6)" }}
+            >
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
@@ -57,7 +60,7 @@ export function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-80 max-h-[500px] overflow-hidden p-0 bg-slate-900 border-slate-700"
+        className="w-[360px] max-h-[520px] overflow-hidden p-0 bg-[#0d0e11] border border-white/[0.08] rounded-[8px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8)]"
       >
         <NotificationDropdown onClose={() => setIsOpen(false)} />
       </DropdownMenuContent>

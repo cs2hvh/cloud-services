@@ -15,10 +15,6 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -27,6 +23,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { copyToClipboard } from '@/lib/utils/safe-clipboard';
+
+// ─── Design tokens (match app-overview-tab / app-bandwidth-card) ────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 
 // Time range options for log filtering
 const TIME_RANGES = [
@@ -421,52 +421,59 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
   // Users need to see logs for 'failed', 'stopped', 'building' etc. to debug issues
   if (appStatus === 'pending') {
     return (
-      <Card className="bg-white/5 border-white/10 rounded-none">
-        <CardContent className="py-8">
-          <div className="text-center text-white/50">
-            <Terminal className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Runtime logs will be available after deployment starts.</p>
-            <p className="text-sm mt-1">Current status: {appStatus}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+        <div className="py-12 text-center">
+          <Terminal className="mx-auto mb-3 h-7 w-7 text-white/25" />
+          <p className="text-[13px] font-medium text-white">Runtime logs will be available after deployment starts.</p>
+          <p className={`${MONO} mt-2 text-[10px] uppercase tracking-[0.14em] text-white/40`}>Current status: {appStatus}</p>
+        </div>
+      </section>
     );
   }
 
   return (
-    <Card className="bg-white/5 border-white/10 rounded-none">
-      <CardHeader className="border-b border-white/[0.06] py-3 px-4">
+    <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+      <header className="border-b border-white/[0.06] px-5 py-3.5">
         {/* Row 1: title + streaming badge + action buttons */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Title */}
-          <div className="flex items-center gap-2 mr-1">
-            <Terminal className="w-4 h-4 text-white/60" />
-            <span className="text-sm font-semibold text-white">Runtime Logs</span>
+          <div className="flex items-center gap-2.5 mr-1 min-w-0">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: ACCENT }}>
+              <Terminal className="h-3.5 w-3.5" />
+            </span>
+            <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white">Runtime Logs</h3>
             {streaming && (
-              <Badge className="bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] px-1.5 py-0">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1 animate-pulse" />
+              <span
+                className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]`}
+                style={{ color: '#4ade80', background: 'rgba(74,222,128,0.10)', borderColor: 'rgba(74,222,128,0.30)' }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#4ade80] animate-pulse" style={{ boxShadow: '0 0 5px #4ade80' }} />
                 Live
-              </Badge>
+              </span>
             )}
             {isPaused && (
-              <Badge className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-[10px] px-1.5 py-0">
+              <span
+                className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]`}
+                style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.10)', borderColor: 'rgba(251,191,36,0.30)' }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24]" />
                 Paused
-              </Badge>
+              </span>
             )}
             {!loading && instances.length > 0 && (
-              <span className="text-[11px] text-white/30">{instances.length} instance{instances.length !== 1 ? 's' : ''}</span>
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] text-white/30`}>{instances.length} instance{instances.length !== 1 ? 's' : ''}</span>
             )}
           </div>
 
           {/* Time range selector */}
           <Select value={timeRange} onValueChange={(v) => { setTimeRange(v); }}>
-            <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
-              <Clock className="w-3 h-3 mr-1.5 text-white/40" />
+            <SelectTrigger className={`${MONO} h-9 w-auto min-w-[130px] text-[11px] border-white/[0.08] bg-[#0d0e11] rounded-[5px] text-white/75 focus:ring-0 focus:ring-offset-0`}>
+              <Clock className="w-3.5 h-3.5 mr-1.5 text-white/40" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
+            <SelectContent className="bg-[#0d0e11] border-white/[0.08] rounded-[6px]">
               {TIME_RANGES.map(range => (
-                <SelectItem key={range.value} value={range.value} className="text-xs">
+                <SelectItem key={range.value} value={range.value} className={`${MONO} text-[11px]`}>
                   {range.label}
                 </SelectItem>
               ))}
@@ -476,16 +483,16 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
           {/* Instance selector — only visible when >1 instance */}
           {instances.length > 1 && (
             <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-              <SelectTrigger className="h-7 w-auto min-w-[140px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
+              <SelectTrigger className={`${MONO} h-9 w-auto min-w-[140px] text-[11px] border-white/[0.08] bg-[#0d0e11] rounded-[5px] text-white/75 focus:ring-0 focus:ring-offset-0`}>
                 <SelectValue placeholder="All instances" />
               </SelectTrigger>
-              <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
-                <SelectItem value="all" className="text-xs">All Instances</SelectItem>
+              <SelectContent className="bg-[#0d0e11] border-white/[0.08] rounded-[6px]">
+                <SelectItem value="all" className={`${MONO} text-[11px]`}>All Instances</SelectItem>
                 {instances.map(inst => (
-                  <SelectItem key={inst.instanceId} value={inst.instanceId} className="text-xs font-mono">
+                  <SelectItem key={inst.instanceId} value={inst.instanceId} className={`${MONO} text-[11px]`}>
                     {inst.displayName}
                     {inst.restartCount > 0 && (
-                      <span className="text-yellow-400 ml-1.5 text-[10px]">↺{inst.restartCount}</span>
+                      <span className="text-[#fbbf24] ml-1.5 text-[10px]">↺{inst.restartCount}</span>
                     )}
                   </SelectItem>
                 ))}
@@ -498,126 +505,116 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`h-7 px-2 rounded-none border-white/[0.12] ${
-                showFilters ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-white/[0.03] text-white/60 hover:text-white'
+              className={`inline-flex h-9 items-center justify-center rounded-[5px] border px-2.5 transition-colors ${
+                showFilters
+                  ? 'border-[#0095FF]/30 bg-[#0095FF]/[0.12] text-[#0095FF]'
+                  : 'border-white/[0.08] bg-[#111216] text-white/65 hover:text-white hover:bg-white/[0.04]'
               }`}
               title="Filters"
             >
               <Filter className="w-3.5 h-3.5" />
-            </Button>
+            </button>
 
             {/* Previous logs toggle */}
             {hasRestartedInstances && (
-              <Button
-                size="sm"
-                variant="outline"
+              <button
                 onClick={() => setShowPrevious(!showPrevious)}
-                className={`h-7 px-2 rounded-none border-white/[0.12] ${
-                  showPrevious ? 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' : 'bg-white/[0.03] text-white/60 hover:text-white'
+                className={`inline-flex h-9 items-center justify-center rounded-[5px] border px-2.5 transition-colors ${
+                  showPrevious
+                    ? 'border-[#fbbf24]/30 bg-[#fbbf24]/[0.12] text-[#fbbf24]'
+                    : 'border-white/[0.08] bg-[#111216] text-white/65 hover:text-white hover:bg-white/[0.04]'
                 }`}
                 title="Show logs before last restart"
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
-              </Button>
+              </button>
             )}
 
             {/* Stream / Pause / Stop */}
             {!streaming ? (
-              <Button
-                size="sm"
-                variant="outline"
+              <button
                 onClick={startStreaming}
-                className="h-7 px-2.5 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white text-xs gap-1.5"
+                className={`${MONO} inline-flex h-9 items-center gap-1.5 rounded-[5px] border border-white/[0.08] bg-[#111216] px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/65 transition-colors hover:text-white hover:bg-white/[0.04]`}
                 title="Stream live logs"
               >
                 <Play className="w-3.5 h-3.5" />
                 Stream
-              </Button>
+              </button>
             ) : (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
+                <button
                   onClick={() => setIsPaused(!isPaused)}
-                  className={`h-7 px-2 rounded-none border-white/[0.12] ${
-                    isPaused ? 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' : 'bg-white/[0.03] text-white/60 hover:text-white'
+                  className={`inline-flex h-9 items-center justify-center rounded-[5px] border px-2.5 transition-colors ${
+                    isPaused
+                      ? 'border-[#fbbf24]/30 bg-[#fbbf24]/[0.12] text-[#fbbf24]'
+                      : 'border-white/[0.08] bg-[#111216] text-white/65 hover:text-white hover:bg-white/[0.04]'
                   }`}
                   title={isPaused ? 'Resume stream' : 'Pause stream'}
                 >
                   {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                </button>
+                <button
                   onClick={() => setAutoScroll(!autoScroll)}
-                  className={`h-7 px-2 rounded-none border-white/[0.12] text-xs ${
-                    autoScroll ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-white/[0.03] text-white/40'
+                  className={`inline-flex h-9 items-center justify-center rounded-[5px] border px-2.5 text-[13px] transition-colors ${
+                    autoScroll
+                      ? 'border-[#0095FF]/30 bg-[#0095FF]/[0.12] text-[#0095FF]'
+                      : 'border-white/[0.08] bg-[#111216] text-white/40 hover:text-white hover:bg-white/[0.04]'
                   }`}
                   title={autoScroll ? 'Auto-scroll on' : 'Auto-scroll off'}
                 >
                   ↓
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                </button>
+                <button
                   onClick={stopStreaming}
-                  className="h-7 px-2 rounded-none border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/15 text-xs"
+                  className={`${MONO} inline-flex h-9 items-center justify-center rounded-[5px] border border-[#f87171]/25 bg-[#f87171]/[0.08] px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#f87171] transition-colors hover:bg-[#f87171]/[0.16]`}
                   title="Stop streaming"
                 >
                   Stop
-                </Button>
+                </button>
               </>
             )}
 
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={fetchLogs}
               disabled={loading || streaming}
-              className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+              className="inline-flex h-9 items-center justify-center rounded-[5px] border border-white/[0.08] bg-[#111216] px-2.5 text-white/65 transition-colors hover:text-white hover:bg-white/[0.04] disabled:opacity-40"
               title="Refresh"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+            </button>
 
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={copyLogs}
               disabled={filteredLogs.length === 0}
-              className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+              className="inline-flex h-9 items-center justify-center rounded-[5px] border border-white/[0.08] bg-[#111216] px-2.5 text-white/65 transition-colors hover:text-white hover:bg-white/[0.04] disabled:opacity-40"
               title="Copy logs"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </Button>
+              {copied ? <Check className="w-3.5 h-3.5 text-[#4ade80]" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
 
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={downloadLogs}
               disabled={logs.length === 0}
-              className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+              className="inline-flex h-9 items-center justify-center rounded-[5px] border border-white/[0.08] bg-[#111216] px-2.5 text-white/65 transition-colors hover:text-white hover:bg-white/[0.04] disabled:opacity-40"
               title="Download logs"
             >
               <Download className="w-3.5 h-3.5" />
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Expandable Filter Bar */}
         {showFilters && (
-          <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center gap-3 flex-wrap">
+          <div className="mt-3.5 pt-3.5 border-t border-white/[0.06] flex items-center gap-2.5 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-[400px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40" />
-              <Input
+              <input
                 placeholder="Search runtime logs…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-8 h-7 bg-black/30 border-white/[0.12] text-xs rounded-none"
+                className={`${MONO} w-full pl-9 pr-8 h-9 bg-[#0d0e11] border border-white/[0.08] text-[11px] text-white placeholder:text-white/30 rounded-[5px] outline-none focus:border-white/[0.16]`}
               />
               {searchTerm && (
                 <button
@@ -630,57 +627,55 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
             </div>
 
             <div className="flex items-center gap-1">
-              {LOG_LEVELS.map((level) => (
-                <Button
-                  key={level.value}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setLogLevel(level.value)}
-                  className={`h-7 text-xs rounded-none border-white/[0.12] ${
-                    logLevel === level.value
-                      ? level.value === 'error'
-                        ? 'bg-red-500/20 text-red-400 border-red-500/20'
-                        : level.value === 'warn'
-                        ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20'
-                        : level.value === 'info'
-                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/20'
-                        : level.value === 'success'
-                        ? 'bg-green-500/20 text-green-400 border-green-500/20'
-                        : 'bg-white/10 text-white'
-                      : 'bg-white/[0.03] text-white/50'
-                  }`}
-                >
-                  {level.label}
-                </Button>
-              ))}
+              {LOG_LEVELS.map((level) => {
+                const active = logLevel === level.value;
+                const tone =
+                  level.value === 'error' ? '#f87171'
+                  : level.value === 'warn' ? '#fbbf24'
+                  : level.value === 'info' ? '#0095FF'
+                  : level.value === 'success' ? '#4ade80'
+                  : '#ffffff';
+                return (
+                  <button
+                    key={level.value}
+                    onClick={() => setLogLevel(level.value)}
+                    className={`${MONO} inline-flex h-9 items-center rounded-[5px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+                      active ? '' : 'border-white/[0.08] bg-[#0d0e11] text-white/50 hover:text-white/80'
+                    }`}
+                    style={active ? { color: tone, background: `${tone}1f`, borderColor: `${tone}4d` } : undefined}
+                  >
+                    {level.label}
+                  </button>
+                );
+              })}
             </div>
 
             {searchTerm && (
-              <Badge variant="outline" className="text-xs">
+              <span
+                className={`${MONO} inline-flex items-center rounded-[4px] border border-white/[0.10] bg-white/[0.05] px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-white/60`}
+              >
                 {totalMatches} match{totalMatches !== 1 ? 'es' : ''}
-              </Badge>
+              </span>
             )}
 
             {(searchTerm || logLevel !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={() => { setSearchTerm(''); setLogLevel('all'); }}
-                className="h-7 text-xs text-white/50 hover:text-white"
+                className={`${MONO} inline-flex h-9 items-center rounded-[5px] px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/50 transition-colors hover:text-white hover:bg-white/[0.04]`}
               >
                 Clear
-              </Button>
+              </button>
             )}
           </div>
         )}
-      </CardHeader>
+      </header>
 
-      <CardContent className="p-0">
-        <div className="bg-[#0c0c0c] border-t border-white/[0.05] h-[600px] overflow-auto
+      <div className="p-0">
+        <div className="bg-[#0a0b0d] h-[600px] overflow-auto
           [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent
           [&::-webkit-scrollbar-thumb]:bg-white/10 hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
           {error && (
-            <div className="mx-4 mt-3 border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <div className={`${MONO} mx-4 mt-3 rounded-[6px] border border-[#f87171]/25 bg-[#f87171]/[0.08] px-3 py-2 text-[11px] text-[#f87171]`}>
               {error}
             </div>
           )}
@@ -695,37 +690,37 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
               ))}
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-white/40 text-xs">
-              <Terminal className="w-6 h-6 mb-2 opacity-30" />
-              <p>No running instances found</p>
-              <p className="mt-1 text-white/30">The app may still be starting or scaling</p>
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Terminal className="w-7 h-7 mb-3 text-white/25" />
+              <p className="text-[13px] font-medium text-white">No running instances found</p>
+              <p className={`${MONO} mt-2 text-[10px] uppercase tracking-[0.12em] text-white/40`}>The app may still be starting or scaling</p>
             </div>
           ) : filteredLogs.every(l => !l.logs || l.logs.trim() === '') ? (
-            <div className="flex flex-col items-center justify-center h-full text-white/40 text-xs">
-              <Terminal className="w-6 h-6 mb-2 opacity-30" />
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Terminal className="w-7 h-7 mb-3 text-white/25" />
               {searchTerm || logLevel !== 'all' ? (
                 <>
-                  <p>No logs match current filters</p>
+                  <p className="text-[13px] font-medium text-white">No logs match current filters</p>
                   <button
                     onClick={() => { setSearchTerm(''); setLogLevel('all'); }}
-                    className="mt-2 text-white/60 underline underline-offset-2 hover:text-white"
+                    className={`${MONO} mt-2.5 text-[10px] uppercase tracking-[0.1em] text-white/55 hover:text-white`}
                   >
                     Clear filters
                   </button>
                 </>
               ) : instances.some((i) => i.status === 'Pending' || !i.ready) ? (
-                <p className="text-yellow-400/70">Instance is starting — logs will appear shortly</p>
+                <p className="text-[12px] text-[#fbbf24]/80">Instance is starting — logs will appear shortly</p>
               ) : instances.some((i) => i.status === 'Failed') ? (
-                <p className="text-red-400/70">Instance failed to start. Check build logs for errors.</p>
+                <p className="text-[12px] text-[#f87171]/80">Instance failed to start. Check build logs for errors.</p>
               ) : streaming ? (
-                <p className="text-white/30">Waiting for log data…</p>
+                <p className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>Waiting for log data…</p>
               ) : (
                 <>
-                  <p>No logs in the selected time range</p>
+                  <p className="text-[13px] font-medium text-white">No logs in the selected time range</p>
                   {timeRange !== '604800' && (
                     <button
                       onClick={() => setTimeRange('604800')}
-                      className="mt-2 text-white/60 underline underline-offset-2 hover:text-white"
+                      className={`${MONO} mt-2.5 text-[10px] uppercase tracking-[0.1em] text-white/55 hover:text-white`}
                     >
                       Show last 7 days
                     </button>
@@ -738,17 +733,17 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
               {filteredLogs.map((instanceLog, idx) => (
                 <div key={idx} className={idx > 0 ? 'border-t border-white/[0.06]' : ''}>
                   {(selectedInstance === 'all' || filteredLogs.length > 1) && (
-                    <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.10] sticky top-0 z-10 backdrop-blur-md bg-[#0c0c0c]/80">
-                      <span className="text-[11px] font-mono text-white/60">{instanceLog.displayName}</span>
-                      <span className={`text-[10px] ${
-                        instanceLog.status === 'Running' ? 'text-green-400' :
-                        instanceLog.status === 'Failed' ? 'text-red-400' : 'text-yellow-400'
+                    <div className="flex items-center gap-2.5 px-4 py-2 border-b border-white/[0.08] sticky top-0 z-10 backdrop-blur-md bg-[#0a0b0d]/85">
+                      <span className={`${MONO} text-[11px] text-white/65`}>{instanceLog.displayName}</span>
+                      <span className={`${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.08em] ${
+                        instanceLog.status === 'Running' ? 'text-[#4ade80]' :
+                        instanceLog.status === 'Failed' ? 'text-[#f87171]' : 'text-[#fbbf24]'
                       }`}>● {instanceLog.status || 'Unknown'}</span>
                       {instanceLog.restartCount > 0 && (
-                        <span className="text-[10px] text-yellow-400">↺ {instanceLog.restartCount} restarts</span>
+                        <span className={`${MONO} text-[10px] text-[#fbbf24]`}>↺ {instanceLog.restartCount} restarts</span>
                       )}
                       {searchTerm && !!instanceLog.matchCount && (
-                        <span className="text-[10px] text-yellow-400">
+                        <span className={`${MONO} text-[10px] text-[#fbbf24]`}>
                           {instanceLog.matchCount} match{instanceLog.matchCount !== 1 ? 'es' : ''}
                         </span>
                       )}
@@ -762,12 +757,12 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                     )}
                   </pre>
                   {showPrevious && instanceLog.previousLogs && (
-                    <div className="border-t border-yellow-500/20 bg-yellow-500/[0.03]">
-                      <div className="flex items-center gap-2 px-4 py-2 text-[11px] text-yellow-400/70">
+                    <div className="border-t border-[#fbbf24]/20 bg-[#fbbf24]/[0.03]">
+                      <div className={`${MONO} flex items-center gap-2 px-4 py-2 text-[10px] uppercase tracking-[0.08em] text-[#fbbf24]/75`}>
                         <Clock className="w-3 h-3" />
                         Previous instance (before restart)
                       </div>
-                      <pre className="font-mono text-xs text-yellow-400/60 px-4 pb-4 whitespace-pre">
+                      <pre className="font-mono text-xs text-[#fbbf24]/60 px-4 pb-4 whitespace-pre">
                         {instanceLog.previousLogs}
                       </pre>
                     </div>
@@ -778,7 +773,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

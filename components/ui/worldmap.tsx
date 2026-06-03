@@ -2,6 +2,7 @@
 
 import DottedMap from "dotted-map";
 import Image from "next/image";
+import { useMemo } from "react";
 
 interface LocationPoint {
   lat: number;
@@ -18,120 +19,123 @@ export default function WorldMap({
   locations = [],
   dotColor = "#0095FF",
 }: MapProps) {
-  const map = new DottedMap({ height: 100, grid: "diagonal" });
+  // Build the dotted map once. dotted-map projects with Web Mercator (proj4 GOOGLE)
+  // over a clipped region (lat ~ -56..71), so we MUST use its own getPin() to place
+  // markers — a hand-rolled equirectangular formula misaligns every dot.
+  const { svgMap, width, height, pins } = useMemo(() => {
+    const map = new DottedMap({ height: 100, grid: "diagonal" });
 
-  const svgMap = map.getSVG({
-    radius: 0.22,
-    color: "#FFFFFF40",
-    shape: "circle",
-    backgroundColor: "transparent",
-  });
+    const svg = map.getSVG({
+      radius: 0.22,
+      color: "#FFFFFF40",
+      shape: "circle",
+      backgroundColor: "transparent",
+    });
 
-  const projectPoint = (lat: number, lng: number) => {
-    const x = (lng + 180) * (800 / 360);
-    const y = (90 - lat) * (400 / 180);
-    return { x, y };
-  };
+    const { width: w, height: h } = map.image;
+
+    // Project each location through the map's own projection → SVG coordinate space.
+    const projected = locations.map((loc) => {
+      const pin = map.getPin({ lat: loc.lat, lng: loc.lng });
+      return { ...loc, x: pin.x, y: pin.y };
+    });
+
+    return { svgMap: svg, width: w, height: h, pins: projected };
+  }, [locations]);
 
   return (
-    <div className="w-full aspect-[2/1] relative font-sans">
+    // Match the container ratio to the map's real ratio so the background image and
+    // the overlay <svg> fit identically (no stretch, no letterbox → no drift).
+    <div
+      className="relative w-full font-sans"
+      style={{ aspectRatio: `${width} / ${height}` }}
+    >
       <Image
         src={`data:image/svg+xml;utf8,${encodeURIComponent(svgMap)}`}
-        className="h-full w-full [mask-image:linear-gradient(to_bottom,transparent,white_10%,white_90%,transparent)] pointer-events-none select-none"
+        className="h-full w-full [mask-image:linear-gradient(to_bottom,transparent,white_8%,white_92%,transparent)] pointer-events-none select-none"
         alt="world map"
-        height="495"
-        width="1056"
+        height={height * 5}
+        width={width * 5}
         draggable={false}
+        priority={false}
       />
       <svg
-        viewBox="0 0 800 400"
+        viewBox={`0 0 ${width} ${height}`}
         className="w-full h-full absolute inset-0 pointer-events-none select-none"
       >
         <defs>
           <radialGradient id="dot-glow">
-            <stop offset="0%" stopColor={dotColor} stopOpacity="0.5" />
+            <stop offset="0%" stopColor={dotColor} stopOpacity="0.45" />
             <stop offset="100%" stopColor={dotColor} stopOpacity="0" />
           </radialGradient>
         </defs>
 
-        {locations.map((loc, i) => {
-          const point = projectPoint(loc.lat, loc.lng);
-          return (
-            <g key={`loc-${i}`}>
-              {/* Glow background */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="14"
-                fill="url(#dot-glow)"
+        {pins.map((loc, i) => (
+          <g key={`loc-${i}`}>
+            {/* Soft glow halo */}
+            <circle cx={loc.x} cy={loc.y} r="4.5" fill="url(#dot-glow)" />
+
+            {/* Expanding ping ring */}
+            <circle
+              cx={loc.x}
+              cy={loc.y}
+              r="1"
+              fill="none"
+              stroke={dotColor}
+              strokeWidth="0.25"
+              opacity="0.5"
+            >
+              <animate
+                attributeName="r"
+                from="1"
+                to="4.5"
+                dur="2.5s"
+                begin={`${i * 0.18}s`}
+                repeatCount="indefinite"
               />
-
-              {/* Pulsing ring */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="3"
-                fill="none"
-                stroke={dotColor}
-                strokeWidth="0.5"
-                opacity="0.5"
-              >
-                <animate
-                  attributeName="r"
-                  from="3"
-                  to="12"
-                  dur="2.5s"
-                  begin={`${i * 0.2}s`}
-                  repeatCount="indefinite"
-                />
-                <animate
-                  attributeName="opacity"
-                  from="0.5"
-                  to="0"
-                  dur="2.5s"
-                  begin={`${i * 0.2}s`}
-                  repeatCount="indefinite"
-                />
-              </circle>
-
-              {/* Second pulsing ring (delayed) */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="3"
-                fill="none"
-                stroke={dotColor}
-                strokeWidth="0.5"
-                opacity="0.35"
-              >
-                <animate
-                  attributeName="r"
-                  from="3"
-                  to="12"
-                  dur="2.5s"
-                  begin={`${i * 0.2 + 1.25}s`}
-                  repeatCount="indefinite"
-                />
-                <animate
-                  attributeName="opacity"
-                  from="0.35"
-                  to="0"
-                  dur="2.5s"
-                  begin={`${i * 0.2 + 1.25}s`}
-                  repeatCount="indefinite"
-                />
-              </circle>
-
-              {/* Core dot */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r="2.5"
-                fill={dotColor}
+              <animate
+                attributeName="opacity"
+                from="0.5"
+                to="0"
+                dur="2.5s"
+                begin={`${i * 0.18}s`}
+                repeatCount="indefinite"
               />
-            </g>
-          );
-        })}
+            </circle>
+
+            {/* Second ring, half-cycle offset for a continuous pulse */}
+            <circle
+              cx={loc.x}
+              cy={loc.y}
+              r="1"
+              fill="none"
+              stroke={dotColor}
+              strokeWidth="0.25"
+              opacity="0.35"
+            >
+              <animate
+                attributeName="r"
+                from="1"
+                to="4.5"
+                dur="2.5s"
+                begin={`${i * 0.18 + 1.25}s`}
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                from="0.35"
+                to="0"
+                dur="2.5s"
+                begin={`${i * 0.18 + 1.25}s`}
+                repeatCount="indefinite"
+              />
+            </circle>
+
+            {/* Bright core */}
+            <circle cx={loc.x} cy={loc.y} r="0.9" fill={dotColor} />
+            <circle cx={loc.x} cy={loc.y} r="0.45" fill="#FFFFFF" opacity="0.85" />
+          </g>
+        ))}
       </svg>
     </div>
   );

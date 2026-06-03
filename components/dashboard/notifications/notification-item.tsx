@@ -1,12 +1,11 @@
 'use client';
 
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  CheckCircle2, 
-  Info, 
-  AlertTriangle, 
+import {
+  CheckCircle2,
+  Info,
+  AlertTriangle,
   XCircle,
-  Circle 
 } from 'lucide-react';
 import { Notification, NotificationType } from '@/lib/notifications/types';
 import { cn } from '@/lib/utils';
@@ -16,6 +15,8 @@ interface NotificationItemProps {
   onMarkAsRead: (id: string) => void;
 }
 
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+
 const iconMap: Record<NotificationType, React.ElementType> = {
   success: CheckCircle2,
   info: Info,
@@ -23,19 +24,33 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   error: XCircle,
 };
 
-const colorMap: Record<NotificationType, string> = {
-  success: 'text-green-400',
-  info: 'text-blue-400',
-  warning: 'text-yellow-400',
-  error: 'text-red-400',
+// Single accent per type → icon color + tinted chip (bg 10%, border 20%).
+const TONE: Record<NotificationType, string> = {
+  success: '#4ade80',
+  info: '#0095FF',
+  warning: '#fbbf24',
+  error: '#f87171',
 };
 
+function formatTimestamp(date: Date): string {
+  return `${date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })}, ${date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })}`;
+}
+
 export function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps) {
-  const Icon = iconMap[notification.type];
-  const iconColor = colorMap[notification.type];
+  const Icon = iconMap[notification.type] ?? Info;
+  const tone = TONE[notification.type] ?? TONE.info;
+  const isUnread = !notification.is_read;
+  const createdAt = new Date(notification.created_at);
 
   const handleClick = () => {
-    if (!notification.is_read) {
+    if (isUnread) {
       onMarkAsRead(notification.id);
     }
   };
@@ -44,50 +59,50 @@ export function NotificationItem({ notification, onMarkAsRead }: NotificationIte
     <div
       onClick={handleClick}
       className={cn(
-        "flex items-start gap-3 p-4 cursor-pointer transition-colors",
-        notification.is_read 
-          ? "bg-transparent hover:bg-slate-800/30" 
-          : "bg-slate-800/50 hover:bg-slate-800/70"
+        'group relative flex cursor-pointer items-start gap-3 px-4 py-3.5 transition-colors',
+        isUnread ? 'bg-[#0095FF]/[0.04] hover:bg-[#0095FF]/[0.07]' : 'hover:bg-white/[0.03]'
       )}
     >
-      {/* Unread indicator */}
-      <div className="flex-shrink-0 mt-1">
-        {!notification.is_read ? (
-          <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
-        ) : (
-          <div className="h-2 w-2" />
-        )}
-      </div>
+      {/* Unread accent bar */}
+      {isUnread && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 w-[2px]"
+          style={{ background: '#0095FF', boxShadow: '0 0 8px rgba(0,149,255,0.5)' }}
+        />
+      )}
 
       {/* Icon */}
-      <div className={cn("flex-shrink-0 mt-0.5", iconColor)}>
-        <Icon className="h-5 w-5" />
+      <div className="mt-0.5 shrink-0" style={{ color: tone }}>
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className={cn(
-          "text-sm",
-          notification.is_read ? "text-slate-300" : "text-white font-medium"
-        )}>
-          {notification.title}
-        </p>
-        <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p
+            className={cn(
+              'truncate text-[13px]',
+              isUnread ? 'font-medium text-white' : 'text-white/75'
+            )}
+          >
+            {notification.title}
+          </p>
+          {isUnread && (
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: '#0095FF', boxShadow: '0 0 6px rgba(0,149,255,0.7)' }}
+            />
+          )}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-[12px] leading-relaxed text-white/45">
           {notification.message}
         </p>
-        <p className="text-xs text-slate-500 mt-1">
-          {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
-        </p>
-        <p className="text-xs text-slate-600 mt-0.5">
-          {new Date(notification.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-          })} at {new Date(notification.created_at).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          })}
+        <p className={`${MONO} mt-1.5 text-[10px] uppercase tracking-[0.06em] text-white/30 tabular-nums`}>
+          {formatDistanceToNow(createdAt, { addSuffix: true })}
+          <span className="mx-1.5 text-white/15">·</span>
+          {formatTimestamp(createdAt)}
         </p>
       </div>
     </div>

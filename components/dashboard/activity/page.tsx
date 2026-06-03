@@ -60,10 +60,9 @@ export default function ActivityPage({ logs }: { logs: ProjectLog[] }) {
       {/* Hero */}
       <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
         Activity{" "}
-        <span style={SERIF_STYLE} className="text-white/55 font-normal">
+        <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
           log
         </span>
-        .
       </h1>
       <p
         className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}

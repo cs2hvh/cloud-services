@@ -26,7 +26,7 @@ const figmaServices = [
     logoAlt: "A.I. Labs",
     title: "A.I. Labs",
     description:
-      "OpenAI-compatible inference for 50+ models. Fine-tune, embed, and host your own on dedicated GPUs — one API key for everything.",
+      "A unified AI development platform — train, fine-tune, and deploy your own models, run production inference at scale, and build with embeddings on dedicated GPU infrastructure.",
   },
    {
     logoSrc: assetUrl("/services-icon/MANAGED DATABASE .png"),
@@ -155,7 +155,7 @@ export function ServicesSection() {
                     custom={i}
                   >
                     <div className="relative h-14 w-14 self-center xl:self-auto">
-                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized />
+                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized referrerPolicy="no-referrer" />
                     </div>
                     <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center xl:text-left">
                       {service.title}
@@ -200,7 +200,7 @@ export function ServicesSection() {
                     custom={i}
                   >
                     <div className="relative h-12 w-12 self-center sm:self-start">
-                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized />
+                      <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" unoptimized referrerPolicy="no-referrer" />
                     </div>
                     <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center sm:text-left">
                       {service.title}

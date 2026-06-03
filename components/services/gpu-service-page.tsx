@@ -8,6 +8,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Brain } from "lucide-react";
+import { motion } from "motion/react";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
@@ -463,65 +464,100 @@ export function GpuServicePage(
                 </div>
 
                 <Container className="relative z-10">
-                    <div className="mx-auto max-w-[920px] text-center">
-                        <p
-                            className={`${MONO} mb-6 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/65`}
+                    <div className="grid gap-14 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center lg:gap-16">
+                        {/* ─── Left: copy ─────────────────────────────────── */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                            className="max-w-2xl"
                         >
-                            GPU Cloud
-                        </p>
-                        <h1 className="text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
-                            The AI developer
-                            <br />
-                            <span className="text-white/55">cloud, <span className="text-blue-500">on demand.</span></span>
-                        </h1>
-                        <p className="mx-auto mt-7 max-w-[660px] text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
-                            Pods for building. Clusters for scaling. Reserved capacity for
-                            shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
-                            second, NVLink-ready, in 12 regions.
-                        </p>
+                            <div className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/56">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                                GPU Cloud
+                            </div>
 
-                        <div className="cursor-pointer mt-10 flex flex-wrap items-center justify-center gap-3">
-                            <AuthAwareServiceCta
-                                service="gpu"
-                                intent="new"
-                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
-                            >
-                                Launch a GPU
-                                <ArrowRight className="h-4 w-4" />
-                            </AuthAwareServiceCta>
-                            <Link
-                                href="#lineup"
-                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
-                            >
-                                See the lineup
-                            </Link>
-                        </div>
+                            <h1 className="mt-6 text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
+                                The AI developer
+                                <br />
+                                <span className="text-white/55">cloud, <span className="text-blue-500">on demand.</span></span>
+                            </h1>
 
-                        {/* Stat strip */}
-                        <div className="mx-auto mt-14 grid max-w-[820px] grid-cols-2 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-4">
-                            {[
-                                { value: "<90s", label: "Provisioning" },
-                                { value: "12", label: "Regions" },
-                                { value: "99.99%", label: "Uptime SLA" },
-                                { value: "1s", label: "Billing increment" },
-                            ].map((s) => (
-                                <div
-                                    key={s.label}
-                                    className="flex flex-col items-center gap-2 bg-[#04060a] px-4 py-5"
+                            <p className="mt-6 max-w-xl text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
+                                Pods for building. Clusters for scaling. Reserved capacity for
+                                shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
+                                second, NVLink-ready, in 12 regions.
+                            </p>
+
+                            <div className="cursor-pointer mt-8 flex flex-wrap gap-3">
+                                <AuthAwareServiceCta
+                                    service="gpu"
+                                    intent="new"
+                                    className={`${MONO} inline-flex h-11 items-center justify-center gap-2 border border-white bg-white px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
                                 >
-                                    <span
-                                        className={`${MONO} text-[22px] font-bold leading-none tabular-nums text-[#0095FF] sm:text-[26px]`}
-                                    >
-                                        {s.value}
-                                    </span>
-                                    <span
-                                        className={`${MONO} text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50`}
-                                    >
-                                        {s.label}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                                    Launch a GPU
+                                    <ArrowRight className="h-4 w-4" />
+                                </AuthAwareServiceCta>
+                                <Link
+                                    href="#lineup"
+                                    className={`${MONO} inline-flex h-11 items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
+                                >
+                                    See the lineup
+                                </Link>
+                            </div>
+
+                            {/* Stat strip */}
+                            <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-4">
+                                {[
+                                    { value: "<90s", label: "Provisioning" },
+                                    { value: "12", label: "Regions" },
+                                    { value: "99.99%", label: "Uptime SLA" },
+                                    { value: "1s", label: "Billing increment" },
+                                ].map((s) => (
+                                    <div key={s.label} className="border-t border-white/[0.1] pt-4">
+                                        <div className={`${MONO} text-[1.15rem] font-bold tabular-nums text-[#0095FF]`}>
+                                            {s.value}
+                                        </div>
+                                        <div className={`${MONO} mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/36`}>
+                                            {s.label}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        {/* ─── Right: hero illustration ──────────────────── */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 24 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
+                            className="relative"
+                        >
+                            <div className="relative mx-auto aspect-square w-full max-w-[560px]">
+                                {/* Soft brand-blue halo behind the illustration */}
+                                <div
+                                    aria-hidden
+                                    className="pointer-events-none absolute inset-0"
+                                    style={{
+                                        background:
+                                            "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,149,255,0.18), transparent 70%)",
+                                        filter: "blur(48px)",
+                                    }}
+                                />
+                                <Image
+                                    src="https://ahurasense.cs2hvh.com/images/2026-06/U8gcWCeZlDQw.png"
+                                    alt="GPU cloud infrastructure illustration"
+                                    fill
+                                    priority
+                                    className="object-contain"
+                                    style={{
+                                        filter:
+                                            "drop-shadow(0 30px 50px rgba(0,0,0,0.55)) drop-shadow(0 0 32px rgba(0,149,255,0.16))",
+                                    }}
+                                    sizes="(min-width: 1024px) 560px, 90vw"
+                                />
+                            </div>
+                        </motion.div>
                     </div>
                 </Container>
             </section>

@@ -1,4 +1,3 @@
-import { assetUrl } from "@/lib/asset-url";
 import type { Metadata, Viewport } from "next";
 import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone } from "next/font/google";
 import "./globals.css";
@@ -90,11 +89,9 @@ export const metadata: Metadata = {
     creator: siteConfig.social.twitter,
     site: siteConfig.social.twitter,
   },
-  icons: {
-    icon: assetUrl("/favicon.ico"),
-    shortcut: assetUrl("/favicon.ico"),
-    apple: assetUrl("/favicon.ico"),
-  },
+  // Favicon / touch icons are provided by the file convention
+  // (app/icon.png + app/apple-icon.png) — served same-origin with a cache
+  // hash, so link-preview crawlers resolve them on any deploy domain.
   alternates: {
     canonical: siteConfig.url,
   },

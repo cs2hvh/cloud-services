@@ -107,6 +107,14 @@ export const supportAttachmentDeleteSchema = z.object({
   attachmentId: z.string().trim().min(1, "attachmentId is required"),
 });
 
+export const supportTicketReplySchema = z.object({
+  message: z
+    .string()
+    .trim()
+    .min(2, "Message must be at least 2 characters")
+    .max(8000, "Message cannot exceed 8000 characters"),
+});
+
 export const supportTicketIdParamSchema = z.object({
   ticketId: z.string().trim().min(1, "ticketId is required"),
 });

@@ -26,6 +26,7 @@ import { toast } from "sonner";
 
 import SingleBucket from "@/components/dashboard/object-storage/bucket-info";
 import BucketSettings from "@/components/dashboard/object-storage/bucket-settings";
+import { ServiceTabBar } from "@/components/dashboard/ui/service-tab-bar";
 import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
 import { copyToClipboard } from "@/lib/utils/safe-clipboard";
 
@@ -356,50 +357,12 @@ const BucketTabs = ({ bucket, locations }: BucketTabsProps) => {
                 </div>
 
                 {/* Pill tab nav */}
-                <div className="border-b border-white/[0.06] mb-5">
-                    <div className="flex items-center gap-1 -mb-px overflow-x-auto no-scrollbar">
-                        {TABS.map((tab) => {
-                            const isActive = activeTab === tab.value;
-                            const Icon = tab.icon;
-                            return (
-                                <button
-                                    key={tab.value}
-                                    type="button"
-                                    onClick={() => setActiveTab(tab.value)}
-                                    className={`${MONO} relative inline-flex items-center gap-2 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
-                                    style={{
-                                        color: isActive
-                                            ? "#ffffff"
-                                            : "rgba(255,255,255,0.45)",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (!isActive)
-                                            e.currentTarget.style.color =
-                                                "rgba(255,255,255,0.75)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (!isActive)
-                                            e.currentTarget.style.color =
-                                                "rgba(255,255,255,0.45)";
-                                    }}
-                                >
-                                    <Icon className="h-3.5 w-3.5" />
-                                    {tab.label}
-                                    {isActive && (
-                                        <span
-                                            className="absolute left-2 right-2 bottom-0 h-[2px]"
-                                            style={{
-                                                background: ACCENT,
-                                                boxShadow:
-                                                    "0 0 8px rgba(0,149,255,0.5)",
-                                            }}
-                                        />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
+                <ServiceTabBar
+                    tabs={TABS}
+                    value={activeTab}
+                    onChange={setActiveTab}
+                    className="mb-5"
+                />
 
                 {/* Tab content */}
                 {activeTab === "info" && <SingleBucket bucket={bucket} />}

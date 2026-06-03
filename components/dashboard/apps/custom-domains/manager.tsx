@@ -16,10 +16,36 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
-const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+
+// ─── Design tokens (match app-overview-tab / app-bandwidth-card) ────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const SERIF_STYLE: React.CSSProperties = {
-  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+  fontFamily: 'var(--font-nunito), system-ui, sans-serif',
 };
+const ACCENT = '#0095FF';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral';
+
+const TONE: Record<Tone, { color: string; bg: string; border: string }> = {
+  green: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.30)' },
+  amber: { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)', border: 'rgba(251,191,36,0.30)' },
+  red: { color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.30)' },
+  blue: { color: ACCENT, bg: 'rgba(0,149,255,0.10)', border: 'rgba(0,149,255,0.30)' },
+  neutral: { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
+};
+
+function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  const t = TONE[tone];
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] w-fit`}
+      style={{ color: t.color, background: t.bg, borderColor: t.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color, boxShadow: `0 0 5px ${t.color}` }} />
+      {children}
+    </span>
+  );
+}
 
 import { AddDomainDialog } from './add-domain-dialog';
 import { DomainCard } from './domain-card';
@@ -410,7 +436,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] flex items-center justify-center py-12">
+      <div className="flex items-center justify-center rounded-[8px] border border-white/[0.06] bg-[#111216] py-12">
         <Loader2 className="h-5 w-5 animate-spin text-white/40" />
       </div>
     );
@@ -423,14 +449,17 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   ];
 
   return (
-    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
-      <div className="border-b border-white/[0.06] px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Globe className="h-3.5 w-3.5 text-white/45" />
-          <div>
-            <h3 className={`${MONO} text-[11px] uppercase tracking-[0.14em] text-white/65 font-semibold`}>
-              App domains
-            </h3>
+    <div className="overflow-hidden rounded-[8px] border border-white/[0.06] bg-[#111216]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]"
+            style={{ color: ACCENT }}
+          >
+            <Globe className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white">App domains</h3>
             <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>
               Connect a domain to this app. Purchase domains globally from the Marketplace.
             </p>
@@ -440,13 +469,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href="/dashboard/domains/marketplace"
-            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
           >
             Marketplace
           </Link>
           <Link
             href="/dashboard/domains"
-            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3 border border-white/[0.08] bg-[#0d0e11] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
+            className={`${MONO} h-9 inline-flex items-center gap-1.5 px-3.5 border border-white/[0.08] bg-[#111216] text-[10.5px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
           >
             Domains
           </Link>
@@ -500,31 +529,25 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
 
       <div className="px-5 py-5 space-y-4">
         {/* Platform domain */}
-        <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[5px] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-3.5">
           <div>
-            <p className={`${MONO} text-[11px] uppercase tracking-[0.12em] text-white/75 font-semibold`}>
+            <p className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>
               Platform domain
             </p>
-            <p className={`${MONO} mt-0.5 text-[10.5px] text-white/40`}>
+            <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>
               Default domain, always active.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`${MONO} inline-flex items-center px-2.5 py-1 border border-white/[0.06] bg-[#111216] text-[11.5px] text-white rounded-[5px]`}>
+            <span className={`${MONO} inline-flex items-center rounded-[6px] border border-white/[0.06] bg-[#0a0b0d] px-3 py-2 text-[13px] text-white`}>
               {platformDomain}
             </span>
-            <span className={`${MONO} inline-flex items-center gap-1.5 px-2.5 py-1 border border-emerald-500/25 bg-emerald-500/[0.08] text-[10px] uppercase tracking-[0.12em] text-emerald-300 rounded-[20px]`}>
-              <span
-                className="h-1 w-1 rounded-full bg-emerald-400"
-                style={{ boxShadow: "0 0 5px #4ade80" }}
-              />
-              Active
-            </span>
+            <StatusPill tone="green">Active</StatusPill>
             <a
               href={`https://${platformDomain}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-white/35 hover:text-[#0095FF] transition-colors"
+              className="text-white/25 transition-colors hover:text-[#0095FF]"
               title="Open"
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -534,12 +557,12 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
 
         {/* Domain list */}
         {domains.length === 0 ? (
-          <div className="border border-dashed border-white/[0.12] rounded-[5px] px-6 py-10 text-center">
-            <Globe className="mx-auto mb-3 h-7 w-7 text-white/25" />
-            <p className={`${MONO} text-[12px] uppercase tracking-[0.12em] text-white/65 font-semibold`}>
-              No custom domains yet
-            </p>
-            <p className={`${MONO} mt-2 text-[11px] text-white/40 max-w-md mx-auto leading-relaxed`}>
+          <div className="rounded-[8px] border border-white/[0.06] bg-[#0d0e11] px-6 py-10 text-center">
+            <span className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-white/[0.08] bg-[#0a0b0d]">
+              <Globe className="h-4 w-4 text-white/30" />
+            </span>
+            <p className="text-[13px] font-semibold text-white">No custom domains yet</p>
+            <p className={`${MONO} mx-auto mt-2 max-w-md text-[11px] leading-relaxed text-white/40`}>
               Click Add Domain to connect a domain you own, or visit the Marketplace to purchase one.
             </p>
           </div>
@@ -575,9 +598,9 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             if (!open && !removingId) setRemoveConfirmId(null);
           }}
         >
-          <AlertDialogContent className="bg-[#0d0e11] border border-white/[0.08] rounded-[6px] text-white">
+          <AlertDialogContent className="rounded-[8px] border border-white/[0.08] bg-[#111216] text-white">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-[16px] font-semibold">
+              <AlertDialogTitle className="text-[15px] font-semibold text-white">
                 Remove domain?
               </AlertDialogTitle>
               <AlertDialogDescription className={`${MONO} text-[11.5px] text-white/55 leading-relaxed`}>
@@ -590,13 +613,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel
-                className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}
+                className={`${MONO} h-10 px-3.5 border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px]`}
                 disabled={removingId !== null}
               >
                 Keep it
               </AlertDialogCancel>
               <AlertDialogAction
-                className={`${MONO} h-10 px-3.5 border border-rose-500/25 bg-rose-500/[0.08] text-[11px] uppercase tracking-[0.14em] text-rose-300 hover:bg-rose-500/[0.15] rounded-[5px]`}
+                className={`${MONO} h-10 px-3.5 border border-[#f87171]/30 bg-[#f87171]/[0.10] text-[11px] uppercase tracking-[0.14em] text-[#f87171] hover:bg-[#f87171]/[0.18] rounded-[5px]`}
                 disabled={removingId !== null}
                 onClick={() => {
                   if (removeConfirmId) void handleRemoveDomain(removeConfirmId);

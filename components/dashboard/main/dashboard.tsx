@@ -211,11 +211,10 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                         Welcome back,{" "}
                         <span
                             style={SERIF_STYLE}
-                            className="text-white/55 font-normal"
+                            className="text-[#0095FF] font-normal"
                         >
                             {userName}
                         </span>
-                        .
                     </h1>
                     <p
                         className={`${MONO} mt-3 max-w-xl text-[11.5px] text-white/45 leading-relaxed`}
@@ -683,10 +682,9 @@ function SectionHead({
             </p>
             <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
                 {title}{" "}
-                <span style={SERIF_STYLE} className="text-white/55 font-normal">
+                <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
                     {accent}
                 </span>
-                <span className="text-white/55 font-normal">.</span>
             </h2>
         </div>
     );

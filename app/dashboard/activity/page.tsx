@@ -3,21 +3,61 @@ import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import ActivityPage from "@/components/dashboard/activity/page";
+import type { ProjectLog } from "@/components/dashboard/activity/activity.types";
 import { getUser } from "@/lib/supabase/auth";
-import { Projects } from "@/lib/supabase/queries/projects";
 import { notFound } from "next/navigation";
+import { AuditLogService } from "@/lib/audit";
+import type { AuditAction, AuditServiceType } from "@/lib/audit/types";
 
 // Authenticated page — reads cookies via getUser(), so it must render per-request.
-// Without this, Next attempts static generation, getUser() throws DYNAMIC_SERVER_USAGE,
-// and the try/catch below swallows + logs it as a (harmless but noisy) build error.
 export const dynamic = "force-dynamic";
+
+// Past-tense labels keep the word the timeline's getEventType() classifies on
+// (create / update / delete) while reading cleanly as the colored event label.
+const ACTION_LABEL: Record<AuditAction, string> = {
+  create: "Created",
+  update: "Updated",
+  delete: "Deleted",
+  login: "Signed in",
+  logout: "Signed out",
+  token_expired: "Token expired",
+  token_refreshed: "Token refreshed",
+  webhook_received: "Webhook",
+  provider_connect: "Connected",
+  provider_disconnect: "Disconnected",
+  password_change: "Password changed",
+  access: "Accessed",
+};
+
+const SERVICE_LABEL: Record<AuditServiceType, string> = {
+  kubernetes: "Kubernetes",
+  database: "Database",
+  network_ddos: "DDoS protection",
+  platform_apps: "App",
+  object_storage: "Object storage",
+  auth: "Account",
+  git_webhook: "Git webhook",
+  ai_agent: "AI agent",
+  knowledge_base: "Knowledge base",
+  domain: "Domain",
+};
 
 const ActivitySuspense = async () => {
   try {
     const user = await getUser();
     if (!user) notFound();
 
-    const logs = (await Projects.get_logs_by_user(user.id)) || [];
+    const entries = await AuditLogService.getRecentByUser(user.id, 200);
+    const logs: ProjectLog[] = entries.map((entry) => {
+      const action = ACTION_LABEL[entry.action] ?? entry.action;
+      const service = SERVICE_LABEL[entry.service_type] ?? entry.service_type;
+      return {
+        id: entry.id,
+        event: `${action} ${service}`.trim(),
+        text: entry.service_name || entry.user_email || "—",
+        created_at: entry.created_at,
+      };
+    });
 
     return <ActivityPage logs={logs} />;
   } catch (error) {

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { copyToClipboard as safeCopyToClipboard } from '@/lib/utils/safe-clipboard';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { ServiceTabBar } from '@/components/dashboard/ui/service-tab-bar';
 import { useVMMetrics } from '@/hooks/use-vm-metrics';
 import { ArrowLeft, Server } from 'lucide-react';
 
@@ -25,7 +26,6 @@ import { VpsNetworkingTab } from './_components/vps-networking-tab';
 import { VpsSettingsTab } from './_components/vps-settings-tab';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
-const ACCENT = '#0095FF';
 
 export default function VMDetailPage() {
   const params = useParams();
@@ -294,50 +294,13 @@ export default function VMDetailPage() {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
-        {/* Horizontal pill-tab nav (replaces sidebar tab list) */}
-        <div className="mb-5 rounded-[8px] border border-white/[0.10] bg-white/[0.03] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab.value;
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => setActiveTab(tab.value)}
-                  className={`${MONO} relative my-1.5 inline-flex items-center gap-2 rounded-[6px] px-4 py-2.5 text-[12.5px] font-semibold uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
-                  style={{
-                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.62)',
-                    background: isActive ? 'rgba(0,149,255,0.10)' : 'transparent',
-                    boxShadow: isActive
-                      ? 'inset 0 0 0 1px rgba(0,149,255,0.35)'
-                      : 'inset 0 0 0 1px rgba(255,255,255,0)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = '#ffffff';
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = 'rgba(255,255,255,0.62)';
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }}
-                    />
-                  )}
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Horizontal segmented tab nav — shared premium pill control. */}
+        <ServiceTabBar
+          tabs={TABS}
+          value={activeTab}
+          onChange={setActiveTab}
+          className="mb-5"
+        />
 
         <div>
           <TabsContent value="overview" className="mt-0">

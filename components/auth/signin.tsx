@@ -31,7 +31,24 @@ import glass from "@/components/auth/glass-controls.module.css";
 type InputType = z.infer<typeof signin_schema>;
 
 const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
-const buttonShellClass = `${glass.glassControl} ${glass.buttonShell}`;
+
+// Premium primary button — accent gradient, soft glow, inset highlight, hover lift.
+const PRIMARY_BTN =
+  "relative flex h-11 w-full items-center justify-center rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY_BTN_STYLE: React.CSSProperties = {
+  background: "linear-gradient(135deg, #1f9dff, #0061c4)",
+  boxShadow:
+    "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)",
+};
+const onBtnEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+  if (e.currentTarget.disabled) return;
+  e.currentTarget.style.filter = "brightness(1.08)";
+  e.currentTarget.style.transform = "translateY(-1px)";
+};
+const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.filter = "none";
+  e.currentTarget.style.transform = "none";
+};
 
 export function SignInForm() {
   const router = useRouter();
@@ -274,22 +291,30 @@ export function SignInForm() {
 
           {twofaError && <p className="text-sm text-red-400">{twofaError}</p>}
 
-          <div className={`w-full ${buttonShellClass}`}>
-            <button
-              type="submit"
-              disabled={twofaBusy || otpCode.length < 6}
-              className={glass.button}
-            >
-              {twofaBusy ? "Verifying..." : "Verify"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={twofaBusy || otpCode.length < 6}
+            className={`${PRIMARY_BTN} mt-1`}
+            style={PRIMARY_BTN_STYLE}
+            onMouseEnter={onBtnEnter}
+            onMouseLeave={onBtnLeave}
+          >
+            {twofaBusy ? "Verifying..." : "Verify"}
+          </button>
         </form>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-6 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6">
+    <div className="relative mx-auto mt-3 sm:mt-0 w-full max-w-[480px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#101116]/95 px-7 py-8 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[24px] sm:px-9 sm:py-9">
+      {/* Ambient accent glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[150%] -translate-x-1/2 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, rgba(0,149,255,0.18), transparent)" }}
+      />
+      <div className="relative z-10">
       {/* Branding — always visible */}
       <div className="mx-auto mb-1 text-center pt-2 pb-1">
         <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
@@ -326,10 +351,10 @@ export function SignInForm() {
           </div>
 
           <div className="mx-auto mt-4 w-full max-w-[320px]">
-            <div className="flex items-center gap-3 text-white">
-              <div className="h-px flex-1 bg-white/75" />
-              <span className="text-sm">Or</span>
-              <div className="h-px flex-1 bg-white/75" />
+            <div className="flex items-center gap-3 text-white/55">
+              <div className="h-px flex-1 bg-white/15" />
+              <span className="text-xs uppercase tracking-[0.18em]">Or</span>
+              <div className="h-px flex-1 bg-white/15" />
             </div>
           </div>
 
@@ -394,19 +419,20 @@ export function SignInForm() {
                 </Link>
               </div>
 
-              <div className={`mx-auto mt-2 w-full max-w-[200px] ${buttonShellClass}`}>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className={glass.button}
-                >
-                  Log In
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`${PRIMARY_BTN} mt-3.5`}
+                style={PRIMARY_BTN_STYLE}
+                onMouseEnter={onBtnEnter}
+                onMouseLeave={onBtnLeave}
+              >
+                Log In
+              </button>
             </form>
           </Form>
 
-          <p className="mt-3 text-center text-sm text-white">
+          <p className="mt-4 text-center text-sm text-white">
             New here! Create an account{" "}
             <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
               Sign Up
@@ -414,6 +440,7 @@ export function SignInForm() {
           </p>
         </>
       )}
+      </div>
     </div>
   );
 }

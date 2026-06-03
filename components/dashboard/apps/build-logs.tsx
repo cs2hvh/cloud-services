@@ -15,9 +15,6 @@ import {
   ArrowUp,
   WrapText,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -28,6 +25,20 @@ import {
 } from '@/components/ui/select';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { copyToClipboard } from '@/lib/utils/safe-clipboard';
+
+// ─── Design tokens (match app-overview-tab / app-bandwidth-card) ────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
+
+type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral';
+
+const TONE: Record<Tone, { color: string; bg: string; border: string }> = {
+  green: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)' },
+  amber: { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)', border: 'rgba(251,191,36,0.25)' },
+  red: { color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.25)' },
+  blue: { color: ACCENT, bg: 'rgba(0,149,255,0.10)', border: 'rgba(0,149,255,0.30)' },
+  neutral: { color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,13 +74,13 @@ function formatBuildStatus(status: string): string {
   }
 }
 
-function statusTextColor(status: string): string {
+function statusTone(status: string): Tone {
   switch (status) {
-    case 'SUCCESS':  return 'text-emerald-400';
-    case 'FAILURE':  return 'text-red-400';
-    case 'BUILDING': return 'text-blue-400';
-    case 'ABORTED':  return 'text-white/35';
-    default:         return 'text-yellow-400';
+    case 'SUCCESS':  return 'green';
+    case 'FAILURE':  return 'red';
+    case 'BUILDING': return 'blue';
+    case 'ABORTED':  return 'neutral';
+    default:         return 'amber';
   }
 }
 
@@ -89,6 +100,51 @@ function getRunLabel(deployment: Pick<DeploymentSummary, 'build_number' | 'trigg
   return deployment.trigger === 'resize'
     ? `Resize #${deployment.build_number}`
     : `Build #${deployment.build_number}`;
+}
+
+// ─── Primitives ──────────────────────────────────────────────────────────────
+
+function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  const t = TONE[tone];
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] w-fit`}
+      style={{ color: t.color, background: t.bg, borderColor: t.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color, boxShadow: `0 0 5px ${t.color}` }} />
+      {children}
+    </span>
+  );
+}
+
+function IconBtn({
+  onClick,
+  active,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex h-7 items-center justify-center gap-1 rounded-[5px] border px-2 text-[11px] transition-colors disabled:opacity-40 ${
+        active
+          ? 'text-white'
+          : 'border-white/[0.08] bg-[#111216] text-white/55 hover:bg-white/[0.04] hover:text-white'
+      }`}
+      style={active ? { borderColor: TONE.blue.border, background: TONE.blue.bg, color: ACCENT } : undefined}
+    >
+      {children}
+    </button>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -314,29 +370,30 @@ export function BuildLogsPanel({
   const hasActiveFilters = logLevel !== 'all' || !!searchTerm;
 
   return (
-    <Card className="bg-white/5 border-white/[0.08] rounded-none">
-      <CardHeader className="border-b border-white/[0.06] py-3 px-4">
-
-        {/* ── Toolbar ── */}
-        <div className="flex items-center gap-3 flex-wrap">
+    <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+      {/* ── Header / toolbar ── */}
+      <header className="border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
 
           {/* Title + status */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Terminal className="w-4 h-4 text-white/50" />
-            <span className="text-sm font-semibold text-white/90">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: ACCENT }}>
+            <Terminal className="h-3.5 w-3.5" />
+          </span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white">
               {isResizeRun ? 'Operation Logs' : 'Build Logs'}
-            </span>
+            </h3>
             {selectedRunLabel && (
-              <span className="font-mono text-xs text-white/35">{selectedRunLabel}</span>
+              <span className={`${MONO} text-[11px] text-white/35`}>{selectedRunLabel}</span>
             )}
             {buildInfo?.building && (
-              <Badge className="bg-blue-500/12 border border-blue-500/25 text-blue-400 text-[10px] px-1.5 py-0">
-                <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
+              <StatusPill tone="amber">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
                 {isResizeRun ? 'Running' : 'Building'}
-              </Badge>
+              </StatusPill>
             )}
             {lineCount > 0 && !buildInfo?.building && (
-              <span className="text-[10px] text-white/25 tabular-nums">
+              <span className={`${MONO} text-[10px] text-white/25 tabular-nums`}>
                 {lineCount.toLocaleString()} lines
               </span>
             )}
@@ -348,26 +405,21 @@ export function BuildLogsPanel({
               value={buildInfo?.number?.toString() ?? ''}
               onValueChange={(val) => onSelectBuild(Number(val))}
             >
-              <SelectTrigger className="h-7 w-auto min-w-[180px] max-w-[260px] text-xs border-white/[0.10] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
+              <SelectTrigger className={`${MONO} h-7 w-auto min-w-[180px] max-w-[260px] text-[11px] border-white/[0.08] bg-[#0d0e11] rounded-[5px] focus:ring-0 focus:ring-offset-0`}>
                 <SelectValue placeholder="Select build…" />
               </SelectTrigger>
-              <SelectContent className="bg-[#111111] border-white/[0.10] rounded-none">
+              <SelectContent className="bg-[#111216] border-white/[0.08] rounded-[6px]">
                 {buildOptions.map((d) => (
                   <SelectItem
                     key={d.build_number}
                     value={d.build_number.toString()}
-                    className="text-xs font-mono cursor-pointer"
+                    className={`${MONO} text-[11px] cursor-pointer`}
                   >
                     <span className="flex items-center gap-2.5">
                       <span className="text-white/80">{getRunLabel(d)}</span>
-                      <span className={`text-[10px] font-sans ${statusTextColor(d.status)}`}>
-                        {d.status === 'BUILDING' && (
-                          <span className="mr-0.5 inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse align-middle" />
-                        )}
-                        {formatBuildStatus(d.status)}
-                      </span>
+                      <StatusPill tone={statusTone(d.status)}>{formatBuildStatus(d.status)}</StatusPill>
                       <span
-                        className="text-[10px] text-white/25 font-sans"
+                        className={`${MONO} text-[10px] text-white/25`}
                         title={new Date(d.started_at).toLocaleString()}
                       >
                         {formatRelative(d.started_at)}
@@ -382,80 +434,57 @@ export function BuildLogsPanel({
           <div className="flex-1" />
 
           {/* Actions */}
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="outline"
+          <div className="flex items-center gap-1.5">
+            <IconBtn
               onClick={() => setWordWrap((w) => !w)}
+              active={wordWrap}
               title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
-              className={`h-7 px-2 rounded-none border-white/[0.10] ${
-                wordWrap
-                  ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
-                  : 'bg-white/[0.03] text-white/50 hover:text-white'
-              }`}
             >
               <WrapText className="w-3.5 h-3.5" />
-            </Button>
+            </IconBtn>
 
-            <Button
-              size="sm"
-              variant="outline"
+            <IconBtn
               onClick={() => setShowFilters((f) => !f)}
+              active={showFilters || hasActiveFilters}
               title="Filter logs"
-              className={`h-7 px-2 rounded-none border-white/[0.10] ${
-                showFilters || hasActiveFilters
-                  ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
-                  : 'bg-white/[0.03] text-white/50 hover:text-white'
-              }`}
             >
               <Filter className="w-3.5 h-3.5" />
-              {hasActiveFilters && (
-                <span className="ml-1 text-[10px]">•</span>
-              )}
-            </Button>
+              {hasActiveFilters && <span className="text-[10px]">•</span>}
+            </IconBtn>
 
             {buildInfo && (
-              <Button
-                size="sm"
-                variant="outline"
+              <IconBtn
                 onClick={handleRefresh}
                 disabled={initialLoading}
                 title="Refresh logs"
-                className="h-7 px-2 rounded-none border-white/[0.10] bg-white/[0.03] text-white/50 hover:text-white"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${initialLoading ? 'animate-spin' : ''}`} />
-              </Button>
+              </IconBtn>
             )}
 
-            <Button
-              size="sm"
-              variant="outline"
+            <IconBtn
               onClick={copyLogs}
               disabled={!hasContent || initialLoading}
               title="Copy logs"
-              className="h-7 px-2 rounded-none border-white/[0.10] bg-white/[0.03] text-white/50 hover:text-white"
             >
               {copied
                 ? <Check className="w-3.5 h-3.5 text-emerald-400" />
                 : <Copy className="w-3.5 h-3.5" />}
-            </Button>
+            </IconBtn>
 
-            <Button
-              size="sm"
-              variant="outline"
+            <IconBtn
               onClick={downloadLogs}
               disabled={!hasContent || initialLoading}
               title="Download logs"
-              className="h-7 px-2 rounded-none border-white/[0.10] bg-white/[0.03] text-white/50 hover:text-white"
             >
               <Download className="w-3.5 h-3.5" />
-            </Button>
+            </IconBtn>
           </div>
         </div>
 
         {/* Resize notice */}
         {isResizeRun && (
-          <p className="mt-2 text-[11px] text-blue-300/60 border-t border-white/[0.05] pt-2">
+          <p className={`${MONO} mt-2.5 text-[11px] text-white/45 border-t border-white/[0.06] pt-2.5`} style={{ color: ACCENT, opacity: 0.7 }}>
             Resize runs reuse the serving image — these logs show the resize operation, not a new build.
           </p>
         )}
@@ -469,7 +498,7 @@ export function BuildLogsPanel({
                 placeholder="Search logs…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-7 pr-7 h-7 bg-black/30 border-white/[0.10] text-xs rounded-none"
+                className={`${MONO} pl-7 pr-7 h-7 bg-[#0d0e11] border-white/[0.08] text-[11px] rounded-[5px]`}
               />
               {searchTerm && (
                 <button
@@ -482,55 +511,58 @@ export function BuildLogsPanel({
             </div>
 
             <div className="flex items-center gap-1">
-              {(['all', 'error', 'warn', 'success'] as const).map((level) => (
-                <Button
-                  key={level}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setLogLevel(level)}
-                  className={`h-7 text-xs rounded-none border-white/[0.10] ${
-                    logLevel === level
-                      ? level === 'error'   ? 'bg-red-500/15 text-red-400 border-red-500/20'
-                      : level === 'warn'    ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
-                      : level === 'success' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
-                      : 'bg-white/10 text-white'
-                      : 'bg-white/[0.02] text-white/40 hover:text-white/70'
-                  }`}
-                >
-                  {level === 'all' ? 'All' : level === 'error' ? 'Errors' : level === 'warn' ? 'Warnings' : 'Success'}
-                </Button>
-              ))}
+              {(['all', 'error', 'warn', 'success'] as const).map((level) => {
+                const levelTone: Tone =
+                  level === 'error' ? 'red'
+                  : level === 'warn' ? 'amber'
+                  : level === 'success' ? 'green'
+                  : 'blue';
+                const t = TONE[levelTone];
+                const isActive = logLevel === level;
+                return (
+                  <button
+                    key={level}
+                    onClick={() => setLogLevel(level)}
+                    className={`${MONO} inline-flex h-7 items-center rounded-[5px] border px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+                      isActive
+                        ? ''
+                        : 'border-white/[0.08] bg-[#0d0e11] text-white/40 hover:text-white/70'
+                    }`}
+                    style={isActive ? { color: t.color, background: t.bg, borderColor: t.border } : undefined}
+                  >
+                    {level === 'all' ? 'All' : level === 'error' ? 'Errors' : level === 'warn' ? 'Warnings' : 'Success'}
+                  </button>
+                );
+              })}
             </div>
 
             {searchTerm && (
-              <span className="text-[11px] text-white/35 tabular-nums">
+              <span className={`${MONO} text-[10px] text-white/35 tabular-nums uppercase tracking-[0.1em]`}>
                 {matchCount} {matchCount === 1 ? 'match' : 'matches'}
               </span>
             )}
 
             {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={() => { setSearchTerm(''); setLogLevel('all'); }}
-                className="h-7 text-[11px] text-white/40 hover:text-white px-2"
+                className={`${MONO} inline-flex h-7 items-center rounded-[5px] px-2 text-[10px] uppercase tracking-[0.1em] text-white/40 hover:text-white`}
               >
                 Clear
-              </Button>
+              </button>
             )}
           </div>
         )}
-      </CardHeader>
+      </header>
 
-      {/* ── Log area ── */}
-      <CardContent className="p-0">
-        <div className="relative bg-[#0b0b0b] border-t border-white/[0.04] font-mono text-xs h-[620px]">
+      {/* ── Log area (terminal surface — kept dark) ── */}
+      <div className="p-0">
+        <div className="relative bg-[#0a0b0d] font-mono text-xs h-[620px]">
           {initialLoading ? (
             <div className="h-full p-4 space-y-2 overflow-hidden">
               {Array.from({ length: 28 }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-3 rounded-sm bg-white/[0.05] animate-pulse"
+                  className="h-3 rounded-[4px] bg-white/[0.05] animate-pulse"
                   style={{ width: `${38 + ((i * 41) % 52)}%` }}
                 />
               ))}
@@ -556,9 +588,9 @@ export function BuildLogsPanel({
               {showJumpTopButton && (
                 <button
                   onClick={jumpToTop}
-                  className="pointer-events-auto flex items-center gap-1.5
+                  className={`${MONO} pointer-events-auto flex items-center gap-1.5
                     bg-black/70 hover:bg-black/90 border border-white/[0.12] backdrop-blur-sm
-                    text-white/60 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                    text-white/60 hover:text-white text-[10px] uppercase tracking-[0.1em] px-3 py-1 rounded-full transition-colors`}
                 >
                   <ArrowUp className="w-3 h-3" /> Top
                 </button>
@@ -566,9 +598,9 @@ export function BuildLogsPanel({
               {showJumpButton && (
                 <button
                   onClick={jumpToBottom}
-                  className="pointer-events-auto flex items-center gap-1.5
+                  className={`${MONO} pointer-events-auto flex items-center gap-1.5
                     bg-black/70 hover:bg-black/90 border border-white/[0.12] backdrop-blur-sm
-                    text-white/60 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+                    text-white/60 hover:text-white text-[10px] uppercase tracking-[0.1em] px-3 py-1 rounded-full transition-colors`}
                 >
                   <ArrowDown className="w-3 h-3" /> Latest
                 </button>
@@ -576,7 +608,7 @@ export function BuildLogsPanel({
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

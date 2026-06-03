@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { ServiceTabBar } from '@/components/dashboard/ui/service-tab-bar';
 import Image from 'next/image';
 import {
   Select,
@@ -37,6 +38,8 @@ import {
   Trash2,
   ArrowLeft,
   MessageSquare,
+  Settings2,
+  Code2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -127,6 +130,7 @@ export default function AgentDetailsPage({
   const [usePlatformBilling, setUsePlatformBilling] = useState(true);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [agentTab, setAgentTab] = useState('settings');
   const [knowledgeBaseId, setKnowledgeBaseId] = useState<string | null>(null);
   const [ragEnabled, setRagEnabled] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
@@ -447,11 +451,15 @@ export default function AgentDetailsPage({
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="settings" className="space-y-5">
-        <TabsList className="grid grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
-          <TabsTrigger value="settings" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Settings</TabsTrigger>
-          <TabsTrigger value="api" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">API</TabsTrigger>
-        </TabsList>
+      <Tabs value={agentTab} onValueChange={setAgentTab} className="space-y-5">
+        <ServiceTabBar
+          tabs={[
+            { value: 'settings', label: 'Settings', icon: Settings2 },
+            { value: 'api', label: 'API', icon: Code2 },
+          ]}
+          value={agentTab}
+          onChange={setAgentTab}
+        />
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-5">

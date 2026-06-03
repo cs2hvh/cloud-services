@@ -343,21 +343,7 @@ export default function HeroClient() {
                         through formations on the right, but the pitch
                         here doesn't shift — GPU is the main subject. */}
                     <div className="relative max-w-[600px]">
-                        <div className="flex items-center gap-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/55">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span
-                                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-                                    style={{ background: BRAND }}
-                                />
-                                <span
-                                    className="relative inline-flex h-1.5 w-1.5 rounded-full"
-                                    style={{ background: BRAND, boxShadow: `0 0 6px ${BRAND}` }}
-                                />
-                            </span>
-                            <span>Ahura Cloud</span>
-                        </div>
-
-                        <h1 className="mt-6 max-w-[680px] text-[44px] font-semibold leading-[0.95] tracking-[-0.045em] text-white sm:text-6xl lg:text-[80px]">
+                        <h1 className="max-w-[680px] text-[44px] font-semibold leading-[0.95] tracking-[-0.045em] text-white sm:text-6xl lg:text-[80px]">
                             Your cloud,
                             <br />
                              <span className="text-blue-500">on demand.</span>
@@ -415,7 +401,7 @@ export default function HeroClient() {
                             }}
                         />
                         <Image
-                            src="https://ahurasense.cs2hvh.com/images/2026-06/zo5fOr7aMqrS.png"
+                            src="https://ahurasense.cs2hvh.com/images/2026-06/yoh3_MfCbKR-.png"
                             alt="Ahura Cloud infrastructure"
                             fill
                             priority

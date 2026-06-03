@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
 import { Hero } from "@/components/hero";
-import { ServicesSection } from "@/components/services-section";
 import { DomainSearchSection } from "@/components/domain-search-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { EverythingSection } from "@/components/everything-section";
@@ -12,31 +11,33 @@ import GlobalNetworkSection from "@/components/global-network-section";
 import HomePopup from "@/components/home-popup";
 // import FeatureSection from "@/components/feature-section";
 
+const HOME_TITLE = `${siteConfig.name} — AI Inference, GPUs & Cloud Infrastructure`;
+const HOME_OG_DESCRIPTION =
+  "Run serverless AI inference, fine-tune and deploy models, and build AI agents with RAG — on on-demand GPUs, plus compute, databases, and Kubernetes. Your entire AI stack and infrastructure in seconds, not hours.";
+
 export const metadata: Metadata = {
-  title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
+  title: HOME_TITLE,
   description:
-    "Deploy GPU instances, VMs, Kubernetes, managed databases, storage, apps, and AI agents from one production cloud control plane.",
+    "Serverless AI inference, model fine-tuning and deployment, AI agents with RAG and vector search, and on-demand GPUs — alongside VMs, Kubernetes, and managed databases from one production control plane.",
   alternates: {
     canonical: siteConfig.url,
   },
   openGraph: {
-    title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
-    description:
-      "One platform for compute, databases, Kubernetes, and AI. Provision your entire infrastructure in seconds, not hours.",
+    title: HOME_TITLE,
+    description: HOME_OG_DESCRIPTION,
     url: siteConfig.url,
     images: [
       {
         url: siteConfig.ogImage,
         width: 1200,
         height: 630,
-        alt: "AhuraSense Cloud — Cloud Infrastructure Platform",
+        alt: "AhuraSense Cloud — AI & Cloud Infrastructure Platform",
       },
     ],
   },
   twitter: {
-    title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
-    description:
-      "One platform for compute, databases, Kubernetes, and AI. Provision your entire infrastructure in seconds, not hours.",
+    title: HOME_TITLE,
+    description: HOME_OG_DESCRIPTION,
     images: [siteConfig.ogImage],
   },
 };
@@ -58,10 +59,16 @@ const jsonLd = {
       foundingDate: "2024",
       areaServed: "Worldwide",
       serviceType: [
+        "AI Inference",
+        "Serverless AI Inference",
+        "Model Fine-Tuning",
+        "Model Deployment",
+        "AI Agents",
+        "Vector Database",
+        "GPU Cloud",
         "Cloud Computing",
         "Virtual Private Servers",
         "Managed Kubernetes",
-        "GPU Cloud",
         "Managed Databases",
         "Object Storage",
         "DDoS Protection",
@@ -89,11 +96,11 @@ const jsonLd = {
       "@type": "WebPage",
       "@id": `${siteConfig.url}/#webpage`,
       url: siteConfig.url,
-      name: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
+      name: HOME_TITLE,
       isPartOf: { "@id": `${siteConfig.url}/#website` },
       about: { "@id": `${siteConfig.url}/#organization` },
       description:
-        "Deploy virtual machines, Kubernetes clusters, GPU instances, managed databases, storage, apps, and AI agents from one production cloud control plane.",
+        "Run serverless AI inference, fine-tune and deploy models, build AI agents with RAG, and launch on-demand GPUs — alongside virtual machines, Kubernetes, managed databases, storage, and apps from one production control plane.",
       breadcrumb: {
         "@type": "BreadcrumbList",
         itemListElement: [
@@ -129,9 +136,6 @@ export default function Home() {
 
       {/* Feature section */}
       {/* <FeatureSection /> */}
-
-        {/* Figma Services Section */}
-        <ServicesSection />
 
         {/* Everything you build */}
         <EverythingSection />

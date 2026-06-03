@@ -38,11 +38,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { ServiceTabBar } from '@/components/dashboard/ui/service-tab-bar';
 import {
   Select,
   SelectContent,
@@ -1248,7 +1245,11 @@ export default function AppDetailPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-3">
-                {<AppStatusBadge status={app.status} building={isBuilding} />}
+                {/* The Live/Degraded pill below already conveys "running" — only
+                    show the status badge for other states (building/failed/stopped). */}
+                {!(appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding) && (
+                  <AppStatusBadge status={app.status} building={isBuilding} />
+                )}
               {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
                     <span
@@ -1451,36 +1452,12 @@ export default function AppDetailPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* ── Pill tab nav ─────────────────────────────── */}
-        <div className="mb-6 border-b border-white/[0.06] overflow-x-auto">
-          <div className="flex items-center gap-1 -mb-px min-w-max">
-            {SECTION_META.map((section) => {
-              const SectionIcon = section.icon;
-              const isActive = activeTab === section.value;
-              return (
-                <button
-                  key={section.value}
-                  type="button"
-                  onClick={() => setActiveTab(section.value)}
-                  className={`${APP_MONO} relative inline-flex items-center gap-1.5 px-4 py-3 text-[11px] uppercase tracking-[0.14em] transition-colors ${
-                    isActive ? "text-white" : "text-white/45 hover:text-white/75"
-                  }`}
-                >
-                  <SectionIcon className="h-3 w-3" />
-                  {section.label}
-                  {isActive && (
-                    <span
-                      className="absolute left-2 right-2 -bottom-px h-[2px]"
-                      style={{
-                        background: APP_ACCENT,
-                        boxShadow: `0 0 8px ${APP_ACCENT}`,
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <ServiceTabBar
+          tabs={SECTION_META}
+          value={activeTab}
+          onChange={setActiveTab}
+          className="mb-6"
+        />
 
         {/* ── Section header ───────────────────────────── */}
         <div className="mb-6 flex items-baseline gap-3">
@@ -1604,80 +1581,79 @@ export default function AppDetailPage() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card className="border border-white/[0.06] bg-[#111216] rounded-[6px] shadow-none">
-              <CardHeader className="border-b border-white/[0.06]">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Settings className="w-5 h-5" />
-                    App Settings
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => setRollbackModalOpen(true)}
-                      disabled={deploymentMutationBlocked || !canRollback}
-                      variant="outline"
-                      className="rounded-none border-white/15 bg-transparent text-white hover:bg-white/10"
-                      title={
-                        canRollback
-                          ? app?.rollback_target_build_number
-                            ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
-                            : 'Rollback to the previous successful release'
-                          : 'No previous release available. Resize-only operations do not create rollback targets.'
-                      }
-                    >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Rollback Release
-                    </Button>
-                    <Button
-                      onClick={handleRedeploy}
-                      disabled={redeploying || deploymentMutationBlocked}
-                      className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {redeploying ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Redeploying...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 mr-2" />
-                          Redeploy
-                        </>
-                      )}
-                    </Button>
-                  </div>
+            <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+              <header className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: APP_ACCENT }}>
+                    <Settings className="h-3.5 w-3.5" />
+                  </span>
+                  <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white">App settings</h3>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-5 pt-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Build Command</p>
-                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRollbackModalOpen(true)}
+                    disabled={deploymentMutationBlocked || !canRollback}
+                    title={
+                      canRollback
+                        ? app?.rollback_target_build_number
+                          ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                          : 'Rollback to the previous successful release'
+                        : 'No previous release available. Resize-only operations do not create rollback targets.'
+                    }
+                    className={`${APP_MONO} inline-flex h-9 items-center gap-2 rounded-[5px] border border-white/[0.08] bg-[#0d0e11] px-3.5 text-[11px] uppercase tracking-[0.14em] text-white/65 transition-colors hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Rollback
+                  </button>
+                  <button
+                    onClick={handleRedeploy}
+                    disabled={redeploying || deploymentMutationBlocked}
+                    className={`${APP_MONO} inline-flex h-9 items-center gap-2 rounded-[5px] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-all disabled:opacity-50`}
+                    style={{ background: 'linear-gradient(135deg,#0095FF,#0066B3)', boxShadow: '0 8px 20px rgba(0,149,255,0.20)' }}
+                  >
+                    {redeploying ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Redeploying…
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5" />
+                        Redeploy
+                      </>
+                    )}
+                  </button>
+                </div>
+              </header>
+              <div className="space-y-5 p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-3.5">
+                    <p className={`${APP_MONO} mb-2 text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>Build Command</p>
+                    <p className={`${APP_MONO} rounded-[6px] border border-white/[0.06] bg-[#0a0b0d] px-3 py-2.5 text-[12px] text-white`}>
                       {app.build_command || 'Default'}
                     </p>
                   </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Output Directory</p>
-                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                  <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-3.5">
+                    <p className={`${APP_MONO} mb-2 text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>Output Directory</p>
+                    <p className={`${APP_MONO} rounded-[6px] border border-white/[0.06] bg-[#0a0b0d] px-3 py-2.5 text-[12px] text-white`}>
                       {app.output_directory || 'Default'}
                     </p>
                   </div>
-                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-                    <p className="text-xs text-white/40 mb-1">Health Check Path</p>
+                  <div className="rounded-[6px] border border-white/[0.06] bg-[#0d0e11] px-4 py-3.5 md:col-span-2">
+                    <p className={`${APP_MONO} mb-2 text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>Health Check Path</p>
                     <div className="flex items-center gap-2">
-                      <p className="flex-1 border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
+                      <p className={`${APP_MONO} flex-1 rounded-[6px] border border-white/[0.06] bg-[#0a0b0d] px-3 py-2.5 text-[12px] text-white`}>
                         {app.healthcheck_path || <span className="text-white/30">Not set · TCP socket probe</span>}
                       </p>
                       {app.healthcheck_path && (
-                        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded ${
-                          healthPathStatus === 'checking'     ? 'bg-white/[0.06] text-white/40' :
-                          healthPathStatus === 'reachable'    ? 'bg-green-500/10 text-green-400' :
-                          healthPathStatus === 'unreachable'  ? 'bg-orange-500/10 text-orange-400' :
-                          'bg-white/[0.06] text-white/40'
+                        <span className={`${APP_MONO} shrink-0 inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${
+                          healthPathStatus === 'reachable'    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' :
+                          healthPathStatus === 'unreachable'  ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' :
+                          'border-white/[0.08] bg-white/[0.04] text-white/45'
                         }`}>
                           {healthPathStatus === 'checking'    ? 'Checking…' :
-                           healthPathStatus === 'reachable'   ? '✓ Reachable' :
-                           healthPathStatus === 'unreachable' ? '⚠ Not reachable' :
+                           healthPathStatus === 'reachable'   ? 'Reachable' :
+                           healthPathStatus === 'unreachable' ? 'Not reachable' :
                            ''}
                         </span>
                       )}
@@ -1719,15 +1695,15 @@ export default function AppDetailPage() {
                 />
 
                 {/* Environment Variables - Using EnvVarsEditor */}
-                <div className="border-t border-white/10 pt-4">
+                <div className="border-t border-white/[0.06] pt-5">
                   {/* Success/Error Messages */}
                   {envVarError && (
-                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                    <div className="mb-3 rounded-[6px] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[12px] text-red-300">
                       {envVarError}
                     </div>
                   )}
                   {envVarSuccess && (
-                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
+                    <div className="mb-3 flex items-center gap-2 rounded-[6px] border border-green-500/30 bg-green-500/10 px-3 py-2.5 text-[12px] text-green-300">
                       <CheckCircle2 className="w-4 h-4" />
                       {envVarSuccess}
                     </div>
@@ -1746,23 +1722,24 @@ export default function AppDetailPage() {
                   {/* Save Button */}
                   {envVarsModified && (
                     <div className="mt-4 flex items-center gap-3">
-                      <Button
+                      <button
                         onClick={handleSaveEnvVars}
                         disabled={savingEnvVars || deploymentMutationBlocked}
-                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
+                        className={`${APP_MONO} inline-flex h-9 items-center gap-2 rounded-[5px] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-all disabled:opacity-50`}
+                        style={{ background: 'linear-gradient(135deg,#0095FF,#0066B3)', boxShadow: '0 8px 20px rgba(0,149,255,0.20)' }}
                       >
                         {savingEnvVars ? (
                           <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Saving…
                           </>
                         ) : (
                           <>
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Changes
+                            <Save className="h-3.5 w-3.5" />
+                            Save changes
                           </>
                         )}
-                      </Button>
+                      </button>
                       <span className="text-xs text-white/50">
                         {envVarSuccess && envVarSuccess.toLowerCase().includes('applied') && envVarSuccess.toLowerCase().includes('immediately') ? (
                           <span className="text-yellow-400">
@@ -1785,20 +1762,19 @@ export default function AppDetailPage() {
                 </div>
 
                 {/* Danger Zone */}
-                <div className="border-t border-white/10 pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h4>
-                  <Button
-                    variant="destructive"
+                <div className="mt-4 border-t border-white/[0.06] pt-5">
+                  <h4 className={`${APP_MONO} mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-red-400`}>Danger Zone</h4>
+                  <button
                     onClick={() => setDeleteModalOpen(true)}
                     disabled={deploymentMutationBlocked}
-                    className="w-full rounded-none md:w-auto"
+                    className={`${APP_MONO} inline-flex h-9 w-full items-center justify-center gap-2 rounded-[5px] border border-red-500/30 bg-red-500/10 px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-40 md:w-auto`}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Application
-                  </Button>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete application
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           </TabsContent>
         </div>
       </Tabs>

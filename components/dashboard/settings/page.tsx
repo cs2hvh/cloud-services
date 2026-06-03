@@ -5,9 +5,11 @@
 // the canvas. Matches the rest of the dashboard's design language.
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
-    ExternalLink,
+    ArrowUpRight,
+    CreditCard,
+    History,
     Key,
     QrCode,
     Shield,
@@ -66,9 +68,36 @@ const TABS = [
     { value: "security" as const, label: "Security", icon: QrCode },
 ];
 
+// Related account destinations that live on their own routes — surfaced here
+// so settings acts as a hub (Linode-style), but only to pages that exist.
+const QUICK_LINKS: Array<{
+    label: string;
+    description: string;
+    href: string;
+    icon: LucideIcon;
+}> = [
+    {
+        label: "API keys",
+        description: "Programmatic access tokens",
+        href: "/dashboard/settings/api-keys",
+        icon: Key,
+    },
+    {
+        label: "Billing",
+        description: "Balance, invoices & payment",
+        href: "/dashboard/nav/billing",
+        icon: CreditCard,
+    },
+    {
+        label: "Login history",
+        description: "Recent account activity",
+        href: "/dashboard/activity",
+        icon: History,
+    },
+];
+
 const SettingsPage = () => {
     const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-    const router = useRouter();
 
     const activeSection = useMemo(() => SECTION_META[activeTab], [activeTab]);
 
@@ -118,69 +147,82 @@ const SettingsPage = () => {
                     </span>
                 </h1>
                 <p
-                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
+                    className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-8`}
                 >
                     Manage your profile, connected accounts, and authentication
                     controls.
                 </p>
 
-                {/* Pill tab nav + API keys link */}
-                <div className="border-b border-white/[0.06] mb-8">
-                    <div className="flex items-center justify-between gap-2 flex-wrap -mb-px">
-                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                            {TABS.map((t) => {
-                                const isActive = activeTab === t.value;
-                                const Icon = t.icon;
-                                return (
-                                    <button
-                                        key={t.value}
-                                        type="button"
-                                        onClick={() => setActiveTab(t.value)}
-                                        className={`${MONO} relative inline-flex items-center gap-2 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
-                                        style={{
-                                            color: isActive
-                                                ? "#ffffff"
-                                                : "rgba(255,255,255,0.45)",
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            if (!isActive)
-                                                e.currentTarget.style.color =
-                                                    "rgba(255,255,255,0.75)";
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!isActive)
-                                                e.currentTarget.style.color =
-                                                    "rgba(255,255,255,0.45)";
-                                        }}
-                                    >
-                                        <Icon className="h-3.5 w-3.5" />
-                                        {t.label}
-                                        {isActive && (
-                                            <span
-                                                className="absolute left-2 right-2 bottom-0 h-[2px]"
-                                                style={{
-                                                    background: ACCENT,
-                                                    boxShadow:
-                                                        "0 0 8px rgba(0,149,255,0.5)",
-                                                }}
-                                            />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                {/* Quick access — related account destinations on their own routes */}
+                <div className="mb-10 grid gap-3 sm:grid-cols-3">
+                    {QUICK_LINKS.map((link) => {
+                        const Icon = link.icon;
+                        return (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                className="group flex items-center gap-3 rounded-[6px] border border-white/[0.07] bg-[#111216] px-4 py-3 transition-colors hover:border-white/[0.16] hover:bg-white/[0.03]"
+                            >
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11] text-white/55 transition-colors group-hover:text-[#0095FF]">
+                                    <Icon className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[13px] font-medium text-white">
+                                        {link.label}
+                                    </p>
+                                    <p className={`${MONO} text-[10px] uppercase tracking-[0.08em] text-white/40 truncate`}>
+                                        {link.description}
+                                    </p>
+                                </div>
+                                <ArrowUpRight className="h-4 w-4 shrink-0 text-white/25 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white/60" />
+                            </Link>
+                        );
+                    })}
+                </div>
 
-                        <button
-                            type="button"
-                            onClick={() =>
-                                router.push("/dashboard/settings/api-keys")
-                            }
-                            className={`${MONO} inline-flex items-center gap-1.5 h-9 px-3.5 mb-1 text-[10.5px] uppercase tracking-[0.14em] text-white/60 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] rounded-[5px] transition-colors`}
-                        >
-                            <Key className="h-3 w-3" />
-                            API keys
-                            <ExternalLink className="h-3 w-3 opacity-60" />
-                        </button>
+                {/* Pill tab nav */}
+                <div className="border-b border-white/[0.06] mb-8">
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mb-px">
+                        {TABS.map((t) => {
+                            const isActive = activeTab === t.value;
+                            const Icon = t.icon;
+                            return (
+                                <button
+                                    key={t.value}
+                                    type="button"
+                                    onClick={() => setActiveTab(t.value)}
+                                    className={`${MONO} relative inline-flex items-center gap-2 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
+                                    style={{
+                                        color: isActive
+                                            ? "#ffffff"
+                                            : "rgba(255,255,255,0.45)",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isActive)
+                                            e.currentTarget.style.color =
+                                                "rgba(255,255,255,0.75)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isActive)
+                                            e.currentTarget.style.color =
+                                                "rgba(255,255,255,0.45)";
+                                    }}
+                                >
+                                    <Icon className="h-3.5 w-3.5" />
+                                    {t.label}
+                                    {isActive && (
+                                        <span
+                                            className="absolute left-2 right-2 bottom-0 h-[2px]"
+                                            style={{
+                                                background: ACCENT,
+                                                boxShadow:
+                                                    "0 0 8px rgba(0,149,255,0.5)",
+                                            }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 

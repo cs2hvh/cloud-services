@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { 
-  Plus, 
-  Loader2, 
+import {
+  Plus,
+  Loader2,
   RefreshCw,
   AlertTriangle,
   Archive,
@@ -22,6 +20,10 @@ import type {
   LinkStorageResponse,
   EnvVarConfig,
 } from './types';
+
+// ─── Design tokens (match app-overview-tab) ─────────────────────────
+const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
+const ACCENT = '#0095FF';
 
 interface StorageIntegrationsSectionProps {
   appId: string;
@@ -314,56 +316,60 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
 
   return (
     <>
-      <Card className="bg-white/5 border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Archive className="w-5 h-5 text-neutral-300" />
-            Object Storage Integrations
-          </CardTitle>
+      <section className="rounded-[8px] border border-white/[0.06] bg-[#111216] overflow-hidden">
+        <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]" style={{ color: ACCENT }}>
+              <Archive className="h-3.5 w-3.5" />
+            </span>
+            <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-white truncate">Object Storage Integrations</h3>
+          </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={fetchLinkedBuckets}
               disabled={loading}
-              className="text-white/60 hover:text-white"
+              className="shrink-0 text-white/25 transition-colors hover:text-white/70 disabled:opacity-40"
+              title="Refresh"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button
-              size="sm"
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
               onClick={() => setLinkModalOpen(true)}
-              className="bg-purple-600 hover:bg-purple-700"
+              className={`${MONO} inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white`}
+              style={{ background: 'linear-gradient(135deg,#0095FF,#0066B3)', boxShadow: '0 8px 20px rgba(0,149,255,0.20)' }}
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="h-3.5 w-3.5" />
               Link Bucket
-            </Button>
+            </button>
           </div>
-        </CardHeader>
-        <CardContent>
+        </header>
+        <div className="p-5">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-white/50" />
+              <Loader2 className="h-6 w-6 animate-spin text-white/40" />
             </div>
           ) : error ? (
-            <div className="flex items-center gap-2 text-red-400 py-4">
-              <AlertTriangle className="w-5 h-5" />
-              <p>{error}</p>
+            <div className="flex items-center gap-2 rounded-[6px] border border-red-500/20 bg-red-500/[0.04] px-4 py-3.5 text-red-400/90">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <p className="text-[13px]">{error}</p>
             </div>
           ) : linkedBuckets.length === 0 ? (
-            <div className="text-center py-8">
-              <Archive className="w-12 h-12 opacity-20 mx-auto mb-4 text-white" />
-              <h3 className="text-lg font-medium text-white/70 mb-2">No Buckets Linked</h3>
-              <p className="text-sm text-white/50 mb-4">
+            <div className="py-10 text-center">
+              <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[8px] border border-white/[0.08] bg-[#0d0e11]">
+                <Archive className="h-5 w-5 text-white/30" />
+              </span>
+              <h4 className="mb-1.5 text-[14px] font-semibold text-white">No Buckets Linked</h4>
+              <p className={`${MONO} mb-4 text-[11px] tracking-[0.04em] text-white/40`}>
                 Connect an S3-compatible bucket to automatically inject credentials
               </p>
-              <Button
+              <button
                 onClick={() => setLinkModalOpen(true)}
-                className="bg-purple-600 hover:bg-purple-700"
+                className={`${MONO} inline-flex items-center gap-1.5 rounded-[5px] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white`}
+                style={{ background: 'linear-gradient(135deg,#0095FF,#0066B3)', boxShadow: '0 8px 20px rgba(0,149,255,0.20)' }}
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="h-3.5 w-3.5" />
                 Link Your First Bucket
-              </Button>
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -383,15 +389,15 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
 
           {/* Info */}
           {linkedBuckets.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <p className="text-xs text-white/40">
-                 Linked buckets automatically inject S3 credentials (S3_BUCKET, S3_ACCESS_KEY_ID, etc.) 
+            <div className="mt-4 border-t border-white/[0.06] pt-4">
+              <p className={`${MONO} text-[10.5px] leading-relaxed tracking-[0.02em] text-white/40`}>
+                Linked buckets automatically inject S3 credentials (S3_BUCKET, S3_ACCESS_KEY_ID, etc.)
                 into your app. Changes trigger a redeploy if the app is running.
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {/* Link Modal */}
       <LinkStorageModal
