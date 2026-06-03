@@ -1,8 +1,8 @@
 import { redis } from "../redis";
 
 export type LimitResult =
-  | { allowed: true }
-  | { allowed: false; retryAfterSec: number };
+  | { allowed: true; remaining: number }
+  | { allowed: false; retryAfterSec: number; remaining: 0 };
 
 function normalize(id: string): string {
   return id.trim().toLowerCase();
@@ -30,8 +30,8 @@ export async function limitByUser(
 
   if (count > limit) {
     const ttl = await redis.ttl(key);
-    return { allowed: false, retryAfterSec: Math.max(ttl, 1) };
+    return { allowed: false, retryAfterSec: Math.max(ttl, 1), remaining: 0 };
   }
 
-  return { allowed: true };
+  return { allowed: true, remaining: Math.max(0, limit - count) };
 }

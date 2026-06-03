@@ -66,8 +66,9 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    // Create product
-    const result = await Products.create(validatedData);
+    // Create product — cast type so new product types (inference_vector, custom_image)
+    // pass TS narrowing; the DB column is plain text with no CHECK constraint.
+    const result = await Products.create(validatedData as Parameters<typeof Products.create>[0]);
   
 
     if (!result.success) {
@@ -123,8 +124,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Update product
-    const result = await Products.update(id, updateData);
+    const result = await Products.update(id, updateData as Parameters<typeof Products.update>[1]);
 
     if (!result.success) {
       return NextResponse.json(

@@ -60,7 +60,7 @@ export function withV1Auth(operation: string, handler: Handler) {
     try {
       const res = await handler(req, auth, context);
       res.headers.set("X-RateLimit-Limit", String(limit));
-      res.headers.set("X-RateLimit-Remaining", String(Math.max(0, limit - 1)));
+      res.headers.set("X-RateLimit-Remaining", String(rl.remaining));
       return res;
     } catch (err) {
       console.error(`[v1/${operation}]`, err);

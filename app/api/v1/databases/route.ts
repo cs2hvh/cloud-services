@@ -97,7 +97,6 @@ export const POST = withV1Auth("databases:create", async (req, auth) => {
       data: {
         ...redactedClusterData,
         cluster_id: result.clusterId ?? redactedClusterData.cluster_id,
-        connection: null,
       },
     },
     201

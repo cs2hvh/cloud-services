@@ -1,7 +1,7 @@
 # Billing System — Complete Behavior Reference
 
 > Last verified against real Supabase: **8 April 2026**
-> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, `credit-system-cron/cron-worker.js`
+> Source files: `config/pricing.ts`, `config/billing-flow.ts`, `lib/supabase/queries/billing.ts`, standalone repo `deep-aghera-001/credit-system-cron`
 
 ---
 
@@ -10,7 +10,7 @@
 ### Real Tests (hit live Supabase — `scripts/smoke-billing.mjs`)
 | Check | Result | Notes |
 |---|---|---|
-| All 5 billing tables exist in Supabase | ✅ Pass | `active_database`, `active_kubernetes`, `active_objectspace`, `active_spectrum`, `active_platform_apps` |
+| All 9 billing tables exist in Supabase | ✅ Pass | `active_database`, `active_kubernetes`, `active_objectspace`, `active_spectrum`, `active_platform_apps`, `active_inference_vector`, `active_compute`, `active_custom_image`, `active_gpu_pods` |
 | 6 real users have billing records | ✅ Pass | Combined balance $656+ million |
 | No negative balances | ✅ Pass | All users ≥ $0 |
 | 12 active service rows have correct structure | ✅ Pass | All have `service_id`, `user_id`, `hourly_rate`, `last_billed_at` |
@@ -42,9 +42,9 @@
 
 ### ISSUE-001 — Kubernetes Cluster Not Being Billed (CRITICAL)
 - **What:** Cluster `6873d186-...` has `last_billed_at` = 337+ minutes ago
-- **Why:** The cron worker (`credit-system-cron/cron-worker.js`) was not running
+- **Why:** The standalone cron worker was not running
 - **Impact:** User is getting hours of Kubernetes for free; billing gap in DB
-- **Fix:** Start the cron worker: `cd credit-system-cron && node cron-worker.js`
+- **Fix:** Start/deploy the standalone cron worker repo: `deep-aghera-001/credit-system-cron`
 - **Detection:** Run `node scripts/smoke-billing.mjs` — will flag any table with rows older than 30 min
 
 ### ISSUE-002 — Float Precision at Very Large Balances (LOW)
@@ -151,9 +151,9 @@ Kubernetes is the only service that scales rate by node count. A 3-node cluster 
    - Applies security caps (see below)  
    - Computes `cost = hoursUsed × hourly_rate`, rounded to 2 decimals
    - If `cost < $0.001` → skips (dust prevention)
-   - **Updates `last_billed_at = now` BEFORE deducting** (timestamp first = safer; failed deduction = free period, not double-bill)
-   - Calls `deduct_user_credit_atomic` RPC to deduct from `billing.user_credits`
-   - If deduction fails → logs error, continues to next service (user not charged)
+   - Calls `billing.bill_service_cycle_atomic` RPC (locks active row + user credit row)
+   - If balance insufficient → does NOT advance `last_billed_at`; triggers grace lifecycle
+   - If deduction succeeds → advances `last_billed_at = now`, records usage transaction
 
 **Security caps applied by cron:**
 | Cap | Value | Reason |
@@ -207,19 +207,21 @@ Kubernetes is the only service that scales rate by node count. A 3-node cluster 
 ## 6. How the Cron Worker Works
 
 ### Location
-`credit-system-cron/cron-worker.js` — separate Node.js process, NOT part of Next.js
+Standalone repo `deep-aghera-001/credit-system-cron` — separate Node.js process, NOT part of Next.js.
 
 ### Schedule
 ```
 */5 * * * *   →  every 5 minutes
 ```
-Runs 288 times per day. Each run bills all 5 service tables in parallel (`Promise.allSettled`).
+Runs 288 times per day. Each run bills all 9 service tables in parallel (`Promise.allSettled`).
 
 ### How to Run
 ```bash
+git clone https://github.com/deep-aghera-001/credit-system-cron.git
 cd credit-system-cron
-# Copy .env from root or set vars manually
-SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... node cron-worker.js
+cp .env.example .env  # fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DOMAIN, CRON_SECRET
+npm install
+npm start
 ```
 
 ### How It Decides What to Charge
@@ -256,8 +258,8 @@ It does NOT re-read the Products table. The `hourly_rate` is locked into the `bi
 | `user_id` | UUID | FK to auth.users |
 | `credit_balance` | numeric | Current total balance in dollars |
 
-### `billing.active_database`, `active_kubernetes`, `active_objectspace`, `active_spectrum`, `active_platform_apps`
-All 5 tables have the same structure:
+### `billing.active_database`, `active_kubernetes`, `active_objectspace`, `active_spectrum`, `active_platform_apps`, `active_inference_vector`, `active_compute`, `active_custom_image`, `active_gpu_pods`
+All 9 tables have the same structure:
 | Column | Type | Notes |
 |---|---|---|
 | `service_id` | UUID | Supabase DB UUID of the service (NOT the DigitalOcean ID) |
@@ -270,8 +272,8 @@ All 5 tables have the same structure:
 | RPC | Called By | What It Does |
 |---|---|---|
 | `billing_topup(p_user_id, p_amount)` | Service creation refunds, Stripe webhook, coupons | Atomically adds to `credit_balance` |
-| `billing_deduct(p_user_id, p_amount)` | Service creation, service deletion | Atomically subtracts from `credit_balance`; returns new balance; returns null if insufficient |
-| `deduct_user_credit_atomic(p_user_id, p_amount)` | Cron worker only | Same as `billing_deduct` but separate RPC for cron isolation |
+| `billing_deduct(p_user_id, p_amount)` | Service creation, service deletion | Atomically subtracts from `credit_balance`; returns new balance; throws if insufficient |
+| `billing.bill_service_cycle_atomic(...)` | Cron worker only | Locks active row + credits row, checks balance, deducts, advances `last_billed_at` in one transaction |
 
 All RPCs use database-level atomicity to prevent race conditions (two charges at the same time).
 
@@ -335,15 +337,15 @@ USER CREATES SERVICE
 
 ─ ─ ─ ─ ─ ─ ─ ─ ─ EVERY 5 MINUTES ─ ─ ─ ─ ─ ─ ─ ─ ─
 
-CRON FIRES
+CRON FIRES (standalone repo: deep-aghera-001/credit-system-cron)
         │
         ▼
-  For each active_X row:
+  For each active_X row (9 tables):
   ─ hours = (now - last_billed_at) / 3600000
   ─ cap to 24 hrs max
   ─ cost = round(hours × hourly_rate, 2)
-  ─ update last_billed_at = now  ← TIMESTAMP FIRST
-  ─ deduct_user_credit_atomic(userId, cost)
+  ─ bill_service_cycle_atomic(...)  ← deduct FIRST, then advance last_billed_at
+  ─ if insufficient → grace lifecycle (no cursor advance)
 
 ─ ─ ─ ─ ─ ─ ─ ─ ─ USER DELETES SERVICE ─ ─ ─ ─ ─ ─ ─
 

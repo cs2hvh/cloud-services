@@ -61,6 +61,8 @@ const PRODUCT_TYPES = [
   { value: "ai-deployment", label: "AI Deployment" },
   { value: "platform-apps", label: "App Deployment" },
   { value: "network-ddos", label: "Network/DDoS" },
+  { value: "inference_vector", label: "Vector Store" },
+  { value: "custom_image", label: "Custom Image" },
 ];
 
 export default function PlansTab({ products: initialProducts }: PlansTabProps) {

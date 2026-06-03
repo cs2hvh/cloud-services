@@ -18,6 +18,8 @@ const PRODUCT_TYPES = [
   "security",
   "ai-deployment",
   "app-deployment",
+  "inference_vector",
+  "custom_image",
 ] as const;
 
 const resourceTypeSchema = z.enum(PRODUCT_TYPES);

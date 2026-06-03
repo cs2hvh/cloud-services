@@ -1,5 +1,17 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
+function computeProratedCharge(row: { hourly_rate: unknown; last_billed_at: unknown } | null): number {
+  if (!row) return 0;
+  const rate = parseFloat(String(row.hourly_rate));
+  if (!(rate > 0)) return 0;
+  const raw = row.last_billed_at as string | undefined;
+  const last = raw
+    ? new Date(raw.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw}Z`)
+    : null;
+  const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
+  return parseFloat((rate * hoursUsed).toFixed(8));
+}
+
 export const BillingCredits = {
   getBalance: async (userId: string): Promise<number> => {
     const supabase = await createServiceClient();
@@ -71,35 +83,15 @@ export const BillingCredits = {
     if (error) throw new Error(`Failed to insert active_gpu_pods: ${error.message}`);
   },
 
-  closeActiveGpuPod: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+  closeActiveGpuPod: async (params: { serviceId: string }): Promise<number> => {
     const supabase = await createServiceClient();
-    const { data: row, error: getErr } = await supabase
-      .schema("billing")
-      .from("active_gpu_pods")
-      .select("hourly_rate, last_billed_at")
-      .eq("service_id", params.serviceId)
-      .maybeSingle();
-
-    if (getErr) throw new Error(`Failed to fetch active_gpu_pods: ${getErr.message}`);
-
-    let finalCharge = 0;
-    if (row) {
-      const rate = parseFloat(String(row.hourly_rate));
-      if (rate > 0) {
-        const lastBilledAt = row.last_billed_at as string | undefined;
-        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
-        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
-        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
-      }
-    }
-
-    await supabase
-      .schema("billing")
-      .from("active_gpu_pods")
-      .delete()
-      .eq("service_id", params.serviceId);
-
-    return { finalCharge };
+    const { data: row, error } = await supabase
+      .schema("billing").from("active_gpu_pods")
+      .select("hourly_rate, last_billed_at").eq("service_id", params.serviceId).maybeSingle();
+    if (error) throw new Error(`Failed to fetch active_gpu_pods: ${error.message}`);
+    const finalCharge = computeProratedCharge(row);
+    await supabase.schema("billing").from("active_gpu_pods").delete().eq("service_id", params.serviceId);
+    return finalCharge;
   },
 
   // M3: re-rate a live GPU meter (e.g. storage-only while stopped, full rate on
@@ -136,35 +128,15 @@ export const BillingCredits = {
     if (error) throw new Error(`Failed to insert active_inference_vector: ${error.message}`);
   },
 
-  closeActiveVectorCollection: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+  closeActiveVectorCollection: async (params: { serviceId: string }): Promise<number> => {
     const supabase = await createServiceClient();
-    const { data: row, error: getErr } = await supabase
-      .schema("billing")
-      .from("active_inference_vector")
-      .select("hourly_rate, last_billed_at")
-      .eq("service_id", params.serviceId)
-      .maybeSingle();
-
-    if (getErr) throw new Error(`Failed to fetch active_inference_vector: ${getErr.message}`);
-
-    let finalCharge = 0;
-    if (row) {
-      const rate = parseFloat(String(row.hourly_rate));
-      if (rate > 0) {
-        const lastBilledAt = row.last_billed_at as string | undefined;
-        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
-        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
-        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
-      }
-    }
-
-    await supabase
-      .schema("billing")
-      .from("active_inference_vector")
-      .delete()
-      .eq("service_id", params.serviceId);
-
-    return { finalCharge };
+    const { data: row, error } = await supabase
+      .schema("billing").from("active_inference_vector")
+      .select("hourly_rate, last_billed_at").eq("service_id", params.serviceId).maybeSingle();
+    if (error) throw new Error(`Failed to fetch active_inference_vector: ${error.message}`);
+    const finalCharge = computeProratedCharge(row);
+    await supabase.schema("billing").from("active_inference_vector").delete().eq("service_id", params.serviceId);
+    return finalCharge;
   },
 
   // ── Compute / virtual servers (service_id = servers.billing_service_id) ────
@@ -187,35 +159,15 @@ export const BillingCredits = {
     if (error) throw new Error(`Failed to insert active_compute: ${error.message}`);
   },
 
-  closeActiveCompute: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+  closeActiveCompute: async (params: { serviceId: string }): Promise<number> => {
     const supabase = await createServiceClient();
-    const { data: row, error: getErr } = await supabase
-      .schema("billing")
-      .from("active_compute")
-      .select("hourly_rate, last_billed_at")
-      .eq("service_id", params.serviceId)
-      .maybeSingle();
-
-    if (getErr) throw new Error(`Failed to fetch active_compute: ${getErr.message}`);
-
-    let finalCharge = 0;
-    if (row) {
-      const rate = parseFloat(String(row.hourly_rate));
-      if (rate > 0) {
-        const lastBilledAt = row.last_billed_at as string | undefined;
-        const last = lastBilledAt ? new Date(/[+-]\d{2}:?\d{2}$/.test(lastBilledAt) || lastBilledAt.endsWith("Z") ? lastBilledAt : `${lastBilledAt}Z`) : null;
-        const hoursUsed = last ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000) : 1;
-        finalCharge = parseFloat((rate * hoursUsed).toFixed(8));
-      }
-    }
-
-    await supabase
-      .schema("billing")
-      .from("active_compute")
-      .delete()
-      .eq("service_id", params.serviceId);
-
-    return { finalCharge };
+    const { data: row, error } = await supabase
+      .schema("billing").from("active_compute")
+      .select("hourly_rate, last_billed_at").eq("service_id", params.serviceId).maybeSingle();
+    if (error) throw new Error(`Failed to fetch active_compute: ${error.message}`);
+    const finalCharge = computeProratedCharge(row);
+    await supabase.schema("billing").from("active_compute").delete().eq("service_id", params.serviceId);
+    return finalCharge;
   },
 
   /**
@@ -259,5 +211,16 @@ export const BillingCredits = {
         last_billed_at: new Date().toISOString(),
       });
     if (error) throw new Error(`Failed to insert active_custom_image: ${error.message}`);
+  },
+
+  closeActiveCustomImage: async (params: { serviceId: string }): Promise<number> => {
+    const supabase = await createServiceClient();
+    const { data: row, error } = await supabase
+      .schema("billing").from("active_custom_image")
+      .select("hourly_rate, last_billed_at").eq("service_id", params.serviceId).maybeSingle();
+    if (error) throw new Error(`Failed to fetch active_custom_image: ${error.message}`);
+    const finalCharge = computeProratedCharge(row);
+    await supabase.schema("billing").from("active_custom_image").delete().eq("service_id", params.serviceId);
+    return finalCharge;
   },
 };
