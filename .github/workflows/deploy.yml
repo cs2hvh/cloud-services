@@ -5,7 +5,7 @@
 #   - manual run     → pick any branch from the Actions tab ("Run workflow")
 #
 # One-time setup — add these in GitHub → Settings → Secrets and variables → Actions:
-#   DEPLOY_HOST      the VM's public IP (e.g. 172.236.172.246)
+#   DEPLOY_HOST      the VM's public IP (e.g. 203.0.113.10)
 #   DEPLOY_USER      root            (or your deploy user)
 #   DEPLOY_PASSWORD  that user's SSH password
 #   DEPLOY_PORT      (optional) SSH port, defaults to 22
