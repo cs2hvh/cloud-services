@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# deploy.sh — one-command deploy for the self-hosted web app on the Linode VM.
+#
+# Pulls a branch → installs deps (only if the lockfile changed) → builds →
+# restarts the app (+ cron) → health-checks. If the build fails it does NOT
+# restart, so the currently-live version keeps serving.
+#
+# Recommended: copy this OUTSIDE the repo once so `git reset` can't touch it:
+#     cp deploy/deploy.sh /root/deploy.sh && chmod +x /root/deploy.sh
+#
+# Usage:
+#   /root/deploy.sh              # deploy the branch currently checked out (default)
+#   /root/deploy.sh main         # deploy origin/main
+#   /root/deploy.sh dev          # deploy origin/dev
+#   /root/deploy.sh dev --no-cron   # skip restarting the billing cron
+#   /root/deploy.sh dev --deps      # force `npm ci` even if the lockfile is unchanged
+#
+# Override paths/services via env if yours differ:
+#   APP_DIR=/root/cloud-services WEB_SERVICE=ahura-web CRON_SERVICE=ahura-cron \
+#     PORT=3000  /root/deploy.sh dev
+# ─────────────────────────────────────────────────────────────────────────────
+set -Eeuo pipefail
+
+APP_DIR="${APP_DIR:-/root/cloud-services}"
+WEB_SERVICE="${WEB_SERVICE:-ahura-web}"
+CRON_SERVICE="${CRON_SERVICE:-ahura-cron}"
+PORT="${PORT:-3000}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT}}"
+
+# ── parse args ───────────────────────────────────────────────────────────────
+BRANCH=""; RESTART_CRON=1; FORCE_DEPS=0
+for a in "$@"; do
+  case "$a" in
+    --no-cron) RESTART_CRON=0 ;;
+    --deps)    FORCE_DEPS=1 ;;
+    -*)        echo "unknown flag: $a" >&2; exit 2 ;;
+    *)         BRANCH="$a" ;;
+  esac
+done
+
+step() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
+ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
+die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+
+cd "$APP_DIR" || die "APP_DIR not found: $APP_DIR"
+[[ -z "$BRANCH" ]] && BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+step "Deploy: branch '$BRANCH' → $APP_DIR   (restart cron: $([[ $RESTART_CRON == 1 ]] && echo yes || echo no))"
+
+# ── 1. sync to the remote branch (deterministic). .env is gitignored → untouched.
+step "Fetching + resetting to origin/$BRANCH"
+git fetch --prune origin "$BRANCH" || die "git fetch failed"
+git checkout -f "$BRANCH" 2>/dev/null || git checkout -f -b "$BRANCH" "origin/$BRANCH" || die "checkout failed"
+git reset --hard "origin/$BRANCH" || die "git reset failed"
+echo "  → $(git rev-parse --short HEAD)  $(git log -1 --pretty=%s)"
+
+# ── 2. deps — only reinstall when package-lock.json changed (or --deps)
+HASH_FILE=".deploy-lock-hash"
+NEW_HASH="$(sha1sum package-lock.json | awk '{print $1}')"
+if [[ $FORCE_DEPS == 1 || ! -f "$HASH_FILE" || "$(cat "$HASH_FILE" 2>/dev/null)" != "$NEW_HASH" ]]; then
+  step "Installing dependencies (npm ci)"
+  npm ci || die "npm ci failed"
+  echo "$NEW_HASH" > "$HASH_FILE"
+else
+  step "Dependencies unchanged — skipping npm ci"
+fi
+
+# ── 3. build (the live app keeps serving its in-memory build until we restart)
+step "Building (generate:openapi + next build — the slow part)"
+if ! npm run build; then
+  die "build FAILED — service NOT restarted, previous version is still live. Fix and re-run."
+fi
+[[ -f .next/BUILD_ID ]] || die "build produced no .next/BUILD_ID — aborting before restart"
+echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
+
+# ── 4. restart services (brief downtime on a single instance)
+step "Restarting $WEB_SERVICE"
+systemctl restart "$WEB_SERVICE" || die "failed to restart $WEB_SERVICE"
+if [[ $RESTART_CRON == 1 ]]; then
+  step "Restarting $CRON_SERVICE"
+  systemctl restart "$CRON_SERVICE" || echo "  (warning: $CRON_SERVICE restart failed — check it manually)"
+fi
+
+# ── 5. health check
+step "Waiting for the app to answer on $HEALTH_URL"
+for _ in $(seq 1 30); do
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || true)"
+  case "$code" in
+    200|301|302|307|308)
+      ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code)"
+      exit 0 ;;
+  esac
+  sleep 2
+done
+die "app not responding after restart — check: journalctl -u $WEB_SERVICE -n 60"
