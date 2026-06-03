@@ -1031,17 +1031,7 @@ function RegionCard({
                     : undefined
             }
         >
-            <div className="flex items-center justify-between mb-2">
-                <span
-                    className={`${MONO} text-[11px] font-semibold tracking-[0.04em] uppercase truncate`}
-                    style={{
-                        color: selected
-                            ? ACCENT
-                            : "rgba(255,255,255,0.55)",
-                    }}
-                >
-                    {region.id}
-                </span>
+            <div className="flex items-center justify-end mb-2">
                 {region.available ? (
                     <span
                         className={`${MONO} text-[9px] uppercase tracking-[0.12em] font-semibold inline-flex items-center gap-1 text-emerald-300/85`}
