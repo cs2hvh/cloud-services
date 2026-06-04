@@ -13,6 +13,7 @@ import { registerNetworkPaths } from '@/lib/openapi/paths/network';
 import { registerProjectPaths } from '@/lib/openapi/paths/projects';
 import { registerResourcePaths } from '@/lib/openapi/paths/resources';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
+import { registerInferenceMgmtPaths } from '@/lib/openapi/paths/inference-mgmt';
 
 export const registry = new OpenAPIRegistry();
 
@@ -32,6 +33,7 @@ registerNetworkPaths(registry);
 registerDatabasePaths(registry);
 registerKubernetesPaths(registry);
 registerDomainPaths(registry);
+registerInferenceMgmtPaths(registry);
 
 /**
  * Generate the complete OpenAPI document
@@ -123,7 +125,7 @@ For more examples, see the API reference below.
         description: 'Development server',
       },
       {
-        url: 'https://galaxyhvh.com',
+        url: 'https://ahurasense.com',
         description: 'Production server',
       },
     ],
@@ -163,6 +165,50 @@ For more examples, see the API reference below.
       {
         name: 'Domain Marketplace',
         description: 'Search, purchase, and track domain marketplace purchase requests.',
+      },
+      {
+        name: 'Billing',
+        description: 'Credit balance, transaction history, and Stripe checkout for account top-ups.',
+      },
+      {
+        name: 'Inference — API Keys',
+        description: 'Create and manage Inference Gateway API keys (`ahu_live_...`). Keys are show-once at creation.',
+      },
+      {
+        name: 'Inference — BYOK Keys',
+        description: 'Store encrypted upstream provider API keys for Bring-Your-Own-Key (BYOK) billing mode.',
+      },
+      {
+        name: 'Inference — Deployments',
+        description: 'Deploy BYO or fine-tuned models on RunPod Serverless. Billed continuously while workers are running.',
+      },
+      {
+        name: 'Inference — Fine-Tuning',
+        description: 'Create and monitor LoRA/qLoRA/full fine-tuning jobs on RunPod GPU. Billed on completion.',
+      },
+      {
+        name: 'Inference — Files',
+        description: 'Upload and manage JSONL files for batch inference (OpenAI-compatible file API).',
+      },
+      {
+        name: 'Inference — Batches',
+        description: 'Run asynchronous batch inference jobs from uploaded JSONL files (OpenAI-compatible batch API).',
+      },
+      {
+        name: 'Inference — Vector',
+        description: 'Managed pgvector collections for RAG — upsert, query, and metadata filtering. $8/month per collection.',
+      },
+      {
+        name: 'Inference — Presets',
+        description: 'Save routing presets (model list, fallbacks, provider sort). Apply on gateway calls via `X-Ahura-Preset`.',
+      },
+      {
+        name: 'Inference — Usage',
+        description: 'Per-org usage analytics — spend totals, daily breakdown, top models, recent requests.',
+      },
+      {
+        name: 'Inference — Org',
+        description: 'Inference org membership management.',
       },
     ],
   });

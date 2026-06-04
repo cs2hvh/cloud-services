@@ -20,7 +20,7 @@
       "description": "Development server"
     },
     {
-      "url": "https://galaxyhvh.com",
+      "url": "https://ahurasense.com",
       "description": "Production server"
     }
   ],
@@ -60,6 +60,50 @@
     {
       "name": "Domain Marketplace",
       "description": "Search, purchase, and track domain marketplace purchase requests."
+    },
+    {
+      "name": "Billing",
+      "description": "Credit balance, transaction history, and Stripe checkout for account top-ups."
+    },
+    {
+      "name": "Inference — API Keys",
+      "description": "Create and manage Inference Gateway API keys (`ahu_live_...`). Keys are show-once at creation."
+    },
+    {
+      "name": "Inference — BYOK Keys",
+      "description": "Store encrypted upstream provider API keys for Bring-Your-Own-Key (BYOK) billing mode."
+    },
+    {
+      "name": "Inference — Deployments",
+      "description": "Deploy BYO or fine-tuned models on RunPod Serverless. Billed continuously while workers are running."
+    },
+    {
+      "name": "Inference — Fine-Tuning",
+      "description": "Create and monitor LoRA/qLoRA/full fine-tuning jobs on RunPod GPU. Billed on completion."
+    },
+    {
+      "name": "Inference — Files",
+      "description": "Upload and manage JSONL files for batch inference (OpenAI-compatible file API)."
+    },
+    {
+      "name": "Inference — Batches",
+      "description": "Run asynchronous batch inference jobs from uploaded JSONL files (OpenAI-compatible batch API)."
+    },
+    {
+      "name": "Inference — Vector",
+      "description": "Managed pgvector collections for RAG — upsert, query, and metadata filtering. $8/month per collection."
+    },
+    {
+      "name": "Inference — Presets",
+      "description": "Save routing presets (model list, fallbacks, provider sort). Apply on gateway calls via `X-Ahura-Preset`."
+    },
+    {
+      "name": "Inference — Usage",
+      "description": "Per-org usage analytics — spend totals, daily breakdown, top models, recent requests."
+    },
+    {
+      "name": "Inference — Org",
+      "description": "Inference org membership management."
     }
   ],
   "components": {
@@ -3832,6 +3876,2215 @@
             "description": "Enable or disable WHOIS privacy."
           }
         }
+      },
+      "InferenceOrg": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "org_01hwxyz"
+          },
+          "slug": {
+            "type": "string",
+            "example": "acme-ai"
+          },
+          "name": {
+            "type": "string",
+            "example": "Acme AI"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "developer",
+              "viewer"
+            ],
+            "example": "owner"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ]
+      },
+      "InferenceApiKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "a1b2c3d4-..."
+          },
+          "name": {
+            "type": "string",
+            "example": "Production key"
+          },
+          "preview": {
+            "type": "string",
+            "description": "Masked key: prefix + 4 trailing chars. The full key is returned only at creation.",
+            "example": "ahu_live_xxxx••••zzzz"
+          },
+          "allowed_models": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Model allowlist. `null` = unrestricted.",
+            "example": null
+          },
+          "allowed_ip_cidrs": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Source IP allowlist (CIDR notation). `null` = unrestricted.",
+            "example": [
+              "192.168.1.0/24"
+            ]
+          },
+          "zdr_enabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "semantic_cache_enabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "rate_limit_rpm": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Per-key rate limit override in RPM. `null` = platform default (600 RPM).",
+            "example": 600
+          },
+          "monthly_budget_cents": {
+            "type": "integer",
+            "nullable": true,
+            "example": 10000
+          },
+          "hard_cap_cents": {
+            "type": "integer",
+            "nullable": true,
+            "example": 5000
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "last_used_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": "2026-06-03T14:00:00Z"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-01T10:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "preview",
+          "allowed_models",
+          "allowed_ip_cidrs",
+          "zdr_enabled",
+          "semantic_cache_enabled",
+          "rate_limit_rpm",
+          "monthly_budget_cents",
+          "hard_cap_cents",
+          "expires_at",
+          "last_used_at",
+          "created_at"
+        ]
+      },
+      "InferenceApiKeyList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InferenceApiKey"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "InferenceMgmtError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Validation error"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid request body"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            },
+            "description": "Zod issue list on validation errors."
+          },
+          "code": {
+            "type": "string",
+            "example": "insufficient_credits"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "InferenceApiKeyCreated": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "key_prefix": {
+                "type": "string",
+                "example": "ahu_live_xxxx"
+              },
+              "key_last_four": {
+                "type": "string",
+                "example": "zzzz"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "api_key": {
+                "type": "string",
+                "description": "**Show-once.** The full plaintext key — copy it now. It will never be returned again.",
+                "example": "ahu_live_abc123def456..."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "key_prefix",
+              "key_last_four",
+              "created_at",
+              "api_key"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "example": "Copy this key now — for security, the full key will never be shown again."
+          }
+        },
+        "required": [
+          "success",
+          "data",
+          "message"
+        ]
+      },
+      "InferenceApiKeyCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Production key"
+          },
+          "allowed_models": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Model allowlist. Omit or `null` for unrestricted.",
+            "example": [
+              "openai/gpt-4o",
+              "anthropic/claude-3-5-sonnet"
+            ]
+          },
+          "allowed_ip_cidrs": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Source IP CIDR allowlist. Omit or `null` for unrestricted.",
+            "example": [
+              "10.0.0.0/8"
+            ]
+          },
+          "zdr_enabled": {
+            "type": "boolean",
+            "description": "Enable Zero Data Retention. No request/response content will be cached or logged.",
+            "example": false
+          },
+          "semantic_cache_enabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "monthly_budget_cents": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Soft monthly spend limit in USD cents (informational).",
+            "example": 10000
+          },
+          "hard_cap_cents": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Hard monthly spend cap in USD cents. Requests return 402 once hit.",
+            "example": 5000
+          },
+          "rate_limit_rpm": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Per-key RPM override (1–10 000). Omit or `null` for platform default (600 RPM).",
+            "example": 1200
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": "2027-01-01T00:00:00Z"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ByokKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b1b2c3d4-..."
+          },
+          "name": {
+            "type": "string",
+            "example": "My OpenAI key"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openrouter",
+              "openai",
+              "anthropic",
+              "google",
+              "mistral",
+              "custom"
+            ],
+            "example": "openai"
+          },
+          "preview": {
+            "type": "string",
+            "description": "Masked preview of the stored key. The plaintext is never returned.",
+            "example": "••••••••1234"
+          },
+          "is_valid": {
+            "type": "boolean",
+            "example": true
+          },
+          "last_verified_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "last_verify_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-01T10:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "provider",
+          "preview",
+          "is_valid",
+          "created_at"
+        ]
+      },
+      "ByokKeyList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ByokKey"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "ByokKeyCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "My OpenAI key"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openrouter",
+              "openai",
+              "anthropic",
+              "google",
+              "mistral",
+              "custom"
+            ],
+            "description": "Upstream provider this key authenticates against. Must match the `X-Ahura-BYOK-Provider` header you send when calling the gateway.",
+            "example": "openai"
+          },
+          "api_key": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500,
+            "description": "The raw upstream API key. Encrypted with AES-GCM server-side before storage. **Never echoed back in any response.**",
+            "example": "sk-proj-abc123..."
+          }
+        },
+        "required": [
+          "name",
+          "provider",
+          "api_key"
+        ]
+      },
+      "DeploymentAutoscale": {
+        "type": "object",
+        "properties": {
+          "min_workers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "example": 0
+          },
+          "max_workers": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "example": 4
+          },
+          "idle_timeout_s": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 3600,
+            "example": 60
+          }
+        },
+        "required": [
+          "min_workers",
+          "max_workers",
+          "idle_timeout_s"
+        ]
+      },
+      "DeploymentList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Deployment"
+                },
+                {
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "d1b2c3d4-..."
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "my-llama-deploy"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "docker",
+                        "huggingface",
+                        "truss"
+                      ],
+                      "example": "huggingface"
+                    },
+                    "source_ref": {
+                      "type": "string",
+                      "example": "meta-llama/Llama-3.1-8B-Instruct"
+                    },
+                    "source_revision": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": null
+                    },
+                    "gpu_sku": {
+                      "type": "string",
+                      "example": "NVIDIA A100 80GB PCIe"
+                    },
+                    "autoscale": {
+                      "$ref": "#/components/schemas/DeploymentAutoscale"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "building",
+                        "active",
+                        "failed",
+                        "stopped"
+                      ],
+                      "example": "active"
+                    },
+                    "endpoint_id": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "RunPod Serverless endpoint ID once provisioned."
+                    },
+                    "image_uri": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": "runpod/worker-vllm:stable-cuda12.1.0"
+                    },
+                    "model_id": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "The `inference.models` ID registered for this deployment."
+                    },
+                    "error_message": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deployed_at": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-05-01T10:00:00Z"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-05-01T10:05:00Z"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "source",
+                    "source_ref",
+                    "gpu_sku",
+                    "autoscale",
+                    "status",
+                    "created_at",
+                    "updated_at"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "DeploymentCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Deployment name — letters, digits, hyphens, underscores.",
+            "example": "my-llama-deploy"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "docker",
+              "huggingface",
+              "truss"
+            ],
+            "description": "`docker` for any public OCI image; `huggingface` for a model repo ID (uses vLLM worker). `truss` is accepted but currently returns an explicit unsupported-source error.",
+            "example": "huggingface"
+          },
+          "source_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Docker image URI or Hugging Face repo ID depending on `source`.",
+            "example": "meta-llama/Llama-3.1-8B-Instruct"
+          },
+          "source_revision": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "description": "Git revision / tag for the source. Optional.",
+            "example": "main"
+          },
+          "gpu_sku": {
+            "type": "string",
+            "minLength": 1,
+            "description": "RunPod `gpuTypeId`. Use `GET /v1/models` or the dashboard GPU picker to see available SKUs.",
+            "example": "NVIDIA A100 80GB PCIe"
+          },
+          "autoscale": {
+            "type": "object",
+            "properties": {
+              "min_workers": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 50,
+                "default": 0,
+                "example": 0
+              },
+              "max_workers": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 4,
+                "example": 4
+              },
+              "idle_timeout_s": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 3600,
+                "default": 60,
+                "description": "Seconds of idle time before a worker scales down.",
+                "example": 60
+              }
+            },
+            "description": "Auto-scaling configuration. Defaults: min=0, max=4, idle=60s."
+          },
+          "hf_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Hugging Face access token. Required in practice for gated models (Meta, Google). **Never echoed back in any response.** Only meaningful when `source = \"huggingface\"`."
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "source_ref",
+          "gpu_sku"
+        ]
+      },
+      "ScaleDeploymentRequest": {
+        "type": "object",
+        "properties": {
+          "min_workers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "example": 1
+          },
+          "max_workers": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "example": 8
+          },
+          "idle_timeout_s": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 3600,
+            "example": 30
+          }
+        },
+        "required": [
+          "min_workers",
+          "max_workers",
+          "idle_timeout_s"
+        ]
+      },
+      "FineTuneHyperparams": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256,
+            "description": "LoRA rank.",
+            "example": 16
+          },
+          "alpha": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 512,
+            "description": "LoRA alpha.",
+            "example": 32
+          },
+          "lr": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "description": "Learning rate.",
+            "example": 0.0002
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "example": 3
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "example": 4
+          },
+          "gradient_accumulation_steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "example": 4
+          },
+          "max_seq_length": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 131072,
+            "example": 4096
+          },
+          "warmup_steps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "example": 100
+          },
+          "target_modules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "q_proj",
+              "v_proj"
+            ]
+          }
+        }
+      },
+      "FineTuneJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "ft_01hwxyz"
+          },
+          "name": {
+            "type": "string",
+            "example": "llama-support-v1"
+          },
+          "base_model_id": {
+            "type": "string",
+            "example": "meta-llama/llama-3.3-8b-instruct"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "lora",
+              "qlora",
+              "full"
+            ],
+            "example": "lora"
+          },
+          "hyperparams": {
+            "$ref": "#/components/schemas/FineTuneHyperparams"
+          },
+          "dataset_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://storage.example.com/dataset.jsonl"
+          },
+          "validation_dataset_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "gpu_sku": {
+            "type": "string",
+            "example": "NVIDIA A100 80GB PCIe"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "preparing",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "example": "running"
+          },
+          "pod_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "RunPod job ID."
+          },
+          "output_model_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Model ID in the inference catalog once training completes."
+          },
+          "output_artifact_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "training_seconds": {
+            "type": "integer",
+            "nullable": true
+          },
+          "cost_cents": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Actual cost charged in USD cents."
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "current_step": {
+            "type": "integer",
+            "nullable": true
+          },
+          "max_steps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "current_epoch": {
+            "type": "number",
+            "nullable": true
+          },
+          "latest_loss": {
+            "type": "number",
+            "nullable": true
+          },
+          "hourly_cost_cents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "training_log_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_managed": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "serving_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "serving_pod_state": {
+            "type": "string",
+            "nullable": true
+          },
+          "serving_pod_gpu_sku": {
+            "type": "string",
+            "nullable": true
+          },
+          "serving_pod_started_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "serving_pod_stopped_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "serving_pod_hourly_cents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "serving_pod_auto_stop_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "serving_pod_error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "queued_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-01T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_model_id",
+          "method",
+          "hyperparams",
+          "dataset_url",
+          "gpu_sku",
+          "status",
+          "created_at"
+        ]
+      },
+      "FineTuneJobList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FineTuneJob"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "FineTuneJobCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Job name — letters, digits, hyphens, underscores.",
+            "example": "llama-support-v1"
+          },
+          "base_model_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Base model to fine-tune. Supported bases: `meta-llama/llama-4-scout`, `meta-llama/llama-4-maverick`, `meta-llama/llama-3.3-70b-instruct`, `meta-llama/llama-3.3-8b-instruct`, `deepseek/deepseek-v3.2`, `qwen/qwen-3-235b-instruct`, `qwen/qwen-3-32b-instruct`, `qwen/qwen-3-14b-instruct`, `qwen/qwen-3-8b-instruct`, `mistralai/mistral-large-3`, `mistralai/mistral-nemo`, `microsoft/phi-4`, `google/gemma-4-27b-it`",
+            "example": "meta-llama/llama-3.3-8b-instruct"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "lora",
+              "qlora",
+              "full"
+            ],
+            "description": "Fine-tuning method. `lora` (default) — parameter-efficient; `qlora` — quantised LoRA for large models; `full` — full weight update.",
+            "example": "lora"
+          },
+          "dataset_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "HTTPS, S3, or R2 URL to a JSONL dataset. Each line must be a chat-formatted example `{\"messages\": [...]}`. Max 200 MB.",
+            "example": "https://storage.example.com/train.jsonl"
+          },
+          "validation_dataset_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "Optional validation dataset URL for eval loss tracking."
+          },
+          "gpu_sku": {
+            "type": "string",
+            "minLength": 1,
+            "description": "RunPod `gpuTypeId`. Must be sufficient for the selected base model.",
+            "example": "NVIDIA A100 80GB PCIe"
+          },
+          "hyperparams": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FineTuneHyperparams"
+              },
+              {
+                "description": "Hyperparameter overrides. Unset fields use platform defaults (rank=16, alpha=32, lr=0.0002, epochs=3, batch_size=4, max_seq_length=4096)."
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "base_model_id",
+          "dataset_url",
+          "gpu_sku"
+        ]
+      },
+      "InferenceFile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "File ID (prefix `file_`).",
+            "example": "file_abc123def456"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "batch"
+            ],
+            "example": "batch"
+          },
+          "filename": {
+            "type": "string",
+            "example": "train-data.jsonl"
+          },
+          "bytes": {
+            "type": "integer",
+            "example": 102400
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Unix timestamp (seconds).",
+            "example": 1749038400
+          },
+          "produced_by_batch_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set if this file was produced as output by a batch job."
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "purpose",
+          "filename",
+          "bytes",
+          "created_at"
+        ]
+      },
+      "InferenceFileList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InferenceFile"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "FileUploadMultipart": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "nullable": true,
+            "description": "JSONL file to upload."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "batch"
+            ],
+            "description": "File purpose. Must be `\"batch\"`."
+          }
+        },
+        "required": [
+          "purpose"
+        ]
+      },
+      "InferenceFileDeleted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "file_abc123def456"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "deleted"
+        ]
+      },
+      "BatchRequestCounts": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 250
+          },
+          "completed": {
+            "type": "integer",
+            "example": 240
+          },
+          "failed": {
+            "type": "integer",
+            "example": 10
+          }
+        },
+        "required": [
+          "total",
+          "completed",
+          "failed"
+        ]
+      },
+      "Batch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Batch ID (prefix `batch_`).",
+            "example": "batch_abc123def456"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "batch"
+            ]
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "/v1/chat/completions",
+              "/v1/embeddings"
+            ],
+            "example": "/v1/chat/completions"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "validating",
+              "in_progress",
+              "completed",
+              "failed",
+              "cancelled",
+              "cancelling"
+            ],
+            "example": "completed"
+          },
+          "input_file_id": {
+            "type": "string",
+            "example": "file_abc123def456"
+          },
+          "output_file_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Output file ID once the batch completes."
+          },
+          "error_file_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "completion_window": {
+            "type": "string",
+            "enum": [
+              "24h"
+            ]
+          },
+          "request_counts": {
+            "$ref": "#/components/schemas/BatchRequestCounts"
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Up to 16 key-value pairs of caller-supplied metadata."
+          },
+          "created_at": {
+            "type": "integer",
+            "example": 1749038400
+          },
+          "in_progress_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completed_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "failed_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "cancelled_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "endpoint",
+          "status",
+          "input_file_id",
+          "completion_window",
+          "created_at"
+        ]
+      },
+      "BatchList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Batch"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "BatchCreateRequest": {
+        "type": "object",
+        "properties": {
+          "input_file_id": {
+            "type": "string",
+            "description": "ID of a previously uploaded file with `purpose: \"batch\"`. Each line must be a JSON object `{custom_id, method, url, body}`.",
+            "example": "file_abc123def456"
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "/v1/chat/completions",
+              "/v1/embeddings"
+            ],
+            "description": "The inference endpoint to call for each line in the file.",
+            "example": "/v1/chat/completions"
+          },
+          "completion_window": {
+            "type": "string",
+            "enum": [
+              "24h"
+            ],
+            "description": "Time window for batch completion. Currently only `\"24h\"` is supported."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Up to 16 string key-value pairs for your own reference.",
+            "example": {
+              "env": "production",
+              "job": "nightly-eval"
+            }
+          }
+        },
+        "required": [
+          "input_file_id",
+          "endpoint",
+          "completion_window"
+        ]
+      },
+      "VectorCollection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "vc_01hwxyz"
+          },
+          "name": {
+            "type": "string",
+            "example": "product-docs"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Product documentation for RAG"
+          },
+          "dimensions": {
+            "type": "integer",
+            "example": 1536
+          },
+          "distance_metric": {
+            "type": "string",
+            "enum": [
+              "cosine",
+              "l2",
+              "inner_product"
+            ],
+            "example": "cosine"
+          },
+          "embedding_model_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Server-side auto-embed model. If set, you can pass `text` instead of `embedding` on upsert/query.",
+            "example": "openai/text-embedding-3-small"
+          },
+          "index_type": {
+            "type": "string",
+            "enum": [
+              "hnsw",
+              "ivfflat",
+              "none"
+            ],
+            "example": "hnsw"
+          },
+          "index_params": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "row_count": {
+            "type": "integer",
+            "example": 12450
+          },
+          "size_bytes": {
+            "type": "integer",
+            "example": 5242880
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-01T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-15T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "dimensions",
+          "distance_metric",
+          "index_type",
+          "row_count",
+          "size_bytes",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "VectorCollectionList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VectorCollection"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "VectorCollectionCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Collection name — letters, digits, hyphens, underscores.",
+            "example": "product-docs"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "example": "Product documentation vectors"
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 4096,
+            "description": "Vector dimensions. Required when `embedding_model_id` is omitted (bring-your-own embeddings). Derived automatically from the catalog when `embedding_model_id` is set.",
+            "example": 1536
+          },
+          "distance_metric": {
+            "type": "string",
+            "enum": [
+              "cosine",
+              "l2",
+              "inner_product"
+            ],
+            "description": "Similarity function. Default: `cosine`.",
+            "example": "cosine"
+          },
+          "embedding_model_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "If set, the server auto-embeds text on upsert and query using this catalog model. Omit to manage embeddings yourself.",
+            "example": "openai/text-embedding-3-small"
+          },
+          "index_type": {
+            "type": "string",
+            "enum": [
+              "hnsw",
+              "ivfflat",
+              "none"
+            ],
+            "description": "Vector index type. `hnsw` (default) — best for recall+speed; `ivfflat` — better for high-volume bulk inserts; `none` — exact search, small collections only.",
+            "example": "hnsw"
+          },
+          "index_params": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "description": "Index-specific tuning params. For HNSW: `{m: 16, ef_construction: 64}`. Omit to use defaults."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "VectorUpsertRequest": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "external_id": {
+                  "type": "string",
+                  "description": "Your identifier for this row. Used for deduplication.",
+                  "example": "doc-42-chunk-3"
+                },
+                "embedding": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "Pre-computed float vector. Required if collection has no `embedding_model_id`."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Raw text/content. Server auto-embeds using collection's model when `embedding` is omitted."
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  },
+                  "example": {
+                    "tenant": "acme",
+                    "source": "kb"
+                  }
+                }
+              },
+              "required": [
+                "external_id"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "description": "Rows to upsert (1–100 per request)."
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "VectorQueryResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "row_01hwxyz"
+                },
+                "external_id": {
+                  "type": "string",
+                  "example": "doc-42-chunk-3"
+                },
+                "content": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "Password reset instructions: click Forgot Password..."
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "nullable": true
+                  },
+                  "example": {
+                    "tenant": "acme",
+                    "source": "kb"
+                  }
+                },
+                "similarity": {
+                  "type": "number",
+                  "example": 0.923
+                }
+              },
+              "required": [
+                "id",
+                "external_id",
+                "content",
+                "metadata",
+                "similarity"
+              ]
+            }
+          },
+          "count": {
+            "type": "integer",
+            "example": 1
+          }
+        },
+        "required": [
+          "success",
+          "results",
+          "count"
+        ]
+      },
+      "VectorQueryRequest": {
+        "type": "object",
+        "properties": {
+          "embedding": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Pre-computed query vector. Either `embedding` or `text` is required."
+          },
+          "text": {
+            "type": "string",
+            "description": "Query text. The server auto-embeds it using the collection's `embedding_model_id`. Either `text` or `embedding` is required.",
+            "example": "How do I reset my password?"
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 100,
+            "description": "Number of nearest neighbours to return (1–100). Default: 10.",
+            "example": 10
+          },
+          "min_similarity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Minimum cosine similarity threshold. Results below this score are excluded. Default: 0.",
+            "example": 0.75
+          },
+          "filter": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "JSONB containment filter on row `metadata`. Returns only rows whose metadata contains all specified key-value pairs. Useful for multi-tenant RAG.",
+            "example": {
+              "tenant": "acme",
+              "lang": "en"
+            }
+          }
+        }
+      },
+      "PresetConfig": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Ordered model list. The first model is tried first; subsequent models are fallbacks.",
+            "example": [
+              "anthropic/claude-3-5-sonnet",
+              "openai/gpt-4o"
+            ]
+          },
+          "provider_sort": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "price",
+              "throughput",
+              "latency"
+            ],
+            "description": "Provider sort preference passed to OpenRouter."
+          },
+          "max_latency_ms": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 60000,
+            "example": 5000
+          },
+          "allow_fallbacks": {
+            "type": "boolean",
+            "description": "Whether to fall back to other models on upstream errors."
+          },
+          "preferred_max_price_per_mtok": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "example": 500
+          }
+        },
+        "required": [
+          "models"
+        ]
+      },
+      "Preset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "pr_01hwxyz"
+          },
+          "name": {
+            "type": "string",
+            "example": "production-claude"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "config": {
+            "$ref": "#/components/schemas/PresetConfig"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "config",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PresetList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Preset"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "data"
+        ]
+      },
+      "PresetCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Preset name — letters, digits, hyphens. Reference via `X-Ahura-Preset: <name>` header on gateway calls.",
+            "example": "production-claude"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "config": {
+            "$ref": "#/components/schemas/PresetConfig"
+          }
+        },
+        "required": [
+          "name",
+          "config"
+        ]
+      },
+      "UsageDailyBreakdown": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "UTC date YYYY-MM-DD.",
+            "example": "2026-06-04"
+          },
+          "spent_cents": {
+            "type": "integer",
+            "example": 1234
+          },
+          "requests": {
+            "type": "integer",
+            "example": 450
+          }
+        },
+        "required": [
+          "day",
+          "spent_cents",
+          "requests"
+        ]
+      },
+      "UsageSummary": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "$ref": "#/components/schemas/InferenceOrg"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "month": {
+                "type": "string",
+                "example": "2026-06"
+              },
+              "month_spent_cents": {
+                "type": "integer",
+                "example": 8640
+              },
+              "month_requests": {
+                "type": "integer",
+                "example": 3200
+              },
+              "window_days": {
+                "type": "integer",
+                "example": 7
+              },
+              "window_spent_cents": {
+                "type": "integer",
+                "example": 4320
+              },
+              "window_requests": {
+                "type": "integer",
+                "example": 1600
+              },
+              "success_count": {
+                "type": "integer",
+                "example": 1550
+              },
+              "error_count": {
+                "type": "integer",
+                "example": 50
+              },
+              "input_tokens": {
+                "type": "integer",
+                "example": 640000
+              },
+              "output_tokens": {
+                "type": "integer",
+                "example": 128000
+              },
+              "latency_ms_p50": {
+                "type": "integer",
+                "nullable": true
+              },
+              "latency_ms_p95": {
+                "type": "integer",
+                "nullable": true
+              },
+              "latency_ms_p99": {
+                "type": "integer",
+                "nullable": true
+              },
+              "cache_l1_hits": {
+                "type": "integer"
+              },
+              "cache_semantic_hits": {
+                "type": "integer"
+              },
+              "cache_hit_rate": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "month",
+              "month_spent_cents",
+              "month_requests",
+              "window_days",
+              "window_spent_cents",
+              "window_requests",
+              "success_count",
+              "error_count",
+              "input_tokens",
+              "output_tokens",
+              "latency_ms_p50",
+              "latency_ms_p95",
+              "latency_ms_p99",
+              "cache_l1_hits",
+              "cache_semantic_hits",
+              "cache_hit_rate"
+            ]
+          },
+          "day_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageDailyBreakdown"
+            },
+            "description": "Per-day breakdown for the requested window."
+          },
+          "top_models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "model_id": {
+                  "type": "string",
+                  "example": "openai/gpt-4o"
+                },
+                "spent_cents": {
+                  "type": "integer",
+                  "example": 5200
+                },
+                "requests": {
+                  "type": "integer",
+                  "example": 1800
+                }
+              },
+              "required": [
+                "model_id",
+                "spent_cents",
+                "requests"
+              ]
+            },
+            "description": "Top models by cost, descending."
+          },
+          "top_api_keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "preview": {
+                  "type": "string"
+                },
+                "spent_cents": {
+                  "type": "integer"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "cache_l1_hits": {
+                  "type": "integer"
+                },
+                "cache_semantic_hits": {
+                  "type": "integer"
+                },
+                "cache_hit_rate": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "preview",
+                "spent_cents",
+                "requests",
+                "cache_l1_hits",
+                "cache_semantic_hits",
+                "cache_hit_rate"
+              ]
+            },
+            "description": "Top API keys by cost, descending."
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "model_id": {
+                  "type": "string"
+                },
+                "modality": {
+                  "type": "string"
+                },
+                "input_tokens": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "output_tokens": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "cost_cents": {
+                  "type": "integer"
+                },
+                "latency_ms": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string"
+                },
+                "billed_to": {
+                  "type": "string"
+                },
+                "cache_kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "created_at",
+                "model_id",
+                "modality",
+                "input_tokens",
+                "output_tokens",
+                "cost_cents",
+                "latency_ms",
+                "status",
+                "billed_to",
+                "cache_kind"
+              ]
+            },
+            "description": "Most recent 20 requests."
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "summary",
+          "day_series",
+          "top_models",
+          "top_api_keys",
+          "recent"
+        ]
+      },
+      "OrgMember": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "mem_01hwxyz"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "format": "email",
+            "example": "alice@example.com"
+          },
+          "full_name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Alice"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "developer",
+              "viewer"
+            ],
+            "example": "developer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "invited",
+              "suspended"
+            ],
+            "example": "active"
+          },
+          "invited_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "joined_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "is_you": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "role",
+          "status",
+          "is_you"
+        ]
+      },
+      "OrgMemberList": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "org": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InferenceOrg"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "your_role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "admin",
+                      "developer",
+                      "viewer"
+                    ]
+                  }
+                },
+                "required": [
+                  "your_role"
+                ]
+              }
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "owners": {
+                "type": "integer"
+              },
+              "admins": {
+                "type": "integer"
+              },
+              "developers": {
+                "type": "integer"
+              },
+              "viewers": {
+                "type": "integer"
+              },
+              "invited": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "owners",
+              "admins",
+              "developers",
+              "viewers",
+              "invited"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgMember"
+            }
+          }
+        },
+        "required": [
+          "success",
+          "org",
+          "counts",
+          "data"
+        ]
       }
     },
     "parameters": {}
@@ -12489,6 +14742,3718 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/api-keys": {
+      "get": {
+        "tags": [
+          "Inference — API Keys"
+        ],
+        "summary": "List API keys",
+        "operationId": "listInferenceApiKeys",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns all active (non-revoked) Inference API keys for the calling user's org. Keys are returned masked — only the prefix and last 4 chars are shown. The full key is visible only once, at creation.",
+        "responses": {
+          "200": {
+            "description": "API key list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceApiKeyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — API Keys"
+        ],
+        "summary": "Create API key",
+        "operationId": "createInferenceApiKey",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates a new Inference API key for the org.\n\nThe generated key (`ahu_live_...`) is returned **once only** in the `data.api_key` field. Copy it immediately — the server stores only the SHA-256 hash and it cannot be recovered.\n\n**Show-once pattern:** Subsequent `GET /api/inference/api-keys` calls return a masked preview (`ahu_live_xxxx••••zzzz`) only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InferenceApiKeyCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API key created — plaintext key returned once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceApiKeyCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error",
+                  "details": [
+                    {
+                      "path": "name",
+                      "message": "Required"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/api-keys/{id}": {
+      "patch": {
+        "tags": [
+          "Inference — API Keys"
+        ],
+        "summary": "Update API key",
+        "operationId": "updateInferenceApiKey",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Update mutable fields on an existing key. All fields are optional — only supplied fields are changed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "API key UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InferenceApiKeyCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InferenceApiKey"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Inference — API Keys"
+        ],
+        "summary": "Revoke API key",
+        "operationId": "revokeInferenceApiKey",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Permanently revokes a key. Revoked keys immediately stop authenticating at the edge gateway (KV TTL propagation ≤ 5 min). This action is irreversible.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "API key UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "revoked_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "revoked_id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/byok-keys": {
+      "get": {
+        "tags": [
+          "Inference — BYOK Keys"
+        ],
+        "summary": "List BYOK keys",
+        "operationId": "listByokKeys",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists stored Bring-Your-Own-Key (BYOK) upstream keys. Only the masked preview is returned — the plaintext is never retrievable after creation.",
+        "responses": {
+          "200": {
+            "description": "BYOK key list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ByokKeyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — BYOK Keys"
+        ],
+        "summary": "Store BYOK key",
+        "operationId": "createByokKey",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Stores an upstream provider API key, AES-GCM encrypted, for use in BYOK billing mode.\n\nOnce stored, reference it on gateway calls by setting:\n- `X-Ahura-Billing: byok`\n- `X-Ahura-BYOK-Provider: <provider>`\n\nThe gateway decrypts the matching key at request time. The plaintext is **never returned** in any response.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ByokKeyCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "BYOK key stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ByokKey"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/byok-keys/{id}": {
+      "delete": {
+        "tags": [
+          "Inference — BYOK Keys"
+        ],
+        "summary": "Delete BYOK key",
+        "operationId": "deleteByokKey",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "BYOK key UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/deployments": {
+      "get": {
+        "tags": [
+          "Inference — Deployments"
+        ],
+        "summary": "List deployments",
+        "operationId": "listDeployments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists BYO model deployments for the org (up to 100). Use the `status` query parameter to filter.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "building",
+                "active",
+                "failed",
+                "stopped"
+              ],
+              "description": "Filter by deployment status."
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Deployments"
+        ],
+        "summary": "Create deployment",
+        "operationId": "createDeployment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Provisions a BYO model deployment on RunPod Serverless.\n\n**Lifecycle:**\n1. Row created with `status: \"building\"`\n2. Deploy-runner picks up the job, provisions a RunPod Serverless endpoint\n3. Once the endpoint is `READY`, the model is registered in the catalog and the row flips to `status: \"active\"`\n4. The model is now callable at the gateway as `POST /v1/chat/completions` with its assigned `model_id`\n\n**Sources:**\n- `docker` — any public OCI image\n- `huggingface` — HF model repo ID (automatically uses the vLLM worker image)\n\n**Note:** `truss` source is not yet supported — build locally with `truss build`, push the image, and deploy with `source: \"docker\"`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Deployment created (building)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Deployment"
+                        },
+                        {
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "example": "d1b2c3d4-..."
+                            },
+                            "name": {
+                              "type": "string",
+                              "example": "my-llama-deploy"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "docker",
+                                "huggingface",
+                                "truss"
+                              ],
+                              "example": "huggingface"
+                            },
+                            "source_ref": {
+                              "type": "string",
+                              "example": "meta-llama/Llama-3.1-8B-Instruct"
+                            },
+                            "source_revision": {
+                              "type": "string",
+                              "nullable": true,
+                              "example": null
+                            },
+                            "gpu_sku": {
+                              "type": "string",
+                              "example": "NVIDIA A100 80GB PCIe"
+                            },
+                            "autoscale": {
+                              "$ref": "#/components/schemas/DeploymentAutoscale"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "building",
+                                "active",
+                                "failed",
+                                "stopped"
+                              ],
+                              "example": "active"
+                            },
+                            "endpoint_id": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "RunPod Serverless endpoint ID once provisioned."
+                            },
+                            "image_uri": {
+                              "type": "string",
+                              "nullable": true,
+                              "example": "runpod/worker-vllm:stable-cuda12.1.0"
+                            },
+                            "model_id": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "The `inference.models` ID registered for this deployment."
+                            },
+                            "error_message": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "deployed_at": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "example": "2026-05-01T10:00:00Z"
+                            },
+                            "updated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "example": "2026-05-01T10:05:00Z"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "source",
+                            "source_ref",
+                            "gpu_sku",
+                            "autoscale",
+                            "status",
+                            "created_at",
+                            "updated_at"
+                          ]
+                        }
+                      ]
+                    },
+                    "preflight": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation or preflight error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Source failed pre-flight checks"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already exists in this org.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Deployment named \"my-deploy\" already exists in this org"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/deployments/{id}": {
+      "get": {
+        "tags": [
+          "Inference — Deployments"
+        ],
+        "summary": "Get deployment",
+        "operationId": "getDeployment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Deployment UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Deployment"
+                        },
+                        {
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "example": "d1b2c3d4-..."
+                            },
+                            "name": {
+                              "type": "string",
+                              "example": "my-llama-deploy"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "docker",
+                                "huggingface",
+                                "truss"
+                              ],
+                              "example": "huggingface"
+                            },
+                            "source_ref": {
+                              "type": "string",
+                              "example": "meta-llama/Llama-3.1-8B-Instruct"
+                            },
+                            "source_revision": {
+                              "type": "string",
+                              "nullable": true,
+                              "example": null
+                            },
+                            "gpu_sku": {
+                              "type": "string",
+                              "example": "NVIDIA A100 80GB PCIe"
+                            },
+                            "autoscale": {
+                              "$ref": "#/components/schemas/DeploymentAutoscale"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "building",
+                                "active",
+                                "failed",
+                                "stopped"
+                              ],
+                              "example": "active"
+                            },
+                            "endpoint_id": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "RunPod Serverless endpoint ID once provisioned."
+                            },
+                            "image_uri": {
+                              "type": "string",
+                              "nullable": true,
+                              "example": "runpod/worker-vllm:stable-cuda12.1.0"
+                            },
+                            "model_id": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "The `inference.models` ID registered for this deployment."
+                            },
+                            "error_message": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "deployed_at": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "example": "2026-05-01T10:00:00Z"
+                            },
+                            "updated_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "example": "2026-05-01T10:05:00Z"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "source",
+                            "source_ref",
+                            "gpu_sku",
+                            "autoscale",
+                            "status",
+                            "created_at",
+                            "updated_at"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Inference — Deployments"
+        ],
+        "summary": "Delete deployment",
+        "operationId": "deleteDeployment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Tears down the RunPod Serverless endpoint and removes the deployment and its catalog model entry. Running requests will fail after teardown.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Deployment UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/deployments/{id}/scale": {
+      "post": {
+        "tags": [
+          "Inference — Deployments"
+        ],
+        "summary": "Scale deployment",
+        "operationId": "scaleDeployment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Update the autoscaling configuration of an active deployment. Changes take effect within ~60 seconds.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Deployment UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaleDeploymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scaling updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "autoscale": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/fine-tuning/jobs": {
+      "get": {
+        "tags": [
+          "Inference — Fine-Tuning"
+        ],
+        "summary": "List fine-tuning jobs",
+        "operationId": "listFineTuningJobs",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "preparing",
+                "running",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "description": "Filter by job status."
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fine-tuning job list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FineTuneJobList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Fine-Tuning"
+        ],
+        "summary": "Create fine-tuning job",
+        "operationId": "createFineTuningJob",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Launches a fine-tuning job on RunPod GPU infrastructure using Axolotl.\n\n**Prerequisites:**\n- Sufficient credits (minimum $1 or estimated job cost)\n- Max 3 concurrent jobs per org\n- A GPU with enough VRAM for the selected base model\n\n**Lifecycle:**\n1. Dataset pre-flight validation (line count, JSONL format, token length) — fails fast before any GPU time is spent\n2. Row created with `status: \"queued\"`\n3. BullMQ worker picks up the job, provisions a RunPod pod with the training image\n4. Pod trains the adapter, webhooks back with the S3 output location\n5. Row transitions to `status: \"completed\"` and the adapter is registered in the model catalog\n6. Org is charged `cost_cents` against their credit balance\n\n**Billing:** Charged on completion (not upfront). The balance gate ensures sufficient funds exist before queuing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FineTuneJobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FineTuneJob"
+                    },
+                    "preflight": {
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": "ft_01hwxyz",
+                    "name": "llama-support-v1",
+                    "status": "queued",
+                    "base_model_id": "meta-llama/llama-3.3-8b-instruct",
+                    "method": "lora",
+                    "gpu_sku": "NVIDIA A100 80GB PCIe"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dataset preflight failed, GPU unfit, or base model not supported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Dataset failed pre-flight checks",
+                  "code": "ft_gpu_unfit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Insufficient credits to start this job.",
+                  "code": "insufficient_credits",
+                  "required_usd": 3.5
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Concurrency quota hit or rate limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "You already have 3 fine-tuning jobs queued or running (limit 3).",
+                  "code": "ft_concurrency_limit"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/fine-tuning/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Inference — Fine-Tuning"
+        ],
+        "summary": "Get fine-tuning job",
+        "operationId": "getFineTuningJob",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Job UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FineTuneJob"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/files": {
+      "get": {
+        "tags": [
+          "Inference — Files"
+        ],
+        "summary": "List files",
+        "operationId": "listInferenceFiles",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists uploaded files for the org (OpenAI-compatible shape).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "batch"
+              ],
+              "description": "Filter by purpose."
+            },
+            "required": false,
+            "name": "purpose",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceFileList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Files"
+        ],
+        "summary": "Upload file",
+        "operationId": "uploadInferenceFile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Uploads a file to R2 object storage. Currently only `purpose: \"batch\"` is supported (JSONL files for batch inference).\n\n**Two upload modes:**\n\n1. **Multipart** (recommended, OpenAI SDK compatible):\n   ```\n   Content-Type: multipart/form-data\n   Body fields: file=<File>, purpose=batch\n   ```\n\n2. **Raw body** (curl-friendly):\n   ```\n   Content-Type: application/x-ndjson\n   ?purpose=batch&filename=data.jsonl\n   Body: raw JSONL bytes\n   ```\n\nMax file size: **200 MB**. Each line must be a valid JSON object.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadMultipart"
+              }
+            },
+            "application/x-ndjson": {
+              "schema": {
+                "type": "string",
+                "description": "Raw JSONL body. Pass `?purpose=batch&filename=data.jsonl` in the query string."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "File uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceFile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty body, size exceeded, or wrong purpose.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "File exceeds 200MB limit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File too large (> 200 MB).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "File exceeds 200MB limit"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/files/{id}": {
+      "get": {
+        "tags": [
+          "Inference — Files"
+        ],
+        "summary": "Get file metadata",
+        "operationId": "getInferenceFile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "File ID (prefix `file_`).",
+              "example": "file_abc123"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Inference — Files"
+        ],
+        "summary": "Delete file",
+        "operationId": "deleteInferenceFile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Soft-deletes the metadata row and purges the R2 object. Files referenced by pending batches cannot be deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "File ID.",
+              "example": "file_abc123"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceFileDeleted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/batches": {
+      "get": {
+        "tags": [
+          "Inference — Batches"
+        ],
+        "summary": "List batches",
+        "operationId": "listBatches",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists batch jobs for the org (OpenAI-compatible shape).",
+        "responses": {
+          "200": {
+            "description": "Batch list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Batches"
+        ],
+        "summary": "Create batch",
+        "operationId": "createBatch",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates an asynchronous batch job from an uploaded JSONL file.\n\n**Input file format** — each line must be a JSON object:\n```json\n{\"custom_id\": \"req-1\", \"method\": \"POST\", \"url\": \"/v1/chat/completions\", \"body\": {\"model\": \"openai/gpt-4o\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}}\n```\n\n**Lifecycle:**\n1. Input file is validated (line count, format)\n2. Batch row created with `status: \"validating\"`\n3. Processor runs each line against the gateway endpoint\n4. On completion: `status: \"completed\"` + `output_file_id` set\n5. Download results via `GET /api/inference/files/{output_file_id}/content`\n\nCompletion window: **24h**.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Batch created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or input file not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Input file not found"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/batches/{id}": {
+      "get": {
+        "tags": [
+          "Inference — Batches"
+        ],
+        "summary": "Get batch",
+        "operationId": "getBatch",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Batch ID (prefix `batch_`).",
+              "example": "batch_abc123"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/batches/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Inference — Batches"
+        ],
+        "summary": "Cancel batch",
+        "operationId": "cancelBatch",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Cancels a batch that is still validating or in progress. Already-completed requests are not reversed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Batch ID.",
+              "example": "batch_abc123"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch cancellation initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Batch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Batch is already completed or cancelled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Cannot cancel a completed batch"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/vector/collections": {
+      "get": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "List vector collections",
+        "operationId": "listVectorCollections",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists pgvector collections for the org. Each collection is billed at $8/month (hourly metered).",
+        "responses": {
+          "200": {
+            "description": "Collection list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorCollectionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "Create vector collection",
+        "operationId": "createVectorCollection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates a new pgvector collection.\n\n**Two modes:**\n- **Auto-embed:** Set `embedding_model_id` to a catalog model. On upsert/query you can pass `text` instead of a pre-computed vector.\n- **Bring-your-own embeddings:** Omit `embedding_model_id` and set `dimensions`. You must always supply `embedding` (float array) on upsert/query.\n\n**Pricing:** $8/month per collection, billed hourly.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VectorCollectionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Collection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/VectorCollection"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits to create a vector collection ($1 minimum balance).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Insufficient credits"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/vector/collections/{id}": {
+      "get": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "Get vector collection",
+        "operationId": "getVectorCollection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Collection UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/VectorCollection"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "Delete vector collection",
+        "operationId": "deleteVectorCollection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Deletes the collection and all its vectors. Billing stops immediately. This is irreversible.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Collection UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/vector/collections/{id}/upsert": {
+      "post": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "Upsert vectors",
+        "operationId": "upsertVectors",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Insert or update rows in a collection. If a row with the same `external_id` already exists it is replaced.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Collection UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VectorUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upsert result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "upserted": {
+                      "type": "integer",
+                      "example": 42
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "external_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "external_id"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "upserted",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/vector/collections/{id}/query": {
+      "post": {
+        "tags": [
+          "Inference — Vector"
+        ],
+        "summary": "Query vectors",
+        "operationId": "queryVectors",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Similarity search against a collection.\n\nProvide either:\n- `embedding` — a pre-computed float vector (bring-your-own embeddings collections)\n- `text` — raw text; the server auto-embeds it using the collection's `embedding_model_id`\n\nResults are ordered by similarity descending. Use `filter` for multi-tenant RAG.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Collection UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VectorQueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Query results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorQueryResult"
+                },
+                "example": {
+                  "success": true,
+                  "results": [
+                    {
+                      "id": "row-uuid",
+                      "external_id": "doc-42-chunk-3",
+                      "content": "To reset your password...",
+                      "metadata": {
+                        "tenant": "acme"
+                      },
+                      "similarity": 0.923
+                    }
+                  ],
+                  "count": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Must provide `embedding` or `text`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Must provide either embedding or text"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/presets": {
+      "get": {
+        "tags": [
+          "Inference — Presets"
+        ],
+        "summary": "List presets",
+        "operationId": "listPresets",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists saved request presets for the org. Apply a preset on gateway calls via `X-Ahura-Preset: <name>`.",
+        "responses": {
+          "200": {
+            "description": "Preset list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inference — Presets"
+        ],
+        "summary": "Create preset",
+        "operationId": "createPreset",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates a saved routing preset.\n\nA preset bundles model preferences, fallback behaviour, and routing hints. Reference it on gateway calls:\n\n```\nX-Ahura-Preset: production-claude\n```\n\nThe gateway merges preset config into the request (body fields override the preset).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Preset created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Preset"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Validation error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Preset \"production-claude\" already exists"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/presets/{id}": {
+      "delete": {
+        "tags": [
+          "Inference — Presets"
+        ],
+        "summary": "Delete preset",
+        "operationId": "deletePreset",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Preset UUID."
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — viewer role cannot perform this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Viewers cannot create resources"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/usage/summary": {
+      "get": {
+        "tags": [
+          "Inference — Usage"
+        ],
+        "summary": "Get usage summary",
+        "operationId": "getInferenceUsageSummary",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns current-month spend, request counts, a per-day breakdown, top models by cost, and the most recent 20 requests for the org.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "description": "Number of days to include in the daily breakdown (1–90). Default: 7.",
+              "example": 7
+            },
+            "required": false,
+            "name": "days",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inference/members": {
+      "get": {
+        "tags": [
+          "Inference — Org"
+        ],
+        "summary": "List org members",
+        "operationId": "listInferenceOrgMembers",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Lists all members of the calling user's inference org with their role and join date.",
+        "responses": {
+          "200": {
+            "description": "Member list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgMemberList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — session expired or API key invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-user rate limit (30–60 req/min depending on operation).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Too Many Requests"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMgmtError"
+                },
+                "example": {
+                  "error": "Internal server error"
                 }
               }
             }

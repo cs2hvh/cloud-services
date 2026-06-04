@@ -1,27 +1,32 @@
 #!/usr/bin/env tsx
 /**
- * Generate OpenAPI specification from Zod schemas
+ * Generate OpenAPI specifications from Zod schemas.
  * Usage: npm run generate:openapi
+ *
+ * Outputs:
+ *   public/openapi.json            — platform API (apps, databases, k8s, …)
+ *   workers/inference/openapi.json — inference edge gateway (chat, embeddings, …)
  */
 import fs from 'fs';
 import path from 'path';
 import { generateOpenAPIDocument } from '../lib/openapi/registry';
+import { generateInferenceOpenAPIDocument } from '../lib/openapi/registry-inference';
 
-console.log('🔧 Generating OpenAPI specification...');
+function write(filePath: string, spec: object) {
+  fs.writeFileSync(filePath, JSON.stringify(spec, null, 2), 'utf-8');
+  const p = Object.keys((spec as Record<string, unknown>).paths ?? {}).length;
+  const s = Object.keys(((spec as Record<string, unknown>).components as Record<string, unknown>)?.schemas ?? {}).length;
+  console.log(`  ${filePath}  (${p} paths, ${s} schemas)`);
+}
+
+console.log('Generating OpenAPI specs...');
 
 try {
-  const spec = generateOpenAPIDocument();
-  const outputPath = path.join(process.cwd(), 'public', 'openapi.json');
-
-  fs.writeFileSync(outputPath, JSON.stringify(spec, null, 2), 'utf-8');
-
-  console.log('✅ OpenAPI spec generated successfully!');
-  console.log(`📄 Output: ${outputPath}`);
-  console.log(`📊 Paths: ${Object.keys(spec.paths || {}).length} endpoints`);
-  console.log(`📦 Schemas: ${Object.keys(spec.components?.schemas || {}).length} components`);
-  console.log('\n🌐 View docs at: http://localhost:3000/api-docs');
-} catch (error) {
-  console.error('❌ Failed to generate OpenAPI spec:');
-  console.error(error);
+  write(path.join(process.cwd(), 'public', 'openapi.json'), generateOpenAPIDocument());
+  write(path.join(process.cwd(), 'workers', 'inference', 'openapi.json'), generateInferenceOpenAPIDocument());
+  console.log('Done.');
+} catch (err) {
+  console.error('Failed to generate OpenAPI specs:');
+  console.error(err);
   process.exit(1);
 }

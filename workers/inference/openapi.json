@@ -1,0 +1,2105 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AhuraCloud Inference Gateway API",
+    "version": "1.0.0",
+    "description": "# AhuraCloud Inference Gateway\n\nOpenAI-compatible LLM gateway at `api.ahurasense.com/v1/`. Use it as a drop-in replacement for the OpenAI SDK — change `base_url` and your API key.\n\n## Authentication\n\nAll endpoints (except `/v1/health`) require a Bearer token:\n\n```\nAuthorization: Bearer ahu_YOUR_API_KEY\n```\n\nKeys are managed from the **Inference → API Keys** dashboard. Keys always start with `ahu_`.\n\n## Request Pipeline\n\nEvery authenticated request flows through these stages before reaching the model:\n\n```\nClient → Auth (KV hot-cache → Postgres fallback)\n       → Spend Check  (block if monthly hard-cap reached → 402)\n       → Rate Limit   (token-bucket per key → 429)\n       → Route Handler (preset → guardrail → cache → upstream → usage event)\n```\n\n## Rate Limits\n\nToken-bucket rate limiting is enforced per API key via Cloudflare Durable Objects.\n\n| Tier | Default RPM | Burst |\n|------|------------|-------|\n| Platform default | 600 RPM (10 RPS) | ~60 tokens (~6 s of capacity) |\n| Custom (per key) | 1 – 10 000 RPM | max(10, ceil(rps × 6)) |\n\nBurst absorbs short spikes — a key allowed 10 RPS can still fire 60 requests in one second before being throttled. Configure per-key limits from the **API Keys** page.\n\nRate-limit response headers (every authenticated response):\n- `X-Ahura-RateLimit-Remaining` — tokens remaining in the current bucket\n- `Retry-After` — seconds until a token is available (only on **429** responses)\n\n## Spend Controls\n\nTwo hard-cap levels are checked **before** any upstream call (so you are never charged for a rejected request):\n- **Key-level hard cap** — set per API key\n- **Org-level hard cap** — set in Inference Settings; prevents any single key from exceeding the org ceiling\n\nOnce the lower cap is hit, every request returns **402** until raised or the billing period resets.\n\n## Caching\n\nTwo independent layers reduce cost and latency:\n\n| Layer | Mechanism | Bypass |\n|-------|-----------|--------|\n| L1 exact-match | Cloudflare KV — identical inputs return a stored response | `X-Ahura-Cache: off` or `Cache-Control: no-cache` |\n| Semantic (L2) | pgvector cosine similarity — near-duplicate prompts reuse prior answers | Same as L1 |\n\nZDR-enabled keys always skip cache regardless of the `X-Ahura-Cache` header.\n\n## Billing Modes\n\n- **`platform`** (default) — usage billed to your AhuraCloud account; the gateway uses the platform OpenRouter key.\n- **`byok`** — your own upstream API key; no platform billing. Requires a BYOK key configured in the dashboard. Pass `X-Ahura-Billing: byok` + `X-Ahura-BYOK-Provider: <provider>`.\n\n## Guardrails (chat endpoints only)\n\nPrompt-injection detection scans user/system text before the upstream call:\n\n| `X-Ahura-Guardrail` | Behaviour |\n|----------------------|-----------|\n| `off` | Skip evaluation |\n| `warn` (default) | Detect, log, and set response header; request proceeds |\n| `block` | Return **400** `guardrail_blocked` if patterns found |\n\nThe response header `X-Ahura-Guardrail` is always set to `clean`, `flagged`, or `blocked`.\n\n## Errors\n\nAll error responses use a consistent envelope:\n\n```json\n{\n  \"error\": {\n    \"message\": \"Human-readable description\",\n    \"type\": \"invalid_request_error\",\n    \"code\": \"model_not_allowed\",\n    \"request_id\": \"uuid\"\n  }\n}\n```\n\n| HTTP | `type` | When |\n|------|---------|------|\n| 400 | `invalid_request_error` | Validation, bad JSON, guardrail blocked, BYOK unavailable |\n| 401 | `authentication_error` | Key missing, malformed, invalid, or expired |\n| 402 | `billing_error` | Monthly hard cap reached |\n| 403 | `permission_error` | Model not on key allowlist, source IP blocked |\n| 429 | `rate_limit_error` | Token bucket exhausted |\n| 500 | `internal_error` | Gateway fault |\n| 503 | `service_unavailable` | Model deployment unreachable |",
+    "contact": {
+      "name": "AhuraCloud Support",
+      "email": "support@ahurasense.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.ahurasense.com",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:8787",
+      "description": "Local dev (wrangler dev)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Unauthenticated gateway health endpoint."
+    },
+    {
+      "name": "Chat",
+      "description": "OpenAI-compatible chat completion endpoint. Supports streaming (SSE) and non-streaming responses, tool calling, and structured output."
+    },
+    {
+      "name": "Messages",
+      "description": "Anthropic Messages API compatibility shim. Accepts Anthropic-shaped requests and returns Anthropic-shaped responses; internally proxied through OpenRouter."
+    },
+    {
+      "name": "Embeddings",
+      "description": "OpenAI-compatible text embedding endpoint. Supports batch inputs and a deterministic L1 KV cache."
+    },
+    {
+      "name": "Models",
+      "description": "Model catalog — public frontier models and private org models (fine-tunes, BYO deployments)."
+    },
+    {
+      "name": "Keys",
+      "description": "API key introspection — identity, model scopes, and current-month spend snapshot."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AhuraCloud Inference API Key",
+        "description": "API key prefixed with `ahu_`. Generate one from the **Inference → API Keys** dashboard.\n\nExample: `Authorization: Bearer ahu_live_abc123def456`"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          },
+          "version": {
+            "type": "string",
+            "description": "Gateway deployment version.",
+            "example": "1.2.0"
+          },
+          "env": {
+            "type": "string",
+            "enum": [
+              "production",
+              "preview",
+              "development"
+            ],
+            "example": "production"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-06-04T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "env",
+          "timestamp"
+        ]
+      },
+      "ChatChoice": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "assistant"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "nullable": true,
+                "example": "The answer is 4."
+              },
+              "tool_calls": {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                },
+                "description": "Tool calls the model wants to make."
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          },
+          "finish_reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "stop",
+              "length",
+              "tool_calls",
+              "content_filter"
+            ],
+            "example": "stop"
+          }
+        },
+        "required": [
+          "index",
+          "message",
+          "finish_reason"
+        ]
+      },
+      "ChatUsage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "example": 18
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "example": 7
+          },
+          "total_tokens": {
+            "type": "integer",
+            "example": 25
+          },
+          "prompt_tokens_details": {
+            "type": "object",
+            "properties": {
+              "cached_tokens": {
+                "type": "integer",
+                "description": "Tokens served from the upstream model's prompt cache.",
+                "example": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ]
+      },
+      "ChatResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "chatcmpl-abc123"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "chat.completion"
+            ]
+          },
+          "created": {
+            "type": "integer",
+            "example": 1749038400
+          },
+          "model": {
+            "type": "string",
+            "example": "openai/gpt-4o"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatChoice"
+            },
+            "minItems": 1
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ChatUsage"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "model",
+          "choices"
+        ]
+      },
+      "InferenceError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "example": "Model \"openai/gpt-99\" is not allowed for this API key"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invalid_request_error",
+                  "authentication_error",
+                  "billing_error",
+                  "permission_error",
+                  "rate_limit_error",
+                  "internal_error",
+                  "service_unavailable"
+                ],
+                "example": "invalid_request_error"
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalid_json",
+                  "invalid_request",
+                  "model_required",
+                  "model_not_allowed",
+                  "model_unavailable",
+                  "preset_not_found",
+                  "guardrail_blocked",
+                  "byok_unavailable",
+                  "self_serve_model",
+                  "key_missing",
+                  "key_malformed",
+                  "key_invalid",
+                  "key_expired",
+                  "ip_not_permitted",
+                  "hard_cap_reached",
+                  "org_hard_cap_reached",
+                  "rate_limit_exceeded",
+                  "catalog_error",
+                  "internal_error",
+                  "not_found"
+                ],
+                "example": "model_not_allowed"
+              },
+              "request_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            },
+            "required": [
+              "message",
+              "type",
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "InferenceBillingError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "example": "Reached the organization's monthly hard cap of 50.00 USD for 2026-06."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "billing_error"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "hard_cap_reached",
+                  "org_hard_cap_reached"
+                ],
+                "description": "`hard_cap_reached` = key-level cap; `org_hard_cap_reached` = org-level cap."
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "key",
+                  "org"
+                ],
+                "description": "Which cap was triggered."
+              },
+              "spent_cents": {
+                "type": "integer",
+                "description": "Month-to-date spend in USD cents.",
+                "example": 5000
+              },
+              "hard_cap_cents": {
+                "type": "integer",
+                "description": "The cap that was reached.",
+                "example": 5000
+              }
+            },
+            "required": [
+              "message",
+              "type",
+              "code",
+              "scope",
+              "spent_cents",
+              "hard_cap_cents"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "InferenceRateLimitError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "example": "Rate limit exceeded"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rate_limit_error"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "rate_limit_exceeded"
+                ]
+              },
+              "retry_after_ms": {
+                "type": "integer",
+                "description": "Milliseconds until a bucket token is available. Complements the `Retry-After` header (seconds).",
+                "example": 850
+              }
+            },
+            "required": [
+              "message",
+              "type",
+              "code",
+              "retry_after_ms"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "ChatMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "developer"
+            ],
+            "example": "user"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              },
+              {
+                "nullable": true
+              },
+              {
+                "nullable": true
+              }
+            ],
+            "description": "Message content — plain string or an array of content blocks (text, image_url, etc.).",
+            "example": "What is 2+2?"
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional participant name for disambiguation."
+          },
+          "tool_call_id": {
+            "type": "string",
+            "description": "ID of the tool call this message is responding to. Required for `role: tool` messages."
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            },
+            "description": "Tool calls the assistant wants to make."
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "ChatRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Model ID to use (e.g. `openai/gpt-4o`, `anthropic/claude-3-5-sonnet`). Required unless an `X-Ahura-Preset` header provides a model.",
+            "example": "openai/gpt-4o"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "minItems": 1,
+            "description": "Conversation history. At least one message is required."
+          },
+          "stream": {
+            "type": "boolean",
+            "description": "If `true`, responses are streamed as Server-Sent Events (`text/event-stream`). Each `data:` line is a ChatCompletionChunk JSON object. Stream ends with `data: [DONE]`.",
+            "example": false
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "description": "Sampling temperature (0–2). Higher = more random.",
+            "example": 0.7
+          },
+          "top_p": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Nucleus sampling — only tokens within the top `top_p` probability mass are sampled.",
+            "example": 1
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Maximum tokens to generate.",
+            "example": 1024
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 8,
+            "description": "Number of completion choices to generate (1–8).",
+            "example": 1
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 4
+              }
+            ],
+            "description": "Up to 4 stop sequences.",
+            "example": [
+              "\\n\\n"
+            ]
+          },
+          "presence_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2,
+            "description": "Penalise tokens that have already appeared. Positive → more new topics.",
+            "example": 0
+          },
+          "frequency_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2,
+            "description": "Penalise tokens by their frequency so far. Positive → less repetition.",
+            "example": 0
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            },
+            "description": "Tools the model may call. Each entry must have `type: \"function\"` and a `function` definition."
+          },
+          "tool_choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "auto",
+                  "required"
+                ]
+              },
+              {
+                "nullable": true
+              },
+              {
+                "nullable": true
+              }
+            ],
+            "description": "`\"auto\"`, `\"none\"`, `\"required\"`, or `{type:\"function\", function:{name}}` to force a specific tool.",
+            "example": "auto"
+          },
+          "response_format": {
+            "nullable": true,
+            "description": "`{type:\"json_object\"}` for JSON mode or `{type:\"json_schema\", json_schema:{...}}` for structured output."
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Seed for deterministic sampling (best-effort; model must support it).",
+            "example": 42
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier for abuse detection. Not forwarded upstream."
+          }
+        },
+        "required": [
+          "messages"
+        ]
+      },
+      "AnthropicContentBlock": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Block type: `text`, `image`, `tool_use`, or `tool_result`.",
+            "example": "text"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "AnthropicResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "msg_01abc"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "message"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnthropicContentBlock"
+            }
+          },
+          "model": {
+            "type": "string",
+            "example": "claude-3-5-sonnet-20241022"
+          },
+          "stop_reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "end_turn",
+              "max_tokens",
+              "stop_sequence",
+              "tool_use"
+            ],
+            "example": "end_turn"
+          },
+          "stop_sequence": {
+            "type": "string",
+            "nullable": true,
+            "description": "The stop sequence that triggered a stop, if applicable."
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "input_tokens": {
+                "type": "integer",
+                "example": 12
+              },
+              "output_tokens": {
+                "type": "integer",
+                "example": 42
+              }
+            },
+            "required": [
+              "input_tokens",
+              "output_tokens"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "role",
+          "content",
+          "model",
+          "stop_reason",
+          "usage"
+        ]
+      },
+      "AnthropicMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "example": "user"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AnthropicContentBlock"
+                }
+              }
+            ],
+            "description": "Plain string or array of content blocks."
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "AnthropicRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Anthropic model ID.",
+            "example": "claude-3-5-sonnet-20241022"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnthropicMessage"
+            },
+            "minItems": 1
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AnthropicContentBlock"
+                }
+              }
+            ],
+            "description": "System prompt — plain string or array of text content blocks."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "**Required**. Maximum tokens to generate (unlike OpenAI this field is mandatory).",
+            "example": 1024
+          },
+          "stream": {
+            "type": "boolean",
+            "example": false
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.7
+          },
+          "top_p": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Only the top `k` tokens are considered."
+          },
+          "stop_sequences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sequences that stop generation when produced."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "nullable": true
+            }
+          },
+          "tool_choice": {
+            "nullable": true,
+            "description": "`{type:\"auto\"}`, `{type:\"any\"}`, or `{type:\"tool\", name:\"<name>\"}`."
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "External identifier for the end user."
+              }
+            }
+          }
+        },
+        "required": [
+          "model",
+          "messages",
+          "max_tokens"
+        ]
+      },
+      "EmbeddingObject": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "embedding"
+            ]
+          },
+          "embedding": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Float32 vector (float format) or base64-encoded Float32 vector (base64 format)."
+          },
+          "index": {
+            "type": "integer",
+            "description": "Position in the input array.",
+            "example": 0
+          }
+        },
+        "required": [
+          "object",
+          "embedding",
+          "index"
+        ]
+      },
+      "EmbeddingsResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingObject"
+            }
+          },
+          "model": {
+            "type": "string",
+            "example": "openai/text-embedding-3-small"
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": {
+                "type": "integer",
+                "example": 9
+              },
+              "total_tokens": {
+                "type": "integer",
+                "example": 9
+              }
+            },
+            "required": [
+              "prompt_tokens",
+              "total_tokens"
+            ]
+          }
+        },
+        "required": [
+          "object",
+          "data",
+          "model",
+          "usage"
+        ]
+      },
+      "EmbeddingsRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Embedding model ID. Supported: `openai/text-embedding-3-small`, `openai/text-embedding-3-large`, `openai/text-embedding-ada-002`.",
+            "example": "openai/text-embedding-3-small"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 2048
+              }
+            ],
+            "description": "Single string or array of strings to embed (max 2048 in a batch).",
+            "example": "The quick brown fox jumps over the lazy dog"
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Desired output dimensions. Only supported by `text-embedding-3-*` models.",
+            "example": 512
+          },
+          "encoding_format": {
+            "type": "string",
+            "enum": [
+              "float",
+              "base64"
+            ],
+            "description": "`float` (default) returns a number array; `base64` returns a compact encoded string.",
+            "example": "float"
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier for abuse detection."
+          }
+        },
+        "required": [
+          "model",
+          "input"
+        ]
+      },
+      "InferenceModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Model ID used in API requests.",
+            "example": "openai/gpt-4o"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "model"
+            ]
+          },
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp (0 for proxied frontier models).",
+            "example": 0
+          },
+          "owned_by": {
+            "type": "string",
+            "description": "`openrouter` for proxied frontier models, `ahura` for platform-hosted models, `ahura-private` for this org's fine-tunes or BYO deployments.",
+            "example": "openrouter"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "GPT-4o"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "OpenAI's most capable multimodal model."
+          },
+          "modality": {
+            "type": "string",
+            "description": "Primary modality: `chat`, `completion`, `embedding`, `image`, `audio_stt`, `audio_tts`, `video`, `rerank`.",
+            "example": "chat"
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "Feature flags (e.g. `{streaming: true, tool_use: true, vision: true, json_mode: true}`)."
+          },
+          "pricing": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "Pricing metadata (e.g. `{input_cents_per_mtok: 250, output_cents_per_mtok: 1000}`)."
+          },
+          "off_peak": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "Off-peak discount window if offered (e.g. `{window: \"00:00-06:00 UTC\", discount_pct: 50}`)."
+          },
+          "featured": {
+            "type": "boolean",
+            "description": "Whether this model is featured in the UI.",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "owned_by",
+          "display_name",
+          "modality",
+          "capabilities",
+          "pricing",
+          "featured"
+        ]
+      },
+      "ModelListResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InferenceModel"
+            }
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ]
+      },
+      "KeyInfo": {
+        "type": "object",
+        "properties": {
+          "key_id": {
+            "type": "string",
+            "example": "key_01hwxyz"
+          },
+          "org_id": {
+            "type": "string",
+            "example": "org_abc123"
+          },
+          "zdr_enabled": {
+            "type": "boolean",
+            "description": "Zero Data Retention mode. If `true`, no request/response content is cached or logged.",
+            "example": false
+          },
+          "allowed_models": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Model allowlist for this key. `null` means unrestricted — any model the org can access.",
+            "example": null
+          },
+          "billing": {
+            "type": "string",
+            "enum": [
+              "platform",
+              "byok"
+            ],
+            "example": "platform"
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}$",
+                "description": "Current billing month (YYYY-MM).",
+                "example": "2026-06"
+              },
+              "spent_cents": {
+                "type": "integer",
+                "description": "Accumulated spend in USD cents this month. Best-effort read from KV; may lag a few seconds.",
+                "example": 4231
+              },
+              "monthly_budget_cents": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Soft monthly budget in USD cents. Informational only. `null` if not set.",
+                "example": 10000
+              },
+              "hard_cap_cents": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Hard cap in USD cents. Requests return 402 once this is reached. `null` if not set.",
+                "example": 5000
+              }
+            },
+            "required": [
+              "month",
+              "spent_cents",
+              "monthly_budget_cents",
+              "hard_cap_cents"
+            ]
+          }
+        },
+        "required": [
+          "key_id",
+          "org_id",
+          "zdr_enabled",
+          "allowed_models",
+          "billing",
+          "usage"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Gateway health check",
+        "operationId": "getHealth",
+        "security": [],
+        "description": "Returns the operational status of the gateway. No authentication required. Use this for uptime monitoring and readiness probes.",
+        "responses": {
+          "200": {
+            "description": "Gateway is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "version": "1.2.0",
+                  "env": "production",
+                  "timestamp": "2026-06-04T12:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Create chat completion",
+        "operationId": "createChatCompletion",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates a model response for the given conversation. OpenAI Chat Completions API-compatible — any SDK targeting OpenAI works by changing `base_url` and `api_key`.\n\n**Streaming** — set `\"stream\": true` to receive a Server-Sent Events stream. Each `data:` line contains a ChatCompletionChunk JSON object (OpenAI delta format). The stream ends with `data: [DONE]`.\n\n**Presets** — pass `X-Ahura-Preset: <name>` to apply a saved org configuration (model, temperature, system prompt, etc.). Body fields override preset values.\n\n**Guardrails** — pass `X-Ahura-Guardrail: block` to enforce prompt-injection protection (default policy: `warn`).\n\n**Model routing** — proxy (frontier) models are forwarded to OpenRouter; fine-tuned and BYO models are forwarded to their RunPod serving URL.\n\n**Response headers set on every request:**\n- `X-Ahura-Request-Id` — trace ID\n- `X-Ahura-Model` — resolved model (after preset expansion)\n- `X-Ahura-RateLimit-Remaining` — tokens left in the bucket\n- `X-Ahura-Cache` — `hit | miss | bypass`\n- `X-Ahura-Cache-Age` — seconds (only on cache hits)\n- `X-Ahura-Guardrail` — `clean | flagged | blocked`\n- `X-Ahura-Cost-Cents` — cost in USD cents (non-cached upstream responses)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "platform",
+                "byok"
+              ],
+              "description": "Billing mode. `platform` (default) charges your AhuraCloud account. `byok` uses your own upstream API key (also set `X-Ahura-BYOK-Provider`)."
+            },
+            "required": false,
+            "name": "x-ahura-billing",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google",
+                "mistral"
+              ],
+              "description": "Required when `X-Ahura-Billing: byok`. Selects which stored BYOK key to decrypt and use."
+            },
+            "required": false,
+            "name": "x-ahura-byok-provider",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Client-supplied trace ID. Echoed in the response `X-Ahura-Request-Id` header. Gateway generates one if omitted.",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": false,
+            "name": "x-ahura-request-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Idempotency key for safe retries. Requests sharing this key return the cached response without a new upstream call."
+            },
+            "required": false,
+            "name": "x-ahura-idempotency-key",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ],
+              "description": "Override caching for this request. `off` bypasses both L1 exact-match and semantic caches. ZDR-enabled keys always bypass regardless of this setting."
+            },
+            "required": false,
+            "name": "x-ahura-cache",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "description": "Override L1 cache TTL in seconds (60–86400).",
+              "example": 3600
+            },
+            "required": false,
+            "name": "x-ahura-cache-ttl",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Saved preset name to apply (model list, temperature, system prompt, etc.). Body fields override preset values.",
+              "example": "production-claude"
+            },
+            "required": false,
+            "name": "x-ahura-preset",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "warn",
+                "block"
+              ],
+              "description": "Prompt-injection guardrail policy. `off` skips evaluation; `warn` (default) logs detections but proceeds; `block` returns 400 if patterns found."
+            },
+            "required": false,
+            "name": "x-ahura-guardrail",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful completion. Returns `application/json` for non-streaming and `text/event-stream` for streaming.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                },
+                "example": {
+                  "id": "chatcmpl-abc123",
+                  "object": "chat.completion",
+                  "created": 1749038400,
+                  "model": "openai/gpt-4o",
+                  "choices": [
+                    {
+                      "index": 0,
+                      "message": {
+                        "role": "assistant",
+                        "content": "The answer is 4."
+                      },
+                      "finish_reason": "stop"
+                    }
+                  ],
+                  "usage": {
+                    "prompt_tokens": 18,
+                    "completion_tokens": 7,
+                    "total_tokens": 25
+                  }
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE stream. Lines: `data: <ChatCompletionChunk json>`. Ends with `data: [DONE]`.\n\nExample chunk:\n```\ndata: {\"id\":\"chatcmpl-abc\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n```"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — validation failure, bad JSON, guardrail blocked, BYOK unavailable, or preset not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Request blocked by prompt-injection guardrail (patterns: role_override_1)",
+                    "type": "invalid_request_error",
+                    "code": "guardrail_blocked",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — API key missing, malformed (must start with `ahu_`), invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Missing API key",
+                    "type": "authentication_error",
+                    "code": "key_missing"
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required — monthly hard cap reached. The request was **not** forwarded upstream; you were not charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceBillingError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Reached the organization's monthly hard cap of 50.00 USD for 2026-06. Raise the org cap on the Inference Settings page.",
+                    "type": "billing_error",
+                    "code": "org_hard_cap_reached",
+                    "scope": "org",
+                    "spent_cents": 5000,
+                    "hard_cap_cents": 5000
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — model not on this key's allowlist, or source IP blocked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Model \"openai/gpt-4o\" is not allowed for this API key",
+                    "type": "permission_error",
+                    "code": "model_not_allowed"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-key token bucket exhausted. Back off by `Retry-After` seconds (or `error.retry_after_ms` milliseconds).\n\nDefault limit: **600 RPM** (10 RPS) with a burst of ~60 tokens. Configurable per key (1–10 000 RPM) from the API Keys dashboard.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceRateLimitError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Rate limit exceeded",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "retry_after_ms": 850
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal gateway error. Stack traces are never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Internal gateway error",
+                    "type": "internal_error",
+                    "code": "internal_error",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable — the model's serving pod is not reachable (e.g. still warming up after a cold start).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Model \"my-finetune-v2\" serving pod is warming up. Retry in ~30 seconds.",
+                    "type": "service_unavailable",
+                    "code": "model_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/messages": {
+      "post": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Create message (Anthropic API shim)",
+        "operationId": "createMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Anthropic Messages API compatibility shim. Accepts an Anthropic-shaped request and returns an Anthropic-shaped response, so code written against the Anthropic SDK works without modification.\n\nInternally the gateway translates to OpenAI Chat Completions, forwards to OpenRouter, then translates the response back.\n\n**Supported (Phase 1):**\n- Text content (string or `[{type:\"text\"}]` blocks)\n- Image content (base64 source blocks → OpenAI `image_url` data URIs)\n- System prompt as string or array of text blocks\n- Streaming — OpenAI SSE is translated to Anthropic event-named SSE (`message_start`, `content_block_delta`, `message_delta`, `message_stop`)\n- Tool calling pass-through\n\n**Not yet supported (Phase 2):**\n- Tool-use response streaming (streams as text-only deltas)\n- `cache_control` block hints\n- Container/code-execution tools",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "platform",
+                "byok"
+              ],
+              "description": "Billing mode. `platform` (default) charges your AhuraCloud account. `byok` uses your own upstream API key (also set `X-Ahura-BYOK-Provider`)."
+            },
+            "required": false,
+            "name": "x-ahura-billing",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google",
+                "mistral"
+              ],
+              "description": "Required when `X-Ahura-Billing: byok`. Selects which stored BYOK key to decrypt and use."
+            },
+            "required": false,
+            "name": "x-ahura-byok-provider",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Client-supplied trace ID. Echoed in the response `X-Ahura-Request-Id` header. Gateway generates one if omitted.",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": false,
+            "name": "x-ahura-request-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Idempotency key for safe retries. Requests sharing this key return the cached response without a new upstream call."
+            },
+            "required": false,
+            "name": "x-ahura-idempotency-key",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ],
+              "description": "Override caching for this request. `off` bypasses both L1 exact-match and semantic caches. ZDR-enabled keys always bypass regardless of this setting."
+            },
+            "required": false,
+            "name": "x-ahura-cache",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "description": "Override L1 cache TTL in seconds (60–86400).",
+              "example": 3600
+            },
+            "required": false,
+            "name": "x-ahura-cache-ttl",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnthropicRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful completion. Returns `application/json` or `text/event-stream` (Anthropic SSE event format).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnthropicResponse"
+                },
+                "example": {
+                  "id": "msg_01abc",
+                  "type": "message",
+                  "role": "assistant",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Hello! How can I help you today?"
+                    }
+                  ],
+                  "model": "claude-3-5-sonnet-20241022",
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null,
+                  "usage": {
+                    "input_tokens": 12,
+                    "output_tokens": 10
+                  }
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Anthropic-format SSE. Events: `message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Invalid JSON body",
+                    "type": "invalid_request_error",
+                    "code": "invalid_json"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — API key missing, malformed (must start with `ahu_`), invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Missing API key",
+                    "type": "authentication_error",
+                    "code": "key_missing"
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required — monthly hard cap reached. The request was **not** forwarded upstream; you were not charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceBillingError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Reached the organization's monthly hard cap of 50.00 USD for 2026-06. Raise the org cap on the Inference Settings page.",
+                    "type": "billing_error",
+                    "code": "org_hard_cap_reached",
+                    "scope": "org",
+                    "spent_cents": 5000,
+                    "hard_cap_cents": 5000
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Model \"claude-3-opus\" is not allowed for this API key",
+                    "type": "permission_error",
+                    "code": "model_not_allowed"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-key token bucket exhausted. Back off by `Retry-After` seconds (or `error.retry_after_ms` milliseconds).\n\nDefault limit: **600 RPM** (10 RPS) with a burst of ~60 tokens. Configurable per key (1–10 000 RPM) from the API Keys dashboard.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceRateLimitError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Rate limit exceeded",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "retry_after_ms": 850
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal gateway error. Stack traces are never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Internal gateway error",
+                    "type": "internal_error",
+                    "code": "internal_error",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable — the model's serving pod is not reachable (e.g. still warming up after a cold start).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Model \"my-finetune-v2\" serving pod is warming up. Retry in ~30 seconds.",
+                    "type": "service_unavailable",
+                    "code": "model_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "tags": [
+          "Embeddings"
+        ],
+        "summary": "Create embeddings",
+        "operationId": "createEmbeddings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Generates vector embeddings for one or more text inputs. OpenAI Embeddings API-compatible.\n\nEmbedding results are deterministic — the same input always produces the same vector. The gateway caches results in Cloudflare KV so repeated identical inputs return immediately without a new upstream call or billing event.\n\n**Response headers:**\n- `X-Ahura-Request-Id` — trace ID\n- `X-Ahura-Model` — resolved model\n- `X-Ahura-RateLimit-Remaining` — bucket tokens remaining\n- `X-Ahura-Cache` — `hit | miss | bypass`\n- `X-Ahura-Cache-Age` — seconds (only on cache hits)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "platform",
+                "byok"
+              ],
+              "description": "Billing mode. `platform` (default) charges your AhuraCloud account. `byok` uses your own upstream API key (also set `X-Ahura-BYOK-Provider`)."
+            },
+            "required": false,
+            "name": "x-ahura-billing",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "openrouter",
+                "openai",
+                "anthropic",
+                "google",
+                "mistral"
+              ],
+              "description": "Required when `X-Ahura-Billing: byok`. Selects which stored BYOK key to decrypt and use."
+            },
+            "required": false,
+            "name": "x-ahura-byok-provider",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Client-supplied trace ID. Echoed in the response `X-Ahura-Request-Id` header. Gateway generates one if omitted.",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": false,
+            "name": "x-ahura-request-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "description": "Idempotency key for safe retries. Requests sharing this key return the cached response without a new upstream call."
+            },
+            "required": false,
+            "name": "x-ahura-idempotency-key",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ],
+              "description": "Override caching for this request. `off` bypasses both L1 exact-match and semantic caches. ZDR-enabled keys always bypass regardless of this setting."
+            },
+            "required": false,
+            "name": "x-ahura-cache",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "description": "Override L1 cache TTL in seconds (60–86400).",
+              "example": 3600
+            },
+            "required": false,
+            "name": "x-ahura-cache-ttl",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Embedding vectors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingsResponse"
+                },
+                "example": {
+                  "object": "list",
+                  "data": [
+                    {
+                      "object": "embedding",
+                      "embedding": [
+                        0.0023,
+                        -0.0095,
+                        0.0156
+                      ],
+                      "index": 0
+                    }
+                  ],
+                  "model": "openai/text-embedding-3-small",
+                  "usage": {
+                    "prompt_tokens": 9,
+                    "total_tokens": 9
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "messages.0.content: Required",
+                    "type": "invalid_request_error",
+                    "code": "invalid_request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — API key missing, malformed (must start with `ahu_`), invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Missing API key",
+                    "type": "authentication_error",
+                    "code": "key_missing"
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required — monthly hard cap reached. The request was **not** forwarded upstream; you were not charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceBillingError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Reached the organization's monthly hard cap of 50.00 USD for 2026-06. Raise the org cap on the Inference Settings page.",
+                    "type": "billing_error",
+                    "code": "org_hard_cap_reached",
+                    "scope": "org",
+                    "spent_cents": 5000,
+                    "hard_cap_cents": 5000
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Model \"openai/text-embedding-3-large\" is not allowed for this API key",
+                    "type": "permission_error",
+                    "code": "model_not_allowed"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-key token bucket exhausted. Back off by `Retry-After` seconds (or `error.retry_after_ms` milliseconds).\n\nDefault limit: **600 RPM** (10 RPS) with a burst of ~60 tokens. Configurable per key (1–10 000 RPM) from the API Keys dashboard.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceRateLimitError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Rate limit exceeded",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "retry_after_ms": 850
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal gateway error. Stack traces are never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Internal gateway error",
+                    "type": "internal_error",
+                    "code": "internal_error",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "List available models",
+        "operationId": "listModels",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns the full model catalog visible to the calling org:\n\n- **Public models** (`org_id: null`) — frontier models proxied through OpenRouter\n- **Private models** (`owned_by: \"ahura-private\"`) — the org's fine-tuned outputs or BYO deployments\n\nModels are returned sorted by `sort_order`. The `capabilities`, `pricing`, and `off_peak` fields contain model-specific metadata for building pricing UIs and routing logic.",
+        "responses": {
+          "200": {
+            "description": "Model catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                },
+                "example": {
+                  "object": "list",
+                  "data": [
+                    {
+                      "id": "openai/gpt-4o",
+                      "object": "model",
+                      "created": 0,
+                      "owned_by": "openrouter",
+                      "display_name": "GPT-4o",
+                      "description": "OpenAI's most capable multimodal model",
+                      "modality": "chat",
+                      "capabilities": {
+                        "streaming": true,
+                        "tool_use": true,
+                        "vision": true,
+                        "json_mode": true
+                      },
+                      "pricing": {
+                        "input_cents_per_mtok": 250,
+                        "output_cents_per_mtok": 1000
+                      },
+                      "off_peak": null,
+                      "featured": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — API key missing, malformed (must start with `ahu_`), invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Missing API key",
+                    "type": "authentication_error",
+                    "code": "key_missing"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-key token bucket exhausted. Back off by `Retry-After` seconds (or `error.retry_after_ms` milliseconds).\n\nDefault limit: **600 RPM** (10 RPS) with a burst of ~60 tokens. Configurable per key (1–10 000 RPM) from the API Keys dashboard.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceRateLimitError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Rate limit exceeded",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "retry_after_ms": 850
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal gateway error. Stack traces are never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Internal gateway error",
+                    "type": "internal_error",
+                    "code": "internal_error",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/key": {
+      "get": {
+        "tags": [
+          "Keys"
+        ],
+        "summary": "Get API key info",
+        "operationId": "getKeyInfo",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns the identity and configuration of the calling API key, plus a best-effort current-month spend snapshot from the KV spend counter.\n\nUseful for SDK integrations that need to check budget remaining or verify which models the key is scoped to — without loading the dashboard.\n\nThe `usage.spent_cents` value is read from a KV counter that is updated asynchronously after each completed request; it may lag by a few seconds.",
+        "responses": {
+          "200": {
+            "description": "Key info and spend snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyInfo"
+                },
+                "example": {
+                  "key_id": "key_01hwxyz",
+                  "org_id": "org_abc123",
+                  "zdr_enabled": false,
+                  "allowed_models": null,
+                  "billing": "platform",
+                  "usage": {
+                    "month": "2026-06",
+                    "spent_cents": 4231,
+                    "monthly_budget_cents": 10000,
+                    "hard_cap_cents": 5000
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — API key missing, malformed (must start with `ahu_`), invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Missing API key",
+                    "type": "authentication_error",
+                    "code": "key_missing"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — per-key token bucket exhausted. Back off by `Retry-After` seconds (or `error.retry_after_ms` milliseconds).\n\nDefault limit: **600 RPM** (10 RPS) with a burst of ~60 tokens. Configurable per key (1–10 000 RPM) from the API Keys dashboard.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceRateLimitError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Rate limit exceeded",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                    "retry_after_ms": 850
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal gateway error. Stack traces are never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceError"
+                },
+                "example": {
+                  "error": {
+                    "message": "Internal gateway error",
+                    "type": "internal_error",
+                    "code": "internal_error",
+                    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
