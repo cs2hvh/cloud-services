@@ -183,7 +183,8 @@ export function createServiceNotification(params: {
     inference: 'Inference',
   };
 
-  const { type: defaultType, verb } = actionMessages[action];
+  const { type: defaultType, verb: baseVerb } = actionMessages[action];
+  let verb = baseVerb;
   const serviceLabel = serviceLabels[serviceType];
   const notificationType = overrideType || (error ? 'error' : defaultType);
 
@@ -275,6 +276,21 @@ export function createServiceNotification(params: {
       default:
         message = `${serviceLabel} "${serviceName}" has been ${verb} successfully.`;
     }
+  } else if (action === 'resized') {
+    const oldSize = metadata?.old_size as string | undefined;
+    const newSize = metadata?.new_size as string | undefined;
+    const sizeOrder = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
+    const isDowngrade =
+      oldSize && newSize
+        ? sizeOrder.indexOf(newSize) < sizeOrder.indexOf(oldSize)
+        : false;
+    const direction = isDowngrade ? 'downgraded' : 'upgraded';
+    if (oldSize && newSize) {
+      message = `${serviceLabel} "${serviceName}" has been ${direction} from ${oldSize} to ${newSize}.`;
+    } else {
+      message = `${serviceLabel} "${serviceName}" has been resized successfully.`;
+    }
+    verb = isDowngrade ? 'downgraded' : 'upgraded';
   } else if (action === 'attached') {
     message = `${serviceLabel} "${serviceName}" has been attached${metadata?.targetName ? ` to ${metadata.targetName}` : ''}.`;
   } else if (action === 'detached') {

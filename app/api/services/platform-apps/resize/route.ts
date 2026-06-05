@@ -36,7 +36,7 @@ const SIZE_SPECS: Record<string, { cpu: string; memory: string; replicas: number
 
 /**
  * POST /api/services/platform-apps/resize
- * Resize an app instance (upsize only) and trigger redeployment
+ * Resize an app instance (upsize or downsize) and trigger redeployment
  */
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -77,11 +77,11 @@ export async function POST(req: NextRequest) {
     const app = existing.data;
 
     const currentSize = app.size || "small";
-    if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
+    if (SIZE_ORDER[new_size] === SIZE_ORDER[currentSize]) {
       return NextResponse.json(
         {
           error: "Invalid resize operation",
-          message: `Cannot resize from ${currentSize} to ${new_size}. Only upsizing is supported.`,
+          message: `App is already running on ${currentSize}.`,
           current_size: currentSize,
           requested_size: new_size,
         },
@@ -89,18 +89,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Balance check — verify user can afford the new tier's hourly rate
-    const balanceCheck = await PlatformAppService.checkBalanceForResize(auth.user!.id, new_size);
-    if (!balanceCheck.ok) {
-      return NextResponse.json(
-        {
-          error: "Insufficient credits",
-          message: `Your balance ($${balanceCheck.balance ?? 0}) is below the new tier's hourly rate ($${balanceCheck.required}/hr). Please top up before resizing.`,
-          balance: balanceCheck.balance,
-          required: balanceCheck.required,
-        },
-        { status: 402 }
-      );
+    // Balance check only applies to upgrades — downgrading always moves to a cheaper tier
+    const isDowngrade = SIZE_ORDER[new_size] < SIZE_ORDER[currentSize];
+    if (!isDowngrade) {
+      const balanceCheck = await PlatformAppService.checkBalanceForResize(auth.user!.id, new_size);
+      if (!balanceCheck.ok) {
+        return NextResponse.json(
+          {
+            error: "Insufficient credits",
+            message: `Your balance ($${balanceCheck.balance ?? 0}) is below the new tier's hourly rate ($${balanceCheck.required}/hr). Please top up before upgrading.`,
+            balance: balanceCheck.balance,
+            required: balanceCheck.required,
+          },
+          { status: 402 }
+        );
+      }
     }
 
     try {
