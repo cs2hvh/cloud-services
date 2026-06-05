@@ -398,7 +398,7 @@ export default function AppDetailPage() {
 
     return buildInfo;
   }, [activeBuildNumber, buildInfo, viewingBuildNumber]);
-  const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
+  const deploymentMutationBlocked = isBuilding || resizeInProgress || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
   const { 
