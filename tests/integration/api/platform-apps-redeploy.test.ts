@@ -46,6 +46,7 @@ const appOpsMocks = vi.hoisted(() => {
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/billing');
 vi.mock('@/lib/supabase/queries/projects');
 vi.mock('@/lib/services/jenkins');
 vi.mock('@/lib/services/app-status');
@@ -154,6 +155,10 @@ describe('POST /api/services/platform-apps/redeploy', () => {
 
     // Default mock for Platform_Apps.get_env_vars
     vi.mocked(Platform_Apps.get_env_vars).mockResolvedValue([]);
+
+    const { Billing } = await import('@/lib/supabase/queries/billing');
+    vi.mocked(Billing.get_platform_app_rate_transition_requirement).mockResolvedValue(1);
+    vi.mocked(Billing.has_balance).mockResolvedValue(true);
 
     // Default mock for Projects.add_log
     const { Projects } = await import('@/lib/supabase/queries/projects');
@@ -512,6 +517,60 @@ describe('POST /api/services/platform-apps/redeploy', () => {
           trigger: 'manual',
           operationType: 'redeploy',
         })
+      );
+    });
+
+    it('deploys an approved pending custom profile and records its request id', async () => {
+      const { Platform_Apps } = await import('@/lib/supabase/queries');
+      const { JenkinsService } = await import('@/lib/services/jenkins');
+      const customSpec = {
+        cpuRequest: '8',
+        cpuLimit: '16',
+        memoryRequest: '16Gi',
+        memoryLimit: '32Gi',
+        replicas: 4,
+      };
+      vi.mocked(Platform_Apps.get).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockPlatformApp,
+          user_id: mockPlatformAppUser.id,
+          project_id: mockProject.id,
+          size: 'xxlarge',
+          pending_custom_profile_request_id: '550e8400-e29b-41d4-a716-446655440099',
+          pending_custom_spec: customSpec,
+          pending_custom_hourly_rate: 0.75,
+        },
+      } as any);
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/redeploy',
+        { app_id: mockPlatformApp.id }
+      );
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response, 200);
+
+      expect(appOpsMocks.startReleaseBuildMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: {
+            size: 'custom',
+            custom_profile_request_id: '550e8400-e29b-41d4-a716-446655440099',
+          },
+        })
+      );
+      expect(JenkinsService.updateJobConfig).toHaveBeenCalledWith(
+        mockPlatformApp.name,
+        mockPlatformApp.id,
+        mockPlatformApp.repository_url,
+        mockPlatformApp.branch,
+        mockPlatformApp.framework,
+        'custom',
+        'manual',
+        [],
+        mockPlatformApp.port,
+        undefined,
+        customSpec,
       );
     });
 

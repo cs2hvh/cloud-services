@@ -7,7 +7,8 @@
  * 1. Build stage
  * 2. Create Environment Secret stage
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar, AppSizeSpec
+} from './utils';
 import { generateAngularDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -24,6 +25,7 @@ export function createAngularPipeline(
   envVars: EnvVar[] = [],
   containerPort?: number,
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -36,7 +38,7 @@ export function createAngularPipeline(
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
 
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'small', sizeOverride);
 
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;

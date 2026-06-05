@@ -69,6 +69,7 @@ export function dateOnly(date: Date): string {
 }
 
 export function normalizeSize(size?: string | null): PlatformAppSize {
+  if (size === "custom") return "xxlarge";
   if (size === "medium" || size === "large" || size === "xlarge" || size === "xxlarge") {
     return size;
   }

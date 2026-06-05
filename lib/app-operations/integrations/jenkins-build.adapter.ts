@@ -1,4 +1,5 @@
 import { JenkinsService } from "@/lib/services/jenkins";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 
 export class JenkinsBuildAdapter {
   getJobName(appName: string) {
@@ -61,6 +62,7 @@ export class JenkinsBuildAdapter {
     containerPort?: number;
     gitAuthUrl?: string;
     healthcheckPath?: string;
+    customSpec?: CustomProfileSpec;
   }) {
     await JenkinsService.createJob(
       params.appName,
@@ -74,6 +76,7 @@ export class JenkinsBuildAdapter {
       params.containerPort,
       params.gitAuthUrl,
       params.healthcheckPath,
+      params.customSpec,
     );
 
     return {

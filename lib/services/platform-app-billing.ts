@@ -43,6 +43,7 @@ export class PlatformAppBillingService {
     const app = appResult.data as {
       user_id: string;
       size?: string | null;
+      custom_hourly_rate?: number | null;
       active_deployment_id?: string | null;
     };
 
@@ -104,8 +105,11 @@ export class PlatformAppBillingService {
       }
     }
 
-    const size = this.normalizeSize(app.size);
-    const { initialCost, hourlyRate } = await getRatesForPlatformApp(size);
+    const size = app.size === "custom" ? "custom" : this.normalizeSize(app.size);
+    const { initialCost, hourlyRate } = await getRatesForPlatformApp(
+      size,
+      size === "custom" ? (app.custom_hourly_rate ?? undefined) : undefined,
+    );
 
     try {
       await Billing.activate_platform_app({

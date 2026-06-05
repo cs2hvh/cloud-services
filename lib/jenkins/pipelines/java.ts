@@ -6,7 +6,7 @@
  * 2. Project has a valid pom.xml file
  * 3. Auto-creates Dockerfile if missing, builds with BuildKit, deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml } from './utils';
+import { generateEnvSecret, generateEnvFromSection, EnvVar, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, AppSizeSpec } from './utils';
 import { generateJavaDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -23,6 +23,7 @@ export function createJavaPipeline(
   envVars: EnvVar[] = [],
   containerPort?: number,
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -36,7 +37,7 @@ export function createJavaPipeline(
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
 
   // JVM needs at least 512 MB to start reliably — floor at medium
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium', sizeOverride);
 
   // Use provided container port or default to 8080 for Java apps
   const port = containerPort ?? 8080;

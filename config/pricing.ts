@@ -80,8 +80,16 @@ export async function getRatesForSpectrum(): Promise<Rates> {
   return ratesFromProduct(pick as any);
 }
 
-export async function getRatesForPlatformApp(size: "small" | "medium" | "large" | "xlarge" | "xxlarge"): Promise<Rates> {
-  // Platform apps pricing stored under product type 'platform-apps' with sub = size
+export async function getRatesForPlatformApp(
+  size: "small" | "medium" | "large" | "xlarge" | "xxlarge" | "custom",
+  customHourlyRate?: number,
+): Promise<Rates> {
+  // Custom profiles carry their rate directly — no product table lookup needed
+  if (size === "custom") {
+    const hourlyRate = clampCurrencyAmount(customHourlyRate ?? 0);
+    return { initialCost: 0, hourlyRate };
+  }
+  // Standard sizes: look up by product type + subtype slug
   const products = await Products.get_by_type_and_subtype("platform-apps", size);
   const pick = products[0] ?? null;
   return ratesFromProduct(pick as any);

@@ -8,7 +8,8 @@
  * 2. Create Environment Secret stage
  * 3. Deploy to Kubernetes stage
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar, AppSizeSpec
+} from './utils';
 import { generatePythonDockerfileStage } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -25,12 +26,13 @@ export function createPythonPipeline(
   envVars: EnvVar[] = [],
   containerPort?: number,
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'small', sizeOverride);
 
   // Use provided container port or default to 8000 for Python apps (FastAPI/Flask/Django)
   const port = containerPort ?? 8000;

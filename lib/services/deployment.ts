@@ -10,6 +10,7 @@ import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { randomBytes } from "crypto";
 import { AppReleaseBuildService, JenkinsBuildAdapter } from "@/lib/app-operations";
 import { PlatformAppLogRetentionService } from "@/lib/services/platform-app-log-retention";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 
 // Generate a random ID
 function generateId(length: number = 10): string {
@@ -33,9 +34,11 @@ export interface DeploymentConfig {
   auto_deploy?: boolean;
   deploy_branch?: string;
   project_id?: string;
-  container_port?: number; // User-specified or auto-detected port
+  container_port?: number;
   healthcheck_path?: string;
   idempotencyKey?: string | null;
+  customSpec?: CustomProfileSpec;
+  customHourlyRate?: number;
 }
 
 export interface DeploymentResult {
@@ -127,14 +130,17 @@ export class DeploymentService {
         framework: config.framework,
         build_command: config.build_command,
         output_directory: config.output_directory,
-        status: "pending" as const, // Will be updated to 'building' when Jenkins starts
-        port: containerPort, // Store container port for reference
+        status: "pending" as const,
+        port: containerPort,
         ip: process.env.KUBE_IP || null,
         auto_deploy: config.auto_deploy || false,
         deploy_branch: config.deploy_branch || config.branch,
-        size: config.size || 'small', // Store size for redeployments
+        size: config.size || 'small',
         project_id: config.project_id || null,
         healthcheck_path: config.healthcheck_path || null,
+        // Custom profile — persisted so redeploy/rollback/auto-deploy can recover spec
+        custom_spec: config.customSpec ?? null,
+        custom_hourly_rate: config.customHourlyRate ?? null,
       };
 
       const result = await Platform_Apps.create(appPayload);
@@ -203,6 +209,7 @@ export class DeploymentService {
               containerPort,
               gitAuthUrl: config.authenticated_url || undefined,
               healthcheckPath: config.healthcheck_path || undefined,
+              customSpec: config.customSpec,
             });
             console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
             return {

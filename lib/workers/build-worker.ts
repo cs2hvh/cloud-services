@@ -1,6 +1,7 @@
 import { Worker, Job } from "bullmq";
 import { getRedis } from "@/lib/queue";
 import type { BuildJobData } from "@/lib/build-job";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 
 declare global {
   var __buildWorker: Worker | undefined;
@@ -47,6 +48,7 @@ async function processBuildJob(job: Job<BuildJobData>): Promise<void> {
     healthcheckPath: app.healthcheck_path ?? undefined,
     commitSha: sourceHash,
     deliveryId: deliveryId,
+    customSpec: (app.custom_spec as CustomProfileSpec | null) ?? undefined,
   });
 
   if (result.skipped) {

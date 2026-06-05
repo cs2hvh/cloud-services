@@ -219,3 +219,82 @@ export const resizePlatformAppSchema = z.object({
 });
 
 export type ResizePlatformAppPayload = z.infer<typeof resizePlatformAppSchema>;
+
+// ─── Custom Profile Validation ────────────────────────────────────────────────
+
+// Valid K8s CPU quantity: "250m" | "0.5" | "4" | "4000m"
+const K8S_CPU_RE = /^(\d+(\.\d+)?)(m?)$/;
+// Valid K8s memory quantity: "256Mi" | "4Gi" | "512Ki" | "32768" (raw bytes)
+const K8S_MEM_RE = /^\d+(\.\d+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$/;
+
+function parseCpuMillicores(value: string): number | null {
+  const m = K8S_CPU_RE.exec(value.trim());
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!isFinite(n) || n <= 0) return null;
+  return m[3] === 'm' ? n : n * 1000;
+}
+
+function parseMemoryBytes(value: string): number | null {
+  const m = K8S_MEM_RE.exec(value.trim());
+  if (!m) return null;
+  const n = parseFloat(value);
+  if (!isFinite(n) || n <= 0) return null;
+  const multipliers: Record<string, number> = {
+    Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4,
+    Pi: 1024 ** 5, Ei: 1024 ** 6,
+    k: 1000,  M: 1000 ** 2,  G: 1000 ** 3,  T: 1000 ** 4,
+    P: 1000 ** 5, E: 1000 ** 6,
+  };
+  const suffix = m[2];
+  return suffix ? n * (multipliers[suffix] ?? 1) : n;
+}
+
+const MAX_CUSTOM_REPLICAS = 20;
+
+/**
+ * Validate a custom deployment profile spec submitted by an admin.
+ * Returns a human-readable error string on failure, or null on success.
+ */
+export function validateCustomSpec(spec: unknown, hourlyRate: unknown): string | null {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    return 'custom_spec must be an object';
+  }
+
+  const s = spec as Record<string, unknown>;
+  const required = ['cpuRequest', 'cpuLimit', 'memoryRequest', 'memoryLimit', 'replicas'] as const;
+  const allowed = new Set<string>(required);
+  const unsupportedField = Object.keys(s).find((field) => !allowed.has(field));
+  if (unsupportedField) {
+    return `custom_spec.${unsupportedField} is not supported`;
+  }
+
+  for (const field of required) {
+    if (s[field] === undefined) return `custom_spec.${field} is required`;
+  }
+
+  const cpuReq = parseCpuMillicores(String(s.cpuRequest));
+  if (cpuReq === null) return 'custom_spec.cpuRequest must be a valid K8s CPU quantity (e.g. "4" or "4000m")';
+
+  const cpuLim = parseCpuMillicores(String(s.cpuLimit));
+  if (cpuLim === null) return 'custom_spec.cpuLimit must be a valid K8s CPU quantity';
+  if (cpuLim < cpuReq) return 'custom_spec.cpuLimit must be >= cpuRequest';
+
+  const memReq = parseMemoryBytes(String(s.memoryRequest));
+  if (memReq === null) return 'custom_spec.memoryRequest must be a valid K8s memory quantity (e.g. "8Gi")';
+
+  const memLim = parseMemoryBytes(String(s.memoryLimit));
+  if (memLim === null) return 'custom_spec.memoryLimit must be a valid K8s memory quantity';
+  if (memLim < memReq) return 'custom_spec.memoryLimit must be >= memoryRequest';
+
+  const replicas = s.replicas;
+  if (!Number.isInteger(replicas) || (replicas as number) < 1 || (replicas as number) > MAX_CUSTOM_REPLICAS) {
+    return `custom_spec.replicas must be an integer between 1 and ${MAX_CUSTOM_REPLICAS}`;
+  }
+
+  if (typeof hourlyRate !== 'number' || !isFinite(hourlyRate) || hourlyRate <= 0) {
+    return 'custom_hourly_rate must be a positive number';
+  }
+
+  return null;
+}

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Rocket, Server, DollarSign, Activity } from "lucide-react";
+import { Rocket, Server, DollarSign, Activity, Cpu } from "lucide-react";
 import { Admin_PlatformApp } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AppsListTab from "@/components/admin/platform-apps/apps-list-tab";
 import ClusterUsageTab from "@/components/admin/cluster-monitor/cluster-usage-tab";
 import PricingTab from "@/components/admin/platform-apps/pricing-tab";
 import BandwidthTab from "@/components/admin/platform-apps/bandwidth-tab";
+import CustomProfileRequestsTab from "@/components/admin/platform-apps/custom-profile-requests-tab";
 
 interface PageProps {
   all_apps: Admin_PlatformApp[];
@@ -43,7 +44,7 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
+          <TabsList className="w-full grid grid-cols-5 gap-2 bg-transparent p-0 h-auto mb-6">
             <TabsTrigger
               value="deployed-apps"
               className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -72,6 +73,13 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
               <Activity className="h-4 w-4 mr-2" />
               Bandwidth
             </TabsTrigger>
+            <TabsTrigger
+              value="custom-profiles"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Cpu className="h-4 w-4 mr-2" />
+              Custom Profiles
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="deployed-apps" className="mt-0">
@@ -88,6 +96,10 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
 
           <TabsContent value="bandwidth" className="mt-0">
             <BandwidthTab />
+          </TabsContent>
+
+          <TabsContent value="custom-profiles" className="mt-0">
+            <CustomProfileRequestsTab />
           </TabsContent>
         </Tabs>
       </motion.div>

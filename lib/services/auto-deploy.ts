@@ -10,6 +10,7 @@
  */
 
 import { JenkinsService } from './jenkins';
+import type { CustomProfileSpec } from '@/lib/jenkins/pipelines';
 import { BuildPollingService } from './build-polling';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
@@ -36,6 +37,7 @@ export interface AutoDeployConfig {
   healthcheckPath?: string;
   commitSha?: string;
   deliveryId?: string;  // For idempotency tracking
+  customSpec?: CustomProfileSpec;
 }
 
 export interface AutoDeployResult {
@@ -132,6 +134,7 @@ export class AutoDeployService {
             envVars,
             containerPort,
             healthcheckPath,
+            config.customSpec,
           );
           console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
 

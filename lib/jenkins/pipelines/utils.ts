@@ -22,6 +22,9 @@ export interface AppSizeSpec {
   replicas: number;
 }
 
+// Custom profile spec — admin-assigned explicit resources for enterprise customers.
+export type CustomProfileSpec = AppSizeSpec;
+
 const SIZE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge'] as const;
 
 const APP_SIZE_SPECS: Record<string, AppSizeSpec> = {
@@ -34,11 +37,16 @@ const APP_SIZE_SPECS: Record<string, AppSizeSpec> = {
 
 /**
  * Resolve K8s resource spec for a given app size key.
- * @param sizeKey - Requested size ('small' | 'medium' | 'large' | 'xlarge' | 'xxlarge')
- * @param minSize - Floor size — when the requested size ranks below this, the floor is used.
- *                  Use 'medium' for runtimes that need more base resources (JVM, SSR).
+ * @param sizeKey    - Requested size ('small' | 'medium' | 'large' | 'xlarge' | 'xxlarge')
+ * @param minSize    - Floor size — when the requested size ranks below this, the floor is used.
+ *                     Use 'medium' for runtimes that need more base resources (JVM, SSR).
+ * @param sizeOverride - When set, bypasses the lookup entirely and uses these values directly.
+ *                       Used by custom-profile apps where admin sets explicit CPU/RAM/replicas.
  */
-export function resolveAppSize(sizeKey: string, minSize: string = 'small'): AppSizeSpec {
+export function resolveAppSize(sizeKey: string, minSize: string = 'small', sizeOverride?: Partial<AppSizeSpec>): AppSizeSpec {
+  if (sizeOverride) {
+    return { ...APP_SIZE_SPECS.small, ...sizeOverride };
+  }
   const key = (sizeKey || 'small').toLowerCase();
   const min = (minSize || 'small').toLowerCase();
   const keyIdx = SIZE_ORDER.indexOf(key as typeof SIZE_ORDER[number]);

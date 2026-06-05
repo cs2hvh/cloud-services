@@ -19,6 +19,7 @@ import {
   createJavaPipeline,
   createResizePipeline,
 } from "@/lib/jenkins/pipelines";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 import { getPlatformAppRetentionPolicy } from "@/lib/platform-apps/retention";
 
 export class JenkinsService {
@@ -310,6 +311,7 @@ export class JenkinsService {
     containerPort?: number,
     gitAuthUrl?: string,
     healthcheckPath?: string,
+    customSpec?: CustomProfileSpec,
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -326,7 +328,7 @@ export class JenkinsService {
 
     const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
 
-    // Select pipeline based on framework
+    // Select pipeline based on framework (custom profiles bypass the framework lookup)
     const pipelineRaw = JenkinsService.selectPipeline(
       appName,
       appId,
@@ -338,6 +340,7 @@ export class JenkinsService {
       envVars,
       containerPort,
       healthcheckPath,
+      customSpec,
     );
     const pipeline = this.hardenPipelineXml(pipelineRaw);
 
@@ -1321,12 +1324,30 @@ export class JenkinsService {
     envVars: Array<{ key: string; value: string }> = [],
     containerPort?: number,
     healthcheckPath?: string,
+    customSpec?: CustomProfileSpec,
   ): string {
     const fw = framework?.toLowerCase();
-    
+
     // WEBHOOK_BASE_URL (ngrok / tunnel) takes priority in dev; DOMAIN is the production fallback
     const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
     const deploymentRecordSecret = process.env.JENKINS_DEPLOYMENT_RECORD_SECRET || '';
+
+    // Convert customSpec → AppSizeSpec so framework pipelines can use it via resolveAppSize override.
+    // This means any framework (Next.js, Python, Java, etc.) can run with custom resources.
+    // custom-profile.ts is only used for explicit Dockerfile + custom resource deployments.
+    const sizeOverride = customSpec
+      ? {
+          cpuRequest: customSpec.cpuRequest,
+          cpuLimit: customSpec.cpuLimit,
+          memoryRequest: customSpec.memoryRequest,
+          memoryLimit: customSpec.memoryLimit,
+          replicas: customSpec.replicas,
+        }
+      : undefined;
+
+    if (sizeOverride) {
+      console.log(`[JenkinsService] Custom profile active — cpu=${sizeOverride.cpuRequest}/${sizeOverride.cpuLimit}, mem=${sizeOverride.memoryRequest}/${sizeOverride.memoryLimit}, replicas=${sizeOverride.replicas}`);
+    }
 
     switch (fw) {
       case 'simple-test':
@@ -1337,7 +1358,7 @@ export class JenkinsService {
       case 'dockerfile':
       case 'custom':
         console.log(`[JenkinsService] Using GENERIC DOCKERFILE pipeline (existing Dockerfile)`);
-        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'java':
       case 'maven':
@@ -1345,58 +1366,58 @@ export class JenkinsService {
       case 'spring-boot':
       case 'springboot':
         console.log(`[JenkinsService] Using JAVA/MAVEN pipeline (auto-Dockerfile with Maven build)`);
-        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createExpressPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createPythonPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'nextjs':
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
-        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createNextJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'nuxtjs':
       case 'nuxt.js':
       case 'nuxt':
         console.log(`[JenkinsService] Using NUXT.JS pipeline (auto-Dockerfile with Nitro server)`);
-        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createNuxtJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'vite-react':
       case 'vitereact':
       case 'react-vite':
         console.log(`[JenkinsService] Using VITE-REACT pipeline (auto-Dockerfile with Vite build)`);
-        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createViteReactPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'vue':
       case 'vue.js':
       case 'vuejs':
         console.log(`[JenkinsService] Using VUE pipeline (auto-Dockerfile with Vite build)`);
-        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createVuePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'angular':
         console.log(`[JenkinsService] Using ANGULAR pipeline (auto-Dockerfile with Angular CLI)`);
-        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createAngularPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'sveltekit':
         console.log(`[JenkinsService] Using SVELTEKIT pipeline (auto-Dockerfile with Node adapter)`);
-        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createSvelteKitPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
 
       case 'nodejs':
       case 'node.js':
       case 'node':
-      case 'react': // Standard React (CRA) - requires Dockerfile
+      case 'react':
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath);
+        return createNodeJsPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort, healthcheckPath, sizeOverride);
     }
   }
 
@@ -1415,6 +1436,7 @@ export class JenkinsService {
     envVars: Array<{ key: string; value: string }> = [],
     containerPort?: number,
     healthcheckPath?: string,
+    customSpec?: CustomProfileSpec,
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -1442,6 +1464,7 @@ export class JenkinsService {
       envVars,
       containerPort,
       healthcheckPath,
+      customSpec,
     );
     const pipeline = this.hardenPipelineXml(pipelineRaw);
 

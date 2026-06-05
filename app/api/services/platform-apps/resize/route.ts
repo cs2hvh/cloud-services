@@ -24,6 +24,8 @@ const SIZE_ORDER: Record<string, number> = {
   large: 3,
   xlarge: 4,
   "xxlarge": 5,
+  // 'custom' intentionally absent — custom profile transitions are not comparable
+  // to standard tiers and are handled separately before this table is consulted.
 };
 
 const SIZE_SPECS: Record<string, { cpu: string; memory: string; replicas: number }> = {
@@ -77,6 +79,29 @@ export async function POST(req: NextRequest) {
     const app = existing.data;
 
     const currentSize = app.size || "small";
+    if (app.pending_custom_profile_request_id) {
+      return NextResponse.json(
+        {
+          error: "Invalid resize operation",
+          message: "Activate the approved custom profile or contact support before resizing.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Custom-profile apps cannot be resized through the standard flow.
+    // Changing a custom profile requires admin involvement.
+    if (currentSize === "custom") {
+      return NextResponse.json(
+        {
+          error: "Invalid resize operation",
+          message: "Custom profile changes must be made by your account team.",
+          current_size: currentSize,
+        },
+        { status: 400 }
+      );
+    }
+
     if (SIZE_ORDER[new_size] === SIZE_ORDER[currentSize]) {
       return NextResponse.json(
         {

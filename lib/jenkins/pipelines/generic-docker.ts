@@ -9,7 +9,8 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with BuildKit and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar, AppSizeSpec
+} from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -25,6 +26,7 @@ export function createDockerfilePipeline(
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -38,7 +40,7 @@ export function createDockerfilePipeline(
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
   
   // Dockerfile apps are unknown runtimes — floor at medium to be safe
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium', sizeOverride);
 
   // Normalize port — handles null/undefined passed from callers even though signature has = 3000
   const port = containerPort ?? 3000;

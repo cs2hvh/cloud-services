@@ -54,6 +54,7 @@ vi.mock('@/lib/app-operations', () => {
 
   class MockJenkinsBuildAdapter {
     triggerBuild = appOpsMocks.jenkinsBuildTriggerMock;
+    triggerResizeBuild = appOpsMocks.jenkinsBuildTriggerMock;
   }
 
   class MockAppOperationFinalizer {}
@@ -271,7 +272,7 @@ describe('POST /api/services/platform-apps/resize', () => {
     expect(data.error).toContain('still in progress');
   });
 
-  it('rejects downsize requests', async () => {
+  it('allows downsize requests', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
     const { Platform_Apps } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
@@ -289,9 +290,15 @@ describe('POST /api/services/platform-apps/resize', () => {
     );
 
     const response = await POST(request as NextRequest);
-    const data = await expectResponseStatus(response, 400);
+    const data = await expectResponseStatus(response, 200);
 
-    expect(data.error).toContain('Invalid resize operation');
+    expect(data.message).toContain('Resize started');
+    expect(appOpsMocks.resizeOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentSize: 'large',
+        targetSize: 'small',
+      })
+    );
   });
 
   it('starts a resize build and creates the in-progress deployment row', async () => {
@@ -359,7 +366,7 @@ describe('POST /api/services/platform-apps/resize', () => {
     const response = await POST(request as NextRequest);
     const data = await expectResponseStatus(response, 500);
 
-    expect(data.error).toContain('Jenkins unavailable');
+    expect(data.error).toBe('Failed to resize app');
     expect(Platform_Apps.update).not.toHaveBeenCalledWith(
       mockPlatformApp.id,
       expect.objectContaining({

@@ -16,12 +16,14 @@ import { createDockerfilePipeline } from './generic-docker';
 import { createJavaPipeline } from './java';
 import { createResizePipeline } from './resize';
 
-export { 
-  createSimpleTestPipeline, 
-  createNodeJsPipeline, 
-  createExpressPipeline, 
-  createPythonPipeline, 
-  createNextJsPipeline, 
+export type { CustomProfileSpec } from './utils';
+
+export {
+  createSimpleTestPipeline,
+  createNodeJsPipeline,
+  createExpressPipeline,
+  createPythonPipeline,
+  createNextJsPipeline,
   createNuxtJsPipeline,
   createDeletePipeline,
   createViteReactPipeline,

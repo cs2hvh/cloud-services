@@ -55,21 +55,53 @@ export class AppBuildSideEffectsService {
     try {
       if (params.status === "success") {
         if (!targetSize) return warnings;
-        const appUpdate = await Platform_Apps.update(params.appId, { size: targetSize });
-        if (!appUpdate.success) {
-          throw new Error(appUpdate.error || "Failed to update app size after resize");
+        const appResult = await Platform_Apps.get(params.appId);
+        if (!appResult.success || !appResult.data) {
+          throw new Error(appResult.error || "Failed to load app after resize");
         }
 
         const { hourlyRate } = await getRatesForPlatformApp(targetSize);
-        const billingUpdate = await Billing.update_active_platform_app_rate({
+        const transition = await Billing.transition_platform_app_size({
           serviceId: params.appId,
+          userId: appResult.data.user_id,
+          newSize: targetSize,
           newHourlyRate: hourlyRate,
         });
 
-        if (!billingUpdate.updated) {
-          logger.info("Skipped resize billing rate update because billing is not active yet", {
+        if (!transition.updated) {
+          throw new Error("Platform app size transition was not applied");
+        }
+        if (!transition.billingActive) {
+          logger.info("Applied resize before initial billing activation", {
             target_size: targetSize,
           });
+        }
+        if (transition.charged > 0) {
+          try {
+            await Billing.save_transaction({
+              userId: appResult.data.user_id,
+              amount: transition.charged,
+              status: transition.settled ? "completed" : "failed",
+              type: "usage",
+              balanceAfter: transition.newBalance,
+              serviceId: params.appId,
+              serviceType: "platform_apps",
+              periodStart: transition.periodStart,
+              periodEnd: transition.periodEnd,
+              description: transition.settled
+                ? `Prorated platform app usage before resize to ${targetSize}`
+                : `Unpaid prorated platform app usage before resize to ${targetSize}`,
+            });
+          } catch (transactionError) {
+            const message =
+              transactionError instanceof Error
+                ? transactionError.message
+                : String(transactionError);
+            warnings.push(`Resize applied, but transaction logging failed: ${message}`);
+            logger.error("Failed to log resize rate-transition transaction", {
+              error: message,
+            });
+          }
         }
 
         // Sync NGINX proxy-body-size and lift any active bandwidth restriction.
@@ -160,6 +192,7 @@ export class AppBuildSideEffectsService {
     appId: string;
     appName: string;
     record: AppDeploymentRecord;
+    details: AppOperationDetails;
   }): Promise<string[]> {
     const warnings: string[] = [];
     const logger = this.logger.child({
@@ -180,6 +213,76 @@ export class AppBuildSideEffectsService {
       logger.error("Failed to activate initial billing", {
         error: billingActivation.error,
       });
+    }
+
+    const customProfileRequestId =
+      params.record.trigger === "manual"
+        ? params.details.target?.custom_profile_request_id
+        : undefined;
+
+    if (customProfileRequestId) {
+      try {
+        const appResult = await Platform_Apps.get(params.appId);
+        const app = appResult.success ? appResult.data : null;
+        if (
+          !app ||
+          app.pending_custom_profile_request_id !== customProfileRequestId ||
+          typeof app.pending_custom_hourly_rate !== "number"
+        ) {
+          throw new Error("Pending custom profile no longer matches this deployment");
+        }
+
+        const supabase = await createServiceClient();
+        const { data: activation, error } = await supabase.rpc(
+          "activate_platform_custom_profile",
+          { p_app_id: params.appId, p_request_id: customProfileRequestId }
+        );
+        const result = activation as {
+          activated?: boolean;
+          charged?: number;
+          settled?: boolean;
+          new_balance?: number;
+          period_start?: string | null;
+          period_end?: string | null;
+        } | null;
+        if (error || result?.activated !== true) {
+          throw new Error(error?.message || "Failed to activate custom profile");
+        }
+        if ((result.charged ?? 0) > 0) {
+          try {
+            await Billing.save_transaction({
+              userId: app.user_id,
+              amount: result.charged!,
+              status: result.settled ? "completed" : "failed",
+              type: "usage",
+              balanceAfter: result.new_balance ?? null,
+              serviceId: params.appId,
+              serviceType: "platform_apps",
+              periodStart: result.period_start ?? null,
+              periodEnd: result.period_end ?? null,
+              description: result.settled
+                ? "Prorated platform app usage before custom profile activation"
+                : "Unpaid prorated platform app usage at custom profile activation",
+            });
+          } catch (transactionError) {
+            const message =
+              transactionError instanceof Error
+                ? transactionError.message
+                : String(transactionError);
+            warnings.push(`Custom profile activated, but transaction logging failed: ${message}`);
+            logger.error("Failed to log custom profile activation transaction", {
+              error: message,
+            });
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        warnings.push(message);
+        logger.error("Failed to activate custom platform app profile", {
+          custom_profile_request_id: customProfileRequestId,
+          error: message,
+        });
+      }
     }
 
     // Sync NGINX proxy-body-size to match the plan quota (or user's custom limit).
@@ -236,6 +339,7 @@ export class AppBuildSideEffectsService {
         appId: params.appId,
         appName: params.appName,
         record: params.record,
+        details: params.details,
       });
     }
 

@@ -744,6 +744,72 @@ export const Billing = {
     return { updated: true };
   },
 
+  transition_platform_app_size: async (params: {
+    serviceId: string;
+    userId: string;
+    newSize: "small" | "medium" | "large" | "xlarge" | "xxlarge";
+    newHourlyRate: number;
+  }): Promise<{
+    updated: boolean;
+    billingActive: boolean;
+    charged: number;
+    settled: boolean;
+    newBalance: number | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+  }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase.rpc("transition_platform_app_size", {
+      p_app_id: params.serviceId,
+      p_user_id: params.userId,
+      p_new_size: params.newSize,
+      p_new_rate: params.newHourlyRate,
+    });
+    if (error) {
+      throw new Error(`Failed to transition platform app size: ${error.message}`);
+    }
+
+    const result = data as {
+      updated?: boolean;
+      billing_active?: boolean;
+      charged?: number;
+      settled?: boolean;
+      new_balance?: number | null;
+      period_start?: string | null;
+      period_end?: string | null;
+    } | null;
+
+    return {
+      updated: result?.updated === true,
+      billingActive: result?.billing_active === true,
+      charged: result?.charged ?? 0,
+      settled: result?.settled === true,
+      newBalance: result?.new_balance ?? null,
+      periodStart: result?.period_start ?? null,
+      periodEnd: result?.period_end ?? null,
+    };
+  },
+
+  get_platform_app_rate_transition_requirement: async (params: {
+    serviceId: string;
+    userId: string;
+    newHourlyRate: number;
+  }): Promise<number> => {
+    const active = await Billing.get_active_platform_app({
+      serviceId: params.serviceId,
+      userId: params.userId,
+    });
+    if (!active.success || !active.data) {
+      throw new Error(active.error || "Active platform app billing record not found");
+    }
+    const accrued = Billing._computeProratedCharge(
+      active.data.hourly_rate,
+      active.data.last_billed_at ?? undefined
+    );
+    return Number((accrued + params.newHourlyRate).toFixed(6));
+  },
+
+
   update_active_kubernetes_rate: async (params: {
     serviceId: string;
     newHourlyRate: number;
@@ -1622,4 +1688,3 @@ export const Billing = {
     });
   },
 };
-

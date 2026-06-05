@@ -81,6 +81,7 @@ import {
 } from '@/components/dashboard/apps/app-resize-section';
 import { AppBodyLimitSection } from '@/components/dashboard/apps/app-body-limit-section';
 import { AppOverviewTab } from '@/components/dashboard/apps/app-overview-tab';
+import { CustomProfileRequestSection } from '@/components/dashboard/apps/custom-profile-request-section';
 
 
 
@@ -115,6 +116,8 @@ interface AppDetail {
   last_failure_reason?: string | null;
   healthcheck_path?: string | null;
   custom_request_body_mb?: number | null;
+  custom_spec?: Record<string, unknown> | null;
+  custom_hourly_rate?: number | null;
 }
 
 const SECTION_META: Array<{
@@ -1220,7 +1223,14 @@ export default function AppDetailPage() {
   const currentSize = (PLATFORM_APP_SIZE_ORDER.includes((app.size ?? '') as SizeKey) ? app.size : 'small') as SizeKey;
   // During an in-flight resize, show the target size in the header; otherwise show the running size.
   const displaySize = (resizeInProgress && pendingResizeSize) ? pendingResizeSize : currentSize;
-  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[displaySize];
+  // For custom-profile apps, read actual CPU/RAM/replicas from app.custom_spec instead of the size table.
+  const currentSizeSpec = (displaySize === 'custom' && app.custom_spec)
+    ? {
+        cpu: `${(app.custom_spec as Record<string, string>).cpuRequest ?? '?'} CPU`,
+        memory: (app.custom_spec as Record<string, string>).memoryRequest ?? '?',
+        replicas: (app.custom_spec as Record<string, number>).replicas ?? 0,
+      }
+    : PLATFORM_APP_SIZE_SPECS[displaySize] ?? PLATFORM_APP_SIZE_SPECS.small;
   const currentSizePrice = platformPricing[displaySize]?.price ?? 0;
   const resizeDirectionLabel = pendingResizeSize
     ? PLATFORM_APP_SIZE_ORDER.indexOf(pendingResizeSize) > PLATFORM_APP_SIZE_ORDER.indexOf(currentSize)
@@ -1687,6 +1697,11 @@ export default function AppDetailPage() {
                     handleResize={handleResize}
                   />
                 </div>
+
+                {/* Custom Profile Request — shown when app is on xxlarge or custom */}
+                {(app.size === 'xxlarge' || app.size === 'custom') && (
+                  <CustomProfileRequestSection appId={app.id} currentSize={app.size} />
+                )}
 
                 <AppBodyLimitSection
                   app={app}

@@ -168,7 +168,7 @@ export const mockInvalidPlatformAppPayloads = {
   },
   invalidSize: {
     ...mockCreatePlatformAppPayload,
-    size: 'xlarge',
+    size: 'enterprise',
   },
   invalidUrl: {
     ...mockCreatePlatformAppPayload,

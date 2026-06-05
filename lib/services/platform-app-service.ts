@@ -16,6 +16,7 @@ import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app
 import { DatabaseIntegrationService } from "@/lib/services/database-integration";
 import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
 import { sendServiceAlertEmail, resolveUserEmail } from "@/lib/services/shared/service-alert-email";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 
 export interface CreateAppRequest {
   name: string;
@@ -29,7 +30,7 @@ export interface CreateAppRequest {
   output_directory?: string;
   project_id?: string;
   env_vars?: Array<{ key: string; value: string }>;
-  size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+  size?: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'custom';
   auto_deploy?: boolean;
   deploy_branch?: string;
   container_port?: number;
@@ -43,6 +44,8 @@ export interface CreateAppRequest {
     user_role?: 'user' | 'admin';
   };
   idempotencyKey?: string | null;
+  customSpec?: CustomProfileSpec;
+  customHourlyRate?: number;
 }
 
 export interface CreateAppResult {
@@ -372,18 +375,21 @@ export class PlatformAppService {
       }
 
       // 4. Check billing
-      const instanceSize = (request.size || 'small') as "small" | "medium" | "large" | "xlarge" | "xxlarge";
+      const instanceSize = (request.size || 'small') as "small" | "medium" | "large" | "xlarge" | "xxlarge" | "custom";
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
-        await getRatesForPlatformApp(instanceSize);
+        await getRatesForPlatformApp(instanceSize, request.customHourlyRate);
 
-      const balCheck = await ensureBalance(request.userId, INITIAL_COST);
+      const requiredBalance = instanceSize === "custom"
+        ? Math.max(INITIAL_COST, HOURLY_RATE)
+        : INITIAL_COST;
+      const balCheck = await ensureBalance(request.userId, requiredBalance);
       if (!balCheck.ok) {
         return {
           success: false,
           error: "Insufficient credits",
           errorCode: "INSUFFICIENT_BALANCE",
           balance: balCheck.balance,
-          required: INITIAL_COST,
+          required: requiredBalance,
         };
       }
 
@@ -427,6 +433,8 @@ export class PlatformAppService {
         container_port: request.container_port,
         healthcheck_path: request.healthcheck_path,
         idempotencyKey: request.idempotencyKey ?? null,
+        customSpec: request.customSpec,
+        customHourlyRate: request.customHourlyRate,
       };
 
       const deploymentResult = await DeploymentService.deploy(deploymentConfig);
@@ -913,14 +921,32 @@ export class PlatformAppService {
       throw error;
     }
 
-    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge' | 'custom';
     const SIZE_ORDER: Record<string, number> = {
       small: 1,
       medium: 2,
       large: 3,
       xlarge: 4,
       'xxlarge': 5,
+      // 'custom' absent — custom ↔ standard transitions must not be compared here.
     };
+
+    if (app.pending_custom_profile_request_id) {
+      const error = new Error(
+        'Activate the approved custom profile or contact support before resizing.'
+      ) as Error & { code?: string };
+      error.code = 'INVALID_RESIZE';
+      throw error;
+    }
+
+    // Custom-profile apps cannot be resized through the standard flow.
+    if (currentSize === 'custom') {
+      const error = new Error(
+        'Custom profile changes must be made by your account team.'
+      ) as Error & { code?: string };
+      error.code = 'INVALID_RESIZE';
+      throw error;
+    }
 
     if (SIZE_ORDER[newSize] === SIZE_ORDER[currentSize]) {
       const error = new Error(

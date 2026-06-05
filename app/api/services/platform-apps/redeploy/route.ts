@@ -7,6 +7,7 @@ import { Platform_Apps } from "@/lib/supabase/queries";
 import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
@@ -19,6 +20,7 @@ import {
   resolveBuildBackedOperationState,
 } from "@/lib/app-operations";
 import { getGitProviderToken, buildAuthenticatedGitUrl } from "@/lib/git/provider-token";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 const redeploySchema = z.object({
   app_id: z.string().uuid(),
@@ -65,6 +67,44 @@ export async function POST(req: NextRequest) {
     }
 
     const app = existing.data;
+    const pendingCustomRequestId =
+      typeof app.pending_custom_profile_request_id === "string"
+        ? app.pending_custom_profile_request_id
+        : undefined;
+    const pendingCustomSpec = pendingCustomRequestId
+      ? (app.pending_custom_spec as CustomProfileSpec | null) ?? undefined
+      : undefined;
+    const pendingCustomRate =
+      pendingCustomRequestId && typeof app.pending_custom_hourly_rate === "number"
+        ? app.pending_custom_hourly_rate
+        : undefined;
+
+    if (pendingCustomRequestId) {
+      if (!pendingCustomSpec || pendingCustomRate === undefined) {
+        return NextResponse.json(
+          { error: "Approved custom profile is incomplete. Please contact support." },
+          { status: 409 }
+        );
+      }
+      const requiredBalance = await Billing.get_platform_app_rate_transition_requirement({
+        serviceId: app.id,
+        userId: auth.user!.id,
+        newHourlyRate: pendingCustomRate,
+      });
+      if (!(await Billing.has_balance(auth.user!.id, requiredBalance))) {
+        return NextResponse.json(
+          {
+            error: "Insufficient balance",
+            message: `At least $${requiredBalance.toFixed(2)} is required to settle current usage and activate this custom profile.`,
+          },
+          { status: 402 }
+        );
+      }
+    }
+
+    const deploymentSize = pendingCustomRequestId ? "custom" : (app.size || "small");
+    const deploymentCustomSpec =
+      pendingCustomSpec ?? ((app.custom_spec as CustomProfileSpec | null) ?? undefined);
 
     try {
       // Fetch environment variables from database
@@ -119,6 +159,9 @@ export async function POST(req: NextRequest) {
         appStatus: app.status,
         trigger: "manual",
         operationType: "redeploy",
+        target: pendingCustomRequestId
+          ? { size: "custom", custom_profile_request_id: pendingCustomRequestId }
+          : undefined,
         idempotencyKey: getIdempotencyKey(req.headers),
         onBeforeTrigger: async () => {
           const runtimeSync = await reconcileRuntimeEnv({
@@ -146,11 +189,12 @@ export async function POST(req: NextRequest) {
             gitUrl,
             app.branch || "main",
             app.framework || undefined,
-            app.size || "small",
+            deploymentSize,
             "manual",
             envVars,
             app.port ?? undefined,
             app.healthcheck_path ?? undefined,
+            deploymentCustomSpec,
           );
           console.log(`[Redeploy] Pipeline XML updated successfully`);
 

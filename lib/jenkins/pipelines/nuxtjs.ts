@@ -16,7 +16,8 @@
  * - Default port: 3000
  * - Production command: node .output/server/index.mjs
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar, AppSizeSpec
+} from './utils';
 import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateImageScanStage, generateSecurityStages } from '../security';
 
@@ -33,6 +34,7 @@ export function createNuxtJsPipeline(
   envVars: EnvVar[] = [],
   containerPort?: number,
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -47,7 +49,7 @@ export function createNuxtJsPipeline(
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
   
   // Nuxt SSR (Nitro) needs at least 512 MB — floor at medium
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium');
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'medium', sizeOverride);
 
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;

@@ -3,6 +3,7 @@ import { withV1Auth, v1Ok, v1Error } from "@/lib/api/v1-middleware";
 import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { JenkinsService } from "@/lib/services/jenkins";
+import type { CustomProfileSpec } from "@/lib/jenkins/pipelines";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { getIdempotencyKey } from "@/lib/idempotency";
@@ -14,6 +15,7 @@ import {
   resolveBuildBackedOperationState,
 } from "@/lib/app-operations";
 import { getGitProviderToken, buildAuthenticatedGitUrl } from "@/lib/git/provider-token";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
   const idResult = await v1ExtractId(context);
@@ -29,6 +31,39 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
   }
 
   const app = existing.data;
+  const pendingCustomRequestId =
+    typeof app.pending_custom_profile_request_id === "string"
+      ? app.pending_custom_profile_request_id
+      : undefined;
+  const pendingCustomSpec = pendingCustomRequestId
+    ? (app.pending_custom_spec as CustomProfileSpec | null) ?? undefined
+    : undefined;
+  const pendingCustomRate =
+    pendingCustomRequestId && typeof app.pending_custom_hourly_rate === "number"
+      ? app.pending_custom_hourly_rate
+      : undefined;
+
+  if (pendingCustomRequestId) {
+    if (!pendingCustomSpec || pendingCustomRate === undefined) {
+      return v1Error("CUSTOM_PROFILE_INVALID", 409, "Approved custom profile is incomplete");
+    }
+    const requiredBalance = await Billing.get_platform_app_rate_transition_requirement({
+      serviceId: app.id,
+      userId: auth.userId,
+      newHourlyRate: pendingCustomRate,
+    });
+    if (!(await Billing.has_balance(auth.userId, requiredBalance))) {
+      return v1Error(
+        "INSUFFICIENT_BALANCE",
+        402,
+        `At least $${requiredBalance.toFixed(2)} is required to settle current usage and activate this custom profile.`
+      );
+    }
+  }
+
+  const deploymentSize = pendingCustomRequestId ? "custom" : (app.size || "small");
+  const deploymentCustomSpec =
+    pendingCustomSpec ?? ((app.custom_spec as CustomProfileSpec | null) ?? undefined);
 
   // Fetch env vars from DB for Jenkins job config update
   const envVarsData = await Platform_Apps.get_env_vars(appId);
@@ -73,6 +108,9 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
       appStatus: app.status,
       trigger: "manual",
       operationType: "redeploy",
+      target: pendingCustomRequestId
+        ? { size: "custom", custom_profile_request_id: pendingCustomRequestId }
+        : undefined,
       idempotencyKey: getIdempotencyKey(req.headers),
       onBeforeTrigger: async () => {
         const runtimeSync = await reconcileRuntimeEnv({
@@ -97,11 +135,12 @@ export const POST = withV1Auth("apps:redeploy", async (req, auth, context) => {
           gitUrl,
           app.branch || "main",
           app.framework || undefined,
-          app.size || "small",
+          deploymentSize,
           "manual",
           envVars,
           app.port ?? undefined,
           app.healthcheck_path ?? undefined,
+          deploymentCustomSpec,
         );
 
         const execution = await jenkins.triggerBuild({

@@ -112,6 +112,7 @@ export class AppReleaseBuildService {
     appStatus?: string | null;
     trigger: Extract<AppDeploymentTrigger, "manual" | "webhook">;
     operationType: Extract<AppOperationType, "deploy" | "redeploy">;
+    target?: AppOperationDetails["target"];
     commitSha?: string | null;
     idempotencyKey?: string | null;
     executor: (operation: AppDeploymentRecord) => Promise<{
@@ -167,6 +168,7 @@ export class AppReleaseBuildService {
     let details = createOperationDetails({
       type: params.operationType,
       trigger: params.trigger,
+      target: params.target,
       steps: [
         {
           key: "prepare",

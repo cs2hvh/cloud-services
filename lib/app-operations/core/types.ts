@@ -49,6 +49,7 @@ export type AppOperationDetails = {
     build_number?: number;
     image_ref?: string;
     size?: string;
+    custom_profile_request_id?: string;
   };
   executor?: {
     type: AppExecutorType;

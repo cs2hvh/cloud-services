@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
+import { createPlatformAppSchema, validateCustomSpec } from "@/lib/validation/platform-apps";
 import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
@@ -75,6 +75,28 @@ export async function POST(req: NextRequest) {
     const adminCheck = await requireAdmin();
     const isAdmin = !!adminCheck.ok;
 
+    // Custom profile fields — admin-only
+    const rawCustomSpec = body.custom_spec;
+    const rawCustomRate = body.custom_hourly_rate;
+
+    if (rawCustomSpec !== undefined && !isAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Custom deployment profiles can only be configured by an administrator." },
+        { status: 403 }
+      );
+    }
+
+    if (rawCustomSpec !== undefined) {
+      const specError = validateCustomSpec(rawCustomSpec, rawCustomRate);
+      if (specError) {
+        return NextResponse.json({ error: "Invalid custom_spec", message: specError }, { status: 400 });
+      }
+    }
+
+    const customSpec = isAdmin ? (rawCustomSpec ?? undefined) : undefined;
+    const customHourlyRate = isAdmin && typeof rawCustomRate === 'number' ? rawCustomRate : undefined;
+    const effectiveSize = customSpec ? 'custom' : appData.size;
+
     // Call service to handle all business logic
     const result = await PlatformAppService.createApp({
       name: appData.name,
@@ -88,7 +110,7 @@ export async function POST(req: NextRequest) {
       output_directory: appData.output_directory,
       project_id: appData.project_id,
       env_vars,
-      size: appData.size,
+      size: effectiveSize,
       auto_deploy: appData.auto_deploy,
       deploy_branch: appData.deploy_branch,
       container_port: appData.container_port,
@@ -102,6 +124,8 @@ export async function POST(req: NextRequest) {
         user_role: isAdmin ? "admin" : "user",
       },
       idempotencyKey: getIdempotencyKey(req.headers),
+      customSpec,
+      customHourlyRate,
     });
 
     if (!result.success) {

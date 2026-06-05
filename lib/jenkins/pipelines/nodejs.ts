@@ -3,7 +3,7 @@
  * Auto-creates Dockerfile, builds with BuildKit
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar, AppSizeSpec } from './utils';
 import { generateNodejsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -20,6 +20,7 @@ export function createNodeJsPipeline(
   envVars: EnvVar[] = [],
   containerPort?: number,
   healthcheckPath?: string,
+  sizeOverride?: AppSizeSpec,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -32,7 +33,7 @@ export function createNodeJsPipeline(
     .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
-  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size);
+  const { cpuRequest, cpuLimit, memoryRequest, memoryLimit, replicas } = resolveAppSize(size, 'small', sizeOverride);
 
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;

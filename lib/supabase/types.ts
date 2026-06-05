@@ -166,6 +166,11 @@ export type PlatformApp = {
   last_failure_reason?: string | null;
   healthcheck_path?: string | null;
   custom_request_body_mb?: number | null;
+  custom_spec?: Record<string, unknown> | null;
+  custom_hourly_rate?: number | null;
+  pending_custom_profile_request_id?: string | null;
+  pending_custom_spec?: Record<string, unknown> | null;
+  pending_custom_hourly_rate?: number | null;
 }
 
 export type Rule = {

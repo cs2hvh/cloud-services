@@ -4,6 +4,7 @@ import {
   updatePlatformAppSchema,
   deletePlatformAppSchema,
   getPlatformAppSchema,
+  validateCustomSpec,
 } from '@/lib/validation/platform-apps';
 import {
   mockCreatePlatformAppPayload,
@@ -475,6 +476,38 @@ describe('Platform Apps Validation Schemas', () => {
       };
       const result = updatePlatformAppSchema.safeParse(payload);
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('validateCustomSpec', () => {
+    const validSpec = {
+      cpuRequest: '4',
+      cpuLimit: '8',
+      memoryRequest: '8Gi',
+      memoryLimit: '16Gi',
+      replicas: 4,
+    };
+
+    it('accepts a valid custom profile', () => {
+      expect(validateCustomSpec(validSpec, 0.5)).toBeNull();
+    });
+
+    it('rejects unsupported fields', () => {
+      expect(validateCustomSpec({ ...validSpec, nodePool: 'dedicated' }, 0.5))
+        .toBe('custom_spec.nodePool is not supported');
+    });
+
+    it('compares large Kubernetes memory units without underflow', () => {
+      expect(validateCustomSpec({
+        ...validSpec,
+        memoryRequest: '1Pi',
+        memoryLimit: '1Ei',
+      }, 0.5)).toBeNull();
+      expect(validateCustomSpec({
+        ...validSpec,
+        memoryRequest: '1Ei',
+        memoryLimit: '1Pi',
+      }, 0.5)).toBe('custom_spec.memoryLimit must be >= memoryRequest');
     });
   });
 });
