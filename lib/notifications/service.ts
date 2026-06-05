@@ -1,6 +1,8 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { CreateNotificationParams, Notification, ServiceType, ActionType, NotificationType } from "./types";
 
+const PLATFORM_APP_SIZE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge'] as const;
+
 export const NotificationService = {
   /**
    * Create a new notification
@@ -279,10 +281,10 @@ export function createServiceNotification(params: {
   } else if (action === 'resized') {
     const oldSize = metadata?.old_size as string | undefined;
     const newSize = metadata?.new_size as string | undefined;
-    const sizeOrder = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
     const isDowngrade =
       oldSize && newSize
-        ? sizeOrder.indexOf(newSize) < sizeOrder.indexOf(oldSize)
+        ? PLATFORM_APP_SIZE_ORDER.indexOf(newSize as typeof PLATFORM_APP_SIZE_ORDER[number]) <
+          PLATFORM_APP_SIZE_ORDER.indexOf(oldSize as typeof PLATFORM_APP_SIZE_ORDER[number])
         : false;
     const direction = isDowngrade ? 'downgraded' : 'upgraded';
     if (oldSize && newSize) {
