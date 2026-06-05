@@ -1222,6 +1222,11 @@ export default function AppDetailPage() {
   const displaySize = (resizeInProgress && pendingResizeSize) ? pendingResizeSize : currentSize;
   const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[displaySize];
   const currentSizePrice = platformPricing[displaySize]?.price ?? 0;
+  const resizeDirectionLabel = pendingResizeSize
+    ? PLATFORM_APP_SIZE_ORDER.indexOf(pendingResizeSize) > PLATFORM_APP_SIZE_ORDER.indexOf(currentSize)
+      ? 'Upgrading to'
+      : 'Downgrading to'
+    : 'Resizing to';
 
   return (
     <AppCanvas>
@@ -1424,7 +1429,7 @@ export default function AppDetailPage() {
 
         <div className="px-5 py-5 flex flex-col gap-2">
           <span className={`${APP_MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-            {resizeInProgress ? 'Upgrading to' : 'Runtime Size'}
+            {resizeInProgress ? resizeDirectionLabel : 'Runtime Size'}
           </span>
           <div className="flex items-baseline gap-1.5">
             <span style={APP_SERIF_STYLE} className="text-[22px] leading-none font-bold tracking-[-0.025em] text-white capitalize">
@@ -1438,7 +1443,7 @@ export default function AppDetailPage() {
             {currentSizeSpec.cpu} · {currentSizeSpec.memory}
           </p>
           {resizeInProgress && (
-            <p className={`${APP_MONO} text-[10px] text-amber-300/80`}>Resize in progress</p>
+            <p className={`${APP_MONO} text-[10px] text-amber-300/80`}>{resizeDirectionLabel.replace(' to', '')} in progress</p>
           )}
         </div>
 

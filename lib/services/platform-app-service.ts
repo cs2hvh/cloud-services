@@ -888,8 +888,8 @@ export class PlatformAppService {
   }
 
   /**
-   * Resize a platform app (upsize only)
-   * - Validates ownership and upsize direction
+   * Resize a platform app (upsize or downsize)
+   * - Validates ownership
    * - Updates billing rate
    * - Creates audit log
    */
@@ -922,10 +922,9 @@ export class PlatformAppService {
       'xxlarge': 5,
     };
 
-    // Validate upsize only
-    if (SIZE_ORDER[newSize] <= SIZE_ORDER[currentSize]) {
+    if (SIZE_ORDER[newSize] === SIZE_ORDER[currentSize]) {
       const error = new Error(
-        `Cannot resize from ${currentSize} to ${newSize}. Only upsizing is allowed.`
+        `App is already running on ${currentSize}.`
       ) as Error & { code?: string };
       error.code = 'INVALID_RESIZE';
       throw error;
