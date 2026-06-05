@@ -73,7 +73,7 @@ export function LegalPageShell({
                 ))}
               </ul>
               <Link
-                href="mailto:legal@ahuracloud.com"
+                href="mailto:legal@ahurasense.com"
                 className="mt-6 inline-flex items-center gap-1.5 text-sm text-[#9ad5ff] hover:text-[#c6e8ff] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
               >
                 Contact legal

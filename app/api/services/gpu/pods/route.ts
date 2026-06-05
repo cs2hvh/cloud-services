@@ -8,6 +8,7 @@ import {
     type CreatePodRequest,
     type RunPodErrorCode,
 } from "@/lib/services/runpod-service";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -182,6 +183,28 @@ export async function POST(req: NextRequest) {
             { status: statusFromErrorCode(result.errorCode) }
         );
     }
+
+    // Notification-only: fire-and-forget lifecycle email. Never throws.
+    const createdPod = result.data;
+    await sendServiceEventEmail({
+        userEmail: user.email ?? null,
+        userId: user.id,
+        serviceType: "GPU Pod",
+        serviceName: createdPod?.name ?? createReq.name,
+        event: "created",
+        items:
+            createdPod?.hourlyCostUsd !== undefined
+                ? [
+                      {
+                          label: "Hourly cost",
+                          value: `$${createdPod.hourlyCostUsd.toFixed(2)}/hr`,
+                      },
+                  ]
+                : undefined,
+        actionPath: createdPod?.podId
+            ? `/dashboard/services/gpu/${createdPod.podId}`
+            : undefined,
+    });
 
     const response = { ok: true, pod: result.data };
     if (idempComplete) {

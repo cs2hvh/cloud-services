@@ -6,6 +6,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { validateRequest, serviceErrorResponse } from "@/lib/middleware/validate-request";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 
 const InitPayload = z.object({
   name: z.string().min(3).max(63),
@@ -78,6 +79,22 @@ export async function POST(req: NextRequest) {
   );
 
   if (!result.success) return serviceErrorResponse(result);
+
+  // Notify the cluster owner that their cluster was created (fire-and-forget,
+  // never throws). Resolve the recipient from the owner id so admin-initiated
+  // creates still email the actual owner.
+  await sendServiceEventEmail({
+    userId: payload.ownerId,
+    serviceType: "Kubernetes Cluster",
+    serviceName: payload.name,
+    event: "created",
+    items: [
+      { label: "Region", value: payload.region },
+      { label: "Nodes", value: String(payload.nodeCount) },
+      { label: "Kubernetes version", value: payload.version },
+    ],
+    actionPath: "/dashboard/services/kubernetes",
+  });
 
   return NextResponse.json(
     {

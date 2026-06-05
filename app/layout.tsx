@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone } from "next/font/google";
+import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone, Sora } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
@@ -26,6 +26,12 @@ const salsa = Salsa({
 const anticDidone = Antic_Didone({
   variable: "--font-antic-didone",
   weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const sora = Sora({
+  variable: "--font-sora",
   subsets: ["latin"],
   display: "swap",
 });
@@ -104,7 +110,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable} ${anticDidone.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable} ${anticDidone.variable} ${sora.variable}`}>
         <OfflineBanner />
         <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster

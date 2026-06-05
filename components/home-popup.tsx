@@ -19,22 +19,8 @@ export default function HomePopup() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    // Defer the popup off the hydration/LCP critical path: wait ~1s, then open
-    // during browser idle time so it never competes with first paint or input.
-    let idleId: number | undefined;
-    const timeoutId = setTimeout(() => {
-      if (typeof requestIdleCallback !== "undefined") {
-        idleId = requestIdleCallback(() => setOpen(true), { timeout: 1500 });
-      } else {
-        setOpen(true);
-      }
-    }, 1000);
-    return () => {
-      clearTimeout(timeoutId);
-      if (idleId !== undefined && typeof cancelIdleCallback !== "undefined") {
-        cancelIdleCallback(idleId);
-      }
-    };
+    const timeoutId = setTimeout(() => setOpen(true), 1000);
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // Lock body scroll while the modal is open.
@@ -214,7 +200,7 @@ export default function HomePopup() {
 
               <div className="flex flex-col gap-2.5">
                 <Link
-                  href="/contact"
+                  href="/contact?topic=reserved-gpu"
                   onClick={() => setOpen(false)}
                   className="group flex w-full items-center justify-center gap-2 rounded-[5px] bg-[#0095FF] py-3.5 text-[13.5px] font-semibold tracking-[-0.01em] text-white ring-1 ring-inset ring-white/15 transition-all hover:bg-[#1aa3ff]"
                   style={{

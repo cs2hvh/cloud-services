@@ -401,7 +401,7 @@ export default function HeroClient() {
                             }}
                         />
                         <Image
-                            src="https://ahurasense.cs2hvh.com/images/2026-06/yoh3_MfCbKR-.png"
+                            src="https://ahurasense.cs2hvh.com/images/2026-06/yCxP4rYYDAru.png"
                             alt="Ahura Cloud infrastructure"
                             fill
                             priority

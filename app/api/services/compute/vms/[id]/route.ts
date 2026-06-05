@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +146,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: server, error: serverErr } = await supabase
     .from("servers")
-    .select("id, vmid, node, ip, location, owner_id, status")
+    .select("id, vmid, node, ip, location, owner_id, owner_email, name, status")
     .eq("id", serverId)
     .maybeSingle();
 
@@ -165,6 +166,16 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     console.error("[VM Delete] teardown failed:", result.message);
     return Response.json({ ok: false, error: "Failed to delete server" }, { status: 500 });
   }
+
+  // Confirm to the owner their server was deleted (fire-and-forget, never throws).
+  await sendServiceEventEmail({
+    userEmail: server.owner_email,
+    userId: server.owner_id,
+    serviceType: "Virtual Server",
+    serviceName: server.name || `Server #${serverId}`,
+    event: "deleted",
+    actionPath: "/dashboard/services/compute/vps",
+  });
 
   return Response.json({ ok: true });
 }

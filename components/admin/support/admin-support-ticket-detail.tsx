@@ -77,7 +77,7 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
     }
 
     if (actorType === "admin") {
-      return { name: "Support Team", email: "support@ahuracloud.com", avatar: null };
+      return { name: "Support Team", email: "support@ahurasense.com", avatar: null };
     }
     if (actorType === "system") {
       return { name: "System", email: "-", avatar: null };

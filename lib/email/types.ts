@@ -180,6 +180,40 @@ export interface InferenceEventEmailData {
   preview?: string;
 }
 
+export type ServiceEventKind =
+  | "created"
+  | "ready"
+  | "updated"
+  | "deleted"
+  | "suspended"
+  | "resumed"
+  | "failed"
+  | "purchased"
+  | "renewed"
+  | "expiring";
+
+export interface ServiceEventEmailData {
+  /** Recipient display name for the greeting. */
+  recipientName: string;
+  /** Human service label, e.g. "Virtual Server", "GPU Pod", "Managed Database". */
+  serviceType: string;
+  /** The resource's name / identifier. */
+  serviceName: string;
+  /** Lifecycle event. */
+  event: ServiceEventKind;
+  /** Optional one-line summary override (otherwise derived from the event). */
+  summary?: string;
+  /** Detail rows rendered in the card (region, plan, IP, cost, expiry, …). */
+  items?: Array<{ label: string; value: string }>;
+  /** Error detail — shown only for `failed` events. */
+  errorMessage?: string;
+  /** CTA target; if omitted the CTA is hidden. */
+  actionUrl?: string;
+  actionLabel?: string;
+  /** Inbox preview text — falls back to the summary. */
+  preview?: string;
+}
+
 export interface VpsPasswordResetEmailData {
   /** Recipient display name for the greeting. */
   recipientName: string;
@@ -215,6 +249,7 @@ export interface EmailTemplateDataMap {
   supportTicketReply: SupportTicketReplyEmailData;
   inferenceEvent: InferenceEventEmailData;
   vpsPasswordReset: VpsPasswordResetEmailData;
+  serviceEvent: ServiceEventEmailData;
 }
 
 export type EmailTemplateId = keyof EmailTemplateDataMap;

@@ -100,7 +100,7 @@ function getMessageIdentity(message: SupportTicketMessage): {
   }
 
   if (message.actor_type === "admin") {
-    return { name: "Support Team", email: "support@ahuracloud.com", avatar: null };
+    return { name: "Support Team", email: "support@ahurasense.com", avatar: null };
   }
   if (message.actor_type === "system") {
     return { name: "System", email: "—", avatar: null };

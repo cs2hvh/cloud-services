@@ -108,13 +108,13 @@ curl -H "Authorization: Bearer sk_live_xxx" \\
 For more examples, see the API reference below.
       `.trim(),
       contact: {
-        name: 'Cloud Services Support',
-        email: 'support@galaxyhvh.com',
-        url: 'https://galaxyhvh.com/support',
+        name: 'AhuraSense Cloud Support',
+        email: 'support@ahurasense.com',
+        url: 'https://ahurasense.com/support',
       },
       license: {
         name: 'Proprietary',
-        url: 'https://galaxyhvh.com/terms',
+        url: 'https://ahurasense.com/terms',
       },
     },
     servers: [

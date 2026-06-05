@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import * as crypto from 'crypto';
 import { AppOperationFinalizer } from '@/lib/app-operations';
+import { sendServiceEventEmail } from '@/lib/services/shared/service-event-email';
 
 type DeploymentRecordPayload = {
   app_id: string;
@@ -135,6 +136,26 @@ export async function POST(req: NextRequest) {
     const deployment = finalization.record;
 
     console.log('[DeploymentRecordWebhook] ✅ Deployment record finalized:', deployment.id);
+
+    // Notify the owner of the deploy outcome (fire-and-forget, never throws).
+    // Scoped to actual deploys; resize/rollback have their own lifecycle and
+    // would make a "ready"/"failed" deploy email misleading.
+    if (body.trigger === 'manual' || body.trigger === 'webhook') {
+      const app = appLookup.success ? appLookup.data : null;
+      const items: Array<{ label: string; value: string }> = [];
+      if (app?.framework) items.push({ label: 'Framework', value: String(app.framework) });
+      const deployBranch = app?.deploy_branch || app?.branch;
+      if (deployBranch) items.push({ label: 'Branch', value: String(deployBranch) });
+      await sendServiceEventEmail({
+        userId: app?.user_id ?? null,
+        serviceType: 'App',
+        serviceName: appName,
+        event: body.status === 'success' ? 'ready' : 'failed',
+        items: items.length > 0 ? items : undefined,
+        errorMessage: body.status === 'failed' ? (failure_reason ?? undefined) : undefined,
+        actionPath: `/dashboard/services/apps/${body.app_id}`,
+      });
+    }
 
     return NextResponse.json({
       success: true,

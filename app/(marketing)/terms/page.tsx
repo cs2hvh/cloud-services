@@ -205,10 +205,10 @@ const SECTIONS: LegalSection[] = [
         <p>
           For legal inquiries, contact{" "}
           <a
-            href="mailto:legal@ahuracloud.com"
+            href="mailto:legal@ahurasense.com"
             className="text-[#9ad5ff] hover:text-[#c6e8ff] transition-colors"
           >
-            legal@ahuracloud.com
+            legal@ahurasense.com
           </a>
           .
         </p>

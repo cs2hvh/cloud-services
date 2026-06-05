@@ -22,6 +22,7 @@ import {
   findAvailableCustomImageByName,
   ensureCustomTemplateOnHost,
 } from "@/lib/services/compute/custom-images";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 
 export const dynamic = "force-dynamic";
 
@@ -1192,6 +1193,24 @@ export async function POST(req: NextRequest) {
         .eq("id", reservationId);
     }
 
+    // Notify the owner their server is live (fire-and-forget, never throws).
+    await sendServiceEventEmail({
+      userEmail: user.email,
+      serviceType: "Virtual Server",
+      serviceName: hostname,
+      event: "ready",
+      items: [
+        { label: "Region", value: region },
+        { label: "IP address", value: ipPrimary },
+        { label: "Operating system", value: String(os) },
+        {
+          label: "Specs",
+          value: `${cpuCores} vCPU · ${Math.round(memoryMB / 1024)} GB RAM · ${diskGB || 20} GB disk`,
+        },
+      ],
+      actionPath: `/dashboard/services/compute/vps/${reservationId}`,
+    });
+
     // Start metered billing now that the VM is live. The 5-min cron meters
     // active_compute hourly (prorated) with the standard grace lifecycle.
     // Best-effort: a failure here is logged but never tears down a live VM.
@@ -1247,6 +1266,15 @@ export async function POST(req: NextRequest) {
           .eq("id", reservationId);
       }
     } catch {}
+    // Let the owner know provisioning failed (fire-and-forget).
+    await sendServiceEventEmail({
+      userEmail: user.email,
+      serviceType: "Virtual Server",
+      serviceName: hostname,
+      event: "failed",
+      errorMessage: failureMessage,
+      actionPath: "/dashboard/services/compute/vps",
+    });
     // Provisioning failed before billing was registered — refund the hold.
     await releaseProvision(reservation);
   }

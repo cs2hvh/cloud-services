@@ -13,7 +13,22 @@ import { SupportTicketCreatedEmailTemplate } from "@/lib/email/templates/support
 import { SupportTicketReplyEmailTemplate } from "@/lib/email/templates/support/support-ticket-reply";
 import { InferenceEventEmailTemplate } from "@/lib/email/templates/inference/inference-event";
 import { VpsPasswordResetEmailTemplate } from "@/lib/email/templates/compute/vps-password-reset";
+import { ServiceEventEmailTemplate } from "@/lib/email/templates/services/service-event";
 import type { EmailTemplateRegistry } from "@/lib/email/types";
+
+// Human label for the lifecycle verb used in the service-event subject line.
+const SERVICE_EVENT_VERB: Record<string, string> = {
+  created: "created",
+  ready: "ready",
+  updated: "updated",
+  deleted: "deleted",
+  suspended: "suspended",
+  resumed: "resumed",
+  failed: "failed",
+  purchased: "purchased",
+  renewed: "renewed",
+  expiring: "expiring soon",
+};
 
 export const emailTemplates: EmailTemplateRegistry = {
   otp: {
@@ -201,6 +216,29 @@ export const emailTemplates: EmailTemplateRegistry = {
     tags: ({ event }) => [
       { name: "category", value: "inference" },
       { name: "event", value: event.replace(/\./g, "-") },
+    ],
+  },
+  serviceEvent: {
+    subject: ({ serviceType, serviceName, event }) =>
+      `AhuraSense | ${serviceType} ${SERVICE_EVENT_VERB[event] ?? event}: ${serviceName}`,
+    previewText: ({ preview, summary, serviceType, serviceName, event }) =>
+      preview ||
+      summary ||
+      `${serviceType} "${serviceName}" ${SERVICE_EVENT_VERB[event] ?? event}.`,
+    render: (data) => <ServiceEventEmailTemplate {...data} />,
+    text: ({ recipientName, serviceType, serviceName, event, summary, items, errorMessage }) =>
+      [
+        `Hi ${recipientName},`,
+        summary || `Your ${serviceType} "${serviceName}" was ${SERVICE_EVENT_VERB[event] ?? event}.`,
+        ...(items ?? []).map((it) => `${it.label}: ${it.value}`),
+        errorMessage ? `Details: ${errorMessage}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    tags: ({ event, serviceType }) => [
+      { name: "category", value: "services" },
+      { name: "event", value: event },
+      { name: "service", value: serviceType.toLowerCase().replace(/\s+/g, "-") },
     ],
   },
   vpsPasswordReset: {

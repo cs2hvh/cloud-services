@@ -5,6 +5,7 @@ import {
     RunPodService,
     type RunPodErrorCode,
 } from "@/lib/services/runpod-service";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +132,21 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
             { status: statusFromErrorCode(result.errorCode) }
         );
     }
+    // Notification-only: fire-and-forget lifecycle email. Never throws.
+    const finalCharge = result.data?.finalCharge;
+    await sendServiceEventEmail({
+        userEmail: user.email ?? null,
+        userId: user.id,
+        serviceType: "GPU Pod",
+        serviceName: `Pod #${result.data?.podId ?? podId}`,
+        event: "deleted",
+        items:
+            finalCharge !== undefined
+                ? [{ label: "Final charge", value: `$${finalCharge.toFixed(2)}` }]
+                : undefined,
+        actionPath: "/dashboard/services/gpu",
+    });
+
     return Response.json({
         ok: true,
         podId: result.data?.podId,

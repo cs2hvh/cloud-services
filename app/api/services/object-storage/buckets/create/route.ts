@@ -78,11 +78,11 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
-        success: true, 
-        data: result.bucket, 
-        message: "Bucket created successfully" 
-      }, 
+      {
+        success: true,
+        data: result.bucket,
+        message: "Bucket created successfully"
+      },
       { status: 201 }
     );
 

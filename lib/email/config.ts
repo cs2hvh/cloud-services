@@ -12,18 +12,24 @@ export interface EmailConfig {
   logoUrl: string;
 }
 
+// Default sending domain for transactional email. Override per-environment with
+// RESEND_DOMAIN (e.g. a staging/test domain) or pin a full address via
+// RESEND_FROM_EMAIL / RESEND_REPLY_TO.
+const DEFAULT_EMAIL_DOMAIN = "ahurasense.com";
+
 export function getEmailConfig(): EmailConfig {
   const appUrl = trimTrailingSlash(
     process.env.DOMAIN || siteConfig.domain,
   );
 
-  const from =
-    process.env.RESEND_FROM_EMAIL ||
-    (process.env.RESEND_DOMAIN
-      ? `support@${process.env.RESEND_DOMAIN}`
-      : "support@example.com");
+  const domain = process.env.RESEND_DOMAIN || DEFAULT_EMAIL_DOMAIN;
 
-  const replyTo = process.env.RESEND_REPLY_TO || from;
+  // Transactional mail is sent from a no-reply identity with a friendly display
+  // name; replies route to support. Both can be overridden via env.
+  const from =
+    process.env.RESEND_FROM_EMAIL || `${siteConfig.name} <noreply@${domain}>`;
+
+  const replyTo = process.env.RESEND_REPLY_TO || `support@${domain}`;
 
   return {
     from,

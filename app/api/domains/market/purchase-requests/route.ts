@@ -9,6 +9,7 @@ import {
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
 import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 
 export async function GET(req: Request) {
   const auth = await authenticateUser();
@@ -114,6 +115,27 @@ export async function POST(req: Request) {
         source: "dashboard-marketplace",
       },
     });
+
+    // Notification-only: confirm the purchase to the owner once it's completed
+    // (createPurchaseRequest charges + registers synchronously and throws on
+    // failure, so a "completed" status here means the domain was bought).
+    if (request.status === "completed") {
+      await sendServiceEventEmail({
+        userId: auth.user.id,
+        userEmail: auth.user.email || null,
+        serviceType: "Domain",
+        serviceName: request.domain,
+        event: "purchased",
+        items: [
+          { label: "Registration term", value: "1 year" },
+          ...(request.purchase_price != null
+            ? [{ label: "Price", value: `${request.purchase_price} ${request.currency}` }]
+            : []),
+          { label: "Auto-renew", value: "Enabled" },
+        ],
+        actionPath: "/dashboard/domains",
+      });
+    }
 
     return NextResponse.json(
       {

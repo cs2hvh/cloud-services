@@ -6,7 +6,6 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import {
@@ -40,7 +39,24 @@ const entry_schema = z.object({ email: z.string().email() });
 type EntryFormData = z.infer<typeof entry_schema>;
 
 const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
-const buttonShellClass = `${glass.glassControl} ${glass.buttonShell}`;
+
+// Premium primary button — accent gradient, soft glow, inset highlight, hover lift.
+const PRIMARY_BTN =
+  "relative flex h-11 w-full items-center justify-center rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY_BTN_STYLE: React.CSSProperties = {
+  background: "linear-gradient(135deg, #1f9dff, #0061c4)",
+  boxShadow:
+    "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)",
+};
+const onBtnEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+  if (e.currentTarget.disabled) return;
+  e.currentTarget.style.filter = "brightness(1.08)";
+  e.currentTarget.style.transform = "translateY(-1px)";
+};
+const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.filter = "none";
+  e.currentTarget.style.transform = "none";
+};
 
 export default function SignUpMultiStep({
   className,
@@ -176,11 +192,18 @@ export default function SignUpMultiStep({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-4 py-4 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6",
+        "relative mx-auto w-full max-w-[480px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#101116]/95 px-7 py-8 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[24px] sm:px-9 sm:py-9",
         className,
       )}
       {...props}
     >
+      {/* Ambient accent glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[150%] -translate-x-1/2 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, rgba(0,149,255,0.18), transparent)" }}
+      />
+      <div className="relative z-10">
       {/* Branding — always visible */}
       <div className="mx-auto mb-1 text-center pt-2 pb-1">
         <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
@@ -226,10 +249,10 @@ export default function SignUpMultiStep({
               </div>
 
               <div className="mx-auto mt-4 w-full max-w-[320px]">
-                <div className="flex items-center gap-3 text-white">
-                  <div className="h-px flex-1 bg-white/75" />
-                  <span className="text-sm">Or</span>
-                  <div className="h-px flex-1 bg-white/75" />
+                <div className="flex items-center gap-3 text-white/55">
+                  <div className="h-px flex-1 bg-white/15" />
+                  <span className="text-xs uppercase tracking-[0.18em]">Or</span>
+                  <div className="h-px flex-1 bg-white/15" />
                 </div>
               </div>
             </>
@@ -263,15 +286,16 @@ export default function SignUpMultiStep({
                   )}
                 />
 
-                <div className={`mx-auto mt-1 w-full max-w-[200px] ${buttonShellClass}`}>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className={glass.button}
-                  >
-                    Continue
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={`${PRIMARY_BTN} mt-1`}
+                  style={PRIMARY_BTN_STYLE}
+                  onMouseEnter={onBtnEnter}
+                  onMouseLeave={onBtnLeave}
+                >
+                  Continue
+                </button>
               </form>
             </Form>
           )}
@@ -368,23 +392,24 @@ export default function SignUpMultiStep({
                   )}
                 />
 
-                <div className="flex items-center justify-center gap-3 pt-1">
-                  <Button
+                <div className="flex items-center gap-3 pt-1">
+                  <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10 cursor-pointer"
+                    className="flex h-11 shrink-0 items-center justify-center rounded-[10px] border border-white/[0.12] bg-white/[0.03] px-5 text-[14px] font-medium text-white/80 transition-colors hover:bg-white/[0.07] hover:text-white"
                   >
                     Back
-                  </Button>
-                  <div className={`w-auto min-w-[180px] ${buttonShellClass}`}>
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className={`${glass.button} px-6`}
-                    >
-                      Create Account
-                    </button>
-                  </div>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className={`${PRIMARY_BTN} flex-1`}
+                    style={PRIMARY_BTN_STYLE}
+                    onMouseEnter={onBtnEnter}
+                    onMouseLeave={onBtnLeave}
+                  >
+                    Create Account
+                  </button>
                 </div>
               </form>
             </Form>
@@ -424,15 +449,16 @@ export default function SignUpMultiStep({
                   )}
                 />
 
-                <div className={`w-full ${buttonShellClass}`}>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className={glass.button}
-                  >
-                    Verify OTP
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={PRIMARY_BTN}
+                  style={PRIMARY_BTN_STYLE}
+                  onMouseEnter={onBtnEnter}
+                  onMouseLeave={onBtnLeave}
+                >
+                  Verify OTP
+                </button>
               </form>
             </Form>
           )}
@@ -445,6 +471,7 @@ export default function SignUpMultiStep({
           </p>
         </>
       )}
+      </div>
     </div>
   );
 }

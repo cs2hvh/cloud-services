@@ -5,13 +5,13 @@
     "version": "1.0.0",
     "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
     "contact": {
-      "name": "Cloud Services Support",
-      "email": "support@galaxyhvh.com",
-      "url": "https://galaxyhvh.com/support"
+      "name": "AhuraSense Cloud Support",
+      "email": "support@ahurasense.com",
+      "url": "https://ahurasense.com/support"
     },
     "license": {
       "name": "Proprietary",
-      "url": "https://galaxyhvh.com/terms"
+      "url": "https://ahurasense.com/terms"
     }
   },
   "servers": [
