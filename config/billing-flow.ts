@@ -6,7 +6,7 @@ export interface PostProvisionBillingArgs {
   initialCost: number;
   hourlyRate: number;
   serviceId: string;
-  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "inference_vector" | "compute" | "custom_image";
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "gpu_volume" | "inference_vector" | "compute" | "custom_image";
   addActive: (args: { userId: string; serviceId: string; hourlyRate: number }) => Promise<void>;
 }
 
@@ -102,13 +102,30 @@ export async function closeActiveBilling({
 }: {
   userId: string;
   serviceId: string;
-  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "inference_vector" | "compute" | "custom_image";
-  closeActive: () => Promise<{ finalCharge: number }>;
-}): Promise<void> {
-  const { finalCharge } = await closeActive();
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "gpu_volume" | "inference_vector" | "compute" | "custom_image";
+  closeActive: () => Promise<{
+    finalCharge: number;
+    finalize?: () => Promise<void>;
+  }>;
+}): Promise<number> {
+  const { finalCharge, finalize } = await closeActive();
 
   if (finalCharge > 0) {
     const newBalance = await Billing.deduct(userId, finalCharge);
+    try {
+      await finalize?.();
+    } catch (error) {
+      try {
+        await Billing.topup(userId, finalCharge);
+      } catch (refundError) {
+        throw new Error(
+          `Failed to finalize billing closure and refund also failed: ${
+            refundError instanceof Error ? refundError.message : String(refundError)
+          }. Finalize error: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+      throw error;
+    }
     try {
       await Billing.save_transaction({
         userId,
@@ -126,7 +143,11 @@ export async function closeActiveBilling({
         error instanceof Error ? error.message : String(error)
       );
     }
+  } else {
+    await finalize?.();
   }
+
+  return finalCharge;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

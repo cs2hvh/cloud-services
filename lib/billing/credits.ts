@@ -71,7 +71,10 @@ export const BillingCredits = {
     if (error) throw new Error(`Failed to insert active_gpu_pods: ${error.message}`);
   },
 
-  closeActiveGpuPod: async (params: { serviceId: string }): Promise<{ finalCharge: number }> => {
+  closeActiveGpuPod: async (params: {
+    serviceId: string;
+    waiveCharge?: boolean;
+  }): Promise<{ finalCharge: number; finalize: () => Promise<void> }> => {
     const supabase = await createServiceClient();
     const { data: row, error: getErr } = await supabase
       .schema("billing")
@@ -83,7 +86,7 @@ export const BillingCredits = {
     if (getErr) throw new Error(`Failed to fetch active_gpu_pods: ${getErr.message}`);
 
     let finalCharge = 0;
-    if (row) {
+    if (row && !params.waiveCharge) {
       const rate = parseFloat(String(row.hourly_rate));
       if (rate > 0) {
         const lastBilledAt = row.last_billed_at as string | undefined;
@@ -93,13 +96,19 @@ export const BillingCredits = {
       }
     }
 
-    await supabase
-      .schema("billing")
-      .from("active_gpu_pods")
-      .delete()
-      .eq("service_id", params.serviceId);
-
-    return { finalCharge };
+    return {
+      finalCharge,
+      finalize: async () => {
+        const { error } = await supabase
+          .schema("billing")
+          .from("active_gpu_pods")
+          .delete()
+          .eq("service_id", params.serviceId);
+        if (error) {
+          throw new Error(`Failed to delete active_gpu_pods: ${error.message}`);
+        }
+      },
+    };
   },
 
   // M3: re-rate a live GPU meter (e.g. storage-only while stopped, full rate on
@@ -107,13 +116,75 @@ export const BillingCredits = {
   // what the pod is charged going forward without closing/reopening the meter.
   updateActiveGpuPodRate: async (params: { serviceId: string; hourlyRate: number }): Promise<void> => {
     const supabase = await createServiceClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .schema("billing")
       .from("active_gpu_pods")
       .update({ hourly_rate: params.hourlyRate })
       .eq("service_id", params.serviceId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .select("service_id")
+      .maybeSingle();
     if (error) throw new Error(`Failed to update active_gpu_pods rate: ${error.message}`);
+    if (!data) {
+      throw new Error("GPU pod billing meter is not active");
+    }
+  },
+
+  addActiveGpuVolume: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_gpu_volumes")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_gpu_volumes: ${error.message}`);
+  },
+
+  closeActiveGpuVolume: async (params: {
+    serviceId: string;
+    waiveCharge?: boolean;
+  }): Promise<{ finalCharge: number; finalize: () => Promise<void> }> => {
+    const supabase = await createServiceClient();
+    const { data: row, error: getErr } = await supabase
+      .schema("billing")
+      .from("active_gpu_volumes")
+      .select("hourly_rate, last_billed_at")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+    if (getErr) throw new Error(`Failed to fetch active_gpu_volumes: ${getErr.message}`);
+
+    let finalCharge = 0;
+    if (row && !params.waiveCharge) {
+      const rate = Number(row.hourly_rate);
+      const last = row.last_billed_at ? new Date(String(row.last_billed_at)) : null;
+      const hoursUsed = last
+        ? Math.max(0, (Date.now() - last.getTime()) / 3_600_000)
+        : 1;
+      finalCharge = Number((rate * hoursUsed).toFixed(8));
+    }
+
+    return {
+      finalCharge,
+      finalize: async () => {
+        const { error } = await supabase
+          .schema("billing")
+          .from("active_gpu_volumes")
+          .delete()
+          .eq("service_id", params.serviceId);
+        if (error) {
+          throw new Error(`Failed to delete active_gpu_volumes: ${error.message}`);
+        }
+      },
+    };
   },
 
   // ── Managed vector collections (service_id = collection UUID) ──────────────

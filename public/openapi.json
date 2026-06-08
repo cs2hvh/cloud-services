@@ -104,6 +104,10 @@
     {
       "name": "Inference — Org",
       "description": "Inference org membership management."
+    },
+    {
+      "name": "GPU Cloud",
+      "description": "GPU inventory, templates, and pod lifecycle."
     }
   ],
   "components": {
@@ -6083,6 +6087,699 @@
           "success",
           "org",
           "counts",
+          "data"
+        ]
+      },
+      "GpuInventoryItem": {
+        "type": "object",
+        "properties": {
+          "gpu_catalog_id": {
+            "type": "string",
+            "example": "h100-80gb-hbm3"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "H100 SXM (80 GB)"
+          },
+          "memory_gb": {
+            "type": "integer",
+            "example": 80
+          },
+          "cloud_type": {
+            "type": "string",
+            "enum": [
+              "SECURE"
+            ],
+            "example": "SECURE"
+          },
+          "stock_status": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "none"
+            ],
+            "example": "high"
+          },
+          "available_counts": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "example": [
+              1,
+              2,
+              4,
+              8
+            ]
+          },
+          "on_demand_price_per_gpu_hour": {
+            "type": "number",
+            "nullable": true,
+            "description": "Customer resale price per GPU-hour, including markup and pricing floor.",
+            "example": 2.5
+          },
+          "spot_price_per_gpu_hour": {
+            "type": "number",
+            "nullable": true,
+            "description": "Customer resale spot price per GPU-hour.",
+            "example": 1.8
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-06-05T12:34:56Z"
+          }
+        },
+        "required": [
+          "gpu_catalog_id",
+          "display_name",
+          "memory_gb",
+          "cloud_type",
+          "stock_status",
+          "available_counts",
+          "on_demand_price_per_gpu_hour",
+          "spot_price_per_gpu_hour",
+          "observed_at"
+        ]
+      },
+      "GpuInventoryListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuInventoryItem"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "GpuTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "pytorch-cuda-12"
+          },
+          "name": {
+            "type": "string",
+            "example": "PyTorch 2.3 + CUDA 12.1"
+          },
+          "image_name": {
+            "type": "string",
+            "example": "ghcr.io/example/gpu-pytorch:latest"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "base",
+              "frameworks",
+              "llm-serving",
+              "image-gen"
+            ]
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "22/tcp",
+              "8888/http"
+            ]
+          },
+          "default_container_disk_gb": {
+            "type": "integer",
+            "example": 80
+          },
+          "env_hints": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sort_order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "image_name",
+          "description",
+          "category",
+          "ports",
+          "default_container_disk_gb",
+          "env_hints",
+          "sort_order"
+        ]
+      },
+      "GpuTemplateListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuTemplate"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "GpuPodSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "training-run-1"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "provisioning",
+              "running",
+              "stopped",
+              "restarting",
+              "terminated",
+              "failed",
+              "interrupted"
+            ]
+          },
+          "gpu_catalog_id": {
+            "type": "string",
+            "example": "h100-80gb-hbm3"
+          },
+          "gpu_count": {
+            "type": "integer",
+            "example": 2
+          },
+          "cloud_type": {
+            "type": "string",
+            "enum": [
+              "SECURE",
+              "COMMUNITY"
+            ]
+          },
+          "interruptible": {
+            "type": "boolean"
+          },
+          "public_ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "port_mappings": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "hourly_cost_usd": {
+            "type": "number",
+            "example": 5
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "gpu_catalog_id",
+          "gpu_count",
+          "cloud_type",
+          "interruptible",
+          "public_ip",
+          "port_mappings",
+          "hourly_cost_usd",
+          "created_at"
+        ]
+      },
+      "GpuPodListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuPodSummary"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "GpuPodCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "public_ip": {
+            "type": "string",
+            "nullable": true
+          },
+          "port_mappings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "hourly_cost_usd": {
+            "type": "number"
+          },
+          "ssh_command": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "public_ip",
+          "port_mappings",
+          "hourly_cost_usd",
+          "ssh_command"
+        ]
+      },
+      "GpuPodCreatedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuPodCreated"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GpuPodCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?$"
+          },
+          "gpu_catalog_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "gpu_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "default": 1
+          },
+          "interruptible": {
+            "type": "boolean",
+            "default": false
+          },
+          "image_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "template_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "container_disk_gb": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 2000
+          },
+          "volume_gb": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "data_center_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "maxItems": 20
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^\\d{1,5}\\/(tcp|http)$"
+            },
+            "maxItems": 50
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 16384
+            }
+          },
+          "public_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          },
+          "root_password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "name",
+          "gpu_catalog_id"
+        ]
+      },
+      "GpuPodDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GpuPodSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "image_name": {
+                "type": "string"
+              },
+              "template_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "container_disk_gb": {
+                "type": "integer"
+              },
+              "volume_gb": {
+                "type": "integer"
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env_keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ssh_command": {
+                "type": "string",
+                "nullable": true
+              },
+              "billing_start": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              },
+              "billing_end": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "image_name",
+              "template_id",
+              "container_disk_gb",
+              "volume_gb",
+              "ports",
+              "env_keys",
+              "ssh_command",
+              "billing_start",
+              "billing_end"
+            ]
+          }
+        ]
+      },
+      "GpuPodResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuPodDetail"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GpuPodDeleteResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "final_charge_usd": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "deleted",
+          "final_charge_usd"
+        ]
+      },
+      "GpuPodDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuPodDeleteResult"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GpuPodPowerResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "restart"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "status"
+        ]
+      },
+      "GpuPodPowerResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuPodPowerResult"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GpuPodPowerRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "restart"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "GpuVolume": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 7
+          },
+          "name": {
+            "type": "string",
+            "example": "training-data"
+          },
+          "size_gb": {
+            "type": "integer",
+            "example": 500
+          },
+          "data_center_id": {
+            "type": "string",
+            "example": "US-TX-3"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "creating",
+              "available",
+              "attached",
+              "error",
+              "deleted"
+            ]
+          },
+          "monthly_cost_usd": {
+            "type": "number",
+            "description": "Customer resale price per month. Provider costs are not exposed.",
+            "example": 43.75
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size_gb",
+          "data_center_id",
+          "status",
+          "monthly_cost_usd",
+          "created_at"
+        ]
+      },
+      "GpuVolumeListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuVolume"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "GpuVolumeResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuVolume"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "GpuVolumeCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9 _-]{0,62}[a-zA-Z0-9])?$"
+          },
+          "size_gb": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000
+          },
+          "data_center_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "name",
+          "size_gb",
+          "data_center_id"
+        ]
+      },
+      "GpuVolumeDeleteResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ]
+      },
+      "GpuVolumeDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GpuVolumeDeleteResult"
+          }
+        },
+        "required": [
           "data"
         ]
       }
@@ -18454,6 +19151,1083 @@
                 },
                 "example": {
                   "error": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/inventory": {
+      "get": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "List GPU inventory",
+        "operationId": "listGpuInventory",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns current secure-cloud availability and customer resale pricing. Upstream provider identifiers and wholesale prices are not exposed.",
+        "responses": {
+          "200": {
+            "description": "GPU inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuInventoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/templates": {
+      "get": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "List GPU pod templates",
+        "operationId": "listGpuTemplates",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GPU pod templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuTemplateListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/pods": {
+      "get": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "List active GPU pods",
+        "operationId": "listGpuPods",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns non-terminated pods owned by the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "GPU pods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuPodListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Create GPU pod",
+        "operationId": "createGpuPod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique client key used to prevent duplicate provisioning."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpuPodCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GPU pod created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuPodCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INSUFFICIENT_BALANCE",
+                  "message": "Insufficient credits"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Capacity unavailable or duplicate request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CAPACITY_UNAVAILABLE",
+                  "message": "GPU capacity is unavailable"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "GATEWAY_TIMEOUT",
+                  "message": "GPU provider request timed out"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/pods/{id}": {
+      "get": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Get GPU pod",
+        "operationId": "getGpuPod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "example": 42
+            },
+            "description": "Internal platform pod ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GPU pod",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuPodResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid pod ID format"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this pod"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "GPU pod not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Terminate GPU pod",
+        "operationId": "deleteGpuPod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "example": 42
+            },
+            "description": "Internal platform pod ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GPU pod terminated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuPodDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID or state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid pod ID format"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this pod"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "GPU pod not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/pods/{id}/power": {
+      "post": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Start, stop, or restart GPU pod",
+        "operationId": "powerGpuPod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "example": 42
+            },
+            "description": "Internal platform pod ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpuPodPowerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Power action accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuPodPowerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this pod"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "GPU pod not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "GATEWAY_TIMEOUT",
+                  "message": "GPU provider request timed out"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/volumes": {
+      "get": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "List network volumes",
+        "operationId": "listGpuVolumes",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns non-deleted volumes owned by the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "Network volumes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuVolumeListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Create network volume",
+        "operationId": "createGpuVolume",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique client key used to prevent duplicate provisioning."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpuVolumeCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Network volume created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuVolumeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INSUFFICIENT_BALANCE",
+                  "message": "Insufficient credits"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "REQUEST_IN_PROGRESS",
+                  "message": "This request is already being processed"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "GATEWAY_TIMEOUT",
+                  "message": "GPU provider request timed out"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu/volumes/{id}": {
+      "delete": {
+        "tags": [
+          "GPU Cloud"
+        ],
+        "summary": "Delete network volume",
+        "operationId": "deleteGpuVolume",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "example": 42
+            },
+            "description": "Internal platform volume ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Network volume deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuVolumeDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid volume ID format"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this volume"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Network volume not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Volume attached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CAPACITY_UNAVAILABLE",
+                  "message": "Volume is attached to a running pod"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
                 }
               }
             }

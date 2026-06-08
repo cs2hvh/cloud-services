@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
     // Idempotency reservation
     const idempKey = getIdempotencyKey(req.headers);
     let idempComplete: ((data: unknown) => Promise<void>) | null = null;
+    let idempAbort: (() => Promise<void>) | null = null;
     if (idempKey) {
         const idemp = await checkIdempotency(`gpu-create:${user.id}:${idempKey}`);
         if (idemp.status === "completed") {
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
             );
         }
         idempComplete = idemp.complete;
+        idempAbort = idemp.abort;
     }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -163,9 +165,10 @@ export async function POST(req: NextRequest) {
             ? Number(body.containerDiskGb)
             : undefined,
         volumeGb: body.volumeGb !== undefined ? Number(body.volumeGb) : undefined,
-        networkVolumeId: body.networkVolumeId
-            ? String(body.networkVolumeId)
-            : undefined,
+        networkVolumeRecordId:
+            body.networkVolumeId !== undefined
+                ? Number(body.networkVolumeId)
+                : undefined,
         ports: Array.isArray(body.ports) ? (body.ports as string[]).map(String) : undefined,
         env:
             body.env && typeof body.env === "object" && !Array.isArray(body.env)
@@ -177,6 +180,9 @@ export async function POST(req: NextRequest) {
 
     const result = await RunPodService.createPod(createReq);
     if (!result.success) {
+        if (idempAbort && result.errorCode !== "TIMEOUT") {
+            await idempAbort().catch(() => {});
+        }
         return Response.json(
             { ok: false, error: result.error || "Pod creation failed" },
             { status: statusFromErrorCode(result.errorCode) }

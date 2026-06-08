@@ -14,6 +14,7 @@ import { registerProjectPaths } from '@/lib/openapi/paths/projects';
 import { registerResourcePaths } from '@/lib/openapi/paths/resources';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
 import { registerInferenceMgmtPaths } from '@/lib/openapi/paths/inference-mgmt';
+import { registerGpuPaths } from '@/lib/openapi/paths/gpu';
 
 export const registry = new OpenAPIRegistry();
 
@@ -34,6 +35,7 @@ registerDatabasePaths(registry);
 registerKubernetesPaths(registry);
 registerDomainPaths(registry);
 registerInferenceMgmtPaths(registry);
+registerGpuPaths(registry);
 
 /**
  * Generate the complete OpenAPI document
@@ -209,6 +211,10 @@ For more examples, see the API reference below.
       {
         name: 'Inference — Org',
         description: 'Inference org membership management.',
+      },
+      {
+        name: 'GPU Cloud',
+        description: 'GPU inventory, templates, and pod lifecycle.',
       },
     ],
   });

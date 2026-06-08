@@ -7,6 +7,7 @@ import { RunPodClient } from "../client";
 import {
     PROBED_GPU_COUNTS,
     buildGpuTypesQuery,
+    computeResalePerHour,
     inferGpuTier,
     inferSortOrder,
     mergeAvailableCounts,
@@ -368,6 +369,87 @@ export const inventoryOperations = {
                 });
 
             return { success: true, data: rows };
+        } catch (e) {
+            return {
+                success: false,
+                error: e instanceof Error ? e.message : String(e),
+                errorCode: "SERVER",
+            };
+        }
+    },
+
+    /** Public API view with customer pricing; leaves listLatest unchanged. */
+    async listLatestForPublic(): Promise<
+        ServiceResult<
+            Array<
+                InventoryRow & {
+                    resaleOnDemandPerHr: number | null;
+                    resaleSpotPerHr: number | null;
+                }
+            >
+        >
+    > {
+        const inventory = await inventoryOperations.listLatest();
+        if (!inventory.success || !inventory.data) {
+            return {
+                success: false,
+                error: inventory.error,
+                errorCode: inventory.errorCode,
+            };
+        }
+
+        try {
+            const supabase = await createServiceClient();
+            const { data, error } = await supabase
+                .from("gpu_pricing")
+                .select(
+                    "gpu_catalog_id, cloud_type, interruptible, markup_pct, floor_per_hour_usd"
+                );
+            if (error) throw new Error(error.message);
+
+            const pricing = new Map(
+                (data || []).map((row) => [
+                    `${row.gpu_catalog_id}:${row.cloud_type}:${row.interruptible}`,
+                    row,
+                ])
+            );
+
+            return {
+                success: true,
+                data: inventory.data.map((row) => {
+                    const onDemand = pricing.get(
+                        `${row.gpuCatalogId}:${row.cloudType}:false`
+                    );
+                    const spot = pricing.get(
+                        `${row.gpuCatalogId}:${row.cloudType}:true`
+                    );
+                    return {
+                        ...row,
+                        resaleOnDemandPerHr:
+                            row.onDemandPerHr !== null && onDemand
+                                ? computeResalePerHour({
+                                      observedPerHr: row.onDemandPerHr,
+                                      markupPct: Number(onDemand.markup_pct),
+                                      floorPerHour: Number(
+                                          onDemand.floor_per_hour_usd
+                                      ),
+                                      gpuCount: 1,
+                                  })
+                                : null,
+                        resaleSpotPerHr:
+                            row.spotPerHr !== null && spot
+                                ? computeResalePerHour({
+                                      observedPerHr: row.spotPerHr,
+                                      markupPct: Number(spot.markup_pct),
+                                      floorPerHour: Number(
+                                          spot.floor_per_hour_usd
+                                      ),
+                                      gpuCount: 1,
+                                  })
+                                : null,
+                    };
+                }),
+            };
         } catch (e) {
             return {
                 success: false,

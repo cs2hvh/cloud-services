@@ -78,7 +78,6 @@ const CUSTOM_TEMPLATE: WizardTemplate = {
 
 interface VolumeOption {
     id: number;
-    runpodVolumeId: string | null;
     name: string;
     sizeGb: number;
     dataCenterId: string;
@@ -455,10 +454,7 @@ export default function DeployWizard({
                 templateId: templateId !== "custom" ? templateId : undefined,
                 containerDiskGb,
                 volumeGb,
-                networkVolumeId: selectedVolume?.runpodVolumeId || undefined,
-                dataCenterIds: selectedVolume
-                    ? [selectedVolume.dataCenterId]
-                    : undefined,
+                networkVolumeId: selectedVolume?.id,
                 ports: parsePorts(portsRaw),
                 env: parseEnv(envRaw),
                 publicKey: publicKey.trim() || undefined,
@@ -851,7 +847,7 @@ export default function DeployWizard({
                                 <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
                                     <SelectItem value="none">None — don&apos;t attach a network volume</SelectItem>
                                     {volumeOptions.map((v) => (
-                                        <SelectItem key={v.id} value={String(v.id)} disabled={!v.runpodVolumeId}>
+                                        <SelectItem key={v.id} value={String(v.id)}>
                                             {v.name} · {v.sizeGb} GB · {v.dataCenterId}
                                         </SelectItem>
                                     ))}
@@ -1534,4 +1530,3 @@ function AuthDot({ ok }: { ok: boolean }) {
         />
     );
 }
-

@@ -122,6 +122,7 @@ type BillableServiceType =
   | "platform_apps"
   | "domain"
   | "gpu_pod"
+  | "gpu_volume"
   | "inference_finetune"
   | "inference_serving"
   | "inference_deployment"
@@ -1525,7 +1526,7 @@ export const Billing = {
       }
       if (
         opts?.serviceType &&
-        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain", "compute", "gpu_pod", "custom_image", "inference_finetune", "inference_serving", "inference_deployment", "inference_vector"].includes(opts.serviceType)
+        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain", "compute", "gpu_pod", "gpu_volume", "custom_image", "inference_finetune", "inference_serving", "inference_deployment", "inference_vector"].includes(opts.serviceType)
       ) {
         nextQuery = nextQuery.eq("service_type", opts.serviceType);
       }
@@ -1622,4 +1623,3 @@ export const Billing = {
     });
   },
 };
-

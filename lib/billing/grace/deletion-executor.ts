@@ -8,6 +8,7 @@ import { SpectrumService } from "@/lib/services/spectrum-service";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { deleteCustomImage } from "@/lib/services/compute/custom-images";
 import { podLifecycleOperations } from "@/lib/services/runpod/operations/pod-lifecycle-operations";
+import { volumeOperations } from "@/lib/services/runpod/operations/volume-operations";
 
 type ServiceDeletionOutcome = {
   success: boolean;
@@ -290,6 +291,7 @@ export async function executeGraceDeletion(params: {
         const result = await podLifecycleOperations.destroyPod({
           podId: Number(pod.id),
           ownerId: String(pod.owner_id),
+          waiveFinalCharge: true,
         });
         if (!result.success && result.errorCode !== "NOT_FOUND") {
           return { success: false, message: result.error ?? "GPU pod deletion failed" };
@@ -298,6 +300,38 @@ export async function executeGraceDeletion(params: {
           success: true,
           alreadyDeleted: !result.success && result.errorCode === "NOT_FOUND",
           message: "GPU pod deleted",
+        };
+      }
+
+      case "active_gpu_volumes": {
+        const supabase = await createServiceClient();
+        const { data: volume } = await supabase
+          .from("gpu_network_volumes")
+          .select("id, owner_id, status")
+          .eq("billing_service_id", params.serviceId)
+          .maybeSingle();
+        if (!volume || volume.status === "deleted") {
+          return {
+            success: true,
+            alreadyDeleted: true,
+            message: "GPU network volume already deleted",
+          };
+        }
+        const result = await volumeOperations.deleteVolume({
+          volumeId: Number(volume.id),
+          ownerId: String(volume.owner_id),
+          waiveFinalCharge: true,
+        });
+        if (!result.success && result.errorCode !== "NOT_FOUND") {
+          return {
+            success: false,
+            message: result.error ?? "GPU network volume deletion failed",
+          };
+        }
+        return {
+          success: true,
+          alreadyDeleted: !result.success,
+          message: "GPU network volume deleted",
         };
       }
 

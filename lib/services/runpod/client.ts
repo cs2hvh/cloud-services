@@ -106,21 +106,24 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function withRetry<T>(
+    fn: () => Promise<T>,
+    maxAttempts = MAX_RETRIES
+): Promise<T> {
     let attempt = 0;
     let lastErr: RunPodError | undefined;
-    while (attempt < MAX_RETRIES) {
+    while (attempt < maxAttempts) {
         try {
             return await fn();
         } catch (e) {
             const re = buildError(e);
             lastErr = re;
-            if (!re.retryable) throw re;
+            attempt += 1;
+            if (!re.retryable || attempt >= maxAttempts) throw re;
             // 250ms, 750ms, 2250ms with ±25 % jitter.
-            const base = 250 * Math.pow(3, attempt);
+            const base = 250 * Math.pow(3, attempt - 1);
             const jitter = base * (Math.random() * 0.5 - 0.25);
             await sleep(base + jitter);
-            attempt += 1;
         }
     }
     throw lastErr || ({ code: "UNKNOWN", message: "retry exhausted", retryable: false } as RunPodError);
@@ -135,6 +138,9 @@ export const RunPodClient = {
         init?: AxiosRequestConfig
     ): Promise<T> {
         const url = `${getRestUrl()}${path}`;
+        // POST creates are not idempotent at RunPod. Retrying after a timeout can
+        // create a second resource when the first response was merely lost.
+        const maxAttempts = method === "POST" ? 1 : MAX_RETRIES;
         return withRetry(async () => {
             try {
                 const res = await axios.request<T>({
@@ -149,7 +155,7 @@ export const RunPodClient = {
             } catch (e) {
                 throw buildError(e);
             }
-        });
+        }, maxAttempts);
     },
 
     /** Authenticated GraphQL call. RunPod's GraphQL endpoint accepts the same Bearer token. */

@@ -81,6 +81,10 @@ function serviceTypeLabel(serviceTable: string | null): string {
       return "Spectrum";
     case "active_platform_apps":
       return "Platform App";
+    case "active_gpu_pods":
+      return "GPU Pod";
+    case "active_gpu_volumes":
+      return "GPU Network Volume";
     default:
       return "Service";
   }

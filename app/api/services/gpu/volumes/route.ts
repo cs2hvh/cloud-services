@@ -65,7 +65,16 @@ export async function GET(_req: NextRequest) {
             { status: statusFromErrorCode(result.errorCode) }
         );
     }
-    return Response.json({ ok: true, volumes: result.data });
+    const volumes = (result.data ?? []).map((volume) => ({
+        id: volume.id,
+        name: volume.name,
+        sizeGb: volume.sizeGb,
+        dataCenterId: volume.dataCenterId,
+        status: volume.status,
+        monthlyCostUsd: volume.monthlyCostUsd,
+        createdAt: volume.createdAt,
+    }));
+    return Response.json({ ok: true, volumes });
 }
 
 /** POST /api/services/gpu/volumes — create a new network volume. */
@@ -100,6 +109,7 @@ export async function POST(req: NextRequest) {
 
     const idempKey = getIdempotencyKey(req.headers);
     let idempComplete: ((data: unknown) => Promise<void>) | null = null;
+    let idempAbort: (() => Promise<void>) | null = null;
     if (idempKey) {
         const idemp = await checkIdempotency(`gpu-vol-create:${user.id}:${idempKey}`);
         if (idemp.status === "completed") return Response.json(idemp.data);
@@ -117,6 +127,7 @@ export async function POST(req: NextRequest) {
             );
         }
         idempComplete = idemp.complete;
+        idempAbort = idemp.abort;
     }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -130,6 +141,9 @@ export async function POST(req: NextRequest) {
 
     const result = await RunPodService.createVolume(createReq);
     if (!result.success) {
+        if (idempAbort && result.errorCode !== "TIMEOUT") {
+            await idempAbort().catch(() => {});
+        }
         return Response.json(
             { ok: false, error: result.error || "Volume creation failed" },
             { status: statusFromErrorCode(result.errorCode) }

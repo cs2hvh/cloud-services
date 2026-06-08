@@ -9,6 +9,7 @@ const SERVICE_LABEL: Record<string, string> = {
   spectrum: "DDoS Protection",
   platform_apps: "App",
   gpu_pod: "GPU pod",
+  gpu_volume: "GPU network volume",
   compute: "Virtual server",
   custom_image: "Custom image",
   inference_vector: "Vector store",

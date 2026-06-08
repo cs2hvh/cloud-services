@@ -32,9 +32,8 @@ function authorize(req: NextRequest): boolean {
 /**
  * POST /api/internal/gpu/reconcile
  *
- * For every pod whose DB status implies "should be present on RunPod", fetch
- * /pods/{id} and reconcile. Detects spot interruption (404), state drift, and
- * upstream deletions. Closes billing for disappeared pods.
+ * Reconciles pods and network volumes, including failed create cleanup,
+ * provider-side deletion, state drift, billing closure, and attachment release.
  *
  * Single-flighted via Redis NX lock.
  */
@@ -57,14 +56,29 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const result = await RunPodService.reconcileActivePods();
-        if (!result.success) {
+        const [pods, volumes] = await Promise.all([
+            RunPodService.reconcileActivePods(),
+            RunPodService.reconcileVolumes(),
+        ]);
+        if (!pods.success || !volumes.success) {
             return Response.json(
-                { ok: false, error: result.error || "Reconcile failed" },
+                {
+                    ok: false,
+                    error:
+                        pods.error ||
+                        volumes.error ||
+                        "GPU resource reconciliation failed",
+                },
                 { status: 500 }
             );
         }
-        return Response.json({ ok: true, summary: result.data });
+        return Response.json({
+            ok: true,
+            summary: {
+                pods: pods.data,
+                volumes: volumes.data,
+            },
+        });
     } finally {
         try {
             const current = await redis.get(LOCK_KEY);

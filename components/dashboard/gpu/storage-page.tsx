@@ -48,7 +48,6 @@ const DATA_CENTERS: { id: string; label: string; cc: string }[] = [
 
 interface VolumeSummary {
     id: number;
-    runpodVolumeId: string | null;
     name: string;
     sizeGb: number;
     dataCenterId: string;
@@ -335,9 +334,6 @@ export default function GpuStorage() {
                                     {/* Name */}
                                     <div className="col-span-2 sm:col-span-1 min-w-0">
                                         <p style={SERIF_STYLE} className="truncate text-[15px] font-semibold text-white">{vol.name}</p>
-                                        {vol.runpodVolumeId && (
-                                            <p className={`${MONO} mt-0.5 truncate text-[10px] text-white/30`}>{vol.runpodVolumeId}</p>
-                                        )}
                                     </div>
                                     {/* Size */}
                                     <Cell label="Size">

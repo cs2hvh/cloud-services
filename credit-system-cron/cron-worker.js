@@ -48,6 +48,7 @@ export const VALID_TABLE_NAMES = [
   "active_compute",
   "active_custom_image",
   "active_gpu_pods",
+  "active_gpu_volumes",
 ];
 
 const TABLE_TO_SERVICE_TYPE = {
@@ -60,6 +61,7 @@ const TABLE_TO_SERVICE_TYPE = {
   active_compute: "compute",
   active_custom_image: "custom_image",
   active_gpu_pods: "gpu_pod",
+  active_gpu_volumes: "gpu_volume",
 };
 
 // Customer-facing label — keeps internal codenames (spectrum / objectspace) out
@@ -71,6 +73,7 @@ const SERVICE_LABEL = {
   spectrum: "DDoS Protection",
   platform_apps: "App",
   gpu_pod: "GPU pod",
+  gpu_volume: "GPU network volume",
   compute: "Virtual server",
   custom_image: "Custom image",
   inference_vector: "Vector store",
@@ -1475,6 +1478,25 @@ cron.schedule("0 * * * *", async () => {
 console.log("🚀 Cron worker started successfully");
 console.log("📅 Schedule: Every 5 minutes (*/5 * * * *)");
 console.log("🔧 Supabase connected:", process.env.SUPABASE_URL ? "✓" : "✗");
+
+// -----------------------------
+// GPU INVENTORY + POD RECONCILIATION
+// The API routes own provider logic and distributed locking. The cron worker
+// only triggers those authenticated central-service entry points.
+// -----------------------------
+cron.schedule("* * * * *", async () => {
+  const result = await postInternalCronRoute("/api/internal/gpu/sync", {});
+  if (!result.ok && !result.skipped) {
+    console.error("[gpu-inventory-sync] Failed:", result.errorMessage);
+  }
+});
+
+cron.schedule("*/2 * * * *", async () => {
+  const result = await postInternalCronRoute("/api/internal/gpu/reconcile", {});
+  if (!result.ok && !result.skipped) {
+    console.error("[gpu-pod-reconcile] Failed:", result.errorMessage);
+  }
+});
 
 // -----------------------------
 // DOMAIN REGISTRANT CONTACT SYNC

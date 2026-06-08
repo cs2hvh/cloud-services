@@ -16,6 +16,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { RunPodClient } from "../client";
 import { computeResalePerHour, storagePerHour } from "../helpers";
 import { templateOperations } from "./template-operations";
+import { volumeOperations } from "./volume-operations";
 import type {
     CloudType,
     PodStatus,
@@ -47,6 +48,7 @@ export interface CreatePodRequest {
     containerDiskGb?: number;
     volumeGb?: number;
     networkVolumeId?: string;
+    networkVolumeRecordId?: number;
     ports?: string[];
     env?: Record<string, string>;
     publicKey?: string;
@@ -73,6 +75,7 @@ export interface PowerPodRequest {
 export interface DestroyPodRequest {
     podId: number;
     ownerId: string;
+    waiveFinalCharge?: boolean;
 }
 
 // ─── DB row helpers (typed locally; supabase generated types lag the migration) ─
@@ -112,7 +115,11 @@ function isRunPodError(e: unknown): e is RunPodError {
     );
 }
 
-function nameToHostname(podId: number, name: string): string {
+function isUniqueViolation(error: { code?: string } | null): boolean {
+    return error?.code === "23505";
+}
+
+export function buildRunPodPodName(podId: number, name: string): string {
     const cleaned = name.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase();
     const tag = `samatva-${podId}-${cleaned}`;
     return tag.length > 191 ? tag.slice(0, 191) : tag;
@@ -134,11 +141,22 @@ function podStatusFromRunPod(pod: RunPodPodResource): PodStatus {
     return "provisioning";
 }
 
+async function deleteRunPodPod(runpodPodId: string): Promise<void> {
+    try {
+        await RunPodClient.rest("DELETE", `/pods/${runpodPodId}`);
+    } catch (e) {
+        if (isRunPodError(e) && e.code === "NOT_FOUND") return;
+        throw e;
+    }
+}
+
 // ─── Operations ─────────────────────────────────────────────────────────────
 export const podLifecycleOperations = {
     async createPod(req: CreatePodRequest): Promise<ServiceResult<CreatePodResult>> {
         let settled = false;
         let reservation: ProvisionReservation | undefined;
+        let reservedNetworkVolumeId: string | undefined;
+        let releaseReservedVolume = false;
         try {
             // 1. Input validation
             if (!req.name || !/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?$/.test(req.name)) {
@@ -191,10 +209,11 @@ export const podLifecycleOperations = {
 
             const supabase = await createServiceClient();
 
-            // 2. Per-user active pod limit
-            const { count: activeCount, error: countErr } = await supabase
+            // 2. Read occupied slots. The partial unique DB index is the actual
+            // concurrency gate; this query only picks likely free candidates.
+            const { data: activeRows, error: countErr } = await supabase
                 .from("gpu_pods")
-                .select("id", { count: "exact", head: true })
+                .select("active_slot")
                 .eq("owner_id", req.ownerId)
                 .in("status", [
                     "provisioning",
@@ -204,7 +223,12 @@ export const podLifecycleOperations = {
                     "interrupted",
                 ]);
             if (countErr) throw new Error(`gpu_pods count failed: ${countErr.message}`);
-            if ((activeCount || 0) >= MAX_PODS_PER_USER) {
+            const occupiedSlots = new Set(
+                (activeRows || [])
+                    .map((row) => Number(row.active_slot))
+                    .filter((slot) => Number.isInteger(slot) && slot > 0)
+            );
+            if (occupiedSlots.size >= MAX_PODS_PER_USER) {
                 return {
                     success: false,
                     error: `Max ${MAX_PODS_PER_USER} active pods per user. Delete an existing pod first.`,
@@ -311,6 +335,36 @@ export const podLifecycleOperations = {
                 };
             }
 
+            let networkVolumeId = req.networkVolumeId;
+            let dataCenterIds = req.dataCenterIds;
+            if (req.networkVolumeRecordId !== undefined) {
+                if (
+                    !Number.isSafeInteger(req.networkVolumeRecordId) ||
+                    req.networkVolumeRecordId < 1
+                ) {
+                    return {
+                        success: false,
+                        error: "Invalid network volume ID",
+                        errorCode: "INVALID",
+                    };
+                }
+                const attachment = await volumeOperations.reserveVolumeAttachment({
+                    volumeId: req.networkVolumeRecordId,
+                    ownerId: req.ownerId,
+                });
+                if (!attachment.success || !attachment.data) {
+                    return {
+                        success: false,
+                        error: attachment.error || "Unable to attach network volume",
+                        errorCode: attachment.errorCode || "CAPACITY",
+                    };
+                }
+                networkVolumeId = attachment.data.runpodVolumeId;
+                dataCenterIds = [attachment.data.dataCenterId];
+                reservedNetworkVolumeId = networkVolumeId;
+                releaseReservedVolume = true;
+            }
+
             // 5. Prepare env (inject SSH key + optional root password)
             const userEnv: Record<string, string> = { ...(req.env || {}) };
             if (req.publicKey) userEnv.PUBLIC_KEY = req.publicKey;
@@ -325,51 +379,71 @@ export const podLifecycleOperations = {
 
             // 6. Reserve pod row BEFORE calling RunPod (provides rollback anchor + idemp source-of-truth)
             const billingStart = new Date();
-            const { data: inserted, error: insErr } = await supabase
-                .from("gpu_pods")
-                .insert({
-                    owner_id: req.ownerId,
-                    owner_email: req.ownerEmail || null,
-                    name: req.name,
-                    gpu_catalog_id: req.gpuCatalogId,
-                    gpu_count: req.gpuCount,
-                    cloud_type: req.cloudType,
-                    interruptible: req.interruptible,
-                    image_name: imageName,
-                    template_id: req.templateId || null,
-                    container_disk_gb: containerDiskGb,
-                    volume_gb: volumeGb,
-                    network_volume_id: req.networkVolumeId || null,
-                    ports:
-                        req.ports && req.ports.length > 0 ? req.ports : ["22/tcp"],
-                    env_keys: envKeys,
-                    env_blob: envBlob,
-                    status: "provisioning",
-                    details: {
-                        provisioning: {
-                            stage: "queuing",
-                            progress: 10,
-                            message: "Allocating GPU…",
-                            started_at: billingStart.toISOString(),
+            let inserted: { id: number; billing_service_id: string } | null = null;
+            let insertError: { code?: string; message: string } | null = null;
+            for (let slot = 1; slot <= MAX_PODS_PER_USER; slot += 1) {
+                if (occupiedSlots.has(slot)) continue;
+                const { data, error } = await supabase
+                    .from("gpu_pods")
+                    .insert({
+                        owner_id: req.ownerId,
+                        owner_email: req.ownerEmail || null,
+                        name: req.name,
+                        gpu_catalog_id: req.gpuCatalogId,
+                        gpu_count: req.gpuCount,
+                        cloud_type: req.cloudType,
+                        interruptible: req.interruptible,
+                        image_name: imageName,
+                        template_id: req.templateId || null,
+                        container_disk_gb: containerDiskGb,
+                        volume_gb: volumeGb,
+                        network_volume_id: networkVolumeId || null,
+                        ports:
+                            req.ports && req.ports.length > 0
+                                ? req.ports
+                                : ["22/tcp"],
+                        env_keys: envKeys,
+                        env_blob: envBlob,
+                        status: "provisioning",
+                        details: {
+                            provisioning: {
+                                stage: "queuing",
+                                progress: 10,
+                                message: "Allocating GPU…",
+                                started_at: billingStart.toISOString(),
+                            },
                         },
-                    },
-                    hourly_cost_usd: hourlyCostUsd,
-                    runpod_cost_per_hr: observedPerHr,
-                    billing_start: billingStart.toISOString(),
-                })
-                .select("id, billing_service_id")
-                .single();
-            if (insErr) {
+                        hourly_cost_usd: hourlyCostUsd,
+                        runpod_cost_per_hr: observedPerHr,
+                        billing_start: billingStart.toISOString(),
+                        active_slot: slot,
+                    })
+                    .select("id, billing_service_id")
+                    .single();
+                if (!error && data) {
+                    inserted = data as {
+                        id: number;
+                        billing_service_id: string;
+                    };
+                    break;
+                }
+                insertError = error;
+                if (!isUniqueViolation(error)) break;
+            }
+            if (!inserted) {
+                const atCapacity = isUniqueViolation(insertError);
                 return {
                     success: false,
-                    error: `Failed to reserve pod record: ${insErr.message}`,
-                    errorCode: "SERVER",
+                    error: atCapacity
+                        ? `Max ${MAX_PODS_PER_USER} active pods per user. Delete an existing pod first.`
+                        : `Failed to reserve pod record: ${
+                              insertError?.message || "unknown database error"
+                          }`,
+                    errorCode: atCapacity ? "CAPACITY" : "SERVER",
                 };
             }
-            const podId = (inserted as { id: number }).id;
-            const billingServiceId = (
-                inserted as { billing_service_id: string }
-            ).billing_service_id;
+            const podId = inserted.id;
+            const billingServiceId = inserted.billing_service_id;
 
             // 7. Call RunPod (with full rollback on failure)
             //
@@ -378,10 +452,10 @@ export const podLifecycleOperations = {
             // RunPod-side template UUID, so we must NEVER forward it to the
             // RunPod create-pod call — RunPod would return "template not
             // found". The image is conveyed via `imageName` only.
-            let runpodPod: RunPodPodResource;
+            let runpodPod: RunPodPodResource | undefined;
             try {
                 const runpodReq: RunPodCreatePodRequest = {
-                    name: nameToHostname(podId, req.name),
+                    name: buildRunPodPodName(podId, req.name),
                     imageName,
                     computeType: "GPU",
                     cloudType: req.cloudType,
@@ -392,13 +466,13 @@ export const podLifecycleOperations = {
                     containerDiskInGb: containerDiskGb,
                     volumeInGb: volumeGb,
                     volumeMountPath: DEFAULT_VOLUME_MOUNT,
-                    networkVolumeId: req.networkVolumeId,
+                    networkVolumeId,
                     ports:
                         req.ports && req.ports.length > 0 ? req.ports : ["22/tcp"],
                     env: userEnv,
-                    dataCenterIds: req.dataCenterIds,
+                    dataCenterIds,
                     dataCenterPriority:
-                        req.dataCenterIds && req.dataCenterIds.length > 0
+                        dataCenterIds && dataCenterIds.length > 0
                             ? "custom"
                             : "availability",
                     supportPublicIp: true,
@@ -409,8 +483,115 @@ export const podLifecycleOperations = {
                     runpodReq
                 );
             } catch (e) {
-                const errMsg = isRunPodError(e) ? e.message : "RunPod request failed";
-                const errCode = isRunPodError(e) ? e.code : "SERVER";
+                if (isRunPodError(e) && e.code === "TIMEOUT") {
+                    try {
+                        const pods = await RunPodClient.rest<
+                            RunPodPodResource[]
+                        >("GET", "/pods");
+                        runpodPod = pods.find(
+                            (pod) =>
+                                pod.name === buildRunPodPodName(podId, req.name)
+                        );
+                    } catch (recoveryError) {
+                        console.warn(
+                            `[GPU:createPod] timeout recovery lookup failed for pod ${podId}:`,
+                            recoveryError
+                        );
+                    }
+                }
+                if (!runpodPod) {
+                    const errMsg = isRunPodError(e)
+                        ? e.message
+                        : "RunPod request failed";
+                    const errCode = isRunPodError(e) ? e.code : "SERVER";
+                    const outcomeUnknown = errCode === "TIMEOUT";
+                    if (outcomeUnknown) releaseReservedVolume = false;
+                    await supabase
+                        .from("gpu_pods")
+                        .update({
+                            status: outcomeUnknown ? "provisioning" : "failed",
+                            details: {
+                                provisioning: {
+                                    stage: outcomeUnknown
+                                        ? "provider_outcome_unknown"
+                                        : "failed",
+                                    progress: 0,
+                                    message: errMsg,
+                                    started_at: billingStart.toISOString(),
+                                    failed_at: new Date().toISOString(),
+                                    provider_name: buildRunPodPodName(
+                                        podId,
+                                        req.name
+                                    ),
+                                    cleanup_pending: outcomeUnknown,
+                                },
+                            },
+                        })
+                        .eq("id", podId);
+                    await supabase.from("gpu_pod_events").insert({
+                        pod_id: podId,
+                        event_type: "failed",
+                        message: errMsg,
+                        metadata: isRunPodError(e)
+                            ? { code: e.code, status: e.status }
+                            : null,
+                    });
+                    return { success: false, error: errMsg, errorCode: errCode };
+                }
+            }
+
+            if (!runpodPod) {
+                return {
+                    success: false,
+                    error: "Provider pod outcome could not be determined",
+                    errorCode: "TIMEOUT",
+                };
+            }
+
+            // 8. Persist RunPod data on the pod row
+            const sshCommand = deriveSshCommand(runpodPod);
+            const status = podStatusFromRunPod(runpodPod);
+            const providerPatch = {
+                runpod_pod_id: runpodPod.id,
+                status,
+                public_ip: runpodPod.publicIp || null,
+                port_mappings: runpodPod.portMappings || null,
+                data_center_id: runpodPod.machine?.dataCenterId || null,
+                ssh_command: sshCommand,
+                details: {
+                    provisioning: {
+                        stage: "complete",
+                        progress: 100,
+                        message: "Pod ready",
+                        started_at: billingStart.toISOString(),
+                        completed_at: new Date().toISOString(),
+                    },
+                },
+            };
+            let { error: updateErr } = await supabase
+                .from("gpu_pods")
+                .update(providerPatch)
+                .eq("id", podId);
+            if (updateErr) {
+                // Retry once before compensating. Provider writes are not retried,
+                // so this cannot create a duplicate pod.
+                ({ error: updateErr } = await supabase
+                    .from("gpu_pods")
+                    .update(providerPatch)
+                    .eq("id", podId));
+            }
+            if (updateErr) {
+                let rollbackFailed = false;
+                try {
+                    await deleteRunPodPod(runpodPod.id);
+                } catch (rollbackErr) {
+                    rollbackFailed = true;
+                    releaseReservedVolume = false;
+                    console.error(
+                        `[GPU:createPod] CRITICAL: provider pod ${runpodPod.id} exists but DB persistence and rollback both failed`,
+                        rollbackErr
+                    );
+                }
                 await supabase
                     .from("gpu_pods")
                     .update({
@@ -418,53 +599,18 @@ export const podLifecycleOperations = {
                         details: {
                             provisioning: {
                                 stage: "failed",
-                                progress: 0,
-                                message: errMsg,
-                                started_at: billingStart.toISOString(),
-                                failed_at: new Date().toISOString(),
+                                message: `Provider pod persistence failed: ${updateErr.message}`,
+                                provider_pod_id: runpodPod.id,
+                                cleanup_pending: rollbackFailed,
                             },
                         },
                     })
                     .eq("id", podId);
-                await supabase.from("gpu_pod_events").insert({
-                    pod_id: podId,
-                    event_type: "failed",
-                    message: errMsg,
-                    metadata: isRunPodError(e)
-                        ? { code: e.code, status: e.status }
-                        : null,
-                });
-                return { success: false, error: errMsg, errorCode: errCode };
-            }
-
-            // 8. Persist RunPod data on the pod row
-            const sshCommand = deriveSshCommand(runpodPod);
-            const status = podStatusFromRunPod(runpodPod);
-            const { error: updateErr } = await supabase
-                .from("gpu_pods")
-                .update({
-                    runpod_pod_id: runpodPod.id,
-                    status,
-                    public_ip: runpodPod.publicIp || null,
-                    port_mappings: runpodPod.portMappings || null,
-                    data_center_id: runpodPod.machine?.dataCenterId || null,
-                    ssh_command: sshCommand,
-                    details: {
-                        provisioning: {
-                            stage: "complete",
-                            progress: 100,
-                            message: "Pod ready",
-                            started_at: billingStart.toISOString(),
-                            completed_at: new Date().toISOString(),
-                        },
-                    },
-                })
-                .eq("id", podId);
-            if (updateErr) {
-                console.error(
-                    `[GPU:createPod] Failed to update pod ${podId} after RunPod success:`,
-                    updateErr.message
-                );
+                return {
+                    success: false,
+                    error: "Failed to persist provisioned GPU pod",
+                    errorCode: "SERVER",
+                };
             }
 
             // 9. Wire billing — no upfront deduct; cron handles hourly. If active-row insert fails,
@@ -485,15 +631,28 @@ export const podLifecycleOperations = {
                     },
                 });
                 settled = true;
+                releaseReservedVolume = false;
             } catch (billingErr) {
                 console.error("[GPU:createPod] Billing wire-up failed:", billingErr);
                 try {
-                    await RunPodClient.rest("DELETE", `/pods/${runpodPod.id}`);
+                    await deleteRunPodPod(runpodPod.id);
                 } catch (destroyErr) {
                     console.error(
                         "[GPU:createPod] Rollback DELETE failed:",
                         destroyErr
                     );
+                    await supabase.from("gpu_pod_events").insert({
+                        pod_id: podId,
+                        event_type: "billing_rollback_failed",
+                        message: "Billing activation failed and provider rollback did not complete",
+                        metadata: { runpod_pod_id: runpodPod.id },
+                    });
+                    releaseReservedVolume = false;
+                    return {
+                        success: false,
+                        error: "Billing activation failed and pod cleanup is pending",
+                        errorCode: "SERVER",
+                    };
                 }
                 await supabase
                     .from("gpu_pods")
@@ -552,6 +711,12 @@ export const podLifecycleOperations = {
             if (!settled) {
                 await releaseProvision(reservation);
             }
+            if (releaseReservedVolume && reservedNetworkVolumeId) {
+                await volumeOperations.releaseVolumeAttachment({
+                    runpodVolumeId: reservedNetworkVolumeId,
+                    ownerId: req.ownerId,
+                });
+            }
         }
     },
 
@@ -593,6 +758,32 @@ export const podLifecycleOperations = {
                 };
             }
 
+            // A grace/paused meter means billing has explicitly suspended this
+            // resource. Do not restart compute until the billing lifecycle has
+            // restored the meter to active.
+            if (req.action === "start") {
+                const { data: meter, error: meterErr } = await supabase
+                    .schema("billing")
+                    .from("active_gpu_pods")
+                    .select("status")
+                    .eq("service_id", pod.billing_service_id)
+                    .maybeSingle();
+                if (meterErr) {
+                    return {
+                        success: false,
+                        error: `Could not verify GPU pod billing status: ${meterErr.message}`,
+                        errorCode: "SERVER",
+                    };
+                }
+                if (meter?.status !== "active") {
+                    return {
+                        success: false,
+                        error: "GPU pod billing is not active",
+                        errorCode: "INVALID",
+                    };
+                }
+            }
+
             try {
                 await RunPodClient.rest(
                     "POST",
@@ -612,10 +803,17 @@ export const podLifecycleOperations = {
                     : req.action === "stop"
                       ? "stopped"
                       : "restarting";
-            await supabase
+            const { error: statusErr } = await supabase
                 .from("gpu_pods")
                 .update({ status: newStatus })
                 .eq("id", req.podId);
+            if (statusErr) {
+                return {
+                    success: false,
+                    error: `Pod changed upstream but local state update failed: ${statusErr.message}`,
+                    errorCode: "SERVER",
+                };
+            }
 
             // M3: re-rate the meter. A stopped pod releases the GPU upstream but
             // keeps its disk, so meter storage-only while stopped; restore the full
@@ -637,7 +835,13 @@ export const podLifecycleOperations = {
                     });
                 }
             } catch (rateErr) {
-                console.warn("[GPU:powerPod] failed to re-rate meter:", rateErr);
+                return {
+                    success: false,
+                    error: `Pod changed upstream but billing rate update failed: ${
+                        rateErr instanceof Error ? rateErr.message : String(rateErr)
+                    }`,
+                    errorCode: "SERVER",
+                };
             }
 
             await supabase.from("gpu_pod_events").insert({
@@ -664,11 +868,14 @@ export const podLifecycleOperations = {
             const supabase = await createServiceClient();
             const { data: row, error: getErr } = await supabase
                 .from("gpu_pods")
-                .select("id, owner_id, runpod_pod_id, status, billing_service_id")
+                .select("id, owner_id, runpod_pod_id, status, billing_service_id, network_volume_id")
                 .eq("id", req.podId)
                 .maybeSingle();
             if (getErr) throw new Error(getErr.message);
             const pod = row as PodRowDb | null;
+            const podNetworkVolumeId = (
+                row as { network_volume_id?: string | null } | null
+            )?.network_volume_id;
             if (!pod) {
                 return { success: false, error: "Pod not found", errorCode: "NOT_FOUND" };
             }
@@ -679,45 +886,76 @@ export const podLifecycleOperations = {
                 return { success: false, error: "Already terminated", errorCode: "INVALID" };
             }
 
-            // 1. Destroy on RunPod (best-effort — DB cleanup must still happen)
+            // 1. Destroy on RunPod. A transient provider failure must not be
+            // reported as success or converted into a terminal local state.
             if (pod.runpod_pod_id) {
                 try {
-                    await RunPodClient.rest("DELETE", `/pods/${pod.runpod_pod_id}`);
+                    await deleteRunPodPod(pod.runpod_pod_id);
                 } catch (e) {
-                    console.warn(
-                        `[GPU:destroyPod] RunPod delete failed for ${pod.runpod_pod_id}:`,
-                        isRunPodError(e) ? e.message : e
-                    );
+                    return {
+                        success: false,
+                        error: isRunPodError(e) ? e.message : "Failed to delete provider pod",
+                        errorCode: isRunPodError(e) ? e.code : "SERVER",
+                    };
                 }
             }
 
             // 2. Close billing (prorate final partial hour + remove active row)
-            let finalCharge = 0;
+            let finalCharge: number;
             try {
-                await closeActiveBilling({
+                finalCharge = await closeActiveBilling({
                     userId: req.ownerId,
                     serviceId: pod.billing_service_id,
                     serviceType: "gpu_pod",
-                    closeActive: async () => {
-                        const result = await BillingCredits.closeActiveGpuPod({
+                    closeActive: () =>
+                        BillingCredits.closeActiveGpuPod({
                             serviceId: pod.billing_service_id,
-                        });
-                        finalCharge = result.finalCharge;
-                        return result;
-                    },
+                            waiveCharge: req.waiveFinalCharge,
+                        }),
                 });
             } catch (billingErr) {
-                console.warn("[GPU:destroyPod] Billing close failed:", billingErr);
+                return {
+                    success: false,
+                    error: `Provider pod was deleted but billing closure failed: ${
+                        billingErr instanceof Error
+                            ? billingErr.message
+                            : String(billingErr)
+                    }`,
+                    errorCode: "SERVER",
+                };
+            }
+
+            if (podNetworkVolumeId) {
+                const release = await volumeOperations.releaseVolumeAttachment({
+                    runpodVolumeId: podNetworkVolumeId,
+                    ownerId: req.ownerId,
+                });
+                if (!release.success) {
+                    return {
+                        success: false,
+                        error:
+                            release.error ||
+                            "Failed to release attached network volume",
+                        errorCode: release.errorCode || "SERVER",
+                    };
+                }
             }
 
             // 3. Update pod row to terminal state
-            await supabase
+            const { error: terminateErr } = await supabase
                 .from("gpu_pods")
                 .update({
                     status: "terminated",
                     billing_end: new Date().toISOString(),
                 })
                 .eq("id", req.podId);
+            if (terminateErr) {
+                return {
+                    success: false,
+                    error: `Provider and billing were closed but local terminal state failed: ${terminateErr.message}`,
+                    errorCode: "SERVER",
+                };
+            }
 
             await supabase.from("gpu_pod_events").insert({
                 pod_id: req.podId,
