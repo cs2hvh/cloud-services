@@ -8,6 +8,8 @@ import { SpectrumService } from "@/lib/services/spectrum-service";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { deleteCustomImage } from "@/lib/services/compute/custom-images";
 import { podLifecycleOperations } from "@/lib/services/runpod/operations/pod-lifecycle-operations";
+import { closeActiveBilling } from "@/config/billing-flow";
+import { BillingCredits } from "@/lib/billing/credits";
 
 type ServiceDeletionOutcome = {
   success: boolean;
@@ -211,8 +213,10 @@ export async function executeGraceDeletion(params: {
       }
 
       case "active_inference_vector": {
-        // service_id is the vector collection id. Deleting the collection
-        // cascades to its rows (vector_rows FK ON DELETE CASCADE).
+        // Delete the collection first. If this fails we return early and grace retries,
+        // which keeps the active billing row alive so the cron can re-attempt deletion.
+        // Only close the meter after the resource is confirmed gone — otherwise a failed
+        // collection delete with a closed meter leaves a free-running resource.
         const supabase = await createServiceClient();
         const { error, count } = await supabase
           .schema("inference")
@@ -223,6 +227,15 @@ export async function executeGraceDeletion(params: {
         if (error) {
           return { success: false, message: `Vector collection deletion failed: ${error.message}` };
         }
+
+        // Collection is gone — close the billing meter (best-effort).
+        await closeActiveBilling({
+          userId: params.userId,
+          serviceId: params.serviceId,
+          serviceType: "inference_vector",
+          closeActive: () => BillingCredits.closeActiveVectorCollection({ serviceId: params.serviceId }),
+        }).catch((e) => console.warn("[grace-delete] inference_vector billing close failed:", e));
+
         return {
           success: true,
           alreadyDeleted: !count,

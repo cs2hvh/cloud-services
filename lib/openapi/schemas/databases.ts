@@ -74,9 +74,7 @@ export const CreateDatabaseClusterRequestSchema = z.object({
 }).openapi('CreateDatabaseClusterRequest');
 
 export const CreateDatabaseClusterResponseSchema = z.object({
-  data: DatabaseClusterSchema.extend({
-    connection: DatabaseConnectionSchema.nullable().optional(),
-  }).passthrough(),
+  data: DatabaseClusterSchema.passthrough(),
 }).openapi('CreateDatabaseClusterResponse');
 
 export const CreateClusterDatabaseRequestSchema = z.object({

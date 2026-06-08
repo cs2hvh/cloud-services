@@ -15,6 +15,8 @@ export const ResourceTypeSchema = z
     "security",
     "ai-deployment",
     "app-deployment",
+    "inference_vector",
+    "custom_image",
   ])
   .openapi("ResourceType");
 

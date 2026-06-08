@@ -32,7 +32,7 @@ const TransactionSchema = z
       .enum(["topup", "refund", "coupon", "recurring", "setup", "usage", "purchase"])
       .openapi({ example: "purchase" }),
     service_type: z
-      .enum(["database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain"])
+      .enum(["database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain", "gpu_pod", "compute", "custom_image", "inference_vector", "inference_finetune", "inference_serving", "inference_deployment"])
       .nullable()
       .openapi({ example: "domain" }),
     description: z.string().nullable().openapi({ example: "Domain renewal: example.com" }),
@@ -74,7 +74,7 @@ const TransactionListQuerySchema = z
       .optional()
       .openapi({ description: "Filter by transaction type." }),
     service_type: z
-      .enum(["database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain"])
+      .enum(["database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain", "gpu_pod", "compute", "custom_image", "inference_vector", "inference_finetune", "inference_serving", "inference_deployment"])
       .optional()
       .openapi({ description: "Filter by service type." }),
     status: z

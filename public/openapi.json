@@ -913,7 +913,14 @@
               "objectspace",
               "spectrum",
               "platform_apps",
-              "domain"
+              "domain",
+              "gpu_pod",
+              "compute",
+              "custom_image",
+              "inference_vector",
+              "inference_finetune",
+              "inference_serving",
+              "inference_deployment"
             ],
             "example": "domain"
           },
@@ -1151,7 +1158,9 @@
           "gpu",
           "security",
           "ai-deployment",
-          "app-deployment"
+          "app-deployment",
+          "inference_vector",
+          "custom_image"
         ],
         "example": "database"
       },
@@ -1891,26 +1900,7 @@
         "type": "object",
         "properties": {
           "data": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DatabaseCluster"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "connection": {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/DatabaseConnection"
-                      },
-                      {
-                        "nullable": true
-                      }
-                    ]
-                  }
-                }
-              }
-            ]
+            "$ref": "#/components/schemas/DatabaseCluster"
           }
         },
         "required": [
@@ -5213,7 +5203,14 @@
                 "objectspace",
                 "spectrum",
                 "platform_apps",
-                "domain"
+                "domain",
+                "gpu_pod",
+                "compute",
+                "custom_image",
+                "inference_vector",
+                "inference_finetune",
+                "inference_serving",
+                "inference_deployment"
               ],
               "description": "Filter by service type."
             },

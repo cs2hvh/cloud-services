@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
 import { BillingCredits } from "@/lib/billing/credits";
+import { getRatePerGbForCustomImage } from "@/config/pricing";
+import { closeActiveBilling } from "@/config/billing-flow";
 import {
   proxmoxAuth,
   getDispatcher,
@@ -33,9 +35,6 @@ export interface CustomImageRow {
 
 const IMAGE_COLS =
   "id, owner_id, name, os_family, default_user, source_type, source_ref, cloud_init, status, size_gb, billing_service_id";
-
-/** Storage price for a stored custom image. */
-export const CUSTOM_IMAGE_USD_PER_GB_MONTH = 0.05;
 
 /**
  * Resolve a customer's AVAILABLE custom image by display name. Used by the
@@ -192,7 +191,8 @@ export async function ensureCustomTemplateOnHost(params: {
         .eq("service_id", image.billing_service_id)
         .maybeSingle();
       if (!meter) {
-        const hourlyRate = Math.max(0.0001, (billedGb * CUSTOM_IMAGE_USD_PER_GB_MONTH) / 730);
+        const gbRate = await getRatePerGbForCustomImage();
+        const hourlyRate = Math.max(0.0001, (billedGb * gbRate) / 730);
         await BillingCredits.addActiveCustomImage({
           userId: image.owner_id,
           serviceId: image.billing_service_id,
@@ -264,15 +264,16 @@ export async function deleteCustomImage(params: {
     }
   }
 
-  // Drop the storage meter (best effort) + the catalog row.
+  // Charge the final prorated period then close the meter.
   try {
-    await supabase
-      .schema("billing")
-      .from("active_custom_image")
-      .delete()
-      .eq("service_id", image.billing_service_id);
-  } catch {
-    /* best-effort meter cleanup */
+    await closeActiveBilling({
+      userId: image.owner_id,
+      serviceId: image.billing_service_id,
+      serviceType: "custom_image",
+      closeActive: () => BillingCredits.closeActiveCustomImage({ serviceId: image.billing_service_id }),
+    });
+  } catch (e) {
+    console.error("[custom-image delete] final billing close failed:", e);
   }
 
   await supabase.from("custom_images").delete().eq("id", params.imageId);
@@ -327,7 +328,8 @@ export async function runSnapshotExport(params: {
       .update({ source_ref: key, size_gb: sizeGb, status: "available" })
       .eq("id", image.id);
 
-    const hourlyRate = Math.max(0.0001, (sizeGb * CUSTOM_IMAGE_USD_PER_GB_MONTH) / 730);
+    const gbRate = await getRatePerGbForCustomImage();
+    const hourlyRate = Math.max(0.0001, (sizeGb * gbRate) / 730);
     await BillingCredits.addActiveCustomImage({
       userId: image.owner_id,
       serviceId: image.billing_service_id,

@@ -10,16 +10,9 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { reserveProvision, settleProvision, releaseProvision } from "@/config/billing-flow";
+import { getRatesForInferenceVector } from "@/config/pricing";
 import { BillingCredits } from "@/lib/billing/credits";
-
-// Managed vector collection pricing: flat $8/month, billed hourly by the credit
-// cron (hourly_rate = monthly / 720). See migration 20260614000005.
-const VECTOR_COLLECTION_MONTHLY_USD = 8;
-const VECTOR_COLLECTION_HOURLY_USD = VECTOR_COLLECTION_MONTHLY_USD / 720;
-// Small starting-balance floor so $0 accounts can't spin up collections; the
-// cron's 7-day grace handles running low afterward.
-const MIN_VECTOR_BALANCE_USD = 1;
 
 const createSchema = z.object({
   name: z
@@ -200,80 +193,97 @@ export async function POST(request: NextRequest) {
     .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
   const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
 
-  const bal = await ensureBalance(payerUserId, MIN_VECTOR_BALANCE_USD);
-  if (!bal.ok) {
+  const vectorRates = await getRatesForInferenceVector();
+
+  // Atomic reservation: debit (initialCost + 1h hold) before creating the
+  // collection. Concurrent creates can no longer both pass a non-locking read.
+  const reservationResult = await reserveProvision({
+    userId: payerUserId,
+    initialCost: vectorRates.initialCost,
+    hourlyRate: vectorRates.hourlyRate,
+  });
+  const reservation = reservationResult.reservation;
+  if (!reservationResult.ok) {
     return NextResponse.json(
       {
-        error: `A managed vector collection is $${VECTOR_COLLECTION_MONTHLY_USD}/month. Add at least $${MIN_VECTOR_BALANCE_USD} in credits to create one.`,
+        error: `A managed vector collection costs $${(vectorRates.hourlyRate * 720).toFixed(2)}/month. Insufficient credits.`,
         code: "insufficient_credits",
       },
       { status: 402 }
     );
   }
 
-  const { data, error } = await supabase
-    .schema("inference")
-    .from("vector_collections")
-    .insert({
-      org_id: org.org_id,
-      name: parsed.data.name,
-      description: parsed.data.description ?? null,
-      dimensions: effectiveDimensions,
-      distance_metric: parsed.data.distance_metric,
-      embedding_model_id: parsed.data.embedding_model_id ?? null,
-      index_type: parsed.data.index_type,
-      index_params: parsed.data.index_params ?? { m: 16, ef_construction: 64 },
-    })
-    .select("id, name, dimensions, distance_metric, embedding_model_id, created_at")
-    .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json(
-        { error: `A collection named "${parsed.data.name}" already exists in this org` },
-        { status: 409 }
-      );
-    }
-    console.error("[Inference Vector] create error:", error);
-    return NextResponse.json({ error: "Failed to create collection" }, { status: 500 });
-  }
-
-  const ctx = auditContextFrom(request);
-  void recordAudit({
-    orgId: org.org_id,
-    actorUserId: auth.user!.id,
-    action: "collection.created",
-    targetType: "vector_collection",
-    targetId: data.id,
-    metadata: {
-      name: data.name,
-      dimensions: data.dimensions,
-      embedding_model_id: data.embedding_model_id,
-    },
-    ipAddress: ctx.ipAddress,
-    userAgent: ctx.userAgent,
-  });
-
-  // Register in the metered billing flow ($8/mo, billed hourly by the cron).
-  // If billing registration fails, roll the collection back so we never run an
-  // unmetered (free) collection.
+  let settled = false;
+  let createdCollectionId: string | null = null;
   try {
-    await postProvisionBilling({
-      userId: payerUserId,
-      initialCost: 0,
-      hourlyRate: VECTOR_COLLECTION_HOURLY_USD,
+    const { data, error } = await supabase
+      .schema("inference")
+      .from("vector_collections")
+      .insert({
+        org_id: org.org_id,
+        name: parsed.data.name,
+        description: parsed.data.description ?? null,
+        dimensions: effectiveDimensions,
+        distance_metric: parsed.data.distance_metric,
+        embedding_model_id: parsed.data.embedding_model_id ?? null,
+        index_type: parsed.data.index_type,
+        index_params: parsed.data.index_params ?? { m: 16, ef_construction: 64 },
+      })
+      .select("id, name, dimensions, distance_metric, embedding_model_id, created_at")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: `A collection named "${parsed.data.name}" already exists in this org` },
+          { status: 409 }
+        );
+      }
+      console.error("[Inference Vector] create error:", error);
+      return NextResponse.json({ error: "Failed to create collection" }, { status: 500 });
+    }
+    createdCollectionId = data.id;
+
+    const ctx = auditContextFrom(request);
+    void recordAudit({
+      orgId: org.org_id,
+      actorUserId: auth.user!.id,
+      action: "collection.created",
+      targetType: "vector_collection",
+      targetId: data.id,
+      metadata: {
+        name: data.name,
+        dimensions: data.dimensions,
+        embedding_model_id: data.embedding_model_id,
+      },
+      ipAddress: ctx.ipAddress,
+      userAgent: ctx.userAgent,
+    });
+
+    // Settle: register the meter. If this throws, the collection is live but
+    // unmetered — releaseProvision in finally refunds the reservation and
+    // we roll the collection back below.
+    await settleProvision({
+      reservation,
+      initialCost: vectorRates.initialCost,
+      hourlyRate: vectorRates.hourlyRate,
       serviceId: data.id,
       serviceType: "inference_vector",
       addActive: BillingCredits.addActiveVectorCollection,
     });
-  } catch (billingErr) {
-    console.error("[Inference Vector] billing wire-up failed, rolling back collection:", billingErr);
-    await supabase.schema("inference").from("vector_collections").delete().eq("id", data.id);
-    return NextResponse.json(
-      { error: "Could not set up billing for the collection. Please try again." },
-      { status: 500 }
-    );
-  }
+    settled = true;
 
-  return NextResponse.json({ success: true, data }, { status: 201 });
+    return NextResponse.json({ success: true, data }, { status: 201 });
+  } finally {
+    if (!settled) {
+      await releaseProvision(reservation);
+      // Best-effort rollback only for a row created in this request. Do not
+      // delete by name; duplicate-name failures would match an existing row.
+      if (createdCollectionId) {
+        await supabase.schema("inference").from("vector_collections")
+          .delete().eq("id", createdCollectionId)
+          .then(() => {}, () => {});
+      }
+    }
+  }
 }

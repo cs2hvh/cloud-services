@@ -42,6 +42,8 @@ const PRODUCT_TYPES = [
   { value: "ai-deployment", label: "AI Deployment" },
   { value: "app-deployment", label: "App Deployment" },
   { value: "network-ddos", label: "Network/DDoS" },
+  { value: "inference_vector", label: "Vector Store" },
+  { value: "custom_image", label: "Custom Image" },
 ];
 
 export default function AddPlanDialog({
@@ -60,6 +62,7 @@ export default function AddPlanDialog({
     description: "",
     short_description: "",
     price: 0,
+    fixed_price: 0,
     yearly_price: 0,
     billing_period: "per month",
     resources: { cpu: 0, ram: 0, storage: 0 },
@@ -139,6 +142,7 @@ export default function AddPlanDialog({
           description: "",
           short_description: "",
           price: 0,
+          fixed_price: 0,
           yearly_price: 0,
           billing_period: "per month",
           resources: { cpu: 0, ram: 0, storage: 0 },
@@ -253,9 +257,9 @@ export default function AddPlanDialog({
             <h3 className="text-sm font-medium text-neutral-300 border-b border-neutral-800 pb-2">
               Pricing
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-neutral-300">Monthly Price *</Label>
+                <Label className="text-neutral-300">Monthly Price ($) *</Label>
                 <Input
                   type="number"
                   value={formData.price}
@@ -266,7 +270,21 @@ export default function AddPlanDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-neutral-300">Yearly Price</Label>
+                <Label className="text-neutral-300">Setup Fee ($)</Label>
+                <Input
+                  type="number"
+                  value={formData.fixed_price}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, fixed_price: parseFloat(e.target.value) || 0 }))
+                  }
+                  placeholder="0 = no setup fee"
+                  className="bg-neutral-800 border-neutral-700 text-white"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-neutral-300">Yearly Price ($)</Label>
                 <Input
                   type="number"
                   value={formData.yearly_price}

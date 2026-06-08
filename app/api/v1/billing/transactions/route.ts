@@ -11,7 +11,7 @@ import { Billing } from "@/lib/supabase/queries/billing";
  *   limit        number   Max records per page. Default 20, max 100.
  *   page         number   1-based page number. Default 1.
  *   type         string   Filter by: topup | refund | coupon | recurring | setup | usage | purchase
- *   service_type string   Filter by: database | kubernetes | objectspace | spectrum | platform_apps | domain
+ *   service_type string   Filter by: database | kubernetes | objectspace | spectrum | platform_apps | domain | gpu_pod | compute | custom_image | inference_vector | inference_finetune | inference_serving | inference_deployment
  *   status       string   Filter by: pending | completed | failed
  *   from         string   ISO 8601 date — return transactions created after this time
  *   to           string   ISO 8601 date — return transactions created before this time
@@ -37,7 +37,11 @@ export const GET = withV1Auth("billing:transactions:list", async (req, auth) => 
   // Validate enum params — ignore unknown values rather than 400 so clients
   // don't break on future type additions.
   const validTypes = ["topup", "refund", "coupon", "recurring", "setup", "usage", "purchase"];
-  const validServiceTypes = ["database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain"];
+  const validServiceTypes = [
+    "database", "kubernetes", "objectspace", "spectrum", "platform_apps", "domain",
+    "gpu_pod", "compute", "custom_image",
+    "inference_vector", "inference_finetune", "inference_serving", "inference_deployment",
+  ];
   const validStatuses = ["pending", "completed", "failed"];
 
   try {

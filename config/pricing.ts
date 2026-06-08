@@ -26,7 +26,10 @@ function normalizeMonthlyMultiplier(value?: number): number {
 function monthlyToHourly(priceMonthly?: number | null): number {
   const p = toFiniteNumber(priceMonthly);
   if (!p || p <= 0) return 0;
-  return roundToTwoDecimals(p / HOURS_IN_MONTH);
+  // 6 decimal places so low-rate services (vector $8/mo → $0.011111/hr) accumulate
+  // correctly over a billing month. The cron rounds individual charges to 2 decimals,
+  // but the stored rate must be precise enough that monthly sum ≈ monthly price.
+  return Math.round((p / HOURS_IN_MONTH) * 1_000_000) / 1_000_000;
 }
 
 function ratesFromProduct(
@@ -85,6 +88,33 @@ export async function getRatesForPlatformApp(size: "small" | "medium" | "large" 
   const products = await Products.get_by_type_and_subtype("platform-apps", size);
   const pick = products[0] ?? null;
   return ratesFromProduct(pick as any);
+}
+
+// Fallback constants — used when no product row exists in the DB yet.
+// Create a product with type="inference_vector" to override via admin UI.
+const INFERENCE_VECTOR_MONTHLY_USD_FALLBACK = 8;
+// Create a product with type="custom_image" to override; price = $/GB/month.
+const CUSTOM_IMAGE_USD_PER_GB_MONTH_FALLBACK = 0.05;
+
+export async function getRatesForInferenceVector(): Promise<Rates> {
+  const products = await Products.get_by_type("inference_vector");
+  const pick = products[0] ?? null;
+  if (!pick) {
+    return { initialCost: 0, hourlyRate: monthlyToHourly(INFERENCE_VECTOR_MONTHLY_USD_FALLBACK) };
+  }
+  return ratesFromProduct(pick as any);
+}
+
+// Returns the $/GB/month rate for custom OS image storage.
+// Callers compute hourlyRate = (sizeGb * rate) / HOURS_IN_MONTH themselves
+// because the GB count is only known at provision time.
+export async function getRatePerGbForCustomImage(): Promise<number> {
+  const products = await Products.get_by_type("custom_image");
+  const pick = products[0] ?? null;
+  const rate = pick?.price != null && Number.isFinite(Number(pick.price)) && Number(pick.price) > 0
+    ? Number(pick.price)
+    : CUSTOM_IMAGE_USD_PER_GB_MONTH_FALLBACK;
+  return rate;
 }
 
 export async function getAllPlatformAppRates(): Promise<Record<string, Rates & { price: number }>> {

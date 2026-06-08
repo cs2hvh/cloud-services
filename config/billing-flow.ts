@@ -90,10 +90,10 @@ export async function postProvisionBilling({
   }
 }
 
-/**
- * Close an active service billing row — deducts the final prorated charge
- * and removes the active row. If the delete fails after deduction, refunds.
- */
+// closeActive: fetches the active row, computes the prorated charge, deletes
+// the row, and returns the charge amount. The row is always removed — callers
+// are deleting the resource, so the meter must not outlive it.
+// Deduction is best-effort: insufficient credits on deletion is logged, not thrown.
 export async function closeActiveBilling({
   userId,
   serviceId,
@@ -103,28 +103,20 @@ export async function closeActiveBilling({
   userId: string;
   serviceId: string;
   serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "inference_vector" | "compute" | "custom_image";
-  closeActive: () => Promise<{ finalCharge: number }>;
+  closeActive: () => Promise<number>;
 }): Promise<void> {
-  const { finalCharge } = await closeActive();
+  const finalCharge = await closeActive();
 
   if (finalCharge > 0) {
-    const newBalance = await Billing.deduct(userId, finalCharge);
     try {
-      await Billing.save_transaction({
-        userId,
-        amount: finalCharge,
-        status: "completed",
-        type: "usage",
-        balanceAfter: newBalance,
-        serviceId,
-        serviceType,
+      const newBalance = await Billing.deduct(userId, finalCharge);
+      Billing.save_transaction({
+        userId, amount: finalCharge, status: "completed", type: "usage",
+        balanceAfter: newBalance, serviceId, serviceType,
         description: `Final prorated ${serviceLabel(serviceType)} charge`,
-      });
-    } catch (error) {
-      console.warn(
-        "[closeActiveBilling] Failed to record final charge transaction:",
-        error instanceof Error ? error.message : String(error)
-      );
+      }).catch((e) => console.warn("[closeActiveBilling] save_transaction failed:", e instanceof Error ? e.message : e));
+    } catch (e) {
+      console.warn("[closeActiveBilling] final charge failed:", e instanceof Error ? e.message : e);
     }
   }
 }

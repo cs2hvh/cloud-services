@@ -699,11 +699,8 @@ export const podLifecycleOperations = {
                     serviceId: pod.billing_service_id,
                     serviceType: "gpu_pod",
                     closeActive: async () => {
-                        const result = await BillingCredits.closeActiveGpuPod({
-                            serviceId: pod.billing_service_id,
-                        });
-                        finalCharge = result.finalCharge;
-                        return result;
+                        finalCharge = await BillingCredits.closeActiveGpuPod({ serviceId: pod.billing_service_id });
+                        return finalCharge;
                     },
                 });
             } catch (billingErr) {
