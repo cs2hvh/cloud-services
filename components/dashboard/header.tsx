@@ -11,6 +11,7 @@ import { CommandPalette } from "@/components/dashboard/command-palette";
 
 export function DashboardHeader({ children }: { children?: React.ReactNode }) {
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [balance, setBalance] = useState<number | null>(null);
 
     // Global ⌘K / Ctrl+K to open the palette.
     useEffect(() => {
@@ -23,6 +24,37 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, []);
+
+    // Live-ish balance for the top bar: load on mount, refresh on focus + 60s.
+    useEffect(() => {
+        let alive = true;
+        const load = async () => {
+            try {
+                const res = await fetch("/api/billing/balance");
+                const data = await res.json().catch(() => ({}));
+                if (alive && data?.ok) setBalance(Number(data.balance));
+            } catch {
+                /* keep last value */
+            }
+        };
+        load();
+        const id = setInterval(load, 60_000);
+        const onFocus = () => load();
+        window.addEventListener("focus", onFocus);
+        return () => {
+            alive = false;
+            clearInterval(id);
+            window.removeEventListener("focus", onFocus);
+        };
+    }, []);
+
+    // Green when healthy, red when low (or depleted).
+    const balanceColor =
+        balance === null
+            ? "rgba(255,255,255,0.7)"
+            : balance <= 5
+              ? "#f87171"
+              : "#4ade80";
 
     return (
         <header className="h-14 flex items-center gap-3 px-4 sm:px-5 border-b border-white/[0.06] bg-[#0a0b0e]">
@@ -43,14 +75,20 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
             </button>
 
             {/* Right cluster */}
-            <div className="ml-auto flex items-center gap-1 shrink-0">
+            <div className="ml-auto flex items-center gap-1.5 shrink-0">
                 {children}
                 <Link
                     href="/dashboard/nav/billing"
-                    className="h-8 w-8 rounded-[6px] text-white/45 hover:bg-white/[0.05] hover:text-white/85 flex items-center justify-center transition-colors"
-                    title="Billing"
+                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors"
+                    title="Billing — your balance"
                 >
-                    <BadgeDollarSign className="h-4 w-4" />
+                    <BadgeDollarSign className="h-3.5 w-3.5 text-white/45" />
+                    <span
+                        className="text-[12.5px] font-medium tabular-nums"
+                        style={{ color: balanceColor }}
+                    >
+                        {balance === null ? "—" : `$${balance.toFixed(2)}`}
+                    </span>
                 </Link>
             </div>
 
