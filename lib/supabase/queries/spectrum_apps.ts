@@ -192,25 +192,32 @@ export const Spectrum_Apps = {
     }
   },
 
-  //get all app name for unique name check
-  get_all_app_name: async (role: string) => {
+  // Existing (hostname, protocol) pairs for the create-form duplicate check.
+  // Cloudflare Spectrum keys an application on hostname + protocol/port, so the
+  // same domain may be reused across different protocols/ports — a clash only
+  // occurs when BOTH the hostname and the protocol match. We therefore return
+  // the protocol alongside the name rather than names alone.
+  get_all_app_name: async (
+    role: string
+  ): Promise<{ name: string; protocol: string }[]> => {
     try {
       const supabase = await (role === "admin"
         ? createSSRClient()
         : createWorkerClient());
       const { data, error } = await supabase
         .from("spectrum_apps")
-        .select("dns->>original_name")
+        .select("dns->>original_name, protocol")
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
-      // console.log(data, ".........check..data in get_all_app_name........");
-
-      const names = data?.map((row) => row.original_name);
-
-      // console.log(names, "...........data in get_all_app_name........");
       if (error) return [];
-      return names || [];
+
+      return (data || [])
+        .map((row) => ({
+          name: (row as { original_name?: string | null }).original_name ?? "",
+          protocol: (row as { protocol?: string | null }).protocol ?? "",
+        }))
+        .filter((r) => r.name);
     } catch {
       return [];
     }

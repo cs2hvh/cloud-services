@@ -64,7 +64,9 @@ interface SpectrumAppCreateProps {
         email: string;
         username?: string;
     }>;
-    spectrumApps?: string[];
+    // Existing (hostname, protocol) pairs — Spectrum allows the same domain on
+    // different protocols/ports, so the duplicate check needs both fields.
+    spectrumApps?: { name: string; protocol: string }[];
 }
 
 const APP_TYPES = [
@@ -202,10 +204,23 @@ const SpectrumAppCreate = ({
             !/^(?=.*[A-Za-z])[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*$/.test(v)
         )
             return "Must start with a letter, letters/numbers only";
-        if (spectrumApps.includes(v))
-            return "Domain name already in use";
+        // Spectrum keys an app on (hostname, protocol/port), so the same domain
+        // is allowed across different protocols/ports — only flag a clash when
+        // BOTH the hostname and the chosen protocol/port already exist.
+        if (formData.appType) {
+            const proto =
+                formData.appType === "rdp" || formData.appType === "ssh"
+                    ? "tcp"
+                    : formData.appType;
+            const protocol = `${proto}/${formData.edgePort}`;
+            const clash = spectrumApps.some(
+                (a) => a.name === v && a.protocol === protocol,
+            );
+            if (clash)
+                return "This domain is already in use on this protocol/port";
+        }
         return "";
-    }, [formData.domain, spectrumApps]);
+    }, [formData.domain, formData.appType, formData.edgePort, spectrumApps]);
     const domainOk = !!formData.domain && !domainNameError;
     const edgePortOk =
         isSSHorRDP ||
