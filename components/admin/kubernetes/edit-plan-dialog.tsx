@@ -228,7 +228,7 @@ export default function EditPlanDialog({
           ram: formData.ram,
           storage: formData.storage,
         },
-        discount: formData.discount > 0 ? formData.discount : 0,
+        discount: formData.discount ?? 0,
         slug: formData.slug || null,
         cpu_type: selectedCpuType,
         machine_type: selectedMachineType,

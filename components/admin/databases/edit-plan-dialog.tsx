@@ -165,7 +165,7 @@ export default function EditPlanDialog({
           ram: formData.ram,
           storage: formData.storage,
         },
-        discount: formData.discount > 0 ? formData.discount : null,
+        discount: formData.discount ?? 0,
       });
 
       if (response.status === 200) {
@@ -459,31 +459,6 @@ export default function EditPlanDialog({
                   setFormData({
                     ...formData,
                     fixed_price: parseFloat(e.target.value) || 0,
-                  })
-                }
-                disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label
-                htmlFor="discount"
-                className="text-sm font-medium text-neutral-300"
-              >
-                Discount (%)
-              </Label>
-              <Input
-                id="discount"
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={formData.discount}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    discount: parseInt(e.target.value) || 0,
                   })
                 }
                 disabled={isLoading}

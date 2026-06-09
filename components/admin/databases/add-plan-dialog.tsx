@@ -174,7 +174,7 @@ export default function AddPlanDialog({
           ram: formData.ram,
           storage: formData.storage,
         },
-        discount: formData.discount > 0 ? formData.discount : null,
+        discount: formData.discount ?? 0,
       });
 
       if (response.status === 201) {
