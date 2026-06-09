@@ -1,7 +1,6 @@
-import { Text } from "@react-email/components";
 import {
   BaseEmailLayout,
-  EmailCard,
+  EmailCodeBlock,
   EmailParagraph,
 } from "@/lib/email/components/base-layout";
 import type { ForgotPasswordEmailData } from "@/lib/email/types";
@@ -20,22 +19,10 @@ export function ForgotPasswordEmailTemplate({
         We received a password reset request for your account. Use the code
         below to continue.
       </EmailParagraph>
-      <EmailCard accent="#ea580c">
-        <Text style={otpStyle}>{otp}</Text>
-      </EmailCard>
+      <EmailCodeBlock code={otp} label="Password reset code" />
       <EmailParagraph>
         If you did not request this, you can safely ignore this email.
       </EmailParagraph>
     </BaseEmailLayout>
   );
 }
-
-const otpStyle = {
-  margin: 0,
-  textAlign: "center" as const,
-  fontSize: "30px",
-  lineHeight: "38px",
-  fontWeight: "700",
-  letterSpacing: "6px",
-  color: "#111827",
-};

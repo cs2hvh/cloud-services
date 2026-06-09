@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
+import { getGpuDeployEnabled } from "@/lib/admin/platform-settings";
 import {
     RunPodService,
     type CloudType,
@@ -93,6 +94,18 @@ export async function POST(req: NextRequest) {
         return Response.json(
             { ok: false, error: "Authentication required" },
             { status: 401 }
+        );
+    }
+
+    // Admin "out of stock" kill-switch — block new GPU deployments (e.g. when the
+    // upstream GPU account has no balance). Hard stop so a direct API call can't buy.
+    if (!(await getGpuDeployEnabled())) {
+        return Response.json(
+            {
+                ok: false,
+                error: "GPU deployments are temporarily out of stock. Please check back soon.",
+            },
+            { status: 503 }
         );
     }
 

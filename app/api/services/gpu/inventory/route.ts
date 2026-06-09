@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { RunPodService } from "@/lib/services/runpod-service";
 import { createClient } from "@/lib/supabase/server";
+import { getGpuDeployEnabled } from "@/lib/admin/platform-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -45,5 +46,17 @@ export async function GET(_req: NextRequest) {
             { status: 500 }
         );
     }
-    return Response.json({ ok: true, inventory: result.data });
+
+    // When the admin "out of stock" switch is off, present every GPU as
+    // out-of-stock so the wizard blocks deployment (the create API also rejects).
+    const deployEnabled = await getGpuDeployEnabled();
+    const inventory = deployEnabled
+        ? result.data
+        : (result.data ?? []).map((row) => ({
+              ...row,
+              stockStatus: "none" as const,
+              availableCounts: [],
+          }));
+
+    return Response.json({ ok: true, inventory, deployEnabled });
 }

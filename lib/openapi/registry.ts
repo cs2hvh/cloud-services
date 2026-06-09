@@ -42,10 +42,10 @@ export function generateOpenAPIDocument() {
   return generator.generateDocument({
     openapi: '3.0.3',
     info: {
-      title: 'Cloud Services - API v1',
+      title: 'AhuraSense Cloud — API v1',
       version: '1.0.0',
       description: `
-# Cloud Services REST API
+# AhuraSense Cloud REST API
 
 A comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.
 
@@ -57,7 +57,7 @@ All API requests require authentication using an API key. Include your API key i
 Authorization: Bearer sk_live_YOUR_API_KEY
 \`\`\`
 
-You can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).
+You can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).
 
 ## Rate Limits
 
@@ -97,12 +97,12 @@ Error responses include details:
 
 ## Getting Started
 
-1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)
+1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)
 2. Make your first request:
 
 \`\`\`bash
 curl -H "Authorization: Bearer sk_live_xxx" \\
-  https://galaxyhvh.com/api/v1/apps
+  https://ahurasense.com/api/v1/apps
 \`\`\`
 
 For more examples, see the API reference below.
@@ -119,12 +119,8 @@ For more examples, see the API reference below.
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development server',
-      },
-      {
-        url: 'https://galaxyhvh.com',
-        description: 'Production server',
+        url: 'https://ahurasense.com',
+        description: 'Production',
       },
     ],
     tags: [

@@ -55,13 +55,6 @@ const ACCENT = "#0095FF";
 const ACCENT_BRIGHT = "#33adff";
 const ACCENT_DIM = "rgba(0,149,255,0.08)";
 
-// Per-provider brand swatch for the logo tile.
-const PROVIDER_TILE: Record<string, string> = {
-    github: "linear-gradient(135deg, #1a1c23, #0d0e11)",
-    gitlab: "linear-gradient(135deg, #fc6d26, #e24329)",
-    bitbucket: "linear-gradient(135deg, #2684ff, #0052cc)",
-};
-
 // Language → dot color (GitHub-style).
 const LANG_COLOR: Record<string, string> = {
     typescript: "#3178c6",
@@ -683,20 +676,13 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                                 }}
                                             >
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <div
-                                                        className="h-9 w-9 inline-flex items-center justify-center rounded-[6px] shrink-0"
-                                                        style={{
-                                                            background:
-                                                                PROVIDER_TILE[provider.id] ??
-                                                                "#1a1c23",
-                                                        }}
-                                                    >
+                                                    <div className="h-9 w-9 inline-flex items-center justify-center rounded-[6px] shrink-0 bg-white p-1.5 ring-1 ring-white/10">
                                                         <Image
                                                             src={provider.icon}
                                                             alt={provider.name}
-                                                            width={20}
-                                                            height={20}
-                                                            className="object-contain"
+                                                            width={24}
+                                                            height={24}
+                                                            className="h-full w-full object-contain"
                                                             unoptimized
                                                         />
                                                     </div>

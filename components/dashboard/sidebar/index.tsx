@@ -447,6 +447,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Cluster Monitor", href: "/dashboard/admin/cluster-monitor", icon: Activity, matchPrefix: true },
             { label: "Platform Apps", href: "/dashboard/admin/platform-apps", icon: Rocket, matchPrefix: true },
             { label: "Plan Pricing", href: "/dashboard/admin/pricing/plans", icon: BadgeDollarSign, matchPrefix: true },
+            { label: "GPU Stock", href: "/dashboard/admin/gpu", icon: GpuCloudIcon, matchPrefix: true },
             { label: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket, matchPrefix: true },
             { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
             { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
@@ -458,7 +459,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         { label: "Billing", href: "/dashboard/nav/billing", icon: BadgeDollarSign, matchPrefix: true },
         { label: "Settings", href: "/dashboard/settings", icon: Settings, matchPrefix: true },
         { label: "Help Center", href: "/dashboard/support", icon: HelpCircle, matchPrefix: true },
-        { label: "Documentation", href: "/docs", icon: FileText },
+        { label: "API Documentation", href: "/api-docs", icon: FileText },
     ];
 
     const projectPreview = useMemo(() => projects.slice(0, 5), [projects]);

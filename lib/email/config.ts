@@ -16,11 +16,23 @@ export interface EmailConfig {
 // RESEND_DOMAIN (e.g. a staging/test domain) or pin a full address via
 // RESEND_FROM_EMAIL / RESEND_REPLY_TO.
 const DEFAULT_EMAIL_DOMAIN = "ahurasense.com";
+const DEFAULT_APP_URL = "https://ahurasense.com";
+
+// Email links must never point at localhost or an unset host. Prefer DOMAIN /
+// NEXT_PUBLIC_SITE_URL, but fall back to the production domain when those are
+// missing or a dev host — a customer email should always resolve.
+function resolveAppUrl(): string {
+  const raw = trimTrailingSlash(
+    process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL || "",
+  );
+  if (!raw || raw.includes("localhost") || raw.includes("127.0.0.1")) {
+    return DEFAULT_APP_URL;
+  }
+  return raw;
+}
 
 export function getEmailConfig(): EmailConfig {
-  const appUrl = trimTrailingSlash(
-    process.env.DOMAIN || siteConfig.domain,
-  );
+  const appUrl = resolveAppUrl();
 
   const domain = process.env.RESEND_DOMAIN || DEFAULT_EMAIL_DOMAIN;
 
@@ -35,7 +47,7 @@ export function getEmailConfig(): EmailConfig {
     from,
     replyTo,
     appUrl,
-    supportUrl: `${appUrl}/support`,
+    supportUrl: `${appUrl}/contact`,
     logoUrl: siteConfig.images.logo,
   };
 }

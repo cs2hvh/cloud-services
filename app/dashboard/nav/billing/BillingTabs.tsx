@@ -513,15 +513,6 @@ function BalanceTab({
                     </div>
                 </div>
 
-                {!BILLING_TOPUP_ENABLED && (
-                    <div className="mb-5 flex items-start gap-2.5 rounded-[6px] border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" style={{ boxShadow: "0 0 6px #fbbf24" }} />
-                        <p className={`${MONO} text-[10.5px] leading-relaxed text-amber-200/85`}>
-                            {TOPUP_DISABLED_MESSAGE} Your existing balance and running services are unaffected.
-                        </p>
-                    </div>
-                )}
-
                 {/* Top-up form */}
                 <form onSubmit={onTopup} className="space-y-4">
                     <div>
@@ -604,8 +595,6 @@ function BalanceTab({
                                     ? "Processing"
                                     : "Redirecting"}
                             </>
-                        ) : !BILLING_TOPUP_ENABLED ? (
-                            "Temporarily unavailable"
                         ) : (
                             <>
                                 Pay {amount && `$${amount}`}
@@ -736,8 +725,6 @@ function BalanceTab({
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                     Redirecting
                                 </>
-                            ) : !BILLING_TOPUP_ENABLED ? (
-                                "Temporarily unavailable"
                             ) : (
                                 <>
                                     Enable auto top-up

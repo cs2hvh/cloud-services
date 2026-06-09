@@ -1,7 +1,6 @@
-import { Text } from "@react-email/components";
 import {
   BaseEmailLayout,
-  EmailCard,
+  EmailCodeBlock,
   EmailParagraph,
 } from "@/lib/email/components/base-layout";
 import type { EmailVerificationEmailData } from "@/lib/email/types";
@@ -24,9 +23,7 @@ export function EmailVerificationTemplate({
         Please verify your email address to activate all account features.
       </EmailParagraph>
       {verificationCode ? (
-        <EmailCard accent="#2563eb">
-          <Text style={codeStyle}>{verificationCode}</Text>
-        </EmailCard>
+        <EmailCodeBlock code={verificationCode} label="Verification code" />
       ) : null}
       <EmailParagraph>
         {expiresIn
@@ -36,13 +33,3 @@ export function EmailVerificationTemplate({
     </BaseEmailLayout>
   );
 }
-
-const codeStyle = {
-  margin: 0,
-  textAlign: "center" as const,
-  fontSize: "30px",
-  lineHeight: "38px",
-  fontWeight: "700",
-  letterSpacing: "6px",
-  color: "#111827",
-};

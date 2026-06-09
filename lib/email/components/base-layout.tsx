@@ -82,6 +82,10 @@ export function BaseEmailLayout({
             <Text style={styles.footerLine}>
               {siteConfig.name} — AI &amp; cloud infrastructure, hosted in India.
             </Text>
+            <Text style={styles.footerAddr}>
+              India: 2/26 Umiya Nagar, Nirnay Nagar, Ahmedabad, Gujarat 382481
+              &nbsp;·&nbsp; UK: 20 Wenlock Road, London, England N1 7GU
+            </Text>
             <Text style={styles.footerMuted}>
               This is an automated message regarding your {siteConfig.name}{" "}
               account. Please do not reply to this email.
@@ -148,6 +152,22 @@ export function EmailParagraph({ children }: { children: ReactNode }) {
   return <Text style={styles.paragraph}>{children}</Text>;
 }
 
+// Centered, labeled one-time-code block — for OTP / verification emails.
+export function EmailCodeBlock({
+  code,
+  label = "Verification code",
+}: {
+  code: string;
+  label?: string;
+}) {
+  return (
+    <Section style={styles.codeWrap}>
+      <Text style={styles.codeLabel}>{label}</Text>
+      <Text style={styles.code}>{code}</Text>
+    </Section>
+  );
+}
+
 const styles = {
   body: {
     margin: 0,
@@ -201,6 +221,32 @@ const styles = {
     color: "#334155",
     margin: "0 0 16px",
   },
+  codeWrap: {
+    backgroundColor: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "20px 16px",
+    margin: "20px 0",
+    textAlign: "center" as const,
+  },
+  codeLabel: {
+    margin: "0 0 10px",
+    fontSize: "11px",
+    fontWeight: 600,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    color: MUTED,
+  },
+  code: {
+    margin: 0,
+    paddingLeft: "10px",
+    fontSize: "34px",
+    lineHeight: "40px",
+    fontWeight: 700,
+    letterSpacing: "10px",
+    color: INK,
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  },
   card: {
     backgroundColor: "#f8fafc",
     border: "1px solid #e2e8f0",
@@ -241,6 +287,12 @@ const styles = {
     color: "#475569",
     fontWeight: 600,
     margin: "0 0 4px",
+  },
+  footerAddr: {
+    fontSize: "11px",
+    lineHeight: "16px",
+    color: "#64748b",
+    margin: "0 0 10px",
   },
   footerMuted: {
     fontSize: "11px",
