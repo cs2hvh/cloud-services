@@ -148,7 +148,9 @@ export default function CareersPage() {
       {/* Why join */}
       <section className="py-12 sm:py-14 lg:py-16">
         <Container>
-          <h2 className="text-3xl sm:text-4xl font-normal tracking-tight">Why AhuraSense</h2>
+          <h2 className="text-3xl sm:text-4xl font-normal tracking-tight">
+            Why Ahura<span className="text-[#0095FF]">Sense</span>
+          </h2>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {PERKS.map((perk) => (
               <div
@@ -178,7 +180,7 @@ export default function CareersPage() {
                   {dept.roles.map((role) => (
                     <article
                       key={role.title}
-                      className="flex flex-col border border-white/[0.08] bg-white/[0.02] p-6 hover:bg-white/[0.04] transition-colors"
+                      className="flex flex-col border border-l-2 border-white/[0.08] border-l-transparent bg-white/[0.02] p-6 transition-all duration-300 hover:-translate-y-1 hover:border-l-[#0095FF] hover:bg-white/[0.04]"
                     >
                       <div className="flex items-start gap-4">
                         <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center border border-white/[0.08] bg-[#0d0e11] text-[#0095FF]">
@@ -209,7 +211,7 @@ export default function CareersPage() {
                       </ul>
                       <a
                         href={applyHref(role.title)}
-                        className="mt-6 inline-flex w-fit items-center gap-1.5 bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-white/90 transition-colors"
+                        className="mt-6 inline-flex w-fit items-center gap-1.5 bg-white px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
                       >
                         Apply now
                         <ArrowRight className="h-4 w-4" />
@@ -236,7 +238,7 @@ export default function CareersPage() {
               href={applyHref("Open Application")}
               className="mt-6 inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 hover:bg-white/[0.08] hover:text-white transition-colors"
             >
-              Email {CAREERS_EMAIL}
+              Email Us
               <ArrowRight className="h-4 w-4" />
             </a>
           </div>

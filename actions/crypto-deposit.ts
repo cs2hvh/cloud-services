@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { crgateway } from '@/lib/crypto';
 import { FormState, paymentSchema } from './create-payment-schema';
+import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from '@/lib/billing/topup-flag';
 
 const CURRENCIES = {
     BTC: {
@@ -88,6 +89,10 @@ export async function createDepositPayment(
         amount_usd: Number(formData.get('amount_usd')),
         currency: formData.get('currency') as string,
     };
+
+    if (!BILLING_TOPUP_ENABLED) {
+        return { values, success: false, errors: { amount_usd: [TOPUP_DISABLED_MESSAGE] } };
+    }
 
     // Validate with Zod schema
     const result = paymentSchema.safeParse(values);

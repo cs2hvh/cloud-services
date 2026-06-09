@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getStripeClient } from "@/lib/stripe";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from "@/lib/billing/topup-flag";
 
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 10000;
 
 export async function POST(request: Request) {
   try {
+    if (!BILLING_TOPUP_ENABLED) {
+      return NextResponse.json({ error: TOPUP_DISABLED_MESSAGE }, { status: 403 });
+    }
     const stripe = getStripeClient();
     const supabase = await createClient();
     const { data: userRes } = await supabase.auth.getUser();

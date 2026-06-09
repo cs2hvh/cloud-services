@@ -25,6 +25,7 @@ import {
 
 import api from "@/lib/axios/axios";
 import { createDepositPayment } from "@/actions/crypto-deposit";
+import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from "@/lib/billing/topup-flag";
 
 // ─── Design tokens ─────────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = {
@@ -139,6 +140,10 @@ export default function BillingTabs({
 
     const onTopup = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!BILLING_TOPUP_ENABLED) {
+            pushToast("error", TOPUP_DISABLED_MESSAGE);
+            return;
+        }
         const parsed = Number(amount);
         if (Number.isNaN(parsed) || parsed <= 0) {
             pushToast("error", "Enter a valid amount > 0");
@@ -202,6 +207,10 @@ export default function BillingTabs({
 
     const onEnableRecurring = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!BILLING_TOPUP_ENABLED) {
+            pushToast("error", TOPUP_DISABLED_MESSAGE);
+            return;
+        }
         const parsed = Number(recurringAmount);
         if (Number.isNaN(parsed) || parsed <= 0) {
             pushToast("error", "Enter a valid recurring amount > 0");
@@ -504,6 +513,15 @@ function BalanceTab({
                     </div>
                 </div>
 
+                {!BILLING_TOPUP_ENABLED && (
+                    <div className="mb-5 flex items-start gap-2.5 rounded-[6px] border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" style={{ boxShadow: "0 0 6px #fbbf24" }} />
+                        <p className={`${MONO} text-[10.5px] leading-relaxed text-amber-200/85`}>
+                            {TOPUP_DISABLED_MESSAGE} Your existing balance and running services are unaffected.
+                        </p>
+                    </div>
+                )}
+
                 {/* Top-up form */}
                 <form onSubmit={onTopup} className="space-y-4">
                     <div>
@@ -562,7 +580,7 @@ function BalanceTab({
 
                     <button
                         type="submit"
-                        disabled={loadingTopup}
+                        disabled={loadingTopup || !BILLING_TOPUP_ENABLED}
                         className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
                         style={{
                             background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
@@ -586,6 +604,8 @@ function BalanceTab({
                                     ? "Processing"
                                     : "Redirecting"}
                             </>
+                        ) : !BILLING_TOPUP_ENABLED ? (
+                            "Temporarily unavailable"
                         ) : (
                             <>
                                 Pay {amount && `$${amount}`}
@@ -708,7 +728,7 @@ function BalanceTab({
 
                         <button
                             type="submit"
-                            disabled={loadingRecurring}
+                            disabled={loadingRecurring || !BILLING_TOPUP_ENABLED}
                             className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold border border-white/[0.08] bg-[#111216] text-white/85 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             {loadingRecurring ? (
@@ -716,6 +736,8 @@ function BalanceTab({
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                     Redirecting
                                 </>
+                            ) : !BILLING_TOPUP_ENABLED ? (
+                                "Temporarily unavailable"
                             ) : (
                                 <>
                                     Enable auto top-up
