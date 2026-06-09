@@ -81,9 +81,10 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     }
   };
 
-  // Filter and search products
-  const getFilteredProducts = () => {
-    let filtered = [...productsList];
+  // Filter and search products. Accepts an explicit source list so callers can
+  // paginate a freshly-fetched array without waiting for setProductsList to flush.
+  const getFilteredProducts = (source: Tables<"products">[] = productsList) => {
+    let filtered = [...source];
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -99,8 +100,8 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     return filtered;
   };
 
-  const updatePagination = useCallback((page: number) => {
-    const filtered = getFilteredProducts();
+  const updatePagination = useCallback((page: number, source: Tables<"products">[] = productsList) => {
+    const filtered = getFilteredProducts(source);
     const startIndex = (page - 1) * PRODUCTS_PER_PAGE;
     const endIndex = startIndex + PRODUCTS_PER_PAGE;
     const paginatedProducts = filtered.slice(startIndex, endIndex);
@@ -143,7 +144,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
         // Refresh the products list
         const updatedProducts = await fetchProducts();
         if (updatedProducts) {
-          updatePagination(1);
+          updatePagination(1, updatedProducts);
         }
       }
     } catch (error: unknown) {
@@ -168,7 +169,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     // Refresh the products list
     const updatedProducts = await fetchProducts();
     if (updatedProducts) {
-      updatePagination(currentPage);
+      updatePagination(currentPage, updatedProducts);
     }
   };
 
@@ -176,7 +177,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     // Refresh the products list
     const updatedProducts = await fetchProducts();
     if (updatedProducts) {
-      updatePagination(1);
+      updatePagination(1, updatedProducts);
     }
   };
 

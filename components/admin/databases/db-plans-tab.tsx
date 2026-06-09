@@ -99,9 +99,10 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     }
   };
 
-  // Filter and search products
-  const getFilteredProducts = () => {
-    let filtered = [...productsList];
+  // Filter and search products. Accepts an explicit source list so callers can
+  // paginate a freshly-fetched array without waiting for setProductsList to flush.
+  const getFilteredProducts = (source: Tables<"products">[] = productsList) => {
+    let filtered = [...source];
 
     // Apply type filter
     if (filterType !== "all") {
@@ -122,8 +123,8 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     return filtered;
   };
 
-  const updatePagination = (page: number) => {
-    const filtered = getFilteredProducts();
+  const updatePagination = (page: number, source: Tables<"products">[] = productsList) => {
+    const filtered = getFilteredProducts(source);
     const startIndex = (page - 1) * PRODUCTS_PER_PAGE;
     const endIndex = startIndex + PRODUCTS_PER_PAGE;
     const paginatedProducts = filtered.slice(startIndex, endIndex);
@@ -170,7 +171,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
         // Refresh the products list
         const updatedProducts = await fetchProducts();
         if (updatedProducts) {
-          updatePagination(1);
+          updatePagination(1, updatedProducts);
         }
       }
     } catch (err) {
@@ -201,7 +202,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     // Refresh the products list
     const updatedProducts = await fetchProducts();
     if (updatedProducts) {
-      updatePagination(currentPage);
+      updatePagination(currentPage, updatedProducts);
     }
   };
 
@@ -209,7 +210,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     // Refresh the products list
     const updatedProducts = await fetchProducts();
     if (updatedProducts) {
-      updatePagination(1);
+      updatePagination(1, updatedProducts);
     }
   };
 
