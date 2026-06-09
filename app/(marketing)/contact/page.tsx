@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cpu, Zap, ShieldCheck, Clock, Mail } from "lucide-react";
+import { Cpu, Zap, ShieldCheck, Clock, Mail, MapPin } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { ContactForm } from "@/components/contact/contact-form";
 
@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 };
 
 const SALES_EMAIL = "sales@ahurasense.com";
+const SUPPORT_EMAIL = "support@ahurasense.com";
+const OFFICE_ADDRESS =
+  "6th Floor, Shivalik Shilp Corporate Office, Sanidhya, Ahmedabad, Gujarat 380058";
 
 const HIGHLIGHTS: Array<{ icon: typeof Cpu; title: string; body: string }> = [
   {
@@ -106,13 +109,34 @@ export default async function ContactPage({
 
             <div className="mt-8 rounded-[12px] border border-white/[0.08] bg-[#0d0e11] p-5">
               <p className="text-[12px] uppercase tracking-[0.14em] text-white/40">Prefer email?</p>
-              <a
-                href={`mailto:${SALES_EMAIL}`}
-                className="mt-2 inline-flex items-center gap-2 text-[15px] font-medium text-white transition-colors hover:text-[#0095FF]"
-              >
-                <Mail className="h-4 w-4 text-[#0095FF]" />
-                {SALES_EMAIL}
-              </a>
+              <div className="mt-3 space-y-2.5">
+                <a
+                  href={`mailto:${SALES_EMAIL}`}
+                  className="flex items-center gap-2 text-[15px] font-medium text-white transition-colors hover:text-[#0095FF]"
+                >
+                  <Mail className="h-4 w-4 text-[#0095FF]" />
+                  {SALES_EMAIL}
+                  <span className="text-[12px] font-normal text-white/40">— sales</span>
+                </a>
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  className="flex items-center gap-2 text-[15px] font-medium text-white transition-colors hover:text-[#0095FF]"
+                >
+                  <Mail className="h-4 w-4 text-[#0095FF]" />
+                  {SUPPORT_EMAIL}
+                  <span className="text-[12px] font-normal text-white/40">— support</span>
+                </a>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[12px] border border-white/[0.08] bg-[#0d0e11] p-5">
+              <p className="text-[12px] uppercase tracking-[0.14em] text-white/40">
+                Ahurasense Technologies
+              </p>
+              <address className="mt-2 flex items-start gap-2 not-italic text-[13.5px] leading-relaxed text-white/60">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#0095FF]" />
+                <span>{OFFICE_ADDRESS}</span>
+              </address>
             </div>
           </div>
 

@@ -2,10 +2,37 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
+import { createClient } from "@/lib/supabase/client";
 
 import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 
 const BRAND = "#0095FF";
+
+// "Get started" CTAs point at /signup; if the visitor is already authenticated,
+// send them straight to the dashboard instead. Resolved client-side from the
+// browser session.
+function useResolveCta() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const supabase = createClient();
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (alive) setLoggedIn(!!data.user);
+      })
+      .catch(() => {});
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      setLoggedIn(!!session?.user),
+    );
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+  return (link: string) =>
+    loggedIn && link === "/signup" ? "/dashboard" : link;
+}
 
 // Flat pricing everywhere — region is a deployment choice, not a price lever.
 const REGIONS = [
@@ -277,6 +304,7 @@ function Configurator({
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [sizeIndex, setSizeIndex] = useState(0);
   const [region, setRegion] = useState(REGIONS[0]);
+  const resolveCta = useResolveCta();
 
   // Initialize / reset facet selections when the facet set changes.
   const facetKey = facets.map((f) => `${f.key}:${f.options.join(",")}`).join("|");
@@ -458,7 +486,7 @@ function Configurator({
             </div>
 
             <a
-              href={tier.ctaLink}
+              href={resolveCta(tier.ctaLink)}
               className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[6px] bg-white px-5 py-3 text-[13.5px] font-semibold text-black transition-colors hover:bg-white/90"
             >
               {tier.ctaText || "Deploy now"}
@@ -541,6 +569,7 @@ function PlanCards({
   );
   // Metered categories have $0 monthly — show the billing model instead of a number.
   const metered = tiers.every((t) => t.price.monthly === 0 && t.billingPeriod);
+  const resolveCta = useResolveCta();
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -604,7 +633,7 @@ function PlanCards({
             </ul>
 
             <a
-              href={tier.ctaLink}
+              href={resolveCta(tier.ctaLink)}
               className={cn(
                 "group/cta mt-5 inline-flex items-center justify-center gap-1.5 rounded-[6px] border px-4 py-2.5 text-[12.5px] font-medium transition-colors",
                 tier.isFeatured

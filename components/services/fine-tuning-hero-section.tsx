@@ -57,12 +57,7 @@ export default function FineTuningHeroSection({
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-2xl"
           >
-            <div className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/56">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-              A.I. Labs — Fine-Tuning
-            </div>
-
-            <h1 className="mt-6 max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
+            <h1 className="max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
               Train your model.
               <span className="block text-[#0095FF]">Ship your adapter.</span>
             </h1>

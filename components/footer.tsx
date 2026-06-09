@@ -1,14 +1,25 @@
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import { Container } from "@/components/ui/container";
+
+const OFFICES = [
+  {
+    country: "India",
+    address:
+      "2/26 Umiya Nagar, Nirnay Nagar,\nAhmedabad, Gujarat 382481, India",
+  },
+  {
+    country: "United Kingdom",
+    address: "20 Wenlock Road,\nLondon, England N1 7GU, United Kingdom",
+  },
+];
 
 const FOOTER_LINKS = [
   {
     heading: "Company",
     links: [
-      { label: "Blog", href: "/blog" },
-      { label: "Careers", href: "#" },
       { label: "Pricing", href: "/pricing" },
-      { label: "Customers", href: "#" },
+      { label: "Contact", href: "/contact" },
     ],
   },
   {
@@ -17,7 +28,7 @@ const FOOTER_LINKS = [
       { label: "Resources Hub", href: "/resources" },
       { label: "API Reference", href: "/api-docs" },
       { label: "Pricing", href: "/pricing" },
-      { label: "Changelog", href: "#" },
+      { label: "Changelog", href: "/changelog" },
     ],
   },
   {
@@ -109,6 +120,21 @@ export function Footer() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Offices */}
+        <div className="mt-12 lg:mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:max-w-[620px]">
+          {OFFICES.map((office) => (
+            <div key={office.country}>
+              <h3 className="mb-3 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-white/30">
+                <MapPin className="h-3 w-3 text-[#0095FF]" />
+                {office.country}
+              </h3>
+              <address className="not-italic whitespace-pre-line text-[12.5px] leading-relaxed text-white/45">
+                {office.address}
+              </address>
+            </div>
+          ))}
         </div>
 
         {/* Bottom bar */}

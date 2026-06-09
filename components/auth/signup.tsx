@@ -58,6 +58,10 @@ const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
   e.currentTarget.style.transform = "none";
 };
 
+// Consistent, premium OTP slot styling (dark fill, accent active state).
+const OTP_SLOT =
+  "h-12 w-11 text-[18px] font-semibold text-white dark:bg-[#0d0e11] border-white/[0.14] data-[active=true]:border-[#0095FF] data-[active=true]:ring-[#0095FF]/25";
+
 export default function SignUpMultiStep({
   className,
   ...props
@@ -430,17 +434,17 @@ export default function SignUpMultiStep({
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <InputOTP maxLength={6} {...field}>
+                        <InputOTP maxLength={6} containerClassName="justify-center gap-2" {...field}>
                           <InputOTPGroup>
-                            <InputOTPSlot index={0} />
-                            <InputOTPSlot index={1} />
-                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={0} className={OTP_SLOT} />
+                            <InputOTPSlot index={1} className={OTP_SLOT} />
+                            <InputOTPSlot index={2} className={OTP_SLOT} />
                           </InputOTPGroup>
-                          <InputOTPSeparator />
+                          <InputOTPSeparator className="text-white/25" />
                           <InputOTPGroup>
-                            <InputOTPSlot index={3} />
-                            <InputOTPSlot index={4} />
-                            <InputOTPSlot index={5} />
+                            <InputOTPSlot index={3} className={OTP_SLOT} />
+                            <InputOTPSlot index={4} className={OTP_SLOT} />
+                            <InputOTPSlot index={5} className={OTP_SLOT} />
                           </InputOTPGroup>
                         </InputOTP>
                       </FormControl>

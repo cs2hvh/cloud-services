@@ -8,7 +8,7 @@
 // surfaces. A curated showcase of single- and dual-socket Intel Xeon / Core
 // and AMD EPYC / Ryzen builds across six datacenters.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
     ArrowUpRight,
@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 
 import { RegionFlag } from '@/components/ui/region-flag';
+import { createClient } from '@/lib/supabase/client';
 
 // ─── Design tokens (shared with the VPS surfaces) ──────────────────
 
@@ -51,8 +52,8 @@ type FeatureKey = 'ddos' | 'ipmi' | 'raid' | 'privatenet' | 'redundantpsu' | 'gp
 type StockKey = 'in-stock' | 'ready-24h' | 'ready-48h';
 
 const VENDORS: Record<Vendor, { label: string; color: string; sub: string }> = {
-    amd: { label: 'AMD', color: '#ff5c5c', sub: 'EPYC · Ryzen' },
-    intel: { label: 'Intel', color: ACCENT, sub: 'Xeon · Core' },
+    amd: { label: 'AMD', color: 'rgba(255,255,255,0.5)', sub: 'EPYC · Ryzen' },
+    intel: { label: 'Intel', color: 'rgba(255,255,255,0.5)', sub: 'Xeon · Core' },
 };
 
 const CATEGORIES: Record<CategoryKey, { label: string; color: string; blurb: string }> = {
@@ -374,6 +375,13 @@ const PRICE_BUCKETS: { key: string; label: string; test: (p: number) => boolean 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const ramLabel = (gb: number) => (gb >= 1024 ? `${gb / 1024} TB` : `${gb} GB`);
 
+// Clean, "normal" display name derived from the real CPU model (drops the
+// vendor prefix; appends ×2 for dual-socket) instead of a marketing alias.
+function modelName(cpu: BareMetalSku['cpu']): string {
+    const m = cpu.model.replace(/^2 × /, '').replace(/^(AMD|Intel)\s+/i, '');
+    return cpu.sockets === 2 ? `${m} ×2` : m;
+}
+
 function toggle<T>(set: Set<T>, v: T): Set<T> {
     const next = new Set(set);
     if (next.has(v)) next.delete(v);
@@ -683,10 +691,7 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
     const stock = STOCK[sku.stock];
     return (
         <div className="group relative overflow-hidden rounded-[8px] border border-white/[0.07] bg-[#111216] transition-colors hover:border-[rgba(0,149,255,0.28)] hover:bg-[#13151a]">
-            {/* vendor accent bar — red = AMD, blue = Intel */}
-            <span className="absolute left-0 top-0 h-full w-[3px]" style={{ background: v.color, opacity: 0.65 }} />
-
-            <div className="pl-4 pr-4 py-3.5 sm:pl-5">
+            <div className="px-4 py-3.5 sm:px-5">
                 <div className={`grid grid-cols-2 gap-x-4 gap-y-3 md:gap-y-0 ${GRID} md:items-center`}>
                     {/* Server */}
                     <div className="col-span-2 md:col-span-1 min-w-0">
@@ -695,19 +700,11 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
                                 {cat.label}
                             </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <h3 style={SERIF_STYLE} className="text-[16px] leading-tight font-semibold text-white truncate">
-                                {sku.name}
-                            </h3>
-                            <span
-                                className={`${MONO} inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] uppercase tracking-[0.08em] font-semibold shrink-0`}
-                                style={{ color: v.color, background: `${v.color}14`, border: `1px solid ${v.color}33` }}
-                            >
-                                {v.label}
-                            </span>
-                        </div>
+                        <h3 className="text-[15px] leading-tight font-semibold text-white truncate">
+                            {modelName(sku.cpu)}
+                        </h3>
                         <p className={`${MONO} mt-0.5 text-[10.5px] text-white/45 truncate`}>
-                            {sku.cpu.model} · {sku.cpu.gen}
+                            {v.label} · {sku.cpu.gen}
                         </p>
                     </div>
 
@@ -767,7 +764,7 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
                                 e.currentTarget.style.transform = 'none';
                             }}
                         >
-                            Configure
+                            Request quote
                             <ArrowUpRight className="h-3.5 w-3.5" />
                         </button>
                     </div>
@@ -862,7 +859,6 @@ function FilterPanel(p: PanelProps) {
                         active={p.vendors.has(v)}
                         onClick={() => p.setVendors(toggle(p.vendors, v))}
                         count={vCount(v)}
-                        dot={VENDORS[v].color}
                     >
                         {VENDORS[v].label}
                     </CheckRow>
@@ -1038,24 +1034,68 @@ function SegRow<T extends string | number>({
 
 function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void }) {
     const [submitting, setSubmitting] = useState(false);
+    const [email, setEmail] = useState('');
+    const [message, setMessage] = useState('');
     const cat = CATEGORIES[sku.category];
 
-    const submit = () => {
+    // Prefill the logged-in user's email so the enquiry is one click.
+    useEffect(() => {
+        let alive = true;
+        createClient()
+            .auth.getUser()
+            .then(({ data }) => {
+                if (alive && data.user?.email) setEmail(data.user.email);
+            })
+            .catch(() => {});
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    const submit = async () => {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+            toast.error('Please enter a valid email so our team can reply.');
+            return;
+        }
         setSubmitting(true);
-        setTimeout(() => {
-            toast.success(`Order placed for ${sku.name}`, {
-                description: 'We’ll provision your server and email access details. Billing starts only when it is live.',
+        try {
+            const summary =
+                `Bare-metal enquiry — ${modelName(sku.cpu)}\n` +
+                `CPU: ${sku.cpu.model} (${sku.cpu.gen}) · ${sku.cpu.cores}c/${sku.cpu.threads}t · ${sku.cpu.baseGhz}–${sku.cpu.boostGhz} GHz\n` +
+                `Memory: ${ramLabel(sku.ramGb)} ${sku.ramType}\n` +
+                `Storage: ${sku.storage}\n` +
+                `Network: ${sku.uplinkGbps} Gbps · ${sku.bandwidth}\n` +
+                `Regions: ${sku.regions.map((r) => REGION_LABEL[r] ?? r).join(', ')}\n` +
+                `Listed price: $${fmt(sku.priceMonthly)}/mo` +
+                (message.trim() ? `\n\nNote from customer:\n${message.trim()}` : '');
+            const res = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: email.split('@')[0] || 'Customer',
+                    email: email.trim(),
+                    topic: 'Bare Metal',
+                    message: summary,
+                }),
             });
-            setSubmitting(false);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Could not send your enquiry.');
+            toast.success('Enquiry sent to sales', {
+                description: 'Our team will reply with availability, lead time, and a final quote.',
+            });
             onClose();
-        }, 600);
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Could not send your enquiry. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
-                className="relative z-10 w-full max-w-md border border-white/[0.1] bg-[#0d0e11] rounded-[10px] p-6 shadow-2xl"
+                className="relative z-10 w-full max-w-md border border-white/[0.1] bg-[#0d0e11] rounded-[10px] p-6 shadow-2xl max-h-[90svh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
             >
                 <button type="button" onClick={onClose} className="absolute right-4 top-4 text-white/40 hover:text-white transition-colors">
@@ -1063,13 +1103,13 @@ function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void
                 </button>
 
                 <div className={`${MONO} mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: VENDORS[sku.vendor].color }} />
-                    {cat.label}
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
+                    Bare metal · {cat.label}
                 </div>
                 <h2 style={SERIF_STYLE} className="text-[24px] font-semibold text-white leading-tight">
-                    {sku.name}
+                    {modelName(sku.cpu)}
                 </h2>
-                <p className={`${MONO} mt-1 text-[11px] text-white/45`}>{sku.cpu.model} · {sku.cpu.gen}</p>
+                <p className={`${MONO} mt-1 text-[11px] text-white/45`}>{VENDORS[sku.vendor].label} · {sku.cpu.gen}</p>
 
                 <div className="mt-5 space-y-2.5 border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
                     <SummaryLine label="Workload" value={cat.label} />
@@ -1079,7 +1119,7 @@ function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void
                     <SummaryLine label="Network" value={`${sku.uplinkGbps} Gbps · ${sku.bandwidth}`} />
                     <SummaryLine label="Regions" value={sku.regions.map((r) => REGION_LABEL[r] ?? r).join(', ')} />
                     <div className="flex items-center justify-between border-t border-white/[0.06] pt-2.5">
-                        <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>Price</span>
+                        <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>From</span>
                         <span style={SERIF_STYLE} className="text-[18px] font-bold text-white tabular-nums">
                             ${fmt(sku.priceMonthly)}
                             <span className={`${MONO} ml-1 text-[11px] font-normal text-white/40`}>/mo</span>
@@ -1087,10 +1127,36 @@ function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void
                     </div>
                 </div>
 
-                <div className="mt-4 flex items-start gap-2">
+                {/* Enquiry fields */}
+                <div className="mt-4 space-y-3">
+                    <div>
+                        <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.12em] text-white/45`}>Your email</label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@company.com"
+                            className="w-full h-10 rounded-[6px] border border-white/[0.1] bg-[#111216] px-3 text-[13px] text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0095FF]/55 focus:shadow-[0_0_0_3px_rgba(0,149,255,0.12)]"
+                        />
+                    </div>
+                    <div>
+                        <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.12em] text-white/45`}>
+                            Message <span className="text-white/25">(optional)</span>
+                        </label>
+                        <textarea
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            rows={3}
+                            placeholder="Timeline, quantity, OS, customisations…"
+                            className="w-full resize-none rounded-[6px] border border-white/[0.1] bg-[#111216] px-3 py-2.5 text-[13px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0095FF]/55 focus:shadow-[0_0_0_3px_rgba(0,149,255,0.12)]"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-3 flex items-start gap-2">
                     <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#4ade80]" />
                     <p className={`${MONO} text-[10.5px] leading-relaxed text-white/50`}>
-                        No upfront charge — billing starts only once your server is live and you have root access.
+                        No commitment — our team replies with current availability, lead time, and a final quote.
                     </p>
                 </div>
 
@@ -1109,7 +1175,7 @@ function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void
                         className={`${MONO} h-10 flex-[1.4] rounded-[5px] text-[11px] uppercase tracking-[0.12em] font-semibold transition-all disabled:opacity-60`}
                         style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: '#fff', boxShadow: '0 8px 20px rgba(0,149,255,0.2)' }}
                     >
-                        {submitting ? 'Submitting…' : 'Order server'}
+                        {submitting ? 'Sending…' : 'Submit enquiry'}
                     </button>
                 </div>
             </div>
