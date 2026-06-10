@@ -41,10 +41,11 @@ interface SpectrumFormData {
     selectedUser?: string;
     appType: "tcp" | "udp" | "ssh" | "rdp" | "";
     domain: string;
-    edgePort: number;
+    // Port specs — a single port ("22") or an inclusive range ("22-3233").
+    edgePort: string;
     originType: "ip-dns" | "load-balancer" | "";
     originIP: string;
-    originPort: number;
+    originPort: string;
     argoSmartRouting: boolean;
     tls: "off" | "full";
     ipAccessRule: boolean;
@@ -92,6 +93,23 @@ const APP_TYPES = [
     },
 ] as const;
 
+// Parse a port spec — a single port ("22") or an inclusive range ("22-3233").
+// Returns the start/end (start === end for a single port) or null when invalid.
+// Mirrors Cloudflare Spectrum's `tcp/22-3233` protocol form.
+function parsePortSpec(raw: string): { start: number; end: number } | null {
+    const s = raw.trim();
+    const m = s.match(/^(\d{1,5})(?:-(\d{1,5}))?$/);
+    if (!m) return null;
+    const start = parseInt(m[1], 10);
+    const end = m[2] ? parseInt(m[2], 10) : start;
+    if (start < 1 || start > 65535 || end < 1 || end > 65535) return null;
+    if (end < start) return null;
+    return { start, end };
+}
+
+const portCount = (spec: { start: number; end: number }) =>
+    spec.end - spec.start + 1;
+
 const SpectrumAppCreate = ({
     projects,
     userId,
@@ -112,10 +130,10 @@ const SpectrumAppCreate = ({
         selectedUser: isAdmin ? "" : userId,
         appType: "",
         domain: "",
-        edgePort: 0,
+        edgePort: "",
         originType: "ip-dns",
         originIP: "",
-        originPort: 0,
+        originPort: "",
         argoSmartRouting: false,
         tls: "off",
         ipAccessRule: false,
@@ -222,13 +240,18 @@ const SpectrumAppCreate = ({
         return "";
     }, [formData.domain, formData.appType, formData.edgePort, spectrumApps]);
     const domainOk = !!formData.domain && !domainNameError;
-    const edgePortOk =
-        isSSHorRDP ||
-        (formData.edgePort >= 1 && formData.edgePort <= 65535);
-    const originOk =
-        !!formData.originIP &&
-        formData.originPort >= 1 &&
-        formData.originPort <= 65535;
+    const edgeSpec = parsePortSpec(formData.edgePort);
+    const originSpec = parsePortSpec(formData.originPort);
+    const edgePortOk = isSSHorRDP || edgeSpec !== null;
+    const originOk = !!formData.originIP && originSpec !== null;
+    // Cloudflare requires the edge and origin port ranges to cover the same
+    // number of ports (each edge port maps to the same offset at the origin).
+    const portRangeError =
+        edgeSpec && originSpec && portCount(edgeSpec) !== portCount(originSpec)
+            ? `Edge and origin must cover the same number of ports (${portCount(
+                  edgeSpec,
+              )} vs ${portCount(originSpec)})`
+            : "";
     const projectOk = !!formData.project_id;
     const canSubmit =
         ownerOk &&
@@ -236,6 +259,7 @@ const SpectrumAppCreate = ({
         domainOk &&
         edgePortOk &&
         originOk &&
+        !portRangeError &&
         projectOk &&
         termsAccepted &&
         !isLoading;
@@ -317,9 +341,9 @@ const SpectrumAppCreate = ({
     // Default edge port for SSH/RDP
     useEffect(() => {
         if (formData.appType === "ssh") {
-            updateFormData({ edgePort: 22, originPort: 22 });
+            updateFormData({ edgePort: "22", originPort: "22" });
         } else if (formData.appType === "rdp") {
-            updateFormData({ edgePort: 3389, originPort: 3389 });
+            updateFormData({ edgePort: "3389", originPort: "3389" });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formData.appType]);
@@ -663,34 +687,31 @@ const SpectrumAppCreate = ({
                                 }
                             >
                                 <div className="max-w-[260px]">
-                                    <FieldLabel hint="1–65535">
+                                    <FieldLabel hint="port or range">
                                         Port number
                                     </FieldLabel>
                                     <Input
-                                        type="number"
-                                        min={1}
-                                        max={65535}
-                                        value={formData.edgePort || ""}
-                                        onChange={(e) => {
-                                            const v = parseInt(
-                                                e.target.value,
-                                                10,
-                                            );
-                                            if (isNaN(v))
-                                                updateFormData({
-                                                    edgePort: 0,
-                                                });
-                                            else
-                                                updateFormData({
-                                                    edgePort: Math.min(
-                                                        Math.max(v, 1),
-                                                        65535,
-                                                    ),
-                                                });
-                                        }}
-                                        placeholder="8080"
+                                        value={formData.edgePort}
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                // Keep only digits and a hyphen so
+                                                // the user can type "22" or "22-3233".
+                                                edgePort: e.target.value
+                                                    .replace(/[^\d-]/g, "")
+                                                    .slice(0, 11),
+                                            })
+                                        }
+                                        placeholder="8080 or 8000-9000"
                                         mono
                                     />
+                                    {formData.edgePort && !edgeSpec && (
+                                        <p
+                                            className={`${MONO} mt-1.5 text-[10.5px] text-red-400/90`}
+                                        >
+                                            Enter a port (1–65535) or a range
+                                            like 22-3233
+                                        </p>
+                                    )}
                                 </div>
                             </Section>
                         )}
@@ -724,37 +745,39 @@ const SpectrumAppCreate = ({
                                     />
                                 </div>
                                 <div>
-                                    <FieldLabel hint="1–65535">
+                                    <FieldLabel hint="port or range">
                                         Origin port
                                     </FieldLabel>
                                     <Input
-                                        type="number"
-                                        min={1}
-                                        max={65535}
-                                        value={formData.originPort || ""}
+                                        value={formData.originPort}
                                         disabled={isSSHorRDP}
-                                        onChange={(e) => {
-                                            const v = parseInt(
-                                                e.target.value,
-                                                10,
-                                            );
-                                            if (isNaN(v))
-                                                updateFormData({
-                                                    originPort: 0,
-                                                });
-                                            else
-                                                updateFormData({
-                                                    originPort: Math.min(
-                                                        Math.max(v, 1),
-                                                        65535,
-                                                    ),
-                                                });
-                                        }}
-                                        placeholder="443"
+                                        onChange={(e) =>
+                                            updateFormData({
+                                                originPort: e.target.value
+                                                    .replace(/[^\d-]/g, "")
+                                                    .slice(0, 11),
+                                            })
+                                        }
+                                        placeholder="443 or 8000-9000"
                                         mono
                                     />
                                 </div>
                             </div>
+                            {formData.originPort && !originSpec && (
+                                <p
+                                    className={`${MONO} mt-3 text-[10.5px] text-red-400/90 max-w-[640px]`}
+                                >
+                                    Enter a port (1–65535) or a range like
+                                    22-3233
+                                </p>
+                            )}
+                            {portRangeError && (
+                                <p
+                                    className={`${MONO} mt-3 text-[10.5px] text-red-400/90 max-w-[640px]`}
+                                >
+                                    {portRangeError}
+                                </p>
+                            )}
                             {isSSHorRDP && (
                                 <p
                                     className={`${MONO} mt-3 text-[10.5px] text-white/40 max-w-[640px]`}
