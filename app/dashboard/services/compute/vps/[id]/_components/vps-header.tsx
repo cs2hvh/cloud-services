@@ -4,7 +4,7 @@
 // name + meta strip + monochrome action buttons. Provisioning + failed
 // banners stack underneath.
 
-import { AlertTriangle, Clock, Copy, Globe, HardDrive, Loader2, MapPin, Play, Power, RotateCw, Terminal } from 'lucide-react';
+import { AlertTriangle, Clock, Copy, Globe, HardDrive, Loader2, MapPin, Play, Power, RotateCw } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -178,7 +178,6 @@ export function VpsHeader({
                 {/* Power actions */}
                 {!isProvisioning && !isFailed && (
                     <div className="flex items-center gap-2 shrink-0">
-                        <ActionBtn icon={<Terminal className="h-3.5 w-3.5" />} label="Console" onClick={() => undefined} />
                         {stopped ? (
                             <ActionBtn
                                 icon={actingPower ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}

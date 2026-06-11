@@ -78,17 +78,17 @@ export function VpsStatsRow({
         {
           label: 'Network',
           value: formatBytes(metrics.net_out).split(' ')[0],
-          unit: ' ' + formatBytes(metrics.net_out).split(' ')[1] + '/s',
+          unit: ' ' + formatBytes(metrics.net_out).split(' ')[1],
           spark: pseudoSpark((metrics.net_out || 1) / 1024),
-          sub: { left: `${formatBytes(metrics.net_in)}/s in`, right: '↓ in' },
+          sub: { left: 'Outbound' },
           live: true,
         },
         {
           label: 'Disk I/O',
           value: formatBytes(metrics.disk_read).split(' ')[0],
-          unit: ' ' + formatBytes(metrics.disk_read).split(' ')[1] + '/s',
+          unit: ' ' + formatBytes(metrics.disk_read).split(' ')[1],
           spark: pseudoSpark((metrics.disk_read || 1) / 1024),
-          sub: { left: `${formatBytes(metrics.disk_write)}/s write`, right: 'NVMe' },
+          sub: { left: 'Read', right: 'NVMe' },
           live: true,
         },
       ]

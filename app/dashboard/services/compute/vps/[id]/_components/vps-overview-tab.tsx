@@ -146,10 +146,9 @@ export function VpsOverviewTab({
           <InfoCell label="Memory" value={String(memGB)} unit="GB" meta="Provisioned RAM" />
           <InfoCell label="Storage" value={String(server.disk_gb)} unit="GB" meta="NVMe attached" />
           <InfoCell
-            label="Placement"
+            label="Location"
             value={server.displayRegion || server.region || 'Pending'}
             mono
-            meta={server.vmid ? `VMID ${server.vmid}` : 'Awaiting provision'}
           />
         </div>
       </section>
@@ -271,7 +270,7 @@ function InfoCell({
   label: string;
   value: string;
   unit?: string;
-  meta: string;
+  meta?: string;
   mono?: boolean;
 }) {
   return (
@@ -286,7 +285,7 @@ function InfoCell({
         </span>
         {unit && <span className={`${MONO} ml-1 text-[11px] text-white/55`}>{unit}</span>}
       </div>
-      <span className={`${MONO} mt-auto text-[10.5px] text-white/40`}>{meta}</span>
+      {meta && <span className={`${MONO} mt-auto text-[10.5px] text-white/40`}>{meta}</span>}
     </div>
   );
 }
