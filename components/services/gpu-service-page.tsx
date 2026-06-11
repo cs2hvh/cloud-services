@@ -34,11 +34,24 @@ type GpuRow = {
     pricePerHour: number;
     stock: "available" | "limited" | "request";
     href: string;
-    description: string;
     featured?: boolean;
 };
 
 const GPUS: GpuRow[] = [
+    {
+        id: "b300",
+        name: "B300",
+        arch: "Blackwell Ultra",
+        archTier: "blackwell",
+        memory: "288 GB",
+        memoryType: "HBM3e",
+        perfFp8: "14 PFLOPS",
+        bandwidth: "8 TB/s",
+        pricePerHour: 7.0,
+        stock: "limited",
+        href: "/dashboard/services/gpu/deploy?gpu=b300-288",
+        featured: true,
+    },
     {
         id: "b200",
         name: "B200",
@@ -51,12 +64,10 @@ const GPUS: GpuRow[] = [
         pricePerHour: 5.49,
         stock: "limited",
         href: "/dashboard/services/gpu/deploy?gpu=b200-180",
-        description: "Frontier-grade Blackwell silicon for the largest training and inference runs.",
-        featured: true,
     },
     {
-        id: "b200 sxm",
-        name: "B200 SXM",
+        id: "h200-sxm",
+        name: "H200 SXM",
         arch: "Hopper",
         archTier: "hopper",
         memory: "141 GB",
@@ -65,8 +76,7 @@ const GPUS: GpuRow[] = [
         bandwidth: "4.8 TB/s",
         pricePerHour: 3.99,
         stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=b200-141",
-        description: "Big-memory Hopper for retrieval-heavy training and long-context inference.",
+        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
     },
     {
         id: "h100-sxm",
@@ -80,7 +90,6 @@ const GPUS: GpuRow[] = [
         pricePerHour: 2.99,
         stock: "available",
         href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
-        description: "The flagship workhorse — balanced for pretraining, fine-tuning, and serving.",
     },
     {
         id: "h100-nvl",
@@ -94,7 +103,6 @@ const GPUS: GpuRow[] = [
         pricePerHour: 2.59,
         stock: "available",
         href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
-        description: "PCIe-form H100 paired for inference and mid-scale fine-tuning.",
     },
     {
         id: "a100",
@@ -108,7 +116,6 @@ const GPUS: GpuRow[] = [
         pricePerHour: 1.89,
         stock: "available",
         href: "/dashboard/services/gpu/deploy?gpu=a100-80",
-        description: "Proven Ampere class for general-purpose AI and HPC workloads.",
     },
     {
         id: "l40s",
@@ -122,7 +129,6 @@ const GPUS: GpuRow[] = [
         pricePerHour: 1.49,
         stock: "available",
         href: "/dashboard/services/gpu/deploy?gpu=l40s-48",
-        description: "Cost-efficient Ada Lovelace for inference, embeddings, and diffusion.",
     },
 ];
 
@@ -158,7 +164,7 @@ const WORKLOADS: Workload[] = [
         title: "LLM training & pretraining",
         description:
             "Frontier model training, full fine-tunes, and large-scale pretraining on multi-node clusters with NVLink fabric.",
-        recommended: ["B200", "B200 SXM"],
+        recommended: ["B300", "B200"],
     },
     {
         icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/WakrGYPcdvwA.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
@@ -174,7 +180,7 @@ const WORKLOADS: Workload[] = [
         title: "Production inference",
         description:
             "High-throughput LLM serving with vLLM, TGI, or TensorRT-LLM. Sub-100ms first-token latency at scale.",
-        recommended: ["L40S", "H100 NVL", "B200 SXM"],
+        recommended: ["L40S", "H100 NVL", "H200 SXM"],
     },
     {
         icon: <Image src="https://ahurasense.cs2hvh.com/images/2026-06/wChs3ApCVclw.png" alt="" width={36} height={36} className="h-9 w-9 object-contain" />,
@@ -298,11 +304,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
         <p
           className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}
         >
-          {gpu.memory} {gpu.memoryType}
-        </p>
-
-        <p className="mt-4 text-[13px] leading-[1.6] text-white/60">
-          {gpu.description}
+          {gpu.arch} · {gpu.memory} {gpu.memoryType}
         </p>
 
         {/* Spec rows */}
@@ -485,7 +487,7 @@ export function GpuServicePage(
 
                             <p className="mt-6 max-w-xl text-[15px] leading-[1.6] text-white/65 sm:text-[17px]">
                                 Pods for building. Clusters for scaling. Reserved capacity for
-                                shipping. B200, B200 SXM, H100, A100, and L40S — billed by the
+                                shipping. B300, B200, H200, H100, and A100 — billed by the
                                 second, NVLink-ready, in 12 regions.
                             </p>
 
@@ -583,9 +585,9 @@ export function GpuServicePage(
                             <span className="text-[#0095FF]">ready to deploy</span>
                         </h2>
                         <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
-                            From Ada Lovelace inference at $1.49 / GPU·hr to Blackwell B200 for
-                            frontier training — every node is NVLink-capable, NVMe-backed, and
-                            billed by the second.
+                            From Ada Lovelace inference at $1.49 / GPU·hr to Blackwell Ultra
+                            B300 for frontier training — every node is NVLink-capable,
+                            NVMe-backed, and billed by the second.
                         </p>
                     </div>
 
