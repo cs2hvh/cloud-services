@@ -8,12 +8,18 @@ import { toast } from "sonner";
 import {
     ArrowLeft,
     CheckCircle,
+    Clock,
+    Cpu,
+    Gauge,
     Layers,
     Loader2,
+    Network,
     Send,
     Server,
+    ShieldCheck,
     Sparkles,
     TrendingDown,
+    Users,
     type LucideIcon,
 } from "lucide-react";
 
@@ -27,8 +33,11 @@ const ACCENT_BRIGHT = "#33adff";
 
 const TEXTAREA_CLASS =
     "block w-full resize-y border border-white/[0.08] bg-[#0d0e11] px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
+const SELECT_CLASS =
+    "block w-full appearance-none border border-white/[0.08] bg-[#0d0e11] px-3 py-2.5 text-[13px] text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors";
 
 const GPU_CHOICES = ["H100 SXM", "H100 PCIe", "H100 NVL", "H200", "B200", "B300", "Mixed / not sure"];
+
 type PlanType = {
     value: string;
     label: string;
@@ -63,11 +72,40 @@ const PLAN_TYPES: PlanType[] = [
     },
 ];
 
-const HERO_BULLETS = [
-    "Discounted long-term rates",
-    "Dedicated capacity, no spot",
-    "Custom SLA & compliance",
-    "Reply within 1 business day",
+const SCALE_PRESETS = [8, 16, 32, 64, 128, 256, 512];
+
+type Term = { value: string; label: string; hint?: string };
+const TERMS: Term[] = [
+    { value: "1-month", label: "1 month" },
+    { value: "3-months", label: "3 months", hint: "~20% off" },
+    { value: "6-months", label: "6 months", hint: "~40% off" },
+    { value: "1-year", label: "1 year", hint: "up to 60% off" },
+];
+
+const REGIONS = [
+    "No preference",
+    "North America",
+    "Europe",
+    "Asia-Pacific",
+    "Other / specify in notes",
+];
+
+// Credibility band — capability claims only (no certifications asserted).
+const TRUST: { icon: LucideIcon; stat: string; label: string }[] = [
+    { icon: Gauge, stat: "Up to 99.99%", label: "Custom uptime SLA" },
+    { icon: Network, stat: "NVLink + InfiniBand", label: "Non-blocking fabric" },
+    { icon: ShieldCheck, stat: "Single-tenant", label: "Dedicated, never spot" },
+    { icon: Clock, stat: "< 1 business day", label: "Solutions response" },
+];
+
+// What an enterprise engagement includes — shown in the rail.
+const INCLUDES: { icon: LucideIcon; text: string }[] = [
+    { icon: Server, text: "Dedicated, reserved single-tenant GPUs" },
+    { icon: Network, text: "NVLink + InfiniBand multi-node fabric" },
+    { icon: TrendingDown, text: "Committed-use discounts up to 60%" },
+    { icon: ShieldCheck, text: "Custom SLA, security & compliance review" },
+    { icon: Users, text: "Named solutions engineer" },
+    { icon: Cpu, text: "Priority 24/7 infrastructure support" },
 ];
 
 export default function EnterpriseInquiryForm() {
@@ -77,12 +115,11 @@ export default function EnterpriseInquiryForm() {
 
     const [planType, setPlanType] = useState("reserved");
     const [gpus, setGpus] = useState<string[]>(["H100 SXM"]);
+    const [gpuCount, setGpuCount] = useState(16);
+    const [duration, setDuration] = useState("1-month");
+    const [region, setRegion] = useState("No preference");
     const [workload, setWorkload] = useState("");
     const [extra, setExtra] = useState("");
-    // Sizing/region are no longer collected as structured fields (the workload
-    // description covers them); send valid defaults so the API contract holds.
-    const gpuCount = 16;
-    const duration = "1-month";
 
     function toggleGpu(g: string) {
         setGpus((prev) =>
@@ -110,7 +147,7 @@ export default function EnterpriseInquiryForm() {
                     gpuCount,
                     duration,
                     workload: workload.trim(),
-                    region: null,
+                    region: region === "No preference" ? null : region,
                     extra: extra.trim() || null,
                 }),
             });
@@ -142,8 +179,9 @@ export default function EnterpriseInquiryForm() {
                         <span className="text-white/55 font-normal">.</span>
                     </h2>
                     <p className={`${MONO} mt-3 max-w-md text-[11.5px] text-white/45 leading-relaxed mx-auto`}>
-                        Our team will reach out within one business day. You can track the
-                        conversation under Support → Tickets.
+                        A solutions engineer will reach out within one business day to scope
+                        your deployment. You can track the conversation under Support →
+                        Tickets.
                     </p>
                     <div className="mt-7 flex flex-wrap justify-center gap-2">
                         <button
@@ -177,10 +215,13 @@ export default function EnterpriseInquiryForm() {
         );
     }
 
+    const selectedPlan = PLAN_TYPES.find((p) => p.value === planType);
+    const selectedTerm = TERMS.find((t) => t.value === duration);
+
     return (
         <div className="mx-auto max-w-[1280px] text-white">
             {/* ── Hero ─────────────────────────────────────────── */}
-            <header className="mb-9">
+            <header className="mb-8">
                 <Link
                     href="/dashboard/services/gpu"
                     className={`${MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
@@ -191,32 +232,69 @@ export default function EnterpriseInquiryForm() {
 
                 <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
                     <span className="h-px w-4" style={{ background: ACCENT }} />
-                    GPU Cloud · Reserved &amp; Clusters
+                    GPU Cloud · Enterprise
                 </div>
 
                 <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold max-w-3xl">
-                    Talk to our{" "}
+                    Scale GPUs on{" "}
                     <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
-                        sales team
+                        enterprise terms
                     </span>
                 </h1>
-                <p className={`${MONO} mt-3 max-w-2xl text-[11.5px] text-white/45 leading-relaxed`}>
-                    For reserved capacity, multi-node training clusters, or long-term
-                    savings plans — our team works with you directly. Self-serve pods stay
-                    on the main page.
+                <p className={`${MONO} mt-3 max-w-2xl text-[12px] text-white/50 leading-relaxed`}>
+                    Dedicated reserved capacity, multi-node training clusters, and long-term
+                    savings plans — architected with our solutions team and backed by a
+                    custom SLA. Tell us what you&apos;re running and we&apos;ll design the
+                    deployment. Self-serve pods stay on the main page.
                 </p>
             </header>
 
+            {/* ── Credibility band ─────────────────────────────── */}
+            <div className="mb-9 grid grid-cols-2 lg:grid-cols-4 border border-white/[0.06] bg-[#0d0e11] rounded-[8px] overflow-hidden">
+                {TRUST.map((t, i) => {
+                    const Icon = t.icon;
+                    return (
+                        <div
+                            key={t.label}
+                            className={`flex items-center gap-3 px-4 py-4 ${
+                                i % 2 === 0 ? "border-r border-white/[0.06]" : ""
+                            } ${i < 2 ? "border-b border-white/[0.06] lg:border-b-0" : ""} ${
+                                i === 2 ? "lg:border-r lg:border-white/[0.06]" : ""
+                            }`}
+                        >
+                            <div
+                                className="h-8 w-8 shrink-0 inline-flex items-center justify-center border rounded-[6px]"
+                                style={{
+                                    borderColor: `${ACCENT}22`,
+                                    background: "rgba(0,149,255,0.06)",
+                                    color: ACCENT_BRIGHT,
+                                }}
+                            >
+                                <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[13px] font-semibold tracking-[-0.01em] text-white truncate">
+                                    {t.stat}
+                                </p>
+                                <p className={`${MONO} text-[10px] uppercase tracking-[0.1em] text-white/40 truncate`}>
+                                    {t.label}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
             {/* Two-column: form on the left, sticky summary on the right. */}
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
-                {/* ── 01 Plan ─────────────────────────────────────── */}
                 <div className="space-y-10 min-w-0">
+                {/* ── 01 Plan ─────────────────────────────────────── */}
                 <section>
                     <SectionHead
                         index="01"
                         title="Plan"
                         accent="type"
-                        meta={PLAN_TYPES.find((p) => p.value === planType)?.label}
+                        meta={selectedPlan?.label}
                     />
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         {PLAN_TYPES.map((p) => {
@@ -350,9 +428,136 @@ export default function EnterpriseInquiryForm() {
                     </div>
                 </section>
 
-                {/* ── 03 Workload ─────────────────────────────────── */}
+                {/* ── 03 Scale & commitment ───────────────────────── */}
                 <section>
-                    <SectionHead index="03" title="Workload &" accent="context" />
+                    <SectionHead
+                        index="03"
+                        title="Scale &"
+                        accent="commitment"
+                        meta={`${gpuCount} GPUs · ${selectedTerm?.label ?? "—"}`}
+                    />
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
+                        {/* GPU count */}
+                        <div>
+                            <FieldLabel hint="approximate is fine">GPU count</FieldLabel>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {SCALE_PRESETS.map((n) => {
+                                    const active = gpuCount === n;
+                                    return (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            onClick={() => setGpuCount(n)}
+                                            className={`${MONO} min-w-[48px] border px-3 py-2 text-[12px] tabular-nums font-semibold rounded-[5px] transition-all ${
+                                                active
+                                                    ? "text-white"
+                                                    : "border-white/[0.08] bg-[#0d0e11] text-white/60 hover:bg-[#16181d] hover:border-white/[0.14]"
+                                            }`}
+                                            style={
+                                                active
+                                                    ? {
+                                                          borderColor: ACCENT,
+                                                          background: "rgba(0,149,255,0.08)",
+                                                          boxShadow: `0 0 0 1px ${ACCENT}33`,
+                                                      }
+                                                    : undefined
+                                            }
+                                        >
+                                            {n}
+                                        </button>
+                                    );
+                                })}
+                                <div className="flex items-center gap-2 ml-1">
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={4096}
+                                        value={gpuCount}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value, 10);
+                                            setGpuCount(
+                                                Number.isFinite(v)
+                                                    ? Math.max(1, Math.min(4096, v))
+                                                    : 1
+                                            );
+                                        }}
+                                        className={`${MONO} w-[88px] border border-white/[0.08] bg-[#0d0e11] px-3 py-2 text-[12px] tabular-nums text-white rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/30 transition-colors`}
+                                    />
+                                    <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] text-white/35`}>
+                                        exact
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Commitment term */}
+                        <div>
+                            <FieldLabel hint="longer = larger discount">Commitment term</FieldLabel>
+                            <div className="flex flex-wrap gap-2">
+                                {TERMS.map((t) => {
+                                    const active = duration === t.value;
+                                    return (
+                                        <button
+                                            key={t.value}
+                                            type="button"
+                                            onClick={() => setDuration(t.value)}
+                                            className={`group/term border px-3.5 py-2 text-left rounded-[5px] transition-all ${
+                                                active
+                                                    ? ""
+                                                    : "border-white/[0.08] bg-[#0d0e11] hover:bg-[#16181d] hover:border-white/[0.14]"
+                                            }`}
+                                            style={
+                                                active
+                                                    ? {
+                                                          borderColor: ACCENT,
+                                                          background: "rgba(0,149,255,0.08)",
+                                                          boxShadow: `0 0 0 1px ${ACCENT}33`,
+                                                      }
+                                                    : undefined
+                                            }
+                                        >
+                                            <span
+                                                className={`${MONO} block text-[12px] font-semibold ${
+                                                    active ? "text-white" : "text-white/65"
+                                                }`}
+                                            >
+                                                {t.label}
+                                            </span>
+                                            {t.hint && (
+                                                <span
+                                                    className={`${MONO} block text-[9.5px] uppercase tracking-[0.08em] mt-0.5`}
+                                                    style={{ color: active ? ACCENT_BRIGHT : "rgba(255,255,255,0.35)" }}
+                                                >
+                                                    {t.hint}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Region */}
+                        <div className="max-w-[280px]">
+                            <FieldLabel hint="optional">Region preference</FieldLabel>
+                            <select
+                                value={region}
+                                onChange={(e) => setRegion(e.target.value)}
+                                className={SELECT_CLASS}
+                            >
+                                {REGIONS.map((r) => (
+                                    <option key={r} value={r} className="bg-[#0d0e11]">
+                                        {r}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                {/* ── 04 Workload ─────────────────────────────────── */}
+                <section>
+                    <SectionHead index="04" title="Workload &" accent="context" />
                     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
                         <FieldWrap label="Workload description">
                             <textarea
@@ -383,7 +588,7 @@ export default function EnterpriseInquiryForm() {
                             className="h-1 w-1 rounded-full"
                             style={{ background: "#4ade80", boxShadow: "0 0 5px #4ade80" }}
                         />
-                        We typically respond within 1 business day
+                        A solutions engineer replies within 1 business day
                     </p>
                     <div className="flex items-center gap-2">
                     <button
@@ -434,8 +639,11 @@ export default function EnterpriseInquiryForm() {
                             Your request
                         </p>
                         <div className="flex flex-col">
-                            <DetailRow label="Plan" value={PLAN_TYPES.find((p) => p.value === planType)?.label ?? "—"} />
+                            <DetailRow label="Plan" value={selectedPlan?.label ?? "—"} />
                             <DetailRow label="GPUs" value={gpus.length ? gpus.join(", ") : "—"} />
+                            <DetailRow label="Scale" value={`${gpuCount} GPUs`} />
+                            <DetailRow label="Term" value={selectedTerm?.label ?? "—"} />
+                            <DetailRow label="Region" value={region} />
                         </div>
                     </div>
                     <div className="border border-white/[0.06] bg-[#111216] rounded-[8px] p-5">
@@ -443,13 +651,28 @@ export default function EnterpriseInquiryForm() {
                             Enterprise includes
                         </p>
                         <ul className="space-y-2.5">
-                            {HERO_BULLETS.map((b) => (
-                                <li key={b} className="flex items-start gap-2.5 text-[12px] text-white/70 leading-snug">
-                                    <CheckCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: ACCENT }} />
-                                    {b}
-                                </li>
-                            ))}
+                            {INCLUDES.map((b) => {
+                                const Icon = b.icon;
+                                return (
+                                    <li key={b.text} className="flex items-start gap-2.5 text-[12px] text-white/70 leading-snug">
+                                        <Icon className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: ACCENT }} />
+                                        {b.text}
+                                    </li>
+                                );
+                            })}
                         </ul>
+                    </div>
+                    <div className="border border-white/[0.06] bg-[#0d0e11] rounded-[8px] p-5">
+                        <div className="flex items-center gap-2.5 mb-2">
+                            <Users className="h-4 w-4" style={{ color: ACCENT_BRIGHT }} />
+                            <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/50`}>
+                                White-glove onboarding
+                            </p>
+                        </div>
+                        <p className={`${MONO} text-[11px] text-white/45 leading-relaxed`}>
+                            You&apos;re paired with a named solutions engineer who scopes the
+                            cluster, validates the fabric, and stays on through go-live.
+                        </p>
                     </div>
                 </aside>
             </div>
@@ -506,6 +729,21 @@ function FieldWrap({ label, children }: { label: string; children: React.ReactNo
                 {label}
             </label>
             {children}
+        </div>
+    );
+}
+
+function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+    return (
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+            <label className={`${MONO} block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                {children}
+            </label>
+            {hint && (
+                <span className={`${MONO} text-[9.5px] lowercase tracking-[0.04em] text-white/30`}>
+                    {hint}
+                </span>
+            )}
         </div>
     );
 }
