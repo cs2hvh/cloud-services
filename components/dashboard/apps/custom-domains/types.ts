@@ -31,6 +31,12 @@ export interface CustomDomainsManagerProps {
   platformDomain: string;
 }
 
+export interface DnsRoutingInstructions {
+  record_type: 'CNAME' | 'A';
+  record_name: string;
+  record_value: string;
+}
+
 export type AddDomainMode = 'existing' | 'external';
 
 export interface VerificationInstructions {

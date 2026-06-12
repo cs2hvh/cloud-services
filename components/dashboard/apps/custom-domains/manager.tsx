@@ -573,6 +573,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
                 key={domain.id}
                 domain={domain}
                 appStatus={appStatus}
+                platformDomain={platformDomain}
                 verifyingId={verifyingId}
                 activatingId={activatingId}
                 settingPrimaryId={settingPrimaryId}

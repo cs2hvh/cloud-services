@@ -18,12 +18,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SslStatusBadge, type SslStatus } from '@/components/ui/ssl-status-badge';
 
-import type { CustomDomain } from './types';
+import type { CustomDomain, DnsRoutingInstructions } from './types';
 import { looksInternal } from './utils';
 
 interface DomainCardProps {
   domain: CustomDomain;
   appStatus: string;
+  platformDomain: string;
   verifyingId: string | null;
   activatingId: string | null;
   settingPrimaryId: string | null;
@@ -105,6 +106,98 @@ function DnsStatusPanel({ domain }: { domain: CustomDomain }) {
 
 
 
+function buildRoutingInstructions(domain: CustomDomain, platformDomain: string): DnsRoutingInstructions | null {
+  const parts = domain.domain.split('.').filter(Boolean);
+  const isApex = parts.length <= 2;
+  const kubeIp = domain.dns_expected_ips?.[0];
+
+  if (isApex && kubeIp) {
+    return { record_type: 'A', record_name: domain.domain, record_value: kubeIp };
+  }
+  if (!isApex && platformDomain) {
+    return { record_type: 'CNAME', record_name: domain.domain, record_value: platformDomain };
+  }
+  return null;
+}
+
+function shouldShowRoutingInstructions(domain: CustomDomain): boolean {
+  if (domain.status === 'verified') return true;
+  if (domain.status === 'active' && domain.ssl_status === 'issuing' && domain.dns_ready === false) return true;
+  if (domain.status === 'active' && domain.ssl_status === 'failed') return true;
+  return false;
+}
+
+function DnsRoutingPanel({
+  domain,
+  platformDomain,
+  copiedField,
+  onCopy,
+}: {
+  domain: CustomDomain;
+  platformDomain: string;
+  copiedField: string | null;
+  onCopy: (text: string, field: string) => void;
+}) {
+  const instructions = buildRoutingInstructions(domain, platformDomain);
+  if (!instructions || !shouldShowRoutingInstructions(domain)) return null;
+
+  const isVerified = domain.status === 'verified';
+
+  return (
+    <Alert className={`mt-3 ${isVerified ? 'border-blue-500/30 bg-blue-500/10' : 'border-orange-500/30 bg-orange-500/10'}`}>
+      <AlertCircle className={`h-4 w-4 ${isVerified ? 'text-blue-300' : 'text-orange-300'}`} />
+      <AlertTitle className={isVerified ? 'text-blue-200' : 'text-orange-200'}>
+        {isVerified ? 'Add DNS record to point your domain to this app' : 'DNS record required for SSL'}
+      </AlertTitle>
+      <AlertDescription className="space-y-2 text-xs text-white/75">
+        <p>
+          Add this {instructions.record_type} record at your DNS provider
+          {!isVerified ? ', then click Re-Activate' : ' before or after activating'}.
+        </p>
+        <div className="space-y-1.5 rounded bg-black/30 p-2 font-mono">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-white/50">Record type</span>
+            <span className="text-white">{instructions.record_type}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-white/50">Record name</span>
+            <button
+              type="button"
+              onClick={() => onCopy(instructions.record_name, `routing-name-${domain.id}`)}
+              className="flex items-center gap-1 text-white hover:text-blue-100"
+            >
+              <span className="truncate max-w-[190px]">{instructions.record_name}</span>
+              {copiedField === `routing-name-${domain.id}` ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-white/50">Record value</span>
+            <button
+              type="button"
+              onClick={() => onCopy(instructions.record_value, `routing-value-${domain.id}`)}
+              className="flex items-center gap-1 text-white hover:text-blue-100"
+            >
+              <span className="truncate max-w-[190px]">{instructions.record_value}</span>
+              {copiedField === `routing-value-${domain.id}` ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+        </div>
+        <p className="text-orange-300/80 font-medium">
+          ⚠ Point DNS directly to this platform — do not route through a proxy or CDN or SSL will fail.
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function getNextAction(domain: CustomDomain) {
   if (domain.status === 'pending') {
     return {
@@ -117,10 +210,7 @@ function getNextAction(domain: CustomDomain) {
   if (domain.status === 'verified') {
     return {
       title: 'Activate domain',
-      description:
-        domain.dns_ready === false
-          ? 'You can activate now. If DNS is still propagating, secure connection will finish once DNS is ready.'
-          : 'Secure connection setup will start automatically once activated.',
+      description: 'Add the DNS record shown below, then activate. SSL will be issued automatically once DNS propagates.',
       action: 'activate' as const,
     };
   }
@@ -166,6 +256,7 @@ function getNextAction(domain: CustomDomain) {
 export function DomainCard({
   domain,
   appStatus,
+  platformDomain,
   verifyingId,
   activatingId,
   settingPrimaryId,
@@ -224,6 +315,7 @@ export function DomainCard({
       </div>
 
       <DnsStatusPanel domain={domain} />
+      <DnsRoutingPanel domain={domain} platformDomain={platformDomain} copiedField={copiedField} onCopy={onCopy} />
       {domain.status === 'active' && (
         <SslStatusBadge
           sslStatus={domain.ssl_status as SslStatus}

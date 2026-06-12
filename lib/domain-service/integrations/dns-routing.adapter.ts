@@ -45,7 +45,7 @@ export class DnsRoutingAdapter implements DnsRoutingPort {
         expected_ips: this.expectedIps,
         message: isApex
           ? `Unable to resolve ${domain}. Add an A record pointing to ${this.expectedIps.join(", ")}.`
-          : `Unable to resolve ${domain}. Add the CNAME record shown above at your DNS provider.`,
+          : `Unable to resolve ${domain}. Add the CNAME record shown below at your DNS provider.`,
       };
     }
 
@@ -56,7 +56,7 @@ export class DnsRoutingAdapter implements DnsRoutingPort {
         expected_ips: this.expectedIps,
         message: isApex
           ? `No DNS records detected yet. Add an A record for ${domain} pointing to ${this.expectedIps.join(", ")} and wait for propagation.`
-          : `No DNS records detected yet. Add the CNAME record shown above at your DNS provider and wait for propagation.`,
+          : `No DNS records detected yet. Add the CNAME record shown below at your DNS provider and wait for propagation.`,
       };
     }
 
@@ -76,7 +76,7 @@ export class DnsRoutingAdapter implements DnsRoutingPort {
       expected_ips: this.expectedIps,
       message: isApex
         ? `DNS currently resolves to ${resolved.join(", ")}. Update the A record to ${this.expectedIps.join(", ")}.`
-        : `DNS currently resolves to ${resolved.join(", ")}. Check that your CNAME record shown above is correct and using direct DNS during SSL provisioning.`,
+        : `DNS currently resolves to ${resolved.join(", ")}. Check that your CNAME record shown below is correct and not routed through a proxy or CDN.`,
     };
   }
 
