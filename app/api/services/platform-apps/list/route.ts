@@ -27,7 +27,8 @@ export async function GET() {
     // Use shared service method (same logic as v1 API)
     const apps = await PlatformAppService.listApps({
       userId: auth.user!.id,
-      includeRollbackInfo: true, // Internal API includes rollback capability
+      includeRollbackInfo: true,
+      syncStatus: true, // Sync live K8s status so the list shows accurate state
     });
 
     return NextResponse.json({ apps });

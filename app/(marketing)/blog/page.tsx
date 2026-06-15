@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { Container } from "@/components/ui/container";
-
 export const metadata: Metadata = {
   title: "Blog",
   description:
@@ -26,7 +25,7 @@ const FEATURED_POST = {
   readTime: "8 min read",
   excerpt:
     "A practical blueprint for implementing active-passive failover across regions using health checks, graceful degradation, and deterministic traffic cutover.",
-  href: "/resources",
+  href: "/services/kubernetes",
 };
 
 const LATEST_POSTS = [
@@ -135,7 +134,7 @@ export default function BlogPage() {
               href={FEATURED_POST.href}
               className="mt-6 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
             >
-              Read article
+              Explore topic
               <ArrowRight className="h-4 w-4" />
             </Link>
           </article>
@@ -174,7 +173,7 @@ export default function BlogPage() {
                   href={post.href}
                   className="mt-5 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors cursor-pointer"
                 >
-                  Read article
+                  Explore topic
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </article>

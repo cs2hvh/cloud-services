@@ -96,6 +96,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         const wasProvisioning =
           previousStatus.current === "creating" ||
           previousStatus.current === "migrating";
+        const wasResizing = previousStatus.current === "resizing";
         const isNowOnline = dbData.status === "online";
 
         if (isNowOnline && intervalRef.current) {
@@ -106,6 +107,10 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         if (wasProvisioning && isNowOnline && !hasShownOnlineToast.current) {
           toast.success("Database cluster is now online!");
           hasShownOnlineToast.current = true;
+        }
+
+        if (wasResizing && isNowOnline) {
+          toast.success("Storage resize complete.");
         }
 
         previousStatus.current = dbData.status;
@@ -144,7 +149,8 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
   }, [fetchDatabaseCluster]);
 
   useEffect(() => {
-    if (database?.status !== "online" && activeTab !== "overview") {
+    const isAccessible = database?.status === "online" || database?.status === "resizing";
+    if (!isAccessible && activeTab !== "overview") {
       setActiveTab("overview");
     }
   }, [activeTab, database?.status]);
@@ -171,9 +177,9 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       };
     }
 
-    if (status === "creating" || status === "migrating") {
+    if (status === "creating" || status === "migrating" || status === "resizing") {
       return {
-        label: status === "migrating" ? "Migrating" : "Provisioning",
+        label: status === "migrating" ? "Migrating" : status === "resizing" ? "Resizing" : "Provisioning",
         color: "#fbbf24",
         Icon: Loader2,
         pulse: false,
@@ -222,7 +228,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
   const visibleTabs = useMemo(
     () =>
-      database?.status === "online"
+      database?.status === "online" || database?.status === "resizing"
         ? allTabs
         : allTabs.filter((tab) => tab.value === "overview"),
     [allTabs, database?.status]
@@ -425,7 +431,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         </div>
       </Tabs>
 
-      {database.status !== "online" && (
+      {database.status !== "online" && database.status !== "resizing" && (
         <div className="mt-10 border border-white/[0.06] bg-[#111216] rounded-[6px] px-5 py-4 flex items-start gap-3">
           {database.status === "creating" || database.status === "migrating" ? (
             <Loader2 className="mt-0.5 h-4 w-4 text-amber-300 animate-spin shrink-0" />

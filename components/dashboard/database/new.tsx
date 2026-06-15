@@ -245,7 +245,7 @@ const DatabaseSelect = ({
       ...prev,
       selectedDbType: code,
       selectedDb: "",
-      selectedVersion: t?.versions?.[0] || "",
+      selectedVersion: t?.versions?.[t.versions.length - 1] || "",
     }));
   };
 

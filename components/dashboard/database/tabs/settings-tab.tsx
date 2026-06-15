@@ -76,6 +76,7 @@ export const SettingsTab = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [isMigrating, setIsMigrating] = useState(database.status === "migrating");
+  const [isResizing, setIsResizing] = useState(database.status === "resizing");
   const [targetRegion, setTargetRegion] = useState(database.region || "");
   const router = useRouter();
 
@@ -443,8 +444,8 @@ export const SettingsTab = ({
       });
 
       if (response.status === 200) {
-        toast.success("Storage upsize success");
-        onDatabaseUpdate?.();
+        toast.info("Storage resize started. This typically takes a few minutes.");
+        setIsResizing(true);
         setSelectedStorageGiB(0);
       }
     } catch (error) {
@@ -827,6 +828,17 @@ export const SettingsTab = ({
           </div>
         </div>
         <div className="px-5 py-3 space-y-2">
+          {isResizing && (
+            <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
+              <Loader2 className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5 animate-spin" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Resize In Progress</p>
+                <p className="text-xs text-white/60 leading-5">
+                  Storage is being resized. This typically takes a few minutes.
+                </p>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
               Select New Storage Size (GiB)
@@ -835,7 +847,7 @@ export const SettingsTab = ({
               value={selectedStorageGiB}
               onChange={(e) => setSelectedStorageGiB(Number(e.target.value))}
               className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400/40 focus:bg-white/[0.06] transition-all duration-150"
-              disabled={loading === "upsize" || isMongoDbCluster}
+              disabled={loading === "upsize" || isMongoDbCluster || isResizing}
             >
               <option value={0} className="bg-slate-900">
                 {getStorageOptions().length === 0 ? "No storage options available" : "Select storage size"}
@@ -865,6 +877,7 @@ export const SettingsTab = ({
               disabled={
                 loading === "upsize" ||
                 isMongoDbCluster ||
+                isResizing ||
                 !selectedStorageGiB ||
                 selectedStorageGiB === 0 ||
                 selectedStorageGiB <= currentStorageGiB
@@ -879,7 +892,7 @@ export const SettingsTab = ({
             </button>
             <button
               onClick={() => setSelectedStorageGiB(0)}
-              disabled={loading === "upsize"}
+              disabled={loading === "upsize" || isResizing}
               className="inline-flex items-center gap-1 border border-white/[0.08] bg-transparent px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
               aria-label="Clear storage selection"
             >

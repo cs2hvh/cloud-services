@@ -452,6 +452,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
             { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
             { label: "Domains", href: "/dashboard/admin/domains", icon: Globe, matchPrefix: true },
+
         ],
     };
 

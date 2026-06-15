@@ -42,7 +42,7 @@ const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
 
 // Premium primary button — accent gradient, soft glow, inset highlight, hover lift.
 const PRIMARY_BTN =
-  "relative flex h-11 w-full items-center justify-center rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50";
+  "relative flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50";
 const PRIMARY_BTN_STYLE: React.CSSProperties = {
   background: "linear-gradient(135deg, #1f9dff, #0061c4)",
   boxShadow:
@@ -110,11 +110,8 @@ export default function SignUpMultiStep({
     try {
       const response = await api.post("/auth/onboarding", data);
       if (response.status === 200) {
-        toast.success(response?.data?.message);
         setPendingEmail(data.email);
         setStep(2);
-      } else {
-        toast.error(response?.data?.message);
       }
     } finally {
       setIsLoading(false);
@@ -327,6 +324,7 @@ export default function SignUpMultiStep({
                           />
                         </div>
                       </FormControl>
+                      <p className="text-[11.5px] text-white/35">Letters, numbers, and underscores only · 3–25 characters</p>
                       <FormMessage />
                     </FormItem>
                   )}

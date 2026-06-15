@@ -888,6 +888,14 @@ export default function AppDetailPage() {
       .filter(env => env.hasValue && !env.revealed)
       .map(env => env.key);
     
+    // Catch new vars with empty values before sending (Zod would reject with a generic message)
+    const emptyValueVars = validEnvVars.filter(env => !env.hasValue && !env.value.trim());
+    if (emptyValueVars.length > 0) {
+      const names = emptyValueVars.map(e => e.key || '(empty key)').join(', ');
+      setEnvVarError(`Missing value for: ${names}`);
+      return;
+    }
+
     // Check for duplicate keys
     const keys = validEnvVars.map(e => e.key.trim());
     const uniqueKeys = new Set(keys);
@@ -952,7 +960,12 @@ export default function AppDetailPage() {
       }
       
       setEnvVarsModified(false);
-      
+
+      // Reset so the env vars list re-fetches from the server on next render —
+      // ensures masks/hasValue flags reflect the true saved state.
+      setEnvVarsLoaded(false);
+      setEditedEnvVars([]);
+
       // Update local app state
       setApp(prev => prev ? { ...prev, env_vars: validEnvVars } : null);
     } catch (err) {

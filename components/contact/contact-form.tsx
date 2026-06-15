@@ -32,22 +32,26 @@ export function ContactForm({ initialTopic }: { initialTopic?: string }) {
     website: "", // honeypot
   });
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const [serverError, setServerError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState(false);
 
   const set = (k: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
-  ) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  ) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    if (fieldErrors[k]) setFieldErrors((fe) => { const n = { ...fe }; delete n[k]; return n; });
+  };
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setServerError(null);
 
-    if (form.name.trim().length < 2) return setError("Please enter your name.");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim()))
-      return setError("Please enter a valid email.");
-    if (form.message.trim().length < 10)
-      return setError("Tell us a little more about what you need.");
+    const errs: Record<string, string> = {};
+    if (form.name.trim().length < 2) errs.name = "Please enter your name.";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) errs.email = "Please enter a valid email.";
+    if (form.message.trim().length < 10) errs.message = "Tell us a little more about what you need.";
+    if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
 
     setLoading(true);
     try {
@@ -62,7 +66,7 @@ export function ContactForm({ initialTopic }: { initialTopic?: string }) {
       }
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setServerError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -94,7 +98,7 @@ export function ContactForm({ initialTopic }: { initialTopic?: string }) {
         className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[150%] -translate-x-1/2 blur-3xl"
         style={{ background: "radial-gradient(closest-side, rgba(0,149,255,0.16), transparent)" }}
       />
-      <form onSubmit={onSubmit} className="relative z-10 space-y-4">
+      <form onSubmit={onSubmit} noValidate className="relative z-10 space-y-4">
         {/* Honeypot — visually hidden, off-screen, not announced */}
         <input
           type="text"
@@ -107,14 +111,22 @@ export function ContactForm({ initialTopic }: { initialTopic?: string }) {
           aria-hidden
         />
 
+        {serverError && (
+          <p role="alert" className="rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[12.5px] text-red-300">
+            {serverError}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="c-name" className={LABEL}>Full name</label>
-            <input id="c-name" className={FIELD} value={form.name} onChange={set("name")} disabled={loading} placeholder="Your name" autoComplete="name" />
+            <label htmlFor="c-name" className={LABEL}>Full name <span className="text-red-400">*</span></label>
+            <input id="c-name" required className={`${FIELD} ${fieldErrors.name ? "border-red-500/60" : ""}`} value={form.name} onChange={set("name")} disabled={loading} placeholder="Your name" autoComplete="name" />
+            {fieldErrors.name && <p className="mt-1 text-[11.5px] text-red-400">{fieldErrors.name}</p>}
           </div>
           <div>
-            <label htmlFor="c-email" className={LABEL}>Work email</label>
-            <input id="c-email" type="email" className={FIELD} value={form.email} onChange={set("email")} disabled={loading} placeholder="you@company.com" autoComplete="email" />
+            <label htmlFor="c-email" className={LABEL}>Work email <span className="text-red-400">*</span></label>
+            <input id="c-email" type="email" required className={`${FIELD} ${fieldErrors.email ? "border-red-500/60" : ""}`} value={form.email} onChange={set("email")} disabled={loading} placeholder="you@company.com" autoComplete="email" />
+            {fieldErrors.email && <p className="mt-1 text-[11.5px] text-red-400">{fieldErrors.email}</p>}
           </div>
           <div>
             <label htmlFor="c-company" className={LABEL}>Company <span className="text-white/30">(optional)</span></label>
@@ -138,28 +150,24 @@ export function ContactForm({ initialTopic }: { initialTopic?: string }) {
         </div>
 
         <div>
-          <label htmlFor="c-message" className={LABEL}>How can we help?</label>
+          <label htmlFor="c-message" className={LABEL}>How can we help? <span className="text-red-400">*</span></label>
           <textarea
             id="c-message"
+            required
             value={form.message}
             onChange={set("message")}
             disabled={loading}
             rows={5}
             placeholder="Tell us about your workload, GPU/cluster needs, timeline, and scale…"
-            className="w-full rounded-[8px] border border-white/[0.1] bg-[#0d0e11] px-3.5 py-3 text-[14px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0095FF]/55 focus:shadow-[0_0_0_3px_rgba(0,149,255,0.12)] disabled:opacity-50 resize-y"
+            className={`w-full rounded-[8px] border bg-[#0d0e11] px-3.5 py-3 text-[14px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0095FF]/55 focus:shadow-[0_0_0_3px_rgba(0,149,255,0.12)] disabled:opacity-50 resize-y ${fieldErrors.message ? "border-red-500/60" : "border-white/[0.1]"}`}
           />
+          {fieldErrors.message && <p className="mt-1 text-[11.5px] text-red-400">{fieldErrors.message}</p>}
         </div>
-
-        {error && (
-          <p className="rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[12.5px] text-red-300">
-            {error}
-          </p>
-        )}
 
         <button
           type="submit"
           disabled={loading}
-          className="relative flex h-11 w-full items-center justify-center gap-2 rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] text-[15px] font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             background: "linear-gradient(135deg, #1f9dff, #0061c4)",
             boxShadow: "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)",

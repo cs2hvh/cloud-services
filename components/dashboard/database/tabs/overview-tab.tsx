@@ -15,6 +15,7 @@ import {
   MapPin,
   Shield,
   XCircle,
+  KeyRound,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
@@ -310,6 +311,17 @@ export const OverviewTab = ({
                     )
                   }
                 />
+              )}
+              {database.engine === "mongodb" && (
+                <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
+                  <KeyRound className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Password Required</p>
+                    <p className="text-xs text-white/60 leading-5">
+                      MongoDB does not expose a default password. Go to the <span className="text-white/80 font-medium">Users</span> tab and set a password for the <span className="text-white/80 font-medium">doadmin</span> user before connecting.
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
 

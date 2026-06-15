@@ -93,7 +93,7 @@ export function EnvVarRow({
           <GripVertical className="h-4 w-4 text-white/30 group-hover:text-white/60" />
         </div>
 
-        {/* Key input */}
+        {/* Key input — read-only for unrevealed existing vars to prevent silent deletion */}
         <div className="w-full sm:w-[42%] shrink-0 min-w-0">
           <Input
             value={env.key ?? ''}
@@ -102,7 +102,9 @@ export function EnvVarRow({
             }
             onPaste={(e) => onPaste(e, env.idx, 'key')}
             placeholder="VARIABLE_NAME"
-            className={`bg-white/10 border-white/20 text-white placeholder:text-white/50 font-mono text-sm w-full ${
+            disabled={needsReveal}
+            title={needsReveal ? 'Reveal the value first to rename this variable' : undefined}
+            className={`bg-white/10 border-white/20 text-white placeholder:text-white/50 font-mono text-sm w-full disabled:opacity-50 disabled:cursor-not-allowed ${
               !validation.valid ? 'border-red-500 focus-visible:ring-red-500/40' : ''
             }`}
             list={`env-suggestions-${env.idx}`}

@@ -28,17 +28,17 @@ export const VALID_DATABASE_ENGINES = [
   'kafka'      // Apache Kafka
 ] as const;
 
-// Valid PostgreSQL versions
-export const VALID_PG_VERSIONS = ['12', '13', '14', '15', '16', '17'] as const;
+// Valid PostgreSQL versions (DO dropped 12/13/14 — current: 15–18)
+export const VALID_PG_VERSIONS = ['15', '16', '17', '18'] as const;
 
-// Valid MySQL versions
-export const VALID_MYSQL_VERSIONS = ['8'] as const;
+// Valid MySQL versions (DO uses 8.4, not "8" or "8.0")
+export const VALID_MYSQL_VERSIONS = ['8.4'] as const;
 
 // Valid Redis versions
 export const VALID_REDIS_VERSIONS = ['6', '7'] as const;
 
-// Valid MongoDB versions
-export const VALID_MONGODB_VERSIONS = ['4', '5', '6', '7', '8'] as const;
+// Valid MongoDB versions (DO requires dot notation: 7.0, 8.0)
+export const VALID_MONGODB_VERSIONS = ['7.0', '8.0'] as const;
 
 // Valid Kafka versions
 export const VALID_KAFKA_VERSIONS = ['3.5', '3.6', '3.7', '3.8'] as const;

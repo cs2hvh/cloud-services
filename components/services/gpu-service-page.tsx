@@ -591,7 +591,7 @@ export function GpuServicePage(
                         </p>
                     </div>
 
-                    <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+                    <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
                         {GPUS.map((gpu, i) => (
                             <GpuCard key={gpu.id} gpu={gpu} index={i} />
                         ))}
@@ -833,12 +833,14 @@ export function GpuServicePage(
                                 Get started
                                 <ArrowRight className="h-4 w-4" />
                             </AuthAwareServiceCta>
-                            <Link
-                                href="/dashboard/services/gpu/enterprise"
-                                className={`${MONO} inline-flex h-12 items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
+                            <AuthAwareServiceCta
+                                service="gpu-enterprise"
+                                intent="main"
+                                unauthenticatedHref="/contact?topic=reserved-gpu"
+                                className={`${MONO} inline-flex h-12 cursor-pointer items-center justify-center gap-2 border border-white/20 bg-transparent px-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.04]`}
                             >
                                 Request a demo
-                            </Link>
+                            </AuthAwareServiceCta>
                         </div>
                     </div>
                 </Container>

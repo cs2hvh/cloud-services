@@ -110,9 +110,9 @@ export function useRealtimeNotifications({
     const supabase = createClient();
     const { error } = await supabase
       .from('notifications')
-      .update({ 
-        is_read: true, 
-        read_at: new Date().toISOString() 
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString()
       })
       .eq('id', id);
 
@@ -121,8 +121,9 @@ export function useRealtimeNotifications({
       throw error;
     }
 
-    // Realtime will automatically update the local state
-  }, []);
+    // Refetch immediately so badge clears even if realtime event is delayed.
+    await refetch();
+  }, [refetch]);
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
@@ -131,9 +132,9 @@ export function useRealtimeNotifications({
     const supabase = createClient();
     const { error } = await supabase
       .from('notifications')
-      .update({ 
-        is_read: true, 
-        read_at: new Date().toISOString() 
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString()
       })
       .eq('user_id', userId)
       .eq('is_read', false);
@@ -143,8 +144,9 @@ export function useRealtimeNotifications({
       throw error;
     }
 
-    // Realtime will automatically update the local state
-  }, [userId]);
+    // Refetch immediately so badge clears even if realtime event is delayed.
+    await refetch();
+  }, [userId, refetch]);
 
   return {
     notifications,

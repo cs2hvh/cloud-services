@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 type ServiceKey =
   | "compute"
   | "gpu"
+  | "gpu-enterprise"
   | "kubernetes"
   | "database"
   | "security"
@@ -38,6 +39,10 @@ const SERVICE_DASHBOARD_TARGETS: Record<
   gpu: {
     main: "/dashboard/services/gpu",
     new: "/dashboard/services/gpu/deploy",
+  },
+  "gpu-enterprise": {
+    main: "/dashboard/services/gpu/enterprise",
+    new: "/dashboard/services/gpu/enterprise",
   },
   kubernetes: {
     main: "/dashboard/services/kubernetes",

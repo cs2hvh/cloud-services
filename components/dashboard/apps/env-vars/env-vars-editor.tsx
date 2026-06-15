@@ -57,7 +57,15 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars, onReveal, 
 
   const duplicateVar = (idx: number) => {
     const src = vars[idx];
-    const copy = { ...src, key: src.key ? `${src.key}_COPY` : '' };
+    // Never inherit hasValue — the copy is always a new entry that needs an explicit value.
+    // For a revealed var we can carry the value; for unrevealed the user must type one.
+    const copy = {
+      ...src,
+      key: src.key ? `${src.key}_COPY` : '',
+      hasValue: false,
+      revealed: false,
+      value: src.revealed ? src.value : '',
+    };
     const next = [...vars];
     next.splice(idx + 1, 0, copy);
     setEnvVars(next);

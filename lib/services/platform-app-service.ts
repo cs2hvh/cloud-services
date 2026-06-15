@@ -118,6 +118,7 @@ export interface GetAppOptions {
 export interface ListAppsOptions {
   userId: string;
   includeRollbackInfo?: boolean;  // Check deployment history for rollback capability
+  syncStatus?: boolean;           // Sync live status from Kubernetes before returning
 }
 
 export interface DeploymentPresentation {
@@ -672,26 +673,53 @@ export class PlatformAppService {
    * - Optionally checks rollback capability (requires deployment history lookup)
    */
   static async listApps(options: ListAppsOptions) {
-    const { userId, includeRollbackInfo = false } = options;
+    const { userId, includeRollbackInfo = false, syncStatus = false } = options;
 
     const apps = await Platform_Apps.list_by_owner(userId);
+    const appList = apps || [];
 
+    // Build the base result (with or without rollback info).
+    let result: Array<Record<string, unknown>>;
     if (!includeRollbackInfo) {
-      return apps || [];
+      result = appList as Array<Record<string, unknown>>;
+    } else {
+      result = await Promise.all(
+        appList.map(async (app: { id: string; active_deployment_id?: string | null }) => {
+          const deploymentPresentation = await PlatformAppService.getDeploymentPresentation({
+            appId: app.id,
+            activeDeploymentId: app.active_deployment_id ?? null,
+          });
+          return { ...app, ...deploymentPresentation };
+        })
+      );
     }
 
-    // Add rollback capability check
-    const appsWithRollback = await Promise.all(
-      (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
-        const deploymentPresentation = await PlatformAppService.getDeploymentPresentation({
-          appId: app.id,
-          activeDeploymentId: app.active_deployment_id ?? null,
-        });
-        return { ...app, ...deploymentPresentation };
-      })
-    );
+    // Sync live K8s status for running/failed apps so the list page shows
+    // accurate status without requiring a visit to the detail page first.
+    if (syncStatus && result.length > 0) {
+      const syncs = result.map(async (app) => {
+        const id = app.id as string;
+        const name = app.name as string;
+        const status = app.status as string;
+        // AppStatusService.syncStatus already skips pending/building/stopped/deleting.
+        if (status !== 'running' && status !== 'failed') return app;
+        const syncResult = await AppStatusService.syncStatus(
+          id,
+          name,
+          status as 'running' | 'failed',
+          (app.updated_at as string | undefined),
+        );
+        if (syncResult.changed) {
+          return { ...app, status: syncResult.currentStatus };
+        }
+        return app;
+      });
+      result = await Promise.allSettled(syncs).then((outcomes) =>
+        outcomes.map((o, i) => (o.status === 'fulfilled' ? o.value : result[i]))
+      );
+    }
 
-    return appsWithRollback;
+    return result;
   }
 
   /**
