@@ -88,6 +88,8 @@ function NewTemplateInner() {
         slug: data.slug,
         name: data.name,
         description: data.description,
+        readme: data.readme,
+        category: data.category,
         tags: data.tags,
         spec: data.spec,
       }),

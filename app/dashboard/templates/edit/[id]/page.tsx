@@ -11,6 +11,8 @@ type DbTemplate = {
   slug: string;
   name: string;
   description: string;
+  readme?: string;
+  category?: string;
   tags: string[];
   schema: TemplateSpec;
   active: boolean;
@@ -40,6 +42,8 @@ export default function EditTemplatePage() {
       body: JSON.stringify({
         name: data.name,
         description: data.description,
+        readme: data.readme,
+        category: data.category,
         tags: data.tags,
         spec: data.spec,
       }),
@@ -90,6 +94,8 @@ export default function EditTemplatePage() {
         slug: template.slug,
         name: template.name,
         description: template.description,
+        readme: template.readme ?? '',
+        category: (template.category as import('@/components/templates/template-builder').TemplateCategory) ?? 'Other',
         tags: template.tags,
         spec: template.schema,
       }}

@@ -25,6 +25,7 @@ type TemplateSummary = {
   name: string;
   description: string;
   tags: string[];
+  category?: string;
   kind?: string;
   serviceCount: number;
   services: ServiceSummary[];
@@ -134,17 +135,19 @@ const AVATAR_PALETTE = [
 ];
 
 const FILTER_TABS = [
-  { id: 'all',        label: 'All'        },
-  { id: 'stacks',     label: 'Stacks'     },
-  { id: 'databases',  label: 'Databases'  },
-  { id: 'ai',         label: 'AI / ML'    },
-  { id: 'automation', label: 'Automation' },
-  { id: 'analytics',  label: 'Analytics'  },
+  { id: 'all',          label: 'All'         },
+  { id: 'stacks',       label: 'Stacks'      },
+  { id: 'Starters',     label: 'Starters'    },
+  { id: 'AI/ML',        label: 'AI / ML'     },
+  { id: 'Automation',   label: 'Automation'  },
+  { id: 'Analytics',    label: 'Analytics'   },
+  { id: 'Observability',label: 'Monitoring'  },
+  { id: 'Storage',      label: 'Storage'     },
+  { id: 'CMS',          label: 'CMS'         },
+  { id: 'Bots',         label: 'Bots'        },
+  { id: 'Blogs',        label: 'Blogs'       },
+  { id: 'Other',        label: 'Other'       },
 ];
-
-const AI_TAGS         = new Set(['ai', 'ml', 'llm', 'vector', 'embeddings', 'inference', 'gpu']);
-const AUTOMATION_TAGS = new Set(['automation', 'workflow', 'orchestration', 'n8n', 'temporal', 'airflow']);
-const ANALYTICS_TAGS  = new Set(['analytics', 'metrics', 'visualization', 'bi', 'clickhouse', 'metabase', 'grafana']);
 
 function formatCount(n: number) {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
@@ -756,12 +759,17 @@ function TemplatesInner() {
   }
 
   const filtered = templates.filter(t => {
-    if (activeFilter === 'stacks'     && t.kind !== 'multi') return false;
-    if (activeFilter === 'databases'  && !t.tags.some(tag => ['database','postgres','mysql','mongodb','redis','valkey','clickhouse'].includes(tag))) return false;
-    if (activeFilter === 'ai'         && !t.tags.some(tag => AI_TAGS.has(tag))) return false;
-    if (activeFilter === 'automation' && !t.tags.some(tag => AUTOMATION_TAGS.has(tag))) return false;
-    if (activeFilter === 'analytics'  && !t.tags.some(tag => ANALYTICS_TAGS.has(tag))) return false;
-    if (search && !t.name.toLowerCase().includes(search.toLowerCase()) && !t.tags.some(g => g.includes(search.toLowerCase()))) return false;
+    if (activeFilter === 'stacks' && t.kind !== 'multi') return false;
+    if (activeFilter !== 'all' && activeFilter !== 'stacks') {
+      if (t.category !== activeFilter) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      const matchName = t.name.toLowerCase().includes(q);
+      const matchTag  = t.tags.some(tag => tag.toLowerCase().includes(q));
+      const matchDesc = t.description.toLowerCase().includes(q);
+      if (!matchName && !matchTag && !matchDesc) return false;
+    }
     return true;
   });
 

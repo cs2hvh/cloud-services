@@ -5,10 +5,14 @@ import { TemplateSpecSchema, validateTemplateSpec } from '@/lib/templates/domain
 import { buildTemplateShareLinks, requestBaseUrl } from '@/lib/templates/domain/share';
 import { z } from 'zod';
 
+const TEMPLATE_CATEGORIES = ['AI/ML', 'Analytics', 'Automation', 'Blogs', 'Bots', 'CMS', 'Observability', 'Other', 'Starters', 'Storage'] as const;
+
 const CreateTemplateSchema = z.object({
   slug: z.string().min(2).max(64).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, 'slug must be lowercase letters, numbers, hyphens'),
   name: z.string().min(1).max(80),
   description: z.string().min(1).max(400),
+  readme: z.string().max(20000).default(''),
+  category: z.enum(TEMPLATE_CATEGORIES).default('Other'),
   tags: z.array(z.string()).default([]),
   spec: TemplateSpecSchema,
 });
@@ -63,6 +67,8 @@ export async function POST(req: NextRequest) {
       slug: parsed.data.slug,
       name: parsed.data.name,
       description: parsed.data.description,
+      readme: parsed.data.readme,
+      category: parsed.data.category,
       tags: parsed.data.tags,
       visibility: 'unlisted',
       owner_id: auth.user!.id,

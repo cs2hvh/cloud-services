@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/lib/auth/server-auth';
 import { createServiceClient } from '@/lib/supabase/server';
 import { validateTemplateSpec } from '@/lib/templates/domain/spec-schema';
-import { resolveServiceLayers } from '@/lib/templates/domain/dag';
+import { resolveServiceLayers, inferDependenciesFromEnv } from '@/lib/templates/domain/dag';
 import { planEnvironment } from '@/lib/templates/domain/env-plan';
 import {
   evaluateTemplateBestPractices,
@@ -80,6 +80,11 @@ export async function POST(_req: Request, { params }: RouteCtx) {
     update_source: result.updatePolicy.source,
   }).eq('id', version.id);
 
+  // Compute which deps would be auto-inferred at deploy time, so the creator
+  // can add them explicitly (the warnings already flag individual env vars, but
+  // this gives a concise "here's what to add to dependsOn" summary).
+  const inferredDeps = ok ? computeInferredDeps(version.spec) : [];
+
   if (!ok) {
     return NextResponse.json({
       tested: false,
@@ -94,7 +99,27 @@ export async function POST(_req: Request, { params }: RouteCtx) {
     runId: run.id,
     warnings: result.warnings,
     updatePolicy: result.updatePolicy,
+    ...(inferredDeps.length > 0 ? { inferredDeps } : {}),
   });
+}
+
+/**
+ * Returns a list of { serviceId, added: string[] } entries describing which
+ * `dependsOn` entries the deploy pipeline would auto-add from env var references.
+ * Empty array means the spec's dependsOn is fully declared.
+ */
+function computeInferredDeps(spec: unknown): Array<{ serviceId: string; added: string[] }> {
+  const validation = validateTemplateSpec(spec);
+  if (!validation.valid) return [];
+  const enriched = inferDependenciesFromEnv(validation.spec);
+  const results: Array<{ serviceId: string; added: string[] }> = [];
+  for (let i = 0; i < validation.spec.services.length; i++) {
+    const original = validation.spec.services[i];
+    const inferred = enriched.services[i];
+    const added = inferred.dependsOn.filter(d => !original.dependsOn.includes(d));
+    if (added.length > 0) results.push({ serviceId: original.id, added });
+  }
+  return results;
 }
 
 function validateVersion(spec: unknown) {

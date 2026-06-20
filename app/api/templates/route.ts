@@ -7,7 +7,7 @@ export async function GET() {
     const { data, error } = await db
       .from('templates')
       .select(`
-        id, slug, name, description, tags, visibility, verification_status, deploy_count, icon_url, demo_project_id, owner_id,
+        id, slug, name, description, tags, category, visibility, verification_status, deploy_count, icon_url, demo_project_id, owner_id,
         template_versions!templates_latest_published_version_fk(id, spec, status)
       `)
       .eq('visibility', 'published');
@@ -26,6 +26,7 @@ export async function GET() {
         name: template.name,
         description: template.description,
         tags: template.tags ?? [],
+        category: (template as { category?: string }).category ?? 'Other',
         kind: spec?.kind ?? (services.length > 1 ? 'multi' : 'single'),
         serviceCount: services.length,
         services: services.map(service => ({

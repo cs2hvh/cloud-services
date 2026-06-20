@@ -7,9 +7,13 @@ import { z } from 'zod';
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+const TEMPLATE_CATEGORIES = ['AI/ML', 'Analytics', 'Automation', 'Blogs', 'Bots', 'CMS', 'Observability', 'Other', 'Starters', 'Storage'] as const;
+
 const UpdateTemplateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   description: z.string().min(1).max(400).optional(),
+  readme: z.string().max(20000).optional(),
+  category: z.enum(TEMPLATE_CATEGORIES).optional(),
   tags: z.array(z.string()).optional(),
   demoProjectId: z.string().uuid().nullable().optional(),
   spec: TemplateSpecSchema.optional(),
@@ -25,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: RouteCtx) {
   const { data, error } = await db
       .from('templates')
       .select(`
-      id, slug, name, description, tags, visibility, verification_status, demo_project_id, created_at, updated_at,
+      id, slug, name, description, readme, category, tags, visibility, verification_status, demo_project_id, created_at, updated_at,
       template_versions!template_id(id, version, status, spec, created_at)
     `)
     .eq('id', id)
@@ -76,6 +80,8 @@ export async function PUT(req: NextRequest, { params }: RouteCtx) {
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+  if (parsed.data.readme !== undefined) updates.readme = parsed.data.readme;
+  if (parsed.data.category !== undefined) updates.category = parsed.data.category;
   if (parsed.data.tags !== undefined) updates.tags = parsed.data.tags;
   if (parsed.data.demoProjectId !== undefined) {
     if (parsed.data.demoProjectId !== null) {

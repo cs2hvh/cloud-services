@@ -6,10 +6,15 @@ import { getAllServiceDefinitions, getServiceDefinition } from '@/lib/services/r
 import { resolveServiceIcon } from '@/lib/ui/service-icons';
 import type { EnvValue, TemplateServiceSpec, TemplateSpec } from '@/lib/templates/domain/spec-schema';
 
+export const TEMPLATE_CATEGORIES = ['AI/ML', 'Analytics', 'Automation', 'Blogs', 'Bots', 'CMS', 'Observability', 'Other', 'Starters', 'Storage'] as const;
+export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
+
 export type BuilderData = {
   slug: string;
   name: string;
   description: string;
+  readme: string;
+  category: TemplateCategory;
   tags: string[];
   spec: TemplateSpec;
 };
@@ -486,6 +491,8 @@ export function TemplateBuilder({ mode, initialData, onSave, onCancel }: Props) 
   const [name, setName] = useState(initialData?.name ?? '');
   const [slug, setSlug] = useState(initialData?.slug ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
+  const [readme, setReadme] = useState(initialData?.readme ?? '');
+  const [category, setCategory] = useState<TemplateCategory>(initialData?.category ?? 'Other');
   const [tags, setTags] = useState(initialData?.tags ?? []);
   const [spec, setSpec] = useState<TemplateSpec>(initialData?.spec ?? EMPTY_SPEC);
   const [saving, setSaving] = useState(false);
@@ -525,6 +532,8 @@ export function TemplateBuilder({ mode, initialData, onSave, onCancel }: Props) 
         slug,
         name,
         description,
+        readme,
+        category,
         tags,
         spec: normalizedSpec,
         publish,
@@ -587,9 +596,34 @@ export function TemplateBuilder({ mode, initialData, onSave, onCancel }: Props) 
               className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none resize-none focus:border-white/25"
             />
           </label>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="space-y-1.5 block">
+              <span className="text-[10px] uppercase text-white/35">Tags</span>
+              <TagInput tags={tags} onChange={setTags} />
+            </label>
+            <label className="space-y-1.5 block">
+              <span className="text-[10px] uppercase text-white/35">Category</span>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value as TemplateCategory)}
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+              >
+                {TEMPLATE_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label className="space-y-1.5 block">
-            <span className="text-[10px] uppercase text-white/35">Tags</span>
-            <TagInput tags={tags} onChange={setTags} />
+            <span className="text-[10px] uppercase text-white/35">README (markdown)</span>
+            <textarea
+              value={readme}
+              onChange={e => setReadme(e.target.value)}
+              rows={8}
+              placeholder={`## About\n\nDescribe what this template does, use cases, and setup notes.\n\n## Dependencies\n\n- Service A connects to Service B via DATABASE_URL`}
+              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none resize-y font-mono focus:border-white/25 placeholder:text-white/20"
+            />
+            <span className="text-[10px] text-white/25">Shown on the public template page. Supports markdown.</span>
           </label>
         </section>
 

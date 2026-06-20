@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const { data } = await db
       .from('templates')
       .select(`
-        slug, name, description, tags, visibility, verification_status, demo_project_id, latest_version_id, latest_published_version_id,
+        slug, name, description, tags, category, readme, icon_url, deploy_count, owner_id, visibility, verification_status, demo_project_id, latest_version_id, latest_published_version_id, published_at,
         template_versions!template_id(id, version, spec, status, update_policy, update_source)
       `)
       .eq('slug', slug)
@@ -40,12 +40,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         volumes?: unknown[];
       }>;
     };
+    const d = data as typeof data & { category?: string; readme?: string; icon_url?: string | null; deploy_count?: number; owner_id?: string | null; published_at?: string | null };
+
     return NextResponse.json({
       template: {
         slug: data.slug,
         name: data.name,
         description: data.description,
+        readme: d.readme ?? '',
         tags: data.tags ?? [],
+        category: d.category ?? 'Other',
         kind: spec.kind ?? ((spec.services?.length ?? 0) > 1 ? 'multi' : 'single'),
         inputs: spec.inputs ?? {},
         services: (spec.services ?? []).map(service => ({
@@ -54,6 +58,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         })),
         demoProjectId: data.demo_project_id,
         verificationStatus: data.verification_status,
+        iconUrl: d.icon_url ?? null,
+        deployCount: d.deploy_count ?? 0,
+        publishedAt: d.published_at ?? null,
       },
       version: {
         id: version.id,
@@ -72,6 +79,7 @@ function selectDeployableVersion(data: {
   latest_version_id: string | null;
   latest_published_version_id: string | null;
   demo_project_id: string | null;
+  [key: string]: unknown;
   template_versions: Array<{
     id: string;
     version: number;

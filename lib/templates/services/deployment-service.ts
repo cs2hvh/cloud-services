@@ -3,7 +3,7 @@ import { Encryption } from '@/config/functions';
 import { createServiceClient } from '@/lib/supabase/server';
 import { validateTemplateSpec, type TemplateSpec } from '../domain/spec-schema';
 import { resolveEndpointProtocol, buildEndpointUrl } from '@/lib/services/registry';
-import { resolveServiceLayers } from '../domain/dag';
+import { resolveServiceLayers, inferDependenciesFromEnv } from '../domain/dag';
 import { planEnvironment } from '../domain/env-plan';
 import { OperationEventService } from './operation-event-service';
 import { enqueueProjectDeploy } from '@/lib/workers/project-deploy-worker';
@@ -36,19 +36,24 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
   }
   assertSupportedDeploySources(validation.spec);
 
-  const dag = resolveServiceLayers(validation.spec.services);
+  // Enrich dependsOn with any deps implied by env var references that the creator omitted.
+  // This ensures the provisioner always deploys services in the correct order even if the
+  // template spec has incomplete dependency declarations.
+  const effectiveSpec = inferDependenciesFromEnv(validation.spec);
+
+  const dag = resolveServiceLayers(effectiveSpec.services);
   if (!dag.ok) throw new Error(dag.error);
 
-  const envPlan = planEnvironment(validation.spec);
+  const envPlan = planEnvironment(effectiveSpec);
   if (envPlan.errors.length > 0) {
     throw new Error(envPlan.errors.map(e => `${e.field}: ${e.message}`).join('; '));
   }
-  validateDeployInputs(validation.spec, input.inputValues ?? {}, input.serviceInputs ?? {});
+  validateDeployInputs(effectiveSpec, input.inputValues ?? {}, input.serviceInputs ?? {});
 
   const fingerprint = fingerprintRequest(
     input.slug,
     input.projectName,
-    validation.spec,
+    effectiveSpec,
     input.inputValues ?? {},
     input.serviceInputs ?? {},
   );
@@ -85,7 +90,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
       name: input.projectName,
       namespace,
       status: 'creating',
-      desired_spec: validation.spec,
+      desired_spec: effectiveSpec,  // includes auto-inferred dependsOn for correct provisioner ordering
     })
     .select('id')
     .single();
@@ -95,7 +100,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
   }
 
   try {
-    const serviceRows = validation.spec.services.map(svc => ({
+    const serviceRows = effectiveSpec.services.map(svc => ({
       project_id: project.id,
       spec_service_id: svc.id,
       name: svc.name,
@@ -141,7 +146,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
     await saveServiceMetadata(
       db,
       project.id,
-      validation.spec,
+      effectiveSpec,
       services ?? [],
       input.inputValues ?? {},
       input.serviceInputs ?? {},
@@ -154,7 +159,7 @@ export async function deployFromTemplate(input: CreateDeploymentInput): Promise<
       progressPct: 0,
       message: 'Deployment queued',
       data: {
-        serviceCount: validation.spec.services.length,
+        serviceCount: effectiveSpec.services.length,
         dependencyLayers: dag.layers.map(layer => layer.map(s => s.id)),
       },
     });

@@ -1,4 +1,5 @@
 import type { EnvValue, TemplateServiceSpec, TemplateSpec } from './spec-schema';
+import { getEnvImpliedDeps } from './dag';
 
 export type TemplatePracticeSeverity = 'error' | 'warning';
 
@@ -36,6 +37,9 @@ export function evaluateTemplateBestPractices(spec: TemplateSpec): TemplatePract
   for (const service of spec.services) {
     issues.push(...evaluateService(service));
   }
+
+  // Cross-service checks — need full spec context
+  issues.push(...evaluateCrossServiceRules(spec));
 
   return issues;
 }
@@ -161,4 +165,93 @@ function hasDescription(value: EnvValue) {
 function referencesPublicServiceUrl(value: EnvValue) {
   if (value.kind === 'serviceRef') return value.field === 'publicUrl';
   return value.kind === 'computed' && /\bpublicUrl\b|\bRAILWAY_PUBLIC_DOMAIN\b/.test(value.template);
+}
+
+/**
+ * Cross-service checks that need to see the whole spec:
+ * 1. env_ref_missing_dependency — service references another via env vars but doesn't declare it in dependsOn
+ * 2. referenced_service_no_ports — service referenced via privateHost/DNS has no ports, so K8s ClusterIP won't exist
+ */
+function evaluateCrossServiceRules(spec: TemplateSpec): TemplatePracticeIssue[] {
+  const issues: TemplatePracticeIssue[] = [];
+  const validIds = new Set(spec.services.map(s => s.id));
+
+  // Map serviceId → services that reference it via privateHost or env
+  // (only privateHost references actually need a K8s ClusterIP Service for DNS)
+  const referencedViaHost = new Map<string, string[]>();
+
+  for (const service of spec.services) {
+    const implied = getEnvImpliedDeps(service);
+    const declared = new Set(service.dependsOn);
+
+    for (const [key, value] of Object.entries(service.env)) {
+      // --- Check 1: implicit dep not declared in dependsOn ---
+      const envDeps = singleEnvImpliedDeps(value, service.id);
+      for (const refId of envDeps) {
+        if (!validIds.has(refId)) continue; // caught by schema validation
+        if (!declared.has(refId)) {
+          issues.push({
+            code: 'env_ref_missing_dependency',
+            severity: 'warning',
+            field: `services.${service.id}.env.${key}`,
+            message: `"${service.id}" references "${refId}" in its env vars but "${refId}" is missing from dependsOn — add it to guarantee "${refId}" is running before "${service.id}" starts.`,
+          });
+        }
+      }
+
+      // --- Collect services referenced via host/DNS (for Check 2) ---
+      if (value.kind === 'serviceRef' && value.field === 'privateHost' && validIds.has(value.serviceId)) {
+        pushTo(referencedViaHost, value.serviceId, service.id);
+      }
+      if (value.kind === 'computed') {
+        const rx = /\$\{\s*services\.([a-z0-9-]+)\.(?:privateHost|env\.)/g;
+        let m: RegExpExecArray | null;
+        while ((m = rx.exec(value.template))) {
+          if (m[1] !== service.id && validIds.has(m[1])) {
+            pushTo(referencedViaHost, m[1], service.id);
+          }
+        }
+      }
+    }
+
+    // Suppress TS6196 — implied used via getEnvImpliedDeps indirectly but TS can't see it
+    void implied;
+  }
+
+  // --- Check 2: referenced service has no ports → no K8s Service → DNS fails ---
+  for (const service of spec.services) {
+    const referencers = referencedViaHost.get(service.id);
+    if (referencers && referencers.length > 0 && service.ports.length === 0) {
+      issues.push({
+        code: 'referenced_service_no_ports',
+        severity: 'error',
+        field: `services.${service.id}.ports`,
+        message: `"${service.id}" is used as a private hostname by ${referencers.map(r => `"${r}"`).join(', ')} but has no ports defined — Kubernetes cannot create a ClusterIP Service, so DNS lookup will fail at runtime. Add at least one internal port (e.g. port 5432 for Postgres).`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+function singleEnvImpliedDeps(value: EnvValue, selfId: string): string[] {
+  if (value.kind === 'serviceRef' || value.kind === 'secretRef') {
+    return value.serviceId !== selfId ? [value.serviceId] : [];
+  }
+  if (value.kind === 'computed') {
+    const deps: string[] = [];
+    const rx = /\$\{\s*services\.([a-z0-9-]+)\./g;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(value.template))) {
+      if (m[1] !== selfId) deps.push(m[1]);
+    }
+    return deps;
+  }
+  return [];
+}
+
+function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V) {
+  const arr = map.get(key) ?? [];
+  arr.push(value);
+  map.set(key, arr);
 }
