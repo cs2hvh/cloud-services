@@ -15,8 +15,8 @@ import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
   forwardJson,
   resolveUpstreamKey,
-  streamPassthrough,
 } from "../lib/openrouter.ts";
+import { scrubJson, scrubSsePassthrough } from "../lib/brand-scrub.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
@@ -34,6 +34,17 @@ import {
   extractUserTextsFromOpenAI,
   parseGuardrailPolicy,
 } from "../lib/guardrail.ts";
+import {
+  extractJsonSchema,
+  validateJsonContent,
+  extractFirstContent,
+  buildStructuredRetry,
+} from "../lib/structured-output.ts";
+import {
+  extractToolDefs,
+  validateToolCalls,
+  buildToolRepairBody,
+} from "../lib/tool-guarantees.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Request schema — permissive on tool/content shape since OpenAI
@@ -365,17 +376,30 @@ export const chatCompletions: Handler<{
     // emits usage in both shapes; we read it the same way the OpenRouter
     // path below does, just from a different upstream.
     if (outgoingBody.stream === true) {
-      return streamPassthrough(upstream, (rawText) => {
-        const usage = extractUsageFromSse(rawText);
-        c.executionCtx.waitUntil(
-          sendUsage(c.env, {
-            ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
-            inputTokens: usage?.prompt_tokens ?? null,
-            outputTokens: usage?.completion_tokens ?? null,
-            status: "success",
-          })
-        );
-      });
+      return scrubSsePassthrough(
+        upstream,
+        effectiveModel,
+        `chat-${requestId}`,
+        {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Model": effectiveModel,
+          "X-Ahura-Billing": auth.billing,
+          "X-Ahura-Routing": "managed",
+        },
+        (scrubbedText) => {
+          const usage = extractUsageFromSse(scrubbedText);
+          c.executionCtx.waitUntil(
+            sendUsage(c.env, {
+              ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+              inputTokens: usage?.prompt_tokens ?? null,
+              outputTokens: usage?.completion_tokens ?? null,
+              status: "success",
+            })
+          );
+        }
+      );
     }
 
     const text = await upstream.text();
@@ -518,7 +542,7 @@ export const chatCompletions: Handler<{
     },
   });
 
-  // 5. Error responses — pass through but tag with our headers
+  // 5. Error responses — scrub brand info, forward Retry-After, pass status through
   if (!upstream.ok) {
     const text = await upstream.text();
     c.executionCtx.waitUntil(
@@ -528,47 +552,67 @@ export const chatCompletions: Handler<{
         errorCode: `upstream_${upstream.status}`,
       })
     );
-    return new Response(text, {
+    // Forward Retry-After so clients can back off correctly on 429/503
+    const retryAfter = upstream.headers.get("Retry-After");
+    if (retryAfter && (upstream.status === 429 || upstream.status === 503)) {
+      c.header("Retry-After", retryAfter);
+    }
+    // Scrub 403 moderation metadata (contains provider_name, model_id)
+    let body = text;
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      body = JSON.stringify(scrubJson(parsed, effectiveModel, requestId));
+    } catch { /* not JSON — pass through as-is */ }
+    return new Response(body, {
       status: upstream.status,
       headers: {
-        "content-type":
-          upstream.headers.get("content-type") ?? "application/json",
+        "content-type": upstream.headers.get("content-type") ?? "application/json",
         "X-Ahura-Request-Id": requestId,
         "X-Ahura-Model": effectiveModel,
       },
     });
   }
 
-  // 6a. Streaming — passthrough SSE, extract usage from final chunk
+  // 6a. Streaming — scrub SSE chunks, extract usage from final scrubbed chunk
   if (req.stream) {
-    return streamPassthrough(upstream, (rawText) => {
-      const usage = extractUsageFromSse(rawText);
-      c.executionCtx.waitUntil(
-        sendUsage(c.env, {
-          ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
-          inputTokens: usage?.prompt_tokens ?? null,
-          outputTokens: usage?.completion_tokens ?? null,
-          cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
-          status: "success",
-        })
-      );
-    });
+    return scrubSsePassthrough(
+      upstream,
+      effectiveModel,
+      `chat-${requestId}`,
+      {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        "X-Ahura-Request-Id": requestId,
+        "X-Ahura-Model": effectiveModel,
+        "X-Ahura-Billing": auth.billing,
+        "X-Ahura-Cache": cacheDecision.cacheable ? "miss" : "skipped",
+      },
+      (scrubbedText) => {
+        const usage = extractUsageFromSse(scrubbedText);
+        c.executionCtx.waitUntil(
+          sendUsage(c.env, {
+            ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+            inputTokens: usage?.prompt_tokens ?? null,
+            outputTokens: usage?.completion_tokens ?? null,
+            cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+            status: "success",
+          })
+        );
+      }
+    );
   }
 
-  // 6b. Non-streaming — buffer, parse for usage, return + cache write-through
+  // 6b. Non-streaming — buffer, scrub, parse for usage, return + cache write-through
   const text = await upstream.text();
+  let parsedData: Record<string, unknown> | undefined;
   let parsedUsage: OpenAIChatResponse["usage"] | undefined;
+  let scrubbedText = text;
   try {
     const data = JSON.parse(text) as OpenAIChatResponse;
     parsedUsage = data.usage;
-    c.executionCtx.waitUntil(
-      sendUsage(c.env, {
-        ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
-        inputTokens: data.usage?.prompt_tokens ?? null,
-        outputTokens: data.usage?.completion_tokens ?? null,
-        cachedTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? null,
-        status: "success",
-      })
+    parsedData = data as unknown as Record<string, unknown>;
+    scrubbedText = JSON.stringify(
+      scrubJson(parsedData, effectiveModel, `chat-${requestId}`)
     );
   } catch (err) {
     console.error(
@@ -580,6 +624,123 @@ export const chatCompletions: Handler<{
       })
     );
   }
+  // Always enqueue — even when JSON parse failed we record the completed request
+  c.executionCtx.waitUntil(
+    sendUsage(c.env, {
+      ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+      inputTokens: parsedUsage?.prompt_tokens ?? null,
+      outputTokens: parsedUsage?.completion_tokens ?? null,
+      cachedTokens: parsedUsage?.prompt_tokens_details?.cached_tokens ?? null,
+      status: "success",
+    })
+  );
+
+  // 6c. Structured output + tool guarantee validation (non-streaming only)
+  if (parsedData) {
+    // --- Structured output ---
+    const jsonSchema = extractJsonSchema(req.response_format);
+    if (jsonSchema) {
+      const content = extractFirstContent(parsedData);
+      const { valid, errors } = content !== null
+        ? validateJsonContent(content, jsonSchema)
+        : { valid: false as const, errors: ["Response has no string content to validate"] };
+
+      if (!valid) {
+        // One constrained retry: append corrective user turn + re-forward
+        const retryBody = buildStructuredRetry(outgoingBody, parsedData, jsonSchema, errors);
+        let resolved = false;
+        try {
+          const retryUp = await forwardJson({
+            env: c.env, body: retryBody, upstreamKey,
+            path: "/chat/completions", signal: c.req.raw.signal,
+            extraHeaders: { "X-Title": "AhuraCloud Inference" },
+          });
+          if (retryUp.ok) {
+            const retryText = await retryUp.text();
+            const retryData = JSON.parse(retryText) as Record<string, unknown>;
+            const retryContent = extractFirstContent(retryData);
+            if (retryContent !== null && validateJsonContent(retryContent, jsonSchema).valid) {
+              parsedData    = retryData;
+              parsedUsage   = (retryData as OpenAIChatResponse).usage;
+              scrubbedText  = JSON.stringify(scrubJson(retryData, effectiveModel, `chat-${requestId}`));
+              resolved      = true;
+              c.header("X-Ahura-Structured", "validated-after-retry");
+              // Bill the retry as a second usage event
+              c.executionCtx.waitUntil(
+                sendUsage(c.env, {
+                  ...baseUsageEvent(auth, effectiveModel, `${requestId}-r1`, startedAt),
+                  inputTokens:  parsedUsage?.prompt_tokens ?? null,
+                  outputTokens: parsedUsage?.completion_tokens ?? null,
+                  status: "success",
+                })
+              );
+            }
+          }
+        } catch { /* network failure on retry — fall through to error */ }
+
+        if (!resolved) {
+          return c.json(
+            errorBody(
+              "Model output failed JSON schema validation after one repair attempt.",
+              "invalid_request_error",
+              "json_schema_validation_failed",
+              requestId,
+            ),
+            422
+          );
+        }
+      } else {
+        c.header("X-Ahura-Structured", "validated");
+      }
+    }
+
+    // --- Tool call guarantees ---
+    if (req.tools && Array.isArray(req.tools) && req.tools.length > 0) {
+      const toolDefs = extractToolDefs(req.tools as unknown[]);
+      if (toolDefs.size > 0) {
+        const toolErrors = validateToolCalls(parsedData, toolDefs);
+        if (toolErrors.length > 0) {
+          // One repair retry: append bad assistant msg + per-tool error results + user prompt
+          const repairBody = buildToolRepairBody(outgoingBody, parsedData, toolErrors);
+          let repaired = false;
+          try {
+            const repairUp = await forwardJson({
+              env: c.env, body: repairBody, upstreamKey,
+              path: "/chat/completions", signal: c.req.raw.signal,
+              extraHeaders: { "X-Title": "AhuraCloud Inference" },
+            });
+            if (repairUp.ok) {
+              const repairText = await repairUp.text();
+              const repairData = JSON.parse(repairText) as Record<string, unknown>;
+              if (validateToolCalls(repairData, toolDefs).length === 0) {
+                parsedData    = repairData;
+                parsedUsage   = (repairData as OpenAIChatResponse).usage;
+                scrubbedText  = JSON.stringify(scrubJson(repairData, effectiveModel, `chat-${requestId}`));
+                repaired      = true;
+                c.header("X-Ahura-Tool-Validated", "repaired");
+                // Bill the repair retry
+                c.executionCtx.waitUntil(
+                  sendUsage(c.env, {
+                    ...baseUsageEvent(auth, effectiveModel, `${requestId}-r1`, startedAt),
+                    inputTokens:  parsedUsage?.prompt_tokens ?? null,
+                    outputTokens: parsedUsage?.completion_tokens ?? null,
+                    status: "success",
+                  })
+                );
+              }
+            }
+          } catch { /* repair network failure — degrade gracefully */ }
+
+          if (!repaired) {
+            // Non-fatal: return the original response with a warning header
+            c.header("X-Ahura-Tool-Validated", "warn");
+          }
+        } else {
+          c.header("X-Ahura-Tool-Validated", "ok");
+        }
+      }
+    }
+  }
 
   // Cache write-through (best effort, doesn't block response)
   if (cacheDecision.cacheable && cacheDecision.key) {
@@ -587,7 +748,7 @@ export const chatCompletions: Handler<{
       writeCache(
         c.env,
         cacheDecision.key,
-        text,
+        scrubbedText,
         "application/json",
         cacheDecision.ttlSeconds,
         parsedUsage
@@ -600,9 +761,7 @@ export const chatCompletions: Handler<{
     );
   }
 
-  // Semantic cache write-through — same eligibility we checked on
-  // the read path. We re-evaluate here in case anything changed
-  // (auth.semanticCacheEnabled won't have, but defensive parity).
+  // Semantic cache write-through
   if (semanticEligible && semanticPromptText) {
     c.executionCtx.waitUntil(
       writeSemanticCache({
@@ -612,7 +771,7 @@ export const chatCompletions: Handler<{
         temperature: req.temperature,
         promptText: semanticPromptText,
         upstreamKey,
-        responseBody: text,
+        responseBody: scrubbedText,
         contentType: "application/json",
         usage: parsedUsage
           ? {
@@ -624,7 +783,7 @@ export const chatCompletions: Handler<{
     );
   }
 
-  return new Response(text, {
+  return new Response(scrubbedText, {
     status: 200,
     headers: {
       "content-type": "application/json",

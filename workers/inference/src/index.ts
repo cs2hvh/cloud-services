@@ -29,6 +29,12 @@ import { embeddings } from "./routes/embeddings.ts";
 import { listModels } from "./routes/models.ts";
 import { keyInfo } from "./routes/key.ts";
 import { messagesShim } from "./routes/messages.ts";
+import { rerank } from "./routes/rerank.ts";
+import { moderations } from "./routes/moderations.ts";
+import { imageGenerations } from "./routes/images.ts";
+import { audioSpeech } from "./routes/audio-speech.ts";
+import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
+import { ocr } from "./routes/ocr.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
 
@@ -100,6 +106,20 @@ v1.use("*", rateLimitMiddleware);
 // Core inference surface — OpenAI compatible
 v1.post("/chat/completions", chatCompletions);
 v1.post("/embeddings", embeddings);
+
+// Phase 1 — Rerank + Moderation (OpenRouter proxy: Cohere + Llama Guard)
+v1.post("/rerank", rerank);
+v1.post("/moderations", moderations);
+
+// Phase 1 — Image generation (OpenAI-compatible surface over OpenRouter images)
+v1.post("/images/generations", imageGenerations);
+
+// Slice 3 — TTS + STT (OpenRouter gpt-audio-mini / voxtral proxy)
+v1.post("/audio/speech", audioSpeech);
+v1.post("/audio/transcriptions", audioTranscriptions);
+
+// Slice 5 — OCR / Document AI (Gemini via OpenRouter)
+v1.post("/ocr", ocr);
 
 // Catalog + introspection
 v1.get("/models", listModels);

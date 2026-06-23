@@ -16,6 +16,14 @@ interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
+  // Per-unit multimodal modalities.
+  cents_per_image?: number;
+  cents_per_1k_chars?: number;
+  cents_per_audio_minute?: number;
+  cents_per_media_second?: number;
+  cents_per_page?: number;
+  cents_per_1k_rerank?: number;
+  cents_per_1k_moderation?: number;
 }
 
 interface ModelOffPeak {
@@ -169,11 +177,22 @@ export async function handleUsageBatch(
 /**
  * Compute the billable cost for one usage event in cents.
  *
+ * Token-based modalities (chat, completion, embedding):
  *   billable_input = max(0, input_tokens - cached_tokens)
  *   raw_cents = billable_input * input_rate / 1M
  *             + cached_tokens  * cached_rate / 1M
  *             + output_tokens  * output_rate / 1M
  *   final     = ceil(raw_cents * (1 - off_peak_discount/100))
+ *
+ * Per-unit modalities:
+ *   image:        ceil(images * cents_per_image)
+ *   tts_char:     ceil(chars / 1000 * cents_per_1k_chars)
+ *   stt_second:   ceil(seconds / 60 * cents_per_audio_minute)
+ *   video/music:  ceil(seconds * cents_per_media_second)
+ *   ocr_page:     ceil(pages * cents_per_page)
+ *   rerank_unit:  ceil(docs / 1000 * cents_per_1k_rerank)
+ *   moderation:   ceil(items / 1000 * cents_per_1k_moderation)
+ *   No off-peak discount applies (flat rate).
  *
  * Rounded UP so micro-amounts don't round to zero and undercount.
  */
@@ -184,6 +203,11 @@ function computeCost(
   // Don't charge for non-success requests or unknown models
   if (!info || event.status !== "success") {
     return { costCents: 0, isOffPeak: false };
+  }
+
+  // Per-unit modalities bypass the token-based path entirely.
+  if (isPerUnitLabel(event.unitLabel)) {
+    return { costCents: computeUnitCost(event, info.pricing), isOffPeak: false };
   }
 
   const p = info.pricing;
@@ -232,6 +256,46 @@ function computeCost(
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
   return { costCents: finalCents, isOffPeak };
+}
+
+/**
+ * Per-unit cost for multimodal services. Flat rate — no off-peak discount.
+ */
+function computeUnitCost(event: UsageEvent, pricing: ModelPricing): number {
+  const units = event.numUnits ?? 0;
+  if (units <= 0) return 0;
+  switch (event.unitLabel) {
+    case "image":
+      return Math.ceil(units * (pricing.cents_per_image ?? 0));
+    case "tts_char":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_chars ?? 0));
+    case "stt_second":
+      return Math.ceil((units / 60) * (pricing.cents_per_audio_minute ?? 0));
+    case "video_second":
+    case "music_second":
+      return Math.ceil(units * (pricing.cents_per_media_second ?? 0));
+    case "ocr_page":
+      return Math.ceil(units * (pricing.cents_per_page ?? 0));
+    case "rerank_unit":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_rerank ?? 0));
+    case "moderation":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_moderation ?? 0));
+    default:
+      return 0;
+  }
+}
+
+function isPerUnitLabel(label: string | null): boolean {
+  return (
+    label === "image" ||
+    label === "tts_char" ||
+    label === "stt_second" ||
+    label === "video_second" ||
+    label === "music_second" ||
+    label === "ocr_page" ||
+    label === "rerank_unit" ||
+    label === "moderation"
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────

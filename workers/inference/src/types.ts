@@ -97,7 +97,21 @@ export interface UsageEvent {
   apiKeyId: string;
   userId: string | null;
   modelId: string;
-  modality: "chat" | "completion" | "embedding" | "image" | "audio_stt" | "audio_tts" | "video" | "rerank";
+  modality:
+    | "chat"
+    | "completion"
+    | "embedding"
+    | "image"
+    | "audio_stt"
+    | "audio_tts"
+    | "tts"
+    | "stt"
+    | "video"
+    | "music"
+    | "ocr"
+    | "rerank"
+    | "moderation"
+    | "realtime";
   requestId: string;
   billedTo: "platform" | "byok";
   inputTokens: number | null;

@@ -14,6 +14,7 @@ import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import { forwardJson, resolveUpstreamKey } from "../lib/openrouter.ts";
 import { lookupCache, shouldCacheEmbeddings, writeCache } from "../lib/cache.ts";
+import { scrubJson } from "../lib/brand-scrub.ts";
 
 const embeddingsRequestSchema = z
   .object({
@@ -177,20 +178,14 @@ export const embeddings: Handler<{
 
   const text = await upstream.text();
   let promptTokens: number | null = null;
+  let numInputs = Array.isArray(req.input) ? req.input.length : 1;
+  let scrubbedText = text;
   try {
     const data = JSON.parse(text) as OpenAIEmbeddingsResponse;
     promptTokens = data.usage?.prompt_tokens ?? null;
-    const inputs = Array.isArray(req.input) ? req.input : [req.input];
-    c.executionCtx.waitUntil(
-      sendUsage(c.env, {
-        ...baseUsageEvent(auth, req.model, requestId, startedAt),
-        inputTokens: promptTokens,
-        outputTokens: 0,
-        numUnits: inputs.length,
-        unitLabel: "embedding",
-        status: "success",
-      })
-    );
+    numInputs = Array.isArray(req.input) ? req.input.length : 1;
+    // Scrub provider/cost fields before returning to customer
+    scrubbedText = JSON.stringify(scrubJson(data as unknown as Record<string, unknown>, req.model, `emb-${requestId}`));
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -201,22 +196,33 @@ export const embeddings: Handler<{
       })
     );
   }
+  // Always enqueue — even when JSON parse failed we record the completed request
+  c.executionCtx.waitUntil(
+    sendUsage(c.env, {
+      ...baseUsageEvent(auth, req.model, requestId, startedAt),
+      inputTokens: promptTokens,
+      outputTokens: 0,
+      numUnits: numInputs,
+      unitLabel: "embedding",
+      status: "success",
+    })
+  );
 
-  // Write-through to L1 cache so subsequent identical requests skip the upstream.
+  // Write-through to L1 cache (cache the scrubbed response)
   if (cacheDecision.cacheable && cacheDecision.key) {
     c.executionCtx.waitUntil(
       writeCache(
         c.env,
         cacheDecision.key,
-        text,
-        upstream.headers.get("content-type") ?? "application/json",
+        scrubbedText,
+        "application/json",
         cacheDecision.ttlSeconds,
         { prompt_tokens: promptTokens ?? undefined, completion_tokens: 0 }
       )
     );
   }
 
-  return new Response(text, {
+  return new Response(scrubbedText, {
     status: 200,
     headers: {
       "content-type": "application/json",
