@@ -56,6 +56,8 @@ export interface ServiceShellProps {
   // ── Render slots ──────────────────────────────────────────────────────────
   renderForm:    React.ReactNode;
   renderResults: React.ReactNode;
+  /** Shown in the results panel while running. If omitted, old results stay visible during reload. */
+  renderLoading?: React.ReactNode;
 
   // ── Labels ────────────────────────────────────────────────────────────────
   usageLabel?:   string | null;
@@ -79,6 +81,7 @@ export function ServiceShell({
   canRun,
   renderForm,
   renderResults,
+  renderLoading,
   usageLabel,
   runLabel     = "Run",
   runningLabel = "Running…",
@@ -231,21 +234,27 @@ export function ServiceShell({
 
         {/* ── Right: results ── */}
         <div className="space-y-4">
-          {error && (
+          {/* Loading skeleton — replaces results while running if provided */}
+          {running && renderLoading}
+
+          {/* Error — only when idle */}
+          {!running && error && (
             <div className={`${CARD} p-4 border-red-500/20`}>
               <p className={`${MONO} text-[11.5px] text-red-300/80`}>{error}</p>
             </div>
           )}
 
-          {!renderResults && !error && (
+          {/* Results — hidden during load when a loading UI is provided */}
+          {(!running || !renderLoading) && renderResults}
+
+          {/* Empty state */}
+          {!running && !renderResults && !error && (
             <div className="flex items-center justify-center h-40 rounded-[10px] border border-dashed border-white/[0.06]">
               <p className={`${MONO} text-[11px] uppercase tracking-[0.12em] text-white/25`}>
                 Results appear here
               </p>
             </div>
           )}
-
-          {renderResults}
         </div>
       </section>
 

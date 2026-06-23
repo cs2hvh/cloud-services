@@ -24,6 +24,9 @@ test-results*.json
 test-output.json
 vitest-report.json
 
+# Script test run artifacts (generated JSON/binary outputs — not source)
+scripts/test-results/
+
 # next.js
 /.next/
 /out/

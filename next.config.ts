@@ -32,6 +32,8 @@ const cspDirectives = [
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com",
+  // blob: required for <audio> and <video> elements playing ObjectURL blobs
+  "media-src 'self' blob:",
   "font-src 'self'",
   `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin}`,
   "frame-src 'none'",

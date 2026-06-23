@@ -106,6 +106,13 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    // Surface prompt-quality rejections clearly rather than hiding them as 503
+    if (errText.toLowerCase().includes("no image data") || errText.toLowerCase().includes("no images")) {
+      return c.json(gatewayError(
+        "Your prompt didn't produce an image. Try a more descriptive visual prompt, e.g. \"a mountain landscape at sunset, photorealistic\".",
+        "invalid_request_error", "prompt_rejected", requestId,
+      ), 422);
+    }
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -127,7 +134,10 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: "upstream_no_images",
     })));
-    return c.json(gatewayError("Image generation service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
+    return c.json(gatewayError(
+      "Your prompt didn't produce an image. Try a more descriptive visual prompt, e.g. \"a mountain landscape at sunset, photorealistic\".",
+      "invalid_request_error", "prompt_rejected", requestId,
+    ), 422);
   }
 
   const responseFormat = req.response_format ?? "b64_json";

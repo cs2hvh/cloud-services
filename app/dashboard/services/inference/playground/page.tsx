@@ -11,7 +11,7 @@ import { PlaygroundShell } from "@/components/dashboard/inference/playground-she
 
 export const dynamic = "force-dynamic";
 
-const SERVICE_MODALITIES = ["image", "tts", "stt", "rerank", "moderation", "ocr"] as const;
+const SERVICE_MODALITIES = ["image", "video", "tts", "stt", "rerank", "moderation", "ocr"] as const;
 type ServiceModality = (typeof SERVICE_MODALITIES)[number];
 
 interface RawModelRow {
@@ -103,7 +103,7 @@ async function loadServiceModels(
     .returns<RawModelRow[]>();
 
   const grouped: Record<ServiceModality, ServiceModel[]> = {
-    image: [], tts: [], stt: [], rerank: [], moderation: [], ocr: [],
+    image: [], video: [], tts: [], stt: [], rerank: [], moderation: [], ocr: [],
   };
 
   for (const row of data ?? []) {

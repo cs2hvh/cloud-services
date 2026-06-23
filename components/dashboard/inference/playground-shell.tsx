@@ -10,7 +10,7 @@
  */
 
 import { useState } from "react";
-import { Braces, FileSearch, ImageIcon, ListOrdered, MessageSquare, Mic, ShieldCheck, Volume2 } from "lucide-react";
+import { Braces, FileSearch, Film, ImageIcon, ListOrdered, MessageSquare, Mic, ShieldCheck, Volume2 } from "lucide-react";
 import {
   Playground,
   type PlaygroundModel,
@@ -24,9 +24,10 @@ import { ImagesService } from "@/components/dashboard/inference/services/images"
 import { TtsService } from "@/components/dashboard/inference/services/tts";
 import { SttService } from "@/components/dashboard/inference/services/stt";
 import { OcrService } from "@/components/dashboard/inference/services/ocr";
+import { VideoService } from "@/components/dashboard/inference/services/video";
 import { MONO } from "@/components/dashboard/inference/chrome";
 
-type TopTab = "chat" | "embeddings" | "rerank" | "moderation" | "images" | "tts" | "stt" | "ocr";
+type TopTab = "chat" | "embeddings" | "rerank" | "moderation" | "images" | "video" | "tts" | "stt" | "ocr";
 
 const TABS: Array<{ key: TopTab; label: string; Icon: React.ElementType }> = [
   { key: "chat",       label: "Chat",       Icon: MessageSquare },
@@ -34,6 +35,7 @@ const TABS: Array<{ key: TopTab; label: string; Icon: React.ElementType }> = [
   { key: "rerank",     label: "Rerank",     Icon: ListOrdered   },
   { key: "moderation", label: "Moderation", Icon: ShieldCheck   },
   { key: "images",     label: "Images",     Icon: ImageIcon     },
+  { key: "video",      label: "Video",      Icon: Film          },
   { key: "tts",        label: "TTS",        Icon: Volume2       },
   { key: "stt",        label: "STT",        Icon: Mic           },
   { key: "ocr",        label: "OCR",        Icon: FileSearch    },
@@ -61,7 +63,7 @@ function TabBar({ tab, onChange }: { tab: TopTab; onChange: (t: TopTab) => void 
   );
 }
 
-export type ServiceModels = Partial<Record<"image" | "tts" | "stt" | "rerank" | "moderation" | "ocr", ServiceModel[]>>;
+export type ServiceModels = Partial<Record<"image" | "video" | "tts" | "stt" | "rerank" | "moderation" | "ocr", ServiceModel[]>>;
 
 export function PlaygroundShell({
   models,
@@ -88,6 +90,8 @@ export function PlaygroundShell({
       return <ModerationService apiBase={apiBase} models={serviceModels.moderation ?? []} tabBar={tabBar} />;
     case "images":
       return <ImagesService apiBase={apiBase} models={serviceModels.image ?? []} tabBar={tabBar} />;
+    case "video":
+      return <VideoService apiBase={apiBase} models={serviceModels.video ?? []} tabBar={tabBar} />;
     case "tts":
       return <TtsService apiBase={apiBase} models={serviceModels.tts ?? []} tabBar={tabBar} />;
     case "stt":

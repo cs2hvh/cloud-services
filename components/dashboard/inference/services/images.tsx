@@ -10,9 +10,26 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { ImageIcon } from "lucide-react";
 import type { ServiceModel } from "@/components/dashboard/inference/playground";
 import { MONO } from "@/components/dashboard/inference/chrome";
 import { CARD, FieldLabel, INPUT_CLS, TEXTAREA_CLS, ServiceShell } from "./_shell";
+
+function ImageLoadingCard() {
+  return (
+    <div className={CARD}>
+      <div className={`${MONO} px-5 pt-4 pb-3 text-[10.5px] uppercase tracking-[0.13em] text-white/45 font-semibold border-b border-white/[0.05]`}>
+        Generated Images
+      </div>
+      <div className="p-5">
+        <div className="w-full aspect-square rounded-[8px] bg-white/[0.04] flex flex-col items-center justify-center gap-3 animate-pulse">
+          <ImageIcon className="h-8 w-8 text-white/10" />
+          <span className={`${MONO} text-[11px] text-white/20 uppercase tracking-[0.1em]`}>Generating…</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const ENDPOINT = "/images/generations";
 const FALLBACK_MODEL_ID = "ahura/image-gen";
@@ -125,6 +142,7 @@ export function ImagesService({
           setImageSize={setImageSize}
         />
       }
+      renderLoading={<ImageLoadingCard />}
       renderResults={images ? <ImageResults images={images} /> : null}
       usageLabel={
         usageImages !== null

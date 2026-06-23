@@ -32,6 +32,7 @@ import { messagesShim } from "./routes/messages.ts";
 import { rerank } from "./routes/rerank.ts";
 import { moderations } from "./routes/moderations.ts";
 import { imageGenerations } from "./routes/images.ts";
+import { createVideoJob, getVideoJob, retryVideoJob } from "./routes/video-generations.ts";
 import { audioSpeech } from "./routes/audio-speech.ts";
 import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
 import { ocr } from "./routes/ocr.ts";
@@ -111,8 +112,12 @@ v1.post("/embeddings", embeddings);
 v1.post("/rerank", rerank);
 v1.post("/moderations", moderations);
 
-// Phase 1 — Image generation (OpenAI-compatible surface over OpenRouter images)
+// Phase 1 — Image generation
 v1.post("/images/generations", imageGenerations);
+// Slice 4 — Async video generation (POST creates job, GET polls status)
+v1.post("/videos", createVideoJob);
+v1.get("/videos/:id", getVideoJob);
+v1.post("/videos/:id/retry", retryVideoJob);
 
 // Slice 3 — TTS + STT (OpenRouter gpt-audio-mini / voxtral proxy)
 v1.post("/audio/speech", audioSpeech);

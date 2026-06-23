@@ -1,13 +1,29 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { FileAudio } from "lucide-react";
+import { FileAudio, Mic } from "lucide-react";
 import { MONO } from "@/components/dashboard/inference/chrome";
 import { ServiceShell, CARD, FieldLabel, INPUT_CLS } from "./_shell";
 import type { ServiceModel } from "@/components/dashboard/inference/playground";
 
 const FALLBACK_MODEL_ID = "ahura/stt-whisper";
 const MODEL_LABEL       = "STT";
+
+function SttLoadingCard() {
+  return (
+    <div className={`${CARD} p-5 space-y-3`}>
+      <div className="flex items-center gap-2">
+        <Mic className="h-3.5 w-3.5 text-white/20" />
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/25`}>Transcribing…</span>
+      </div>
+      <div className="space-y-2 animate-pulse">
+        <div className="h-2.5 rounded-full bg-white/[0.06] w-full" />
+        <div className="h-2.5 rounded-full bg-white/[0.06] w-5/6" />
+        <div className="h-2.5 rounded-full bg-white/[0.06] w-3/4" />
+      </div>
+    </div>
+  );
+}
 
 interface SttResult { text: string; duration: number; }
 
@@ -64,6 +80,7 @@ export function SttService({
       description="Transcribe audio files to text. Supports MP3, WAV, M4A, WebM, FLAC, and OGG."
       canRun={!!file}
       customRun={customRun}
+      renderLoading={<SttLoadingCard />}
       runLabel="Transcribe"
       runningLabel="Transcribing…"
       usageLabel={result ? `${result.duration.toFixed(1)}s audio transcribed` : null}
