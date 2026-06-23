@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import { ImageIcon } from "lucide-react";
+import { Download, ImageIcon } from "lucide-react";
 import type { ServiceModel } from "@/components/dashboard/inference/playground";
 import { MONO } from "@/components/dashboard/inference/chrome";
 import { CARD, FieldLabel, INPUT_CLS, TEXTAREA_CLS, ServiceShell } from "./_shell";
@@ -253,6 +253,13 @@ function ImagesForm({
 }
 
 function ImageResults({ images }: { images: GeneratedImage[] }) {
+  const handleDownload = (src: string, index: number) => {
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = `ahura-image-${index + 1}.png`;
+    a.click();
+  };
+
   return (
     <div className={CARD}>
       <div className={`${MONO} px-5 pt-4 pb-3 text-[10.5px] uppercase tracking-[0.13em] text-white/45 font-semibold border-b border-white/[0.05]`}>
@@ -267,9 +274,20 @@ function ImageResults({ images }: { images: GeneratedImage[] }) {
               alt={`Generated image ${index + 1}`}
               className="w-full rounded-[8px] border border-white/[0.08] bg-black object-cover"
             />
-            <figcaption className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/35`}>
-              {image.kind}
-            </figcaption>
+            <div className="flex items-center justify-between">
+              <figcaption className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/35`}>
+                {image.kind}
+              </figcaption>
+              <button
+                type="button"
+                onClick={() => handleDownload(image.src, index)}
+                className="flex items-center gap-1 text-white/25 hover:text-white/60 transition-colors"
+                title="Download image"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className={`${MONO} text-[10px] uppercase tracking-[0.1em]`}>png</span>
+              </button>
+            </div>
           </figure>
         ))}
       </div>

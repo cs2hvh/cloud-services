@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { FileAudio, Mic } from "lucide-react";
+import { Check, Copy, FileAudio, Mic } from "lucide-react";
 import { MONO } from "@/components/dashboard/inference/chrome";
 import { ServiceShell, CARD, FieldLabel, INPUT_CLS } from "./_shell";
 import type { ServiceModel } from "@/components/dashboard/inference/playground";
@@ -41,7 +41,15 @@ export function SttService({
   const [file, setFile]         = useState<File | null>(null);
   const [language, setLanguage] = useState("");
   const [result, setResult]     = useState<SttResult | null>(null);
+  const [copied, setCopied]     = useState(false);
   const fileInputRef             = useRef<HTMLInputElement>(null);
+
+  const handleCopy = useCallback((text: string) => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
 
   const codeSnippet = `curl ${apiBase}/audio/transcriptions \\
   -H "Authorization: Bearer ahu_..." \\
@@ -123,7 +131,20 @@ export function SttService({
         <div className={`${CARD} p-5 space-y-3`}>
           <div className="flex items-center justify-between">
             <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>Transcript</span>
-            <span className={`${MONO} text-[10px] text-white/30`}>{result.duration.toFixed(1)}s audio</span>
+            <div className="flex items-center gap-3">
+              <span className={`${MONO} text-[10px] text-white/30`}>{result.duration.toFixed(1)}s audio</span>
+              <button
+                type="button"
+                onClick={() => handleCopy(result.text)}
+                className="flex items-center gap-1 text-white/25 hover:text-white/60 transition-colors"
+                title="Copy transcript"
+              >
+                {copied
+                  ? <Check className="h-3.5 w-3.5 text-green-400" />
+                  : <Copy className="h-3.5 w-3.5" />}
+                <span className={`${MONO} text-[10px] uppercase tracking-[0.1em]`}>{copied ? "copied" : "copy"}</span>
+              </button>
+            </div>
           </div>
           <p className={`${MONO} text-[13px] text-white/85 leading-relaxed`}>{result.text}</p>
         </div>

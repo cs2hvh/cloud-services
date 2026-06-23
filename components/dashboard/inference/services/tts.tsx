@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef } from "react";
-import { Volume2 } from "lucide-react";
+import { Download, Volume2 } from "lucide-react";
 import { CARD, FieldLabel, INPUT_CLS, ServiceShell, TEXTAREA_CLS } from "./_shell";
 import { MONO } from "@/components/dashboard/inference/chrome";
 import type { ServiceModel } from "@/components/dashboard/inference/playground";
@@ -108,11 +108,30 @@ export function TtsService({
     </>
   );
 
+  const handleDownload = useCallback(() => {
+    if (!audioUrlRef.current) return;
+    const a = document.createElement("a");
+    a.href = audioUrlRef.current;
+    a.download = "tts-output.wav";
+    a.click();
+  }, []);
+
   const renderResults = audioUrl ? (
     <div className={`${CARD} p-5 space-y-4`}>
-      <div className="flex items-center gap-2">
-        <Volume2 className="h-3.5 w-3.5 text-white/40" />
-        <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>Audio output</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Volume2 className="h-3.5 w-3.5 text-white/40" />
+          <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>Audio output</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="flex items-center gap-1.5 text-white/25 hover:text-white/60 transition-colors"
+          title="Download WAV"
+        >
+          <Download className="h-3.5 w-3.5" />
+          <span className={`${MONO} text-[10px] uppercase tracking-[0.1em]`}>wav</span>
+        </button>
       </div>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio controls src={audioUrl} className="w-full" style={{ filter: "invert(1) hue-rotate(180deg)" }} />
