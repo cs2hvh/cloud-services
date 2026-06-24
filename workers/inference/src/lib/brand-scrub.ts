@@ -71,6 +71,7 @@ export function scrubJson(
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
     if (k === "provider") continue;           // brand leak
+    if (k === "user_id") continue;            // OR internal user id — never expose
     if (k === "model") { out[k] = modelId; continue; }
     if (k === "id" && requestId) { out[k] = requestId; continue; }
     if (k === "usage") { const u = cleanUsage(v); if (u) out[k] = u; continue; }

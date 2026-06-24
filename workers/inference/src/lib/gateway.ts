@@ -81,7 +81,7 @@ export function checkModelScope(
 // ── Model routing ─────────────────────────────────────────────────────────────
 
 export type RoutingResult =
-  | { ok: true; upstreamModelId: string }
+  | { ok: true; upstreamModelId: string; capabilities: Record<string, unknown> | null }
   | { ok: false; error: ReturnType<typeof gatewayError> };
 
 export async function resolveRouting(env: Env, modelId: string, requestId: string): Promise<RoutingResult> {
@@ -108,7 +108,7 @@ export async function resolveRouting(env: Env, modelId: string, requestId: strin
       ),
     };
   }
-  return { ok: true, upstreamModelId: routing.upstream_model_id };
+  return { ok: true, upstreamModelId: routing.upstream_model_id, capabilities: routing.capabilities };
 }
 
 // ── Upstream error classification ────────────────────────────────────────────

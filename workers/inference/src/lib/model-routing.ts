@@ -32,6 +32,9 @@ export interface ModelRouting {
   /** Upstream model ID used when serving_type='proxy' (e.g. 'cohere/rerank-v3.5'). */
   upstream_model_id: string | null;
   is_active: boolean;
+  /** Model capabilities JSONB — route-specific handlers can read feature flags
+   *  (e.g. supported_durations, supports_i2v) without extra DB queries. */
+  capabilities: Record<string, unknown> | null;
 }
 
 /**
@@ -49,13 +52,14 @@ export async function lookupModelRouting(
   const { data } = await supabase
     .schema("inference")
     .from("models")
-    .select("serving_type, serving_url, upstream_model_id, is_active")
+    .select("serving_type, serving_url, upstream_model_id, is_active, capabilities")
     .eq("model_id", modelId)
     .maybeSingle<{
       serving_type: ServingType;
       serving_url: string | null;
       upstream_model_id: string | null;
       is_active: boolean;
+      capabilities: Record<string, unknown> | null;
     }>();
 
   if (!data) return null;
@@ -66,6 +70,7 @@ export async function lookupModelRouting(
     served_model_name: data.serving_type === "runpod_ft" ? "adapter" : null,
     upstream_model_id: data.upstream_model_id,
     is_active: data.is_active,
+    capabilities: data.capabilities ?? null,
   };
 }
 

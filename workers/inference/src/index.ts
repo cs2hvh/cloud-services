@@ -32,7 +32,8 @@ import { messagesShim } from "./routes/messages.ts";
 import { rerank } from "./routes/rerank.ts";
 import { moderations } from "./routes/moderations.ts";
 import { imageGenerations } from "./routes/images.ts";
-import { createVideoJob, getVideoJob, retryVideoJob } from "./routes/video-generations.ts";
+import { createVideoJob, getVideoJob, getVideoContent, retryVideoJob } from "./routes/video-generations.ts";
+import { createMusicJob } from "./routes/music-generations.ts";
 import { audioSpeech } from "./routes/audio-speech.ts";
 import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
 import { ocr } from "./routes/ocr.ts";
@@ -116,8 +117,12 @@ v1.post("/moderations", moderations);
 v1.post("/images/generations", imageGenerations);
 // Slice 4 — Async video generation (POST creates job, GET polls status)
 v1.post("/videos", createVideoJob);
+v1.get("/videos/:id/content", getVideoContent);  // proxy before :id catch-all
 v1.get("/videos/:id", getVideoJob);
 v1.post("/videos/:id/retry", retryVideoJob);
+
+// Music generation (synchronous via Lyria streaming, like TTS)
+v1.post("/audio/music", createMusicJob);
 
 // Slice 3 — TTS + STT (OpenRouter gpt-audio-mini / voxtral proxy)
 v1.post("/audio/speech", audioSpeech);
@@ -221,6 +226,7 @@ export default {
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runServingPodWatchdog(env, event));
+    ctx.waitUntil(runMediaJobWatchdog(env, event));
     const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
     // Fine-tuning watchdog every 5 min: reaps orphaned FT jobs (stale
     // heartbeat) and zombie GPU pods left on already-terminal jobs. Its
@@ -247,6 +253,15 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
     event,
     "/api/inference/internal/serving-pod-watchdog",
     "serving-pod watchdog"
+  );
+}
+
+async function runMediaJobWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/media-job-watchdog",
+    "media-job watchdog"
   );
 }
 

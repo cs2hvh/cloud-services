@@ -79,6 +79,7 @@ export interface ServiceModel {
   display_name: string;
   is_featured: boolean;
   tier: string | null;
+  capabilities: Record<string, unknown> | null;
 }
 
 export interface PlaygroundPreset {
