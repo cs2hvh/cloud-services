@@ -1,0 +1,8 @@
+# Build context is workers/ (so runner images can include the shared
+# runner-core package). Keep the context lean — never ship local installs
+# or build output; the Dockerfiles install + build from source.
+**/node_modules
+**/dist
+**/.wrangler
+**/*.log
+inference

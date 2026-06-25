@@ -1,10 +1,10 @@
 /**
- * Tiny HTTP server for k8s liveness/readiness probes. No Express — just the
- * stdlib. The runner is process-bound, not request-bound, so we keep this
- * trivial.
+ * Tiny stdlib HTTP server for k8s liveness/readiness probes. The runner is
+ * process-bound, not request-bound, so this stays trivial.
  *
- * /health  → 200 if main loop is healthy
- * /ready   → 200 once boot completed
+ * /ready  → 200 once boot completed, else 503
+ * /health → 200 while the process responds (worker inactivity is not a
+ *           liveness signal — there may simply be no work)
  */
 import { createServer, type Server } from "http";
 import type { Logger } from "./logger.js";
@@ -15,11 +15,7 @@ export interface HealthState {
   lastWorkerActivityAt: number;
 }
 
-export function startHealthServer(
-  port: number,
-  state: HealthState,
-  logger: Logger
-): Server {
+export function startHealthServer(port: number, state: HealthState, logger: Logger): Server {
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
     if (url === "/ready") {
@@ -29,8 +25,6 @@ export function startHealthServer(
     }
     if (url === "/health" || url === "/healthz" || url === "/") {
       const now = Date.now();
-      // Liveness: as long as the process responds we're alive. Worker
-      // inactivity isn't a liveness signal — there might just be no work.
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
