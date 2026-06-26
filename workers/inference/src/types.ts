@@ -1,3 +1,5 @@
+import type { TraceSpan } from "./lib/trace.ts";
+
 /**
  * Bindings exposed to the edge gateway by wrangler.toml.
  * Keep this in sync with the [vars], [[kv_namespaces]], [[queues.producers]],
@@ -8,6 +10,10 @@ export interface Env {
   API_KEYS: KVNamespace;
   SPEND: KVNamespace;
   L1_CACHE: KVNamespace;
+  /** Phase 3 S3: prompt template cache. Key: "prompt:{orgId}:{name}:{label}" */
+  PROMPTS: KVNamespace;
+  /** Phase 3 S2: per-org guardrail policy cache. Key: "guardrail:{orgId}:{name}" */
+  GUARDRAILS: KVNamespace;
 
   // Durable Objects
   RATE_LIMITER: DurableObjectNamespace;
@@ -15,6 +21,8 @@ export interface Env {
   // Queues
   AUDIT_EVENTS: Queue<AuditEvent>;
   USAGE_EVENTS: Queue<UsageEvent>;
+  /** Phase 3 S1: trace span events → inference.trace_spans */
+  TRACE_EVENTS: Queue<TraceSpan>;
 
   // Public vars
   OPENROUTER_BASE_URL: string;

@@ -30,9 +30,11 @@ import {
   extendServingPodIdle,
 } from "../lib/model-routing.ts";
 import {
-  evaluateGuardrail,
   extractUserTextsFromOpenAI,
-  parseGuardrailPolicy,
+  resolveOrgGuardrailPolicy,
+  evaluateOrgGuardrail,
+  redactPii,
+  type GuardrailRule,
 } from "../lib/guardrail.ts";
 import {
   extractJsonSchema,
@@ -45,6 +47,8 @@ import {
   validateToolCalls,
   buildToolRepairBody,
 } from "../lib/tool-guarantees.ts";
+import { sendTrace, shouldSamplePayload, DEFAULT_TRACE_SAMPLE_RATE, type GuardrailAction } from "../lib/trace.ts";
+import { resolvePrompt, applyPrompt } from "../lib/prompt-resolver.ts";
 
 // ───────────────────────────────────────────────────────────────
 // Request schema — permissive on tool/content shape since OpenAI
@@ -105,6 +109,13 @@ export const chatCompletions: Handler<{
   const auth = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+
+  // Phase 3 S1: trace ID — forwarded from the client or generated fresh.
+  // Groups all spans for multi-step agent traces.
+  const traceId = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
+  // Hoisted so the blocked-guardrail path can include it (null before prompt resolution).
+  let promptMeta: { promptId: string; version: number } | null = null;
 
   // 1. Parse body
   let body: unknown;
@@ -181,19 +192,25 @@ export const chatCompletions: Handler<{
     );
   }
 
-  // 3b. Prompt-injection guardrail — scans user+system text for known
-  //     jailbreak/role-injection patterns. Policy comes from header,
-  //     defaults to "warn" so rollout is non-breaking. The header is set
-  //     unconditionally (off → "clean"; warn → "clean"|"flagged";
-  //     block → "clean"|"flagged"|"blocked") so callers can wire alerting.
-  const guardrailPolicy = parseGuardrailPolicy(c.req.header("X-Ahura-Guardrail"));
-  const guardrail = evaluateGuardrail(
-    extractUserTextsFromOpenAI(req.messages as Array<{ role?: string; content?: unknown }>),
-    guardrailPolicy
+  // 3b. Guardrail — Phase 3 S2: per-org named policy from KV, falling back
+  //     to keyword mode ("off"/"warn"/"block"/"redact") for backwards compat.
+  //     The header now accepts either a policy name ("strict-rag-policy") or
+  //     a keyword; the control plane writes named policies to GUARDRAILS KV.
+  const orgGuardrailPolicy = await resolveOrgGuardrailPolicy(
+    c.env,
+    auth.orgId,
+    c.req.header("X-Ahura-Guardrail")
+  );
+  const userTexts = extractUserTextsFromOpenAI(
+    req.messages as Array<{ role?: string; content?: unknown }>
+  );
+  const guardrail = evaluateOrgGuardrail(
+    userTexts,
+    req.messages as Array<{ role: string; content: unknown }>,
+    orgGuardrailPolicy
   );
   c.header("X-Ahura-Guardrail", guardrail.action);
   if (guardrail.hits.length > 0) {
-    // Single line, structured so the log shipper can grep + aggregate.
     console.log(
       JSON.stringify({
         level: guardrail.action === "blocked" ? "warn" : "info",
@@ -201,15 +218,25 @@ export const chatCompletions: Handler<{
         orgId: auth.orgId,
         keyId: auth.keyId,
         message: `guardrail.${guardrail.action}`,
-        policy: guardrail.policy,
+        policy: orgGuardrailPolicy.mode,
         pattern_ids: guardrail.hits.map((h) => h.pattern_id),
       })
     );
   }
   if (guardrail.action === "blocked") {
+    c.executionCtx.waitUntil(
+      sendTrace(c.env, {
+        ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, "blocked"),
+        inputTokens: null,
+        outputTokens: null,
+        status: "error_guardrail_blocked",
+        payload: null,
+        attributes: { blocked_patterns: guardrail.hits.map((h) => h.pattern_id) },
+      })
+    );
     return c.json(
       errorBody(
-        `Request blocked by prompt-injection guardrail (patterns: ${guardrail.hits.map((h) => h.pattern_id).join(", ")})`,
+        `Request blocked by guardrail (patterns: ${guardrail.hits.map((h) => h.pattern_id).join(", ")})`,
         "invalid_request_error",
         "guardrail_blocked",
         requestId
@@ -267,6 +294,67 @@ export const chatCompletions: Handler<{
   if (presetConfig) {
     outgoingBody = applyPreset(outgoingBody, presetConfig);
     c.header("X-Ahura-Preset", presetName!);
+  }
+
+  // Phase 3 S2: apply redacted messages when guardrail mode="redact"
+  if (guardrail.redactedMessages) {
+    outgoingBody = { ...outgoingBody, messages: guardrail.redactedMessages };
+  }
+
+  // Phase 3 S3: resolve named prompt template from X-Ahura-Prompt header.
+  // Rendered messages are prepended; template model defaults fill gaps.
+  const promptRef = c.req.header("X-Ahura-Prompt");
+  if (promptRef) {
+    let promptVars: Record<string, unknown> = {};
+    const varsHeader = c.req.header("X-Ahura-Prompt-Vars");
+    if (varsHeader) {
+      try { promptVars = JSON.parse(varsHeader) as Record<string, unknown>; } catch { /* ignore */ }
+    }
+
+    // Scan variable values through the guardrail — they are user-controlled strings
+    // that will be interpolated into the system prompt AFTER the main guardrail pass.
+    // A jailbreak payload in {{var}} would otherwise bypass the guardrail entirely.
+    if (orgGuardrailPolicy.mode !== "off" && Object.keys(promptVars).length > 0) {
+      const varTexts = Object.values(promptVars).map(String).filter(Boolean);
+      const varScan = evaluateOrgGuardrail(varTexts, [], orgGuardrailPolicy);
+      if (varScan.action === "blocked") {
+        c.executionCtx.waitUntil(
+          sendTrace(c.env, {
+            ...baseTraceSpan(auth, traceId, requestId, effectiveModel, null, startedAt, "blocked"),
+            inputTokens: null,
+            outputTokens: null,
+            status: "error_guardrail_blocked",
+            payload: null,
+            attributes: { blocked_on: "prompt_vars" },
+          })
+        );
+        return c.json(
+          errorBody(
+            `Request blocked by guardrail on prompt variable values`,
+            "invalid_request_error",
+            "guardrail_blocked",
+            requestId
+          ),
+          400
+        );
+      }
+    }
+
+    const resolved = await resolvePrompt(c.env, auth.orgId, promptRef, promptVars);
+    if (!resolved) {
+      return c.json(
+        errorBody(
+          `Prompt "${promptRef}" not found or has no deployed label`,
+          "invalid_request_error",
+          "prompt_not_found",
+          requestId
+        ),
+        400
+      );
+    }
+    promptMeta = { promptId: resolved.promptId, version: resolved.version };
+    outgoingBody = applyPrompt(outgoingBody, resolved);
+    c.header("X-Ahura-Prompt-Version", String(resolved.version));
   }
 
   // 5b. Self-hosted models (FT outputs, BYO deploys) — two branches:
@@ -384,9 +472,12 @@ export const chatCompletions: Handler<{
           "content-type": "text/event-stream",
           "cache-control": "no-cache",
           "X-Ahura-Request-Id": requestId,
+          "X-Ahura-Trace-Id": traceId,
           "X-Ahura-Model": effectiveModel,
           "X-Ahura-Billing": auth.billing,
           "X-Ahura-Routing": "managed",
+          "X-Ahura-Guardrail": guardrail.action,
+          ...(promptMeta ? { "X-Ahura-Prompt-Version": String(promptMeta.version) } : {}),
         },
         (scrubbedText) => {
           const usage = extractUsageFromSse(scrubbedText);
@@ -396,6 +487,18 @@ export const chatCompletions: Handler<{
               inputTokens: usage?.prompt_tokens ?? null,
               outputTokens: usage?.completion_tokens ?? null,
               status: "success",
+            })
+          );
+          c.executionCtx.waitUntil(
+            sendTrace(c.env, {
+              ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+              inputTokens: usage?.prompt_tokens ?? null,
+              outputTokens: usage?.completion_tokens ?? null,
+              status: "success",
+              payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
+                ? { input: outgoingBody.messages, output: null }
+                : null,
+              attributes: { streaming: true, routing: "managed" },
             })
           );
         }
@@ -418,14 +521,27 @@ export const chatCompletions: Handler<{
         status: "success",
       })
     );
+    c.executionCtx.waitUntil(
+      sendTrace(c.env, {
+        ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+        inputTokens: usage?.prompt_tokens ?? null,
+        outputTokens: usage?.completion_tokens ?? null,
+        status: "success",
+        payload: null,
+        attributes: { routing: "managed" },
+      })
+    );
     return new Response(text, {
       status: 200,
       headers: {
         "content-type": upstream.headers.get("content-type") ?? "application/json",
         "X-Ahura-Request-Id": requestId,
+        "X-Ahura-Trace-Id": traceId,
         "X-Ahura-Model": effectiveModel,
         "X-Ahura-Billing": auth.billing,
         "X-Ahura-Routing": "managed",
+        "X-Ahura-Guardrail": guardrail.action,
+        ...(promptMeta ? { "X-Ahura-Prompt-Version": String(promptMeta.version) } : {}),
       },
     });
   }
@@ -444,6 +560,16 @@ export const chatCompletions: Handler<{
           cachedTokens: cached.usage?.prompt_tokens ?? null,
           status: "success",
           cacheKind: "l1",
+        })
+      );
+      c.executionCtx.waitUntil(
+        sendTrace(c.env, {
+          ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+          inputTokens: cached.usage?.prompt_tokens ?? null,
+          outputTokens: cached.usage?.completion_tokens ?? null,
+          status: "success",
+          payload: null,
+          attributes: { cache_kind: "l1" },
         })
       );
       return new Response(cached.body, {
@@ -510,6 +636,16 @@ export const chatCompletions: Handler<{
             cacheKind: "semantic",
           })
         );
+        c.executionCtx.waitUntil(
+          sendTrace(c.env, {
+            ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+            inputTokens: semanticHit.usage?.prompt_tokens ?? null,
+            outputTokens: semanticHit.usage?.completion_tokens ?? null,
+            status: "success",
+            payload: null,
+            attributes: { cache_kind: "semantic", similarity: semanticHit.similarity },
+          })
+        );
         return new Response(semanticHit.responseBody, {
           status: 200,
           headers: {
@@ -545,11 +681,22 @@ export const chatCompletions: Handler<{
   // 5. Error responses — scrub brand info, forward Retry-After, pass status through
   if (!upstream.ok) {
     const text = await upstream.text();
+    const errStatus = mapUpstreamStatus(upstream.status);
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
-        status: mapUpstreamStatus(upstream.status),
+        status: errStatus,
         errorCode: `upstream_${upstream.status}`,
+      })
+    );
+    c.executionCtx.waitUntil(
+      sendTrace(c.env, {
+        ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+        inputTokens: null,
+        outputTokens: null,
+        status: errStatus,
+        payload: null,
+        attributes: { upstream_http_status: upstream.status },
       })
     );
     // Forward Retry-After so clients can back off correctly on 429/503
@@ -583,9 +730,12 @@ export const chatCompletions: Handler<{
         "content-type": "text/event-stream",
         "cache-control": "no-cache",
         "X-Ahura-Request-Id": requestId,
+        "X-Ahura-Trace-Id": traceId,
         "X-Ahura-Model": effectiveModel,
         "X-Ahura-Billing": auth.billing,
         "X-Ahura-Cache": cacheDecision.cacheable ? "miss" : "skipped",
+        "X-Ahura-Guardrail": guardrail.action,
+        ...(promptMeta ? { "X-Ahura-Prompt-Version": String(promptMeta.version) } : {}),
       },
       (scrubbedText) => {
         const usage = extractUsageFromSse(scrubbedText);
@@ -596,6 +746,18 @@ export const chatCompletions: Handler<{
             outputTokens: usage?.completion_tokens ?? null,
             cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
             status: "success",
+          })
+        );
+        c.executionCtx.waitUntil(
+          sendTrace(c.env, {
+            ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+            inputTokens: usage?.prompt_tokens ?? null,
+            outputTokens: usage?.completion_tokens ?? null,
+            status: "success",
+            payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
+              ? { input: outgoingBody.messages, output: null }
+              : null,
+            attributes: { streaming: true },
           })
         );
       }
@@ -632,6 +794,19 @@ export const chatCompletions: Handler<{
       outputTokens: parsedUsage?.completion_tokens ?? null,
       cachedTokens: parsedUsage?.prompt_tokens_details?.cached_tokens ?? null,
       status: "success",
+    })
+  );
+  // Phase 3 S1: emit trace span alongside usage event
+  c.executionCtx.waitUntil(
+    sendTrace(c.env, {
+      ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
+      inputTokens: parsedUsage?.prompt_tokens ?? null,
+      outputTokens: parsedUsage?.completion_tokens ?? null,
+      status: "success",
+      payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
+        ? { input: outgoingBody.messages, output: parsedData ?? null }
+        : null,
+      attributes: {},
     })
   );
 
@@ -742,6 +917,32 @@ export const chatCompletions: Handler<{
     }
   }
 
+  // Phase 3 S2: POST-call guardrail scan — redact PII in completion before caching/returning.
+  // Only runs for mode="redact" with a pii rule; streaming is best-effort post-hoc (cut for v1).
+  if (orgGuardrailPolicy.mode === "redact" && parsedData) {
+    const piiRule = orgGuardrailPolicy.rules.find(
+      (r): r is Extract<GuardrailRule, { type: "pii" }> => r.type === "pii"
+    );
+    if (piiRule) {
+      const choices = parsedData.choices as Array<{ message?: { role?: string; content?: unknown } }> | undefined;
+      if (choices) {
+        let mutated = false;
+        const newChoices = choices.map((ch) => {
+          if (typeof ch?.message?.content !== "string") return ch;
+          const { text: clean, hits } = redactPii(ch.message.content, piiRule.categories);
+          if (hits.length === 0) return ch;
+          mutated = true;
+          return { ...ch, message: { ...ch.message, content: clean } };
+        });
+        if (mutated) {
+          parsedData = { ...parsedData, choices: newChoices };
+          scrubbedText = JSON.stringify(scrubJson(parsedData, effectiveModel, `chat-${requestId}`));
+          c.header("X-Ahura-Guardrail", "redacted");
+        }
+      }
+    }
+  }
+
   // Cache write-through (best effort, doesn't block response)
   if (cacheDecision.cacheable && cacheDecision.key) {
     c.executionCtx.waitUntil(
@@ -788,9 +989,12 @@ export const chatCompletions: Handler<{
     headers: {
       "content-type": "application/json",
       "X-Ahura-Request-Id": requestId,
+      "X-Ahura-Trace-Id": traceId,
       "X-Ahura-Model": effectiveModel,
       "X-Ahura-Billing": auth.billing,
       "X-Ahura-Cache": cacheDecision.cacheable ? "miss" : "skipped",
+      "X-Ahura-Guardrail": guardrail.action,
+      ...(promptMeta ? { "X-Ahura-Prompt-Version": String(promptMeta.version) } : {}),
     },
   });
 };
@@ -878,6 +1082,39 @@ function extractUsageFromSse(rawText: string): OpenAIUsage | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Common fields shared across every trace span in this handler.
+ * Only the variable parts (tokens, status, payload, attributes) are
+ * passed at each call site. Adding a new span field: update here only.
+ */
+function baseTraceSpan(
+  auth: AuthContext,
+  traceId: string,
+  requestId: string,
+  effectiveModel: string,
+  promptMeta: { promptId: string; version: number } | null,
+  startedAt: number,
+  guardrailAction: GuardrailAction
+) {
+  return {
+    orgId: auth.orgId,
+    traceId,
+    parentSpanId: null,
+    requestId,
+    apiKeyId: auth.keyId,
+    name: "gen_ai.chat" as const,
+    modelId: effectiveModel,
+    promptId: promptMeta?.promptId ?? null,
+    promptVersion: promptMeta?.version ?? null,
+    experimentId: null,
+    arm: null,
+    latencyMs: Date.now() - startedAt,
+    ttftMs: null,
+    costCents: 0,
+    guardrailAction,
+  };
 }
 
 function mapUpstreamStatus(httpStatus: number): UsageEvent["status"] {

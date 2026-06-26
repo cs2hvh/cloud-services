@@ -82,3 +82,4 @@ infra/jenkins/data/
 workers/*/.wrangler/
 workers/*/dist/
 workers/*/test/load-result.json
+workers/*/.dev.vars

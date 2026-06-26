@@ -20,7 +20,7 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { cors } from "hono/cors";
 
-import type { AuditEvent, Env, HonoVariables, UsageEvent } from "./types.ts";
+import type { Env, HonoVariables } from "./types.ts";
 import { authMiddleware } from "./middleware/auth.ts";
 import { spendCheckMiddleware } from "./middleware/spend.ts";
 import { rateLimitMiddleware } from "./middleware/rate-limit.ts";
@@ -39,6 +39,7 @@ import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
 import { ocr } from "./routes/ocr.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
+import { handleTraceBatch } from "./consumers/trace.ts";
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -62,6 +63,9 @@ app.use(
       "X-Ahura-Guardrail",
       "X-Ahura-Cache",
       "X-Ahura-Cache-TTL",
+      "X-Ahura-Trace-Id",
+      "X-Ahura-Prompt",
+      "X-Ahura-Prompt-Vars",
     ],
     exposeHeaders: [
       "X-Ahura-Request-Id",
@@ -70,6 +74,8 @@ app.use(
       "X-Ahura-Cache",
       "X-Ahura-Cache-Age",
       "X-Ahura-Guardrail",
+      "X-Ahura-Prompt-Version",
+      "X-Ahura-Trace-Id",
     ],
     maxAge: 86400,
   })
@@ -190,13 +196,23 @@ export default {
   fetch: app.fetch.bind(app),
 
   async queue(
-    batch: MessageBatch<UsageEvent | AuditEvent>,
+    batch: MessageBatch<unknown>,
     env: Env
   ): Promise<void> {
-    if (batch.queue === "ahura-inference-usage") {
-      await handleUsageBatch(batch as MessageBatch<UsageEvent>, env);
-    } else if (batch.queue === "ahura-inference-audit") {
-      await handleAuditBatch(batch as MessageBatch<AuditEvent>, env);
+    // To add a new queue: import its handler, register it here.
+    // The queue name must match the `queue` field in wrangler.toml [[queues.consumers]].
+    const QUEUE_HANDLERS: Record<
+      string,
+      (batch: MessageBatch<never>, env: Env) => Promise<void>
+    > = {
+      "ahura-inference-usage": handleUsageBatch as never,
+      "ahura-inference-audit": handleAuditBatch as never,
+      "ahura-inference-trace": handleTraceBatch as never,
+    };
+
+    const handler = QUEUE_HANDLERS[batch.queue];
+    if (handler) {
+      await handler(batch as MessageBatch<never>, env);
     } else {
       console.warn(
         JSON.stringify({

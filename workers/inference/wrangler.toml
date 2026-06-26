@@ -54,6 +54,22 @@ binding = "L1_CACHE"
 id = "2f6599a7b1dc4334bb3b11dc5a310332"
 preview_id = "3e43e360d8f047798c86ef1f40aa9c9c"
 
+# Phase 3 S3 — versioned prompt template cache.
+# Key: "prompt:{orgId}:{name}:{label}" — written-through on every label publish.
+# Create: wrangler kv namespace create PROMPTS  (then paste IDs below)
+[[kv_namespaces]]
+binding = "PROMPTS"
+id = "REPLACE_WITH_PROMPTS_KV_ID"
+preview_id = "REPLACE_WITH_PROMPTS_KV_PREVIEW_ID"
+
+# Phase 3 S2 — per-org guardrail policy cache.
+# Key: "guardrail:{orgId}:{name}" — written-through on every policy publish.
+# Create: wrangler kv namespace create GUARDRAILS  (then paste IDs below)
+[[kv_namespaces]]
+binding = "GUARDRAILS"
+id = "REPLACE_WITH_GUARDRAILS_KV_ID"
+preview_id = "REPLACE_WITH_GUARDRAILS_KV_PREVIEW_ID"
+
 # ───────────────────────────────────────────────────────────────
 # Durable Objects
 # ───────────────────────────────────────────────────────────────
@@ -81,6 +97,11 @@ queue = "ahura-inference-audit"
 binding = "USAGE_EVENTS"
 queue = "ahura-inference-usage"
 
+# Phase 3 S1 — OTel-compatible trace spans → inference.trace_spans
+[[queues.producers]]
+binding = "TRACE_EVENTS"
+queue = "ahura-inference-trace"
+
 # ───────────────────────────────────────────────────────────────
 # Queue consumers — same Worker drains the queues it produces to
 # ───────────────────────────────────────────────────────────────
@@ -98,6 +119,15 @@ max_concurrency = 4
 [[queues.consumers]]
 queue = "ahura-inference-audit"
 max_batch_size = 50
+max_batch_timeout = 10
+max_retries = 3
+max_concurrency = 2
+
+# TRACE consumer: batch-inserts into inference.trace_spans. Larger timeout
+# because spans are lower-priority than usage events.
+[[queues.consumers]]
+queue = "ahura-inference-trace"
+max_batch_size = 100
 max_batch_timeout = 10
 max_retries = 3
 max_concurrency = 2
