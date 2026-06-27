@@ -144,3 +144,92 @@ export async function PUT(
     },
   });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; v: string }> }
+) {
+  const { id, v } = await params;
+  const auth = await authenticateUser();
+  if (!auth.authenticated) return auth.response;
+
+  const rl = await limitByUser(auth.user!.id, { prefix: "rl:prompt-label", limit: 20, windowMs: 60_000 });
+  if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+
+  const version = parseInt(v, 10);
+  if (!Number.isFinite(version) || version < 1) {
+    return NextResponse.json({ error: "Invalid version number" }, { status: 400 });
+  }
+
+  let org;
+  try {
+    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
+  }
+  if (org.role !== "owner" && org.role !== "admin" && org.role !== "developer") {
+    return NextResponse.json({ error: "Viewers cannot remove labels" }, { status: 403 });
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  const { data: prompt } = await supabase
+    .schema("inference")
+    .from("prompts")
+    .select("id, name")
+    .eq("id", id)
+    .eq("org_id", org.org_id)
+    .single();
+
+  if (!prompt) return NextResponse.json({ error: "Prompt not found" }, { status: 404 });
+
+  const { data: target } = await supabase
+    .schema("inference")
+    .from("prompt_versions")
+    .select("id, version, label")
+    .eq("prompt_id", id)
+    .eq("version", version)
+    .single();
+
+  if (!target) return NextResponse.json({ error: "Version not found" }, { status: 404 });
+  if (!target.label) return NextResponse.json({ error: "This version has no label to remove" }, { status: 409 });
+
+  const removedLabel = target.label as string;
+
+  const { error } = await supabase
+    .schema("inference")
+    .from("prompt_versions")
+    .update({ label: null })
+    .eq("id", target.id);
+
+  if (error) {
+    console.error("[prompts] label remove error:", error);
+    return NextResponse.json({ error: "Failed to remove label" }, { status: 500 });
+  }
+
+  // Purge from KV so the gateway stops resolving this label immediately
+  void kvDeletePrompt(org.org_id, prompt.name, removedLabel);
+
+  const ctx = auditContextFrom(request);
+  void recordAudit({
+    orgId: org.org_id,
+    actorUserId: auth.user!.id,
+    action: "org.updated",
+    targetType: "prompt_version",
+    targetId: target.id,
+    metadata: {
+      event: "prompt_version.undeployed",
+      name: prompt.name,
+      version: target.version,
+      label: removedLabel,
+    },
+    ipAddress: ctx.ipAddress,
+    userAgent: ctx.userAgent,
+  });
+
+  return NextResponse.json({ success: true, data: { removed_label: removedLabel } });
+}

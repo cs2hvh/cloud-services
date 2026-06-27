@@ -521,8 +521,8 @@ export default function GuardrailsPage() {
 
       {/* ── Create / Edit dialog ───────────────────────────────── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg border-white/[0.08] bg-[#111216]">
-          <DialogHeader>
+        <DialogContent className="max-w-lg border-white/[0.08] bg-[#111216] flex flex-col max-h-[88vh] p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/[0.06] shrink-0">
             <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white/80`}>
               {form.id ? 'Edit policy' : 'New policy'}
             </DialogTitle>
@@ -531,7 +531,7 @@ export default function GuardrailsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
             <Field label="Name">
               <Input
                 value={form.name}
@@ -559,7 +559,6 @@ export default function GuardrailsPage() {
             <div className="space-y-2">
               <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>Rules</p>
 
-              {/* Jailbreak rule */}
               <RuleToggle
                 checked={form.hasJailbreak}
                 label="Jailbreak detection"
@@ -567,7 +566,6 @@ export default function GuardrailsPage() {
                 onChange={(v) => setForm({ ...form, hasJailbreak: v })}
               />
 
-              {/* PII rule */}
               <RuleToggle
                 checked={form.hasPii}
                 label="PII redaction / detection"
@@ -600,7 +598,6 @@ export default function GuardrailsPage() {
                 </div>
               )}
 
-              {/* Regex rule */}
               <RuleToggle
                 checked={form.hasRegex}
                 label="Custom regex pattern"
@@ -646,7 +643,7 @@ export default function GuardrailsPage() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="px-6 py-4 border-t border-white/[0.06] shrink-0 gap-2">
             <GhostButton onClick={() => setEditOpen(false)} disabled={saving}>Cancel</GhostButton>
             <PrimaryButton onClick={save} disabled={saving || !form.name.trim()}>
               {saving ? 'Saving…' : form.id ? 'Save changes' : 'Create policy'}

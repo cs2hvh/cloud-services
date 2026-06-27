@@ -47,7 +47,8 @@ export async function GET() {
       prompt_versions(id, version, label, template, model_defaults, created_at)
     `)
     .eq("org_id", org.org_id)
-    .order("name");
+    .order("name")
+    .order("version", { referencedTable: "prompt_versions", ascending: false });
 
   if (error) {
     console.error("[prompts] list error:", error);
