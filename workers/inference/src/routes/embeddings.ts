@@ -15,6 +15,7 @@ import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import { forwardJson, resolveUpstreamKey } from "../lib/openrouter.ts";
 import { lookupCache, shouldCacheEmbeddings, writeCache } from "../lib/cache.ts";
 import { scrubJson } from "../lib/brand-scrub.ts";
+import { sendTrace } from "../lib/trace.ts";
 
 const embeddingsRequestSchema = z
   .object({
@@ -41,6 +42,8 @@ export const embeddings: Handler<{
   const auth = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse body
   let body: unknown;
@@ -159,11 +162,36 @@ export const embeddings: Handler<{
 
   if (!upstream.ok) {
     const text = await upstream.text();
+    const errStatus = mapUpstreamStatus(upstream.status);
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, req.model, requestId, startedAt),
-        status: mapUpstreamStatus(upstream.status),
+        status: errStatus,
         errorCode: `upstream_${upstream.status}`,
+      })
+    );
+    c.executionCtx.waitUntil(
+      sendTrace(c.env, {
+        orgId: auth.orgId,
+        traceId,
+        parentSpanId: null,
+        requestId,
+        apiKeyId: auth.keyId,
+        name: "gen_ai.embed",
+        modelId: req.model,
+        promptId: null,
+        promptVersion: null,
+        experimentId: null,
+        arm: null,
+        inputTokens: null,
+        outputTokens: null,
+        latencyMs: Date.now() - startedAt,
+        ttftMs: null,
+        costCents: 0,
+        guardrailAction: "clean",
+        status: errStatus,
+        payload: null,
+        attributes: { upstream_http_status: upstream.status },
       })
     );
     return new Response(text, {
@@ -172,6 +200,7 @@ export const embeddings: Handler<{
         "content-type": upstream.headers.get("content-type") ?? "application/json",
         "X-Ahura-Request-Id": requestId,
         "X-Ahura-Model": req.model,
+        "X-Ahura-Trace-Id": traceId,
       },
     });
   }
@@ -196,6 +225,7 @@ export const embeddings: Handler<{
       })
     );
   }
+  const latencyMs = Date.now() - startedAt;
   // Always enqueue — even when JSON parse failed we record the completed request
   c.executionCtx.waitUntil(
     sendUsage(c.env, {
@@ -205,6 +235,30 @@ export const embeddings: Handler<{
       numUnits: numInputs,
       unitLabel: "embedding",
       status: "success",
+    })
+  );
+  c.executionCtx.waitUntil(
+    sendTrace(c.env, {
+      orgId: auth.orgId,
+      traceId,
+      parentSpanId: null,
+      requestId,
+      apiKeyId: auth.keyId,
+      name: "gen_ai.embed",
+      modelId: req.model,
+      promptId: null,
+      promptVersion: null,
+      experimentId: null,
+      arm: null,
+      inputTokens: promptTokens,
+      outputTokens: null,
+      latencyMs,
+      ttftMs: null,
+      costCents: 0,
+      guardrailAction: "clean",
+      status: "success",
+      payload: null,
+      attributes: numInputs > 1 ? { num_inputs: numInputs } : {},
     })
   );
 
@@ -229,6 +283,7 @@ export const embeddings: Handler<{
       "X-Ahura-Request-Id": requestId,
       "X-Ahura-Model": req.model,
       "X-Ahura-Billing": auth.billing,
+      "X-Ahura-Trace-Id": traceId,
     },
   });
 };

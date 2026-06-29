@@ -18,6 +18,7 @@ import type { Env, HonoVariables } from "../types.ts";
 import { forwardJson } from "../lib/openrouter.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
+  buildBaseSpan, enqueueTrace,
   classifyUpstreamError,
 } from "../lib/gateway.ts";
 
@@ -46,6 +47,8 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse request
   let rawBody: unknown;
@@ -91,6 +94,7 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "rerank", requestId, startedAt, {
       numUnits: numDocs, unitLabel: "rerank_unit", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.rerank", startedAt, "error_upstream")));
     return c.json(gatewayError("Rerank service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -100,6 +104,7 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "rerank", requestId, startedAt, {
       numUnits: numDocs, unitLabel: "rerank_unit", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.rerank", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -113,6 +118,7 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "rerank", requestId, startedAt, {
       numUnits: numDocs, unitLabel: "rerank_unit", status: "error_upstream", errorCode: "upstream_invalid_response",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.rerank", startedAt, "error_upstream")));
     return c.json(gatewayError("Rerank service returned an unexpected response.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -120,6 +126,7 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "rerank", requestId, startedAt, {
     numUnits: numDocs, unitLabel: "rerank_unit",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.rerank", startedAt, "success", { num_documents: numDocs }, numDocs, "rerank_unit")));
 
   return c.json(
     {
@@ -128,6 +135,6 @@ export const rerank: Handler<{ Bindings: Env; Variables: HonoVariables }> = asyn
       usage:   { rerank_units: numDocs },
     },
     200,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model }
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model, "X-Ahura-Trace-Id": traceId }
   );
 };

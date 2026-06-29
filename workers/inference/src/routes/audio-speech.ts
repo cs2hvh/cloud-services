@@ -21,7 +21,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
-  classifyUpstreamError,
+  classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const PCM_SAMPLE_RATE = 24000;
@@ -49,6 +49,8 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse request
   let rawBody: unknown;
@@ -107,6 +109,7 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
       numUnits: req.input.length, unitLabel: "tts_char", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Text-to-speech service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -116,6 +119,7 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
       numUnits: req.input.length, unitLabel: "tts_char", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -124,6 +128,7 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
       numUnits: req.input.length, unitLabel: "tts_char", status: "error_upstream", errorCode: "upstream_no_body",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Text-to-speech service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -136,6 +141,7 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
       numUnits: req.input.length, unitLabel: "tts_char", status: "error_upstream", errorCode: "upstream_stream_error",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Text-to-speech service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -143,6 +149,7 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
       numUnits: req.input.length, unitLabel: "tts_char", status: "error_upstream", errorCode: "upstream_no_audio",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Text-to-speech service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -152,10 +159,12 @@ export const audioSpeech: Handler<{ Bindings: Env; Variables: HonoVariables }> =
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "tts", requestId, startedAt, {
     numUnits: charCount, unitLabel: "tts_char",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.audio", startedAt, "success", { audio_type: "tts", char_count: charCount }, charCount, "tts_char")));
 
   const headers: Record<string, string> = {
     "X-Ahura-Request-Id": requestId,
     "X-Ahura-Model":      req.model,
+    "X-Ahura-Trace-Id":   traceId,
   };
 
   if (req.response_format === "b64_json") {

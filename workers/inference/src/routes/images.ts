@@ -16,7 +16,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
-  classifyUpstreamError,
+  classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const MAX_PROMPT_LENGTH = 4000;
@@ -50,6 +50,8 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse request
   let rawBody: unknown;
@@ -97,6 +99,7 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.image", startedAt, "error_upstream")));
     return c.json(gatewayError("Image generation service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -106,6 +109,7 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.image", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     // Surface prompt-quality rejections clearly rather than hiding them as 503
     if (errText.toLowerCase().includes("no image data") || errText.toLowerCase().includes("no images")) {
       return c.json(gatewayError(
@@ -125,6 +129,7 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: "upstream_invalid_response",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.image", startedAt, "error_upstream")));
     return c.json(gatewayError("Image generation service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -134,6 +139,7 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
       numUnits: 0, unitLabel: "image", status: "error_upstream", errorCode: "upstream_no_images",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.image", startedAt, "error_upstream", { reason: "no_images_returned" })));
     return c.json(gatewayError(
       "Your prompt didn't produce an image. Try a more descriptive visual prompt, e.g. \"a mountain landscape at sunset, photorealistic\".",
       "invalid_request_error", "prompt_rejected", requestId,
@@ -147,11 +153,12 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {
     numUnits: imageCount, unitLabel: "image",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.image", startedAt, "success", { num_images: imageCount }, imageCount, "image")));
 
   return c.json(
     { created: Math.floor(Date.now() / 1000), data, model: req.model, usage: { images: imageCount } },
     200,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model },
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model, "X-Ahura-Trace-Id": traceId },
   );
 };
 

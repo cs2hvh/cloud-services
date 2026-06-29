@@ -17,7 +17,10 @@ export type SpanName =
   | "gen_ai.image"
   | "gen_ai.audio"
   | "gen_ai.rerank"
-  | "gen_ai.moderation";
+  | "gen_ai.moderation"
+  | "gen_ai.video"
+  | "gen_ai.music"
+  | "gen_ai.ocr";
 
 /** Terminal status of a span. Mirrors UsageEvent.status + guardrail additions. */
 export type SpanStatus =
@@ -48,6 +51,8 @@ export interface TraceSpan {
   arm: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  numUnits?: number | null;
+  unitLabel?: string | null;
   latencyMs: number;
   ttftMs: number | null;
   costCents: number;

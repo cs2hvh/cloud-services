@@ -21,6 +21,7 @@ import type { Handler } from "hono";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
+  buildBaseSpan, enqueueTrace,
   classifyUpstreamError,
 } from "../lib/gateway.ts";
 
@@ -45,6 +46,8 @@ export const audioTranscriptions: Handler<{ Bindings: Env; Variables: HonoVariab
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse multipart form
   let formData: FormData;
@@ -130,6 +133,7 @@ export const audioTranscriptions: Handler<{ Bindings: Env; Variables: HonoVariab
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "stt", requestId, startedAt, {
       numUnits: Math.ceil(estimatedSeconds), unitLabel: "stt_second", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Transcription service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -139,6 +143,7 @@ export const audioTranscriptions: Handler<{ Bindings: Env; Variables: HonoVariab
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "stt", requestId, startedAt, {
       numUnits: Math.ceil(estimatedSeconds), unitLabel: "stt_second", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.audio", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -150,6 +155,7 @@ export const audioTranscriptions: Handler<{ Bindings: Env; Variables: HonoVariab
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "stt", requestId, startedAt, {
       numUnits: Math.ceil(estimatedSeconds), unitLabel: "stt_second", status: "error_upstream", errorCode: "upstream_invalid_response",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Transcription service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -159,17 +165,19 @@ export const audioTranscriptions: Handler<{ Bindings: Env; Variables: HonoVariab
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "stt", requestId, startedAt, {
       numUnits: Math.ceil(estimatedSeconds), unitLabel: "stt_second", status: "error_upstream", errorCode: "upstream_empty_transcription",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.audio", startedAt, "error_upstream")));
     return c.json(gatewayError("Transcription service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "stt", requestId, startedAt, {
     numUnits: Math.ceil(estimatedSeconds), unitLabel: "stt_second",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.audio", startedAt, "success", { audio_type: "stt", estimated_seconds: Math.ceil(estimatedSeconds) }, Math.ceil(estimatedSeconds), "stt_second")));
 
   return c.json(
     { text, duration: Math.round(estimatedSeconds * 100) / 100 },
     200,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": modelId }
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": modelId, "X-Ahura-Trace-Id": traceId }
   );
 };
 

@@ -20,7 +20,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope,
-  resolveRouting, resolvePlatformKey, classifyUpstreamError,
+  resolveRouting, resolvePlatformKey, classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const MP3_AVG_KBPS = 24; // conservative estimate for Lyria output bitrate
@@ -40,6 +40,8 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   let rawBody: unknown;
   try { rawBody = await c.req.json(); }
@@ -106,6 +108,7 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
       numUnits: 0, unitLabel: "music_second", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "error_upstream")));
     return c.json(gatewayError("Music generation service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -115,6 +118,7 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
       numUnits: 0, unitLabel: "music_second", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -124,12 +128,14 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
       numUnits: 0, unitLabel: "music_second", status: "error_upstream", errorCode: "upstream_no_body",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "error_upstream")));
     return c.json(gatewayError("Music generation service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
   const baseHeaders: Record<string, string> = {
     "X-Ahura-Request-Id": requestId,
     "X-Ahura-Model":      req.model,
+    "X-Ahura-Trace-Id":   traceId,
   };
 
   // ── mp3 format: peek-then-stream.
@@ -146,6 +152,7 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
       c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
         numUnits: 0, unitLabel: "music_second", status: "error_upstream", errorCode: "upstream_no_audio",
       })));
+      c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "error_upstream", { reason: "no_audio" })));
       return c.json(gatewayError(errMsg, "server_error", "service_unavailable", requestId), 503);
     }
 
@@ -166,9 +173,12 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     c.executionCtx.waitUntil(
       streamDone.then(() => {
         const secs = Math.max(1, Math.round(totalBytes / (MP3_AVG_KBPS * 1024)));
-        return enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
-          numUnits: secs, unitLabel: "music_second",
-        }));
+        return Promise.all([
+          enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
+            numUnits: secs, unitLabel: "music_second",
+          })),
+          enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "success", { estimated_seconds: secs }, secs, "music_second")),
+        ]);
       }),
     );
 
@@ -202,6 +212,7 @@ export const createMusicJob: Handler<{ Bindings: Env; Variables: HonoVariables }
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "music", requestId, startedAt, {
     numUnits: estimatedSeconds, unitLabel: "music_second",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.music", startedAt, "success", { estimated_seconds: estimatedSeconds }, estimatedSeconds, "music_second")));
 
   return c.json(
     { created: Math.floor(Date.now() / 1000), data: [{ b64_json: encodeBase64(mp3Bytes) }], model: req.model, usage: { music_seconds: estimatedSeconds } },

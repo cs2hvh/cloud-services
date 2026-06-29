@@ -25,7 +25,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
-  classifyUpstreamError,
+  classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -52,6 +52,8 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse input (JSON or multipart)
   const contentType = c.req.header("content-type") ?? "";
@@ -159,6 +161,7 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "ocr", requestId, startedAt, {
       numUnits: 0, unitLabel: "ocr_page", status: "error_upstream", errorCode: "upstream_fetch_failed",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.ocr", startedAt, "error_upstream")));
     return c.json(gatewayError("OCR service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -168,6 +171,7 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "ocr", requestId, startedAt, {
       numUnits: 0, unitLabel: "ocr_page", status: "error_upstream", errorCode: `upstream_${upstreamResp.status}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.ocr", startedAt, "error_upstream", { upstream_http_status: upstreamResp.status })));
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(upstreamResp.status, upstreamResp.headers);
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
@@ -179,6 +183,7 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "ocr", requestId, startedAt, {
       numUnits: 0, unitLabel: "ocr_page", status: "error_upstream", errorCode: "upstream_invalid_response",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.ocr", startedAt, "error_upstream")));
     return c.json(gatewayError("OCR service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -188,6 +193,7 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "ocr", requestId, startedAt, {
       numUnits: 0, unitLabel: "ocr_page", status: "error_upstream", errorCode: "upstream_empty_response",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.ocr", startedAt, "error_upstream")));
     return c.json(gatewayError("OCR service is temporarily unavailable. Please try again.", "server_error", "service_unavailable", requestId), 503);
   }
 
@@ -197,11 +203,12 @@ export const ocr: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, modelId, "ocr", requestId, startedAt, {
     numUnits: pageCount, unitLabel: "ocr_page",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, modelId, "gen_ai.ocr", startedAt, "success", { page_count: pageCount }, pageCount, "ocr_page")));
 
   return c.json(
     { model: modelId, pages, usage: { pages: pageCount } },
     200,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": modelId }
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": modelId, "X-Ahura-Trace-Id": traceId }
   );
 };
 

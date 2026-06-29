@@ -464,8 +464,9 @@ export const chatCompletions: Handler<{
     // emits usage in both shapes; we read it the same way the OpenRouter
     // path below does, just from a different upstream.
     if (outgoingBody.stream === true) {
+      const { wrapped: wrappedUpstream, getTtftMs } = wrapTtft(upstream, startedAt);
       return scrubSsePassthrough(
-        upstream,
+        wrappedUpstream,
         effectiveModel,
         `chat-${requestId}`,
         {
@@ -494,6 +495,7 @@ export const chatCompletions: Handler<{
               ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
               inputTokens: usage?.prompt_tokens ?? null,
               outputTokens: usage?.completion_tokens ?? null,
+              ttftMs: getTtftMs(),
               status: "success",
               payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
                 ? { input: outgoingBody.messages, output: null }
@@ -722,8 +724,9 @@ export const chatCompletions: Handler<{
 
   // 6a. Streaming — scrub SSE chunks, extract usage from final scrubbed chunk
   if (req.stream) {
+    const { wrapped: wrappedUpstream, getTtftMs } = wrapTtft(upstream, startedAt);
     return scrubSsePassthrough(
-      upstream,
+      wrappedUpstream,
       effectiveModel,
       `chat-${requestId}`,
       {
@@ -753,6 +756,7 @@ export const chatCompletions: Handler<{
             ...baseTraceSpan(auth, traceId, requestId, effectiveModel, promptMeta, startedAt, guardrail.action),
             inputTokens: usage?.prompt_tokens ?? null,
             outputTokens: usage?.completion_tokens ?? null,
+            ttftMs: getTtftMs(),
             status: "success",
             payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
               ? { input: outgoingBody.messages, output: null }
@@ -1122,4 +1126,39 @@ function mapUpstreamStatus(httpStatus: number): UsageEvent["status"] {
   if (httpStatus === 401 || httpStatus === 403) return "error_auth";
   if (httpStatus === 400 || httpStatus === 422) return "error_validation";
   return "error_upstream";
+}
+
+/**
+ * Wraps an upstream SSE Response in a pass-through TransformStream that
+ * records when the first non-empty byte chunk arrives, giving us TTFT.
+ *
+ * The wrapped Response is a drop-in replacement for the original — it has the
+ * same status/headers and the same body bytes, just with a TTFT side-channel.
+ * Call getTtftMs() inside the onComplete callback (after stream is fully read)
+ * to get the captured value.
+ */
+function wrapTtft(
+  upstream: Response,
+  startedAt: number,
+): { wrapped: Response; getTtftMs: () => number | null } {
+  if (!upstream.body) return { wrapped: upstream, getTtftMs: () => null };
+  let ttftMs: number | null = null;
+  let seen = false;
+  const transform = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      if (!seen && chunk.byteLength > 0) {
+        ttftMs = Date.now() - startedAt;
+        seen = true;
+      }
+      controller.enqueue(chunk);
+    },
+  });
+  upstream.body.pipeTo(transform.writable).catch(() => {});
+  return {
+    wrapped: new Response(transform.readable, {
+      status: upstream.status,
+      headers: upstream.headers,
+    }),
+    getTtftMs: () => ttftMs,
+  };
 }

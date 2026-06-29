@@ -31,6 +31,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
+  buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const MAX_BATCH_SIZE  = 8;    // parallel chat calls; keep small to avoid rate limits
@@ -108,6 +109,8 @@ export const moderations: Handler<{ Bindings: Env; Variables: HonoVariables }> =
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   // 1. Parse request
   let rawBody: unknown;
@@ -177,6 +180,7 @@ export const moderations: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "moderation", requestId, startedAt, {
       numUnits: numItems, unitLabel: "moderation", status: "error_upstream", errorCode: `upstream_${upstreamStatus}`,
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.moderation", startedAt, "error_upstream", { upstream_http_status: upstreamStatus })));
     if (upstreamStatus === 429) {
       return c.json(gatewayError("Moderation service is temporarily rate-limited. Please retry after a moment.", "rate_limit_error", "rate_limited", requestId), 429);
     }
@@ -191,6 +195,7 @@ export const moderations: Handler<{ Bindings: Env; Variables: HonoVariables }> =
     c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "moderation", requestId, startedAt, {
       numUnits: numItems, unitLabel: "moderation", status: "error_upstream", errorCode: "partial_upstream_failure",
     })));
+    c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.moderation", startedAt, "error_upstream", { reason: "partial_failure", failed: partialFailures, total: numItems })));
     return c.json(serviceErr, 503);
   }
 
@@ -199,10 +204,11 @@ export const moderations: Handler<{ Bindings: Env; Variables: HonoVariables }> =
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "moderation", requestId, startedAt, {
     numUnits: numItems, unitLabel: "moderation",
   })));
+  c.executionCtx.waitUntil(enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.moderation", startedAt, "success", { num_items: numItems }, numItems, "moderation")));
 
   return c.json(
     { id: `modr-${requestId}`, model: req.model, results },
     200,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model }
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model, "X-Ahura-Trace-Id": traceId }
   );
 };

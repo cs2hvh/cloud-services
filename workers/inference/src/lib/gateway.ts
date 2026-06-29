@@ -9,6 +9,7 @@
 import type { AuthContext, Env, UsageEvent } from "../types.ts";
 import { lookupModelRouting } from "./model-routing.ts";
 import { resolveUpstreamKey } from "./openrouter.ts";
+import { sendTrace, type SpanName, type SpanStatus, type TraceSpan } from "./trace.ts";
 
 // ── Error body ───────────────────────────────────────────────────────────────
 
@@ -58,6 +59,49 @@ export async function enqueueUsage(env: Env, event: UsageEvent): Promise<void> {
   } catch (err) {
     console.error(JSON.stringify({ level: "error", message: "Failed to enqueue usage event", err: String(err) }));
   }
+}
+
+/** Build a minimal TraceSpan for per-unit routes (images, audio, rerank, etc.). */
+export function buildBaseSpan(
+  auth: AuthContext,
+  traceId: string,
+  requestId: string,
+  modelId: string,
+  spanName: SpanName,
+  startedAt: number,
+  status: SpanStatus,
+  attributes: Record<string, unknown> = {},
+  numUnits: number | null = null,
+  unitLabel: string | null = null,
+): TraceSpan {
+  return {
+    orgId: auth.orgId,
+    traceId,
+    parentSpanId: null,
+    requestId,
+    apiKeyId: auth.keyId,
+    name: spanName,
+    modelId,
+    promptId: null,
+    promptVersion: null,
+    experimentId: null,
+    arm: null,
+    inputTokens: null,
+    outputTokens: null,
+    numUnits,
+    unitLabel,
+    latencyMs: Date.now() - startedAt,
+    ttftMs: null,
+    costCents: 0,
+    guardrailAction: "clean",
+    status,
+    payload: null,
+    attributes,
+  };
+}
+
+export async function enqueueTrace(env: Env, span: TraceSpan): Promise<void> {
+  return sendTrace(env, span);
 }
 
 // ── Auth scope check ─────────────────────────────────────────────────────────

@@ -4,13 +4,61 @@
  * Drains TraceSpan events produced by the gateway request path and
  * batch-inserts them into inference.trace_spans.
  *
+ * Cost: the gateway always emits costCents=0 (it doesn't have access to
+ * catalog pricing at request time). The consumer resolves model pricing
+ * here — same query/formula as the usage consumer — so trace_spans.cost_cents
+ * is accurate and consistent with inference.usage.cost_cents.
+ *
  * R2 payload capture: payload_ref is left NULL until R2 is wired up.
- * When non-null, the consumer would write raw {input, output} JSON to
- * R2 under "traces/{orgId}/{yyyy-mm}/{requestId}.json" and store the key.
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
 import type { TraceSpan } from "../lib/trace.ts";
+
+interface ModelPricing {
+  input_cents_per_mtok?: number;
+  output_cents_per_mtok?: number;
+  cached_cents_per_mtok?: number;
+  cents_per_image?: number;
+  cents_per_1k_chars?: number;
+  cents_per_audio_minute?: number;
+  cents_per_media_second?: number;
+  cents_per_page?: number;
+  cents_per_1k_rerank?: number;
+  cents_per_1k_moderation?: number;
+}
+
+function computeTraceCost(
+  inputTokens: number | null,
+  outputTokens: number | null,
+  numUnits: number | null,
+  unitLabel: string | null,
+  pricing: ModelPricing | null
+): number {
+  if (!pricing) return 0;
+
+  // Per-unit models (image, audio, rerank, etc.)
+  if (numUnits != null && unitLabel) {
+    const u = numUnits;
+    switch (unitLabel) {
+      case "image":        return Math.ceil(u * (pricing.cents_per_image ?? 0));
+      case "tts_char":     return Math.ceil((u / 1000) * (pricing.cents_per_1k_chars ?? 0));
+      case "stt_second":   return Math.ceil((u / 60) * (pricing.cents_per_audio_minute ?? 0));
+      case "video_second":
+      case "music_second": return Math.ceil(u * (pricing.cents_per_media_second ?? 0));
+      case "ocr_page":     return Math.ceil(u * (pricing.cents_per_page ?? 0));
+      case "rerank_unit":  return Math.ceil((u / 1000) * (pricing.cents_per_1k_rerank ?? 0));
+      case "moderation":   return Math.ceil((u / 1000) * (pricing.cents_per_1k_moderation ?? 0));
+    }
+  }
+
+  // Token-based models (chat, embed)
+  if (inputTokens == null && outputTokens == null) return 0;
+  const rawCents =
+    ((inputTokens ?? 0) * (pricing.input_cents_per_mtok ?? 0)) / 1_000_000 +
+    ((outputTokens ?? 0) * (pricing.output_cents_per_mtok ?? 0)) / 1_000_000;
+  return Math.ceil(rawCents);
+}
 
 export async function handleTraceBatch(
   batch: MessageBatch<TraceSpan>,
@@ -23,8 +71,27 @@ export async function handleTraceBatch(
     global: { headers: { "X-Client-Info": "ahura-inference-trace-consumer" } },
   });
 
+  // Resolve model pricing for all distinct models in this batch
+  const modelIds = [...new Set(batch.messages.map((m) => m.body.modelId).filter(Boolean))] as string[];
+  const pricingMap = new Map<string, ModelPricing>();
+
+  if (modelIds.length > 0) {
+    const { data: models } = await supabase
+      .schema("inference")
+      .from("models")
+      .select("model_id, pricing")
+      .in("model_id", modelIds);
+
+    for (const m of models ?? []) {
+      if (m.pricing) pricingMap.set(m.model_id as string, m.pricing as ModelPricing);
+    }
+  }
+
   const rows = batch.messages.map((msg) => {
     const s = msg.body;
+    const pricing = s.modelId ? (pricingMap.get(s.modelId) ?? null) : null;
+    const costCents = computeTraceCost(s.inputTokens ?? null, s.outputTokens ?? null, s.numUnits ?? null, s.unitLabel ?? null, pricing);
+
     return {
       org_id:           s.orgId,
       trace_id:         s.traceId,
@@ -41,7 +108,7 @@ export async function handleTraceBatch(
       output_tokens:    s.outputTokens ?? null,
       latency_ms:       s.latencyMs,
       ttft_ms:          s.ttftMs ?? null,
-      cost_cents:       s.costCents,
+      cost_cents:       costCents,
       guardrail_action: s.guardrailAction,
       status:           s.status,
       payload_ref:      null,   // R2 write deferred
@@ -64,7 +131,6 @@ export async function handleTraceBatch(
         count: rows.length,
       })
     );
-    // Re-throw so CF retries the batch (up to max_retries=3)
     throw new Error(`trace_spans insert failed: ${error.message}`);
   }
 

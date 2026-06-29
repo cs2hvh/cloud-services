@@ -22,6 +22,7 @@ import {
     FileCode,
     LogOut,
     Menu,
+    ScanSearch,
     Search,
     X,
     type LucideIcon,
@@ -417,6 +418,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
             // ─── Manage: observe + configure + org admin ──────
             { kind: "section", label: "Manage" },
+            { label: "Observe", href: "/dashboard/services/inference/observe", icon: ScanSearch, matchPrefix: true },
             { label: "Usage", href: "/dashboard/services/inference/usage", icon: Activity, matchPrefix: true },
             { label: "Notifications", href: "/dashboard/services/inference/notifications", icon: Bell, matchPrefix: true },
             { label: "Audit Log", href: "/dashboard/services/inference/audit", icon: ShieldCheck, matchPrefix: true },

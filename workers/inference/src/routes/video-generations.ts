@@ -23,7 +23,7 @@ import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting,
-  resolvePlatformKey, classifyUpstreamError,
+  resolvePlatformKey, classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
 
 const MAX_PROMPT = 4000;
@@ -74,6 +74,8 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
   const auth      = c.get("auth");
   const requestId = c.get("requestId");
   const startedAt = c.get("startedAt");
+  const traceId   = c.req.header("X-Ahura-Trace-Id") ?? crypto.randomUUID();
+  c.header("X-Ahura-Trace-Id", traceId);
 
   let rawBody: unknown;
   try { rawBody = await c.req.json(); }
@@ -118,6 +120,7 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", scope: "video", requestId, message: "OR submit network error", err: String(err) }));
+    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream"));
     return c.json(gatewayError(
       "Video generation service is temporarily unavailable. Please try again.",
       "server_error", "service_unavailable", requestId,
@@ -136,10 +139,12 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
     } catch { /* non-JSON */ }
 
     if (submitResp.status === 400 && orMessage) {
+      void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream", { upstream_http_status: 400 }));
       return c.json(gatewayError(orMessage, "invalid_request_error", "invalid_request", requestId), 400);
     }
 
     const { status, retryAfter, errorType, errorCode, message } = classifyUpstreamError(submitResp.status, submitResp.headers);
+    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream", { upstream_http_status: submitResp.status }));
     if (retryAfter) c.header("Retry-After", retryAfter);
     return c.json(gatewayError(message, errorType, errorCode, requestId), status as 429 | 408 | 503);
   }
@@ -175,6 +180,7 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
 
   if (insertErr || !job) {
     console.error(JSON.stringify({ level: "error", scope: "video", requestId, message: "DB insert failed after OR acceptance", orJobId, err: String(insertErr?.message) }));
+    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream", { reason: "db_insert_failed" }));
     return c.json(gatewayError(
       "Video generation service is temporarily unavailable. Please try again.",
       "server_error", "service_unavailable", requestId,
@@ -187,17 +193,21 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
       .update({ status: "completed", output_url: initJob.unsigned_urls[0], num_units: req.duration, unit_label: "video_second" })
       .eq("id", job.id);
     void enqueueUsage(c.env, buildBaseEvent(auth, req.model, "video", requestId, startedAt, { numUnits: req.duration, unitLabel: "video_second" }));
+    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "success", { duration_s: req.duration, job_id: job.id }, req.duration, "video_second"));
     const origin = new URL(c.req.url).origin;
     const proxyUrl = `${origin}/v1/videos/${job.id}/content`;
     return c.json({ id: job.id, status: "completed", model: req.model, url: proxyUrl, data: [{ url: proxyUrl }] }, 202, {
-      "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model,
+      "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model, "X-Ahura-Trace-Id": traceId,
     });
   }
+
+  // Job is queued — emit a span now so the request is visible in Observe immediately
+  void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "success", { duration_s: req.duration, job_id: job.id, async: true }, req.duration, "video_second"));
 
   return c.json(
     { id: job.id, status: "queued", model: req.model },
     202,
-    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model },
+    { "X-Ahura-Request-Id": requestId, "X-Ahura-Model": req.model, "X-Ahura-Trace-Id": traceId },
   );
 };
 
