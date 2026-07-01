@@ -1,6 +1,6 @@
 "use client";
 
-import { assetUrl } from "@/lib/asset-url";
+import { currencyIconUrl, type Currency } from "@/config/currencies";
 // Billing & payments — editorial pill-tab nav (Balance / Coupons /
 // Transactions), big Nunito balance hero, top-up form + recurring
 // card, coupon redemption, and a clean transactions table. All
@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 import api from "@/lib/axios/axios";
-import { createDepositPayment } from "@/actions/crypto-deposit";
+import { CreatePaymentDialog } from "@/components/dashboard/wallet/create-payment-dialog";
 import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from "@/lib/billing/topup-flag";
 
 // ─── Design tokens ─────────────────────────────────────────────────
@@ -78,6 +78,7 @@ export default function BillingTabs({
     availableCoupons = [],
     paymentStatus,
     initialRecurring = null,
+    currencies = [],
 }: {
     initialBalance?: number;
     promoCredits?: number;
@@ -85,6 +86,7 @@ export default function BillingTabs({
     availableCoupons?: Coupon[];
     paymentStatus?: string | null;
     initialRecurring?: RecurringTopup | null;
+    currencies?: Currency[];
 }) {
     const [tab, setTab] = useState<TabValue>("balance");
     const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
@@ -138,8 +140,19 @@ export default function BillingTabs({
     const recurringConfigured =
         recurringTopup && recurringTopup.stripe_subscription_id;
 
+    // Stripe top-up only. The crypto path is driven by <CreatePaymentDialog>,
+    // which has its own multi-currency / multi-network picker.
     const onTopup = async (e: React.FormEvent) => {
+        // The crypto deposit dialog is portaled to <body> but is still a React
+        // child of this form, so its submit event bubbles here through the
+        // portal. Ignore anything that didn't originate from THIS form —
+        // calling preventDefault on the bubbled event would cancel the dialog's
+        // server action (React 19 skips a form action whose submit was
+        // defaultPrevented), which makes the dialog's button look dead.
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
+        // Crypto is handled by <CreatePaymentDialog>, not this Stripe form.
+        if (paymentMethod === "crypto") return;
         if (!BILLING_TOPUP_ENABLED) {
             pushToast("error", TOPUP_DISABLED_MESSAGE);
             return;
@@ -155,35 +168,12 @@ export default function BillingTabs({
         }
         try {
             setLoadingTopup(true);
-            if (paymentMethod === "crypto") {
-                const formData = new FormData();
-                formData.set("amount_usd", String(parsed));
-                formData.set("currency", "USDT_TRC20");
-                const result = await createDepositPayment(
-                    {
-                        values: { amount_usd: parsed, currency: "USDT_TRC20" },
-                        errors: null,
-                        success: false,
-                    },
-                    formData,
-                );
-                if (result.success && result.payment_url) {
-                    window.location.href = result.payment_url;
-                } else {
-                    const msg =
-                        result.errors?.amount_usd?.[0] ??
-                        result.errors?.currency?.[0] ??
-                        "Failed to create crypto payment";
-                    pushToast("error", msg);
-                }
-            } else {
-                const res = await api.post("/billing/create-checkout-session", {
-                    amount: parsed,
-                });
-                const data = res?.data;
-                if (data.url) window.location.href = data.url;
-                else throw new Error("No checkout URL returned");
-            }
+            const res = await api.post("/billing/create-checkout-session", {
+                amount: parsed,
+            });
+            const data = res?.data;
+            if (data.url) window.location.href = data.url;
+            else throw new Error("No checkout URL returned");
         } catch (err: unknown) {
             pushToast(
                 "error",
@@ -364,6 +354,7 @@ export default function BillingTabs({
                     setPaymentMethod={setPaymentMethod}
                     onTopup={onTopup}
                     loadingTopup={loadingTopup}
+                    currencies={currencies}
                     recurringTopup={recurringTopup}
                     recurringConfigured={!!recurringConfigured}
                     recurringAmount={recurringAmount}
@@ -424,6 +415,7 @@ function BalanceTab({
     setPaymentMethod,
     onTopup,
     loadingTopup,
+    currencies,
     recurringTopup,
     recurringConfigured,
     recurringAmount,
@@ -442,6 +434,7 @@ function BalanceTab({
     setPaymentMethod: (m: "stripe" | "crypto") => void;
     onTopup: (e: React.FormEvent) => void;
     loadingTopup: boolean;
+    currencies: Currency[];
     recurringTopup: RecurringTopup | null;
     recurringConfigured: boolean;
     recurringAmount: string;
@@ -558,50 +551,77 @@ function BalanceTab({
                                 icon={
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img
-                                        src={assetUrl("/currencies/usdt_trc20.svg")}
-                                        alt="USDT"
+                                        src={currencyIconUrl("BTC")}
+                                        alt="BTC"
                                         className="h-5 w-5"
                                     />
                                 }
                                 label="Crypto"
-                                desc="USDT (TRC20) · instant"
+                                desc="BTC, ETH, USDT & more"
                             />
                         </div>
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={loadingTopup || !BILLING_TOPUP_ENABLED}
-                        className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
-                        style={{
-                            background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
-                            color: "#ffffff",
-                            boxShadow:
-                                "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
-                        }}
-                        onMouseEnter={(e) => {
-                            if (loadingTopup) return;
-                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-                        }}
-                        onMouseLeave={(e) => {
-                            if (loadingTopup) return;
-                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
-                        }}
-                    >
-                        {loadingTopup ? (
-                            <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                {paymentMethod === "crypto"
-                                    ? "Processing"
-                                    : "Redirecting"}
-                            </>
-                        ) : (
-                            <>
-                                Pay {amount && `$${amount}`}
-                                <ArrowRight className="h-3.5 w-3.5" />
-                            </>
-                        )}
-                    </button>
+                    {paymentMethod === "crypto" ? (
+                        <CreatePaymentDialog
+                            initialAmount={Number(amount) || 20}
+                            currencies={currencies}
+                            trigger={
+                                <button
+                                    type="button"
+                                    disabled={!BILLING_TOPUP_ENABLED}
+                                    className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    style={{
+                                        background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                                        color: "#ffffff",
+                                        boxShadow:
+                                            "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                                    }}
+                                >
+                                    Pay with crypto {amount && `$${amount}`}
+                                    <ArrowRight className="h-3.5 w-3.5" />
+                                </button>
+                            }
+                        />
+                    ) : (
+                        <button
+                            type="submit"
+                            disabled={loadingTopup || !BILLING_TOPUP_ENABLED}
+                            className={`${MONO} w-full inline-flex h-11 items-center justify-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                            style={{
+                                background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                                color: "#ffffff",
+                                boxShadow:
+                                    "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
+                            }}
+                            onMouseEnter={(e) => {
+                                if (loadingTopup) return;
+                                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
+                            }}
+                            onMouseLeave={(e) => {
+                                if (loadingTopup) return;
+                                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                            }}
+                        >
+                            {loadingTopup ? (
+                                <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    Redirecting
+                                </>
+                            ) : (
+                                <>
+                                    Pay {amount && `$${amount}`}
+                                    <ArrowRight className="h-3.5 w-3.5" />
+                                </>
+                            )}
+                        </button>
+                    )}
                 </form>
             </Section>
 

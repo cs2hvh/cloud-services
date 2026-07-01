@@ -31,7 +31,7 @@ const cspDirectives = [
   // Block inline event-handler attributes (onclick, onerror, etc.) even when inline scripts are allowed.
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com",
+  "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com https://payment.zx.xyz",
   "font-src 'self'",
   `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin}`,
   "frame-src 'none'",
@@ -145,6 +145,12 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "ahurasense.cs2hvh.com",
+        port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "payment.zx.xyz",
         port: "",
         pathname: "/**",
       },

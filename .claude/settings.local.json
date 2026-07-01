@@ -27,7 +27,9 @@
       "WebFetch(domain:railway.com)",
       "WebFetch(domain:www.saasui.design)",
       "Bash(npx next:*)",
-      "Bash(find /c/Users/Administrator/cloud-services -path */app/dashboard/apps/*page.tsx -type f)"
+      "Bash(find /c/Users/Administrator/cloud-services -path */app/dashboard/apps/*page.tsx -type f)",
+      "Bash(npx tsc *)",
+      "Bash(cd \"D:\\\\Projects\\\\ahurasense\" && ls -d */ 2>/dev/null; echo \"=== grep stats across projects ===\"; grep -rlE \"Active Users|Payments Processed|Value Processed\" --include=*.tsx --include=*.jsx --include=*.ts -l . 2>/dev/null | grep -v node_modules | head -20)"
     ]
   }
 }

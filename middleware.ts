@@ -176,7 +176,6 @@ export async function middleware(request: NextRequest) {
   const needsSession =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/api") ||
-    pathname.startsWith("/payments") ||
     pathname.startsWith("/signin") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/reset-password");

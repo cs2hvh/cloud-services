@@ -1,85 +1,44 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { crgateway } from '@/lib/crypto';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { zxgateway } from '@/lib/zxgateway';
+import { findCurrency } from '@/config/currencies';
 import { FormState, paymentSchema } from './create-payment-schema';
 import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from '@/lib/billing/topup-flag';
 
-const CURRENCIES = {
-    BTC: {
-        id: 'ad1558a3-c9ac-4405-8002-eb8f2e00bb1d',
-        symbol: 'BTC',
-        name: 'Bitcoin',
-        blockchain: 'BTC',
-        network: null,
-        minConfirmations: 3,
-        estimatedMinutes: 90,
-        decimals: 6,
-        conversion: true,
-        enabled: true,
-        processingFee: 0,
-    },
-    USDT_TRC20: {
-        id: '9a538ffb-6f80-4068-88b6-7c18dae92f61',
-        symbol: 'USDT_TRC20',
-        name: 'USDT (TRC-20)',
-        blockchain: 'TRX', // Same blockchain as TRX
-        network: 'TRC20',
-        minConfirmations: 19,
-        estimatedMinutes: 15,
-        decimals: 2,
-        conversion: false,
-        enabled: true,
-        processingFee: 0,
-    },
-} as const;
+// Gateway-hosted checkout page the buyer is redirected to after a payment is
+// created. Override with ZXGATEWAY_PAYMENT_URL.
+const ZX_PAYMENT_BASE = (process.env.ZXGATEWAY_PAYMENT_URL || 'https://payment.zx.xyz').replace(/\/+$/, '');
 
-// Types
-interface DepositPaymentRequest {
-    amount_usd: number;
-    currency: string;
-    payment_method: string;
+// ZX Gateway POST /payments request. Amounts are decimal STRINGS; fees,
+// settlement asset and auto-exchange are configured merchant-side, so the
+// request only carries the pay asset, the USD amount and the URLs.
+interface CreatePaymentRequest {
+    pay_asset_id: string;
+    amount_usd: string;
+    /** Where the gateway POSTs status webhooks (see /api/billing/crypto-callback). */
     callback_url: string;
+    /** Merchant URL the buyer can return to once the payment completes. */
+    fallback_url?: string;
 }
 
-interface AmountToPay {
-    crypto: number;
-    usd: number;
-}
-
-interface AmountRequested {
-    usd: number;
-}
-
-interface FeeBreakdown {
-    percentage: number;
-    fee_amount_usd: number;
-    fee_amount_crypto: number;
-    network_fee_usd: number;
-    network_fee_crypto: number;
-}
-
-interface DepositPaymentData {
-    payment_id: string;
-    address: string;
-    currency: string;
-    amount_to_pay: AmountToPay;
-    amount_requested: AmountRequested;
-    fees: FeeBreakdown;
-    crypto_price_usd: number;
+// ZX Gateway PaymentResponse. All amounts are decimal STRINGS.
+interface ZxPaymentResponse {
+    id: string;
     status: string;
-    expires_at: string;
+    pay_asset_id: string;
+    pay_amount: string;
+    address: string | null;
+    tag: string | null;
+    expires_at: string | null;
+    price: { amount: string; currency: string; total: string; rate: string };
+    fees: { base: string; platform_fee: string; merchant_commission: string; network_fee: string };
     created_at: string;
 }
 
-interface DepositPaymentResponse {
-    success: boolean;
-    data: DepositPaymentData;
-}
-
 /**
- * Server action for creating a deposit payment
- * Accepts FormData and returns FormState for use with useActionState
+ * Server action for creating a deposit payment.
+ * Accepts FormData and returns FormState for use with useActionState.
  */
 export async function createDepositPayment(
     _prevState: FormState,
@@ -96,7 +55,6 @@ export async function createDepositPayment(
 
     // Validate with Zod schema
     const result = paymentSchema.safeParse(values);
-
     if (!result.success) {
         return {
             values,
@@ -104,6 +62,15 @@ export async function createDepositPayment(
             errors: result.error.flatten().fieldErrors,
         };
     }
+
+    const validatedAmount = result.data.amount_usd;
+    // The dialog submits the ZX pay_asset_id (e.g. "usdt-trc20") as `currency`.
+    const payAssetId = result.data.currency;
+    // The currency list is sourced live from the gateway, so we don't reject
+    // unknown ids here — the gateway is the source of truth and will 4xx an
+    // unsupported asset. We only use the static catalog for a friendly name.
+    const asset = findCurrency(payAssetId);
+    const assetName = asset?.name ?? payAssetId;
 
     try {
         // Get Supabase client and verify user is authenticated
@@ -118,24 +85,19 @@ export async function createDepositPayment(
             };
         }
 
-        const validatedAmount = result.data.amount_usd;
-        const validatedCurrency = result.data.currency;
-
-        const currencyConfig = CURRENCIES[validatedCurrency as keyof typeof CURRENCIES];
-        const processingFee = currencyConfig?.processingFee ?? 0;
-
-        // Prepare request payload
-        const payload: DepositPaymentRequest = {
-            amount_usd: validatedAmount + processingFee,
-            currency: validatedCurrency,
-            payment_method: 'api',
-            callback_url: `${process.env.DOMAIN}/api/billing/crypto-callback`
+        // Create payment via ZX Gateway. amount_usd must be a string (the API
+        // accepts a string or integer, never a float).
+        const payload: CreatePaymentRequest = {
+            pay_asset_id: payAssetId,
+            amount_usd: String(validatedAmount),
+            callback_url: `${process.env.DOMAIN}/api/billing/crypto-callback`,
+            fallback_url: `${process.env.DOMAIN}/dashboard/nav/billing`,
         };
 
-        // Create payment via API
-        const response = await crgateway.post<DepositPaymentResponse>('/payments', payload);
+        const response = await zxgateway.post<ZxPaymentResponse>('/payments', payload);
+        const payment = response.data;
 
-        if (!response.data.success) {
+        if (!payment?.id) {
             return {
                 values,
                 success: false,
@@ -143,20 +105,31 @@ export async function createDepositPayment(
             };
         }
 
-        const paymentData = response.data.data;
+        // Record a PENDING top-up transaction keyed by the gateway payment id.
+        // We use the service client to bypass RLS (users can't write billing
+        // rows directly) and reuse `stripe_session_id` as the unique idempotency
+        // key (`zx_<payment_id>`) the webhook looks up to credit the balance.
+        const service = await createServiceClient();
+        const { error: txError } = await service
+            .schema('billing')
+            .from('transactions')
+            .insert({
+                user_id: user.id,
+                amount: validatedAmount,
+                currency: 'usd',
+                status: 'pending',
+                type: 'topup',
+                description: `Crypto deposit (${assetName})`,
+                stripe_session_id: `zx_${payment.id}`,
+                metadata: {
+                    gateway: 'zx',
+                    payment_id: payment.id,
+                    pay_asset_id: payAssetId,
+                },
+            });
 
-        // Create wallet transaction in Supabase
-        const { data: transactionResult, error: rpcError } = await supabase.rpc(
-            'create_deposit_transaction',
-            {
-                p_amount: validatedAmount,
-                p_payment_id: paymentData.payment_id,
-                p_description: `Deposit (${validatedCurrency})`,
-            }
-        );
-
-        if (rpcError) {
-            console.error('RPC Error creating transaction:', rpcError);
+        if (txError) {
+            console.error('Error creating deposit transaction:', txError);
             return {
                 values,
                 success: false,
@@ -167,11 +140,11 @@ export async function createDepositPayment(
         return {
             values: {
                 amount_usd: 20,
-                currency: '',
+                currency: payAssetId,
             },
             success: true,
             errors: null,
-            payment_url: `${process.env.DOMAIN}/payments/${paymentData.payment_id}`
+            payment_url: `${ZX_PAYMENT_BASE}/payments/${payment.id}`,
         };
     } catch (error) {
         console.error('Error creating deposit payment:', error);

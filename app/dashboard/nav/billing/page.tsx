@@ -4,6 +4,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { createClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
+import { getCurrencies } from "@/actions/currencies";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +20,13 @@ async function BillingSuspense({
   const userEmail = data.user?.email || "";
   if (!userId) redirect("/signin");
 
-  const [credits, availableCoupons, recurringTopup] = await Promise.all([
-    Billing.get_user_credits(userId),
-    Promocodes.get_available_for_user(userId, userEmail),
-    Billing.get_recurring_topup(userId),
-  ]);
+  const [credits, availableCoupons, recurringTopup, currenciesRes] =
+    await Promise.all([
+      Billing.get_user_credits(userId),
+      Promocodes.get_available_for_user(userId, userEmail),
+      Billing.get_recurring_topup(userId),
+      getCurrencies(),
+    ]);
 
   return (
     <BillingTabs
@@ -31,6 +34,7 @@ async function BillingSuspense({
       availableCoupons={availableCoupons}
       paymentStatus={paymentStatus}
       initialRecurring={recurringTopup}
+      currencies={currenciesRes.data ?? []}
     />
   );
 }

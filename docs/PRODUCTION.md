@@ -137,7 +137,7 @@ images), **RunPod** (GPU), **OpenRouter** (inference upstream), **DigitalOcean**
 | **Proxmox / OVH** | VPS (KVM) + public IPs | `PTERO_*`(panel), `OVH_*`, `VNC_TOKEN_SECRET` |
 | **name.com** | domain registrar (reseller) | `NAMECOM_API_TOKEN`, `NAMECOM_USERNAME` |
 | **Jenkins** | platform-app build/deploy pipeline | `JENKINS_URL`, `JENKINS_WEBHOOK_SECRET` |
-| **Stripe** (+ crypto gateway) | payments / credit top-ups | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CRGATEWAY_*` |
+| **Stripe** (+ ZX crypto gateway) | payments / credit top-ups | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `ZXGATEWAY_*` |
 | **Resend** | transactional email | `RESEND_API_KEY`, `RESEND_DOMAIN` |
 | **HuggingFace** | gated model pulls (optional) | `HF_TOKEN` |
 | **GitLab / Bitbucket** | source OAuth for app deploys | `GITLAB_*`, `BITBUCKET_*` |
@@ -351,7 +351,7 @@ which deployable consumes it (app ①, gateway ②, runners ③, cron ④).
 | **name.com** | `NAMECOM_API_TOKEN`🔑, `NAMECOM_USERNAME`, `NAMECOM_API_BASE_URL` | ① |
 | **Jenkins** | `JENKINS_URL`🔑, `JENKINS_WEBHOOK_SECRET`🔑, `JENKINS_DEPLOYMENT_RECORD_SECRET`🔑 | ① |
 | **Kubernetes (control)** | `KUBE_IP`, `KUBE_CONFIG_STRING`🔑 | ① |
-| **Payments** | `STRIPE_SECRET_KEY`🔑, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`🔑, `CRGATEWAY_API_KEY`🔑, `CRGATEWAY_API_SECRET`🔑, `CRGATEWAY_URL` | ① |
+| **Payments** | `STRIPE_SECRET_KEY`🔑, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`🔑, `ZXGATEWAY_API_KEY`🔑, `ZXGATEWAY_API_SECRET`🔑, `ZXGATEWAY_URL`, `ZXGATEWAY_PAYMENT_URL`, `NEXT_PUBLIC_ZXGATEWAY_STORAGE_URL` | ① |
 | **Email** | `RESEND_API_KEY`🔑, `RESEND_DOMAIN`, `RESEND_FROM_EMAIL` | ① |
 | **Source OAuth** | `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET`🔑, `BITBUCKET_CLIENT_ID`, `BITBUCKET_CLIENT_SECRET`🔑 | ① |
 | **Runtime** | `NODE_ENV`, `PORT`, `HOSTNAME`, `NODE_OPTIONS`, `MAX_CONCURRENT_JOBS`, `LOG_LEVEL`, `ADMIN_EMAILS`, `INFERENCE_OPERATOR_EMAILS` | ①③ |
