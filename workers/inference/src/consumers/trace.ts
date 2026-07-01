@@ -1,5 +1,5 @@
 /**
- * TRACE_EVENTS queue consumer — Phase 3 S1.
+ * TRACE_EVENTS queue consumer — Phase 3 S1/S2.
  *
  * Drains TraceSpan events produced by the gateway request path and
  * batch-inserts them into inference.trace_spans.
@@ -9,7 +9,10 @@
  * here — same query/formula as the usage consumer — so trace_spans.cost_cents
  * is accurate and consistent with inference.usage.cost_cents.
  *
- * R2 payload capture: payload_ref is left NULL until R2 is wired up.
+ * R2 payload capture (Phase 3 S2): when span.payload is non-null the consumer
+ * writes it to PAYLOAD_BUCKET under spans/{orgId}/{traceId}/{requestId}.json
+ * and stores the key in payload_ref for trace-replay from the dashboard.
+ * ZDR keys never set span.payload (hard-gated in shouldSamplePayload).
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
@@ -87,6 +90,34 @@ export async function handleTraceBatch(
     }
   }
 
+  // Phase 3 S2 — write sampled payloads to R2 before building the DB rows.
+  // Failures are soft: a bad R2 write skips payload_ref but the span still lands.
+  const payloadRefs = new Map<string, string>();
+  await Promise.allSettled(
+    batch.messages
+      .filter((m) => m.body.payload != null)
+      .map(async (m) => {
+        const s = m.body;
+        const key = `spans/${s.orgId}/${s.traceId}/${s.requestId}.json`;
+        try {
+          await env.PAYLOAD_BUCKET.put(key, JSON.stringify(s.payload), {
+            httpMetadata: { contentType: "application/json" },
+          });
+          payloadRefs.set(s.requestId, key);
+        } catch (err) {
+          console.warn(
+            JSON.stringify({
+              level: "warn",
+              scope: "trace-consumer",
+              message: "R2 payload write failed — span will be inserted without payload_ref",
+              requestId: s.requestId,
+              err: String(err),
+            })
+          );
+        }
+      })
+  );
+
   const rows = batch.messages.map((msg) => {
     const s = msg.body;
     const pricing = s.modelId ? (pricingMap.get(s.modelId) ?? null) : null;
@@ -111,7 +142,7 @@ export async function handleTraceBatch(
       cost_cents:       costCents,
       guardrail_action: s.guardrailAction,
       status:           s.status,
-      payload_ref:      null,   // R2 write deferred
+      payload_ref:      payloadRefs.get(s.requestId) ?? null,
       attributes:       s.attributes ?? {},
     };
   });

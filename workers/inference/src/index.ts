@@ -250,6 +250,10 @@ export default {
     // sweep makes RunPod API calls — every 5 min is plenty.
     if (minuteOfHour % 5 === 0) {
       ctx.waitUntil(runFinetuneWatchdog(env, event));
+      // Backstop for orphaned eval runs (runner died mid-run). Pure status
+      // flip — no pod/cost to settle — so a generous stale threshold is fine
+      // at the 5-min cadence.
+      ctx.waitUntil(runEvalWatchdog(env, event));
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
@@ -287,6 +291,15 @@ async function runFinetuneWatchdog(env: Env, event: ScheduledEvent): Promise<voi
     event,
     "/api/inference/internal/finetune-watchdog",
     "finetune watchdog"
+  );
+}
+
+async function runEvalWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/eval-watchdog",
+    "eval watchdog"
   );
 }
 

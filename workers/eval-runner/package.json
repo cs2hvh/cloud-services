@@ -1,0 +1,29 @@
+{
+  "name": "ahura-eval-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AhuraCloud eval runner. Polls inference.eval_runs for queued runs, executes each test case against the target model, scores outputs with the configured scorer (llm_judge, exact, contains, regex), and writes per-case results + aggregate scores back to Postgres. Runs as a single-replica k8s Deployment.",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@ahura/runner-core": "file:../runner-core",
+    "@supabase/supabase-js": "^2.55.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

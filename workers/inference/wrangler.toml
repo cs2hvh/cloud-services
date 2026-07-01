@@ -71,6 +71,18 @@ id = "REPLACE_WITH_GUARDRAILS_KV_ID"
 preview_id = "REPLACE_WITH_GUARDRAILS_KV_PREVIEW_ID"
 
 # ───────────────────────────────────────────────────────────────
+# R2 Buckets
+# ───────────────────────────────────────────────────────────────
+# PAYLOAD_BUCKET — sampled request/response payloads for trace replay.
+# Keyed: spans/{orgId}/{traceId}/{requestId}.json
+# ZDR keys never write here (enforced in trace consumer).
+# Create: wrangler r2 bucket create ahura-trace-payloads
+[[r2_buckets]]
+binding = "PAYLOAD_BUCKET"
+bucket_name = "ahura-trace-payloads"
+preview_bucket_name = "ahura-trace-payloads-preview"
+
+# ───────────────────────────────────────────────────────────────
 # Durable Objects
 # ───────────────────────────────────────────────────────────────
 # RateLimiter — token-bucket per (api_key_id, model_id). Consistent

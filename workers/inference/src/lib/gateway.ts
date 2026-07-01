@@ -204,7 +204,7 @@ export type KeyResult =
 
 export async function resolvePlatformKey(env: Env, auth: AuthContext, requestId: string): Promise<KeyResult> {
   try {
-    const key = await resolveUpstreamKey(env, "platform", auth.orgId, undefined);
+    const key = await resolveUpstreamKey(env, auth.billing, auth.orgId, auth.byokProvider);
     return { ok: true, key };
   } catch (err) {
     return {

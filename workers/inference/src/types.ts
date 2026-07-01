@@ -15,6 +15,10 @@ export interface Env {
   /** Phase 3 S2: per-org guardrail policy cache. Key: "guardrail:{orgId}:{name}" */
   GUARDRAILS: KVNamespace;
 
+  // R2
+  /** Phase 3 S2: sampled span payloads. Key: spans/{orgId}/{traceId}/{requestId}.json */
+  PAYLOAD_BUCKET: R2Bucket;
+
   // Durable Objects
   RATE_LIMITER: DurableObjectNamespace;
 

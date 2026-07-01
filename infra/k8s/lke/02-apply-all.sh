@@ -80,7 +80,22 @@ kubectl apply -f workers/deploy-runner/k8s/deployment.yaml
 echo "  waiting for deploy-runner to be Ready..."
 kubectl -n ahura rollout status deployment/ahura-deploy-runner --timeout=180s
 
-# ── 5. Final status ──────────────────────────────────────────────────
+# ── 5. eval-runner ───────────────────────────────────────────────────
+echo ""
+for v in INFERENCE_PLATFORM_KEY INFERENCE_BASE_URL; do
+  if [[ -z "${!v:-}" ]]; then
+    echo "ERROR: $v is required for eval-runner — add it to ~/.ahura-lke.env" >&2
+    exit 1
+  fi
+done
+echo "→ Applying eval-runner Secret..."
+envsubst < workers/eval-runner/k8s/secret.yaml.template | kubectl apply -f -
+echo "→ Applying eval-runner Deployment..."
+kubectl apply -f workers/eval-runner/k8s/deployment.yaml
+echo "  waiting for eval-runner to be Ready..."
+kubectl -n ahura rollout status deployment/ahura-eval-runner --timeout=180s
+
+# ── 6. Final status ──────────────────────────────────────────────────
 echo ""
 echo "✅ All resources applied."
 echo ""
@@ -90,3 +105,4 @@ echo ""
 echo "Tail logs with:"
 echo "  kubectl -n ahura logs -f deploy/ahura-ft-runner"
 echo "  kubectl -n ahura logs -f deploy/ahura-deploy-runner"
+echo "  kubectl -n ahura logs -f deploy/ahura-eval-runner"
