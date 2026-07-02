@@ -1,0 +1,30 @@
+{
+  "name": "@ahura/agent-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure agentcore loop core — the multi-step agent loop (model turns + tool dispatch), message mapping, tool interface, and shared types. ZERO runtime deps and ZERO I/O: everything is injected (callModel, dispatchTool, priceStep, onStep). One source of truth consumed by both the CF Worker gateway / Next control-plane (via lib/agent barrels) and the k8s agent-runner (file: dep). Prevents inline-vs-durable drift (§6).",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./loop": { "types": "./dist/loop.d.ts", "import": "./dist/loop.js" },
+    "./messages": { "types": "./dist/messages.d.ts", "import": "./dist/messages.js" },
+    "./types": { "types": "./dist/types.d.ts", "import": "./dist/types.js" },
+    "./tools/types": { "types": "./dist/tools/types.d.ts", "import": "./dist/tools/types.js" }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.5"
+  }
+}

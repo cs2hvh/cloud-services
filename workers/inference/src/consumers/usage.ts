@@ -24,6 +24,12 @@ interface ModelPricing {
   cents_per_page?: number;
   cents_per_1k_rerank?: number;
   cents_per_1k_moderation?: number;
+  // Agent (agentcore) hosted-tool unit rates. Priced by pseudo-catalog rows
+  // (agent/web-search, agent/code-interpreter, agent/function-call) so agent
+  // tool steps flow through this same pipeline — no parallel queue (doc 09 §2.B).
+  cents_per_web_search?: number;
+  cents_per_cpu_second?: number;
+  cents_per_function_call?: number;
 }
 
 interface ModelOffPeak {
@@ -259,9 +265,10 @@ function computeCost(
 }
 
 /**
- * Per-unit cost for multimodal services. Flat rate — no off-peak discount.
+ * Per-unit cost for multimodal + agentcore tool services. Flat rate — no
+ * off-peak discount. Exported for unit testing the metering contract.
  */
-function computeUnitCost(event: UsageEvent, pricing: ModelPricing): number {
+export function computeUnitCost(event: UsageEvent, pricing: ModelPricing): number {
   const units = event.numUnits ?? 0;
   if (units <= 0) return 0;
   switch (event.unitLabel) {
@@ -280,6 +287,14 @@ function computeUnitCost(event: UsageEvent, pricing: ModelPricing): number {
       return Math.ceil((units / 1000) * (pricing.cents_per_1k_rerank ?? 0));
     case "moderation":
       return Math.ceil((units / 1000) * (pricing.cents_per_1k_moderation ?? 0));
+    // Agentcore hosted-tool units. web_search: per search; cpu_second: per
+    // microVM CPU-second (code interpreter); function_call: per webhook call.
+    case "web_search":
+      return Math.ceil(units * (pricing.cents_per_web_search ?? 0));
+    case "cpu_second":
+      return Math.ceil(units * (pricing.cents_per_cpu_second ?? 0));
+    case "function_call":
+      return Math.ceil(units * (pricing.cents_per_function_call ?? 0));
     default:
       return 0;
   }
@@ -294,7 +309,10 @@ function isPerUnitLabel(label: string | null): boolean {
     label === "music_second" ||
     label === "ocr_page" ||
     label === "rerank_unit" ||
-    label === "moderation"
+    label === "moderation" ||
+    label === "web_search" ||
+    label === "cpu_second" ||
+    label === "function_call"
   );
 }
 

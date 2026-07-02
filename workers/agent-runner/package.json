@@ -1,0 +1,31 @@
+{
+  "name": "ahura-agent-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AhuraCloud agent runner (agentcore). Polls agentcore.runs for queued durable agent runs, atomically claims each, executes the pure multi-step agent loop (model turns + tool dispatch) against the inference gateway, persists per-step traces + usage events, and marks runs completed/failed. Runs as a single-replica k8s Deployment (v1).",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@ahura/agent-core": "file:../agent-core",
+    "@ahura/runner-core": "file:../runner-core",
+    "@supabase/supabase-js": "^2.55.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.5"
+  }
+}

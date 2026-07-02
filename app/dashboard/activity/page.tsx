@@ -38,6 +38,7 @@ const SERVICE_LABEL: Record<AuditServiceType, string> = {
   auth: "Account",
   git_webhook: "Git webhook",
   ai_agent: "AI agent",
+  agentcore_agent: "Agent",
   knowledge_base: "Knowledge base",
   domain: "Domain",
 };

@@ -37,6 +37,8 @@ import { createMusicJob } from "./routes/music-generations.ts";
 import { audioSpeech } from "./routes/audio-speech.ts";
 import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
 import { ocr } from "./routes/ocr.ts";
+import { responses, createAgentRun } from "./routes/responses.ts";
+import { getAgentRun, streamAgentRun, cancelAgentRun } from "./routes/agent-runs.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
 import { handleTraceBatch } from "./consumers/trace.ts";
@@ -114,6 +116,15 @@ v1.use("*", rateLimitMiddleware);
 // Core inference surface — OpenAI compatible
 v1.post("/chat/completions", chatCompletions);
 v1.post("/embeddings", embeddings);
+
+// Agents v2 (agentcore) — durable Responses API. POST enqueues a run (202 +
+// run_id); the agent-runner executes it. GET/stream/cancel read the durable run.
+// Static "runs" segment first so it doesn't collide with :id.
+v1.post("/responses", responses);
+v1.get("/agents/runs/:id/stream", streamAgentRun);
+v1.get("/agents/runs/:id", getAgentRun);
+v1.post("/agents/runs/:id/cancel", cancelAgentRun);
+v1.post("/agents/:id/runs", createAgentRun);
 
 // Phase 1 — Rerank + Moderation (OpenRouter proxy: Cohere + Llama Guard)
 v1.post("/rerank", rerank);
@@ -254,6 +265,9 @@ export default {
       // flip — no pod/cost to settle — so a generous stale threshold is fine
       // at the 5-min cadence.
       ctx.waitUntil(runEvalWatchdog(env, event));
+      // Backstop for orphaned agentcore runs (runner died / past expires_at).
+      // Pure status flip to 'expired' — no sandbox/cost to settle in S1.
+      ctx.waitUntil(runAgentRunReaper(env, event));
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
@@ -309,6 +323,15 @@ async function runDeploymentMeter(env: Env, event: ScheduledEvent): Promise<void
     event,
     "/api/inference/internal/deployment-meter",
     "deployment meter"
+  );
+}
+
+async function runAgentRunReaper(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/agents/internal/run-reaper",
+    "agent run-reaper"
   );
 }
 

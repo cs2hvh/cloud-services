@@ -410,6 +410,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             // ─── Build: things you USE to make calls ──────────
             { kind: "section", label: "Build" },
             { label: "Models", href: "/dashboard/services/inference/models", icon: BookOpen, matchPrefix: true },
+            { label: "Agents", href: "/dashboard/services/agents", icon: Bot, matchPrefix: true },
             { label: "Playground", href: "/dashboard/services/inference/playground", icon: Bot, matchPrefix: true },
             { label: "Prompts", href: "/dashboard/services/inference/prompts", icon: FileCode, matchPrefix: true },
             { label: "Guardrails", href: "/dashboard/services/inference/guardrails", icon: Shield, matchPrefix: true },
