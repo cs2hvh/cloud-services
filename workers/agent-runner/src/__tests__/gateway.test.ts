@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { callModelTurn } from "../gateway.js";
+import { callModelTurn, toWireMessages } from "../gateway.js";
 import type { RunnerEnv } from "../env.js";
+import type { LoopMessage } from "@ahura/agent-core";
 
 // Doc: nextstespsAI/12-agent-execution-stages.md (T1.3c)
 
@@ -63,5 +64,31 @@ describe("callModelTurn", () => {
   it("throws on a non-2xx response", async () => {
     global.fetch = mockFetch({ error: "bad" }, false, 500);
     await expect(callModelTurn(env, "test/model", [])).rejects.toThrow(/HTTP 500/);
+  });
+});
+
+// Regression: after a tool call, the assistant turn must serialize tool_calls in
+// OpenAI's NESTED shape and the result as a role:'tool' message, or the follow-up
+// model turn 400s. (Found by live web_search testing — the loop ran 2 steps then failed.)
+describe("toWireMessages", () => {
+  it("nests assistant tool_calls into OpenAI shape + keeps the tool result", () => {
+    const msgs: LoopMessage[] = [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "web_search", name: "web_search", arguments: '{"query":"x"}' }] },
+      { role: "tool", tool_call_id: "c1", content: '{"results":[]}' },
+    ];
+    const wire = toWireMessages(msgs);
+    expect(wire[1]).toEqual({
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "c1", type: "function", function: { name: "web_search", arguments: '{"query":"x"}' } }],
+    });
+    expect(wire[2]).toEqual({ role: "tool", tool_call_id: "c1", content: '{"results":[]}' });
+  });
+
+  it("leaves a normal assistant answer without a tool_calls field", () => {
+    const wire = toWireMessages([{ role: "assistant", content: "final" }]);
+    expect(wire[0]).toEqual({ role: "assistant", content: "final" });
+    expect("tool_calls" in wire[0]).toBe(false);
   });
 });

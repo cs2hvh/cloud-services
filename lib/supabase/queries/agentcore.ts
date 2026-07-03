@@ -272,14 +272,16 @@ export async function orgHardCapReached(orgId: string): Promise<boolean> {
 }
 
 export const AgentcoreRuns = {
-  async list(orgId: string, limit = 50): Promise<RunListItem[]> {
-    const { data, error } = await client()
+  async list(orgId: string, opts: { agentId?: string; limit?: number } = {}): Promise<RunListItem[]> {
+    let q = client()
       .schema("agentcore")
       .from("runs")
       .select("id, agent_id, status, cost_cents, step_count, created_at, updated_at")
-      .eq("org_id", orgId)
+      .eq("org_id", orgId);
+    if (opts.agentId) q = q.eq("agent_id", opts.agentId);
+    const { data, error } = await q
       .order("created_at", { ascending: false })
-      .limit(limit)
+      .limit(opts.limit ?? 50)
       .returns<RunListItem[]>();
     if (error) throw new Error(error.message);
     return data ?? [];

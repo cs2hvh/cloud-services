@@ -19,6 +19,12 @@ export interface RunnerEnv extends CoreRunnerEnv {
   modelTurnTimeoutMs: number;
   // Re-check run.cost_cents vs max_cost_cents every K steps (mid-run guard, §9).
   costRecheckEverySteps: number;
+
+  // Web search (S2.2) — brand-hidden behind a citation envelope. Optional: if the
+  // key is absent, the web_search tool errors gracefully ("not configured").
+  webSearchProvider: string;      // 'brave' (default) | 'exa'
+  webSearchApiKey: string | null;
+  toolTimeoutMs: number;          // per hosted-tool / webhook call timeout
 }
 
 export function loadEnv(): RunnerEnv {
@@ -30,5 +36,9 @@ export function loadEnv(): RunnerEnv {
 
     modelTurnTimeoutMs: optionalInt("MODEL_TURN_TIMEOUT_MS", 120_000),
     costRecheckEverySteps: optionalInt("COST_RECHECK_EVERY_STEPS", 1),
+
+    webSearchProvider: optional("WEB_SEARCH_PROVIDER", "brave"),
+    webSearchApiKey: process.env.WEB_SEARCH_API_KEY?.trim() || process.env.BRAVE_API_KEY?.trim() || null,
+    toolTimeoutMs: optionalInt("TOOL_TIMEOUT_MS", 30_000),
   };
 }

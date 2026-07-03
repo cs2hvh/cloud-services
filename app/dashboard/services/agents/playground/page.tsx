@@ -14,8 +14,9 @@ import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
-  PageCanvas, Hero, PrimaryButton, MONO, ACCENT, EmptyState, StatusLabel,
+  PageCanvas, Hero, PrimaryButton, MONO, StatusLabel,
 } from '@/components/dashboard/inference/chrome';
+import { formatCost } from '../_constants';
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'expired']);
 
@@ -132,10 +133,11 @@ function PlaygroundInner() {
 
   return (
     <PageCanvas>
+      <div className="mx-auto w-full max-w-5xl space-y-5">
       <Hero
         breadcrumb={{ label: 'Agents', href: '/dashboard/services/agents' }}
         title="Playground"
-        accent={ACCENT}
+        size="md"
         caption="Run an agent and watch the durable execution — step trace, tokens, cost."
       />
 
@@ -176,7 +178,7 @@ function PlaygroundInner() {
                   <StatusLabel status={statusKind(detail.status)}>{detail.status}</StatusLabel>
                 </div>
                 <span className={`${MONO} text-[10.5px] text-white/45`}>
-                  {detail.step_count} steps · {(detail.cost_cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                  {detail.step_count} steps · {formatCost(detail.cost_cents)}
                 </span>
               </div>
 
@@ -235,13 +237,14 @@ function PlaygroundInner() {
                   {statusIcon(r.status)}
                   <span className={`${MONO} text-[10px] text-white/55 truncate flex-1`}>{r.id.slice(0, 8)}</span>
                   <span className={`${MONO} text-[10px] text-white/30`}>
-                    {(r.cost_cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+                    {formatCost(r.cost_cents)}
                   </span>
                 </button>
               ))}
             </div>
           )}
         </div>
+      </div>
       </div>
     </PageCanvas>
   );

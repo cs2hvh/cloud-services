@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
   }
 
+  const agentId = request.nextUrl.searchParams.get("agent_id") ?? undefined;
   try {
-    const runs = await AgentcoreRuns.list(org.org_id);
+    const runs = await AgentcoreRuns.list(org.org_id, { agentId });
     return NextResponse.json({ success: true, data: runs });
   } catch (err) {
     console.error("[agents] runs list error:", err);

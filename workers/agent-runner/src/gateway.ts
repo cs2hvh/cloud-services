@@ -13,6 +13,12 @@
 import type { CallModel, LoopMessage, ModelTurn, ToolCall } from "@ahura/agent-core";
 import type { RunnerEnv } from "./env.js";
 
+/** OpenAI-shaped tool schema advertised to the model so it can emit tool_calls. */
+export interface ModelTool {
+  type: "function";
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
+}
+
 interface ChatCompletionResponse {
   choices?: Array<{
     message?: {
@@ -48,22 +54,55 @@ function toModelTurn(data: ChatCompletionResponse): ModelTurn {
   };
 }
 
-/** Perform one model turn against the gateway. Throws on non-2xx / timeout. */
+/** Serialize the loop's working transcript into OpenAI chat-completions wire
+ *  format. Critically, an assistant turn that called tools must carry the NESTED
+ *  `tool_calls` shape ({id, type:'function', function:{name, arguments}}) — our
+ *  loop stores a flat ToolCall — and each tool result is a `role:'tool'` message
+ *  keyed by tool_call_id. Without this, the follow-up turn after any tool call
+ *  400s. (Found by live web_search testing.) */
+export function toWireMessages(messages: LoopMessage[]): Record<string, unknown>[] {
+  return messages.map((m) => {
+    if (m.role === "assistant" && m.tool_calls && m.tool_calls.length > 0) {
+      return {
+        role: "assistant",
+        content: m.content ?? "",
+        tool_calls: m.tool_calls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      };
+    }
+    if (m.role === "tool") {
+      return { role: "tool", tool_call_id: m.tool_call_id, content: m.content };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+
+/** Perform one model turn against the gateway. Throws on non-2xx / timeout.
+ *  When `tools` is supplied, the model may emit tool_calls the runner dispatches. */
 export async function callModelTurn(
   env: RunnerEnv,
   model: string,
-  messages: LoopMessage[]
+  messages: LoopMessage[],
+  tools?: ModelTool[]
 ): Promise<ModelTurn> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.modelTurnTimeoutMs);
   try {
+    const body: Record<string, unknown> = { model, messages: toWireMessages(messages) };
+    if (tools && tools.length > 0) {
+      body.tools = tools;
+      body.tool_choice = "auto";
+    }
     const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.inferencePlatformKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, messages }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -76,7 +115,43 @@ export async function callModelTurn(
   }
 }
 
-/** Bind a `CallModel` for one run's model. The loop injects this. */
-export function makeCallModel(env: RunnerEnv, model: string): CallModel {
-  return (messages) => callModelTurn(env, model, messages);
+/** Bind a `CallModel` for one run's model + tool schema. The loop injects this. */
+export function makeCallModel(env: RunnerEnv, model: string, tools?: ModelTool[]): CallModel {
+  return (messages) => callModelTurn(env, model, messages, tools);
+}
+
+/** Embed text via the gateway's /v1/embeddings (brand-hidden catalog model).
+ *  Used by file_search to embed the query before the vector RPC. */
+export async function embedText(
+  env: RunnerEnv,
+  model: string,
+  input: string
+): Promise<{ embedding: number[]; tokens: number }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.toolTimeoutMs);
+  try {
+    const res = await fetch(`${env.inferenceBaseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.inferencePlatformKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, input }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`embeddings returned HTTP ${res.status}: ${txt.slice(0, 150)}`);
+    }
+    const data = (await res.json()) as {
+      data?: Array<{ embedding?: number[] }>;
+      usage?: { prompt_tokens?: number };
+    };
+    return {
+      embedding: data.data?.[0]?.embedding ?? [],
+      tokens: data.usage?.prompt_tokens ?? 0,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }

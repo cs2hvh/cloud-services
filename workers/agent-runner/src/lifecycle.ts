@@ -25,11 +25,13 @@ import {
   type LoopMessage,
   type LoopStep,
   type ResponsesInput,
+  type RunCtx,
 } from "@ahura/agent-core";
 import type { RunnerEnv } from "./env.js";
 import type { Logger } from "./logger.js";
 import type { AgentJob } from "./scan.js";
 import { makeCallModel } from "./gateway.js";
+import { buildDispatcher } from "./tools/dispatch.js";
 
 export interface RunContext {
   env: RunnerEnv;
@@ -106,6 +108,15 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
 
     const messages = await buildMessages(ctx, run, cfg);
 
+    // Build the tool dispatcher from the agent's declared tools (S2). It yields
+    // the schemas advertised to the model + the name→adapter router.
+    const dispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase);
+    const runCtx: RunCtx = {
+      runId: run.id,
+      orgId: run.org_id,
+      billingUserId: run.billing_user_id,
+    };
+
     // ── 4. Run the pure loop ───────────────────────────────────────────────────
     const result = await runAgentLoop({
       messages,
@@ -115,15 +126,16 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
         maxSteps: cfg.maxSteps,
         maxCostCents: run.max_cost_cents,
       },
-      // Cancellation gate before each model turn, then the real gateway call.
+      // Cancellation gate → model turn (with tool schemas) → remap each tool_call
+      // to its real step_type (web_search/function/…) so the trace is accurate.
       callModel: async (msgs) => {
         await assertNotCancelled(ctx, run.id);
-        return makeCallModel(ctx.env, cfg.model)(msgs);
+        const turn = await makeCallModel(ctx.env, cfg.model, dispatcher.modelTools)(msgs);
+        for (const c of turn.toolCalls) c.type = dispatcher.resolveType(c.name);
+        return turn;
       },
-      // S1 is model-only — no hosted tools yet (they arrive in S2).
-      dispatchTool: async () => {
-        throw new Error("This agent has no enabled tools (S1 is model-only).");
-      },
+      // Route each tool call to its adapter (web_search / inline function; more in S2.1/S3/S4).
+      dispatchTool: (call) => dispatcher.dispatch(call, runCtx),
       priceStep: (step) => priceModelStep(step, pricing),
       onStep: async (step) => {
         if (step.stepType === "model") {
@@ -317,9 +329,9 @@ async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Pr
     cost_cents: round4(step.costCents ?? 0),
     latency_ms: step.latencyMs ?? null,
     status: step.status,
-    // detail intentionally null in S1 — model output lives in runs.output.
-    // When tool outputs land (S2), detail MUST be brand-scrubbed first (§11).
-    detail: null,
+    // Tool steps carry a small brand-scrubbed detail preview (set by the adapter,
+    // already upstream-scrubbed, §11); model steps have none (output → runs.output).
+    detail: step.detail ?? null,
   });
   // A failed step insert must NOT be silent — it means a lost trace + lost
   // per-step usage while the run still looks "completed". Throw so the run
