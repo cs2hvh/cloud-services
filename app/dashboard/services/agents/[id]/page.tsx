@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ChevronRight, ChevronDown, RotateCw, Trash2, Loader2, Play,
+  ChevronRight, ChevronDown, RotateCw, Trash2, Loader2, Play, Plus,
   CheckCircle2, XCircle, Clock, Ban, Cpu, Search, Wrench, Layers, DollarSign, Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,8 +26,9 @@ import {
 } from '@/components/dashboard/inference/chrome';
 import {
   MODEL_OPTIONS, HOSTED_TOOLS, type Agent, type RunListItem, type RunDetail, type RunStep,
-  formatCost, relativeTime, statusKind, finalText,
+  formatCost, relativeTime, statusKind, finalText, detailRows,
   buildToolsPayload, fileSearchCollectionOf,
+  buildFunctionTools, functionToolsOf, emptyFn, type FnDef,
 } from '../_constants';
 import { KnowledgeBasePicker } from '../_kb-picker';
 
@@ -89,23 +90,42 @@ function TraceTimeline({ runId }: { runId: string }) {
   return (
     <div className="bg-[#0c0d10] border-t border-white/[0.05]">
       {detail.steps.length === 0 && <div className="px-5 py-3 text-white/35 text-xs">No steps recorded.</div>}
-      {detail.steps.map((s: RunStep) => (
-        <div key={s.step_index} className="grid grid-cols-[auto_auto_1fr_auto] gap-3 px-5 py-2 items-center border-b border-white/[0.03]">
-          <span className={`${MONO} text-[10px] text-white/25 tabular-nums w-4`}>{s.step_index}</span>
-          <StepIcon type={s.step_type} />
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60`}>
-              {s.step_type}{s.tool_name ? `·${s.tool_name}` : ''}
+      {detail.steps.map((s: RunStep) => {
+        const rows = detailRows(s.detail);
+        const header = (
+          <div className="grid grid-cols-[auto_auto_1fr_auto] gap-3 px-5 py-2 items-center">
+            <span className={`${MONO} text-[10px] text-white/25 tabular-nums w-4`}>{s.step_index}</span>
+            <StepIcon type={s.step_type} />
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60`}>
+                {s.step_type}{s.tool_name ? `·${s.tool_name}` : ''}
+              </span>
+              {s.status !== 'success' && <span className="text-[10px] text-red-400">error</span>}
+              {s.unit_label && s.units != null && <span className={`${MONO} text-[10px] text-white/35`}>{s.units} {s.unit_label}</span>}
+              {rows.length > 0 && <span className="text-[10px] text-white/25 group-open:hidden">▸ details</span>}
+            </div>
+            <span className={`${MONO} text-[10px] text-white/40 tabular-nums text-right`}>
+              {s.input_tokens != null ? `${s.input_tokens}→${s.output_tokens ?? 0} tok · ` : ''}
+              {s.latency_ms != null ? `${s.latency_ms}ms · ` : ''}{formatCost(s.cost_cents)}
             </span>
-            {s.status !== 'success' && <span className="text-[10px] text-red-400">error</span>}
-            {s.unit_label && s.units != null && <span className={`${MONO} text-[10px] text-white/35`}>{s.units} {s.unit_label}</span>}
           </div>
-          <span className={`${MONO} text-[10px] text-white/40 tabular-nums text-right`}>
-            {s.input_tokens != null ? `${s.input_tokens}→${s.output_tokens ?? 0} tok · ` : ''}
-            {s.latency_ms != null ? `${s.latency_ms}ms · ` : ''}{formatCost(s.cost_cents)}
-          </span>
-        </div>
-      ))}
+        );
+        return rows.length === 0 ? (
+          <div key={s.step_index} className="border-b border-white/[0.03]">{header}</div>
+        ) : (
+          <details key={s.step_index} className="group border-b border-white/[0.03]">
+            <summary className="cursor-pointer list-none hover:bg-white/[0.02]">{header}</summary>
+            <div className="px-5 pb-3 pl-14 space-y-1.5">
+              {rows.map(([label, text]) => (
+                <div key={label}>
+                  <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
+                  <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
       {out && (
         <div className="px-5 py-3 border-t border-white/[0.05]">
           <div className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/30 mb-1`}>Output</div>
@@ -296,20 +316,26 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
   const [maxCost, setMaxCost] = useState(agent.max_cost_cents);
   const [tools, setTools] = useState<string[]>(agent.tools.map((t) => t.type));
   const [fileSearchCollectionId, setFileSearchCollectionId] = useState(fileSearchCollectionOf(agent.tools));
+  const [functions, setFunctions] = useState<FnDef[]>(functionToolsOf(agent.tools as unknown as Record<string, unknown>[]));
   const [saving, setSaving] = useState(false);
 
   const toggle = (type: string) => setTools((ts) => ts.includes(type) ? ts.filter((t) => t !== type) : [...ts, type]);
+  const addFn = () => setFunctions((f) => [...f, emptyFn()]);
+  const updateFn = (i: number, k: keyof FnDef, v: string) => setFunctions((f) => f.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const removeFn = (i: number) => setFunctions((f) => f.filter((_, j) => j !== i));
 
   async function save() {
     if (tools.includes('file_search') && !fileSearchCollectionId) {
       toast.error('Pick a knowledge base for File search');
       return;
     }
+    const fn = buildFunctionTools(functions);
+    if (fn.error) { toast.error(fn.error); return; }
     setSaving(true);
     try {
       const r = await fetch(`${AGENTS}/${agent.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, model, system_prompt: prompt.trim() || null, guardrail, max_steps: maxSteps, max_cost_cents: maxCost, tools: buildToolsPayload(tools, fileSearchCollectionId) }),
+        body: JSON.stringify({ name, model, system_prompt: prompt.trim() || null, guardrail, max_steps: maxSteps, max_cost_cents: maxCost, tools: [...buildToolsPayload(tools, fileSearchCollectionId), ...(fn.tools ?? [])] }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Save failed');
@@ -371,6 +397,31 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
                 <KnowledgeBasePicker value={fileSearchCollectionId} onChange={setFileSearchCollectionId} />
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <span className={fieldLabel}>Custom functions</span>
+            <div className="text-[11px] text-white/40">Your own API endpoints — POSTed (SSRF-guarded, HMAC-signed if a secret is set) when the agent calls them.</div>
+            {functions.map((f, i) => (
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#0c0d10] p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className={fieldLabel}>Function {i + 1}</span>
+                  <button type="button" onClick={() => removeFn(i)} className="text-white/30 hover:text-red-400" aria-label="Remove function">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input value={f.name} placeholder="get_weather" onChange={(e) => updateFn(i, 'name', e.target.value)} />
+                  <Input value={f.webhook_url} placeholder="https://api.yoursite.com/hook" onChange={(e) => updateFn(i, 'webhook_url', e.target.value)} />
+                </div>
+                <Input value={f.description} placeholder="What this function does (shown to the model)" onChange={(e) => updateFn(i, 'description', e.target.value)} />
+                <Input value={f.secret} placeholder="Signing secret (optional — HMAC-signs each call)" onChange={(e) => updateFn(i, 'secret', e.target.value)} />
+                <Textarea rows={2} value={f.parameters} placeholder={'Parameters JSON Schema (optional)'} onChange={(e) => updateFn(i, 'parameters', e.target.value)} />
+              </div>
+            ))}
+            <button type="button" onClick={addFn} className="inline-flex items-center gap-1.5 text-[12px] text-[#33adff] hover:text-[#5cb8ff]">
+              <Plus className="h-3.5 w-3.5" /> Add function
+            </button>
           </div>
         </div>
         <div className="px-5 py-4 border-t border-white/[0.06] flex justify-end">

@@ -26,12 +26,13 @@ vi.mock("../gateway.js", () => ({
   makeCallModel: () => (msgs: unknown) => model.fn(msgs),
 }));
 
-import { runAgentJob, type RunContext } from "../lifecycle.js";
+import { runAgentJob, priceStep, type RunContext } from "../lifecycle.js";
 import type { AgentJob } from "../scan.js";
+import type { LoopStep } from "@ahura/agent-core";
 
 // ── Minimal in-memory fake of the supabase-js query chains lifecycle uses. ──────
 type Row = Record<string, unknown>;
-type Filter = { col: string; val: unknown; kind: "eq" | "in" };
+type Filter = { col: string; val: unknown; kind: "eq" | "in" | "like" };
 
 class Query {
   private op: "select" | "update" | "insert" = "select";
@@ -44,12 +45,17 @@ class Query {
   insert(p: Row) { this.op = "insert"; this.payload = p; return this; }
   eq(col: string, val: unknown) { this.filters.push({ col, val, kind: "eq" }); return this; }
   in(col: string, val: unknown[]) { this.filters.push({ col, val, kind: "in" }); return this; }
+  like(col: string, val: string) { this.filters.push({ col, val, kind: "like" }); return this; }
 
   private match(): Row[] {
     return this.table.filter((r) =>
-      this.filters.every((f) =>
-        f.kind === "eq" ? r[f.col] === f.val : (f.val as unknown[]).includes(r[f.col])
-      )
+      this.filters.every((f) => {
+        if (f.kind === "eq") return r[f.col] === f.val;
+        if (f.kind === "in") return (f.val as unknown[]).includes(r[f.col]);
+        // like: SQL '%' wildcard → regex
+        const re = new RegExp("^" + String(f.val).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$");
+        return re.test(String(r[f.col]));
+      })
     );
   }
   private run(): Row[] {
@@ -147,5 +153,29 @@ describe("runAgentJob (lifecycle integration)", () => {
     const run = store["agentcore.runs"][0];
     expect(run.status).toBe("failed");
     expect(run.error).toBe("max_cost_exceeded");
+  });
+});
+
+// priceStep must count TOOL spend (not just model tokens) toward the ceiling —
+// else a tool-heavy agent could run past max_cost_cents. (§9 mid-run guard.)
+describe("priceStep", () => {
+  const modelPricing = { input_cents_per_mtok: 30, output_cents_per_mtok: 60 };
+  const toolRates = { web_search: 1, function_call: 0.02 };
+
+  it("prices a model step by token usage", () => {
+    const step = { stepType: "model", inputTokens: 1_000_000, outputTokens: 0, status: "success", stepIndex: 0 } as LoopStep;
+    expect(priceStep(step, modelPricing, toolRates)).toBeCloseTo(30);
+  });
+
+  it("prices a tool step by units × per-label rate", () => {
+    const ws = { stepType: "web_search", metering: { units: 1, unitLabel: "web_search" }, status: "success", stepIndex: 1 } as LoopStep;
+    expect(priceStep(ws, modelPricing, toolRates)).toBe(1);
+    const fn = { stepType: "function", metering: { units: 3, unitLabel: "function_call" }, status: "success", stepIndex: 2 } as LoopStep;
+    expect(priceStep(fn, modelPricing, toolRates)).toBeCloseTo(0.06);
+  });
+
+  it("returns 0 for an unpriced tool label (no rate configured)", () => {
+    const step = { stepType: "file_search", metering: { units: 1, unitLabel: "file_search" }, status: "success", stepIndex: 3 } as LoopStep;
+    expect(priceStep(step, modelPricing, toolRates)).toBe(0);
   });
 });

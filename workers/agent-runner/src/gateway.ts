@@ -86,7 +86,8 @@ export async function callModelTurn(
   env: RunnerEnv,
   model: string,
   messages: LoopMessage[],
-  tools?: ModelTool[]
+  tools?: ModelTool[],
+  guardrail?: string | null
 ): Promise<ModelTurn> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.modelTurnTimeoutMs);
@@ -96,12 +97,18 @@ export async function callModelTurn(
       body.tools = tools;
       body.tool_choice = "auto";
     }
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${env.inferencePlatformKey}`,
+      "Content-Type": "application/json",
+    };
+    // Apply the agent's guardrail via the existing gateway enforcement (Phase 3):
+    // the chat route evaluates the policy on the transcript each turn and returns
+    // a non-2xx when it BLOCKS — which surfaces here as a thrown error → the run
+    // fails with a guardrail reason. Omitted only when explicitly 'off'.
+    if (guardrail && guardrail !== "off") headers["X-Ahura-Guardrail"] = guardrail;
     const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.inferencePlatformKey}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -115,9 +122,14 @@ export async function callModelTurn(
   }
 }
 
-/** Bind a `CallModel` for one run's model + tool schema. The loop injects this. */
-export function makeCallModel(env: RunnerEnv, model: string, tools?: ModelTool[]): CallModel {
-  return (messages) => callModelTurn(env, model, messages, tools);
+/** Bind a `CallModel` for one run's model + tool schema + guardrail. The loop injects this. */
+export function makeCallModel(
+  env: RunnerEnv,
+  model: string,
+  tools?: ModelTool[],
+  guardrail?: string | null
+): CallModel {
+  return (messages) => callModelTurn(env, model, messages, tools, guardrail);
 }
 
 /** Embed text via the gateway's /v1/embeddings (brand-hidden catalog model).

@@ -29,6 +29,7 @@ interface StepRow {
   cost_cents: number;
   latency_ms: number | null;
   status: string;
+  detail: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -47,7 +48,7 @@ async function fetchSteps(
     .schema("agentcore")
     .from("run_steps")
     .select(
-      "step_index, step_type, tool_name, input_tokens, output_tokens, units, unit_label, cost_cents, latency_ms, status, created_at"
+      "step_index, step_type, tool_name, input_tokens, output_tokens, units, unit_label, cost_cents, latency_ms, status, detail, created_at"
     )
     .eq("run_id", runId)
     .gt("step_index", afterIndex)

@@ -93,7 +93,12 @@ export function webSearchTool(env: RunnerEnv, providerOverride?: WebSearchProvid
         return {
           output: { query, results: citations },
           metering: { units: 1, unitLabel: "web_search" },
-          detail: { count: citations.length },
+          // Trace preview: the query + a few result titles/urls (already scrubbed).
+          detail: {
+            query,
+            results: citations.slice(0, 5).map((c) => ({ title: c.title, url: c.url })),
+            count: citations.length,
+          },
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

@@ -40,6 +40,14 @@ export interface FunctionToolDecl {
   /** JSON Schema for the function parameters. */
   parameters: Record<string, unknown>;
   webhook_url: string;
+  /**
+   * Optional shared secret. When present, the runner HMAC-SHA256 signs each
+   * webhook POST (Stripe-style: `sha256(secret, "{timestamp}.{body}")`) and sends
+   * `X-Ahura-Timestamp` + `X-Ahura-Signature`, so the customer can verify the call
+   * originated from us and reject replays. Carried in the decl (inline tools hold
+   * their own config, §4) — never logged or echoed into the trace.
+   */
+  secret?: string;
 }
 
 /** An MCP-hosted tool bound by server slug (optional, S4). */

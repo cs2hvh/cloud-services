@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   PageCanvas, Hero, PrimaryButton, MONO, StatusLabel,
 } from '@/components/dashboard/inference/chrome';
-import { formatCost } from '../_constants';
+import { formatCost, detailRows } from '../_constants';
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'expired']);
 
@@ -25,6 +25,7 @@ interface Step {
   step_index: number; step_type: string; tool_name: string | null;
   input_tokens: number | null; output_tokens: number | null;
   cost_cents: number; latency_ms: number | null; status: string;
+  detail?: Record<string, unknown> | null;
 }
 interface RunDetail {
   id: string; status: string; cost_cents: number; step_count: number;
@@ -184,21 +185,40 @@ function PlaygroundInner() {
 
               {/* Step waterfall */}
               <div className="divide-y divide-white/[0.04]">
-                {detail.steps.map((s) => (
-                  <div key={s.step_index} className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2 items-center">
-                    <span className={`${MONO} text-[10px] text-white/30 tabular-nums w-6`}>{s.step_index}</span>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60`}>
-                        {s.step_type}{s.tool_name ? `·${s.tool_name}` : ''}
+                {detail.steps.map((s) => {
+                  const rows = detailRows(s.detail);
+                  const header = (
+                    <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-4 py-2 items-center">
+                      <span className={`${MONO} text-[10px] text-white/30 tabular-nums w-6`}>{s.step_index}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`${MONO} text-[10px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60`}>
+                          {s.step_type}{s.tool_name ? `·${s.tool_name}` : ''}
+                        </span>
+                        {s.status !== 'success' && <span className="text-[10px] text-red-400">error</span>}
+                        {rows.length > 0 && <span className="text-[10px] text-white/25 group-open:hidden">▸</span>}
+                      </div>
+                      <span className={`${MONO} text-[10px] text-white/40 tabular-nums`}>
+                        {s.input_tokens != null ? `${s.input_tokens}→${s.output_tokens ?? 0} tok` : ''}
+                        {s.latency_ms != null ? ` · ${s.latency_ms}ms` : ''}
                       </span>
-                      {s.status !== 'success' && <span className="text-[10px] text-red-400">error</span>}
                     </div>
-                    <span className={`${MONO} text-[10px] text-white/40 tabular-nums`}>
-                      {s.input_tokens != null ? `${s.input_tokens}→${s.output_tokens ?? 0} tok` : ''}
-                      {s.latency_ms != null ? ` · ${s.latency_ms}ms` : ''}
-                    </span>
-                  </div>
-                ))}
+                  );
+                  return rows.length === 0 ? (
+                    <div key={s.step_index}>{header}</div>
+                  ) : (
+                    <details key={s.step_index} className="group">
+                      <summary className="cursor-pointer list-none hover:bg-white/[0.02]">{header}</summary>
+                      <div className="px-4 pb-3 pl-12 space-y-1.5">
+                        {rows.map(([label, text]) => (
+                          <div key={label}>
+                            <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
+                            <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
                 {detail.steps.length === 0 && (
                   <div className="px-4 py-6 text-center text-white/30 text-xs">Waiting for the runner to pick up this run…</div>
                 )}

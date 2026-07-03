@@ -21,11 +21,30 @@ import type { RunnerEnv } from "../env.js";
 import { webSearchTool } from "./web-search.js";
 import { fileSearchTool, type FileSearchDecl } from "./file-search.js";
 import { functionTool } from "./function.js";
+import { codeTool } from "./code.js";
+import { DockerSandboxPool } from "./sandbox/docker-pool.js";
+import type { SandboxPool } from "./sandbox/pool.js";
 
 /** Runtime dependencies a tool factory may pull from. Kept small on purpose. */
 export interface ToolDeps {
   env: RunnerEnv;
   supabase: SupabaseClient;
+  /** Per-run sandbox pool (owned by the runner, disposed at run end). Only set
+   *  when the sandbox is enabled; the `code` tool is unavailable without it. */
+  sandboxPool?: SandboxPool;
+}
+
+/** Build a per-run sandbox pool from env (dev: Docker; prod later: gVisor runtime).
+ *  The runner creates ONE per run and disposes it at run end. */
+export function sandboxPoolFor(env: RunnerEnv): SandboxPool {
+  return new DockerSandboxPool({
+    image: env.sandboxImage,
+    memory: env.sandboxMemory,
+    cpus: env.sandboxCpus,
+    pidsLimit: env.sandboxPidsLimit,
+    timeoutMs: env.toolTimeoutMs,
+    runtime: env.sandboxRuntime ?? undefined,
+  });
 }
 
 /** JSON Schema for a tool's params — the shape the model sees + we validate against. */
@@ -85,7 +104,25 @@ export const HOSTED_TOOL_SPECS: Record<string, ToolSpec> = {
     create: (decl, deps) => fileSearchTool(decl as FileSearchDecl, deps.env, deps.supabase),
   },
 
-  // code (S3), mcp (S4) — register here when their adapters land.
+  code: {
+    type: "code",
+    name: "code",
+    description:
+      "Run Python in a sandboxed, STATEFUL interpreter. Variables, imports, defined functions and files you write to the working directory PERSIST across calls in this run, so you can build up work step by step. Runs like a notebook: the value of the final expression is shown automatically (e.g. `909 * 783347833` prints its result) — you don't need print(). Use it for calculations, data wrangling, and transforming tool results. No internet access.",
+    parameters: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "The Python source to execute. The last expression's value is auto-printed." },
+      },
+      required: ["code"],
+    },
+    // GATE: a real pool is wired ONLY when SANDBOX_ENABLED is on (post security
+    // sign-off, doc 13). Off → codeTool gets no pool and reports unavailable, and
+    // the dispatcher also skips advertising it (see dispatch.ts).
+    create: (_decl, deps) => codeTool(deps.env, deps.env.sandboxEnabled ? deps.sandboxPool : undefined),
+  },
+
+  // mcp (S4) — register here when its adapter lands.
 };
 
 // ── Dynamic tools (customer-supplied) ─────────────────────────────────────────
@@ -99,7 +136,11 @@ export function dynamicToolSpec(decl: AgentToolDecl): ToolSpec | null {
       name: fd.name,
       description: fd.description ?? "",
       parameters: (fd.parameters as unknown as JSONSchema) ?? { type: "object", properties: {} },
-      create: (_d, deps) => functionTool(fd, { timeoutMs: deps.env.toolTimeoutMs }),
+      create: (_d, deps) =>
+        functionTool(fd, {
+          timeoutMs: deps.env.toolTimeoutMs,
+          allowPrivateWebhooks: deps.env.allowPrivateWebhooks,
+        }),
     };
   }
   // mcp: dynamic tool discovery from a hosted MCP server lands in S4.

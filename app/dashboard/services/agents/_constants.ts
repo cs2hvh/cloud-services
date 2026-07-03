@@ -19,12 +19,14 @@ export const MODEL_OPTIONS: { provider: string; models: { id: string; label: str
 ];
 export const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
-// Attachable hosted tools. web_search + file_search are live (S2); code (S3)
-// lands with the sandbox. `needsCollection` tools reveal a KB picker.
+// Attachable hosted tools. web_search + file_search are live (S2). code (S3) has
+// a real sandbox executor but stays server-gated (SANDBOX_ENABLED) until the
+// security review signs off — so it's selectable but flagged Beta.
+// `needsCollection` tools reveal a KB picker.
 export const HOSTED_TOOLS: { type: string; label: string; enabled: boolean; note?: string; needsCollection?: boolean }[] = [
   { type: 'web_search',  label: 'Web search', enabled: true },
   { type: 'file_search', label: 'File search (RAG)', enabled: true, needsCollection: true },
-  { type: 'code',        label: 'Code interpreter', enabled: false, note: 'soon' },
+  { type: 'code',        label: 'Code interpreter', enabled: true, note: 'Beta · sandboxed Python (runs only where the sandbox is enabled)' },
 ];
 
 export interface VectorCollection {
@@ -49,6 +51,60 @@ export async function fetchCollections(): Promise<VectorCollection[]> {
 /** Build the stored tools JSONB from selected types + the file_search collection. */
 export function buildToolsPayload(types: string[], fileSearchCollectionId: string): { type: string; collection_id?: string }[] {
   return types.map((type) => (type === 'file_search' && fileSearchCollectionId ? { type, collection_id: fileSearchCollectionId } : { type }));
+}
+
+/** A custom function-webhook tool as edited in the builder form. */
+export interface FnDef {
+  name: string;
+  webhook_url: string;
+  description: string;
+  secret: string;
+  parameters: string; // JSON Schema text; blank = permissive object
+}
+
+export function emptyFn(): FnDef {
+  return { name: '', webhook_url: '', description: '', secret: '', parameters: '' };
+}
+
+/**
+ * Validate + convert the builder's function rows into stored `function` tool
+ * objects. Returns { tools } on success or { error } on the first problem, so the
+ * caller can surface a toast. Blank rows are ignored.
+ */
+export function buildFunctionTools(fns: FnDef[]): { tools?: Record<string, unknown>[]; error?: string } {
+  const out: Record<string, unknown>[] = [];
+  for (const f of fns) {
+    const name = f.name.trim();
+    const url = f.webhook_url.trim();
+    if (!name && !url) continue; // skip empty row
+    if (!name) return { error: 'Every custom function needs a name' };
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) return { error: `Function name "${name}" must be alphanumeric/underscore` };
+    if (!/^https?:\/\//.test(url)) return { error: `Function "${name}" needs an http(s) webhook URL` };
+    let parameters: unknown = { type: 'object', properties: {} };
+    if (f.parameters.trim()) {
+      try { parameters = JSON.parse(f.parameters); }
+      catch { return { error: `Function "${name}" has invalid JSON in Parameters` }; }
+    }
+    out.push({
+      type: 'function', name, webhook_url: url, parameters,
+      ...(f.description.trim() ? { description: f.description.trim() } : {}),
+      ...(f.secret.trim() ? { secret: f.secret.trim() } : {}),
+    });
+  }
+  return { tools: out };
+}
+
+/** Read stored function tools back into editable builder rows. */
+export function functionToolsOf(tools: Record<string, unknown>[]): FnDef[] {
+  return (tools ?? [])
+    .filter((t) => t.type === 'function')
+    .map((t) => ({
+      name: String(t.name ?? ''),
+      webhook_url: String(t.webhook_url ?? ''),
+      description: String(t.description ?? ''),
+      secret: String(t.secret ?? ''),
+      parameters: t.parameters ? JSON.stringify(t.parameters, null, 2) : '',
+    }));
 }
 
 /** Read the file_search collection_id back out of an agent's stored tools. */
@@ -91,6 +147,7 @@ export interface RunStep {
   cost_cents: number;
   latency_ms: number | null;
   status: string;
+  detail?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -102,6 +159,20 @@ export interface RunDetail extends RunListItem {
 }
 
 /** Human cost: sub-cent values read as e.g. "0.15¢" instead of a flat "$0.00". */
+/** Flatten a step's `detail` into ordered [label, text] rows for the trace UI —
+ *  input/code first, then outputs, then metadata. Empty when there's nothing to show. */
+export function detailRows(detail?: Record<string, unknown> | null): [string, string][] {
+  if (!detail || typeof detail !== 'object') return [];
+  const order = ['input', 'code', 'query', 'args', 'stdout', 'stderr', 'output', 'results', 'snippets'];
+  const rank = (k: string) => { const i = order.indexOf(k); return i === -1 ? 99 : i; };
+  return Object.keys(detail)
+    .sort((a, b) => rank(a) - rank(b))
+    .map((k) => {
+      const v = (detail as Record<string, unknown>)[k];
+      return [k, typeof v === 'string' ? v : JSON.stringify(v, null, v && typeof v === 'object' ? 1 : 0)] as [string, string];
+    });
+}
+
 export function formatCost(cents: number): string {
   const c = Number(cents) || 0;
   if (c === 0) return '$0';

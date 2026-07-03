@@ -4,6 +4,8 @@
 
 This is the build-ready plan for the agent runtime, grounded against the real codebase. It supersedes the parts of `02-agent-infrastructure.md` that were cut for complexity (browser automation + tool/function registry) and pins down the plugin model, architecture, slices, and test discipline.
 
+> **BUILD STATUS (2026-07-03):** **S1 ✅ shipped** (`66cc22d8`, verified live E2E), **S2 hosted tools ✅ shipped** (`93c6a518`; incl. an SSRF guard on function webhooks), **S3 code interpreter 🚧 built (stateful dev sandbox: persistent kernel, session reuse, data image) but hard-gated** behind `SANDBOX_ENABLED` pending the security review in **[13-agent-s3-sandbox-security-review.md](13-agent-s3-sandbox-security-review.md)**. Full as-built status + honest gaps: see the BUILD STATUS block in [12-agent-execution-stages.md](12-agent-execution-stages.md). Companion docs: **12** = task board · **13** = S3 sandbox security gate.
+
 ---
 
 ## 0. The one framing that drives every decision
@@ -394,6 +396,8 @@ Since v1 is durable-only, *every* run goes through `agent-runner` — the Worker
 
 **Security (biggest new boundary = code sandbox):** gVisor/Firecracker isolation, no cloud-metadata access, egress allowlist, per-session net namespace, hard wall-clock/memory/disk caps. **One shared security review before any customer code executes — gate S3.** Brand-scrub must extend from JSON errors to **tool outputs, citations, `run_steps.detail`, and stream/log surfaces** (highest-leakage area).
 
+*As-built (2026-07-03):* the S3 `code` tool + sandbox pool are **hard-gated behind `SANDBOX_ENABLED` (default false everywhere)** — the real executor stays off until **[13-agent-s3-sandbox-security-review.md](13-agent-s3-sandbox-security-review.md)** is signed off. **SSRF guard shipped for S2 function webhooks** (`workers/agent-runner/src/tools/ssrf.ts`): the runner rejects private/link-local/cloud-metadata targets *before* any webhook call — closing the "runner POSTs to a customer-supplied URL" vector.
+
 **Accuracy (customer's job; we provide levers, most already shipped):** file_search (grounded RAG w/ citations), web_search citations, tool-call validation + repair ([tool-guarantees.ts](../workers/inference/src/lib/tool-guarantees.ts)), structured outputs, evals (Phase 4), guardrails (Phase 3), `max_steps`. Verification for customers = the step trace + dashboard trace viewer + evals against a golden dataset.
 
 ---
@@ -488,6 +492,12 @@ Restructured for **durable-only** (§6): the old "S1 inline loop, then S2 add du
 3. **Sandbox timing** — build Firecracker pool on current RunPod-backed k8s now, or wait for the owned fleet?
 4. ~~**Always-durable vs keep inline fast path?**~~ **RESOLVED (2026-07-01): durable-only for v1** — see §6 and §16. Revisit only if short-run latency becomes a customer complaint.
 5. **v1/v2 branding** — separate product vs "advanced mode" of existing AI Agents.
+
+### Known as-built gaps (tracked, not blocking S1/S2)
+- ✅ **Function-tool builder UI — CLOSED (2026-07-03).** The dashboard now has a "Custom functions" form (name + webhook URL + description + params JSON Schema + optional signing secret) in **both** the new-agent builder and the agent Settings tab (`buildFunctionTools`/`functionToolsOf` in `_constants.ts`).
+- ✅ **Webhook HMAC signing — CLOSED (2026-07-03).** When a function tool carries a `secret`, the runner HMAC-SHA256 signs each POST Stripe-style (`sha256(secret, "{ts}.{body}")`) via `X-Ahura-Signature` + `X-Ahura-Timestamp` (`tools/function.ts`). Replay-bound; secret never logged or echoed into the trace.
+- **`web_search` unverified live** — unit-tested, but no Brave key is configured, so it hasn't run against the real upstream end-to-end. (Only remaining open item.)
+- **Tool usage-emit deferred** — tool steps record metering on `run_steps` (trace + mid-run cost guard) but don't yet emit `UsageEvent`s; the Node runner can't reach the CF `USAGE_EVENTS` queue, so this needs a gateway usage-ingress and lands with Phase-0 billing (nothing agent-related charges until then, §9).
 
 ---
 

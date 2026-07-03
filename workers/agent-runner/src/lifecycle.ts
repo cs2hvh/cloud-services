@@ -32,6 +32,7 @@ import type { Logger } from "./logger.js";
 import type { AgentJob } from "./scan.js";
 import { makeCallModel } from "./gateway.js";
 import { buildDispatcher } from "./tools/dispatch.js";
+import { sandboxPoolFor } from "./tools/spec.js";
 
 export interface RunContext {
   env: RunnerEnv;
@@ -66,12 +67,16 @@ interface RuntimeConfig {
   systemPrompt: string | null;
   tools: AgentToolDecl[];
   maxSteps: number;
+  guardrail: string | null;
 }
 
 interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
 }
+
+/** cents-per-unit for each hosted-tool unit_label (from the agent/* catalog rows). */
+export type ToolRates = Record<string, number>;
 
 const DEFAULT_MAX_STEPS = 12;
 
@@ -103,14 +108,19 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
     // ── 2. Resolve config (stored agent or inline request) ─────────────────────
     const cfg = await resolveConfig(ctx, run);
 
-    // ── 3. Model pricing for the per-step ceiling guard ────────────────────────
+    // ── 3. Model + tool pricing for the per-step ceiling guard ─────────────────
     const pricing = await fetchModelPricing(ctx, cfg.model);
+    const toolRates = await fetchToolRates(ctx);
 
     const messages = await buildMessages(ctx, run, cfg);
 
     // Build the tool dispatcher from the agent's declared tools (S2). It yields
-    // the schemas advertised to the model + the name→adapter router.
-    const dispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase);
+    // the schemas advertised to the model + the name→adapter router. The sandbox
+    // pool (if enabled) is ONE per run so code steps share state; it's disposed in
+    // the finally below.
+    const sandboxPool = ctx.env.sandboxEnabled ? sandboxPoolFor(ctx.env) : undefined;
+    const dispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase, sandboxPool);
+    try {
     const runCtx: RunCtx = {
       runId: run.id,
       orgId: run.org_id,
@@ -130,13 +140,13 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       // to its real step_type (web_search/function/…) so the trace is accurate.
       callModel: async (msgs) => {
         await assertNotCancelled(ctx, run.id);
-        const turn = await makeCallModel(ctx.env, cfg.model, dispatcher.modelTools)(msgs);
+        const turn = await makeCallModel(ctx.env, cfg.model, dispatcher.modelTools, cfg.guardrail)(msgs);
         for (const c of turn.toolCalls) c.type = dispatcher.resolveType(c.name);
         return turn;
       },
       // Route each tool call to its adapter (web_search / inline function; more in S2.1/S3/S4).
       dispatchTool: (call) => dispatcher.dispatch(call, runCtx),
-      priceStep: (step) => priceModelStep(step, pricing),
+      priceStep: (step) => priceStep(step, pricing, toolRates),
       onStep: async (step) => {
         if (step.stepType === "model") {
           inputTokensTotal += step.inputTokens ?? 0;
@@ -160,6 +170,11 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       await finalizeFailed(ctx, run.id, result.stopReason, result.costCents, result.stepsUsed);
       log.warn({ reason: result.stopReason }, "agent run stopped by guard");
     }
+    } finally {
+      // Tear down the sandbox session (if any) at run end — the only place it's
+      // stopped, so state persists across all code steps within the run.
+      await dispatcher.dispose();
+    }
   } catch (err) {
     if (err instanceof RunCancelledError) {
       log.info("run cancelled mid-flight — leaving cancelled status");
@@ -178,13 +193,14 @@ async function resolveConfig(ctx: RunContext, run: ClaimedRun): Promise<RuntimeC
     const { data: agent, error } = await ctx.supabase
       .schema("agentcore")
       .from("agents")
-      .select("model, system_prompt, tools, max_steps")
+      .select("model, system_prompt, tools, max_steps, guardrail")
       .eq("id", run.agent_id)
       .maybeSingle<{
         model: string;
         system_prompt: string | null;
         tools: AgentToolDecl[];
         max_steps: number;
+        guardrail: string | null;
       }>();
     if (error || !agent) {
       throw new Error(`Agent ${run.agent_id} not found: ${error?.message ?? "no row"}`);
@@ -194,6 +210,7 @@ async function resolveConfig(ctx: RunContext, run: ClaimedRun): Promise<RuntimeC
       systemPrompt: agent.system_prompt,
       tools: agent.tools ?? [],
       maxSteps: agent.max_steps ?? DEFAULT_MAX_STEPS,
+      guardrail: agent.guardrail ?? null,
     };
   }
 
@@ -203,6 +220,7 @@ async function resolveConfig(ctx: RunContext, run: ClaimedRun): Promise<RuntimeC
     system_prompt?: string;
     tools?: AgentToolDecl[];
     max_steps?: number;
+    guardrail?: string;
   };
   if (!input.model) {
     throw new Error("Run has neither agent_id nor an inline model");
@@ -212,6 +230,7 @@ async function resolveConfig(ctx: RunContext, run: ClaimedRun): Promise<RuntimeC
     systemPrompt: input.system_prompt ?? null,
     tools: input.tools ?? [],
     maxSteps: input.max_steps ?? DEFAULT_MAX_STEPS,
+    guardrail: input.guardrail ?? null,
   };
 }
 
@@ -301,16 +320,54 @@ async function fetchModelPricing(ctx: RunContext, model: string): Promise<ModelP
   return data?.pricing ?? {};
 }
 
-/** Fractional cents for a model step (kept precise for the ceiling comparison;
- *  the authoritative billed amount comes from the usage pipeline later). */
-function priceModelStep(step: LoopStep, pricing: ModelPricing): number {
-  if (step.stepType !== "model") return 0;
-  const inRate = pricing.input_cents_per_mtok ?? 0;
-  const outRate = pricing.output_cents_per_mtok ?? 0;
-  return (
-    ((step.inputTokens ?? 0) * inRate) / 1_000_000 +
-    ((step.outputTokens ?? 0) * outRate) / 1_000_000
-  );
+/** Maps a hosted-tool pricing row's `cents_per_*` key to its metering unit_label. */
+const TOOL_PRICE_KEY_TO_LABEL: Record<string, string> = {
+  cents_per_web_search: "web_search",
+  cents_per_function_call: "function_call",
+  cents_per_cpu_second: "cpu_second",
+  cents_per_file_search: "file_search",
+};
+
+/**
+ * Load per-unit tool rates from the internal `agent/*` catalog rows so tool steps
+ * count toward the mid-run cost ceiling (§9). Placeholder rates PENDING_FINANCE —
+ * but the guard must sum tool spend regardless, else an agent that only calls
+ * expensive tools (never re-invoking the model) could run past its budget.
+ */
+async function fetchToolRates(ctx: RunContext): Promise<ToolRates> {
+  const { data } = await ctx.supabase
+    .schema("inference")
+    .from("models")
+    .select("pricing")
+    .like("model_id", "agent/%");
+  const rates: ToolRates = {};
+  for (const row of (data ?? []) as Array<{ pricing: Record<string, number> | null }>) {
+    for (const [key, cents] of Object.entries(row.pricing ?? {})) {
+      const label = TOOL_PRICE_KEY_TO_LABEL[key];
+      if (label && typeof cents === "number") rates[label] = cents;
+    }
+  }
+  return rates;
+}
+
+/** Fractional cents for one step — model steps by token pricing, tool steps by
+ *  `units × per-unit rate`. Kept precise for the ceiling comparison; the
+ *  authoritative billed amount comes from the usage pipeline later.
+ *  Exported for unit testing the tool-cost path. */
+export function priceStep(step: LoopStep, pricing: ModelPricing, toolRates: ToolRates): number {
+  if (step.stepType === "model") {
+    const inRate = pricing.input_cents_per_mtok ?? 0;
+    const outRate = pricing.output_cents_per_mtok ?? 0;
+    return (
+      ((step.inputTokens ?? 0) * inRate) / 1_000_000 +
+      ((step.outputTokens ?? 0) * outRate) / 1_000_000
+    );
+  }
+  // Tool step: price by its metering (units × per-unit-label rate).
+  const label = step.metering?.unitLabel;
+  const units = step.metering?.units ?? 0;
+  const rate = label ? toolRates[label] ?? 0 : 0;
+  return units * rate;
 }
 
 // ── persistence ───────────────────────────────────────────────────────────────
