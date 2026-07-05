@@ -488,19 +488,22 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 )}
             </div>
 
-            {/* Search */}
+            {/* Search — opens the global command palette (rendered by the header) */}
             <div className="px-3 pt-3 pb-1">
-                <div className="relative group">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 group-focus-within:text-white/55 transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Search resources"
-                        className="w-full h-8 pl-8 pr-12 text-[12.5px] text-white placeholder:text-white/30 bg-white/[0.025] border border-white/[0.06] rounded-[5px] focus:outline-none focus:border-[#0095FF]/40 focus:ring-1 focus:ring-[#0095FF]/25 focus:bg-white/[0.04] transition-colors"
-                    />
+                <button
+                    type="button"
+                    onClick={() => {
+                        setIsMobileOpen(false);
+                        window.dispatchEvent(new Event("open-command-palette"));
+                    }}
+                    className="group relative flex w-full h-8 items-center pl-8 pr-12 text-[12.5px] text-white/30 hover:text-white/55 bg-white/[0.025] border border-white/[0.06] rounded-[5px] hover:border-white/[0.12] hover:bg-white/[0.04] transition-colors"
+                >
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 group-hover:text-white/55 transition-colors" />
+                    <span className="truncate">Search resources</span>
                     <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9.5px] font-medium text-white/40 bg-white/[0.04] border border-white/[0.08] rounded font-[var(--font-geist-mono),ui-monospace,monospace] tabular-nums">
                         ⌘K
                     </kbd>
-                </div>
+                </button>
             </div>
 
             {/* Nav */}

@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   Sparkles,
   Tag,
+  XCircle,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -188,7 +189,7 @@ function ResultRow({
           </Button>
         ) : (
           <span className="inline-flex h-9 min-w-[124px] items-center justify-center border border-white/[0.08] px-3 text-xs font-medium text-white/32">
-            Unavailable
+            Taken
           </span>
         )}
       </div>
@@ -243,6 +244,18 @@ export function SearchResults({
   const premiumResults = sortedResults.filter((item) => item.available && item.premium);
   const unavailableResults = sortedResults.filter((item) => !item.available);
 
+  // When the user searched a full domain (e.g. "google.com") and it is taken,
+  // answer that question up front instead of hiding it in the collapsed
+  // "Already registered" section.
+  const exactQuery = query.includes('.') ? query.trim().toLowerCase() : '';
+  const exactTakenMatch = exactQuery
+    ? unavailableResults.find((item) => item.domainName === exactQuery) ?? null
+    : null;
+
+  const hasAvailable = featuredResults.length > 0 || premiumResults.length > 0;
+  // If nothing is available there is no reason to collapse the only content.
+  const unavailableVisible = showUnavailable || !hasAvailable;
+
   if (searching) {
     return <SearchSkeleton count={selectedTlds.length} />;
   }
@@ -276,9 +289,29 @@ export function SearchResults({
         </div>
       </div>
 
+      {exactTakenMatch && (
+        <div className="flex flex-wrap items-start gap-3 border-b border-white/[0.06] bg-amber-500/[0.05] px-5 py-4 sm:px-6">
+          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">
+              <span className="font-mono">{exactTakenMatch.domainName}</span> is already registered
+            </p>
+            <p className="mt-1 text-xs text-white/45">
+              {hasAvailable
+                ? 'This exact domain is taken by another owner — here are available alternatives.'
+                : 'This exact domain is taken by another owner. Try a different name or extension.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {featuredResults.length > 0 && (
         <div>
-          <SectionHeader title="Best matches" count={featuredResults.length} />
+          <SectionHeader
+            title="Available domains"
+            caption="Ready to register now"
+            count={featuredResults.length}
+          />
           <div>
             {featuredResults.map((item, index) => (
               <ResultRow
@@ -295,7 +328,11 @@ export function SearchResults({
 
       {premiumResults.length > 0 && (
         <div className="border-t border-white/[0.06]">
-          <SectionHeader title="Premium names" count={premiumResults.length} />
+          <SectionHeader
+            title="Premium domains"
+            caption="High-demand names at registry-set prices"
+            count={premiumResults.length}
+          />
           <div>
             {premiumResults.map((item) => (
               <ResultRow
@@ -312,20 +349,23 @@ export function SearchResults({
       {unavailableResults.length > 0 && (
         <div className="border-t border-white/[0.06]">
           <SectionHeader
-            title="Taken names"
+            title="Already registered"
+            caption="Taken by other owners and not for sale here"
             count={unavailableResults.length}
             action={
-              <button
-                type="button"
-                onClick={() => setShowUnavailable((value) => !value)}
-                className="inline-flex items-center gap-1.5 text-xs text-white/42 transition-colors hover:text-white/72"
-              >
-                {showUnavailable ? 'Hide' : 'Show'}
-                {showUnavailable ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              </button>
+              hasAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setShowUnavailable((value) => !value)}
+                  className="inline-flex items-center gap-1.5 text-xs text-white/42 transition-colors hover:text-white/72"
+                >
+                  {unavailableVisible ? 'Hide' : 'Show'}
+                  {unavailableVisible ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
+              ) : undefined
             }
           />
-          {showUnavailable && (
+          {unavailableVisible && (
             <div>
               {unavailableResults.map((item) => (
                 <ResultRow

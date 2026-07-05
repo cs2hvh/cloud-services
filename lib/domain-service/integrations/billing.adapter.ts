@@ -1,4 +1,5 @@
 import { Billing } from "@/lib/supabase/queries/billing";
+import { createServiceClient } from "@/lib/supabase/server";
 import { DOMAIN_ERROR_CODES, DomainServiceError } from "@/lib/domain-service/core/errors";
 import type { DomainBillingPort } from "@/lib/domain-service/core/ports";
 
@@ -97,6 +98,30 @@ export function createDomainBillingAdapter(): DomainBillingPort {
           message: `Domain billing refund failed: ${toErrorMessage(error)}`,
         });
       }
+    },
+
+    async findDomainPurchaseSettlement(params) {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .schema("billing")
+        .from("transactions")
+        .select("type, status")
+        .eq("user_id", params.userId)
+        .eq("service_type", "domain")
+        .contains("metadata", { purchase_request_id: params.purchaseRequestId });
+
+      if (error) {
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+          message: `Failed to look up domain purchase settlement: ${error.message}`,
+        });
+      }
+
+      const rows = data ?? [];
+      return {
+        charged: rows.some((row) => row.type === "purchase" && row.status === "completed"),
+        refunded: rows.some((row) => row.type === "refund" && row.status === "completed"),
+      };
     },
 
     async chargeRenewal(params) {

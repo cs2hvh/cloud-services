@@ -51,6 +51,17 @@ export interface DomainMarketplaceRegistrarPort {
     domainName: string,
     contact: RegistrantContactInput
   ): Promise<void>;
+  /**
+   * Optional: Fetch a domain that exists in the platform's registrar account.
+   * Must reject with DOMAIN_NOT_FOUND when the domain is not in the account.
+   * Used to recover purchase requests that died mid-flight: presence of the
+   * domain proves the registrar purchase went through before the crash.
+   */
+  getDomain?(domainName: string): Promise<{
+    domainName?: string;
+    expireDate?: string;
+    renewalPrice?: number;
+  } | null>;
 }
 
 export interface RegistrarSettings {
@@ -224,6 +235,17 @@ export interface DomainBillingPort {
     amount: number;
     currency: string;
   }): Promise<void>;
+  /**
+   * Optional: Look up whether a purchase charge (and matching refund) was
+   * recorded for a purchase request. Used when auto-failing a stale request
+   * to decide if a refund is provably owed. `charged: false` means "no record
+   * found", not proof that no charge happened — transaction recording is
+   * best-effort, so callers must treat that case as needing manual review.
+   */
+  findDomainPurchaseSettlement?(params: {
+    userId: string;
+    purchaseRequestId: string;
+  }): Promise<{ charged: boolean; refunded: boolean }>;
 }
 
 export interface DomainAuditLogPort {

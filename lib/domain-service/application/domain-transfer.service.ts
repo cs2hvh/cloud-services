@@ -282,18 +282,16 @@ export class DomainTransferService {
       });
 
       // Refund if we charged
-      if (chargedAmount > 0 && this.deps.billing) {
-        await this.safeAsync(async () => {
-          await this.deps.billing!.refundDomainPurchase({
-            userId: actor.userId,
-            purchaseRequestId: request.id,
-            domain,
-            amount: chargedAmount,
-            currency: "USD",
-            reason: "transfer_failed",
-          });
-        });
-      }
+      await this.refundTransferChargeWithTracking({
+        actor,
+        transferId: request.id,
+        userId: actor.userId,
+        domain,
+        amount: chargedAmount,
+        currency: "USD",
+        reason: "transfer_failed",
+        status: "failed",
+      });
 
       await this.emitFailureEvents({
         actor,
@@ -503,18 +501,16 @@ export class DomainTransferService {
 
     // Refund if there was a charge
     const chargedAmount = Number(request.purchase_price || 0);
-    if (chargedAmount > 0 && this.deps.billing) {
-      await this.safeAsync(async () => {
-        await this.deps.billing!.refundDomainPurchase({
-          userId: input.actor.userId,
-          purchaseRequestId: request.id,
-          domain: request.domain,
-          amount: chargedAmount,
-          currency: request.currency,
-          reason: "transfer_cancelled",
-        });
-      });
-    }
+    await this.refundTransferChargeWithTracking({
+      actor: input.actor,
+      transferId: request.id,
+      userId: input.actor.userId,
+      domain: request.domain,
+      amount: chargedAmount,
+      currency: request.currency,
+      reason: "transfer_cancelled",
+      status: "cancelled",
+    });
 
     await this.safeAsync(async () => {
       await this.emitAudit({
@@ -844,18 +840,16 @@ export class DomainTransferService {
 
       // Auto-refund on failure from polling
       const chargedAmount = Number(transfer.purchase_price || 0);
-      if (chargedAmount > 0 && this.deps.billing) {
-        await this.safeAsync(async () => {
-          await this.deps.billing!.refundDomainPurchase({
-            userId: transfer.user_id,
-            purchaseRequestId: transfer.id,
-            domain: transfer.domain,
-            amount: chargedAmount,
-            currency: transfer.currency,
-            reason: "transfer_rejected",
-          });
-        });
-      }
+      await this.refundTransferChargeWithTracking({
+        actor: systemActor,
+        transferId: transfer.id,
+        userId: transfer.user_id,
+        domain: transfer.domain,
+        amount: chargedAmount,
+        currency: transfer.currency,
+        reason: "transfer_rejected",
+        status: "failed",
+      });
     } else if (newStatus === "cancelled") {
       await this.safeAsync(async () => {
         await this.emitAudit({
@@ -887,19 +881,84 @@ export class DomainTransferService {
 
       // Auto-refund when registrar cancels — mirrors the "failed" branch
       const chargedAmount = Number(transfer.purchase_price || 0);
-      if (chargedAmount > 0 && this.deps.billing) {
-        await this.safeAsync(async () => {
-          await this.deps.billing!.refundDomainPurchase({
-            userId: transfer.user_id,
-            purchaseRequestId: transfer.id,
-            domain: transfer.domain,
-            amount: chargedAmount,
-            currency: transfer.currency,
-            reason: "transfer_cancelled_by_registrar",
-          });
+      await this.refundTransferChargeWithTracking({
+        actor: systemActor,
+        transferId: transfer.id,
+        userId: transfer.user_id,
+        domain: transfer.domain,
+        amount: chargedAmount,
+        currency: transfer.currency,
+        reason: "transfer_cancelled_by_registrar",
+        status: "cancelled",
+      });
+    }
+  }
+
+  /**
+   * Refund a transfer charge and durably record the outcome on the transfer
+   * row. Refund failures must never be silently swallowed — a row with
+   * refund_status "failed" in metadata is the signal for manual review.
+   */
+  private async refundTransferChargeWithTracking(params: {
+    actor: ActorContext;
+    transferId: string;
+    userId: string;
+    domain: string;
+    amount: number;
+    currency: string;
+    reason: string;
+    status: DomainTransferRequestStatus;
+  }): Promise<void> {
+    if (!(params.amount > 0) || !this.deps.billing) return;
+
+    let refundFailure: string | null = null;
+    try {
+      await this.deps.billing.refundDomainPurchase({
+        userId: params.userId,
+        purchaseRequestId: params.transferId,
+        domain: params.domain,
+        amount: params.amount,
+        currency: params.currency,
+        reason: params.reason,
+      });
+    } catch (error: unknown) {
+      refundFailure = error instanceof Error ? error.message : String(error);
+      console.error("[DomainTransferService] Refund failed — manual review required", {
+        transferId: params.transferId,
+        domain: params.domain,
+        userId: params.userId,
+        amount: params.amount,
+        reason: params.reason,
+        error: refundFailure,
+      });
+    }
+
+    await this.safeAsync(async () => {
+      await this.transfers.updateStatus({
+        requestId: params.transferId,
+        status: params.status,
+        metadata: refundFailure
+          ? { refund_status: "failed", refund_amount: params.amount, refund_error: refundFailure, refund_review: true }
+          : { refund_status: "completed", refund_amount: params.amount },
+        ...(refundFailure
+          ? { lastError: `Refund of $${params.amount.toFixed(2)} failed (${params.reason}): ${refundFailure}` }
+          : {}),
+      });
+      if (refundFailure) {
+        await this.emitAudit({
+          actor: params.actor,
+          action: "update",
+          serviceId: params.transferId,
+          serviceName: params.domain,
+          metadata: {
+            event: "domain_transfer_refund_failed",
+            reason: params.reason,
+            amount: params.amount,
+            error: refundFailure,
+          },
         });
       }
-    }
+    });
   }
 
   /* ─── Event helpers (same pattern as DomainMarketplaceService) ─── */

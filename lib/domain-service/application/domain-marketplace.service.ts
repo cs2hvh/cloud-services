@@ -40,6 +40,10 @@ export interface DomainSearchResponse {
   results: DomainMarketplaceResult[];
 }
 
+// A synchronous purchase (charge + registrar call) finishes in seconds; an
+// in-flight request older than this window means the process died mid-flight.
+const STALE_IN_FLIGHT_PURCHASE_MS = 15 * 60 * 1000;
+
 const DEFAULT_TLDS = [
   // Classic
   "com", "net", "org",
@@ -226,10 +230,25 @@ export class DomainMarketplaceService {
       domain: cleanDomain,
     });
     if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
-      throw new DomainServiceError({
+      const blockedError = new DomainServiceError({
         code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
         message: `A purchase request for "${cleanDomain}" already exists with status: ${existingByDomain.status}`,
         details: { request_id: existingByDomain.id, status: existingByDomain.status, domain: cleanDomain },
+      });
+
+      // The purchase flow is synchronous and completes within seconds. An
+      // in-flight request older than the staleness window means the process
+      // died mid-purchase; resolve it instead of blocking the domain forever.
+      const inFlight = existingByDomain.status === "requested" || existingByDomain.status === "processing";
+      const ageMs = Date.now() - new Date(existingByDomain.created_at).getTime();
+      if (!inFlight || !(ageMs > STALE_IN_FLIGHT_PURCHASE_MS)) {
+        throw blockedError;
+      }
+
+      await this.resolveStaleInFlightPurchase({
+        stale: existingByDomain,
+        actor,
+        blockedError,
       });
     }
 
@@ -340,15 +359,21 @@ export class DomainMarketplaceService {
           })
         : rawError;
 
+      // Mark failed first (with the refund flagged as pending) so a crash
+      // anywhere in the refund path leaves a row that reconciliation can find.
       await this.purchaseRequests.updateStatus({
         requestId: request.id,
         status: "failed",
         lastError: serviceError.message,
+        ...(chargedAmount > 0
+          ? { metadata: { refund_status: "pending", refund_amount: chargedAmount } }
+          : {}),
       });
 
       if (chargedAmount > 0 && this.deps.billing) {
-        await this.emitNonBlocking(async () => {
-          await this.deps.billing!.refundDomainPurchase({
+        let refundFailure: string | null = null;
+        try {
+          await this.deps.billing.refundDomainPurchase({
             userId: input.actor.userId,
             purchaseRequestId: request.id,
             domain: cleanDomain,
@@ -356,7 +381,51 @@ export class DomainMarketplaceService {
             currency: "USD",
             reason: "purchase_failed",
           });
+        } catch (refundError: unknown) {
+          refundFailure = refundError instanceof Error ? refundError.message : String(refundError);
+          console.error("[DomainMarketplace] Refund failed after purchase failure — manual review required", {
+            requestId: request.id,
+            domain: cleanDomain,
+            userId: input.actor.userId,
+            amount: chargedAmount,
+            error: refundFailure,
+          });
+        }
+
+        // Durably record the refund outcome on the request row; a row stuck in
+        // refund_status "pending"/"failed" is the signal for manual review.
+        await this.emitNonBlocking(async () => {
+          await this.purchaseRequests.updateStatus({
+            requestId: request.id,
+            status: "failed",
+            metadata: refundFailure
+              ? { refund_status: "failed", refund_amount: chargedAmount, refund_error: refundFailure, refund_review: true }
+              : { refund_status: "completed", refund_amount: chargedAmount },
+            ...(refundFailure
+              ? { lastError: `${serviceError.message} | Refund of $${chargedAmount.toFixed(2)} failed: ${refundFailure}` }
+              : {}),
+          });
         });
+
+        if (refundFailure) {
+          await this.emitFailureEvents({
+            actor,
+            requestId: request.id,
+            domain: cleanDomain,
+            appId: input.appId,
+            error: new DomainServiceError({
+              code: DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
+              message: `Refund of $${chargedAmount.toFixed(2)} for ${cleanDomain} failed and needs manual review: ${refundFailure}`,
+            }),
+            event: "domain_purchase_refund_failed",
+          });
+        }
+
+        serviceError.details = {
+          ...(serviceError.details || {}),
+          refund_status: refundFailure ? "failed" : "completed",
+          refund_amount: chargedAmount,
+        };
       }
 
       await this.emitFailureEvents({
@@ -544,6 +613,140 @@ export class DomainMarketplaceService {
     // doesn't break; returns an empty result.
     void params;
     return { processed: 0, failed: 0, skipped: 0, failures: [] };
+  }
+
+  /**
+   * Resolve an in-flight purchase request that died mid-flight (process crash
+   * between charge and registrar call, or between registrar call and the
+   * completed-status write). Outcomes:
+   *
+   * - Registrar HAS the domain → the registrar purchase may have completed
+   *   just before the crash (or the domain belongs to another customer of the
+   *   platform account). Flag for manual review and keep the request blocked —
+   *   never risk a double purchase. Status stays in-flight so the existing
+   *   admin cancel route (which refunds) still applies.
+   * - Registrar does NOT have the domain (DOMAIN_NOT_FOUND) → the purchase
+   *   provably never happened. Refund if a charge is provably recorded, mark
+   *   the request failed, and let the caller's new purchase proceed.
+   * - Registrar state unknown (network error, no getDomain support) → keep
+   *   the original blocking error; guessing with money is worse than blocking.
+   */
+  private async resolveStaleInFlightPurchase(params: {
+    stale: DomainPurchaseRequest;
+    actor: ActorContext;
+    blockedError: DomainServiceError;
+  }): Promise<void> {
+    const { stale, actor, blockedError } = params;
+
+    const registrarWithGetDomain = this.registrar as DomainMarketplaceRegistrarPort;
+    if (!registrarWithGetDomain.getDomain) {
+      throw blockedError;
+    }
+
+    let registeredWithUs: boolean;
+    try {
+      await registrarWithGetDomain.getDomain(stale.domain);
+      registeredWithUs = true;
+    } catch (error: unknown) {
+      if (error instanceof DomainServiceError && error.code === DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND) {
+        registeredWithUs = false;
+      } else {
+        throw blockedError;
+      }
+    }
+
+    if (registeredWithUs) {
+      await this.emitNonBlocking(async () => {
+        await this.purchaseRequests.updateStatus({
+          requestId: stale.id,
+          status: stale.status,
+          metadata: { stale_review: true },
+        });
+        await this.emitAudit({
+          actor,
+          action: "update",
+          serviceId: stale.id,
+          serviceName: stale.domain,
+          metadata: {
+            event: "domain_purchase_stale_needs_review",
+            stale_status: stale.status,
+            stale_created_at: stale.created_at,
+          },
+        });
+      });
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+        message: `A previous purchase attempt for "${stale.domain}" did not finish cleanly, but the domain is registered with our provider. It has been flagged for support review.`,
+        details: { request_id: stale.id, domain: stale.domain, stale_review: true },
+      });
+    }
+
+    // Registrar provably does not have the domain — settle any charge and
+    // close the stale request out so the new purchase can proceed.
+    const amount = Number(stale.purchase_price || 0);
+    let refundStatus: "completed" | "failed" | "no_charge_found" | "unknown" = "no_charge_found";
+    if (amount > 0 && this.deps.billing) {
+      try {
+        const settlement = await this.deps.billing.findDomainPurchaseSettlement?.({
+          userId: stale.user_id,
+          purchaseRequestId: stale.id,
+        });
+        if (!settlement) {
+          refundStatus = "unknown";
+        } else if (settlement.refunded) {
+          refundStatus = "completed";
+        } else if (settlement.charged) {
+          await this.deps.billing.refundDomainPurchase({
+            userId: stale.user_id,
+            purchaseRequestId: stale.id,
+            domain: stale.domain,
+            amount,
+            currency: stale.currency || "USD",
+            reason: "stale_purchase_auto_failed",
+          });
+          refundStatus = "completed";
+        }
+      } catch (error: unknown) {
+        refundStatus = "failed";
+        console.error("[DomainMarketplace] Stale purchase refund failed — manual review required", {
+          requestId: stale.id,
+          domain: stale.domain,
+          userId: stale.user_id,
+          amount,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    const needsReview = refundStatus === "failed" || refundStatus === "unknown" || refundStatus === "no_charge_found";
+    await this.purchaseRequests.updateStatus({
+      requestId: stale.id,
+      status: "failed",
+      lastError: `Auto-failed: request was stuck in "${stale.status}" and the domain was never registered at the provider`,
+      metadata: {
+        stale_auto_failed: true,
+        refund_status: refundStatus,
+        refund_amount: amount,
+        // "no_charge_found" still needs eyes: transaction recording is
+        // best-effort, so absence of a charge record is not proof of no charge.
+        ...(needsReview && amount > 0 ? { refund_review: true } : {}),
+      },
+    });
+
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor,
+        action: "update",
+        serviceId: stale.id,
+        serviceName: stale.domain,
+        metadata: {
+          event: "domain_purchase_stale_auto_failed",
+          stale_status: stale.status,
+          refund_status: refundStatus,
+          amount,
+        },
+      });
+    });
   }
 
   private async emitFailureEvents(params: {

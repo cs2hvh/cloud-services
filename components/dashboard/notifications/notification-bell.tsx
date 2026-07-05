@@ -60,7 +60,7 @@ export function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-[360px] max-h-[520px] overflow-hidden p-0 bg-[#0d0e11] border border-white/[0.08] rounded-[8px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8)]"
+        className="w-[360px] max-w-[calc(100vw-1.5rem)] max-h-[520px] overflow-hidden p-0 bg-[#0d0e11] border border-white/[0.08] rounded-[8px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8)]"
       >
         <NotificationDropdown onClose={() => setIsOpen(false)} />
       </DropdownMenuContent>

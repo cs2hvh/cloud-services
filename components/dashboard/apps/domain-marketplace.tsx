@@ -309,7 +309,7 @@ export function DomainMarketplaceTab({
             </h2>
 
             <div className="mt-4 flex gap-2.5">
-              <div className="relative flex-1">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25 pointer-events-none" />
                 <input
                   type="text"

@@ -5,9 +5,12 @@ import { DomainMarketplaceService } from "@/lib/domain-service/application/domai
 function createService(overrides?: {
   purchasable?: boolean;
   latestStatus?: "requested" | "processing" | "completed" | "failed" | "cancelled" | null;
+  latestCreatedAt?: string;
+  getDomain?: ReturnType<typeof vi.fn>;
   billing?: {
     chargeDomainPurchase: ReturnType<typeof vi.fn>;
     refundDomainPurchase: ReturnType<typeof vi.fn>;
+    findDomainPurchaseSettlement?: ReturnType<typeof vi.fn>;
   };
 }) {
   const nameCom = {
@@ -37,6 +40,7 @@ function createService(overrides?: {
       order: 1001,
       totalPaid: 12.99,
     }),
+    ...(overrides?.getDomain ? { getDomain: overrides.getDomain } : {}),
   };
 
   const appRead = {
@@ -79,8 +83,8 @@ function createService(overrides?: {
             provider_request_id: null,
             last_error: null,
             metadata: {},
-            created_at: "2026-03-16T00:00:00Z",
-            updated_at: "2026-03-16T00:00:00Z",
+            created_at: overrides.latestCreatedAt ?? "2026-03-16T00:00:00Z",
+            updated_at: overrides.latestCreatedAt ?? "2026-03-16T00:00:00Z",
           }
         : null
     ),
@@ -169,8 +173,79 @@ describe("DomainMarketplaceService", () => {
     );
   });
 
-  it("returns latest blocking request for same app/domain", async () => {
-    const { service, purchaseRequests, nameCom } = createService({ latestStatus: "requested" });
+  it("blocks new purchase when a completed request exists for the domain", async () => {
+    const { service, purchaseRequests, nameCom } = createService({ latestStatus: "completed" });
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+    });
+
+    expect(nameCom.checkAvailability).not.toHaveBeenCalled();
+    expect(purchaseRequests.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks new purchase when a fresh in-flight request exists", async () => {
+    const getDomain = vi.fn();
+    const { service, purchaseRequests } = createService({
+      latestStatus: "processing",
+      latestCreatedAt: new Date().toISOString(),
+      getDomain,
+    });
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+    });
+
+    expect(getDomain).not.toHaveBeenCalled();
+    expect(purchaseRequests.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks stale in-flight request when registrar state cannot be verified", async () => {
+    // nameCom mock has no getDomain — the service must stay conservative
+    const { service, purchaseRequests } = createService({ latestStatus: "requested" });
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+    });
+
+    expect(purchaseRequests.create).not.toHaveBeenCalled();
+  });
+
+  it("auto-fails stale in-flight request, refunds proven charge, and proceeds", async () => {
+    const getDomain = vi.fn().mockRejectedValue(
+      new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND,
+        message: "Registrar resource not found",
+      })
+    );
+    const billing = {
+      chargeDomainPurchase: vi.fn().mockResolvedValue(undefined),
+      refundDomainPurchase: vi.fn().mockResolvedValue(undefined),
+      findDomainPurchaseSettlement: vi.fn().mockResolvedValue({ charged: true, refunded: false }),
+    };
+    const { service, purchaseRequests } = createService({
+      latestStatus: "processing",
+      getDomain,
+      billing,
+    });
 
     const request = await service.createPurchaseRequest({
       actor: { userId: "user-1" },
@@ -178,8 +253,55 @@ describe("DomainMarketplaceService", () => {
       domain: "hello.com",
     });
 
-    expect(request.id).toBe("req-existing");
-    expect(nameCom.checkAvailability).not.toHaveBeenCalled();
+    // Stale request refunded and closed out
+    expect(billing.refundDomainPurchase).toHaveBeenCalledWith({
+      userId: "user-1",
+      purchaseRequestId: "req-existing",
+      domain: "hello.com",
+      amount: 12.99,
+      currency: "USD",
+      reason: "stale_purchase_auto_failed",
+    });
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-existing",
+        status: "failed",
+        metadata: expect.objectContaining({
+          stale_auto_failed: true,
+          refund_status: "completed",
+        }),
+      })
+    );
+
+    // New purchase proceeded normally
+    expect(purchaseRequests.create).toHaveBeenCalled();
+    expect(request.status).toBe("completed");
+  });
+
+  it("flags stale in-flight request for review when registrar already has the domain", async () => {
+    const getDomain = vi.fn().mockResolvedValue({ domainName: "hello.com" });
+    const { service, purchaseRequests } = createService({
+      latestStatus: "processing",
+      getDomain,
+    });
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+      details: expect.objectContaining({ stale_review: true }),
+    });
+
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-existing",
+        metadata: expect.objectContaining({ stale_review: true }),
+      })
+    );
     expect(purchaseRequests.create).not.toHaveBeenCalled();
   });
 
@@ -221,11 +343,13 @@ describe("DomainMarketplaceService", () => {
       code: DOMAIN_ERROR_CODES.DOMAIN_NOT_AVAILABLE,
     });
 
-    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith({
-      requestId: "req-1",
-      status: "failed",
-      lastError: "Domain hello.com is no longer available for registration",
-    });
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-1",
+        status: "failed",
+        lastError: "Domain hello.com is no longer available for registration",
+      })
+    );
     expect(billing.refundDomainPurchase).toHaveBeenCalledWith({
       userId: "user-1",
       purchaseRequestId: "req-1",
@@ -234,6 +358,45 @@ describe("DomainMarketplaceService", () => {
       currency: "USD",
       reason: "purchase_failed",
     });
+    // Refund outcome is durably recorded on the request row
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-1",
+        status: "failed",
+        metadata: expect.objectContaining({ refund_status: "completed", refund_amount: 12.99 }),
+      })
+    );
+  });
+
+  it("records failed refund durably and surfaces it when refund fails after purchase failure", async () => {
+    const billing = {
+      chargeDomainPurchase: vi.fn().mockResolvedValue(undefined),
+      refundDomainPurchase: vi.fn().mockRejectedValue(new Error("billing backend down")),
+    };
+    const { service, nameCom, purchaseRequests } = createService({ billing });
+    nameCom.purchaseDomain.mockRejectedValue(new Error("registrar timeout"));
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({ refund_status: "failed" }),
+    });
+
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-1",
+        status: "failed",
+        metadata: expect.objectContaining({
+          refund_status: "failed",
+          refund_amount: 12.99,
+          refund_review: true,
+        }),
+      })
+    );
   });
 
   it("fails fast when billing charge fails", async () => {

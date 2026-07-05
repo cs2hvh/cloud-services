@@ -13,7 +13,8 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [balance, setBalance] = useState<number | null>(null);
 
-    // Global ⌘K / Ctrl+K to open the palette.
+    // Global ⌘K / Ctrl+K to open the palette. Also listens for the
+    // "open-command-palette" event so other chrome (sidebar search) can open it.
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
@@ -21,8 +22,13 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
                 setPaletteOpen((v) => !v);
             }
         };
+        const onOpen = () => setPaletteOpen(true);
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        window.addEventListener("open-command-palette", onOpen);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("open-command-palette", onOpen);
+        };
     }, []);
 
     // Live-ish balance for the top bar: load on mount, refresh on focus + 60s.
@@ -57,17 +63,20 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
               : "#4ade80";
 
     return (
-        <header className="h-14 flex items-center gap-3 px-4 sm:px-5 border-b border-white/[0.06] bg-[#0a0b0e]">
+        // pl-14 below md clears the fixed mobile sidebar toggle (left-3, 36px wide)
+        // rendered by AppSidebar — without it the toggle overlaps the search box.
+        <header className="h-14 flex items-center gap-2 sm:gap-3 pl-14 pr-3 md:pl-5 sm:pr-5 border-b border-white/[0.06] bg-[#0a0b0e]">
             {/* Search box (left, prominent) — opens the command palette */}
             <button
                 type="button"
                 onClick={() => setPaletteOpen(true)}
-                className="group flex items-center gap-2.5 h-9 w-full max-w-[420px] pl-3 pr-2 rounded-[8px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.14] transition-colors"
+                className="group flex items-center gap-2.5 h-9 w-full min-w-0 max-w-[420px] pl-3 pr-2 rounded-[8px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.14] transition-colors"
                 title="Search (⌘K)"
             >
                 <Search className="h-4 w-4 text-white/40 group-hover:text-white/60 shrink-0 transition-colors" />
-                <span className="flex-1 text-left text-[12.5px] text-white/35 group-hover:text-white/55 truncate transition-colors">
-                    Search servers, services, pages…
+                <span className="flex-1 min-w-0 text-left text-[12.5px] text-white/35 group-hover:text-white/55 truncate transition-colors">
+                    <span className="sm:hidden">Search…</span>
+                    <span className="hidden sm:inline">Search servers, services, pages…</span>
                 </span>
                 <kbd className="hidden sm:inline-flex items-center justify-center h-5 px-1.5 rounded-[4px] border border-white/[0.08] bg-white/[0.04] text-[10px] font-mono text-white/40">
                     ⌘K
