@@ -330,3 +330,23 @@ export const AgentcoreRuns = {
     return { success: true, id: data.id };
   },
 };
+
+// ── Agent memory (S5) — control-plane purge (DPDP/GDPR right-to-erasure) ───────
+
+export const AgentcoreMemories = {
+  /** Delete ALL of an agent's stored memories, org-scoped. Returns the count removed. */
+  async purgeForAgent(
+    orgId: string,
+    agentId: string
+  ): Promise<{ success: boolean; purged?: number; error?: string }> {
+    const { data, error } = await client()
+      .schema("agentcore")
+      .from("agent_memories")
+      .delete()
+      .eq("org_id", orgId)
+      .eq("agent_id", agentId)
+      .select("id");
+    if (error) return { success: false, error: error.message };
+    return { success: true, purged: data?.length ?? 0 };
+  },
+};

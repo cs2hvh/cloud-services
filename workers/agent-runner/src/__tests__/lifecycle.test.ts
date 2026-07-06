@@ -24,6 +24,9 @@ const { model } = vi.hoisted(() => ({
 }));
 vi.mock("../gateway.js", () => ({
   makeCallModel: () => (msgs: unknown) => model.fn(msgs),
+  // Fixed 1536-dim embedding — the fake RPC below returns canned rows regardless
+  // of the actual vector, so its value doesn't need to vary per test.
+  embedText: async () => ({ embedding: Array(1536).fill(0.01), tokens: 3 }),
 }));
 
 import { runAgentJob, priceStep, type RunContext } from "../lifecycle.js";
@@ -38,9 +41,14 @@ class Query {
   private op: "select" | "update" | "insert" = "select";
   private payload: Row = {};
   private filters: Filter[] = [];
+  private wantCount = false;
   constructor(private table: Row[]) {}
 
-  select() { if (this.op !== "update") this.op = "select"; return this; }
+  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+    if (this.op !== "update") this.op = "select";
+    if (opts?.count) this.wantCount = true;
+    return this;
+  }
   update(p: Row) { this.op = "update"; this.payload = p; return this; }
   insert(p: Row) { this.op = "insert"; this.payload = p; return this; }
   eq(col: string, val: unknown) { this.filters.push({ col, val, kind: "eq" }); return this; }
@@ -66,15 +74,25 @@ class Query {
   }
   maybeSingle<T>() { const r = this.run(); return { data: (r[0] ?? null) as T | null, error: null }; }
   single<T>() { const r = this.run(); return { data: (r[0] ?? null) as T | null, error: r[0] ? null : { message: "no rows" } }; }
-  // Awaiting the builder directly (insert / update-without-terminal) applies + resolves.
-  then(res: (v: { data: Row[]; error: null }) => void) { res({ data: this.run(), error: null }); }
+  // Awaiting the builder directly (insert / update-without-terminal / count-only
+  // select like hasAnyMemories) applies + resolves.
+  then(res: (v: { data: Row[]; error: null; count?: number }) => void) {
+    const r = this.run();
+    res({ data: r, error: null, ...(this.wantCount ? { count: r.length } : {}) });
+  }
 }
 
-function makeFakeSupabase(store: Record<string, Row[]>) {
+function makeFakeSupabase(store: Record<string, Row[]>, rpc: Record<string, unknown[]> = {}) {
   const tableFor = (schema: string, name: string) => (store[`${schema}.${name}`] ??= []);
   return {
     schema(schema: string) {
-      return { from: (name: string) => new Query(tableFor(schema, name)) };
+      return {
+        from: (name: string) => new Query(tableFor(schema, name)),
+        // Fake search_agent_memories: canned rows per test, real cosine math
+        // isn't exercised here (that's covered live + by the RPC's own SQL);
+        // this tests lifecycle's OWN wiring (threshold filter, step, injection).
+        rpc: async (fn: string) => ({ data: rpc[fn] ?? [], error: null }),
+      };
     },
   } as unknown as RunContext["supabase"];
 }
@@ -86,8 +104,8 @@ const nullLogger = () => {
   return l as unknown as RunContext["logger"];
 };
 
-function makeCtx(store: Record<string, Row[]>): RunContext {
-  return { env: {} as RunContext["env"], supabase: makeFakeSupabase(store), logger: nullLogger(), podId: "test-pod" };
+function makeCtx(store: Record<string, Row[]>, rpc: Record<string, unknown[]> = {}): RunContext {
+  return { env: {} as RunContext["env"], supabase: makeFakeSupabase(store, rpc), logger: nullLogger(), podId: "test-pod" };
 }
 
 const JOB: AgentJob = { runId: "run_1", orgId: "org_1" };
@@ -177,5 +195,86 @@ describe("priceStep", () => {
   it("returns 0 for an unpriced tool label (no rate configured)", () => {
     const step = { stepType: "file_search", metering: { units: 1, unitLabel: "file_search" }, status: "success", stepIndex: 3 } as LoopStep;
     expect(priceStep(step, modelPricing, toolRates)).toBe(0);
+  });
+});
+
+// ── auto-recall (memory) ────────────────────────────────────────────────────
+// Proactive recall (inject before the loop runs) instead of relying on the
+// model to call the memory tool — see lifecycle.ts §3b. These tests cover the
+// NEW similarity-threshold gate: an unrelated "closest" hit must not be
+// injected just because top-K always returns something.
+const AGENT_ID = "agent_mem_1";
+
+/** Seed a defined agent with the memory tool attached + one dummy stored
+ *  memory row (so hasAnyMemories() short-circuits true and the mocked RPC
+ *  in `rpc` decides what's "found"). */
+function seedMemoryAgent(store: Record<string, Row[]>, zdr = false) {
+  store["agentcore.agents"] = [{
+    id: AGENT_ID, model: "openai/gpt-4.1-mini", system_prompt: "Be helpful.",
+    tools: [{ type: "memory" }], max_steps: 12, guardrail: "warn",
+  }];
+  store["agentcore.agent_memories"] = [{ id: "m0", agent_id: AGENT_ID, scope_key: "default" }];
+  store["inference.orgs"] = [{ id: "org_1", zdr_default: zdr }];
+  store["agentcore.runs"][0].agent_id = AGENT_ID;
+}
+
+describe("auto-recall (memory)", () => {
+  beforeEach(() => {
+    model.fn = async () => ({ content: "final answer", toolCalls: [], usage: { inputTokens: 10, outputTokens: 5 } });
+  });
+
+  it("injects recalled facts + persists a billed step 0 when similarity clears the threshold", async () => {
+    const store: Record<string, Row[]> = {};
+    seedRun(store, { input: { input: "what is my name?" } });
+    seedMemoryAgent(store);
+    const seenMessages: unknown[] = [];
+    model.fn = async (msgs) => { seenMessages.push(msgs); return { content: "You're Deep.", toolCalls: [], usage: { inputTokens: 20, outputTokens: 5 } }; };
+
+    await runAgentJob(
+      makeCtx(store, { search_agent_memories: [{ id: "m1", content: "User's name is Deep.", similarity: 0.4 }] }),
+      JOB
+    );
+
+    const run = store["agentcore.runs"][0];
+    expect(run.status).toBe("completed");
+    const steps = store["agentcore.run_steps"];
+    expect(steps).toHaveLength(2); // auto-recall (0) + model (1)
+    expect(steps[0]).toMatchObject({ step_index: 0, step_type: "memory", tool_name: "memory" });
+    expect((steps[0].detail as { action: string }).action).toBe("auto_recall");
+    // The recalled fact must actually reach the model's transcript.
+    const firstCallMessages = seenMessages[0] as Array<{ role: string; content: string }>;
+    expect(firstCallMessages.some((m) => m.role === "system" && m.content.includes("User's name is Deep."))).toBe(true);
+  });
+
+  it("does NOT inject or persist a step when the best match is below the relevance threshold", async () => {
+    const store: Record<string, Row[]> = {};
+    seedRun(store, { input: { input: "what is the weather today?" } });
+    seedMemoryAgent(store);
+
+    // Top-K always returns *something* — here it's the agent's stored fact,
+    // but it's unrelated to the question, so similarity is low (below 0.15).
+    await runAgentJob(
+      makeCtx(store, { search_agent_memories: [{ id: "m1", content: "User's favorite color is teal.", similarity: 0.04 }] }),
+      JOB
+    );
+
+    const steps = store["agentcore.run_steps"];
+    expect(steps).toHaveLength(1); // model only — no stray auto_recall step
+    expect(steps[0].step_type).toBe("model");
+  });
+
+  it("skips auto-recall entirely for a ZDR org (no injected message, no extra step)", async () => {
+    const store: Record<string, Row[]> = {};
+    seedRun(store, { input: { input: "what is my name?" } });
+    seedMemoryAgent(store, /* zdr */ true);
+
+    await runAgentJob(
+      makeCtx(store, { search_agent_memories: [{ id: "m1", content: "User's name is Deep.", similarity: 0.9 }] }),
+      JOB
+    );
+
+    const steps = store["agentcore.run_steps"];
+    expect(steps).toHaveLength(1);
+    expect(steps[0].step_type).toBe("model");
   });
 });

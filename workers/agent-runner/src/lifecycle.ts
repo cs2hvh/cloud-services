@@ -33,6 +33,8 @@ import type { AgentJob } from "./scan.js";
 import { makeCallModel } from "./gateway.js";
 import { buildDispatcher } from "./tools/dispatch.js";
 import { sandboxPoolFor } from "./tools/spec.js";
+import { searchMemories, hasAnyMemories } from "./tools/memory.js";
+import { preview } from "./tools/detail.js";
 
 export interface RunContext {
   env: RunnerEnv;
@@ -113,6 +115,69 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
     const toolRates = await fetchToolRates(ctx);
 
     const messages = await buildMessages(ctx, run, cfg);
+    const zdr = await fetchOrgZdr(ctx, run.org_id); // ZDR orgs must not persist OR auto-recall memory
+
+    // ── 3b. Automatic memory recall (BEFORE the model runs) ────────────────────
+    // Recall must not depend on the model choosing to call the memory tool —
+    // small models routinely skip an implicit "check memory first" step (found
+    // live: gpt-4o-mini answered "I don't know your name" with a matching stored
+    // memory sitting right there). So if this agent has memory attached, embed
+    // the user's current input and inject the top hits into the transcript up
+    // front — this is the same pattern OpenAI's ChatGPT memory and MemGPT/Letta's
+    // "core memory" use (proactive injection, not a model-invoked tool call).
+    //
+    // MIN_AUTO_RECALL_SIMILARITY gates what gets injected: unlike the explicit
+    // `search` action (where the model sees raw results and can judge relevance
+    // itself), this path is blind/automatic, so an unrelated query must NOT drag
+    // in a stray "closest" memory just because top-K always returns something.
+    // Threshold picked from live cosine-similarity data on text-embedding-3-small:
+    // a genuine match scored ~0.38; unrelated pairs cluster much lower — 0.15 is a
+    // conservative cut that admits real matches while filtering obvious noise.
+    // Persisted as a real, billed trace step (index 0) only when something clears
+    // the bar, so it's visible and priced through the same pipeline as a manual search.
+    const MIN_AUTO_RECALL_SIMILARITY = 0.15;
+    let autoRecallCostCents = 0;
+    let loopStartIndex = 0;
+    if (run.agent_id && !zdr && cfg.tools.some((t) => t.type === "memory")) {
+      const queryText = extractLatestUserText(run.input as { input?: ResponsesInput });
+      if (queryText && (await hasAnyMemories(ctx.supabase, run.agent_id))) {
+        try {
+          const { results: candidates, tokens } = await searchMemories(ctx.env, ctx.supabase, run.agent_id, queryText, 3);
+          const results = candidates.filter((r) => r.similarity >= MIN_AUTO_RECALL_SIMILARITY);
+          if (results.length > 0) {
+            const recalled = results.map((r, i) => `${i + 1}. ${r.content}`).join("\n");
+            messages.push({
+              role: "system",
+              content: `Relevant memories about this user, recalled from earlier conversations:\n${recalled}`,
+            });
+            const autoStep: LoopStep = {
+              stepIndex: 0,
+              stepType: "memory",
+              toolName: "memory",
+              metering: { units: 1, unitLabel: "memory_search" },
+              status: "success",
+              detail: {
+                action: "auto_recall",
+                query: preview(queryText, 200),
+                snippets: results.map((r) => preview(r.content, 200)),
+                count: results.length,
+                candidates: candidates.length, // how many were fetched before the relevance filter
+                embed_tokens: tokens,
+              },
+            };
+            autoStep.costCents = priceStep(autoStep, pricing, toolRates);
+            await persistStep(ctx, run, autoStep);
+            autoRecallCostCents = autoStep.costCents;
+            loopStartIndex = 1;
+          }
+        } catch (e) {
+          // Best-effort: a recall failure must not fail the whole run — the
+          // agent just proceeds without injected context, same as before this
+          // feature existed.
+          log.warn({ err: e instanceof Error ? e.message : String(e) }, "auto-recall failed, continuing without it");
+        }
+      }
+    }
 
     // Build the tool dispatcher from the agent's declared tools (S2). It yields
     // the schemas advertised to the model + the name→adapter router. The sandbox
@@ -125,6 +190,8 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       runId: run.id,
       orgId: run.org_id,
       billingUserId: run.billing_user_id,
+      agentId: run.agent_id ?? undefined, // scopes agent memory (S5); absent for inline runs
+      zdr, // ZDR orgs must not persist memory
     };
 
     // ── 4. Run the pure loop ───────────────────────────────────────────────────
@@ -136,6 +203,8 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
         maxSteps: cfg.maxSteps,
         maxCostCents: run.max_cost_cents,
       },
+      costCentsSoFar: autoRecallCostCents,
+      startStepIndex: loopStartIndex,
       // Cancellation gate → model turn (with tool schemas) → remap each tool_call
       // to its real step_type (web_search/function/…) so the trace is accurate.
       callModel: async (msgs) => {
@@ -266,9 +335,12 @@ async function loadPriorTurns(
 
   // Walk the chain newest→oldest, then reverse to replay oldest→newest.
   const chain: Array<{ input: unknown; output: unknown }> = [];
+  const visited = new Set<string>(); // cycle guard: a forged/looping chain can't spin
   let cursor: string | null = previousResponseId;
   let hops = 0;
   while (cursor && hops < MAX_CHAIN_TURNS) {
+    if (visited.has(cursor)) break;
+    visited.add(cursor);
     const { data } = await ctx.supabase
       .schema("agentcore")
       .from("runs")
@@ -310,6 +382,35 @@ function extractFinalText(output: unknown): string | null {
   return typeof text === "string" && text.length > 0 ? text : null;
 }
 
+/** Pull a plain-text query out of the run's raw input for the auto-recall embed.
+ *  A bare string is used as-is; an OpenAI-style message array uses the LAST
+ *  `user` message (mirrors what the model itself is actually responding to). */
+function extractLatestUserText(input: { input?: ResponsesInput } | null | undefined): string {
+  const raw = input?.input;
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    for (let i = raw.length - 1; i >= 0; i--) {
+      const item = raw[i] as { role?: unknown; content?: unknown };
+      if (item?.role === "user") {
+        return typeof item.content === "string" ? item.content : JSON.stringify(item.content ?? "");
+      }
+    }
+  }
+  return "";
+}
+
+/** Org zero-data-retention flag — gates tools that would PERSIST customer data
+ *  (agent memory writes). Defaults to false (retention allowed) if unreadable. */
+async function fetchOrgZdr(ctx: RunContext, orgId: string): Promise<boolean> {
+  const { data } = await ctx.supabase
+    .schema("inference")
+    .from("orgs")
+    .select("zdr_default")
+    .eq("id", orgId)
+    .maybeSingle<{ zdr_default: boolean }>();
+  return data?.zdr_default ?? false;
+}
+
 async function fetchModelPricing(ctx: RunContext, model: string): Promise<ModelPricing> {
   const { data } = await ctx.supabase
     .schema("inference")
@@ -326,6 +427,8 @@ const TOOL_PRICE_KEY_TO_LABEL: Record<string, string> = {
   cents_per_function_call: "function_call",
   cents_per_cpu_second: "cpu_second",
   cents_per_file_search: "file_search",
+  cents_per_memory_write: "memory_write",
+  cents_per_memory_search: "memory_search",
 };
 
 /**

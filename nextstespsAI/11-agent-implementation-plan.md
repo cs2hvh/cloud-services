@@ -4,7 +4,7 @@
 
 This is the build-ready plan for the agent runtime, grounded against the real codebase. It supersedes the parts of `02-agent-infrastructure.md` that were cut for complexity (browser automation + tool/function registry) and pins down the plugin model, architecture, slices, and test discipline.
 
-> **BUILD STATUS (2026-07-03):** **S1 ✅ shipped** (`66cc22d8`, verified live E2E), **S2 hosted tools ✅ shipped** (`93c6a518`; incl. an SSRF guard on function webhooks), **S3 code interpreter 🚧 built (stateful dev sandbox: persistent kernel, session reuse, data image) but hard-gated** behind `SANDBOX_ENABLED` pending the security review in **[13-agent-s3-sandbox-security-review.md](13-agent-s3-sandbox-security-review.md)**. Full as-built status + honest gaps: see the BUILD STATUS block in [12-agent-execution-stages.md](12-agent-execution-stages.md). Companion docs: **12** = task board · **13** = S3 sandbox security gate.
+> **BUILD STATUS (2026-07-03):** **S1 ✅ shipped** (`66cc22d8`, verified live E2E), **S2 hosted tools ✅ shipped** (`93c6a518`; incl. an SSRF guard on function webhooks), **S3 code interpreter 🚧 built (stateful dev sandbox: persistent kernel, session reuse, data image) but hard-gated** behind `SANDBOX_ENABLED` pending the security review in **[13-agent-s3-sandbox-security-review.md](13-agent-s3-sandbox-security-review.md)**. **S5 agent memory ✅ built** (write/search tool, org+agent-scoped, ZDR-gated, purge API — migration `20260703000001` pending apply). Full as-built status + honest gaps: see the BUILD STATUS block in [12-agent-execution-stages.md](12-agent-execution-stages.md). Companion docs: **12** = task board · **13** = S3 sandbox security gate.
 
 ---
 

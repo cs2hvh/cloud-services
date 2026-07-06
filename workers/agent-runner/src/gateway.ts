@@ -80,8 +80,23 @@ export function toWireMessages(messages: LoopMessage[]): Record<string, unknown>
   });
 }
 
-/** Perform one model turn against the gateway. Throws on non-2xx / timeout.
- *  When `tools` is supplied, the model may emit tool_calls the runner dispatches. */
+/** Max attempts for one model turn (1 try + 2 retries) on TRANSIENT failures. */
+const MODEL_TURN_ATTEMPTS = 3;
+
+/** Retry 5xx + network/timeout (transient); never retry 4xx — a client error
+ *  (bad request, or a guardrail BLOCK) won't succeed on retry and re-sending
+ *  wastes tokens/latency. */
+function isTransientModelError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/HTTP 4\d\d/.test(msg)) return false;
+  if (/HTTP 5\d\d/.test(msg)) return true;
+  return true; // AbortError (timeout) / network reset — transient
+}
+
+/** Perform one model turn against the gateway. Retries transient failures (5xx,
+ *  timeout, network) with backoff so a momentary upstream blip doesn't fail the
+ *  whole run; throws on a 4xx (incl. guardrail block) immediately. When `tools`
+ *  is supplied, the model may emit tool_calls the runner dispatches. */
 export async function callModelTurn(
   env: RunnerEnv,
   model: string,
@@ -89,37 +104,45 @@ export async function callModelTurn(
   tools?: ModelTool[],
   guardrail?: string | null
 ): Promise<ModelTurn> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.modelTurnTimeoutMs);
-  try {
-    const body: Record<string, unknown> = { model, messages: toWireMessages(messages) };
-    if (tools && tools.length > 0) {
-      body.tools = tools;
-      body.tool_choice = "auto";
-    }
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${env.inferencePlatformKey}`,
-      "Content-Type": "application/json",
-    };
-    // Apply the agent's guardrail via the existing gateway enforcement (Phase 3):
-    // the chat route evaluates the policy on the transcript each turn and returns
-    // a non-2xx when it BLOCKS — which surfaces here as a thrown error → the run
-    // fails with a guardrail reason. Omitted only when explicitly 'off'.
-    if (guardrail && guardrail !== "off") headers["X-Ahura-Guardrail"] = guardrail;
-    const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Model turn returned HTTP ${res.status}: ${txt.slice(0, 200)}`);
-    }
-    return toModelTurn((await res.json()) as ChatCompletionResponse);
-  } finally {
-    clearTimeout(timer);
+  const body: Record<string, unknown> = { model, messages: toWireMessages(messages) };
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = "auto";
   }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${env.inferencePlatformKey}`,
+    "Content-Type": "application/json",
+  };
+  // Apply the agent's guardrail via the existing gateway enforcement (Phase 3):
+  // the chat route evaluates the policy each turn and returns a non-2xx when it
+  // BLOCKS → a 4xx here → thrown (not retried) → the run fails with that reason.
+  if (guardrail && guardrail !== "off") headers["X-Ahura-Guardrail"] = guardrail;
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MODEL_TURN_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), env.modelTurnTimeoutMs);
+    try {
+      const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Model turn returned HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      return toModelTurn((await res.json()) as ChatCompletionResponse);
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= MODEL_TURN_ATTEMPTS || !isTransientModelError(err)) throw err;
+      await new Promise((r) => setTimeout(r, 300 * attempt)); // backoff: 300ms, 600ms
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr; // unreachable (loop returns or throws) — satisfies the type checker
 }
 
 /** Bind a `CallModel` for one run's model + tool schema + guardrail. The loop injects this. */

@@ -162,8 +162,12 @@ class DockerSession implements SandboxSession {
       const done = (l: string | null) => { this.waiter = null; clearTimeout(timer); resolve(l); };
       const timer = setTimeout(() => {
         if (this.waiter === done) {
+          // A hung exec can't be interrupted inside the single-threaded kernel, so
+          // we kill the whole container. Trade-off: the rest of the run's code
+          // steps lose session state (they get "session no longer available",
+          // exit 137). Safer than leaking a CPU-burning container.
           this.dead = true;
-          spawn("docker", ["kill", this.id]).on("error", () => {}); // hung exec → kill the session
+          spawn("docker", ["kill", this.id]).on("error", () => {});
           done(null);
         }
       }, timeoutMs);

@@ -65,6 +65,25 @@ describe("callModelTurn", () => {
     global.fetch = mockFetch({ error: "bad" }, false, 500);
     await expect(callModelTurn(env, "test/model", [])).rejects.toThrow(/HTTP 500/);
   });
+
+  it("retries a transient 5xx, then succeeds", async () => {
+    let n = 0;
+    global.fetch = vi.fn(async () => {
+      n++;
+      if (n < 2) return { ok: false, status: 503, text: async () => "busy" } as unknown as Response;
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "ok" } }], usage: {} }), text: async () => "" } as unknown as Response;
+    }) as unknown as typeof fetch;
+    const turn = await callModelTurn(env, "test/model", []);
+    expect(turn.content).toBe("ok");
+    expect(n).toBe(2); // one retry
+  });
+
+  it("does NOT retry a 4xx (e.g. guardrail block)", async () => {
+    let n = 0;
+    global.fetch = vi.fn(async () => { n++; return { ok: false, status: 403, text: async () => "blocked" } as unknown as Response; }) as unknown as typeof fetch;
+    await expect(callModelTurn(env, "test/model", [])).rejects.toThrow(/HTTP 403/);
+    expect(n).toBe(1); // no retry on client error
+  });
 });
 
 // Regression: after a tool call, the assistant turn must serialize tool_calls in

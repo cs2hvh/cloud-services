@@ -2,7 +2,11 @@
 
 **Date:** 2026-07-03 · **Companion to:** [11-agent-implementation-plan.md](11-agent-implementation-plan.md) (§11) · [12-agent-execution-stages.md](12-agent-execution-stages.md) (S3.3) · **Status:** ⛔ NOT SIGNED OFF
 
-This is the **gate S3 must pass before any customer/model-authored code executes** (§11: *"One shared security review before any customer code executes"*). The `code` tool, the real sandbox pool, and the standalone `/v1/tools/code` primitive stay **disabled in every environment** until every MUST item below is checked and the sign-off table is complete. Building the *ungated* scaffolding (pool interface, mock pool, session lifecycle, settle/reaper) is allowed before sign-off; **wiring a real executor is not.**
+This is the **gate S3 must pass before any customer/model-authored code executes in a shared/production environment** (§11: *"One shared security review before any customer code executes"*).
+
+**What this gate blocks: un-gating.** `SANDBOX_ENABLED` stays **false (default) in every shared/staging/production environment** until every MUST item below is checked and the sign-off table is complete. Flipping it on anywhere customers' code could run against real tenants is what requires sign-off.
+
+**What is permitted before sign-off: a gated, default-off, LOCAL-DEV-ONLY executor.** The committed `DockerSandboxPool` (a shared-kernel container — `--network none`, non-root, read-only rootfs, cap-drop ALL, memory/pids/wall-clock caps) runs **only when a developer sets `SANDBOX_ENABLED=true` on their own machine** for building/testing the loop. It is explicitly **not** the production isolation model (§1) and must never be enabled in a shared env. So the MUST items below gate **production un-gating**, not the existence of the dev executor — that reconciles this doc with the "dev executor, gated" status in [12-agent-execution-stages.md](12-agent-execution-stages.md).
 
 > **Why a hard gate:** the sandbox runs arbitrary code an LLM (or the customer) produced. It is the platform's single largest new attack + cost surface (§11, §2). A miss here is a tenant-isolation breach or a metadata-credential exfiltration, not a bug.
 
@@ -10,13 +14,13 @@ This is the **gate S3 must pass before any customer/model-authored code executes
 
 ## 0. Open decision that blocks the *real* pool (not the scaffolding)
 
-- [ ] **§15.3 — where does the pool run?** Firecracker/gVisor pool on the current RunPod-backed k8s **now**, or wait for the owned B300/H200 fleet? *(Owner: platform/manager. Until decided, only the mock pool exists.)*
+- [ ] **§15.3 — where does the *production* pool run?** Firecracker/gVisor pool on the current RunPod-backed k8s **now**, or wait for the owned B300/H200 fleet? *(Owner: platform/manager. Until decided, production has no pool; local dev may use the shared-kernel `DockerSandboxPool` behind the gate — see the preamble.)*
 
 ---
 
 ## 1. Isolation (MUST — no customer code runs until all checked)
 
-- [ ] **Kernel isolation.** Each session runs in a gVisor (runsc) or Firecracker microVM — **not** a shared-kernel container. No tenant shares a kernel with the host or another tenant.
+- [ ] **Kernel isolation (production un-gating).** Each session runs in a gVisor (runsc) or Firecracker microVM — **not** a shared-kernel container. No tenant shares a kernel with the host or another tenant. *(The local-dev `DockerSandboxPool` is shared-kernel by design and does NOT meet this — which is exactly why it is walled off to a developer's own machine and can never be enabled in a shared env. The prod pool swaps the runtime to `runsc`/Firecracker behind the same interface via `SANDBOX_RUNTIME`.)*
 - [ ] **Ephemeral rootfs.** Fresh, read-mostly rootfs per session; destroyed on stop. No writable host mount, no shared volume, no Docker socket.
 - [ ] **Non-root, no privilege escalation.** Runs as an unprivileged uid; `allowPrivilegeEscalation=false`, all Linux capabilities dropped, seccomp default-deny profile applied.
 - [ ] **No host PID/IPC/network namespace sharing.** Per-session net namespace; cannot see host or sibling processes/sockets.

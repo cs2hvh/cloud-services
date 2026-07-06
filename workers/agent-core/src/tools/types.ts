@@ -33,6 +33,10 @@ export interface RunCtx {
   runId: string;
   orgId: string;
   billingUserId: string;
+  /** The defined agent's id (absent for inline runs). Scopes agent memory (S5). */
+  agentId?: string;
+  /** Org is zero-data-retention → tools must not PERSIST customer data (memory writes). */
+  zdr?: boolean;
   /** Byte budget for a single tool result before it spills to R2 (brand-scrub still applies). */
   maxInlineResultBytes?: number;
   /** Abort signal wired to the run's wall-clock / cancel path. */

@@ -32,7 +32,7 @@ export interface LoopMessage {
 }
 
 /** The tool `type` a call maps to (never "model"). */
-export type StepTypeToolName = "web_search" | "file_search" | "code" | "function" | "mcp";
+export type StepTypeToolName = "web_search" | "file_search" | "code" | "function" | "memory" | "mcp";
 
 /** A model-requested tool call (OpenAI-shaped). */
 export interface ToolCall {
@@ -92,8 +92,12 @@ export interface RunAgentLoopParams {
   dispatchTool: DispatchTool;
   priceStep?: PriceStep;
   onStep?: OnStep;
-  /** Seed the running cost total (e.g. resuming a run). Defaults to 0. */
+  /** Seed the running cost total (e.g. resuming a run, or a pre-loop step like
+   *  memory auto-recall). Defaults to 0. */
   costCentsSoFar?: number;
+  /** Seed the step index (e.g. a pre-loop auto-recall step already persisted at
+   *  index 0). Defaults to 0. Keeps run_steps.step_index contiguous/unique. */
+  startStepIndex?: number;
   /** Injected clock for latency measurement; defaults to Date.now. Enables deterministic tests. */
   now?: () => number;
 }
@@ -127,12 +131,13 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<RunAgent
     priceStep,
     onStep,
     costCentsSoFar = 0,
+    startStepIndex = 0,
     now = Date.now,
   } = params;
 
   const messages: LoopMessage[] = [...params.messages];
   let costCents = costCentsSoFar;
-  let stepIndex = 0;
+  let stepIndex = startStepIndex;
   let modelTurns = 0;
   let finalText = "";
 

@@ -1,10 +1,10 @@
 /**
  * Hosted web_search tool (S2.2).
  *
- * Proxied and brand-hidden behind a normalized citation envelope (§5). The
- * upstream (Brave) is never named in anything returned to the customer — a
- * scrub pass strips provider identifiers from all surfaced text. Exa is a
- * future opt-in provider behind the same `WebSearchProvider` interface.
+ * Proxied and brand-hidden behind a normalized citation envelope (§5). Two
+ * providers behind one `WebSearchProvider` interface — **Brave** (default) and
+ * **Exa** (opt-in via `WEB_SEARCH_PROVIDER=exa`); the upstream is never named in
+ * anything returned to the customer (a scrub pass strips provider identifiers).
  */
 import type { AgentTool, RunCtx, ToolResult } from "@ahura/agent-core";
 import type { RunnerEnv } from "../env.js";
@@ -24,7 +24,9 @@ export function scrubUpstream(text: string): string {
   return (text ?? "")
     .replace(/brave\s*search/gi, "web search")
     .replace(/\bbrave\b/gi, "search")
-    .replace(/x-subscription-token/gi, "");
+    .replace(/exa\s*search/gi, "web search")
+    .replace(/\bexa\.ai\b/gi, "")
+    .replace(/x-(subscription-token|api-key)/gi, "");
 }
 
 function braveProvider(apiKey: string): WebSearchProvider {
@@ -48,11 +50,39 @@ function braveProvider(apiKey: string): WebSearchProvider {
   };
 }
 
-/** Select the configured provider. Exa is a future adapter; defaults to Brave. */
+/**
+ * Exa (premium, opt-in) adapter — same interface as Brave, so the loop/tool never
+ * change (§5 "offer both"). Requests highlight snippets so the citation envelope
+ * has usable text. `x-api-key` header + provider name are brand-scrubbed downstream.
+ */
+function exaProvider(apiKey: string): WebSearchProvider {
+  return {
+    async search(query, maxResults, signal) {
+      const res = await fetch("https://api.exa.ai/search", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query, numResults: maxResults, contents: { highlights: { numSentences: 2 } } }),
+        signal,
+      });
+      if (!res.ok) throw new Error(`search upstream returned ${res.status}`);
+      const data = (await res.json()) as {
+        results?: Array<{ title?: string; url?: string; highlights?: string[]; text?: string }>;
+      };
+      return (data.results ?? []).slice(0, maxResults).map((r) => ({
+        title: r.title ?? "",
+        url: r.url ?? "",
+        snippet: r.highlights?.[0] ?? (r.text ?? "").slice(0, 300),
+      }));
+    },
+  };
+}
+
+/** Select the configured provider (Brave default, Exa opt-in) — both brand-hidden. */
 function selectProvider(env: RunnerEnv): WebSearchProvider | null {
   if (!env.webSearchApiKey) return null;
-  // Only Brave is implemented; 'exa' falls back until its adapter lands.
-  return braveProvider(env.webSearchApiKey);
+  return env.webSearchProvider === "exa"
+    ? exaProvider(env.webSearchApiKey)
+    : braveProvider(env.webSearchApiKey);
 }
 
 export function webSearchTool(env: RunnerEnv, providerOverride?: WebSearchProvider): AgentTool {

@@ -62,7 +62,12 @@ function PlaygroundInner() {
   const [runId, setRunId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [recent, setRecent] = useState<RunListItem[]>([]);
+  const [stalled, setStalled] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runStartRef = useRef(0);
+
+  // If a run sits non-terminal with zero steps this long, the runner is likely down.
+  const STALL_MS = 12_000;
 
   // Load agents (for the picker) + recent runs.
   useEffect(() => {
@@ -92,8 +97,9 @@ function PlaygroundInner() {
     return json.data as RunDetail;
   }, []);
 
-  // Poll the active run until terminal.
-  useEffect(() => {
+  // Fallback polling — used only if the SSE stream errors or a run outlives one
+  // stream window. Same behaviour as before (1.5s trace refresh + stall check).
+  const startPolling = useCallback(() => {
     if (!runId) return;
     stopPolling();
     pollRef.current = setInterval(async () => {
@@ -102,12 +108,46 @@ function PlaygroundInner() {
         if (TERMINAL.has(d.status)) {
           stopPolling();
           setRunning(false);
+          setStalled(false);
           void fetch('/api/agents/runs').then((r) => r.json()).then((j) => setRecent(j.data ?? []));
+        } else {
+          setStalled(d.step_count === 0 && Date.now() - runStartRef.current > STALL_MS);
         }
       } catch { stopPolling(); setRunning(false); }
     }, 1500);
-    return stopPolling;
   }, [runId, loadTrace, stopPolling]);
+
+  // Live step stream (SSE): render each step the instant it lands. Falls back to
+  // polling on any stream error (initial 404, network, or a very long run).
+  useEffect(() => {
+    if (!runId) return;
+    const base: RunDetail = { id: runId, status: 'queued', cost_cents: 0, step_count: 0, error: null, output: null, steps: [] };
+    const mergeStep = (steps: Step[], step: Step): Step[] =>
+      steps.some((s) => s.step_index === step.step_index)
+        ? steps.map((s) => (s.step_index === step.step_index ? step : s))
+        : [...steps, step].sort((a, b) => a.step_index - b.step_index);
+
+    const es = new EventSource(`/api/agents/runs/${runId}/stream`);
+    es.addEventListener('step', (e) => {
+      const { step } = JSON.parse((e as MessageEvent).data) as { step: Step };
+      setDetail((d) => ({ ...(d ?? base), steps: mergeStep((d ?? base).steps, step) }));
+    });
+    es.addEventListener('status', (e) => {
+      const s = JSON.parse((e as MessageEvent).data) as { status: string; cost_cents: number; step_count: number };
+      setDetail((d) => ({ ...(d ?? base), status: s.status, cost_cents: s.cost_cents, step_count: s.step_count }));
+      setStalled(s.step_count === 0 && !TERMINAL.has(s.status) && Date.now() - runStartRef.current > STALL_MS);
+    });
+    es.addEventListener('done', (e) => {
+      const s = JSON.parse((e as MessageEvent).data) as { status: string; output: RunDetail['output']; error: string | null; cost_cents: number; step_count: number };
+      setDetail((d) => ({ ...(d ?? base), status: s.status, output: s.output, error: s.error, cost_cents: s.cost_cents, step_count: s.step_count }));
+      setStalled(false);
+      setRunning(false);
+      es.close();
+      void fetch('/api/agents/runs').then((r) => r.json()).then((j) => setRecent(j.data ?? []));
+    });
+    es.onerror = () => { es.close(); startPolling(); }; // fall back to polling
+    return () => { es.close(); stopPolling(); };
+  }, [runId, startPolling, stopPolling]);
 
   async function run() {
     if (!agentId) { toast.error('Create and select an agent first'); return; }
@@ -115,6 +155,8 @@ function PlaygroundInner() {
     setRunning(true);
     setDetail(null);
     setRunId(null);
+    setStalled(false);
+    runStartRef.current = Date.now();
     try {
       const res = await fetch('/api/agents/runs', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -220,7 +262,15 @@ function PlaygroundInner() {
                   );
                 })}
                 {detail.steps.length === 0 && (
-                  <div className="px-4 py-6 text-center text-white/30 text-xs">Waiting for the runner to pick up this run…</div>
+                  <div className="px-4 py-6 text-center text-xs">
+                    {stalled ? (
+                      <span className="text-yellow-400/90">
+                        ⚠ Queued {Math.round((Date.now() - runStartRef.current) / 1000)}s with no step yet — the agent-runner may be down or not draining. Check the runner, then re-run.
+                      </span>
+                    ) : (
+                      <span className="text-white/30">Waiting for the runner to pick up this run…</span>
+                    )}
+                  </div>
                 )}
               </div>
 

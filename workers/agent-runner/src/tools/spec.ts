@@ -22,6 +22,7 @@ import { webSearchTool } from "./web-search.js";
 import { fileSearchTool, type FileSearchDecl } from "./file-search.js";
 import { functionTool } from "./function.js";
 import { codeTool } from "./code.js";
+import { memoryTool } from "./memory.js";
 import { DockerSandboxPool } from "./sandbox/docker-pool.js";
 import type { SandboxPool } from "./sandbox/pool.js";
 
@@ -102,6 +103,24 @@ export const HOSTED_TOOL_SPECS: Record<string, ToolSpec> = {
       required: ["query"],
     },
     create: (decl, deps) => fileSearchTool(decl as FileSearchDecl, deps.env, deps.supabase),
+  },
+
+  memory: {
+    type: "memory",
+    name: "memory",
+    description:
+      "The agent's long-term memory, persistent across runs. Use action='write' with `content` to remember a durable fact (a user preference, a decision, a result). Use action='search' with `query` to recall relevant facts before answering. Only what you explicitly write is remembered.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["write", "search"], description: "'write' to store a fact, 'search' to recall" },
+        content: { type: "string", description: "For write: the fact to remember" },
+        query: { type: "string", description: "For search: what to recall" },
+        max_results: { type: "integer", description: "For search: max memories (1–20)", default: 5 },
+      },
+      required: ["action"],
+    },
+    create: (_decl, deps) => memoryTool(deps.env, deps.supabase),
   },
 
   code: {

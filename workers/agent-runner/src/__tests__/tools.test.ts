@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { functionTool } from "../tools/function.js";
 import { webSearchTool, scrubUpstream } from "../tools/web-search.js";
 import { fileSearchTool, reRank } from "../tools/file-search.js";
+import { memoryTool } from "../tools/memory.js";
 import { buildDispatcher } from "../tools/dispatch.js";
 import { codeTool } from "../tools/code.js";
 import { MockSandboxPool } from "../tools/sandbox/pool.js";
@@ -195,9 +196,31 @@ describe("MockSandboxPool (session reuse + dispose)", () => {
 
 // ── web_search (S2.2) ────────────────────────────────────────────────────────
 describe("web_search", () => {
-  it("scrubUpstream removes provider identifiers", () => {
+  it("scrubUpstream removes provider identifiers (Brave + Exa)", () => {
     expect(scrubUpstream("Powered by Brave Search")).not.toMatch(/brave/i);
     expect(scrubUpstream("the brave dog")).not.toMatch(/\bbrave\b/i);
+    expect(scrubUpstream("results via Exa Search")).not.toMatch(/exa/i);
+    expect(scrubUpstream("see exa.ai for more")).not.toMatch(/exa\.ai/i);
+  });
+
+  it("routes to the Exa adapter when webSearchProvider='exa' (brand-scrubbed)", async () => {
+    let calledUrl = "";
+    global.fetch = vi.fn(async (u: unknown) => {
+      calledUrl = String(u);
+      return {
+        ok: true, status: 200, headers: { get: () => "application/json" },
+        json: async () => ({ results: [{ title: "Found via Exa Search", url: "https://y", highlights: ["seen on exa.ai"] }] }),
+        text: async () => "",
+      };
+    }) as unknown as typeof fetch;
+    const exaEnv = { webSearchApiKey: "k", webSearchProvider: "exa", toolTimeoutMs: 5000 } as RunnerEnv;
+    const r = await webSearchTool(exaEnv).run({ query: "x", max_results: 3 }, ctx);
+    expect(calledUrl).toContain("exa.ai");                 // hit the Exa endpoint
+    const out = r.output as { results: { index: number; url: string }[] };
+    expect(out.results[0]).toMatchObject({ index: 1, url: "https://y" });
+    expect(JSON.stringify(out)).not.toMatch(/exa\.ai/i);   // no upstream leak
+    expect(JSON.stringify(out)).not.toMatch(/exa search/i);
+    expect(r.metering).toEqual({ units: 1, unitLabel: "web_search" });
   });
 
   it("returns a numbered, brand-scrubbed citation envelope", async () => {
@@ -315,6 +338,82 @@ describe("fileSearchTool", () => {
   it("errors on an empty query", async () => {
     const r = await fileSearchTool({ type: "file_search", collection_id: "col_1" }, env, mockSupabase(collection, [])).run({ query: "  " }, ctx);
     expect((r.output as { error: string }).error).toMatch(/non-empty/i);
+  });
+});
+
+// ── agent memory (S5) ─────────────────────────────────────────────────────────
+describe("memoryTool", () => {
+  const memCtx: RunCtx = { ...ctx, agentId: "agent_1" };
+  const embedFetch = () => (global.fetch = vi.fn(async () => ({
+    ok: true, status: 200, headers: { get: () => "application/json" },
+    json: async () => ({ data: [{ embedding: Array(1536).fill(0.01) }], usage: { prompt_tokens: 4 } }),
+    text: async () => "",
+  })) as unknown as typeof fetch);
+
+  /** supabase mock: captures inserts; rpc returns the given rows. */
+  function memSupabase(rows: unknown[] = [], insertError: string | null = null) {
+    const inserts: unknown[] = [];
+    const client = {
+      schema: () => ({
+        from: () => ({ insert: async (row: unknown) => { inserts.push(row); return { error: insertError ? { message: insertError } : null }; } }),
+        rpc: async () => ({ data: rows, error: null }),
+      }),
+    } as unknown as SupabaseClient;
+    return { client, inserts };
+  }
+
+  it("is unavailable without a defined agent (inline run)", async () => {
+    const r = await memoryTool(env, memSupabase().client).run({ action: "write", content: "x" }, ctx); // ctx has no agentId
+    expect((r.output as { error: string }).error).toMatch(/defined agent/i);
+  });
+
+  it("rejects a missing/invalid action", async () => {
+    const r = await memoryTool(env, memSupabase().client).run({ content: "x" }, memCtx);
+    expect((r.output as { error: string }).error).toMatch(/action/i);
+  });
+
+  it("writes a fact: embeds + inserts scoped to (org, agent)", async () => {
+    embedFetch();
+    const { client, inserts } = memSupabase();
+    const r = await memoryTool(env, client).run({ action: "write", content: "The user prefers metric units." }, memCtx);
+    expect(r.output).toEqual({ stored: true });
+    expect(r.metering).toEqual({ units: 1, unitLabel: "memory_write" });
+    expect(inserts[0]).toMatchObject({ org_id: "org_1", agent_id: "agent_1", scope_key: "default", content: "The user prefers metric units." });
+  });
+
+  it("rejects a wrong-dimension embedding on write (clear error, no bad insert)", async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => "application/json" },
+      json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { prompt_tokens: 1 } }), text: async () => "" })) as unknown as typeof fetch;
+    const { client, inserts } = memSupabase();
+    const r = await memoryTool(env, client).run({ action: "write", content: "x" }, memCtx);
+    expect((r.output as { error: string }).error).toMatch(/dimension/i);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects empty content on write", async () => {
+    const r = await memoryTool(env, memSupabase().client).run({ action: "write", content: "  " }, memCtx);
+    expect((r.output as { error: string }).error).toMatch(/content/i);
+  });
+
+  it("refuses to persist for a ZDR org (no write)", async () => {
+    const { client, inserts } = memSupabase();
+    const zdrCtx: RunCtx = { ...memCtx, zdr: true };
+    const r = await memoryTool(env, client).run({ action: "write", content: "secret" }, zdrCtx);
+    expect((r.output as { error: string }).error).toMatch(/zero data retention/i);
+    expect(inserts).toHaveLength(0); // nothing persisted
+  });
+
+  it("searches: embeds query + returns numbered memories", async () => {
+    embedFetch();
+    const rows = [
+      { id: "m1", content: "The user prefers metric units.", similarity: 0.93, created_at: "t" },
+      { id: "m2", content: "Project deadline is Aug 14.", similarity: 0.71, created_at: "t" },
+    ];
+    const r = await memoryTool(env, memSupabase(rows).client).run({ action: "search", query: "units?" }, memCtx);
+    const out = r.output as { results: { index: number; content: string; score: number }[] };
+    expect(out.results).toHaveLength(2);
+    expect(out.results[0]).toMatchObject({ index: 1, score: 0.93 });
+    expect(r.metering).toEqual({ units: 1, unitLabel: "memory_search" });
   });
 });
 

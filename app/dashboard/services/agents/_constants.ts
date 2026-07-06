@@ -26,7 +26,8 @@ export const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 export const HOSTED_TOOLS: { type: string; label: string; enabled: boolean; note?: string; needsCollection?: boolean }[] = [
   { type: 'web_search',  label: 'Web search', enabled: true },
   { type: 'file_search', label: 'File search (RAG)', enabled: true, needsCollection: true },
-  { type: 'code',        label: 'Code interpreter', enabled: true, note: 'Beta · sandboxed Python (runs only where the sandbox is enabled)' },
+  { type: 'code',        label: 'Code interpreter', enabled: true, note: 'Beta · sandboxed Python for calculations & data' },
+  { type: 'memory',      label: 'Memory', enabled: true, note: 'Remembers facts across runs' },
 ];
 
 export interface VectorCollection {

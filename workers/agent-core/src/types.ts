@@ -19,12 +19,13 @@ export type AgentToolType =
   | "web_search"
   | "file_search"
   | "code"
+  | "memory"
   | "function"
   | "mcp";
 
 /** A hosted tool attached by name; extra fields are tool-specific config. */
 export interface HostedToolDecl {
-  type: "web_search" | "file_search" | "code";
+  type: "web_search" | "file_search" | "code" | "memory";
   [key: string]: unknown;
 }
 
@@ -140,6 +141,7 @@ export type StepType =
   | "file_search"
   | "code"
   | "function"
+  | "memory"
   | "mcp";
 
 export type StepStatus = "success" | "error";
