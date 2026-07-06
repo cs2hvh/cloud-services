@@ -62,7 +62,17 @@ export interface Env {
  * present without re-querying KV.
  */
 export interface AuthContext {
+  // Rate-limit bucket identity + the on-behalf-of route guard (isOnBehalfOf).
+  // For a normal customer key this is the real key id (a UUID). For an
+  // on-behalf-of request it's `obo:{orgId}` — a STRING, not a UUID, so it
+  // stays per-org for fair rate-limiting instead of one shared global bucket.
   keyId: string;
+  // What every route must stamp on UsageEvent.apiKeyId. inference.usage.api_key_id
+  // is a plain UUID column — for a normal key this equals `keyId`; for
+  // on-behalf-of it's the OBO_API_KEY_ID sentinel (never `keyId` directly,
+  // which would fail the INSERT: found live, 2026-07-06 — `obo:{orgId}` isn't
+  // a valid UUID and the usage-consumer's insert silently failed/retried).
+  usageApiKeyId: string;
   orgId: string;
   allowedModels: string[] | null; // null = unrestricted
   allowedIpCidrs: string[] | null;
@@ -123,7 +133,8 @@ export interface UsageEvent {
     | "ocr"
     | "rerank"
     | "moderation"
-    | "realtime";
+    | "realtime"
+    | "agent_tool";
   requestId: string;
   billedTo: "platform" | "byok";
   inputTokens: number | null;

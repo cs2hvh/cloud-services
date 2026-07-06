@@ -92,7 +92,7 @@ export function fileSearchTool(
       }
 
       try {
-        const { embedding, tokens } = await embedText(env, col.embedding_model_id, query);
+        const { embedding, tokens } = await embedText(env, col.embedding_model_id, query, ctx.orgId);
         if (embedding.length !== col.dimensions) return err("query embedding dimension mismatch");
 
         // Over-fetch a candidate pool so the hybrid re-rank has room to reorder

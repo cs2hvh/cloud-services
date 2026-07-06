@@ -29,7 +29,7 @@ export function buildBaseEvent(
 ): UsageEvent {
   return {
     orgId: auth.orgId,
-    apiKeyId: auth.keyId,
+    apiKeyId: auth.usageApiKeyId,
     userId: null,
     modelId,
     modality,
@@ -79,7 +79,7 @@ export function buildBaseSpan(
     traceId,
     parentSpanId: null,
     requestId,
-    apiKeyId: auth.keyId,
+    apiKeyId: auth.usageApiKeyId,
     name: spanName,
     modelId,
     promptId: null,

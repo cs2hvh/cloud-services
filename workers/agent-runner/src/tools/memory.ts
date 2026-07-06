@@ -60,9 +60,10 @@ export async function searchMemories(
   supabase: SupabaseClient,
   agentId: string,
   query: string,
-  limit: number
+  limit: number,
+  orgId: string
 ): Promise<{ results: MemoryHit[]; tokens: number }> {
-  const { embedding, tokens } = await embedText(env, MEMORY_EMBED_MODEL, query);
+  const { embedding, tokens } = await embedText(env, MEMORY_EMBED_MODEL, query, orgId);
   if (embedding.length !== MEMORY_EMBED_DIMS) throw new Error("memory embedding has unexpected dimensions");
   const { data, error } = await supabase.schema("agentcore").rpc("search_agent_memories", {
     p_agent_id: agentId,
@@ -106,7 +107,7 @@ export function memoryTool(env: RunnerEnv, supabase: SupabaseClient): AgentTool 
           if (ctx.zdr) return err("memory write is disabled for this org (zero data retention)");
           const content = typeof a.content === "string" ? a.content : String(a.content ?? "");
           if (!content.trim()) return err("memory write requires non-empty `content`");
-          const { embedding, tokens } = await embedText(env, MEMORY_EMBED_MODEL, content);
+          const { embedding, tokens } = await embedText(env, MEMORY_EMBED_MODEL, content, ctx.orgId);
           // Guard against a wrong-dim embedding (mirrors file_search): a clear tool
           // error the model can react to, instead of an opaque pgvector insert failure.
           if (embedding.length !== MEMORY_EMBED_DIMS) return err("memory embedding has unexpected dimensions");
@@ -130,7 +131,7 @@ export function memoryTool(env: RunnerEnv, supabase: SupabaseClient): AgentTool 
         const query = typeof a.query === "string" ? a.query : String(a.query ?? "");
         if (!query.trim()) return err("memory search requires a non-empty `query`");
         const topK = Math.min(Math.max(Number(a.max_results ?? 5) || 5, 1), 20);
-        const { results, tokens } = await searchMemories(env, supabase, ctx.agentId, query, topK);
+        const { results, tokens } = await searchMemories(env, supabase, ctx.agentId, query, topK, ctx.orgId);
         const withIndex = results.map((r, i) => ({ index: i + 1, content: r.content, score: r.similarity }));
         return {
           output: { query, results: withIndex },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeUnitCost } from "../usage.ts";
+import { computeUnitCost, normalizeNumUnits } from "../usage.ts";
 import type { UsageEvent } from "../../types.ts";
 
 // Doc: nextstespsAI/12-agent-execution-stages.md (T0.4)
@@ -50,11 +50,59 @@ describe("computeUnitCost — agentcore tool labels", () => {
     expect(computeUnitCost(agentEvent("function_call", 1), { cents_per_function_call: 0.02 })).toBe(1);
   });
 
+  it("prices file_search per query", () => {
+    expect(computeUnitCost(agentEvent("file_search", 2), { cents_per_file_search: 1 })).toBe(2);
+  });
+
+  it("prices memory_write per write", () => {
+    // 1 write × 0.02 = 0.02 → ceil → 1
+    expect(computeUnitCost(agentEvent("memory_write", 1), { cents_per_memory_write: 0.02 })).toBe(1);
+  });
+
+  it("prices memory_search per search (covers both the explicit tool and auto-recall)", () => {
+    expect(computeUnitCost(agentEvent("memory_search", 5), { cents_per_memory_search: 0.02 })).toBe(1);
+  });
+
   it("returns 0 when the matching rate is absent", () => {
     expect(computeUnitCost(agentEvent("web_search", 3), {})).toBe(0);
   });
 
   it("returns 0 for zero/negative units", () => {
     expect(computeUnitCost(agentEvent("web_search", 0), { cents_per_web_search: 1 })).toBe(0);
+  });
+});
+
+// Regression (found live, 2026-07-06): inference.usage.num_units is INTEGER.
+// A real code-interpreter execution reported cpu_seconds=0.0002 — the raw
+// fractional value failed the row INSERT ("invalid input syntax for type
+// integer") and the queue DROPPED the message after 4 retries. No fake-backed
+// test had ever exercised this real Postgres column constraint.
+describe("normalizeNumUnits", () => {
+  it("ceils a fractional numUnits (a fast code-interpreter run) up to a whole unit", () => {
+    const event = agentEvent("cpu_second", 0.0002);
+    expect(normalizeNumUnits(event).numUnits).toBe(1);
+  });
+
+  it("ceils a fractional value greater than 1 up to the next whole unit", () => {
+    const event = agentEvent("cpu_second", 4.2);
+    expect(normalizeNumUnits(event).numUnits).toBe(5);
+  });
+
+  it("leaves an already-integer numUnits untouched", () => {
+    const event = agentEvent("web_search", 3);
+    expect(normalizeNumUnits(event).numUnits).toBe(3);
+  });
+
+  it("leaves a null numUnits untouched", () => {
+    const event = { ...agentEvent("chat", 0), numUnits: null };
+    expect(normalizeNumUnits(event).numUnits).toBeNull();
+  });
+
+  it("keeps cost computation consistent with the normalized (ceil'd) unit count", () => {
+    const event = agentEvent("cpu_second", 0.0002);
+    const normalized = normalizeNumUnits(event);
+    // 1 (ceil'd) cpu-second × 0.06 = 0.06 → ceil → 1 cent — computed from the
+    // SAME normalized event, not the raw fractional one.
+    expect(computeUnitCost(normalized, { cents_per_cpu_second: 0.06 })).toBe(1);
   });
 });

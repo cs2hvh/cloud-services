@@ -11,11 +11,13 @@
  *   5. Finalize: completed (final answer) / failed (guard trip or error) /
  *      cancelled (respected if the control plane flipped status mid-run).
  *
- * BILLING (S1): model turns authenticate with the platform key. On-behalf-of
- * customer billing is wired with the gateway in S1.2 + Phase-0 billing hardening.
- * Until then we record cost on run_steps/runs for the trace + mid-run guard only
- * — nothing is charged (matches "nothing agent-related charges money until
- * billing hardening", §9).
+ * BILLING (on-behalf-of, 2026-07-06): model turns + reportable tool steps
+ * (web_search/code/function) now carry X-Ahura-On-Behalf-Of-Org and post to
+ * the real USAGE_EVENTS pipeline via the gateway, so cost attributes to this
+ * run's org — not the platform key's own org (the prior misattribution bug).
+ * Rates on the agent/* catalog rows are still PENDING_FINANCE placeholders
+ * (20260701000003), so this is correct metering at whatever rate finance
+ * eventually sets — no code change needed when that rate lands.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -33,8 +35,10 @@ import type { AgentJob } from "./scan.js";
 import { makeCallModel } from "./gateway.js";
 import { buildDispatcher } from "./tools/dispatch.js";
 import { sandboxPoolFor } from "./tools/spec.js";
+import { PersistedSandboxPool } from "./tools/sandbox/persisted-pool.js";
 import { searchMemories, hasAnyMemories } from "./tools/memory.js";
 import { preview } from "./tools/detail.js";
+import { reportToolUsage } from "./tool-usage-report.js";
 
 export interface RunContext {
   env: RunnerEnv;
@@ -142,7 +146,7 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       const queryText = extractLatestUserText(run.input as { input?: ResponsesInput });
       if (queryText && (await hasAnyMemories(ctx.supabase, run.agent_id))) {
         try {
-          const { results: candidates, tokens } = await searchMemories(ctx.env, ctx.supabase, run.agent_id, queryText, 3);
+          const { results: candidates, tokens } = await searchMemories(ctx.env, ctx.supabase, run.agent_id, queryText, 3, run.org_id);
           const results = candidates.filter((r) => r.similarity >= MIN_AUTO_RECALL_SIMILARITY);
           if (results.length > 0) {
             const recalled = results.map((r, i) => `${i + 1}. ${r.content}`).join("\n");
@@ -181,9 +185,13 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
 
     // Build the tool dispatcher from the agent's declared tools (S2). It yields
     // the schemas advertised to the model + the name→adapter router. The sandbox
-    // pool (if enabled) is ONE per run so code steps share state; it's disposed in
-    // the finally below.
-    const sandboxPool = ctx.env.sandboxEnabled ? sandboxPoolFor(ctx.env) : undefined;
+    // pool (if enabled) is ONE per run so code steps share state; wrapped in
+    // PersistedSandboxPool so the session gets a real agentcore.sandbox_sessions
+    // row (closing the S3 gap: the reaper/settle logic had nothing to find
+    // before this). Disposed in the finally below, which also settles the row.
+    const sandboxPool = ctx.env.sandboxEnabled
+      ? new PersistedSandboxPool(sandboxPoolFor(ctx.env), ctx.supabase, toolRates.cpu_second ?? 0)
+      : undefined;
     const dispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase, sandboxPool);
     try {
     const runCtx: RunCtx = {
@@ -209,7 +217,7 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       // to its real step_type (web_search/function/…) so the trace is accurate.
       callModel: async (msgs) => {
         await assertNotCancelled(ctx, run.id);
-        const turn = await makeCallModel(ctx.env, cfg.model, dispatcher.modelTools, cfg.guardrail)(msgs);
+        const turn = await makeCallModel(ctx.env, cfg.model, run.org_id, dispatcher.modelTools, cfg.guardrail)(msgs);
         for (const c of turn.toolCalls) c.type = dispatcher.resolveType(c.name);
         return turn;
       },
@@ -505,6 +513,18 @@ async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Pr
     .from("runs")
     .update({ heartbeat_at: new Date().toISOString(), step_count: step.stepIndex + 1 })
     .eq("id", run.id);
+
+  // Bridge to the real usage pipeline (on-behalf-of billing, 2026-07-06) — the
+  // run_steps row above is the trace/ceiling record; this is what makes the
+  // cost real (routes to USAGE_EVENTS via the gateway). No-ops for step types
+  // with no agent/* catalog row yet (file_search, memory_*).
+  if (step.stepType !== "model") {
+    await reportToolUsage(ctx.env, run.org_id, `${run.id}:${step.stepIndex}`, {
+      unitLabel: step.metering?.unitLabel,
+      units: step.metering?.units,
+      status: step.status,
+    });
+  }
 }
 
 async function finalizeCompleted(

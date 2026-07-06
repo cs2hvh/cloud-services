@@ -5,10 +5,12 @@
  * so model routing stays brand-hidden (§6), exactly like eval-runner. Returns
  * the normalized `ModelTurn` the pure loop consumes.
  *
- * NOTE (billing, S1): these calls authenticate with the platform key. Attributing
- * model-turn cost to the CUSTOMER's org/key (on-behalf-of billing) is wired with
- * the gateway in S1.2 + Phase-0 billing hardening — until then the runner records
- * cost on run_steps/runs for the trace + mid-run guard but does not charge.
+ * NOTE (billing, on-behalf-of, 2026-07-06): these calls authenticate with the
+ * platform key, whose row is flagged `is_internal_service` (migration
+ * 20260706000001). Every call here carries X-Ahura-On-Behalf-Of-Org so the
+ * gateway's auth middleware attributes cost/caps to the CUSTOMER org running
+ * the agent, not to whichever org owns the static platform key — closing a
+ * live misattribution found by the 02/11/12/13 doc audit.
  */
 import type { CallModel, LoopMessage, ModelTurn, ToolCall } from "@ahura/agent-core";
 import type { RunnerEnv } from "./env.js";
@@ -101,6 +103,7 @@ export async function callModelTurn(
   env: RunnerEnv,
   model: string,
   messages: LoopMessage[],
+  orgId: string,
   tools?: ModelTool[],
   guardrail?: string | null
 ): Promise<ModelTurn> {
@@ -112,6 +115,7 @@ export async function callModelTurn(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${env.inferencePlatformKey}`,
     "Content-Type": "application/json",
+    "X-Ahura-On-Behalf-Of-Org": orgId,
   };
   // Apply the agent's guardrail via the existing gateway enforcement (Phase 3):
   // the chat route evaluates the policy each turn and returns a non-2xx when it
@@ -149,18 +153,20 @@ export async function callModelTurn(
 export function makeCallModel(
   env: RunnerEnv,
   model: string,
+  orgId: string,
   tools?: ModelTool[],
   guardrail?: string | null
 ): CallModel {
-  return (messages) => callModelTurn(env, model, messages, tools, guardrail);
+  return (messages) => callModelTurn(env, model, messages, orgId, tools, guardrail);
 }
 
 /** Embed text via the gateway's /v1/embeddings (brand-hidden catalog model).
- *  Used by file_search to embed the query before the vector RPC. */
+ *  Used by file_search + memory to embed the query before the vector RPC. */
 export async function embedText(
   env: RunnerEnv,
   model: string,
-  input: string
+  input: string,
+  orgId: string
 ): Promise<{ embedding: number[]; tokens: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.toolTimeoutMs);
@@ -170,6 +176,7 @@ export async function embedText(
       headers: {
         Authorization: `Bearer ${env.inferencePlatformKey}`,
         "Content-Type": "application/json",
+        "X-Ahura-On-Behalf-Of-Org": orgId,
       },
       body: JSON.stringify({ model, input }),
       signal: controller.signal,

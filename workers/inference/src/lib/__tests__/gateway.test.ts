@@ -5,6 +5,7 @@ import type { AuthContext } from "../../types.ts";
 const mockAuth: AuthContext = {
   orgId:                     "org-123",
   keyId:                     "key-456",
+  usageApiKeyId:             "key-456",
   billing:                   "platform",
   allowedModels:             null,
   allowedIpCidrs:            null,

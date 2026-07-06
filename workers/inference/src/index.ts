@@ -39,6 +39,7 @@ import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
 import { ocr } from "./routes/ocr.ts";
 import { responses, createAgentRun } from "./routes/responses.ts";
 import { getAgentRun, streamAgentRun, cancelAgentRun } from "./routes/agent-runs.ts";
+import { agentToolUsage } from "./routes/agent-tool-usage.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
 import { handleTraceBatch } from "./consumers/trace.ts";
@@ -157,6 +158,13 @@ v1.post("/messages", messagesShim);
 
 app.route("/v1", v1);
 
+// Agent tool-usage ingress (S1/S2 billing bridge) — auth only, deliberately
+// outside the v1 group: this reports cost already incurred by a completed
+// tool step, so spendCheck/rateLimit (which gate NEW requests) don't apply.
+// authMiddleware's on-behalf-of path + the route's own isOnBehalfOf check
+// together restrict this to agent-runner, never a customer's own API key.
+app.post("/v1/agent-tool-usage", authMiddleware, agentToolUsage);
+
 // ───────────────────────────────────────────────────────────────
 // Error fallback — never leak stack traces; always JSON
 // ───────────────────────────────────────────────────────────────
@@ -268,6 +276,9 @@ export default {
       // Backstop for orphaned agentcore runs (runner died / past expires_at).
       // Pure status flip to 'expired' — no sandbox/cost to settle in S1.
       ctx.waitUntil(runAgentRunReaper(env, event));
+      // S3 counterpart: reap orphaned sandbox sessions (runner died before its
+      // dispose() finally-block settled the session row) past idle_deadline.
+      ctx.waitUntil(runAgentSessionReaper(env, event));
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
@@ -332,6 +343,15 @@ async function runAgentRunReaper(env: Env, event: ScheduledEvent): Promise<void>
     event,
     "/api/agents/internal/run-reaper",
     "agent run-reaper"
+  );
+}
+
+async function runAgentSessionReaper(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/agents/internal/session-reaper",
+    "agent session-reaper"
   );
 }
 

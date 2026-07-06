@@ -14,6 +14,7 @@
 import type { MiddlewareHandler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { AuthContext, Env, HonoVariables } from "../types.ts";
+import { isValidUuid, lookupOrgBilling, onBehalfOfKeyId, OBO_API_KEY_ID } from "../lib/on-behalf-of.ts";
 
 const KEY_CACHE_TTL_SECONDS = 300; // 5 min
 
@@ -55,6 +56,16 @@ export const authMiddleware: MiddlewareHandler<{
     return unauth(c, "API key expired");
   }
 
+  // Internal on-behalf-of path: a key flagged is_internal_service (agent-runner's
+  // platform key, see 20260706000001) asserts a target CUSTOMER org via
+  // X-Ahura-On-Behalf-Of-Org, so agent model/tool cost attributes to that org
+  // instead of to whichever org owns this static key. Required (not optional)
+  // once a key is flagged — this key has no legitimate first-party traffic of
+  // its own, so a missing header is treated as misconfiguration, not fallback.
+  if (resolved.isInternalService) {
+    return resolveOnBehalfOf(c, next);
+  }
+
   // 3. IP allowlist
   if (resolved.allowedIpCidrs && resolved.allowedIpCidrs.length > 0) {
     const ip = c.req.header("CF-Connecting-IP");
@@ -72,6 +83,7 @@ export const authMiddleware: MiddlewareHandler<{
 
   const auth: AuthContext = {
     keyId: resolved.keyId,
+    usageApiKeyId: resolved.keyId,
     orgId: resolved.orgId,
     allowedModels: resolved.allowedModels,
     allowedIpCidrs: resolved.allowedIpCidrs,
@@ -91,6 +103,50 @@ export const authMiddleware: MiddlewareHandler<{
 };
 
 // ───────────────────────────────────────────────────────────────
+// On-behalf-of resolution (platform-key callers only)
+// ───────────────────────────────────────────────────────────────
+
+async function resolveOnBehalfOf(
+  c: Parameters<MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }>>[0],
+  next: () => Promise<void>
+) {
+  const orgId = c.req.header("X-Ahura-On-Behalf-Of-Org");
+  if (!orgId || !isValidUuid(orgId)) {
+    return unauth(c, "Missing or invalid X-Ahura-On-Behalf-Of-Org");
+  }
+
+  const billing = await lookupOrgBilling(c.env, orgId);
+  if (!billing) {
+    // Fail closed — an unknown org must never silently fall through to an
+    // unattributed or platform-owned cost bucket.
+    return unauth(c, "Unknown on-behalf-of org");
+  }
+
+  const auth: AuthContext = {
+    keyId: onBehalfOfKeyId(billing.orgId),
+    usageApiKeyId: OBO_API_KEY_ID,
+    orgId: billing.orgId,
+    allowedModels: null,
+    allowedIpCidrs: null,
+    zdrEnabled: billing.zdrEnabled,
+    // No real per-key caps exist for a synthetic on-behalf-of identity —
+    // only the org-level ceiling applies (still enforced by spend.ts).
+    monthlyBudgetCents: null,
+    hardCapCents: null,
+    orgMonthlyBudgetCents: billing.orgMonthlyBudgetCents,
+    orgHardCapCents: billing.orgHardCapCents,
+    // Conservative default: skip semantic cache for agent-attributed calls
+    // rather than inherit a per-key opt-in that doesn't exist here.
+    semanticCacheEnabled: false,
+    orgSemanticCacheThreshold: billing.orgSemanticCacheThreshold,
+    rateLimitRpm: null,
+    billing: "platform",
+  };
+  c.set("auth", auth);
+  await next();
+}
+
+// ───────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────
 
@@ -107,6 +163,7 @@ interface CachedKey {
   semanticCacheEnabled: boolean;
   orgSemanticCacheThreshold: number | null;
   rateLimitRpm: number | null;
+  isInternalService: boolean;
   expiresAt: string | null;
 }
 
@@ -145,6 +202,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       semantic_cache_enabled: boolean;
       org_semantic_cache_threshold: number | string | null;
       rate_limit_rpm: number | null;
+      is_internal_service: boolean;
       expires_at: string | null;
     }>();
 
@@ -175,6 +233,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       ? orgSemanticCacheThreshold
       : null,
     rateLimitRpm: data.rate_limit_rpm ?? null,
+    isInternalService: data.is_internal_service ?? false,
     expiresAt: data.expires_at,
   };
 }

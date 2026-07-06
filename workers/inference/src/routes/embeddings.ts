@@ -176,7 +176,7 @@ export const embeddings: Handler<{
         traceId,
         parentSpanId: null,
         requestId,
-        apiKeyId: auth.keyId,
+        apiKeyId: auth.usageApiKeyId,
         name: "gen_ai.embed",
         modelId: req.model,
         promptId: null,
@@ -243,7 +243,7 @@ export const embeddings: Handler<{
       traceId,
       parentSpanId: null,
       requestId,
-      apiKeyId: auth.keyId,
+      apiKeyId: auth.usageApiKeyId,
       name: "gen_ai.embed",
       modelId: req.model,
       promptId: null,
@@ -298,7 +298,7 @@ function baseUsageEvent(
 ): UsageEvent {
   return {
     orgId: auth.orgId,
-    apiKeyId: auth.keyId,
+    apiKeyId: auth.usageApiKeyId,
     userId: null,
     modelId,
     modality: "embedding",

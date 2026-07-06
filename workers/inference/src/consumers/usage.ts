@@ -25,11 +25,16 @@ interface ModelPricing {
   cents_per_1k_rerank?: number;
   cents_per_1k_moderation?: number;
   // Agent (agentcore) hosted-tool unit rates. Priced by pseudo-catalog rows
-  // (agent/web-search, agent/code-interpreter, agent/function-call) so agent
-  // tool steps flow through this same pipeline — no parallel queue (doc 09 §2.B).
+  // (agent/web-search, agent/code-interpreter, agent/function-call,
+  // agent/file-search, and agent/memory — ONE row carrying both
+  // cents_per_memory_write and cents_per_memory_search) so agent tool steps
+  // flow through this same pipeline — no parallel queue (doc 09 §2.B).
   cents_per_web_search?: number;
   cents_per_cpu_second?: number;
   cents_per_function_call?: number;
+  cents_per_file_search?: number;
+  cents_per_memory_write?: number;
+  cents_per_memory_search?: number;
 }
 
 interface ModelOffPeak {
@@ -82,9 +87,12 @@ export async function handleUsageBatch(
     });
   }
 
-  // 2. Build inference.usage rows with computed cost
+  // 2. Build inference.usage rows with computed cost. normalizeNumUnits
+  // (below) rounds a fractional numUnits up before it touches either the
+  // cost computation or the row, so cost_cents and the stored num_units
+  // stay mutually consistent.
   const rows = batch.messages.map((msg) => {
-    const event = msg.body;
+    const event = normalizeNumUnits(msg.body);
     const info = pricingMap.get(event.modelId);
     const { costCents, isOffPeak } = computeCost(event, info);
 
@@ -265,6 +273,21 @@ function computeCost(
 }
 
 /**
+ * inference.usage.num_units is INTEGER — but cpu_second (code interpreter) is
+ * naturally fractional (a fast script might run 0.0002s). Found live,
+ * 2026-07-06: the raw fractional value failed the row INSERT with "invalid
+ * input syntax for type integer", and the queue DROPPED the message after 4
+ * retries — a real, silent loss, not a delay. Ceil (not round) so a
+ * sub-1-unit execution still bills/records as 1 — same "never round a
+ * micro-amount down to zero" rule computeCost already applies to cost_cents,
+ * applied here to the unit count too. Exported for unit testing.
+ */
+export function normalizeNumUnits(event: UsageEvent): UsageEvent {
+  if (event.numUnits == null || Number.isInteger(event.numUnits)) return event;
+  return { ...event, numUnits: Math.ceil(event.numUnits) };
+}
+
+/**
  * Per-unit cost for multimodal + agentcore tool services. Flat rate — no
  * off-peak discount. Exported for unit testing the metering contract.
  */
@@ -288,13 +311,21 @@ export function computeUnitCost(event: UsageEvent, pricing: ModelPricing): numbe
     case "moderation":
       return Math.ceil((units / 1000) * (pricing.cents_per_1k_moderation ?? 0));
     // Agentcore hosted-tool units. web_search: per search; cpu_second: per
-    // microVM CPU-second (code interpreter); function_call: per webhook call.
+    // microVM CPU-second (code interpreter); function_call: per webhook call;
+    // file_search: per RAG query; memory_write/memory_search: per agent-memory
+    // write/recall (memory_search also covers the runner's automatic recall).
     case "web_search":
       return Math.ceil(units * (pricing.cents_per_web_search ?? 0));
     case "cpu_second":
       return Math.ceil(units * (pricing.cents_per_cpu_second ?? 0));
     case "function_call":
       return Math.ceil(units * (pricing.cents_per_function_call ?? 0));
+    case "file_search":
+      return Math.ceil(units * (pricing.cents_per_file_search ?? 0));
+    case "memory_write":
+      return Math.ceil(units * (pricing.cents_per_memory_write ?? 0));
+    case "memory_search":
+      return Math.ceil(units * (pricing.cents_per_memory_search ?? 0));
     default:
       return 0;
   }
@@ -312,7 +343,10 @@ function isPerUnitLabel(label: string | null): boolean {
     label === "moderation" ||
     label === "web_search" ||
     label === "cpu_second" ||
-    label === "function_call"
+    label === "function_call" ||
+    label === "file_search" ||
+    label === "memory_write" ||
+    label === "memory_search"
   );
 }
 
