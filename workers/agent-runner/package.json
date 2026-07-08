@@ -17,6 +17,7 @@
   "dependencies": {
     "@ahura/agent-core": "file:../agent-core",
     "@ahura/runner-core": "file:../runner-core",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@supabase/supabase-js": "^2.55.0",
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.0",

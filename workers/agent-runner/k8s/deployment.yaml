@@ -104,6 +104,7 @@ spec:
 #   --from-literal=SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
 #   --from-literal=INFERENCE_PLATFORM_KEY="sk-ahura-platform-..." \
 #   --from-literal=INFERENCE_BASE_URL="https://api.ahurasense.com/v1" \
+#   --from-literal=BYOK_DEK="<same DEK the Next.js app uses>" \
 #   --from-literal=MODEL_TURN_TIMEOUT_MS="120000" \
 #   --from-literal=MAX_CONCURRENT_JOBS="4" \
 #   --from-literal=CLAIM_POLL_INTERVAL_MS="5000"

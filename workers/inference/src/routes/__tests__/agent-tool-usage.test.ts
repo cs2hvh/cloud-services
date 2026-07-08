@@ -159,6 +159,19 @@ describe("agentToolUsage route", () => {
     expect(msCtx.sent[0]?.modelId).toBe("agent/memory");
   });
 
+  it("maps mcp -> agent/mcp (doc 14 M2)", async () => {
+    const { c, sent } = makeContext(oboAuth, {
+      toolType: "mcp",
+      unitLabel: "mcp_call",
+      units: 1,
+      requestId: "r11",
+      status: "success",
+    });
+    await agentToolUsage(c as never);
+    expect(sent[0]?.modelId).toBe("agent/mcp");
+    expect(sent[0]?.unitLabel).toBe("mcp_call");
+  });
+
   it("maps a failed tool step to status=error_internal so it prices at 0", async () => {
     const { c, sent } = makeContext(oboAuth, {
       toolType: "web_search",

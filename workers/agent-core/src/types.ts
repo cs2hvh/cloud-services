@@ -51,11 +51,25 @@ export interface FunctionToolDecl {
   secret?: string;
 }
 
-/** An MCP-hosted tool bound by server slug (optional, S4). */
+/**
+ * An MCP **client** tool (doc 14): connects to a remote MCP server, discovers
+ * its tools, and advertises them (namespaced) alongside the rest. Exactly one
+ * of `server_url` (inline, M1) | `server_slug` (registry, M3+) is set — both
+ * resolve to the same internal config shape, so the adapter is agnostic to
+ * where the config came from.
+ */
 export interface McpToolDecl {
   type: "mcp";
-  server_slug: string;
-  [key: string]: unknown;
+  /** Inline mode (M1): a remote Streamable HTTP MCP server URL. */
+  server_url?: string;
+  /** Registry mode (M3+): resolved from agentcore.mcp_servers by slug. */
+  server_slug?: string;
+  /** Namespaces this server's tools (a-z0-9_); defaults from host/slug. */
+  label?: string;
+  /** Inline-mode bearer token (registry mode stores it encrypted server-side). */
+  auth_token?: string;
+  /** Bind only these vetted tools; absent = all the server offers. */
+  allowed_tools?: string[];
 }
 
 export type AgentToolDecl = HostedToolDecl | FunctionToolDecl | McpToolDecl;

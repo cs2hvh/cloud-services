@@ -108,6 +108,87 @@ export function functionToolsOf(tools: Record<string, unknown>[]): FnDef[] {
     }));
 }
 
+/** An inline MCP server tool as edited in the builder form (M1 — doc 14). */
+export interface McpDef {
+  server_url: string;
+  label: string;
+  auth_token: string;
+  allowed_tools: string; // comma-separated; blank = all tools the server offers
+}
+
+export function emptyMcp(): McpDef {
+  return { server_url: '', label: '', auth_token: '', allowed_tools: '' };
+}
+
+/**
+ * Validate + convert the builder's MCP rows into stored `mcp` tool objects.
+ * Returns { tools } on success or { error } on the first problem. Blank rows
+ * are ignored. Registry-mode (pick a saved server by slug) lands in M3.
+ */
+export function buildMcpTools(rows: McpDef[]): { tools?: Record<string, unknown>[]; error?: string } {
+  const out: Record<string, unknown>[] = [];
+  for (const m of rows) {
+    const url = m.server_url.trim();
+    if (!url && !m.label.trim() && !m.auth_token.trim()) continue; // skip empty row
+    if (!/^https?:\/\//.test(url)) return { error: 'Every MCP server needs an http(s) URL' };
+    const allowed_tools = m.allowed_tools.split(',').map((s) => s.trim()).filter(Boolean);
+    out.push({
+      type: 'mcp', server_url: url,
+      ...(m.label.trim() ? { label: m.label.trim() } : {}),
+      ...(m.auth_token.trim() ? { auth_token: m.auth_token.trim() } : {}),
+      ...(allowed_tools.length ? { allowed_tools } : {}),
+    });
+  }
+  return { tools: out };
+}
+
+/** Read stored inline MCP tools back into editable builder rows. */
+export function mcpToolsOf(tools: Record<string, unknown>[]): McpDef[] {
+  return (tools ?? [])
+    .filter((t) => t.type === 'mcp' && t.server_url)
+    .map((t) => ({
+      server_url: String(t.server_url ?? ''),
+      label: String(t.label ?? ''),
+      auth_token: String(t.auth_token ?? ''),
+      allowed_tools: Array.isArray(t.allowed_tools) ? t.allowed_tools.join(', ') : '',
+    }));
+}
+
+// ── MCP registry (M3) — "saved servers" bound by slug, alongside inline rows ──
+
+export interface McpServerSummary {
+  id: string;
+  slug: string;
+  display_name: string;
+  visibility: 'private' | 'curated';
+  status: 'active' | 'error' | 'disabled';
+}
+
+/** The org's registered servers + the platform-curated catalog. */
+export async function fetchMcpServers(): Promise<McpServerSummary[]> {
+  try {
+    const r = await fetch('/api/agents/mcp-servers');
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.data ?? []) as McpServerSummary[];
+  } catch {
+    return [];
+  }
+}
+
+/** Read the registry-bound (server_slug) MCP tools back into a slug list. */
+export function mcpSlugsOf(tools: Record<string, unknown>[]): string[] {
+  return (tools ?? [])
+    .filter((t) => t.type === 'mcp' && typeof t.server_slug === 'string' && t.server_slug)
+    .map((t) => String(t.server_slug));
+}
+
+/** Build stored `mcp` tool objects for registry-bound slugs — register once,
+ *  bind by slug in any agent (doc 14 §4). */
+export function buildMcpSlugTools(slugs: string[]): Record<string, unknown>[] {
+  return slugs.filter(Boolean).map((server_slug) => ({ type: 'mcp', server_slug }));
+}
+
 /** Read the file_search collection_id back out of an agent's stored tools. */
 export function fileSearchCollectionOf(tools: { type: string; collection_id?: string }[]): string {
   return tools.find((t) => t.type === 'file_search')?.collection_id ?? '';

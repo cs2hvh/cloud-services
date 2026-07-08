@@ -35,6 +35,8 @@ interface ModelPricing {
   cents_per_file_search?: number;
   cents_per_memory_write?: number;
   cents_per_memory_search?: number;
+  // Agent MCP client tool call (agent/mcp, doc 14 M2). PENDING_FINANCE.
+  cents_per_mcp_call?: number;
 }
 
 interface ModelOffPeak {
@@ -326,6 +328,8 @@ export function computeUnitCost(event: UsageEvent, pricing: ModelPricing): numbe
       return Math.ceil(units * (pricing.cents_per_memory_write ?? 0));
     case "memory_search":
       return Math.ceil(units * (pricing.cents_per_memory_search ?? 0));
+    case "mcp_call":
+      return Math.ceil(units * (pricing.cents_per_mcp_call ?? 0));
     default:
       return 0;
   }
@@ -346,7 +350,8 @@ function isPerUnitLabel(label: string | null): boolean {
     label === "function_call" ||
     label === "file_search" ||
     label === "memory_write" ||
-    label === "memory_search"
+    label === "memory_search" ||
+    label === "mcp_call"
   );
 }
 

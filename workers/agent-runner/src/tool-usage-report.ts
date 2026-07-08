@@ -17,13 +17,14 @@
 import type { RunnerEnv } from "./env.js";
 
 /** Every agent/* catalog row (20260701000003 web_search/code/function,
- *  20260703000002 file_search + the single shared agent/memory row) that has a
- *  computeUnitCost() case (added in 20260706000001's usage.ts changes) —
- *  anything else would insert a zero-priced, orphaned usage row, so it's left
- *  out until both a catalog row and a consumer case exist for it. */
+ *  20260703000002 file_search + the single shared agent/memory row,
+ *  20260707000001 agent/mcp) that has a computeUnitCost() case (added in
+ *  20260706000001's / doc-14-M2's usage.ts changes) — anything else would
+ *  insert a zero-priced, orphaned usage row, so it's left out until both a
+ *  catalog row and a consumer case exist for it. */
 const REPORTABLE_UNIT_LABELS: Record<
   string,
-  "web_search" | "code" | "function" | "file_search" | "memory_write" | "memory_search"
+  "web_search" | "code" | "function" | "file_search" | "memory_write" | "memory_search" | "mcp"
 > = {
   web_search: "web_search",
   cpu_second: "code",
@@ -31,6 +32,7 @@ const REPORTABLE_UNIT_LABELS: Record<
   file_search: "file_search",
   memory_write: "memory_write",
   memory_search: "memory_search",
+  mcp_call: "mcp",
 };
 
 export interface ReportableStep {

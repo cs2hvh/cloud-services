@@ -31,6 +31,14 @@ export interface RunnerEnv extends CoreRunnerEnv {
   // S3 gate: the code-interpreter tool is disabled unless this is true. Set ONLY
   // after the sandbox security review signs off (doc 13). Defaults false.
   sandboxEnabled: boolean;
+  // Decrypts registry-mode MCP server auth tokens (doc 14 M3) — same DEK the
+  // Next.js app's BYOK_DEK encrypts with (lib/inference/crypto.ts). Null =
+  // registry servers with a stored token can't be used (fail closed, skipped).
+  mcpTokenDek: string | null;
+  // How often to re-check every registered MCP server's health (doc 14 M4
+  // follow-up) — updates status/last_error/tool_schemas. 0 disables the loop
+  // (useful for tests / a minimal deploy that doesn't need this yet).
+  mcpSchemaRefreshIntervalMs: number;
   // Docker sandbox config (used only when sandboxEnabled). runtime="runsc" opts
   // into gVisor when the node has it; empty = default docker runtime (dev only).
   sandboxImage: string;
@@ -55,6 +63,8 @@ export function loadEnv(): RunnerEnv {
     toolTimeoutMs: optionalInt("TOOL_TIMEOUT_MS", 30_000),
     allowPrivateWebhooks: optional("AGENT_WEBHOOK_ALLOW_PRIVATE", "false").toLowerCase() === "true",
     sandboxEnabled: optional("SANDBOX_ENABLED", "false").toLowerCase() === "true",
+    mcpTokenDek: process.env.BYOK_DEK?.trim() || null,
+    mcpSchemaRefreshIntervalMs: optionalInt("MCP_SCHEMA_REFRESH_INTERVAL_MS", 30 * 60_000),
     sandboxImage: optional("SANDBOX_IMAGE", "python:3.12-slim"),
     sandboxMemory: optional("SANDBOX_MEMORY", "256m"),
     sandboxCpus: optional("SANDBOX_CPUS", "1"),

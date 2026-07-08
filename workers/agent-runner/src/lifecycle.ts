@@ -26,6 +26,7 @@ import {
   type AgentToolDecl,
   type LoopMessage,
   type LoopStep,
+  type McpToolDecl,
   type ResponsesInput,
   type RunCtx,
 } from "@ahura/agent-core";
@@ -34,6 +35,7 @@ import type { Logger } from "./logger.js";
 import type { AgentJob } from "./scan.js";
 import { makeCallModel } from "./gateway.js";
 import { buildDispatcher } from "./tools/dispatch.js";
+import { attachMcpTools } from "./tools/mcp-attach.js";
 import { sandboxPoolFor } from "./tools/spec.js";
 import { PersistedSandboxPool } from "./tools/sandbox/persisted-pool.js";
 import { searchMemories, hasAnyMemories } from "./tools/memory.js";
@@ -192,7 +194,16 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
     const sandboxPool = ctx.env.sandboxEnabled
       ? new PersistedSandboxPool(sandboxPoolFor(ctx.env), ctx.supabase, toolRates.cpu_second ?? 0)
       : undefined;
-    const dispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase, sandboxPool);
+    const baseDispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase, sandboxPool);
+    // MCP (M1, doc 14): a purely additive layer over the base dispatcher — see
+    // mcp-attach.ts's decorator. buildDispatcher above is untouched by this.
+    const mcpDecls = cfg.tools.filter((t): t is McpToolDecl => t.type === "mcp");
+    const dispatcher = await attachMcpTools(
+      baseDispatcher,
+      mcpDecls,
+      { timeoutMs: ctx.env.toolTimeoutMs, allowPrivate: ctx.env.allowPrivateWebhooks },
+      { supabase: ctx.supabase, orgId: run.org_id, dek: ctx.env.mcpTokenDek }
+    );
     try {
     const runCtx: RunCtx = {
       runId: run.id,
@@ -437,6 +448,7 @@ const TOOL_PRICE_KEY_TO_LABEL: Record<string, string> = {
   cents_per_file_search: "file_search",
   cents_per_memory_write: "memory_write",
   cents_per_memory_search: "memory_search",
+  cents_per_mcp_call: "mcp_call",
 };
 
 /**
@@ -518,8 +530,16 @@ async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Pr
   // run_steps row above is the trace/ceiling record; this is what makes the
   // cost real (routes to USAGE_EVENTS via the gateway). No-ops for step types
   // with no agent/* catalog row yet (file_search, memory_*).
+  //
+  // Deliberately NOT awaited (found by code review, 2026-07-06):
+  // reportToolUsage's own try/catch already swallows every failure it can
+  // have (network error, non-2xx response) and never throws, so awaiting it
+  // here only added a full network round-trip of latency to every tool step
+  // with zero correctness benefit — this is a long-running Node process, not
+  // a Workers isolate, so the fire-and-forget call safely runs to completion
+  // in the background regardless.
   if (step.stepType !== "model") {
-    await reportToolUsage(ctx.env, run.org_id, `${run.id}:${step.stepIndex}`, {
+    void reportToolUsage(ctx.env, run.org_id, `${run.id}:${step.stepIndex}`, {
       unitLabel: step.metering?.unitLabel,
       units: step.metering?.units,
       status: step.status,

@@ -34,14 +34,15 @@ import type { Context } from "hono";
 import type { Env, HonoVariables, UsageEvent } from "../types.ts";
 import { isOnBehalfOf } from "../lib/on-behalf-of.ts";
 
-type ToolType = "web_search" | "code" | "function" | "file_search" | "memory_write" | "memory_search";
+type ToolType = "web_search" | "code" | "function" | "file_search" | "memory_write" | "memory_search" | "mcp";
 type ToolUnitLabel =
   | "web_search"
   | "cpu_second"
   | "function_call"
   | "file_search"
   | "memory_write"
-  | "memory_search";
+  | "memory_search"
+  | "mcp_call";
 
 const TOOL_TYPE_TO_MODEL_ID: Record<ToolType, string> = {
   web_search: "agent/web-search",
@@ -54,6 +55,8 @@ const TOOL_TYPE_TO_MODEL_ID: Record<ToolType, string> = {
   // unit_label correctly off the same row.
   memory_write: "agent/memory",
   memory_search: "agent/memory",
+  // agent/mcp (20260707000001, doc 14 M2) — one row, one unit_label.
+  mcp: "agent/mcp",
 };
 
 const VALID_UNIT_LABELS: ToolUnitLabel[] = [
@@ -63,6 +66,7 @@ const VALID_UNIT_LABELS: ToolUnitLabel[] = [
   "file_search",
   "memory_write",
   "memory_search",
+  "mcp_call",
 ];
 
 interface AgentToolUsageBody {

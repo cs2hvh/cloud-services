@@ -115,7 +115,21 @@ async function resolveOnBehalfOf(
     return unauth(c, "Missing or invalid X-Ahura-On-Behalf-Of-Org");
   }
 
-  const billing = await lookupOrgBilling(c.env, orgId);
+  // Same KV hot-path/Postgres-fallback shape as the normal key lookup above —
+  // found by code review (2026-07-06): every agent model turn and tool-usage
+  // report goes through this path, so an uncached RPC per call was real added
+  // DB load/latency across the whole agent fleet, unlike the customer-key
+  // path which already had this cache.
+  const cacheKey = `org-billing:${orgId}`;
+  let billing = await c.env.API_KEYS.get<Awaited<ReturnType<typeof lookupOrgBilling>>>(cacheKey, "json");
+  if (!billing) {
+    billing = await lookupOrgBilling(c.env, orgId);
+    if (billing) {
+      c.executionCtx.waitUntil(
+        c.env.API_KEYS.put(cacheKey, JSON.stringify(billing), { expirationTtl: KEY_CACHE_TTL_SECONDS })
+      );
+    }
+  }
   if (!billing) {
     // Fail closed — an unknown org must never silently fall through to an
     // unattributed or platform-owned cost bucket.

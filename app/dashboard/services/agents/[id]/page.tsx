@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ChevronRight, ChevronDown, RotateCw, Trash2, Loader2, Play, Plus,
+  ChevronRight, ChevronDown, RotateCw, Trash2, Loader2, Play,
   CheckCircle2, XCircle, Clock, Ban, Cpu, Search, Wrench, Layers, DollarSign, Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,11 +28,27 @@ import {
   MODEL_OPTIONS, HOSTED_TOOLS, type Agent, type RunListItem, type RunDetail, type RunStep,
   formatCost, relativeTime, statusKind, finalText, detailRows,
   buildToolsPayload, fileSearchCollectionOf,
-  buildFunctionTools, functionToolsOf, emptyFn, type FnDef,
+  buildFunctionTools, functionToolsOf, type FnDef,
+  buildMcpTools, mcpToolsOf, type McpDef,
+  mcpSlugsOf, buildMcpSlugTools,
 } from '../_constants';
 import { KnowledgeBasePicker } from '../_kb-picker';
+import { FunctionToolsEditor, FUNCTION_TOOLS_DESCRIPTION } from '../_function-tools-editor';
+import { McpServersEditor, MCP_SERVERS_DESCRIPTION } from '../_mcp-servers-editor';
 
 const AGENTS = '/api/agents';
+
+/** Distinguishes tool chips of the same type (an agent can bind several MCP
+ *  servers or custom functions — the whole point of the registry, doc 14 §4)
+ *  so the Overview tab doesn't just show a wall of identical "mcp" chips. */
+function toolChipLabel(t: { type: string; server_slug?: string; server_url?: string; name?: string }): string {
+  if (t.type === 'mcp') {
+    if (t.server_slug) return `mcp: ${t.server_slug}`;
+    if (t.server_url) { try { return `mcp: ${new URL(t.server_url).host}`; } catch { /* fall through */ } }
+  }
+  if (t.type === 'function' && t.name) return `function: ${t.name}`;
+  return t.type;
+}
 
 function StatusPill({ status }: { status: string }) {
   const kind = statusKind(status);
@@ -226,9 +242,13 @@ export default function AgentDetailPage() {
               <div className="text-white/30 text-sm">No tools — model-only.</div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {agent.tools.map((t) => (
-                  <span key={t.type} className={`${MONO} inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[#0095FF]/10 text-[#66c2ff]`}>
-                    <Wrench className="h-3 w-3" /> {t.type}
+                {agent.tools.map((t, i) => (
+                  // Index in the key: an agent can bind several tools of the
+                  // SAME type (e.g. two mcp servers — the whole point of the
+                  // registry, doc 14 §4), so `t.type` alone collides (found
+                  // live: "two children with the same key, mcp").
+                  <span key={`${t.type}-${i}`} className={`${MONO} inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-[#0095FF]/10 text-[#66c2ff]`}>
+                    <Wrench className="h-3 w-3" /> {toolChipLabel(t)}
                   </span>
                 ))}
               </div>
@@ -314,15 +334,23 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
   const [guardrail, setGuardrail] = useState(agent.guardrail);
   const [maxSteps, setMaxSteps] = useState(agent.max_steps);
   const [maxCost, setMaxCost] = useState(agent.max_cost_cents);
-  const [tools, setTools] = useState<string[]>(agent.tools.map((t) => t.type));
+  // Only seed the checkbox-toggle types from HOSTED_TOOLS — 'mcp'/'function'
+  // rows are managed by their own editors below (mcpServers/mcpSlugs/functions)
+  // and rebuilt from those on save. Including them here would re-emit them a
+  // SECOND time as content-free `{type:"mcp"}`/`{type:"function"}` stubs via
+  // buildToolsPayload (found by simulating repeated saves: each Settings save
+  // permanently doubled the dead-entry count, since agent.tools on next load
+  // already contains the previous save's dead stubs too — real, unbounded
+  // tools-array bloat, not just a cosmetic issue).
+  const hostedToolTypes = new Set(HOSTED_TOOLS.map((t) => t.type));
+  const [tools, setTools] = useState<string[]>(agent.tools.map((t) => t.type).filter((t) => hostedToolTypes.has(t)));
   const [fileSearchCollectionId, setFileSearchCollectionId] = useState(fileSearchCollectionOf(agent.tools));
   const [functions, setFunctions] = useState<FnDef[]>(functionToolsOf(agent.tools as unknown as Record<string, unknown>[]));
+  const [mcpServers, setMcpServers] = useState<McpDef[]>(mcpToolsOf(agent.tools as unknown as Record<string, unknown>[]));
+  const [mcpSlugs, setMcpSlugs] = useState<string[]>(mcpSlugsOf(agent.tools as unknown as Record<string, unknown>[]));
   const [saving, setSaving] = useState(false);
 
   const toggle = (type: string) => setTools((ts) => ts.includes(type) ? ts.filter((t) => t !== type) : [...ts, type]);
-  const addFn = () => setFunctions((f) => [...f, emptyFn()]);
-  const updateFn = (i: number, k: keyof FnDef, v: string) => setFunctions((f) => f.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-  const removeFn = (i: number) => setFunctions((f) => f.filter((_, j) => j !== i));
 
   async function save() {
     if (tools.includes('file_search') && !fileSearchCollectionId) {
@@ -331,11 +359,21 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
     }
     const fn = buildFunctionTools(functions);
     if (fn.error) { toast.error(fn.error); return; }
+    const mcp = buildMcpTools(mcpServers);
+    if (mcp.error) { toast.error(mcp.error); return; }
     setSaving(true);
     try {
       const r = await fetch(`${AGENTS}/${agent.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, model, system_prompt: prompt.trim() || null, guardrail, max_steps: maxSteps, max_cost_cents: maxCost, tools: [...buildToolsPayload(tools, fileSearchCollectionId), ...(fn.tools ?? [])] }),
+        body: JSON.stringify({
+          name, model, system_prompt: prompt.trim() || null, guardrail, max_steps: maxSteps, max_cost_cents: maxCost,
+          tools: [
+            ...buildToolsPayload(tools, fileSearchCollectionId),
+            ...(fn.tools ?? []),
+            ...(mcp.tools ?? []),
+            ...buildMcpSlugTools(mcpSlugs),
+          ],
+        }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Save failed');
@@ -401,27 +439,14 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
 
           <div className="space-y-2">
             <span className={fieldLabel}>Custom functions</span>
-            <div className="text-[11px] text-white/40">Your own API endpoints — POSTed (SSRF-guarded, HMAC-signed if a secret is set) when the agent calls them.</div>
-            {functions.map((f, i) => (
-              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#0c0d10] p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className={fieldLabel}>Function {i + 1}</span>
-                  <button type="button" onClick={() => removeFn(i)} className="text-white/30 hover:text-red-400" aria-label="Remove function">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input value={f.name} placeholder="get_weather" onChange={(e) => updateFn(i, 'name', e.target.value)} />
-                  <Input value={f.webhook_url} placeholder="https://api.yoursite.com/hook" onChange={(e) => updateFn(i, 'webhook_url', e.target.value)} />
-                </div>
-                <Input value={f.description} placeholder="What this function does (shown to the model)" onChange={(e) => updateFn(i, 'description', e.target.value)} />
-                <Input value={f.secret} placeholder="Signing secret (optional — HMAC-signs each call)" onChange={(e) => updateFn(i, 'secret', e.target.value)} />
-                <Textarea rows={2} value={f.parameters} placeholder={'Parameters JSON Schema (optional)'} onChange={(e) => updateFn(i, 'parameters', e.target.value)} />
-              </div>
-            ))}
-            <button type="button" onClick={addFn} className="inline-flex items-center gap-1.5 text-[12px] text-[#33adff] hover:text-[#5cb8ff]">
-              <Plus className="h-3.5 w-3.5" /> Add function
-            </button>
+            <div className="text-[11px] text-white/40">{FUNCTION_TOOLS_DESCRIPTION}</div>
+            <FunctionToolsEditor value={functions} onChange={setFunctions} />
+          </div>
+
+          <div className="space-y-2">
+            <span className={fieldLabel}>MCP servers</span>
+            <div className="text-[11px] text-white/40">{MCP_SERVERS_DESCRIPTION}</div>
+            <McpServersEditor slugs={mcpSlugs} onSlugsChange={setMcpSlugs} rows={mcpServers} onRowsChange={setMcpServers} />
           </div>
         </div>
         <div className="px-5 py-4 border-t border-white/[0.06] flex justify-end">

@@ -63,6 +63,10 @@ describe("computeUnitCost — agentcore tool labels", () => {
     expect(computeUnitCost(agentEvent("memory_search", 5), { cents_per_memory_search: 0.02 })).toBe(1);
   });
 
+  it("prices mcp_call per call (doc 14 M2, agent/mcp)", () => {
+    expect(computeUnitCost(agentEvent("mcp_call", 1), { cents_per_mcp_call: 0.2 })).toBe(1);
+  });
+
   it("returns 0 when the matching rate is absent", () => {
     expect(computeUnitCost(agentEvent("web_search", 3), {})).toBe(0);
   });

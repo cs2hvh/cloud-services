@@ -350,3 +350,162 @@ export const AgentcoreMemories = {
     return { success: true, purged: data?.length ?? 0 };
   },
 };
+
+// ── MCP servers registry (M3, doc 14 §4) — control-plane metadata only ────────
+// Encryption/decryption of auth_token happens in the ROUTE (mirrors byok-keys),
+// not here — this module just stores/reads whatever ciphertext it's given.
+
+/** Masked row shape for list/read responses — auth_token_enc is NEVER returned. */
+export interface AgentcoreMcpServerRow {
+  id: string;
+  org_id: string | null;
+  slug: string;
+  display_name: string;
+  server_url: string;
+  has_token: boolean; // derived: auth_token_enc IS NOT NULL, never the ciphertext itself
+  allowed_tools: string[];
+  visibility: "private" | "curated";
+  status: "active" | "error" | "disabled";
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentcoreMcpServerInsert {
+  org_id: string;
+  slug: string;
+  display_name: string;
+  server_url: string;
+  auth_token_enc?: string | null; // pre-encrypted (bytea hex), or absent
+  allowed_tools?: string[];
+}
+
+/** slug/visibility deliberately excluded — see AgentcoreMcpServers.update(). */
+export interface AgentcoreMcpServerUpdate {
+  display_name?: string;
+  server_url?: string;
+  auth_token_enc?: string | null;
+  allowed_tools?: string[];
+}
+
+interface McpServerDbRow {
+  id: string;
+  org_id: string | null;
+  slug: string;
+  display_name: string;
+  server_url: string;
+  auth_token_enc: string | null;
+  allowed_tools: string[];
+  visibility: "private" | "curated";
+  status: "active" | "error" | "disabled";
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function maskMcpServer(row: McpServerDbRow): AgentcoreMcpServerRow {
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    slug: row.slug,
+    display_name: row.display_name,
+    server_url: row.server_url,
+    has_token: row.auth_token_enc != null,
+    allowed_tools: row.allowed_tools ?? [],
+    visibility: row.visibility,
+    status: row.status,
+    last_error: row.last_error,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+const MCP_SERVER_COLS =
+  "id, org_id, slug, display_name, server_url, auth_token_enc, allowed_tools, visibility, status, last_error, created_at, updated_at";
+
+export interface McpServerMutationResult {
+  success: boolean;
+  data?: AgentcoreMcpServerRow;
+  /** Postgres error code when relevant (e.g. "23505" unique violation). */
+  code?: string;
+  error?: string;
+}
+
+export const AgentcoreMcpServers = {
+  /** Org's own servers PLUS the platform-curated catalog (org_id IS NULL). */
+  async list(orgId: string): Promise<AgentcoreMcpServerRow[]> {
+    const { data, error } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .select(MCP_SERVER_COLS)
+      .or(`org_id.eq.${orgId},org_id.is.null`)
+      // Org's own ('private') servers first, curated catalog last — 'private' >
+      // 'curated' alphabetically, so this needs DESCENDING, not ascending (a
+      // bug caught on review: ascending actually sorted curated first).
+      .order("visibility", { ascending: false })
+      .order("created_at", { ascending: false })
+      .returns<McpServerDbRow[]>();
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(maskMcpServer);
+  },
+
+  /** Register once, org-scoped (org_id NOT NULL — customers only ever create
+   *  'private' rows; 'curated' rows are seeded separately, M4). */
+  async create(input: AgentcoreMcpServerInsert): Promise<McpServerMutationResult> {
+    const { data, error } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .insert({
+        org_id: input.org_id,
+        slug: input.slug,
+        display_name: input.display_name,
+        server_url: input.server_url,
+        auth_token_enc: input.auth_token_enc ?? null,
+        allowed_tools: input.allowed_tools ?? [],
+        visibility: "private",
+      })
+      .select(MCP_SERVER_COLS)
+      .single<McpServerDbRow>();
+    if (error) return { success: false, code: error.code, error: error.message };
+    return { success: true, data: maskMcpServer(data) };
+  },
+
+  /** Org-scoped update — slug and visibility are intentionally NOT editable
+   *  here: the slug is the stable bind-key agents reference by
+   *  `{server_slug}`, so changing it would silently break every agent bound
+   *  to it; visibility is platform-controlled (curated rows aren't reachable
+   *  through this org-scoped query anyway). `auth_token_enc` is only set when
+   *  the caller actually re-encrypted a new token (route decides that). */
+  async update(orgId: string, id: string, patch: AgentcoreMcpServerUpdate): Promise<McpServerMutationResult> {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
+
+    const { data, error } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .update(clean)
+      .eq("org_id", orgId)
+      .eq("id", id)
+      .select(MCP_SERVER_COLS)
+      .maybeSingle<McpServerDbRow>();
+    if (error) return { success: false, code: error.code, error: error.message };
+    if (!data) return { success: false, error: "not_found" };
+    return { success: true, data: maskMcpServer(data) };
+  },
+
+  /** Hard delete, org-scoped — a curated (org_id NULL) row can never match, so
+   *  no customer can delete a platform row through this org-scoped query. */
+  async remove(orgId: string, id: string): Promise<{ success: boolean; error?: string }> {
+    const { data, error } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .delete()
+      .eq("org_id", orgId)
+      .eq("id", id)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    if (error) return { success: false, error: error.message };
+    if (!data) return { success: false, error: "not_found" };
+    return { success: true };
+  },
+};

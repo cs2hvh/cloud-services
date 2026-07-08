@@ -66,11 +66,23 @@ describe("reportToolUsage", () => {
     expect(seenToolTypes).toEqual(["file_search", "memory_write", "memory_search"]);
   });
 
+  it("maps mcp_call -> mcp toolType (doc 14 M2, agent/mcp catalog row)", async () => {
+    let seenBody: Record<string, unknown> | undefined;
+    global.fetch = vi.fn(async (_url, init) => {
+      seenBody = JSON.parse(String(init?.body));
+      return { ok: true, status: 200, text: async () => "" } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    await reportToolUsage(env, "org_1", "run_1:0", { unitLabel: "mcp_call", units: 1, status: "success" });
+
+    expect(seenBody).toMatchObject({ toolType: "mcp", unitLabel: "mcp_call", units: 1 });
+  });
+
   it("is a no-op for an unrecognized unit label (no agent/* catalog row)", async () => {
     const fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    await reportToolUsage(env, "org_1", "run_1:0", { unitLabel: "mcp_call", units: 1, status: "success" });
+    await reportToolUsage(env, "org_1", "run_1:0", { unitLabel: "some_future_label", units: 1, status: "success" });
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

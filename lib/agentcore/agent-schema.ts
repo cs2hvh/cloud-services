@@ -54,3 +54,30 @@ export const createRunSchema = z
   });
 
 export type CreateRunInputBody = z.infer<typeof createRunSchema>;
+
+/** Register an MCP server in the org's registry (M3, doc 14 §4). Always
+ *  'private' visibility — curated rows are seeded separately (M4), never via
+ *  this customer-facing route. */
+export const createMcpServerSchema = z.object({
+  slug: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, "slug must be lowercase alphanumeric/underscore/hyphen"),
+  display_name: z.string().min(1).max(100),
+  server_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL"),
+  auth_token: z.string().min(1).max(2000).optional(),
+  allowed_tools: z.array(z.string().min(1)).max(50).optional(),
+});
+
+export type CreateMcpServerInput = z.infer<typeof createMcpServerSchema>;
+
+/** Edit a registered MCP server (M4). `slug` is deliberately NOT editable
+ *  here — it's the stable bind-key agents reference via `{server_slug}`;
+ *  changing it would silently break every agent already bound to it. */
+export const updateMcpServerSchema = z
+  .object({
+    display_name: z.string().min(1).max(100).optional(),
+    server_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL").optional(),
+    auth_token: z.string().min(1).max(2000).optional(),
+    allowed_tools: z.array(z.string().min(1)).max(50).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+
+export type UpdateMcpServerInput = z.infer<typeof updateMcpServerSchema>;
