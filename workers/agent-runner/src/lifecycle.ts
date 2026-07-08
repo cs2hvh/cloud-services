@@ -569,6 +569,15 @@ async function finalizeCompleted(
     x_ahura_cost_cents: round4(totals.costCents),
   };
 
+  // Guard against clobbering a cancellation that landed mid-flight. Found
+  // live (2026-07-08, testing the new dashboard Cancel button): assertNotCancelled
+  // only gates the START of each model turn — for a single-step run (the
+  // common case) there's no re-check between "model call in flight" and
+  // "write completed", so a cancel arriving during that one in-flight call
+  // previously got silently overwritten back to "completed" the moment the
+  // model responded. Per-step cost/trace is already durable via persistStep
+  // regardless of whether this summary write lands, so no billing accuracy
+  // is lost by skipping it here — only the status field's correctness.
   await ctx.supabase
     .schema("agentcore")
     .from("runs")
@@ -578,7 +587,8 @@ async function finalizeCompleted(
       step_count: totals.steps,
       cost_cents: round4(totals.costCents),
     })
-    .eq("id", run.id);
+    .eq("id", run.id)
+    .eq("status", "running");
 }
 
 async function finalizeFailed(
@@ -591,7 +601,9 @@ async function finalizeFailed(
   const update: Record<string, unknown> = { status: "failed", error };
   if (costCents != null) update.cost_cents = round4(costCents);
   if (steps != null) update.step_count = steps;
-  await ctx.supabase.schema("agentcore").from("runs").update(update).eq("id", runId);
+  // Same guard as finalizeCompleted — a run cancelled mid-flight must not
+  // get silently flipped to "failed" once the in-flight call errors out.
+  await ctx.supabase.schema("agentcore").from("runs").update(update).eq("id", runId).eq("status", "running");
 }
 
 async function assertNotCancelled(ctx: RunContext, runId: string): Promise<void> {

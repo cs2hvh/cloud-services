@@ -9,12 +9,12 @@
  */
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Play, Loader2, RotateCw, CheckCircle2, XCircle, Clock, Ban } from 'lucide-react';
+import { Play, Loader2, RotateCw, CheckCircle2, XCircle, Clock, Ban, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
-  PageCanvas, Hero, PrimaryButton, MONO, StatusLabel,
+  PageCanvas, Hero, PrimaryButton, GhostButton, MONO, StatusLabel,
 } from '@/components/dashboard/inference/chrome';
 import { formatCost, detailRows } from '../_constants';
 
@@ -63,6 +63,7 @@ function PlaygroundInner() {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [recent, setRecent] = useState<RunListItem[]>([]);
   const [stalled, setStalled] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const runStartRef = useRef(0);
 
@@ -172,6 +173,30 @@ function PlaygroundInner() {
     }
   }
 
+  // Found missing entirely during the "whole agent UI" gap review (2026-07-08):
+  // the gateway has always had a cancel endpoint, but nothing in the dashboard
+  // — not here, not the agent detail Runs tab — could ever reach it short of
+  // minting an API key and calling it with curl. A stuck or expensive run
+  // started from the playground had no way to be stopped from the UI at all.
+  async function cancelRun() {
+    if (!runId) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/agents/runs/${runId}/cancel`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to cancel run');
+      stopPolling();
+      setRunning(false);
+      setDetail((d) => (d ? { ...d, status: json.status ?? 'cancelled' } : d));
+      toast.success(json.status === 'cancelled' ? 'Run cancelled' : `Run already ${json.status}`);
+      void fetch('/api/agents/runs').then((r) => r.json()).then((j) => setRecent(j.data ?? []));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel run');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   const output = finalText(detail);
 
   return (
@@ -206,6 +231,11 @@ function PlaygroundInner() {
                 onChange={(e) => setInput(e.target.value)} />
             </div>
             <div className="flex justify-end">
+              {running && !TERMINAL.has(detail?.status ?? '') && (
+                <GhostButton onClick={cancelRun} disabled={cancelling}>
+                  <Square className="h-3 w-3" /> {cancelling ? 'Cancelling…' : 'Cancel'}
+                </GhostButton>
+              )}
               <PrimaryButton onClick={run} disabled={running || !agentId}>
                 {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 {running ? 'Running…' : 'Run'}

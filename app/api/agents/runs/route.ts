@@ -7,11 +7,36 @@
  * the agent-runner then executes the queued run exactly the same way.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreAgents, AgentcoreRuns, orgPayer, orgHardCapReached } from "@/lib/supabase/queries/agentcore";
 import { createRunSchema } from "@/lib/agentcore/agent-schema";
+
+/** Which credential started each run, resolved in one batch query — an agent
+ *  bound to both a private backend key and a public widget key needs to tell
+ *  "my own dashboard testing" apart from "a real external caller" in its run
+ *  history (doc 15). Absent api_key_id = the dashboard itself (session-authed
+ *  playground/run button), not an API key at all. */
+async function resolveKeyLabels(orgId: string, apiKeyIds: string[]): Promise<Map<string, { name: string; tier: string }>> {
+  const labels = new Map<string, { name: string; tier: string }>();
+  if (apiKeyIds.length === 0) return labels;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+  const { data } = await supabase
+    .schema("inference")
+    .from("api_keys")
+    .select("id, name, key_tier")
+    .eq("org_id", orgId)
+    .in("id", apiKeyIds)
+    .returns<{ id: string; name: string; key_tier: string }[]>();
+  for (const k of data ?? []) labels.set(k.id, { name: k.name, tier: k.key_tier });
+  return labels;
+}
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateUserFromHeader(request);
@@ -27,7 +52,16 @@ export async function GET(request: NextRequest) {
   const agentId = request.nextUrl.searchParams.get("agent_id") ?? undefined;
   try {
     const runs = await AgentcoreRuns.list(org.org_id, { agentId });
-    return NextResponse.json({ success: true, data: runs });
+    const keyIds = Array.from(new Set(runs.map((r) => r.api_key_id).filter((v): v is string => !!v)));
+    const keyLabels = await resolveKeyLabels(org.org_id, keyIds);
+    const data = runs.map((r) => ({
+      ...r,
+      // A revoked/since-deleted key still shows the run — key_name falls
+      // back to null rather than silently dropping the whole field.
+      key_name: r.api_key_id ? (keyLabels.get(r.api_key_id)?.name ?? null) : null,
+      key_tier: r.api_key_id ? (keyLabels.get(r.api_key_id)?.tier ?? null) : null,
+    }));
+    return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("[agents] runs list error:", err);
     return NextResponse.json({ error: "Failed to list runs" }, { status: 500 });

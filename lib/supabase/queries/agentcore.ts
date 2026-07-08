@@ -185,6 +185,12 @@ export const AgentcoreAgents = {
 export interface RunListItem {
   id: string;
   agent_id: string | null;
+  // Which credential started this run — null means the dashboard itself
+  // (session-authed playground/run button), not an API key at all. Doc 15's
+  // access-key feature makes this genuinely useful: an agent bound to both a
+  // private backend key and a public widget key needs to distinguish "my own
+  // testing" from "real external traffic" in its run history.
+  api_key_id: string | null;
   status: string;
   cost_cents: number;
   step_count: number;
@@ -277,7 +283,7 @@ export const AgentcoreRuns = {
     let q = client()
       .schema("agentcore")
       .from("runs")
-      .select("id, agent_id, status, cost_cents, step_count, created_at, updated_at")
+      .select("id, agent_id, api_key_id, status, cost_cents, step_count, created_at, updated_at")
       .eq("org_id", orgId);
     if (opts.agentId) q = q.eq("agent_id", opts.agentId);
     const { data, error } = await q
@@ -328,6 +334,40 @@ export const AgentcoreRuns = {
       .single<{ id: string }>();
     if (error || !data) return { success: false, error: error?.message ?? "insert failed" };
     return { success: true, id: data.id };
+  },
+
+  /**
+   * Session-authed counterpart to the api-key gateway's POST /v1/agents/
+   * runs/:id/cancel (workers/inference/src/routes/agent-runs.ts) — same
+   * atomic transition, no dashboard route existed to reach it before (doc:
+   * "whole agent UI" gap review, 2026-07-08). Only a non-terminal run flips;
+   * an already-terminal run is a no-op that just reports its real status,
+   * not an error — cancelling a run that finished a second ago shouldn't
+   * look like a failure to the person who clicked the button.
+   */
+  async cancel(orgId: string, runId: string): Promise<{ success: boolean; status?: string; error?: string }> {
+    const { data: won } = await client()
+      .schema("agentcore")
+      .from("runs")
+      .update({ status: "cancelled" })
+      .eq("id", runId)
+      .eq("org_id", orgId)
+      .in("status", ["queued", "running", "requires_action"])
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (won) return { success: true, status: "cancelled" };
+
+    const { data: existing } = await client()
+      .schema("agentcore")
+      .from("runs")
+      .select("status")
+      .eq("id", runId)
+      .eq("org_id", orgId)
+      .maybeSingle<{ status: string }>();
+
+    if (!existing) return { success: false, error: "not_found" };
+    return { success: true, status: existing.status };
   },
 };
 

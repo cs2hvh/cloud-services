@@ -11,12 +11,12 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { generateApiKey } from "@/lib/inference/api-key-crypto";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -70,6 +70,14 @@ export async function GET() {
     )
     .eq("org_id", org.org_id)
     .is("revoked_at", null)
+    // Agent-scoped keys (doc 15) are deliberately excluded from this general,
+    // unscoped-keys page. Tried surfacing them here once — reverted: this
+    // page's create/edit form has no concept of tier/origins, so a row here
+    // that can only be revoked (not managed) is a half-integration, and the
+    // stats strip above would silently mix two different security postures
+    // into one number. They live and are managed exclusively on the owning
+    // agent's own Access Keys tab (app/dashboard/services/agents/_agent-keys-tab.tsx).
+    .is("agent_id", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -133,12 +141,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Generate the key — format: ahu_live_<32 url-safe random chars>
-  const random = randomBytes(24).toString("base64url").slice(0, 32);
-  const fullKey = `ahu_live_${random}`;
-  const keyPrefix = fullKey.slice(0, 13);     // "ahu_live_xxxx"
-  const keyLastFour = fullKey.slice(-4);
-  const keyHash = createHash("sha256").update(fullKey).digest("hex");
+  const { fullKey, keyPrefix, keyLastFour, keyHash } = generateApiKey();
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

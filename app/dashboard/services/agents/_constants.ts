@@ -206,6 +206,11 @@ export interface Agent {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Batch-resolved by GET /api/agents (doc 15 gap review) — lets the agents
+  // list show which ones are actually externally distributed at a glance,
+  // without opening each one individually.
+  access_key_count?: number;
+  has_public_key?: boolean;
 }
 
 export interface RunListItem {
@@ -216,6 +221,10 @@ export interface RunListItem {
   step_count: number;
   created_at: string;
   updated_at: string;
+  // Which credential started this run — resolved server-side (doc 15).
+  // Both null = the dashboard itself, not an API key at all.
+  key_name: string | null;
+  key_tier: 'private' | 'public' | null;
 }
 
 export interface RunStep {

@@ -213,6 +213,15 @@ export const createAgentRun: Handler<{ Bindings: Env; Variables: HonoVariables }
     return c.json(gatewayError("Missing agent id", "invalid_request_error", "invalid_request", requestId), 400);
   }
 
+  // Defense in depth alongside agentScopeMiddleware's path-based check.
+  const auth = c.get("auth") as AuthContext;
+  if (auth.agentId && auth.agentId !== agentId) {
+    return c.json(
+      gatewayError("This key is scoped to a different agent", "invalid_request_error", "agent_scope_mismatch", requestId),
+      403
+    );
+  }
+
   let raw: unknown;
   try {
     raw = await c.req.json();

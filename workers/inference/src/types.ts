@@ -74,6 +74,20 @@ export interface AuthContext {
   // a valid UUID and the usage-consumer's insert silently failed/retried).
   usageApiKeyId: string;
   orgId: string;
+  // Agent-scope restriction (doc: manager ask 2026-07-08 — per-agent access
+  // keys). Null = unrestricted (today's default, and always null for an
+  // on-behalf-of identity). Set = agentScopeMiddleware + the agent-run
+  // routes restrict this key to running/reading only that one agent.
+  agentId: string | null;
+  // Public/private tier (doc: manager ask 2026-07-08 — public access keys).
+  // "private" (default, and always private for on-behalf-of) = server-to-
+  // server, full trace/cost visibility. "public" = safe to embed in a
+  // customer's website JS: originCheckMiddleware requires a matching Origin,
+  // and agent-runs.ts redacts cost_cents/steps from every response.
+  keyTier: "private" | "public";
+  // Required (non-null, non-empty) when keyTier is "public" — the DB CHECK
+  // constraint (chk_public_key_has_origins) guarantees this at write time.
+  allowedOrigins: string[] | null;
   allowedModels: string[] | null; // null = unrestricted
   allowedIpCidrs: string[] | null;
   zdrEnabled: boolean;

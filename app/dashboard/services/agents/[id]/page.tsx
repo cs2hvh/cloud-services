@@ -35,6 +35,7 @@ import {
 import { KnowledgeBasePicker } from '../_kb-picker';
 import { FunctionToolsEditor, FUNCTION_TOOLS_DESCRIPTION } from '../_function-tools-editor';
 import { McpServersEditor, MCP_SERVERS_DESCRIPTION } from '../_mcp-servers-editor';
+import { AgentKeysTab } from '../_agent-keys-tab';
 
 const AGENTS = '/api/agents';
 
@@ -57,6 +58,26 @@ function StatusPill({ status }: { status: string }) {
     <span className="inline-flex items-center gap-1.5">
       <Icon className={`h-3.5 w-3.5 ${kind === 'ok' ? 'text-green-400' : kind === 'error' ? 'text-red-400' : kind === 'info' ? 'text-[#33adff]' : 'text-white/40'} ${status === 'running' ? 'animate-pulse' : ''}`} />
       <StatusLabel status={kind}>{status}</StatusLabel>
+    </span>
+  );
+}
+
+/** Which credential started a run — doc 15. Absent (both null) means the
+ *  dashboard itself (session-authed playground/run button), not a key at
+ *  all. Lets an agent bound to both a private backend key and a public
+ *  widget key tell "my own testing" apart from "real external traffic". */
+function RunSourceTag({ keyName, tier }: { keyName: string | null; tier: 'private' | 'public' | null }) {
+  if (!keyName) {
+    return <span className={`${MONO} text-[9.5px] uppercase tracking-[0.08em] text-white/25 shrink-0`}>dashboard</span>;
+  }
+  return (
+    <span
+      className={`${MONO} inline-flex items-center gap-1 text-[9.5px] uppercase tracking-[0.08em] px-1.5 py-0.5 rounded shrink-0 truncate max-w-[140px] ${
+        tier === 'public' ? 'bg-[#33adff]/10 text-[#66c2ff]' : 'bg-white/[0.06] text-white/45'
+      }`}
+      title={`${tier} key: ${keyName}`}
+    >
+      {tier}: {keyName}
     </span>
   );
 }
@@ -160,11 +181,18 @@ export default function AgentDetailPage() {
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'overview' | 'runs' | 'settings'>('overview');
+  const [tab, setTab] = useState<'overview' | 'runs' | 'keys' | 'settings'>('overview');
 
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Found missing during the "whole agent UI" gap review (2026-07-08): once
+  // an agent has real public/private key traffic mixed with dashboard
+  // testing, a flat unfilterable list gets unscannable fast.
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [runsRefreshNonce, setRunsRefreshNonce] = useState(0);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -186,11 +214,42 @@ export default function AgentDetailPage() {
       const r = await fetch(`${AGENTS}/runs?agent_id=${id}`);
       const j = await r.json();
       if (r.ok) setRuns(j.data ?? []);
+      // Bumps TraceTimeline's key below so an already-expanded run's trace
+      // panel actually remounts and refetches too — found showing stale
+      // status after Cancel (the collapsed row's StatusPill updated from
+      // this same refresh, but the expanded panel below it fetches once on
+      // mount and never again, so it kept showing "running" after a cancel
+      // until manually collapsed and reopened).
+      setRunsRefreshNonce((n) => n + 1);
     } finally { setRunsLoading(false); }
   }, [id]);
 
   useEffect(() => { void loadAgent(); }, [loadAgent]);
   useEffect(() => { if (tab === 'runs') void loadRuns(); }, [tab, loadRuns]);
+
+  const cancelRun = useCallback(async (runId: string) => {
+    setCancellingId(runId);
+    try {
+      const r = await fetch(`${AGENTS}/runs/${runId}/cancel`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Failed to cancel');
+      toast.success(j.status === 'cancelled' ? 'Run cancelled' : `Run already ${j.status}`);
+      await loadRuns();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel run');
+    } finally {
+      setCancellingId(null);
+    }
+  }, [loadRuns]);
+
+  const NON_TERMINAL = new Set(['queued', 'running', 'requires_action']);
+  const filteredRuns = runs.filter((run) => {
+    if (statusFilter !== 'all' && run.status !== statusFilter) return false;
+    if (sourceFilter === 'dashboard' && run.key_name) return false;
+    if (sourceFilter === 'private' && run.key_tier !== 'private') return false;
+    if (sourceFilter === 'public' && run.key_tier !== 'public') return false;
+    return true;
+  });
 
   if (loading) return <PageCanvas><div className="py-24 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div></PageCanvas>;
   if (!agent) return <PageCanvas><EmptyState title="Agent not found" description="It may have been deleted." action={<Link href="/dashboard/services/agents" className="text-[#33adff] text-sm">← Back to agents</Link>} /></PageCanvas>;
@@ -219,7 +278,7 @@ export default function AgentDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-white/[0.06] mb-4">
-        {(['overview', 'runs', 'settings'] as const).map((t) => (
+        {(['overview', 'runs', 'keys', 'settings'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -264,33 +323,75 @@ export default function AgentDetailPage() {
 
       {tab === 'runs' && (
         <div className="border border-white/[0.06] bg-[#111216] rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-            <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`}>Run history</span>
-            <button onClick={loadRuns} className="text-white/40 hover:text-white/70"><RotateCw className={`h-3.5 w-3.5 ${runsLoading ? 'animate-spin' : ''}`} /></button>
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] gap-3 flex-wrap">
+            <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 shrink-0`}>Run history</span>
+            <div className="flex items-center gap-2 ml-auto">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={`${MONO} h-7 rounded-md bg-white/[0.03] border border-white/[0.08] px-2 text-[10.5px] text-white/70`}
+              >
+                <option value="all">All statuses</option>
+                {['queued', 'running', 'requires_action', 'completed', 'failed', 'cancelled', 'expired'].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className={`${MONO} h-7 rounded-md bg-white/[0.03] border border-white/[0.08] px-2 text-[10.5px] text-white/70`}
+              >
+                <option value="all">All sources</option>
+                <option value="dashboard">Dashboard only</option>
+                <option value="private">Private keys</option>
+                <option value="public">Public keys</option>
+              </select>
+              <button onClick={loadRuns} className="text-white/40 hover:text-white/70 shrink-0"><RotateCw className={`h-3.5 w-3.5 ${runsLoading ? 'animate-spin' : ''}`} /></button>
+            </div>
           </div>
           {runsLoading && runs.length === 0 ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-white/30" /></div>
           ) : runs.length === 0 ? (
             <div className="py-12 text-center text-white/35 text-sm">No runs yet — <Link href={`/dashboard/services/agents/playground?agent=${agent.id}`} className="text-[#33adff]">run it in the playground</Link>.</div>
+          ) : filteredRuns.length === 0 ? (
+            <div className="py-12 text-center text-white/35 text-sm">No runs match this filter.</div>
           ) : (
-            runs.map((run) => (
+            filteredRuns.map((run) => (
               <div key={run.id} className="border-b border-white/[0.04]">
-                <button
+                <div
                   onClick={() => setExpanded(expanded === run.id ? null : run.id)}
-                  className="w-full grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 px-4 py-3 items-center hover:bg-white/[0.02] text-left"
+                  role="button"
+                  tabIndex={0}
+                  className="w-full grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 px-4 py-3 items-center hover:bg-white/[0.02] text-left cursor-pointer"
                 >
                   {expanded === run.id ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronRight className="h-3.5 w-3.5 text-white/40" />}
-                  <StatusPill status={run.status} />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StatusPill status={run.status} />
+                    <RunSourceTag keyName={run.key_name} tier={run.key_tier} />
+                  </div>
                   <span className={`${MONO} text-[11px] text-white/50 tabular-nums`}>{run.step_count} steps</span>
                   <span className={`${MONO} text-[11px] text-white/70 tabular-nums`}>{formatCost(run.cost_cents)}</span>
                   <span className={`${MONO} text-[11px] text-white/35`}>{relativeTime(run.created_at)}</span>
-                </button>
-                {expanded === run.id && <TraceTimeline runId={run.id} />}
+                  {NON_TERMINAL.has(run.status) ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void cancelRun(run.id); }}
+                      disabled={cancellingId === run.id}
+                      className={`${MONO} text-[10px] uppercase tracking-[0.08em] text-red-300/70 hover:text-red-300 px-2 py-1 rounded border border-red-400/20 hover:border-red-400/40 disabled:opacity-50`}
+                    >
+                      {cancellingId === run.id ? '…' : 'Cancel'}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+                {expanded === run.id && <TraceTimeline key={`${run.id}-${runsRefreshNonce}`} runId={run.id} />}
               </div>
             ))
           )}
         </div>
       )}
+
+      {tab === 'keys' && <AgentKeysTab agentId={agent.id} />}
 
       {tab === 'settings' && (
         <SettingsTab agent={agent} onSaved={loadAgent} onDelete={() => setDeleteOpen(true)} />

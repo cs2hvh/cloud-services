@@ -22,6 +22,8 @@ import { cors } from "hono/cors";
 
 import type { Env, HonoVariables } from "./types.ts";
 import { authMiddleware } from "./middleware/auth.ts";
+import { agentScopeMiddleware } from "./middleware/agent-scope.ts";
+import { originCheckMiddleware } from "./middleware/origin-check.ts";
 import { spendCheckMiddleware } from "./middleware/spend.ts";
 import { rateLimitMiddleware } from "./middleware/rate-limit.ts";
 import { chatCompletions } from "./routes/chat-completions.ts";
@@ -111,6 +113,8 @@ app.get("/v1/health", (c) =>
 const v1 = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 v1.use("*", authMiddleware);
+v1.use("*", agentScopeMiddleware);
+v1.use("*", originCheckMiddleware);
 v1.use("*", spendCheckMiddleware);
 v1.use("*", rateLimitMiddleware);
 

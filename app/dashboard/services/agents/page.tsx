@@ -6,7 +6,7 @@
  */
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, RotateCw, Trash2, Bot, Loader2, Play } from 'lucide-react';
+import { Plus, RotateCw, Trash2, Bot, Loader2, Play, Key } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -123,6 +123,16 @@ export default function AgentsPage() {
                   <Bot className="h-4 w-4 text-white/30 shrink-0" />
                   <Link href={`/dashboard/services/agents/${a.id}`} className="truncate text-sm text-white/90 hover:text-[#33adff]">{a.name}</Link>
                   {!a.is_active && <Badge variant="outline" className="text-[9px]">paused</Badge>}
+                  {!!a.access_key_count && (
+                    <span
+                      className={`${MONO} inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.08em] px-1.5 py-0.5 rounded shrink-0 ${
+                        a.has_public_key ? 'bg-[#33adff]/10 text-[#66c2ff]' : 'bg-white/[0.06] text-white/45'
+                      }`}
+                      title={`${a.access_key_count} active access key${a.access_key_count === 1 ? '' : 's'}${a.has_public_key ? ' (incl. public)' : ''}`}
+                    >
+                      <Key className="h-2.5 w-2.5" /> {a.access_key_count}
+                    </span>
+                  )}
                 </div>
                 <span className={`${MONO} text-[11px] text-white/55 truncate`}>{a.model}</span>
                 <span className={`${MONO} text-[11px] text-white/70 text-right tabular-nums`}>{a.max_steps}</span>

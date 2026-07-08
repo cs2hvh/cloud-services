@@ -6,6 +6,7 @@
  * active inference org owns the agent. Writes require a non-viewer role.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
@@ -17,6 +18,36 @@ import { NotificationService, createServiceNotification } from "@/lib/notificati
 /** Writes require developer+ — viewers are read-only. */
 function canWrite(role: string): boolean {
   return role !== "viewer";
+}
+
+/**
+ * Active access-key counts per agent, one batch query for the whole org.
+ * Found missing during the "whole agent UI" gap review (2026-07-08): you
+ * couldn't tell which agents were actually externally distributed (had a
+ * live public key) without opening each one individually.
+ */
+async function keyCountsByAgent(orgId: string): Promise<Map<string, { total: number; public: number }>> {
+  const counts = new Map<string, { total: number; public: number }>();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+  const { data } = await supabase
+    .schema("inference")
+    .from("api_keys")
+    .select("agent_id, key_tier")
+    .eq("org_id", orgId)
+    .is("revoked_at", null)
+    .not("agent_id", "is", null)
+    .returns<{ agent_id: string; key_tier: string }[]>();
+  for (const k of data ?? []) {
+    const cur = counts.get(k.agent_id) ?? { total: 0, public: 0 };
+    cur.total += 1;
+    if (k.key_tier === "public") cur.public += 1;
+    counts.set(k.agent_id, cur);
+  }
+  return counts;
 }
 
 export async function GET(request: NextRequest) {
@@ -34,8 +65,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const agents = await AgentcoreAgents.list(org.org_id);
-    return NextResponse.json({ success: true, data: agents });
+    const [agents, keyCounts] = await Promise.all([
+      AgentcoreAgents.list(org.org_id),
+      keyCountsByAgent(org.org_id),
+    ]);
+    const data = agents.map((a) => ({
+      ...a,
+      access_key_count: keyCounts.get(a.id)?.total ?? 0,
+      has_public_key: (keyCounts.get(a.id)?.public ?? 0) > 0,
+    }));
+    return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("[agents] list error:", err);
     return NextResponse.json({ error: "Failed to list agents" }, { status: 500 });
