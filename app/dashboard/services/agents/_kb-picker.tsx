@@ -3,11 +3,14 @@
 /**
  * Knowledge-base picker for the file_search tool — used by the agent builder and
  * the Settings tab. Lets a user either select an existing vector collection OR
- * create a new one and seed it with pasted text, inline, without leaving the
- * agent flow (mirrors how production agent builders attach files).
+ * create a new one and seed it with pasted text, hosted URLs, and/or uploaded
+ * documents, inline, without leaving the agent flow (mirrors how production
+ * agent builders attach files).
  *
- * Text-only for now (create → auto-embed via text-embedding-3-small). PDF/DOCX
- * file upload needs the parsing pipeline (RAG data platform) — tracked separately.
+ * Seeding sources: pasted text; URLs (server fetches + extracts readable
+ * paragraphs via /ingest-url — see lib/inference/url-ingest.ts); and files —
+ * PDF/DOCX/TXT/MD, extracted server-side via /ingest-file — see
+ * lib/inference/doc-ingest.ts.
  */
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -25,6 +28,8 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [name, setName] = useState('');
   const [text, setText] = useState('');
+  const [urls, setUrls] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -49,6 +54,7 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
 
       // Seed with pasted text (one row per paragraph) if provided.
       const body = text.trim();
+      let seeded = false;
       if (body) {
         const parts = body.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean).slice(0, 100);
         const rows = parts.map((content, i) => ({ external_id: `doc-${Date.now()}-${i + 1}`, content }));
@@ -57,13 +63,42 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
           body: JSON.stringify({ rows }),
         });
         if (!ur.ok) { const uj = await ur.json().catch(() => ({})); throw new Error(uj.error || 'Created, but seeding text failed'); }
+        seeded = true;
       }
 
-      toast.success(body ? 'Knowledge base created + seeded' : 'Knowledge base created');
+      // Seed from hosted URLs (one per line) if provided — server fetches
+      // + extracts readable text, so this can pull in existing docs/FAQ
+      // pages without copy-pasting.
+      const urlList = urls.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 5);
+      if (urlList.length > 0) {
+        const ir = await fetch(`/api/inference/vector/collections/${id}/ingest-url`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ urls: urlList }),
+        });
+        const ij = await ir.json().catch(() => ({}));
+        if (!ir.ok) throw new Error(ij.error || 'Created, but URL ingest failed');
+        seeded = true;
+      }
+
+      // Seed from uploaded documents (PDF/DOCX/TXT/MD) if provided — server
+      // extracts text per file type and chunks it the same way as pasted
+      // text / URL ingest.
+      if (files.length > 0) {
+        const fd = new FormData();
+        for (const f of files) fd.append('files', f);
+        const fr = await fetch(`/api/inference/vector/collections/${id}/ingest-file`, {
+          method: 'POST', credentials: 'include', body: fd,
+        });
+        const fj = await fr.json().catch(() => ({}));
+        if (!fr.ok) throw new Error(fj.error || 'Created, but file ingest failed');
+        seeded = true;
+      }
+
+      toast.success(seeded ? 'Knowledge base created + seeded' : 'Knowledge base created');
       setCollections(await fetchCollections());
       onChange(id);
       setMode('existing');
-      setName(''); setText('');
+      setName(''); setText(''); setUrls(''); setFiles([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create knowledge base');
     } finally {
@@ -98,9 +133,21 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
         <div className="space-y-2 rounded-xl border border-white/[0.08] bg-[#0c0d10] p-3">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name — e.g. product-docs" />
           <Textarea rows={4} value={text} onChange={(e) => setText(e.target.value)}
-            placeholder="Paste text to seed this knowledge base (optional — one row per paragraph). File/PDF upload coming soon." />
+            placeholder="Paste text to seed this knowledge base (optional — one row per paragraph)." />
+          <Textarea rows={2} value={urls} onChange={(e) => setUrls(e.target.value)}
+            placeholder="Or add hosted URLs to fetch + ingest, one per line (optional, max 5) — e.g. https://docs.example.com/shipping" />
+          <div>
+            <input
+              type="file" multiple accept=".pdf,.docx,.txt,.md"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))}
+              className={`w-full text-[11px] text-white/55 ${MONO} file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-[11px] file:text-white/80 hover:file:bg-white/15`}
+            />
+            {files.length > 0 && (
+              <div className="mt-1 text-[10px] text-white/40">{files.length} file{files.length > 1 ? 's' : ''} selected — {files.map((f) => f.name).join(', ')}</div>
+            )}
+          </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-white/35">Embedded with text-embedding-3-small</span>
+            <span className="text-[10px] text-white/35">Embedded with text-embedding-3-small. PDF, DOCX, TXT, MD — max 5 files, 10MB each.</span>
             <PrimaryButton onClick={createKb} disabled={creating}>{creating ? 'Creating…' : 'Create & attach'}</PrimaryButton>
           </div>
         </div>

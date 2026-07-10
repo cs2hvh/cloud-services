@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
@@ -16,10 +16,10 @@ function isUuid(s: string): boolean {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; rowId: string }> }
 ) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id, rowId } = await params;
@@ -67,7 +67,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; rowId: string }> }
 ) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id, rowId } = await params;

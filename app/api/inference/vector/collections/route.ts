@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
@@ -33,8 +33,8 @@ const createSchema = z.object({
   index_params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
 
-export async function GET() {
-  const auth = await authenticateUser();
+export async function GET(request: NextRequest) {
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const rl = await limitByUser(auth.user!.id, {
@@ -87,7 +87,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const rl = await limitByUser(auth.user!.id, {
