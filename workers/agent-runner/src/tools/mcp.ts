@@ -10,7 +10,7 @@
 import type { AgentTool, McpToolDecl, ToolResult } from "@ahura/agent-core";
 import { assertSafeWebhookUrl, SsrfBlockedError } from "./ssrf.js";
 import { preview } from "./detail.js";
-import { openMcpClient, type McpCallResult, type McpClient } from "./mcp-client.js";
+import { openMcpClient, type McpCallResult, type McpClient, type McpToolInfo } from "./mcp-client.js";
 
 const DESC_CAP = 1024;
 const MAX_TOOLS_PER_SERVER = 20;
@@ -22,6 +22,14 @@ export interface ResolvedMcpConfig {
   token?: string;
   label: string;
   allowedTools?: string[];
+  /** Registry mode only (§4 "tool_schemas cache = the scalability win"): the
+   *  schema-refresh cron's cached tools/list for this server. When present
+   *  and non-empty, connectMcpTools advertises tools straight from this
+   *  instead of connecting here — the actual connection opens lazily, only
+   *  once the model calls one of this server's tools. Absent for inline mode
+   *  (nothing to cache for a one-off URL) and for a registry row the cron
+   *  hasn't refreshed yet. */
+  cachedTools?: McpToolInfo[];
 }
 
 export interface McpBoundTool {
@@ -66,6 +74,30 @@ export function flattenMcpResult(result: McpCallResult): { text: string; isError
     c.type === "text" ? (c.text ?? "") : `[${c.type} omitted]`
   );
   return { text: parts.join("\n"), isError: result?.isError === true };
+}
+
+/** Wraps openClient so the actual `connect` doesn't happen until the first
+ *  `listTools`/`callTool` — used only on the cached-schema path, where we
+ *  already know the tool list without connecting (§4/§6: "only opens a
+ *  connection when a tool is actually called"). `close()` no-ops if the
+ *  connection was never actually opened (a run that never calls this
+ *  server's tools closes nothing). */
+function makeLazyClient(
+  url: string,
+  token: string | undefined,
+  timeoutMs: number,
+  openClient: typeof openMcpClient
+): McpClient {
+  let clientPromise: Promise<McpClient> | null = null;
+  const getClient = () => (clientPromise ??= openClient(url, token, timeoutMs));
+  return {
+    listTools: () => getClient().then((c) => c.listTools()),
+    callTool: (name, args, callTimeoutMs) => getClient().then((c) => c.callTool(name, args, callTimeoutMs)),
+    async close() {
+      if (!clientPromise) return;
+      await (await clientPromise).close();
+    },
+  };
 }
 
 function mcpCallTool(client: McpClient, toolName: string, timeoutMs: number): AgentTool {
@@ -115,9 +147,30 @@ export async function connectMcpTools(
       throw new SsrfBlockedError("MCP server URL must use https in this environment");
     }
 
+    const allow = config.allowedTools?.length ? new Set(config.allowedTools) : null;
+
+    if (config.cachedTools?.length) {
+      // Scalability path (§4/§6): advertise from the schema-refresh cron's
+      // cache instead of connecting here. Real connection opens lazily, only
+      // if the model actually calls one of this server's tools; if the
+      // server has since gone down, that call fails as tool output (§7
+      // scenario 4), same as any other transport failure — it just isn't
+      // caught at build time anymore for cached servers.
+      const client = makeLazyClient(config.url, config.token, opts.timeoutMs, openClient);
+      const tools: McpBoundTool[] = config.cachedTools
+        .filter((t) => (allow ? allow.has(t.name) : true))
+        .slice(0, MAX_TOOLS_PER_SERVER)
+        .map((t) => ({
+          name: `mcp__${config.label}__${t.name}`,
+          description: preview(t.description ?? "", DESC_CAP),
+          parameters: t.inputSchema ?? { type: "object", properties: {} },
+          tool: mcpCallTool(client, t.name, opts.timeoutMs),
+        }));
+      return { tools, client };
+    }
+
     const client = await openClient(config.url, config.token, opts.timeoutMs);
     const listed = await client.listTools();
-    const allow = config.allowedTools?.length ? new Set(config.allowedTools) : null;
 
     const tools: McpBoundTool[] = listed
       .filter((t) => (allow ? allow.has(t.name) : true))

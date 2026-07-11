@@ -143,4 +143,54 @@ describe("resolveRegistryMcpConfig", () => {
     });
     await expect(resolveRegistryMcpConfig(supa, "org_1", "flaky", null)).resolves.toBeNull();
   });
+
+  // §4/§6 scalability path: the schema-refresh cron populates tool_schemas so
+  // the per-run adapter can skip connect()+listTools() and advertise from the
+  // cache instead (mcp.ts's connectMcpTools branches on ResolvedMcpConfig's
+  // cachedTools). This resolver's only job is to pass the cache through.
+  it("passes a populated tool_schemas cache through as cachedTools", async () => {
+    const supa = fakeSupabase({
+      slug: "docs", display_name: "Docs Server", server_url: "https://docs.example.com/mcp",
+      auth_token_enc: null, allowed_tools: [], status: "active",
+      tool_schemas: [{ name: "search", description: "Search docs" }],
+    });
+    const cfg = await resolveRegistryMcpConfig(supa, "org_1", "docs", null);
+    expect(cfg?.cachedTools).toEqual([{ name: "search", description: "Search docs" }]);
+  });
+
+  it("omits cachedTools when tool_schemas is empty or absent (never swept yet)", async () => {
+    const supa = fakeSupabase({
+      slug: "docs", display_name: "Docs Server", server_url: "https://docs.example.com/mcp",
+      auth_token_enc: null, allowed_tools: [], status: "active",
+      tool_schemas: [],
+    });
+    const cfg = await resolveRegistryMcpConfig(supa, "org_1", "docs", null);
+    expect(cfg?.cachedTools).toBeUndefined();
+  });
+
+  // The tool_schemas cache and OAuth token resolution are two independent
+  // branches inside resolveRegistryMcpConfig (auth_type dispatch vs. the
+  // tool_schemas passthrough at the end) — proven separately elsewhere, but
+  // never together. This confirms an oauth-mode row with a still-valid
+  // (unexpired) access token resolves BOTH correctly in the same call: the
+  // real decrypted bearer token AND the cached tool list, so a cached OAuth
+  // server genuinely skips both the connect+listTools round trip and (since
+  // the token isn't expired) the refresh round trip too.
+  it("an oauth-mode row with a still-valid token resolves both the token AND the tool_schemas cache", async () => {
+    const enc = await encryptForTest("oauth_access_xyz", DEK);
+    const supa = fakeSupabase({
+      slug: "gh", display_name: "GitHub", server_url: "https://gh.example.com/mcp",
+      auth_type: "oauth",
+      oauth_client_id: "client_1",
+      oauth_access_token_enc: enc,
+      oauth_refresh_token_enc: null,
+      oauth_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h out — well past the refresh skew
+      oauth_authorization_server_url: null,
+      auth_token_enc: null, allowed_tools: [], status: "active",
+      tool_schemas: [{ name: "search_issues" }, { name: "create_issue" }],
+    });
+    const cfg = await resolveRegistryMcpConfig(supa, "org_1", "gh", DEK);
+    expect(cfg?.token).toBe("oauth_access_xyz");
+    expect(cfg?.cachedTools).toEqual([{ name: "search_issues" }, { name: "create_issue" }]);
+  });
 });

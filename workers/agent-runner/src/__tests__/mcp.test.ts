@@ -169,6 +169,141 @@ describe("connectMcpTools", () => {
   });
 });
 
+// ── connectMcpTools: cachedTools (§4/§6 scalability path) ──────────────────
+describe("connectMcpTools with cachedTools", () => {
+  const opts = { timeoutMs: 1000, allowPrivate: true };
+
+  it("advertises tools straight from the cache without ever calling openClient", async () => {
+    const open = fakeOpenClient({ tools: [{ name: "should_never_be_seen" }] });
+    const { tools, client } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "docs", cachedTools: [{ name: "search", description: "Search docs" }] },
+      opts,
+      open
+    );
+    expect(client).not.toBeNull();
+    expect(tools.map((t) => t.name)).toEqual(["mcp__docs__search"]);
+    expect(open).not.toHaveBeenCalled(); // no connection yet — nothing was actually called
+  });
+
+  it("still honors allowed_tools and the 20-tool cap against the cache", async () => {
+    const open = fakeOpenClient({});
+    const cached = Array.from({ length: 30 }, (_, i) => ({ name: `t${i}` }));
+    const { tools } = await connectMcpTools({ url: "http://x.test/mcp", label: "s", cachedTools: cached }, opts, open);
+    expect(tools).toHaveLength(20);
+
+    const { tools: narrowed } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "a" }, { name: "b" }], allowedTools: ["b"] },
+      opts,
+      open
+    );
+    expect(narrowed.map((t) => t.name)).toEqual(["mcp__s__b"]);
+  });
+
+  it("connects lazily on the first real tool call, not before", async () => {
+    const open = fakeOpenClient({ call: () => ({ content: [{ type: "text", text: "3 hits" }] }) });
+    const { tools } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "search" }] },
+      opts,
+      open
+    );
+    expect(open).not.toHaveBeenCalled();
+    const r = await tools[0].tool.run({ q: "x" }, ctx);
+    expect(open).toHaveBeenCalledTimes(1); // connected on demand
+    expect(r.output).toEqual({ result: "3 hits" });
+  });
+
+  it("connects at most once even across multiple calls to the same server", async () => {
+    const open = fakeOpenClient({ tools: [{ name: "a" }, { name: "b" }], call: () => ({ content: [{ type: "text", text: "ok" }] }) });
+    const { tools } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "a" }, { name: "b" }] },
+      opts,
+      open
+    );
+    await tools[0].tool.run({}, ctx);
+    await tools[1].tool.run({}, ctx);
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("two tools from the same cached server called concurrently still connect only once", async () => {
+    // The lazy client shares one connect promise (`clientPromise ??= ...`),
+    // so two in-flight callTool()s racing on the same server should dedupe
+    // to a single real connect — not just when called sequentially (the test
+    // above), but genuinely in parallel via Promise.all, the shape a model
+    // calling two tools from the same server in one turn actually produces.
+    let resolveConnect!: () => void;
+    const connectGate = new Promise<void>((r) => (resolveConnect = r));
+    const open = vi.fn(async () => {
+      await connectGate; // hold the "connect" open until both calls have started racing
+      return {
+        async listTools() {
+          return [];
+        },
+        async callTool(name: string) {
+          return { content: [{ type: "text", text: `${name}-ok` }] };
+        },
+        async close() {},
+      };
+    });
+    const { tools } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "a" }, { name: "b" }] },
+      opts,
+      open
+    );
+    const p1 = tools[0].tool.run({}, ctx);
+    const p2 = tools[1].tool.run({}, ctx);
+    resolveConnect(); // let the single in-flight connect complete
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(open).toHaveBeenCalledTimes(1); // one real connect, not two racing ones
+    expect(r1.output).toEqual({ result: "a-ok" });
+    expect(r2.output).toEqual({ result: "b-ok" });
+  });
+
+  it("close() is a no-op if the server's tools were never actually called", async () => {
+    const onClose = vi.fn();
+    const open = fakeOpenClient({ onClose });
+    const { client } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "search" }] },
+      opts,
+      open
+    );
+    await client!.close();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("a dead server's cached tool call fails as tool output, not a build-time skip (§7 scenario 4)", async () => {
+    const open = fakeOpenClient({ throwOnConnect: true });
+    const { tools, client } = await connectMcpTools(
+      { url: "http://x.test/mcp", label: "s", cachedTools: [{ name: "search" }] },
+      opts,
+      open
+    );
+    // Unlike the no-cache path, a since-dead server still advertises its
+    // stale-cached tools — the build step never had to connect to know them.
+    expect(tools).toHaveLength(1);
+    expect(client).not.toBeNull();
+    const r = await tools[0].tool.run({}, ctx);
+    expect((r.output as { error: string }).error).toMatch(/mcp call failed/);
+  });
+
+  it("SSRF/HTTPS guards still apply before advertising anything, even from cache", async () => {
+    const open = fakeOpenClient({});
+    const { tools, client } = await connectMcpTools(
+      { url: "http://169.254.169.254/mcp", label: "s", cachedTools: [{ name: "search" }] },
+      { timeoutMs: 1000 },
+      open
+    );
+    expect(tools).toEqual([]);
+    expect(client).toBeNull();
+  });
+
+  it("falls back to the connect-and-list path when cachedTools is absent or empty", async () => {
+    const open = fakeOpenClient({ tools: [{ name: "search" }] });
+    const { tools } = await connectMcpTools({ url: "http://x.test/mcp", label: "s", cachedTools: [] }, opts, open);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(tools.map((t) => t.name)).toEqual(["mcp__s__search"]);
+  });
+});
+
 // ── attachMcpTools (the decorator) ──────────────────────────────────────────
 describe("attachMcpTools", () => {
   it("is a no-op (returns base unchanged) when there are no mcp decls", async () => {

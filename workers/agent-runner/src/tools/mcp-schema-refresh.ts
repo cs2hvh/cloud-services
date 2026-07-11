@@ -24,10 +24,11 @@
  * ~30 minutes. Fixed by branching on `auth_type` exactly like
  * `resolveRegistryMcpConfig` does for the per-run path.
  *
- * `tool_schemas` is written here but not yet READ anywhere at run time (the
- * adapter still does a fresh connect+listTools every run) — that's the
- * separate "scalability win" doc 14 §4 describes and is still deferred; this
- * job only delivers the correctness-relevant half (accurate status/last_error).
+ * `tool_schemas` written here is now also READ at run time — mcp-registry.ts's
+ * `resolveRegistryMcpConfig` passes it through as `ResolvedMcpConfig.cachedTools`,
+ * and mcp.ts's `connectMcpTools` advertises straight from it instead of doing a
+ * fresh connect+listTools every run, opening the real connection lazily only
+ * once a tool is actually called (doc 14 §4/§6's "scalability win", closed).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertSafeWebhookUrl } from "./ssrf.js";

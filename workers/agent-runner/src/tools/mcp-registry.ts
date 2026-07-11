@@ -22,6 +22,7 @@ import { discoverOAuthServerInfo, refreshAuthorization } from "@modelcontextprot
 import { decryptMcpToken, encryptMcpToken } from "./mcp-crypto.js";
 import { assertSafeWebhookUrl } from "./ssrf.js";
 import { sanitizeLabel, type ResolvedMcpConfig } from "./mcp.js";
+import type { McpToolInfo } from "./mcp-client.js";
 
 /** The subset of a mcp_servers row `resolveOAuthToken` actually needs —
  *  exported so mcp-schema-refresh.ts's health-check sweep can reuse the SAME
@@ -49,6 +50,7 @@ interface McpServerRow extends OAuthTokenRow {
   auth_token_enc: string | null;
   allowed_tools: string[] | null;
   status: string;
+  tool_schemas: McpToolInfo[] | null;
 }
 
 /** Per-decl overrides on top of the registry row (doc 14 §4: "org-level
@@ -183,7 +185,7 @@ export async function resolveRegistryMcpConfig(
     .schema("agentcore")
     .from("mcp_servers")
     .select(
-      "id, org_id, slug, server_url, auth_type, auth_token_enc, oauth_client_id, oauth_client_secret_enc, oauth_access_token_enc, oauth_refresh_token_enc, oauth_token_expires_at, oauth_authorization_server_url, allowed_tools, status"
+      "id, org_id, slug, server_url, auth_type, auth_token_enc, oauth_client_id, oauth_client_secret_enc, oauth_access_token_enc, oauth_refresh_token_enc, oauth_token_expires_at, oauth_authorization_server_url, allowed_tools, status, tool_schemas"
     )
     .or(`org_id.eq.${orgId},org_id.is.null`)
     .eq("slug", slug)
@@ -230,5 +232,10 @@ export async function resolveRegistryMcpConfig(
     // decl-level label override still wins when explicitly set.
     label: sanitizeLabel(declOverrides?.label ?? data.slug),
     allowedTools,
+    // Scalability path (§4/§6): the schema-refresh cron already has this
+    // server's tools/list — let connectMcpTools advertise from it instead of
+    // connecting fresh every run. Absent (or empty) rows fall through to the
+    // old connect-and-list behavior unchanged (e.g. never swept yet).
+    cachedTools: data.tool_schemas?.length ? data.tool_schemas : undefined,
   };
 }
