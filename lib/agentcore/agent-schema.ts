@@ -57,25 +57,49 @@ export type CreateRunInputBody = z.infer<typeof createRunSchema>;
 
 /** Register an MCP server in the org's registry (M3, doc 14 §4). Always
  *  'private' visibility — curated rows are seeded separately (M4), never via
- *  this customer-facing route. */
-export const createMcpServerSchema = z.object({
-  slug: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, "slug must be lowercase alphanumeric/underscore/hyphen"),
-  display_name: z.string().min(1).max(100),
-  server_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL"),
-  auth_token: z.string().min(1).max(2000).optional(),
-  allowed_tools: z.array(z.string().min(1)).max(50).optional(),
-});
+ *  this customer-facing route.
+ *
+ *  auth_type='oauth' (M6, §10 decision #2): the customer pastes their own
+ *  OAuth app's client_id/client_secret (no Dynamic Client Registration in
+ *  v1) and completes the consent flow afterward via the /oauth/authorize
+ *  route — `auth_token` is mutually exclusive with the oauth_* fields. */
+export const createMcpServerSchema = z
+  .object({
+    slug: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, "slug must be lowercase alphanumeric/underscore/hyphen"),
+    display_name: z.string().min(1).max(100),
+    server_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL"),
+    auth_type: z.enum(["static", "oauth"]).optional().default("static"),
+    auth_token: z.string().min(1).max(2000).optional(),
+    oauth_client_id: z.string().min(1).max(500).optional(),
+    oauth_client_secret: z.string().min(1).max(2000).optional(),
+    oauth_scope: z.string().max(500).optional(),
+    allowed_tools: z.array(z.string().min(1)).max(50).optional(),
+  })
+  .refine((d) => d.auth_type !== "oauth" || !!d.oauth_client_id, {
+    message: "oauth_client_id is required when auth_type is 'oauth'",
+    path: ["oauth_client_id"],
+  })
+  .refine((d) => d.auth_type !== "static" || !d.oauth_client_id, {
+    message: "oauth_client_id only applies when auth_type is 'oauth'",
+    path: ["oauth_client_id"],
+  });
 
 export type CreateMcpServerInput = z.infer<typeof createMcpServerSchema>;
 
-/** Edit a registered MCP server (M4). `slug` is deliberately NOT editable
- *  here — it's the stable bind-key agents reference via `{server_slug}`;
- *  changing it would silently break every agent already bound to it. */
+/** Edit a registered MCP server (M4). `slug` and `auth_type` are deliberately
+ *  NOT editable here: slug is the stable bind-key agents reference via
+ *  `{server_slug}` (changing it would silently break every agent already
+ *  bound to it), and switching auth_type after registration would leave
+ *  stale tokens/credentials of the wrong shape — delete and re-register
+ *  instead, same reasoning as visibility. */
 export const updateMcpServerSchema = z
   .object({
     display_name: z.string().min(1).max(100).optional(),
     server_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL").optional(),
     auth_token: z.string().min(1).max(2000).optional(),
+    oauth_client_id: z.string().min(1).max(500).optional(),
+    oauth_client_secret: z.string().min(1).max(2000).optional(),
+    oauth_scope: z.string().max(500).optional(),
     allowed_tools: z.array(z.string().min(1)).max(50).optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });

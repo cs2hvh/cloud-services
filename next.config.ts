@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
   // Produces a self-contained build under .next/standalone for Docker
   output: 'standalone',
   // Keep native Node.js modules out of the webpack bundle
-  serverExternalPackages: ["ssh2", "ioredis", "bullmq", "pdfjs-dist", "mammoth", "undici"],
+  serverExternalPackages: ["ssh2", "ioredis", "bullmq", "pdfjs-dist", "mammoth", "undici", "@modelcontextprotocol/sdk"],
 
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,

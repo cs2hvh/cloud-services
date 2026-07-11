@@ -69,10 +69,14 @@ export async function attachMcpTools(
       // Decl-level label/allowed_tools ride along as overrides (doc 14 §4) —
       // found live: these were previously dropped entirely (§7 test above).
       config = deps
-        ? await resolveRegistry(deps.supabase, deps.orgId, decl.server_slug, deps.dek, {
-            label: decl.label,
-            allowedTools: decl.allowed_tools,
-          })
+        ? await resolveRegistry(
+            deps.supabase,
+            deps.orgId,
+            decl.server_slug,
+            deps.dek,
+            { label: decl.label, allowedTools: decl.allowed_tools },
+            opts.allowPrivate
+          )
         : null;
     } else {
       config = resolveInlineMcpConfig(decl);

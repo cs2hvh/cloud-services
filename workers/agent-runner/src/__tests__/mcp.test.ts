@@ -247,7 +247,7 @@ describe("attachMcpTools", () => {
     const deps = { supabase: supa, orgId: "org_1", dek: null };
     const d = await attachMcpTools(base, [decl], { timeoutMs: 1000 }, deps, fakeConnect, resolveRegistry);
 
-    expect(resolveRegistry).toHaveBeenCalledWith(supa, "org_1", "github", null, { label: undefined, allowedTools: undefined });
+    expect(resolveRegistry).toHaveBeenCalledWith(supa, "org_1", "github", null, { label: undefined, allowedTools: undefined }, undefined);
     expect(fakeConnect).toHaveBeenCalledTimes(1);
     expect(d.modelTools.some((t) => t.function.name === "mcp__github__search")).toBe(true);
   });
@@ -260,7 +260,7 @@ describe("attachMcpTools", () => {
     const deps = { supabase: supa, orgId: "org_1", dek: null };
     await attachMcpTools(base, [decl], { timeoutMs: 1000 }, deps, fakeConnect, resolveRegistry);
 
-    expect(resolveRegistry).toHaveBeenCalledWith(supa, "org_1", "github", null, { label: "gh", allowedTools: ["search"] });
+    expect(resolveRegistry).toHaveBeenCalledWith(supa, "org_1", "github", null, { label: "gh", allowedTools: ["search"] }, undefined);
   });
 
   it("registry mode: no deps provided → skipped (best-effort), never throws", async () => {

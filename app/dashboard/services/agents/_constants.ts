@@ -162,6 +162,8 @@ export interface McpServerSummary {
   display_name: string;
   visibility: 'private' | 'curated';
   status: 'active' | 'error' | 'disabled';
+  auth_type: 'static' | 'oauth';
+  oauth_status: 'pending' | 'connected' | 'error' | null;
 }
 
 /** The org's registered servers + the platform-curated catalog. */

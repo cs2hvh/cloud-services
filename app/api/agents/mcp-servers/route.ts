@@ -82,19 +82,22 @@ export async function POST(request: NextRequest) {
   }
   const d = parsed.data;
 
-  // Encrypt the token BEFORE it ever reaches the DB (same discipline as byok-keys).
+  const dek = process.env.BYOK_DEK;
+  if ((d.auth_token || d.oauth_client_secret) && !dek) {
+    return NextResponse.json({ error: "Server is not configured to store MCP credentials (BYOK_DEK missing)" }, { status: 500 });
+  }
+
+  // Encrypt whichever credential applies BEFORE it ever reaches the DB (same
+  // discipline as byok-keys). auth_token and oauth_client_secret are mutually
+  // exclusive by the schema's own refine(), so at most one of these runs.
   let authTokenEnc: string | null = null;
-  if (d.auth_token) {
-    const dek = process.env.BYOK_DEK;
-    if (!dek) {
-      return NextResponse.json({ error: "Server is not configured to store MCP auth tokens (BYOK_DEK missing)" }, { status: 500 });
-    }
-    try {
-      authTokenEnc = bytesToPostgresBytea(await encryptAesGcm(d.auth_token, dek));
-    } catch (err) {
-      console.error("[mcp-servers] encryption failed:", err);
-      return NextResponse.json({ error: "Failed to encrypt auth token" }, { status: 500 });
-    }
+  let oauthClientSecretEnc: string | null = null;
+  try {
+    if (d.auth_token) authTokenEnc = bytesToPostgresBytea(await encryptAesGcm(d.auth_token, dek!));
+    if (d.oauth_client_secret) oauthClientSecretEnc = bytesToPostgresBytea(await encryptAesGcm(d.oauth_client_secret, dek!));
+  } catch (err) {
+    console.error("[mcp-servers] encryption failed:", err);
+    return NextResponse.json({ error: "Failed to encrypt credentials" }, { status: 500 });
   }
 
   const result = await AgentcoreMcpServers.create({
@@ -102,7 +105,11 @@ export async function POST(request: NextRequest) {
     slug: d.slug,
     display_name: d.display_name,
     server_url: d.server_url,
+    auth_type: d.auth_type,
     auth_token_enc: authTokenEnc,
+    oauth_client_id: d.oauth_client_id ?? null,
+    oauth_client_secret_enc: oauthClientSecretEnc,
+    oauth_scope: d.oauth_scope ?? null,
     allowed_tools: d.allowed_tools ?? [],
   });
 

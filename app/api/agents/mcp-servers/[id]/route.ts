@@ -61,20 +61,22 @@ export async function PATCH(
   }
   const d = parsed.data;
 
-  // Re-encrypt only if a NEW token was actually provided — omitted means
-  // "leave the existing token alone" (the current one is never returned to
-  // the client, so there's nothing to "keep the same value" with otherwise).
+  // Re-encrypt only if a NEW credential was actually provided — omitted means
+  // "leave the existing one alone" (neither is ever returned to the client,
+  // so there's nothing to "keep the same value" with otherwise).
   let authTokenEnc: string | undefined;
-  if (d.auth_token) {
+  let oauthClientSecretEnc: string | undefined;
+  if (d.auth_token || d.oauth_client_secret) {
     const dek = process.env.BYOK_DEK;
     if (!dek) {
-      return NextResponse.json({ error: "Server is not configured to store MCP auth tokens (BYOK_DEK missing)" }, { status: 500 });
+      return NextResponse.json({ error: "Server is not configured to store MCP credentials (BYOK_DEK missing)" }, { status: 500 });
     }
     try {
-      authTokenEnc = bytesToPostgresBytea(await encryptAesGcm(d.auth_token, dek));
+      if (d.auth_token) authTokenEnc = bytesToPostgresBytea(await encryptAesGcm(d.auth_token, dek));
+      if (d.oauth_client_secret) oauthClientSecretEnc = bytesToPostgresBytea(await encryptAesGcm(d.oauth_client_secret, dek));
     } catch (err) {
       console.error("[mcp-servers] encryption failed:", err);
-      return NextResponse.json({ error: "Failed to encrypt auth token" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to encrypt credentials" }, { status: 500 });
     }
   }
 
@@ -83,6 +85,9 @@ export async function PATCH(
     server_url: d.server_url,
     allowed_tools: d.allowed_tools,
     auth_token_enc: authTokenEnc,
+    oauth_client_id: d.oauth_client_id,
+    oauth_client_secret_enc: oauthClientSecretEnc,
+    oauth_scope: d.oauth_scope,
   });
 
   if (!result.success) {

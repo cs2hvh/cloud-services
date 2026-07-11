@@ -113,6 +113,79 @@ describe("refreshAllMcpServers", () => {
     expect(updates.map((u) => u.id).sort()).toEqual(["bad", "good"]);
   });
 
+  // ── OAuth-mode rows (M6 follow-up: this sweep predated OAuth and, before
+  // the fix, would health-check every oauth server with no Authorization
+  // header at all — a guaranteed, spurious failure). ────────────────────────
+
+  it("skips a pending (never-connected) OAuth server instead of attempting a doomed connect", async () => {
+    const { client, updates } = fakeSupabase([
+      { id: "o1", server_url: "https://needs-oauth.example.com/mcp", auth_token_enc: null, auth_type: "oauth", oauth_status: "pending" },
+    ]);
+    const openClient = fakeOpenClient(async () => ({ listTools: async () => [], callTool: async () => ({}), close: async () => undefined }));
+
+    const summary = await refreshAllMcpServers({ supabase: client, dek: "irrelevant", timeoutMs: 1000, allowPrivate: true, openClient });
+
+    expect(summary).toEqual({ checked: 1, ok: 0, failed: 0 }); // seen, not attempted — neither ok nor failed
+    expect(openClient).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(0); // status/oauth_status left untouched
+  });
+
+  it("health-checks a connected OAuth server by reusing the real resolve-and-refresh path", async () => {
+    const dek = Buffer.alloc(32, 5).toString("base64");
+    const { encryptMcpToken } = await import("../tools/mcp-crypto.js");
+    const { client, updates } = fakeSupabase([
+      {
+        id: "o2",
+        server_url: "https://needs-oauth.example.com/mcp",
+        auth_token_enc: null,
+        auth_type: "oauth",
+        oauth_status: "connected",
+        oauth_client_id: "client-1",
+        oauth_client_secret_enc: null,
+        oauth_access_token_enc: await encryptMcpToken("valid-access-token", dek),
+        oauth_refresh_token_enc: null,
+        oauth_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // still valid, no refresh needed
+        oauth_authorization_server_url: "https://auth.example.com",
+      },
+    ]);
+    const openClient = fakeOpenClient(async (_url: string, token?: string) => {
+      expect(token).toBe("valid-access-token"); // proves the resolved OAuth token actually reached the connect call
+      return { listTools: async () => [{ name: "ping" }], callTool: async () => ({}), close: async () => undefined };
+    });
+
+    const summary = await refreshAllMcpServers({ supabase: client, dek, timeoutMs: 1000, allowPrivate: true, openClient });
+
+    expect(summary).toEqual({ checked: 1, ok: 1, failed: 0 });
+    expect(updates.find((u) => u.id === "o2")).toMatchObject({ patch: { status: "active" } });
+  });
+
+  it("marks an OAuth server error when its refresh token is no longer valid, without crashing the sweep", async () => {
+    const dek = Buffer.alloc(32, 5).toString("base64");
+    const { encryptMcpToken } = await import("../tools/mcp-crypto.js");
+    const { client, updates } = fakeSupabase([
+      {
+        id: "o3",
+        server_url: "https://needs-oauth.example.com/mcp",
+        auth_token_enc: null,
+        auth_type: "oauth",
+        oauth_status: "connected",
+        oauth_client_id: "client-1",
+        oauth_client_secret_enc: null,
+        oauth_access_token_enc: await encryptMcpToken("expired-access-token", dek),
+        oauth_refresh_token_enc: null, // no refresh token to fall back on -> resolveOAuthToken returns null
+        oauth_token_expires_at: new Date(Date.now() - 1000).toISOString(), // already expired
+        oauth_authorization_server_url: "https://auth.example.com",
+      },
+    ]);
+    const openClient = fakeOpenClient(async () => ({ listTools: async () => [], callTool: async () => ({}), close: async () => undefined }));
+
+    const summary = await refreshAllMcpServers({ supabase: client, dek, timeoutMs: 1000, allowPrivate: true, openClient });
+
+    expect(summary).toEqual({ checked: 1, ok: 0, failed: 1 });
+    expect(openClient).not.toHaveBeenCalled(); // never even attempts to connect without a usable token
+    expect(updates.find((u) => u.id === "o3")).toMatchObject({ patch: { status: "error", last_error: "OAuth token unavailable or refresh failed" } });
+  });
+
   it("returns a zero summary (no crash) when the list query itself fails", async () => {
     const client = {
       schema: () => ({

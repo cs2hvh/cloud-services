@@ -8,11 +8,21 @@
  * periodically re-checks every registered server (private + curated) and
  * updates status/last_error/tool_schemas/schemas_refreshed_at accordingly.
  *
- * Deliberately does NOT change the per-run adapter (mcp.ts / mcp-attach.ts /
- * mcp-registry.ts stay frozen, §2b rule 3) — this is a separate, additive,
- * out-of-band job. It reuses the SAME quarantined SDK wrapper (mcp-client.ts)
- * and the SAME crypto (mcp-crypto.ts) and SSRF guard (ssrf.ts), so no new
- * surface touches the SDK or key material (§2b rules 2/4).
+ * Deliberately does NOT change the per-run adapter (mcp.ts / mcp-attach.ts stay
+ * frozen, §2b rule 3) — this is a separate, additive, out-of-band job. It
+ * reuses the SAME quarantined SDK wrapper (mcp-client.ts), the SAME crypto
+ * (mcp-crypto.ts), the SAME SSRF guard (ssrf.ts), and — since M6 — the SAME
+ * OAuth resolve-and-refresh logic (mcp-registry.ts's `resolveOAuthToken`) so
+ * no new surface touches the SDK or key material (§2b rules 2/4) and OAuth
+ * resolution exists in exactly one place, not two.
+ *
+ * **Found on review (2026-07-10, M6 follow-up):** this job predates OAuth and,
+ * before this fix, only ever read `auth_token_enc` — an oauth-mode server
+ * would connect with NO Authorization header at all on every sweep and get
+ * marked `status: 'error'` regardless of whether its OAuth credentials were
+ * actually fine, a false health-check failure for every OAuth server, every
+ * ~30 minutes. Fixed by branching on `auth_type` exactly like
+ * `resolveRegistryMcpConfig` does for the per-run path.
  *
  * `tool_schemas` is written here but not yet READ anywhere at run time (the
  * adapter still does a fresh connect+listTools every run) — that's the
@@ -22,11 +32,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertSafeWebhookUrl } from "./ssrf.js";
 import { decryptMcpToken } from "./mcp-crypto.js";
+import { resolveOAuthToken, type OAuthTokenRow } from "./mcp-registry.js";
 import { openMcpClient, type McpToolInfo } from "./mcp-client.js";
 
-interface McpServerRow {
-  id: string;
-  server_url: string;
+interface McpServerRow extends OAuthTokenRow {
+  oauth_status: "pending" | "connected" | "error" | null;
   auth_token_enc: string | null;
 }
 
@@ -66,7 +76,9 @@ export async function refreshAllMcpServers(deps: RefreshDeps): Promise<RefreshSu
   const { data, error } = await deps.supabase
     .schema("agentcore")
     .from("mcp_servers")
-    .select("id, server_url, auth_token_enc")
+    .select(
+      "id, server_url, auth_token_enc, auth_type, oauth_client_id, oauth_client_secret_enc, oauth_access_token_enc, oauth_refresh_token_enc, oauth_token_expires_at, oauth_authorization_server_url, oauth_status"
+    )
     .neq("status", "disabled")
     .returns<McpServerRow[]>();
 
@@ -78,6 +90,12 @@ export async function refreshAllMcpServers(deps: RefreshDeps): Promise<RefreshSu
   let ok = 0;
   let failed = 0;
   for (const row of data) {
+    // A registered-but-not-yet-connected OAuth server has no credentials to
+    // health-check at all (the customer hasn't clicked "Connect" yet) —
+    // attempting a connect here would just be another guaranteed, spurious
+    // failure. Leave its status alone until it's actually connected once.
+    if (row.auth_type === "oauth" && row.oauth_status !== "connected" && row.oauth_status !== "error") continue;
+
     // Sequential, not Promise.all: this is a background sweep, not a
     // request path — no latency pressure, and it avoids opening N concurrent
     // connections to N different (untrusted) remote servers at once.
@@ -98,7 +116,16 @@ async function refreshOne(
     await assertSafeWebhookUrl(row.server_url, { allowPrivate: deps.allowPrivate });
 
     let token: string | undefined;
-    if (row.auth_token_enc) {
+    if (row.auth_type === "oauth") {
+      if (!deps.dek) throw new Error("no DEK configured to resolve OAuth credentials");
+      // Reuses the exact per-run resolve-and-refresh logic (mcp-registry.ts)
+      // — a health-check that finds an expired token refreshes it too, same
+      // as a real run would, rather than reporting a spurious failure for
+      // something a run would have silently self-healed.
+      const resolved = await resolveOAuthToken(deps.supabase, row, deps.dek, deps.allowPrivate);
+      if (!resolved) throw new Error("OAuth token unavailable or refresh failed");
+      token = resolved;
+    } else if (row.auth_token_enc) {
       if (!deps.dek) throw new Error("no DEK configured to decrypt the stored auth token");
       token = await decryptMcpToken(row.auth_token_enc, deps.dek);
     }

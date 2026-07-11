@@ -395,14 +395,19 @@ export const AgentcoreMemories = {
 // Encryption/decryption of auth_token happens in the ROUTE (mirrors byok-keys),
 // not here — this module just stores/reads whatever ciphertext it's given.
 
-/** Masked row shape for list/read responses — auth_token_enc is NEVER returned. */
+/** Masked row shape for list/read responses — auth_token_enc / oauth_client_secret_enc
+ *  / oauth_access_token_enc / oauth_refresh_token_enc are NEVER returned. */
 export interface AgentcoreMcpServerRow {
   id: string;
   org_id: string | null;
   slug: string;
   display_name: string;
   server_url: string;
+  auth_type: "static" | "oauth";
   has_token: boolean; // derived: auth_token_enc IS NOT NULL, never the ciphertext itself
+  oauth_client_id: string | null;
+  oauth_status: "pending" | "connected" | "error" | null;
+  oauth_last_error: string | null;
   allowed_tools: string[];
   visibility: "private" | "curated";
   status: "active" | "error" | "disabled";
@@ -416,15 +421,22 @@ export interface AgentcoreMcpServerInsert {
   slug: string;
   display_name: string;
   server_url: string;
+  auth_type?: "static" | "oauth";
   auth_token_enc?: string | null; // pre-encrypted (bytea hex), or absent
+  oauth_client_id?: string | null;
+  oauth_client_secret_enc?: string | null;
+  oauth_scope?: string | null;
   allowed_tools?: string[];
 }
 
-/** slug/visibility deliberately excluded — see AgentcoreMcpServers.update(). */
+/** slug/visibility/auth_type deliberately excluded — see AgentcoreMcpServers.update(). */
 export interface AgentcoreMcpServerUpdate {
   display_name?: string;
   server_url?: string;
   auth_token_enc?: string | null;
+  oauth_client_id?: string;
+  oauth_client_secret_enc?: string | null;
+  oauth_scope?: string | null;
   allowed_tools?: string[];
 }
 
@@ -432,6 +444,10 @@ interface McpServerDbRow {
   id: string;
   org_id: string | null;
   slug: string;
+  auth_type: "static" | "oauth";
+  oauth_client_id: string | null;
+  oauth_status: "pending" | "connected" | "error" | null;
+  oauth_last_error: string | null;
   display_name: string;
   server_url: string;
   auth_token_enc: string | null;
@@ -450,7 +466,11 @@ function maskMcpServer(row: McpServerDbRow): AgentcoreMcpServerRow {
     slug: row.slug,
     display_name: row.display_name,
     server_url: row.server_url,
+    auth_type: row.auth_type,
     has_token: row.auth_token_enc != null,
+    oauth_client_id: row.oauth_client_id,
+    oauth_status: row.oauth_status,
+    oauth_last_error: row.oauth_last_error,
     allowed_tools: row.allowed_tools ?? [],
     visibility: row.visibility,
     status: row.status,
@@ -461,7 +481,7 @@ function maskMcpServer(row: McpServerDbRow): AgentcoreMcpServerRow {
 }
 
 const MCP_SERVER_COLS =
-  "id, org_id, slug, display_name, server_url, auth_token_enc, allowed_tools, visibility, status, last_error, created_at, updated_at";
+  "id, org_id, slug, display_name, server_url, auth_type, auth_token_enc, oauth_client_id, oauth_status, oauth_last_error, allowed_tools, visibility, status, last_error, created_at, updated_at";
 
 export interface McpServerMutationResult {
   success: boolean;
@@ -500,7 +520,14 @@ export const AgentcoreMcpServers = {
         slug: input.slug,
         display_name: input.display_name,
         server_url: input.server_url,
+        auth_type: input.auth_type ?? "static",
         auth_token_enc: input.auth_token_enc ?? null,
+        oauth_client_id: input.oauth_client_id ?? null,
+        oauth_client_secret_enc: input.oauth_client_secret_enc ?? null,
+        oauth_scope: input.oauth_scope ?? null,
+        // A freshly-registered oauth server has no tokens yet — 'pending'
+        // until the customer completes the authorize→callback consent flow.
+        oauth_status: input.auth_type === "oauth" ? "pending" : null,
         allowed_tools: input.allowed_tools ?? [],
         visibility: "private",
       })
@@ -531,6 +558,64 @@ export const AgentcoreMcpServers = {
     if (error) return { success: false, code: error.code, error: error.message };
     if (!data) return { success: false, error: "not_found" };
     return { success: true, data: maskMcpServer(data) };
+  },
+
+  /** Unmasked read for the OAuth authorize/callback routes ONLY — the only
+   *  two places in the app that legitimately need oauth_client_id +
+   *  the encrypted client secret (to build client info for the token
+   *  exchange). Every other caller goes through list/create/update's masked
+   *  shape. Org-scoped like every other query here. */
+  async getForOAuthFlow(
+    orgId: string,
+    id: string
+  ): Promise<{
+    id: string;
+    slug: string;
+    server_url: string;
+    auth_type: "static" | "oauth";
+    oauth_client_id: string | null;
+    oauth_client_secret_enc: string | null;
+    oauth_scope: string | null;
+    oauth_authorization_server_url: string | null;
+    oauth_resource_metadata: unknown;
+  } | null> {
+    const { data } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .select(
+        "id, slug, server_url, auth_type, oauth_client_id, oauth_client_secret_enc, oauth_scope, oauth_authorization_server_url, oauth_resource_metadata"
+      )
+      .eq("org_id", orgId)
+      .eq("id", id)
+      .maybeSingle();
+    return data ?? null;
+  },
+
+  /** Persists the result of a completed (or failed) OAuth token exchange —
+   *  called only by the /oauth/callback route. Caches the discovered
+   *  authorization-server URL + resource metadata so a later refresh doesn't
+   *  need to re-run RFC 9728/8414 discovery. */
+  async saveOAuthTokens(
+    orgId: string,
+    id: string,
+    patch: {
+      oauth_access_token_enc: string | null;
+      oauth_refresh_token_enc: string | null;
+      oauth_token_expires_at: string | null;
+      oauth_authorization_server_url?: string;
+      oauth_resource_metadata?: unknown;
+      oauth_status: "connected" | "error";
+      oauth_last_error: string | null;
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    const { error } = await client()
+      .schema("agentcore")
+      .from("mcp_servers")
+      .update(patch)
+      .eq("org_id", orgId)
+      .eq("id", id);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
   },
 
   /** Hard delete, org-scoped — a curated (org_id NULL) row can never match, so

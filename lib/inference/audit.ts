@@ -36,6 +36,7 @@ export type InferenceAuditAction =
   | "mcp_server.registered"
   | "mcp_server.updated"
   | "mcp_server.removed"
+  | "mcp_server.oauth_connected"
   | "finetune.created"
   | "finetune.cancelled"
   | "deployment.created"

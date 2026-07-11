@@ -58,7 +58,11 @@ interface McpServer {
   slug: string;
   display_name: string;
   server_url: string;
+  auth_type: 'static' | 'oauth';
   has_token: boolean;
+  oauth_client_id: string | null;
+  oauth_status: 'pending' | 'connected' | 'error' | null;
+  oauth_last_error: string | null;
   allowed_tools: string[];
   visibility: 'private' | 'curated';
   status: 'active' | 'error' | 'disabled';
@@ -66,8 +70,14 @@ interface McpServer {
   created_at: string;
 }
 
-const emptyForm = { slug: '', display_name: '', server_url: '', auth_token: '', allowed_tools: '' };
-const emptyEditForm = { display_name: '', server_url: '', auth_token: '', allowed_tools: '' };
+const emptyForm = {
+  slug: '', display_name: '', server_url: '', auth_type: 'static' as 'static' | 'oauth',
+  auth_token: '', oauth_client_id: '', oauth_client_secret: '', oauth_scope: '', allowed_tools: '',
+};
+const emptyEditForm = {
+  display_name: '', server_url: '', auth_token: '',
+  oauth_client_id: '', oauth_client_secret: '', oauth_scope: '', allowed_tools: '',
+};
 
 export default function McpServersPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -97,9 +107,25 @@ export default function McpServersPage() {
 
   useEffect(() => { load(); }, []);
 
+  // The OAuth callback route redirects back here with ?mcp_oauth=connected|error
+  // (see app/api/agents/mcp-servers/oauth/callback/route.ts) — surface it once,
+  // then strip it from the URL so a page refresh doesn't re-toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('mcp_oauth');
+    if (!result) return;
+    if (result === 'connected') toast.success('MCP server connected via OAuth');
+    else toast.error(`OAuth connection failed${params.get('reason') ? `: ${params.get('reason')}` : ''}`);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
+
   const create = async () => {
     if (!form.slug.trim() || !form.display_name.trim() || !form.server_url.trim()) {
       toast.error('Slug, name, and server URL are required');
+      return;
+    }
+    if (form.auth_type === 'oauth' && !form.oauth_client_id.trim()) {
+      toast.error('OAuth client ID is required');
       return;
     }
     setCreating(true);
@@ -112,7 +138,13 @@ export default function McpServersPage() {
           slug: form.slug.trim(),
           display_name: form.display_name.trim(),
           server_url: form.server_url.trim(),
-          ...(form.auth_token.trim() ? { auth_token: form.auth_token.trim() } : {}),
+          auth_type: form.auth_type,
+          ...(form.auth_type === 'static' && form.auth_token.trim() ? { auth_token: form.auth_token.trim() } : {}),
+          ...(form.auth_type === 'oauth' ? {
+            oauth_client_id: form.oauth_client_id.trim(),
+            ...(form.oauth_client_secret.trim() ? { oauth_client_secret: form.oauth_client_secret.trim() } : {}),
+            ...(form.oauth_scope.trim() ? { oauth_scope: form.oauth_scope.trim() } : {}),
+          } : {}),
           ...(allowed_tools.length ? { allowed_tools } : {}),
         }),
       });
@@ -135,6 +167,9 @@ export default function McpServersPage() {
       display_name: s.display_name,
       server_url: s.server_url,
       auth_token: '', // never returned by the API — blank means "leave unchanged"
+      oauth_client_id: s.oauth_client_id ?? '',
+      oauth_client_secret: '', // never returned — blank means "leave unchanged"
+      oauth_scope: '',
       allowed_tools: s.allowed_tools.join(', '),
     });
   };
@@ -156,6 +191,11 @@ export default function McpServersPage() {
           server_url: editForm.server_url.trim(),
           allowed_tools,
           ...(editForm.auth_token.trim() ? { auth_token: editForm.auth_token.trim() } : {}),
+          ...(editServer.auth_type === 'oauth' ? {
+            ...(editForm.oauth_client_id.trim() ? { oauth_client_id: editForm.oauth_client_id.trim() } : {}),
+            ...(editForm.oauth_client_secret.trim() ? { oauth_client_secret: editForm.oauth_client_secret.trim() } : {}),
+            ...(editForm.oauth_scope.trim() ? { oauth_scope: editForm.oauth_scope.trim() } : {}),
+          } : {}),
         }),
       });
       const data = await r.json();
@@ -258,7 +298,13 @@ export default function McpServersPage() {
               <div className={`${MONO} text-[12.5px] font-semibold text-white truncate`}>
                 {s.display_name}
                 <span className={`${MONO} block text-[10px] text-white/35 mt-0.5 uppercase tracking-[0.04em]`}>
-                  {s.slug} · {s.has_token ? 'token set' : 'no auth'}
+                  {s.slug} · {s.auth_type === 'oauth' ? (
+                    <span style={{ color: s.oauth_status === 'connected' ? '#4ade80' : s.oauth_status === 'error' ? '#f87171' : '#a1a1aa' }}>
+                      oauth: {s.oauth_status ?? 'pending'}
+                    </span>
+                  ) : (
+                    s.has_token ? 'token set' : 'no auth'
+                  )}
                 </span>
               </div>
               <div className={`${MONO} text-[11.5px] text-white/55 truncate`}>{s.server_url}</div>
@@ -288,6 +334,12 @@ export default function McpServersPage() {
               <div className="flex flex-wrap justify-end gap-1.5">
                 {s.org_id ? (
                   <>
+                    {s.auth_type === 'oauth' && s.oauth_status !== 'connected' && (
+                      <RowActionButton onClick={() => { window.location.href = `/api/agents/mcp-servers/${s.id}/oauth/authorize`; }}>
+                        <Plug className="h-3 w-3" />
+                        Connect
+                      </RowActionButton>
+                    )}
                     <RowActionButton onClick={() => openEdit(s)}>
                       <Pencil className="h-3 w-3" />
                       Edit
@@ -356,15 +408,65 @@ export default function McpServersPage() {
                 className="bg-white/[0.02] border-white/[0.08] font-mono"
               />
             </Field>
-            <Field label="Auth token (optional)">
-              <Input
-                type="password"
-                value={form.auth_token}
-                onChange={(e) => setForm({ ...form, auth_token: e.target.value })}
-                placeholder="Bearer token, if the server requires auth"
-                className="bg-white/[0.02] border-white/[0.08] font-mono"
-              />
+            <Field label="Authentication">
+              <div className="flex gap-1.5">
+                {(['static', 'oauth'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm({ ...form, auth_type: t })}
+                    className={`${MONO} px-2.5 py-1 rounded text-[10.5px] uppercase tracking-[0.1em] border transition-colors ${
+                      form.auth_type === t
+                        ? 'border-[#33adff]/40 bg-[#33adff]/10 text-[#33adff]'
+                        : 'border-white/[0.08] text-white/45 hover:text-white/70'
+                    }`}
+                  >
+                    {t === 'static' ? 'Bearer token' : 'OAuth 2.1'}
+                  </button>
+                ))}
+              </div>
             </Field>
+            {form.auth_type === 'static' ? (
+              <Field label="Auth token (optional)">
+                <Input
+                  type="password"
+                  value={form.auth_token}
+                  onChange={(e) => setForm({ ...form, auth_token: e.target.value })}
+                  placeholder="Bearer token, if the server requires auth"
+                  className="bg-white/[0.02] border-white/[0.08] font-mono"
+                />
+              </Field>
+            ) : (
+              <>
+                <Field label="OAuth client ID">
+                  <Input
+                    value={form.oauth_client_id}
+                    onChange={(e) => setForm({ ...form, oauth_client_id: e.target.value })}
+                    placeholder="From an OAuth app you created on the provider"
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                <Field label="OAuth client secret (optional for public clients)">
+                  <Input
+                    type="password"
+                    value={form.oauth_client_secret}
+                    onChange={(e) => setForm({ ...form, oauth_client_secret: e.target.value })}
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                <Field label="Scope (optional)">
+                  <Input
+                    value={form.oauth_scope}
+                    onChange={(e) => setForm({ ...form, oauth_scope: e.target.value })}
+                    placeholder="e.g. repo read:org"
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                <p className={`${MONO} text-[10.5px] text-white/40`}>
+                  After registering, click &quot;Connect&quot; on this server to complete the consent flow.
+                </p>
+              </>
+            )}
             <Field label="Allowed tools (optional)">
               <Input
                 value={form.allowed_tools}
@@ -415,15 +517,50 @@ export default function McpServersPage() {
                 className="bg-white/[0.02] border-white/[0.08] font-mono"
               />
             </Field>
-            <Field label={`Auth token ${editServer?.has_token ? '(set — leave blank to keep it)' : '(optional)'}`}>
-              <Input
-                type="password"
-                value={editForm.auth_token}
-                onChange={(e) => setEditForm({ ...editForm, auth_token: e.target.value })}
-                placeholder={editServer?.has_token ? '••••••••' : 'Bearer token, if the server requires auth'}
-                className="bg-white/[0.02] border-white/[0.08] font-mono"
-              />
-            </Field>
+            {editServer?.auth_type === 'oauth' ? (
+              <>
+                <Field label={`OAuth client ID ${editServer.oauth_client_id ? '(leave blank to keep it)' : ''}`}>
+                  <Input
+                    value={editForm.oauth_client_id}
+                    onChange={(e) => setEditForm({ ...editForm, oauth_client_id: e.target.value })}
+                    placeholder={editServer.oauth_client_id ?? 'From an OAuth app you created on the provider'}
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                <Field label="OAuth client secret (set — leave blank to keep it)">
+                  <Input
+                    type="password"
+                    value={editForm.oauth_client_secret}
+                    onChange={(e) => setEditForm({ ...editForm, oauth_client_secret: e.target.value })}
+                    placeholder="••••••••"
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                <Field label="Scope (leave blank to keep it)">
+                  <Input
+                    value={editForm.oauth_scope}
+                    onChange={(e) => setEditForm({ ...editForm, oauth_scope: e.target.value })}
+                    placeholder="e.g. repo read:org"
+                    className="bg-white/[0.02] border-white/[0.08] font-mono"
+                  />
+                </Field>
+                {editServer.oauth_status !== 'connected' && (
+                  <p className={`${MONO} text-[10.5px] text-white/40`}>
+                    Changed the client ID or secret? Click &quot;Connect&quot; again after saving to re-authorize.
+                  </p>
+                )}
+              </>
+            ) : (
+              <Field label={`Auth token ${editServer?.has_token ? '(set — leave blank to keep it)' : '(optional)'}`}>
+                <Input
+                  type="password"
+                  value={editForm.auth_token}
+                  onChange={(e) => setEditForm({ ...editForm, auth_token: e.target.value })}
+                  placeholder={editServer?.has_token ? '••••••••' : 'Bearer token, if the server requires auth'}
+                  className="bg-white/[0.02] border-white/[0.08] font-mono"
+                />
+              </Field>
+            )}
             <Field label="Allowed tools (optional)">
               <Input
                 value={editForm.allowed_tools}
