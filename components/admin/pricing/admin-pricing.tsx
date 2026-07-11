@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Tag, Gift, Package, Cpu } from "lucide-react";
+import { Tag, Gift, Package, Cpu, Gamepad2 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import CategoriesTab from "./categories-tab";
 import PromosTab from "./promos-tab";
 import PlansTab from "./plans-tab";
 import GpuTab from "./gpu-tab";
+import GameTab from "./game-tab";
 
 interface PageProps {
   categories: Tables<"pricing_categories">[];
@@ -45,7 +46,7 @@ export default function AdminPricing({ categories, promos, products }: PageProps
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
+          <TabsList className="w-full grid grid-cols-5 gap-2 bg-transparent p-0 h-auto mb-6">
             <TabsTrigger
               value="categories"
               className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -74,6 +75,13 @@ export default function AdminPricing({ categories, promos, products }: PageProps
               <Cpu className="h-4 w-4 mr-2" />
               GPU Markup
             </TabsTrigger>
+            <TabsTrigger
+              value="game"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Gamepad2 className="h-4 w-4 mr-2" />
+              Game Plans
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="categories" className="mt-0">
@@ -90,6 +98,10 @@ export default function AdminPricing({ categories, promos, products }: PageProps
 
           <TabsContent value="gpu" className="mt-0">
             <GpuTab />
+          </TabsContent>
+
+          <TabsContent value="game" className="mt-0">
+            <GameTab />
           </TabsContent>
         </Tabs>
       </motion.div>

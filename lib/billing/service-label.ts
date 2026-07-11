@@ -15,6 +15,7 @@ const SERVICE_LABEL: Record<string, string> = {
   inference_finetune: "Fine-tuning",
   inference_serving: "Model serving",
   inference_deployment: "Deployment",
+  game_server: "Game server",
 };
 
 export function serviceLabel(type: string): string {

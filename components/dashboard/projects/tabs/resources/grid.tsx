@@ -4,7 +4,6 @@ import {
   Cpu,
   Database,
   HardDrive,
-  ExternalLink,
   Gamepad2,
   Clock,
 } from "lucide-react";
@@ -13,12 +12,10 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getDaysRemaining } from "@/lib/utils";
 
@@ -195,22 +192,6 @@ const GameServerGrid = ({
                 </div>
               )}
             </CardContent>
-
-            <CardFooter className="pt-2 gap-2">
-              <Button
-                className="flex-1 group-hover:bg-orange-600 group-hover:text-white transition-colors"
-                size="sm"
-                onClick={() =>
-                  window.open(
-                    `https://panel.hav0k.dev/server/${server.identifier}`,
-                    "_blank"
-                  )
-                }
-              >
-                Open Panel
-                <ExternalLink className="ml-2 h-3.5 w-3.5" />
-              </Button>
-            </CardFooter>
           </Card>
         ))}
       </div>

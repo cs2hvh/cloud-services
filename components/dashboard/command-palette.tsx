@@ -51,6 +51,8 @@ const DESTINATIONS: Dest[] = [
     { label: "New Agent", href: "/dashboard/services/ai-agents/new", group: "AI Agents", icon: Plus },
     { label: "Knowledge Bases", href: "/dashboard/services/ai-agents/knowledge-bases", group: "AI Agents", icon: Database },
 
+    { label: "Game Servers", href: "/dashboard/services/game", group: "Services", icon: Boxes, keywords: "minecraft rust cs2 fivem gaming" },
+    { label: "Deploy Game Server", href: "/dashboard/services/game/deploy", group: "Services", icon: Plus, keywords: "minecraft rust new game" },
     { label: "Database", href: "/dashboard/services/database", group: "Services", icon: Database, keywords: "postgres sql" },
     { label: "Kubernetes", href: "/dashboard/services/kubernetes", group: "Services", icon: Boxes, keywords: "k8s clusters" },
     { label: "Object Storage", href: "/dashboard/services/object-storage", group: "Services", icon: HardDrive, keywords: "s3 buckets" },

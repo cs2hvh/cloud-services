@@ -4,10 +4,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 // and read/written only via the service-role client.
 
 const GPU_DEPLOY_KEY = "gpu_deploy_enabled";
+const GAME_DEPLOY_KEY = "game_deploy_enabled";
 
 // Tiny in-memory cache so the inventory poll (~6s) and create path don't hit the
 // DB on every call. Short TTL keeps the admin toggle near-instant.
 let gpuCache: { value: boolean; at: number } | null = null;
+let gameCache: { value: boolean; at: number } | null = null;
 const TTL_MS = 10_000;
 
 function now(): number {
@@ -44,6 +46,58 @@ export async function getGpuDeployEnabled(): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+/** Whether customers may currently order game servers. Fail-open like GPU. */
+export async function getGameDeployEnabled(): Promise<boolean> {
+  if (gameCache && now() - gameCache.at < TTL_MS) return gameCache.value;
+  try {
+    const supabase = await createServiceClient();
+    const { data, error } = await (supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            k: string,
+            v: string,
+          ) => { maybeSingle: () => Promise<{ data: { value: unknown } | null; error: unknown }> };
+        };
+      };
+    })
+      .from("platform_settings")
+      .select("value")
+      .eq("key", GAME_DEPLOY_KEY)
+      .maybeSingle();
+
+    const enabled = error || data == null ? true : data.value !== false;
+    gameCache = { value: enabled, at: now() };
+    return enabled;
+  } catch {
+    return true;
+  }
+}
+
+/** Set the game-server ordering availability switch (admin only). */
+export async function setGameDeployEnabled(
+  enabled: boolean,
+  userId?: string | null,
+): Promise<void> {
+  const supabase = await createServiceClient();
+  await (supabase as unknown as {
+    from: (t: string) => {
+      upsert: (row: Record<string, unknown>, opts: { onConflict: string }) => Promise<unknown>;
+    };
+  })
+    .from("platform_settings")
+    .upsert(
+      {
+        key: GAME_DEPLOY_KEY,
+        value: enabled,
+        updated_at: new Date().toISOString(),
+        updated_by: userId ?? null,
+      },
+      { onConflict: "key" },
+    );
+  gameCache = { value: enabled, at: now() };
 }
 
 /** Set the GPU deployment availability switch (admin only). */

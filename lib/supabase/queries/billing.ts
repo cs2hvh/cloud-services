@@ -127,7 +127,8 @@ type BillableServiceType =
   | "inference_deployment"
   | "inference_vector"
   | "compute"
-  | "custom_image";
+  | "custom_image"
+  | "game_server";
 
 type TransactionHistoryMode = "unknown" | "legacy" | "service_ledger";
 const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;

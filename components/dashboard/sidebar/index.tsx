@@ -19,6 +19,7 @@ import {
     Atom,
     Bell,
     ChevronDown,
+    Gamepad2,
     LogOut,
     Menu,
     Search,
@@ -302,6 +303,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     const [projectsExpanded, setProjectsExpanded] = useState(true);
     const [computeExpanded, setComputeExpanded] = useState(pathname.startsWith("/dashboard/services/compute"));
     const [gpuExpanded, setGpuExpanded] = useState(pathname.startsWith("/dashboard/services/gpu"));
+    const [gameExpanded, setGameExpanded] = useState(pathname.startsWith("/dashboard/services/game"));
     const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.startsWith("/dashboard/services/ai-agents"));
     const [inferenceExpanded, setInferenceExpanded] = useState(pathname.startsWith("/dashboard/services/inference"));
     const [domainsExpanded, setDomainsExpanded] = useState(pathname.startsWith("/dashboard/domains"));
@@ -315,6 +317,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     useEffect(() => {
         if (pathname.startsWith("/dashboard/services/compute")) setComputeExpanded(true);
         if (pathname.startsWith("/dashboard/services/gpu")) setGpuExpanded(true);
+        if (pathname.startsWith("/dashboard/services/game")) setGameExpanded(true);
         if (pathname.startsWith("/dashboard/services/ai-agents")) setAiAgentsExpanded(true);
         if (pathname.startsWith("/dashboard/services/inference")) setInferenceExpanded(true);
         if (pathname.startsWith("/dashboard/domains")) setDomainsExpanded(true);
@@ -362,6 +365,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Deploy Pod", href: "/dashboard/services/gpu/deploy", icon: Plus, matchPrefix: true },
             { label: "Storage", href: "/dashboard/services/gpu/storage", icon: HardDrive, matchPrefix: true },
             { label: "Clusters", href: "/dashboard/services/gpu/enterprise", icon: Rocket, matchPrefix: true },
+        ],
+    };
+
+    const gameGroup: NavGroup = {
+        label: "Game Servers",
+        icon: Gamepad2,
+        href: "/dashboard/services/game",
+        children: [
+            { label: "My Servers", href: "/dashboard/services/game", icon: LayoutDashboard },
+            { label: "Deploy Server", href: "/dashboard/services/game/deploy", icon: Plus, matchPrefix: true },
         ],
     };
 
@@ -448,6 +461,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Platform Apps", href: "/dashboard/admin/platform-apps", icon: Rocket, matchPrefix: true },
             { label: "Plan Pricing", href: "/dashboard/admin/pricing/plans", icon: BadgeDollarSign, matchPrefix: true },
             { label: "GPU Stock", href: "/dashboard/admin/gpu", icon: GpuCloudIcon, matchPrefix: true },
+            { label: "Game Hosts", href: "/dashboard/admin/game", icon: Gamepad2, matchPrefix: true },
             { label: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket, matchPrefix: true },
             { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
             { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
@@ -602,6 +616,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             pathname={pathname}
                             expanded={gpuExpanded}
                             onToggle={() => setGpuExpanded((p) => !p)}
+                        />
+                        <GroupRow
+                            group={gameGroup}
+                            pathname={pathname}
+                            expanded={gameExpanded}
+                            onToggle={() => setGameExpanded((p) => !p)}
                         />
                         {/* A.I. Labs brought up — grouped with the other compute/AI verticals */}
                         <GroupRow group={inferenceGroup} pathname={pathname} expanded={inferenceExpanded} onToggle={() => setInferenceExpanded((p) => !p)} />
