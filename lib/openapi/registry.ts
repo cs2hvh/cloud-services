@@ -6,6 +6,7 @@ import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-open
 
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
 import { registerBillingPaths } from '@/lib/openapi/paths/billing';
+import { registerComputePaths } from '@/lib/openapi/paths/compute';
 import { registerDatabasePaths } from '@/lib/openapi/paths/databases';
 import { registerDomainPaths } from '@/lib/openapi/paths/domains';
 import { registerKubernetesPaths } from '@/lib/openapi/paths/kubernetes';
@@ -29,6 +30,7 @@ registerProjectPaths(registry);
 registerResourcePaths(registry);
 registerStoragePaths(registry);
 registerNetworkPaths(registry);
+registerComputePaths(registry);
 registerDatabasePaths(registry);
 registerKubernetesPaths(registry);
 registerDomainPaths(registry);
@@ -135,6 +137,10 @@ For more examples, see the API reference below.
       {
         name: 'Resources',
         description: 'List available product plans/resources and filter by type.',
+      },
+      {
+        name: 'Compute',
+        description: 'Manage virtual server instances: create, power, resize, rebuild, backups, and the region/type/image catalog.',
       },
       {
         name: 'Databases',

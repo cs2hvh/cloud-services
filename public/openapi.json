@@ -34,6 +34,10 @@
       "description": "List available product plans/resources and filter by type."
     },
     {
+      "name": "Compute",
+      "description": "Manage virtual server instances: create, power, resize, rebuild, backups, and the region/type/image catalog."
+    },
+    {
       "name": "Databases",
       "description": "Manage database clusters, databases, and users."
     },
@@ -1662,6 +1666,1114 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "ComputeSpecs": {
+        "type": "object",
+        "properties": {
+          "vcpus": {
+            "type": "number",
+            "description": "Virtual CPU cores",
+            "example": 2
+          },
+          "memory_mb": {
+            "type": "number",
+            "description": "Memory in MB",
+            "example": 4096
+          },
+          "disk_gb": {
+            "type": "number",
+            "description": "Disk size in GB",
+            "example": 80
+          }
+        },
+        "required": [
+          "vcpus",
+          "memory_mb",
+          "disk_gb"
+        ]
+      },
+      "ComputePricing": {
+        "type": "object",
+        "properties": {
+          "hourly": {
+            "type": "number",
+            "nullable": true,
+            "description": "Hourly price in USD (frozen at create/last re-rate)",
+            "example": 0.036
+          },
+          "monthly": {
+            "type": "number",
+            "nullable": true,
+            "description": "Monthly price in USD (hourly × 720)",
+            "example": 25.92
+          }
+        },
+        "required": [
+          "hourly",
+          "monthly"
+        ]
+      },
+      "ComputeInstance": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "Instance ID (use this for /compute/instances/{instanceId} routes)",
+            "example": 1042
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instance display label",
+            "example": "web-01-k3f9a"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instance status (provisioning, running, stopped, failed, ...)",
+            "example": "running"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Backing provider for this instance",
+            "example": "linode"
+          },
+          "region": {
+            "type": "string",
+            "nullable": true,
+            "description": "Region ID the instance is deployed in",
+            "example": "us-east"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instance type/plan ID",
+            "example": "g6-standard-2"
+          },
+          "image": {
+            "type": "string",
+            "nullable": true,
+            "description": "Operating system image label",
+            "example": "Ubuntu 24.04 LTS"
+          },
+          "ipv4": {
+            "type": "string",
+            "nullable": true,
+            "description": "Primary IPv4 address (null while provisioning)",
+            "example": "203.0.113.10"
+          },
+          "specs": {
+            "$ref": "#/components/schemas/ComputeSpecs"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/ComputePricing"
+          },
+          "backups_enabled": {
+            "type": "boolean",
+            "description": "Whether the backups add-on is enabled",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "nullable": true,
+            "example": "2026-02-27T10:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "provider",
+          "region",
+          "type",
+          "image",
+          "ipv4",
+          "specs",
+          "pricing",
+          "backups_enabled",
+          "created_at"
+        ]
+      },
+      "ComputeInstanceListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComputeInstance"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "CreateComputeInstanceResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "serverId": {
+            "type": "number",
+            "nullable": true,
+            "description": "Instance ID — poll GET /api/v1/compute/instances/{instanceId} to track provisioning",
+            "example": 1042
+          },
+          "name": {
+            "type": "string",
+            "description": "Final label (requested label + random suffix)",
+            "example": "web-01-k3f9a"
+          },
+          "ip": {
+            "type": "string",
+            "nullable": true,
+            "example": "203.0.113.10"
+          },
+          "os": {
+            "type": "string",
+            "example": "Ubuntu 24.04 LTS"
+          },
+          "region": {
+            "type": "string",
+            "example": "us-east"
+          },
+          "specs": {
+            "type": "object",
+            "properties": {
+              "cpuCores": {
+                "type": "number",
+                "example": 2
+              },
+              "memoryMB": {
+                "type": "number",
+                "example": 4096
+              },
+              "diskGB": {
+                "type": "number",
+                "example": 80
+              }
+            },
+            "required": [
+              "cpuCores",
+              "memoryMB",
+              "diskGB"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "provisioning"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "hourlyCost": {
+                "type": "number",
+                "example": 0.036
+              },
+              "monthlyCost": {
+                "type": "number",
+                "example": 25.92
+              },
+              "initialCharge": {
+                "type": "number",
+                "example": 0.036
+              },
+              "backupsHourly": {
+                "type": "number",
+                "example": 0
+              }
+            },
+            "required": [
+              "hourlyCost",
+              "monthlyCost",
+              "initialCharge",
+              "backupsHourly"
+            ]
+          },
+          "ssh": {
+            "type": "object",
+            "properties": {
+              "username": {
+                "type": "string",
+                "example": "root"
+              },
+              "port": {
+                "type": "number",
+                "example": 22
+              }
+            },
+            "required": [
+              "username",
+              "port"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "serverId",
+          "name",
+          "ip",
+          "os",
+          "region",
+          "specs",
+          "status",
+          "pricing",
+          "ssh"
+        ]
+      },
+      "CreateComputeInstanceRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "description": "Instance label: 3-64 characters of letters, numbers, dots, dashes or underscores, starting and ending with a letter or number. A short random suffix is appended on creation.",
+            "example": "web-01"
+          },
+          "region": {
+            "type": "string",
+            "description": "Region ID (see GET /api/v1/compute/regions)",
+            "example": "us-east"
+          },
+          "type": {
+            "type": "string",
+            "description": "Instance type ID (see GET /api/v1/compute/types)",
+            "example": "g6-standard-2"
+          },
+          "image": {
+            "type": "string",
+            "description": "Image ID (see GET /api/v1/compute/images)",
+            "example": "linode/ubuntu24.04"
+          },
+          "root_pass": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 128,
+            "description": "Root password (11-128 characters, at least two of: uppercase, lowercase, numbers, punctuation)"
+          },
+          "ssh_key_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 25,
+            "description": "IDs of SSH keys from your account to authorize for root (max 25)"
+          },
+          "backups_enabled": {
+            "type": "boolean",
+            "description": "Enable the backups add-on (billed additionally)",
+            "example": false
+          },
+          "disk_encryption": {
+            "type": "boolean",
+            "description": "Enable disk encryption where the region supports it (default true)",
+            "example": true
+          }
+        },
+        "required": [
+          "label",
+          "region",
+          "type",
+          "image",
+          "root_pass"
+        ]
+      },
+      "ComputeInstanceResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ComputeInstance"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "UpdateComputeInstanceRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "description": "New instance label (3-64 characters of letters, numbers, dots, dashes or underscores)",
+            "example": "web-02"
+          }
+        },
+        "required": [
+          "label"
+        ]
+      },
+      "ComputeInstanceDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "example": 1042
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "id",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ComputeActionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "example": 1042
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "boot",
+                  "reboot",
+                  "shutdown"
+                ],
+                "example": "reboot"
+              },
+              "status": {
+                "type": "string",
+                "description": "Expected status after the action completes",
+                "example": "running"
+              }
+            },
+            "required": [
+              "id",
+              "action",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ComputeActionRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "boot",
+              "reboot",
+              "shutdown"
+            ],
+            "description": "Power action to perform",
+            "example": "reboot"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "ComputeResizePlan": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "Plan slug — pass the type ID (with or without the linode: prefix) to POST .../resize",
+            "example": "linode:g6-standard-4"
+          },
+          "name": {
+            "type": "string",
+            "example": "Linode 8GB"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "dedicated"
+            ],
+            "example": "shared"
+          },
+          "vcpu": {
+            "type": "number",
+            "example": 4
+          },
+          "memoryMB": {
+            "type": "number",
+            "example": 8192
+          },
+          "diskGB": {
+            "type": "number",
+            "example": 160
+          },
+          "hourlyUSD": {
+            "type": "number",
+            "example": 0.072
+          },
+          "monthlyUSD": {
+            "type": "number",
+            "example": 51.84
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "example": false
+          },
+          "fits": {
+            "type": "boolean",
+            "description": "Whether the instance can be resized to this plan",
+            "example": true
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the plan does not fit (when fits is false)",
+            "example": "Smaller disk than current plan"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "tier",
+          "vcpu",
+          "memoryMB",
+          "diskGB",
+          "hourlyUSD",
+          "monthlyUSD",
+          "isCurrent",
+          "fits"
+        ]
+      },
+      "ComputeResizeOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "current": {
+                "type": "object",
+                "properties": {
+                  "planSlug": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "linode:g6-standard-2"
+                  },
+                  "vcpu": {
+                    "type": "number",
+                    "example": 2
+                  },
+                  "memoryMB": {
+                    "type": "number",
+                    "example": 4096
+                  },
+                  "diskGB": {
+                    "type": "number",
+                    "example": 80
+                  },
+                  "tier": {
+                    "type": "string",
+                    "example": "shared"
+                  }
+                },
+                "required": [
+                  "planSlug",
+                  "vcpu",
+                  "memoryMB",
+                  "diskGB",
+                  "tier"
+                ]
+              },
+              "plans": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ComputeResizePlan"
+                }
+              }
+            },
+            "required": [
+              "current",
+              "plans"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ComputeResizeAcceptedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "example": 1042
+              },
+              "status": {
+                "type": "string",
+                "example": "resizing"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ResizeComputeInstanceRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Target instance type ID (see GET .../resize for valid targets)",
+            "example": "g6-standard-4"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ComputeBackup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 123456
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "example": "manual-2026-07-11"
+          },
+          "status": {
+            "type": "string",
+            "example": "successful"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "snapshot"
+            ],
+            "example": "snapshot"
+          },
+          "created": {
+            "type": "string",
+            "example": "2026-07-10T02:00:00"
+          },
+          "finished": {
+            "type": "string",
+            "nullable": true,
+            "example": "2026-07-10T02:04:30"
+          },
+          "disks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "example": "Ubuntu 24.04 Disk"
+                },
+                "size": {
+                  "type": "number",
+                  "example": 81408
+                },
+                "filesystem": {
+                  "type": "string",
+                  "example": "ext4"
+                }
+              },
+              "required": [
+                "label",
+                "size",
+                "filesystem"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "type",
+          "created",
+          "finished"
+        ]
+      },
+      "ComputeBackupsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Whether the backups add-on is enabled",
+                "example": true
+              },
+              "backups": {
+                "type": "object",
+                "properties": {
+                  "automatic": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ComputeBackup"
+                    },
+                    "description": "Automatic daily/weekly backups"
+                  },
+                  "snapshot": {
+                    "type": "object",
+                    "properties": {
+                      "current": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/ComputeBackup"
+                          },
+                          {
+                            "nullable": true
+                          }
+                        ]
+                      },
+                      "in_progress": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/ComputeBackup"
+                          },
+                          {
+                            "nullable": true
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "current",
+                      "in_progress"
+                    ],
+                    "description": "Manual snapshot slot"
+                  }
+                },
+                "required": [
+                  "automatic",
+                  "snapshot"
+                ]
+              },
+              "pricing": {
+                "type": "object",
+                "properties": {
+                  "hourly": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Backups add-on hourly price in USD",
+                    "example": 0.003
+                  },
+                  "monthly": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Backups add-on monthly price in USD",
+                    "example": 2.16
+                  }
+                },
+                "required": [
+                  "hourly",
+                  "monthly"
+                ]
+              }
+            },
+            "required": [
+              "enabled",
+              "backups",
+              "pricing"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ComputeBackupsActionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "example": 1042
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "enable",
+                  "cancel",
+                  "snapshot",
+                  "restore"
+                ],
+                "example": "enable"
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "New backups state (enable/cancel actions)",
+                "example": true
+              },
+              "hourlyUSD": {
+                "type": "number",
+                "nullable": true,
+                "description": "New total hourly rate after re-rate (enable/cancel actions)",
+                "example": 0.039
+              },
+              "snapshot": {
+                "type": "string",
+                "description": "Snapshot label (snapshot action)",
+                "example": "pre-upgrade"
+              },
+              "restoring": {
+                "type": "boolean",
+                "description": "Restore started (restore action)",
+                "example": true
+              }
+            },
+            "required": [
+              "id",
+              "action"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ComputeBackupsActionRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "enable",
+              "cancel",
+              "snapshot",
+              "restore"
+            ],
+            "description": "Backup action. enable/cancel re-rate the instance billing meter (plan rate ± backups add-on). snapshot takes a manual snapshot. restore restores a backup in place.",
+            "example": "snapshot"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Snapshot label (snapshot action only; defaults to manual-<date>)",
+            "example": "pre-upgrade"
+          },
+          "backup_id": {
+            "type": "integer",
+            "description": "Backup ID to restore (restore action only)",
+            "example": 123456
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "ComputeRebuildAcceptedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "example": 1042
+              },
+              "status": {
+                "type": "string",
+                "example": "rebuilding"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "RebuildComputeInstanceRequest": {
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "Image ID to redeploy (see GET /api/v1/compute/images)",
+            "example": "linode/debian12"
+          },
+          "root_pass": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 128,
+            "description": "New root password (11-128 characters, at least two of: uppercase, lowercase, numbers, punctuation)"
+          },
+          "ssh_key_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 25,
+            "description": "IDs of SSH keys from your account to authorize for root (max 25)"
+          }
+        },
+        "required": [
+          "image",
+          "root_pass"
+        ]
+      },
+      "ComputeRegion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Region ID (use as `region` when creating instances)",
+            "example": "us-east"
+          },
+          "label": {
+            "type": "string",
+            "example": "Newark, NJ"
+          },
+          "country": {
+            "type": "string",
+            "example": "us"
+          },
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "country",
+          "status"
+        ]
+      },
+      "ComputeRegionListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComputeRegion"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ComputeType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Type ID (use as `type` when creating instances)",
+            "example": "g6-standard-2"
+          },
+          "label": {
+            "type": "string",
+            "example": "Linode 4GB"
+          },
+          "class": {
+            "type": "string",
+            "description": "Plan class (nanode, standard, dedicated, highmem, premium)",
+            "example": "standard"
+          },
+          "vcpus": {
+            "type": "number",
+            "example": 2
+          },
+          "memory_mb": {
+            "type": "number",
+            "example": 4096
+          },
+          "disk_gb": {
+            "type": "number",
+            "example": 80
+          },
+          "transfer_gb": {
+            "type": "number",
+            "description": "Monthly network transfer allowance in GB",
+            "example": 4000
+          },
+          "network_out_mbps": {
+            "type": "number",
+            "description": "Outbound network speed in Mbps",
+            "example": 4000
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "hourly": {
+                "type": "number",
+                "description": "Base hourly price in USD",
+                "example": 0.036
+              },
+              "monthly": {
+                "type": "number",
+                "description": "Base monthly price in USD",
+                "example": 25.92
+              },
+              "backups_hourly": {
+                "type": "number",
+                "nullable": true,
+                "description": "Backups add-on hourly price (null when unavailable)",
+                "example": 0.003
+              },
+              "backups_monthly": {
+                "type": "number",
+                "nullable": true,
+                "example": 2.16
+              }
+            },
+            "required": [
+              "hourly",
+              "monthly",
+              "backups_hourly",
+              "backups_monthly"
+            ]
+          },
+          "region_prices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "region": {
+                  "type": "string",
+                  "example": "br-gru"
+                },
+                "hourly": {
+                  "type": "number",
+                  "example": 0.043
+                },
+                "monthly": {
+                  "type": "number",
+                  "example": 30.96
+                }
+              },
+              "required": [
+                "region",
+                "hourly",
+                "monthly"
+              ]
+            },
+            "description": "Regions where the price differs from the base price"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "class",
+          "vcpus",
+          "memory_mb",
+          "disk_gb",
+          "transfer_gb",
+          "network_out_mbps",
+          "pricing",
+          "region_prices"
+        ]
+      },
+      "ComputeTypeListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComputeType"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ComputeImage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Image ID (use as `image` when creating or rebuilding instances)",
+            "example": "linode/ubuntu24.04"
+          },
+          "label": {
+            "type": "string",
+            "example": "Ubuntu 24.04 LTS"
+          },
+          "vendor": {
+            "type": "string",
+            "nullable": true,
+            "example": "Ubuntu"
+          },
+          "size_mb": {
+            "type": "number",
+            "description": "Minimum disk size required in MB",
+            "example": 3500
+          },
+          "deprecated": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "vendor",
+          "size_mb",
+          "deprecated"
+        ]
+      },
+      "ComputeImageListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComputeImage"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
         ]
       },
       "DatabaseConnection": {
@@ -6915,6 +8027,1917 @@
                 "example": {
                   "error": "INTERNAL_ERROR",
                   "message": "Failed to delete spectrum app"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List compute instances",
+        "description": "Returns all compute instances owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of compute instances",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeInstanceListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch compute instances"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Create compute instance",
+        "description": "Creates a new compute instance. The first hour is charged upfront from your credit balance; the instance then bills hourly at the returned rate. Poll GET /api/v1/compute/instances/{instanceId} to track provisioning.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Instance configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComputeInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Instance creation started (status `provisioning`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateComputeInstanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "root_pass",
+                      "message": "Root password must be at least 11 characters"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Insufficient balance. You need at least $0.04 to create this server."
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Region unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "This region is currently unavailable. Please select a different region."
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Plan out of stock in the selected region",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "This plan is out of stock in the selected region. Please pick a different region or plan."
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Deployments temporarily disabled or provider unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "New server deployments are temporarily disabled. Please try again later."
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances/{instanceId}": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Get compute instance by ID",
+        "description": "Returns detailed information about a specific compute instance.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compute instance details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeInstanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid instance ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid instanceId format",
+                  "details": {
+                    "field": "instanceId"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to load instance"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Update compute instance",
+        "description": "Updates the instance label. For Linode-backed instances the label is also pushed upstream (best-effort).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Instance update payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateComputeInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compute instance updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeInstanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or invalid instance ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Body validation error",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "label",
+                          "message": "Label must be at least 3 characters"
+                        }
+                      ]
+                    }
+                  },
+                  "invalid_id": {
+                    "summary": "Invalid instance ID format",
+                    "value": {
+                      "error": "INVALID_ID",
+                      "message": "Invalid instanceId format",
+                      "details": {
+                        "field": "instanceId"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to update instance"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Delete compute instance",
+        "description": "Destroys the instance, settles billing (prorated final hour), and removes it from your account. This action is irreversible.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compute instance deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeInstanceDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid instance ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid instanceId format",
+                  "details": {
+                    "field": "instanceId"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to delete instance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances/{instanceId}/actions": {
+      "post": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Perform power action",
+        "description": "Boots, reboots, or shuts down the instance. Shut-down instances continue to bill (delete the instance to stop billing).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Power action",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComputeActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Power action accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error, invalid ID, or unsupported server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Invalid action",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "action",
+                          "message": "action must be one of: boot, reboot, shutdown"
+                        }
+                      ]
+                    }
+                  },
+                  "not_supported": {
+                    "summary": "Unsupported server",
+                    "value": {
+                      "error": "NOT_SUPPORTED",
+                      "message": "Power actions are not supported for this server"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance is still provisioning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Instance is still provisioning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PROVIDER_ERROR",
+                  "message": "Unable to reboot the instance. Please try again later."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances/{instanceId}/resize": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List resize options",
+        "description": "Returns the current plan and every plan the instance could resize to, annotated with availability and the price you would be billed after the resize.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resize options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeResizeOptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid ID or unsupported server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_SUPPORTED",
+                  "message": "Resize is not supported for this server"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance is not fully provisioned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Instance is not fully provisioned"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Unable to load resize options"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Resize compute instance",
+        "description": "Starts a resize to the target type. The instance is migrated in the background (it powers off, migrates, and boots back if it was running); billing is re-rated to the new plan price once the resize settles. Disk can only grow.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Resize target",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizeComputeInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Resize started — poll GET /api/v1/compute/instances/{instanceId} for completion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeResizeAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error, unknown plan, or unsupported server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Missing type",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "type",
+                          "message": "type is required"
+                        }
+                      ]
+                    }
+                  },
+                  "unknown_plan": {
+                    "summary": "Unknown plan",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "That plan is no longer available."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits for the new plan rate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INSUFFICIENT_BALANCE",
+                  "message": "Insufficient balance. You need at least $0.07 to resize."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - wrong state or plan unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFLICT",
+                  "message": "Server must be running or stopped to resize."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance configuration is incomplete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Server configuration is incomplete."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PROVIDER_ERROR",
+                  "message": "Unable to start the resize. Please try again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances/{instanceId}/backups": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List backups",
+        "description": "Returns the backup add-on state, existing automatic backups and snapshot (when enabled), and the add-on price quote.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backup overview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeBackupsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid ID or unsupported server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_SUPPORTED",
+                  "message": "Backups are not supported for this server"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance is still provisioning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Instance is still provisioning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PROVIDER_ERROR",
+                  "message": "Failed to load backups"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Manage backups",
+        "description": "Enables or cancels the backups add-on (re-rates the hourly billing meter), takes a manual snapshot, or restores a backup in place. Restore returns 202 and proceeds in the background.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Backup action",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComputeBackupsActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Backup action completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeBackupsActionResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Restore started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeBackupsActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or invalid state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Invalid action",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "action",
+                          "message": "action must be one of: enable, cancel, snapshot, restore"
+                        }
+                      ]
+                    }
+                  },
+                  "already_enabled": {
+                    "summary": "Backups already enabled",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Backups are already enabled."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance is still provisioning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Instance is still provisioning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PROVIDER_ERROR",
+                  "message": "Backup operation failed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/instances/{instanceId}/rebuild": {
+      "post": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "Rebuild compute instance",
+        "description": "Wipes all disks and redeploys the chosen image with a new root password (+ optional SSH keys). All data on the instance is destroyed. Proceeds in the background.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "description": "Compute instance ID",
+              "example": "1042"
+            },
+            "required": true,
+            "name": "instanceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Rebuild configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildComputeInstanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Rebuild started — poll GET /api/v1/compute/instances/{instanceId} for completion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeRebuildAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error, unknown image, or unsupported server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Weak root password",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "root_pass",
+                          "message": "Root password must be at least 11 characters"
+                        }
+                      ]
+                    }
+                  },
+                  "not_supported": {
+                    "summary": "Unsupported server",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Rebuild is not available for this server."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this instance"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Instance not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Instance not found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Instance must be running or stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "CONFLICT",
+                  "message": "Server must be running or stopped to rebuild."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Instance is still provisioning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_STATE",
+                  "message": "Server is still provisioning"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PROVIDER_ERROR",
+                  "message": "Unable to start the rebuild. Please try again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/regions": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List compute regions",
+        "description": "Returns the regions where compute instances can be deployed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeRegionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch compute regions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/types": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List compute types",
+        "description": "Returns the available instance types with customer pricing (base price plus per-region overrides where applicable).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of instance types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeTypeListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch compute types"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compute/images": {
+      "get": {
+        "tags": [
+          "Compute"
+        ],
+        "summary": "List compute images",
+        "description": "Returns the OS images available for creating or rebuilding compute instances.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeImageListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch compute images"
                 }
               }
             }
