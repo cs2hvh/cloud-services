@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import VPSSelect from "./simple";
+import LinodeCreate from "./linode";
+import type { LinodeComputeOptions } from "@/lib/services/compute/providers/linode/options";
 
 interface Region {
   id: string;
@@ -17,6 +19,8 @@ interface OSOption {
 }
 
 interface ComputeOptions {
+  /** Set when the platform provisions on Linode — routes to the Linode form. */
+  provider?: "linode";
   regions: Region[];
   osOptions: OSOption[];
   specs: {
@@ -30,8 +34,8 @@ interface ComputeOptions {
 }
 
 /**
- * Loads compute options from API with retry logic
- * Shows regions (not raw hosts) and deduplicated OS templates
+ * Loads compute options from API with retry logic, then renders the deploy
+ * form for the active provisioning backend (Linode resell or legacy Proxmox).
  */
 export default function VPSFormLoader() {
   const [options, setOptions] = useState<ComputeOptions | null>(null);
@@ -102,6 +106,10 @@ export default function VPSFormLoader() {
         <p className="mt-1 text-sm text-white/45">No active servers available. Please contact support.</p>
       </div>
     );
+  }
+
+  if (options.provider === "linode") {
+    return <LinodeCreate options={options as unknown as LinodeComputeOptions} />;
   }
 
   return <VPSSelect computeOptions={options} />;

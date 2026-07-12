@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { type ServerData } from './types';
 import { NoVncViewer } from './novnc-viewer';
+import { LinodeWeblish } from './linode-weblish';
 
 interface VpsConsoleTabProps {
   server: ServerData;
@@ -15,6 +16,8 @@ interface VpsConsoleTabProps {
   consoleState: 'idle' | 'loading' | 'ready' | 'error';
   consoleWsPath: string | null;
   consoleVncPassword: string | null;
+  /** Weblish websocket URL — set instead of consoleWsPath for Linode servers. */
+  consoleLishUrl?: string | null;
   consoleError: string | null;
   onLaunchConsole: () => void;
 }
@@ -25,6 +28,7 @@ export function VpsConsoleTab({
   consoleState,
   consoleWsPath,
   consoleVncPassword,
+  consoleLishUrl,
   consoleError,
   onLaunchConsole,
 }: VpsConsoleTabProps) {
@@ -90,6 +94,26 @@ export function VpsConsoleTab({
   }
 
   // consoleState === 'ready'
+  if (consoleLishUrl) {
+    return (
+      <div className="space-y-3">
+        <LinodeWeblish
+          wsUrl={consoleLishUrl}
+          serverName={server.name}
+          onDisconnect={(clean, reason) => {
+            if (!clean) {
+              console.warn('[console] weblish disconnected:', reason);
+            }
+          }}
+        />
+        <p className="text-[11px] text-white/20 text-center">
+          Log in with your server credentials (root + password or SSH key).
+          Sessions expire after inactivity — click Reconnect to resume.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <NoVncViewer

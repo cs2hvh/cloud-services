@@ -11,6 +11,7 @@ import {
     CreditCard,
     History,
     Key,
+    KeyRound,
     QrCode,
     Shield,
     User,
@@ -81,6 +82,12 @@ const QUICK_LINKS: Array<{
         description: "Programmatic access tokens",
         href: "/dashboard/settings/api-keys",
         icon: Key,
+    },
+    {
+        label: "SSH keys",
+        description: "Key-based server login",
+        href: "/dashboard/settings/ssh-keys",
+        icon: KeyRound,
     },
     {
         label: "Billing",

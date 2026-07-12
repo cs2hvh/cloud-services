@@ -11,6 +11,7 @@ import {
 import { type ServerData } from './types';
 import { VpsResizeSection } from './vps-resize-section';
 import { VpsPasswordResetSection } from './vps-password-reset-section';
+import { LinodeRebuildSection } from './linode-rebuild-section';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const ACCENT = '#0095FF';
@@ -221,10 +222,22 @@ export function VpsSettingsTab({
         <VpsPasswordResetSection server={server} />
       </section>
 
-      {/* ── 05 · Danger zone ─────────────────────────────── */}
+      {/* ── 05 · Rebuild (Linode-backed servers only) ────── */}
+      {server.provider === 'linode' && (
+        <section>
+          <SectionHead
+            num="05"
+            title="Rebuild"
+            description="Redeploy a fresh operating system onto this server. Erases all data; keeps the IP."
+          />
+          <LinodeRebuildSection server={server} onRefresh={onRefresh} />
+        </section>
+      )}
+
+      {/* ── Danger zone ──────────────────────────────────── */}
       <section>
         <SectionHead
-          num="05"
+          num={server.provider === 'linode' ? '06' : '05'}
           title="Danger zone"
           description="Destructive actions cannot be undone."
           danger

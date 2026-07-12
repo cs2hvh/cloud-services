@@ -5,6 +5,7 @@ import {
   Terminal,
   Network,
   Settings2,
+  DatabaseBackup,
 } from 'lucide-react';
 
 /* ─── types ──────────────────────────────────────────────────────── */
@@ -16,6 +17,19 @@ export interface ProvisioningInfo {
   started_at?: string;
   completed_at?: string;
   failed_at?: string;
+}
+
+/** Linode-specific metadata stored on details.linode for resold instances. */
+export interface LinodeDetails {
+  type?: string;
+  class?: string;
+  image?: string;
+  image_label?: string;
+  region?: string;
+  region_label?: string;
+  ipv6?: string | null;
+  backups_enabled?: boolean;
+  disk_encryption?: boolean;
 }
 
 export interface ServerData {
@@ -30,10 +44,13 @@ export interface ServerData {
   disk_gb: number;
   status: string;
   hourly_cost: number;
+  monthly_cost?: number | null;
   billing_start: string | null;
   created_at: string;
   location: string | null;
-  details?: { provisioning?: ProvisioningInfo } | null;
+  provider?: 'proxmox' | 'linode' | null;
+  linode_id?: number | null;
+  details?: { provisioning?: ProvisioningInfo; linode?: LinodeDetails } | null;
   region?: string | null;
   displayRegion?: string | null;
 }
@@ -78,6 +95,13 @@ export const TABS: TabItem[] = [
     description: 'IP and traffic.',
   },
   {
+    value: 'backups',
+    label: 'Backups',
+    icon: DatabaseBackup,
+    eyebrow: 'Protection',
+    description: 'Automatic + snapshots.',
+  },
+  {
     value: 'settings',
     label: 'Settings',
     icon: Settings2,
@@ -85,6 +109,12 @@ export const TABS: TabItem[] = [
     description: 'Lifecycle actions.',
   },
 ];
+
+/** Tabs applicable to a server row — Backups is Linode-only. */
+export function tabsForServer(server: Pick<ServerData, 'provider'>): TabItem[] {
+  if (server.provider === 'linode') return TABS;
+  return TABS.filter((t) => t.value !== 'backups');
+}
 
 /* ─── helpers ────────────────────────────────────────────────────── */
 

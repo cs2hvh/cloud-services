@@ -15,7 +15,7 @@ import { ServiceTabBar } from '@/components/dashboard/ui/service-tab-bar';
 import { useVMMetrics } from '@/hooks/use-vm-metrics';
 import { ArrowLeft, Server } from 'lucide-react';
 
-import { type ServerData, TABS, getAccessInfo } from './_components/types';
+import { type ServerData, tabsForServer, getAccessInfo } from './_components/types';
 import { useUptime } from './hooks/use-uptime';
 import { VpsHeader } from './_components/vps-header';
 import { VpsStatsRow } from './_components/vps-stats-row';
@@ -24,6 +24,7 @@ import { VpsMonitoringTab } from './_components/vps-monitoring-tab';
 import { VpsConsoleTab } from './_components/vps-console-tab';
 import { VpsNetworkingTab } from './_components/vps-networking-tab';
 import { VpsSettingsTab } from './_components/vps-settings-tab';
+import { LinodeBackupsTab } from './_components/linode-backups-tab';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 
@@ -44,6 +45,7 @@ export default function VMDetailPage() {
   const [consoleState, setConsoleState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [consoleWsPath, setConsoleWsPath] = useState<string | null>(null);
   const [consoleVncPassword, setConsoleVncPassword] = useState<string | null>(null);
+  const [consoleLishUrl, setConsoleLishUrl] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -213,8 +215,17 @@ export default function VMDetailPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('failed');
-      setConsoleWsPath(data.console.wsPath);
-      setConsoleVncPassword(data.console.ticket);
+      if (data.console.kind === 'lish') {
+        // Linode-backed server — weblish terminal over the Lish websocket.
+        if (!data.console.weblishUrl) throw new Error('no weblish url');
+        setConsoleLishUrl(data.console.weblishUrl);
+        setConsoleWsPath(null);
+        setConsoleVncPassword(null);
+      } else {
+        setConsoleWsPath(data.console.wsPath);
+        setConsoleVncPassword(data.console.ticket);
+        setConsoleLishUrl(null);
+      }
       setConsoleState('ready');
     } catch {
       setConsoleError('Could not open console. Make sure the server is running.');
@@ -296,7 +307,7 @@ export default function VMDetailPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
         {/* Horizontal segmented tab nav — shared premium pill control. */}
         <ServiceTabBar
-          tabs={TABS}
+          tabs={tabsForServer(server)}
           value={activeTab}
           onChange={setActiveTab}
           className="mb-5"
@@ -338,10 +349,17 @@ export default function VMDetailPage() {
               consoleState={consoleState}
               consoleWsPath={consoleWsPath}
               consoleVncPassword={consoleVncPassword}
+              consoleLishUrl={consoleLishUrl}
               consoleError={consoleError}
               onLaunchConsole={handleLaunchConsole}
             />
           </TabsContent>
+
+          {server.provider === 'linode' && (
+            <TabsContent value="backups" className="mt-0">
+              <LinodeBackupsTab server={server} />
+            </TabsContent>
+          )}
 
           <TabsContent value="networking" className="mt-0">
             <VpsNetworkingTab
