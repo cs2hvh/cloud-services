@@ -30,6 +30,8 @@ type SectionProps = {
     subtitle?: string;
     /** Hide the thin top divider line */
     hideTopDivider?: boolean;
+    /** Hide the small uppercase eyebrow above the heading */
+    hideEyebrow?: boolean;
 };
 
 function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
@@ -80,7 +82,7 @@ function UseCaseCard({ item, index }: { item: UseCase; index: number }) {
                         {item.metric}
                     </p>
                 )}
-                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white">
+                <h3 className="text-[17px] font-semibold leading-[1.3] tracking-[-0.005em] text-white transition-colors duration-300 group-hover:text-[#0095FF]">
                     {item.title}
                 </h3>
                 <p className="mt-2.5 text-[13.5px] leading-[1.6] text-white/65">
@@ -98,6 +100,7 @@ const ServicesHomeSectionSix = ({
     headingAccent,
     subtitle = "Four common workloads our customers ship into production every day — backed by the same primitives, SLAs, and support.",
     hideTopDivider = false,
+    hideEyebrow = false,
 }: SectionProps) => {
     return (
         <section className="relative overflow-hidden bg-[#0D0D0F] py-16 sm:py-20 lg:py-24">
@@ -112,12 +115,14 @@ const ServicesHomeSectionSix = ({
 
             <div className="relative z-10 mx-auto w-full max-w-[1280px] px-6 lg:px-12">
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        {eyebrow}
-                    </p>
+                    {!hideEyebrow && (
+                        <p
+                            className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
+                        >
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
+                            {eyebrow}
+                        </p>
+                    )}
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
                         {heading}
                         {headingAccent && (

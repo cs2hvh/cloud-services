@@ -186,6 +186,16 @@ export function ActivePodsTable({ loading, pods }: ActivePodsTableProps) {
                             boxShadow:
                                 "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
                         }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#ffffff";
+                            e.currentTarget.style.color = "#000000";
+                            e.currentTarget.style.transform = "translateY(-2px)";
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                            e.currentTarget.style.color = "#ffffff";
+                            e.currentTarget.style.transform = "none";
+                        }}
                     >
                         <Plus className="h-3.5 w-3.5" />
                         Deploy a pod

@@ -623,10 +623,6 @@ function Workflows() {
 
             <Container className="relative z-10">
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        What you can ship
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
                         Four shapes of web workload. One pipeline.
                     </h2>
@@ -725,13 +721,9 @@ function RequestFlow() {
 
             <Container className="relative z-10">
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Request lifecycle
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[52px]">
                         Click to byte,{" "}
-                        <span style={ACCENT_FONT} className="text-[#82adfb]">
+                        <span style={ACCENT_FONT} className="text-[#0095FF]">
                             in milliseconds.
                         </span>
                     </h2>
@@ -800,10 +792,6 @@ function Scenarios() {
             <Container className="relative z-10">
                 <div className="mx-auto flex max-w-[1180px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                     <div className="max-w-[680px]">
-                        <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}>
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                            Composed stacks
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
                             One recommended stack.{" "}
                             <span style={ACCENT_FONT} className="text-[#0066B3]">
@@ -969,13 +957,9 @@ function Stack() {
             <Container className="relative z-10">
                 <div className="mx-auto flex max-w-[1080px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                     <div className="max-w-[680px]">
-                        <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                            Platform layers
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
                             Six layers.{" "}
-                            <span style={ACCENT_FONT} className="text-[#82adfb]">
+                            <span style={ACCENT_FONT} className="text-[#0095FF]">
                                 One private network.
                             </span>
                         </h2>
@@ -1059,10 +1043,6 @@ function Workloads() {
 
             <Container className="relative z-10">
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Workloads
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[48px]">
                         Tuned for the sites teams{" "}
                         <span style={ACCENT_FONT} className="text-[#0066B3]">
@@ -1113,10 +1093,6 @@ function FinalCta() {
 
                     <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center lg:gap-14">
                         <div>
-                            <p className={`${MONO} mb-4 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}>
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                                Plan your migration
-                            </p>
                             <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[42px]">
                                 Walk us through the site. We&apos;ll size the stack.
                             </h2>
@@ -1158,7 +1134,6 @@ export function WebHostingLanding() {
     return (
         <main className="bg-[#0D0D0F]">
             <ServiceHeroSection
-                badge="Web Hosting & SaaS"
                 title="Web infrastructure that stays up."
                 description="VPS, App Platform, managed databases, object storage, CDN, and WAF — one network, one bill."
                 primaryAction={{ label: "Talk to a solutions engineer", href: "/contact" }}

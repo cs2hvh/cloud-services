@@ -79,7 +79,6 @@ const GpuHome = async () => {
   return (
     <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
-        badge="Cloud Storage"
         title="Object Storage"
         description="S3-compatible object storage with 99.999% durability, automatic scaling, and built-in CDN. Store and serve any amount of data securely."
         primaryAction={{ label: "Get Started", href: "/signup" }}
@@ -92,7 +91,7 @@ const GpuHome = async () => {
       <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
       <ServicesHomeSectionSix
         cases={cases}
-        eyebrow="Use cases"
+        hideEyebrow
         heading="Built for the data you"
         headingAccent="actually store."
         subtitle="One S3-compatible store, four workloads — 99.999% durability, lifecycle automation, free CDN cache egress."

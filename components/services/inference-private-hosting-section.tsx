@@ -55,20 +55,11 @@ export default function InferencePrivateHostingSection() {
       <Container className="relative z-10">
         {/* ─── TOP: editorial header ─── */}
         <div className="max-w-3xl">
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5 }}
-            className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[11px] uppercase tracking-[0.22em] text-white/40"
-          >
-            Private hosting
-          </motion.p>
-
           <motion.h2
             initial={{ opacity: 0, y: 14 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-5 text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-white sm:text-5xl lg:text-[56px]"
+            className="text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-white sm:text-5xl lg:text-[56px]"
           >
             Your model.{" "}
             <span className="text-white/30">/</span>{" "}
@@ -94,15 +85,16 @@ export default function InferencePrivateHostingSection() {
                 "radial-gradient(55% 60% at 50% 50%, rgba(0,149,255,0.22), transparent 70%)",
             }}
           />
-          <div className="relative w-full">
+          {/* raod.png is a wide 1920×516 canvas with the diagram in its left ~third.
+              Crop the empty right and center it so it reads as a balanced graphic. */}
+          <div className="relative mx-auto aspect-[16/10] w-full max-w-[620px] overflow-hidden">
             <Image
               src={assetUrl("/ailabs/raod.png")}
               alt="Single-tenant request path — your traffic stays in your lane"
-              width={1920}
-              height={760}
+              fill
               priority={false}
-              className="h-auto w-full object-contain"
-              sizes="(min-width: 1280px) 1100px, 92vw"
+              className="object-cover object-left"
+              sizes="(min-width: 1280px) 620px, 92vw"
             />
           </div>
         </motion.div>

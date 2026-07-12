@@ -97,11 +97,8 @@ export default function PricingClient({ categories }: PricingClientProps) {
           >
             Yearly
             <span
-              className={cn(
-                "rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold",
-                billingCycle === "yearly" ? "bg-black/10 text-black" : "text-[#8ecaff]"
-              )}
-              style={billingCycle === "yearly" ? undefined : { background: "rgba(0,149,255,0.14)" }}
+              className="rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold text-[#0095FF]"
+              style={{ background: "rgba(0,149,255,0.16)", boxShadow: "0 0 10px rgba(0,149,255,0.55)" }}
             >
               Save 20%
             </span>
@@ -169,7 +166,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 </div>
                 <a
                   href="/contact"
-                  className="inline-flex shrink-0 items-center justify-center rounded-[5px] bg-white px-5 py-2.5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
+                  className="inline-flex shrink-0 items-center justify-center rounded-[5px] bg-white px-5 py-2.5 text-[13px] font-medium text-black transition-colors hover:bg-[#0095FF] hover:text-white"
                 >
                   Talk to sales
                 </a>

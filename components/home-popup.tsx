@@ -94,7 +94,7 @@ export default function HomePopup() {
               }}
             >
               {/* Image — object-contain so the GPU is never cropped */}
-              <div className="relative h-[190px] w-full sm:h-auto sm:flex-1">
+              <div className="relative h-[118px] w-full sm:h-auto sm:flex-1">
                 {/* Brand glow behind the render */}
                 <div
                   aria-hidden="true"
@@ -117,7 +117,7 @@ export default function HomePopup() {
               </div>
 
               {/* Spec block */}
-              <div className="flex flex-col px-6 pb-6 pt-1 sm:pb-7">
+              <div className="flex flex-col px-6 pb-4 pt-1 sm:pb-7">
                 <span
                   className={`${MONO} text-[11px] font-bold uppercase tracking-[0.28em]`}
                   style={{ color: NVIDIA_GREEN }}
@@ -132,7 +132,7 @@ export default function HomePopup() {
                 </span>
 
                 <div
-                  className="mt-2.5 select-none text-[56px] font-semibold leading-none tracking-[-0.04em] sm:text-[60px]"
+                  className="mt-2 select-none text-[42px] font-semibold leading-none tracking-[-0.04em] sm:mt-2.5 sm:text-[60px]"
                   style={{
                     background:
                       "linear-gradient(145deg, #ffffff 0%, #d4e6ff 45%, #79b5ff 100%)",
@@ -169,10 +169,10 @@ export default function HomePopup() {
 
             {/* ══ RIGHT PANEL — copy ══ */}
             <div
-              className="flex flex-1 flex-col justify-between gap-6 px-6 py-7 sm:px-8 sm:py-8"
+              className="flex flex-1 flex-col justify-between gap-5 px-6 py-6 sm:gap-6 sm:px-8 sm:py-8"
               style={{ background: "#07090f" }}
             >
-              <div className="flex flex-col gap-3.5 pr-6 sm:pr-2">
+              <div className="flex flex-col gap-3 pr-6 sm:gap-3.5 sm:pr-2">
                 <span
                   className={`${MONO} inline-flex w-fit items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/55`}
                 >
@@ -183,7 +183,7 @@ export default function HomePopup() {
                   Now available
                 </span>
 
-                <h2 className="text-balance text-[23px] font-semibold leading-[1.18] tracking-[-0.025em] text-white antialiased sm:text-[26px]">
+                <h2 className="text-balance text-[20px] font-semibold leading-[1.2] tracking-[-0.025em] text-white antialiased sm:text-[26px] sm:leading-[1.18]">
                   1.5× FP4 compute.{" "}
                   <span style={{ color: NVIDIA_GREEN }}>
                     Double the bandwidth.

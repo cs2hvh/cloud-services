@@ -82,7 +82,6 @@ const KubernetesPage = async () => {
   return (
     <main className="bg-[#0D0D0F]">
       <ServiceHeroSection
-        badge="Managed Kubernetes"
         title="Kubernetes Cluster"
         description="Production Kubernetes clusters with a free managed control plane, multi-zone HA, autoscaling node pools, and GitOps wired in from the first push."
         primaryAction={{ label: "Get Started", href: "/signup" }}
@@ -96,7 +95,7 @@ const KubernetesPage = async () => {
       <ServicesHomeSectionFive title="Frequently asked questions" faqs={faqs} />
       <ServicesHomeSectionSix
         cases={cases}
-        eyebrow="Use cases"
+        hideEyebrow
         heading="Built for"
         headingAccent="every workload."
         subtitle="From microservices to GPU training — one platform, ready for every production workload."

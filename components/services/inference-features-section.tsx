@@ -262,10 +262,7 @@ export default function InferenceFeaturesSection() {
       <Container className="relative z-10">
         {/* Section header */}
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Enterprise controls
-          </p>
-          <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
+          <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Production guardrails.{" "}
             <span className="text-[#0095FF]">Day one.</span>
           </h2>
@@ -286,7 +283,7 @@ export default function InferenceFeaturesSection() {
                 Drop-in
               </span>
             </div>
-            <h3 className="mt-5 text-[18px] font-semibold leading-snug tracking-tight text-white">
+            <h3 className="mt-5 text-[18px] font-semibold leading-snug tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
               OpenAI &amp; Anthropic SDK compatible
             </h3>
             <p className="mt-2 max-w-md text-[12.5px] leading-relaxed text-white/55">
@@ -326,7 +323,7 @@ export default function InferenceFeaturesSection() {
                 Cache
               </span>
             </div>
-            <h3 className="mt-5 text-[16px] font-semibold leading-snug tracking-tight text-white">
+            <h3 className="mt-5 text-[16px] font-semibold leading-snug tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
               Semantic cache
             </h3>
             <p className="mt-2 text-[12px] leading-relaxed text-white/55">
@@ -399,7 +396,7 @@ export default function InferenceFeaturesSection() {
                 BYOK
               </span>
             </div>
-            <h3 className="mt-5 text-[16px] font-semibold leading-snug tracking-tight text-white">
+            <h3 className="mt-5 text-[16px] font-semibold leading-snug tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
               Bring your own key
             </h3>
             <p className="mt-2 text-[12px] leading-relaxed text-white/55">
@@ -438,7 +435,7 @@ export default function InferenceFeaturesSection() {
               <ImageBadge src={assetUrl("/inference/per-key.png")} alt="Per-key spend caps" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
-                  <h3 className="text-[15px] font-semibold tracking-tight text-white">
+                  <h3 className="text-[15px] font-semibold tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
                     Per-key &amp; org-level hard caps
                   </h3>
                   <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
@@ -492,7 +489,7 @@ export default function InferenceFeaturesSection() {
               <ImageBadge src={assetUrl("/inference/ZeroData Retention.png")} alt="Zero Data Retention" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
+                  <h3 className="text-[14.5px] font-semibold tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
                     Zero Data Retention
                   </h3>
                   <span className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/40">
@@ -512,7 +509,7 @@ export default function InferenceFeaturesSection() {
               <ImageBadge src={assetUrl("/inference/usage-audit.png")} alt="Usage and audit" />
               <div className="flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-[14.5px] font-semibold tracking-tight text-white">
+                  <h3 className="text-[14.5px] font-semibold tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
                     Usage &amp; audit
                   </h3>
                   <span className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/40">
@@ -532,7 +529,7 @@ export default function InferenceFeaturesSection() {
               <ImageBadge src={assetUrl("/inference/routing-icon.png")} alt="Routing presets and webhooks" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-4">
-                  <h3 className="text-[15px] font-semibold tracking-tight text-white">
+                  <h3 className="text-[15px] font-semibold tracking-tight text-white transition-colors duration-300 group-hover:text-[#0095FF]">
                     Routing presets &amp; signed webhooks
                   </h3>
                   <span className="h-1.5 w-1.5 rounded-full bg-[#33adff]/60" />

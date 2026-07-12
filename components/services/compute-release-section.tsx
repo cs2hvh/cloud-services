@@ -206,11 +206,6 @@ const ComputeReleaseSection = () => {
             <Container className="relative z-10">
                 {/* Header */}
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        Bare metal
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
                         Dedicated hardware, on tap
                     </h2>
@@ -252,7 +247,7 @@ const ComputeReleaseSection = () => {
                     </p>
                     <Link
                         href="/services/compute#pricing"
-                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                        className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                     >
                         Browse all server SKUs
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />

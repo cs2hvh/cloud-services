@@ -310,7 +310,7 @@ function GpuPricingRail() {
 export default function HeroClient() {
     return (
         <section
-            className="relative isolate h-[100svh] min-h-[780px] w-full overflow-hidden bg-[#04060a] text-white lg:min-h-[820px]"
+            className="relative isolate min-h-[100svh] w-full overflow-hidden bg-[#04060a] text-white lg:h-[100svh] lg:min-h-[820px]"
             aria-label="Ahura Cloud infrastructure"
         >
             {/* PixelBlast ambient pattern — sits behind everything, brand color, minimal density.
@@ -337,8 +337,8 @@ export default function HeroClient() {
                 />
             </div>
 
-            <div className="relative z-10 mx-auto flex h-[calc(100svh-170px)] min-h-[608px] w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-180px)] lg:min-h-[640px]">
-                <div className="grid flex-1 items-center gap-10 pb-10 pt-20 sm:pt-24 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:gap-12 lg:pb-12 lg:pt-24">
+            <div className="relative z-10 mx-auto flex h-auto min-h-0 w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-180px)] lg:min-h-[640px]">
+                <div className="grid flex-1 items-start gap-6 pb-8 pt-20 sm:gap-10 sm:pt-24 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-center lg:gap-12 lg:pb-12 lg:pt-24">
                     {/* LEFT — static, GPU-focused. The tensor cycles
                         through formations on the right, but the pitch
                         here doesn't shift — GPU is the main subject. */}
@@ -389,7 +389,7 @@ export default function HeroClient() {
                     </div>
 
                     {/* RIGHT — hero illustration */}
-                    <div className="relative h-[280px] w-full sm:h-[420px] md:h-[480px] lg:h-full lg:min-h-[520px]">
+                    <div className="relative h-[200px] w-full sm:h-[420px] md:h-[480px] lg:h-full lg:min-h-[520px]">
                         {/* Soft brand-blue halo behind the illustration */}
                         <div
                             aria-hidden="true"

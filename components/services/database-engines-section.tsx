@@ -124,7 +124,7 @@ export default function DatabaseEnginesSection() {
             <div className="max-w-2xl">
               <h2 className="text-3xl font-[400] leading-[1.02] tracking-tight text-white sm:text-4xl lg:text-[4rem]">
                 Pick a database by
-                <span className="block text-[#8ecaff]">workload, not branding</span>
+                <span className="block text-[#0095FF]">workload, not branding</span>
               </h2>
             </div>
 
@@ -177,7 +177,7 @@ export default function DatabaseEnginesSection() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="text-[18px] font-medium tracking-tight text-white">{engine.name}</div>
+                      <div className="text-[18px] font-medium tracking-tight text-white transition-colors group-hover:text-[#0095FF]">{engine.name}</div>
                       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38">
                         {engine.fit}
                       </div>

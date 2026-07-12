@@ -190,19 +190,11 @@ export default function ModelHostingFormatsSection() {
           style={{ y: headerY, opacity: headerOpacity }}
           className="mx-auto max-w-3xl text-center"
         >
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
-            <span
-              aria-hidden
-              className="block h-1.5 w-1.5 rounded-full bg-[#33adff]"
-              style={{ boxShadow: "0 0 8px rgba(0,149,255,0.7)" }}
-            />
-            Source formats
-          </div>
-          <h2 className="mt-6 text-3xl font-[400] leading-[1.04] tracking-tight text-white sm:text-4xl lg:text-[3.6rem]">
+          <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Bring it in{" "}
             <span className="text-[#0095FF]">the shape you have it.</span>
           </h2>
-          <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16.5px]">
+          <p className="mt-6 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             Docker for full control, HuggingFace for zero-config, Truss for the paved Python path.
           </p>
         </motion.div>

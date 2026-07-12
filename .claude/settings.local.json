@@ -44,7 +44,12 @@
       "Bash(ssh -i /c/Users/harsh/AppData/Local/Temp/claude/D--work-cloud-services/5dfc396c-dde6-4498-a195-778259ebd0c2/scratchpad/ssh/ahura_panel -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new root@192.46.211.9 'bash -s')",
       "Bash(ssh -i /c/Users/harsh/AppData/Local/Temp/claude/D--work-cloud-services/5dfc396c-dde6-4498-a195-778259ebd0c2/scratchpad/ssh/ahura_panel -o IdentitiesOnly=yes root@192.46.211.9 'bash -s')",
       "Bash(ssh -i /c/Users/harsh/AppData/Local/Temp/claude/D--work-cloud-services/5dfc396c-dde6-4498-a195-778259ebd0c2/scratchpad/ssh/ahura_panel -o IdentitiesOnly=yes root@192.46.211.9 'certbot --nginx -d games.ahurasense.com --non-interactive --agree-tos -m admin@ahurasense.com --redirect 2>&1 | tail -15; echo '\\\\''--- external HTTPS check:'\\\\''; sleep 2; curl -sS -o /dev/null -w '\\\\''https_code=%{http_code}\\\\n'\\\\'' https://games.ahurasense.com/ || true')",
-      "mcp__visualize__read_me"
+      "mcp__visualize__read_me",
+      "Bash(git -C /c/cloud-services log --oneline -30)",
+      "Bash(git -C /c/cloud-services branch -a)",
+      "Bash(git -C /c/cloud-services shortlog -sn --since=\"3 months ago\")",
+      "Bash(git -C /c/cloud-services log --oneline master..dev)",
+      "Bash(git -C /c/cloud-services diff --stat master..dev)"
     ]
   }
 }

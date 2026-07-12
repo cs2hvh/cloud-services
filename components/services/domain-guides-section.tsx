@@ -146,12 +146,6 @@ export default function DomainGuidesSection() {
             <Container className="relative z-10">
                 {/* Header */}
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Resources
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
                         Domain operations, explained
                     </h2>

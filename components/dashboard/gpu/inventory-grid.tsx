@@ -113,7 +113,7 @@ function GpuCard({ row }: { row: InventoryRowClient }) {
                     <Button
                         asChild
                         size="sm"
-                        className="w-full h-8 bg-[#0095FF] hover:bg-[#0aa0ff] text-white text-[12px] font-medium"
+                        className="w-full h-8 bg-[#0095FF] hover:bg-white hover:text-black hover:-translate-y-0.5 text-white text-[12px] font-medium"
                     >
                         <Link href={deployUrl}>Deploy</Link>
                     </Button>

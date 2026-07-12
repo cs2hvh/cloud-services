@@ -756,11 +756,13 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
                                 boxShadow: '0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)',
                             }}
                             onMouseEnter={(e) => {
-                                e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.background = '#ffffff';
+                                e.currentTarget.style.color = '#000000';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
                             }}
                             onMouseLeave={(e) => {
                                 e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                                e.currentTarget.style.color = '#ffffff';
                                 e.currentTarget.style.transform = 'none';
                             }}
                         >
@@ -1174,6 +1176,16 @@ function RequestModal({ sku, onClose }: { sku: BareMetalSku; onClose: () => void
                         disabled={submitting}
                         className={`${MONO} h-10 flex-[1.4] rounded-[5px] text-[11px] uppercase tracking-[0.12em] font-semibold transition-all disabled:opacity-60`}
                         style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: '#fff', boxShadow: '0 8px 20px rgba(0,149,255,0.2)' }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.color = '#000000';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.transform = 'none';
+                        }}
                     >
                         {submitting ? 'Sending…' : 'Submit enquiry'}
                     </button>

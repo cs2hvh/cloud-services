@@ -447,7 +447,7 @@ function Configurator({
             {/* Price */}
             <div className="mt-4 flex items-end gap-3">
               <div>
-                <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[40px] font-bold leading-none tabular-nums text-white">
+                <span className="font-[var(--font-geist-mono),ui-monospace,monospace] text-[40px] font-bold leading-none tabular-nums text-[#0095FF]">
                   ${formatPrice(monthly)}
                 </span>
                 <span className="ml-1 text-[13px] text-white/45">/mo</span>
@@ -461,7 +461,7 @@ function Configurator({
                 "Billed monthly · cancel anytime"
               ) : (
                 <>
-                  Billed yearly · <span className="text-[#8ecaff]">save 20%</span>
+                  Billed yearly · <span className="font-semibold text-[#0095FF]" style={{ textShadow: "0 0 10px rgba(0,149,255,0.65)" }}>save 20%</span>
                 </>
               )}
             </p>
@@ -487,7 +487,7 @@ function Configurator({
 
             <a
               href={resolveCta(tier.ctaLink)}
-              className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[6px] bg-white px-5 py-3 text-[13.5px] font-semibold text-black transition-colors hover:bg-white/90"
+              className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[6px] bg-white px-5 py-3 text-[13.5px] font-semibold text-black transition-colors hover:bg-[#0095FF] hover:text-white"
             >
               {tier.ctaText || "Deploy now"}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -615,7 +615,7 @@ function PlanCards({
                 </p>
               ) : (
                 <p className="font-[var(--font-geist-mono),ui-monospace,monospace] tabular-nums text-white">
-                  <span className="text-[26px] font-bold">${formatPrice(monthly)}</span>
+                  <span className="text-[26px] font-bold text-[#0095FF]">${formatPrice(monthly)}</span>
                   <span className="ml-1 text-[12px] text-white/45">
                     {billingCycle === "monthly" ? "/mo" : "/mo · yearly"}
                   </span>
@@ -637,8 +637,8 @@ function PlanCards({
               className={cn(
                 "group/cta mt-5 inline-flex items-center justify-center gap-1.5 rounded-[6px] border px-4 py-2.5 text-[12.5px] font-medium transition-colors",
                 tier.isFeatured
-                  ? "border-transparent bg-white text-black hover:bg-white/90"
-                  : "border-white/15 bg-white/[0.04] text-white/85 hover:border-white/40 hover:bg-white/[0.09] hover:text-white"
+                  ? "border-transparent bg-white text-black hover:bg-[#0095FF] hover:text-white"
+                  : "border-white/15 bg-white/[0.04] text-white/85 hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
               )}
             >
               {tier.ctaText || "Get started"}

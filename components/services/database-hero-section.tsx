@@ -78,14 +78,9 @@ export default function DatabaseHeroSection({
       <Container className="relative z-10">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center lg:gap-16">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/56">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-              Managed Databases
-            </div>
-
-            <h1 className="mt-6 max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
+            <h1 className="max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[3.5rem] xl:text-[5.15rem]">
               The data layer for
-              <span className="block text-[#8ecaff]">production software</span>
+              <span className="block text-[#0095FF]">production software</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]">

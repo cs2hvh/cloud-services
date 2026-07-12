@@ -292,7 +292,7 @@ export default async function StatusPage() {
     <main className="min-h-screen bg-[#08090b] text-white">
       {/* Aurora glow background */}
       <div
-        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] opacity-60"
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[900px] h-[400px] opacity-60"
         style={{
           background: `radial-gradient(ellipse at center, ${overallColor}22 0%, transparent 70%)`,
           filter: "blur(40px)",

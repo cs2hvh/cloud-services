@@ -542,10 +542,7 @@ export default function ComputePricingSection({
 
       <Container>
         <div className="mx-auto max-w-4xl text-center">
-          <span className="inline-flex items-center border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/48">
-            Compute Pricing
-          </span>
-          <h2 className="mt-5 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
             Built on <span className="text-[#0095FF]">Next-Gen Hardware</span>, priced for real workloads
           </h2>
           <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-white/45 lg:text-base">

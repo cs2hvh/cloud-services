@@ -13,7 +13,6 @@ const AppDeploymentHome = async () => {
   return (
     <main className="bg-black">
       <ServiceHeroSection
-        badge="Application Platform"
         title="App Deployment"
         description="Deploy applications directly from Git with managed builds, zero-downtime releases, and instant rollbacks. Production infrastructure without the operational overhead."
         primaryAction={{ label: "Deploy Your App", href: "/signup" }}

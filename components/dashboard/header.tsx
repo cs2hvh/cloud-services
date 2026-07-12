@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search, BadgeDollarSign } from "lucide-react";
+import { Search } from "lucide-react";
 import { CommandPalette } from "@/components/dashboard/command-palette";
 
 export function DashboardHeader({ children }: { children?: React.ReactNode }) {
@@ -88,12 +88,25 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
                 {children}
                 <Link
                     href="/dashboard/nav/billing"
-                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors"
+                    className="group inline-flex items-center gap-2 h-8 px-2.5 rounded-[7px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/[0.16] transition-colors"
+                    style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}
                     title="Billing — your balance"
                 >
-                    <BadgeDollarSign className="h-3.5 w-3.5 text-white/45" />
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4 text-white/75 transition-colors group-hover:text-white"
+                    >
+                        <path d="M4 8h13.5A2.5 2.5 0 0 1 20 10.5v5A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5V8Z" />
+                        <path d="M4 8a1.5 1.5 0 0 1 1.5-1.5H15" />
+                        <path d="M20 12h-2.4a1.6 1.6 0 0 0 0 3.2H20" />
+                    </svg>
                     <span
-                        className="text-[12.5px] font-medium tabular-nums"
+                        className="text-[12.5px] font-semibold tabular-nums"
                         style={{ color: balanceColor }}
                     >
                         {balance === null ? "—" : `$${balance.toFixed(2)}`}

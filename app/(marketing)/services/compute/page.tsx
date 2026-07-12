@@ -55,7 +55,6 @@ const ComputeHome = async () => {
   return (
     <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
-        badge="Compute"
         title={
           <>
             Compute, ready in <span className="text-[#0095FF]">seconds</span>.
@@ -127,7 +126,7 @@ const ComputeHome = async () => {
       />
       <ServicesHomeSectionSix
         cases={cases}
-        eyebrow="Use cases"
+        hideEyebrow
         heading="Compute that fits"
         headingAccent="the workload."
         subtitle="Four workloads our customers ship every day — same NVMe instances, 12-region footprint, 24/7 support."

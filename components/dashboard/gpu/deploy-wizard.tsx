@@ -41,7 +41,6 @@ const SERIF_STYLE: React.CSSProperties = {
 };
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
-const ACCENT_BRIGHT = "#33adff";
 const ACCENT_DIM = "rgba(0,149,255,0.12)";
 const BORDER_ACCENT = "rgba(0,149,255,0.4)";
 
@@ -1067,8 +1066,18 @@ export default function DeployWizard({
                                   }
                                 : {}
                         }
-                        onMouseEnter={(e) => !isLoading && (e.currentTarget.style.background = ACCENT_BRIGHT)}
-                        onMouseLeave={(e) => !isLoading && (e.currentTarget.style.background = ACCENT)}
+                        onMouseEnter={(e) => {
+                            if (isLoading) return;
+                            e.currentTarget.style.background = "#ffffff";
+                            e.currentTarget.style.color = "#000000";
+                            e.currentTarget.style.transform = "translateY(-2px)";
+                        }}
+                        onMouseLeave={(e) => {
+                            if (isLoading) return;
+                            e.currentTarget.style.background = ACCENT;
+                            e.currentTarget.style.color = "#001930";
+                            e.currentTarget.style.transform = "none";
+                        }}
                     >
                         {isLoading ? (
                             <>

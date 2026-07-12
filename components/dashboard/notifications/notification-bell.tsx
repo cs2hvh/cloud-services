@@ -1,6 +1,5 @@
 "use client";
 
-import { Bell } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,9 +44,22 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="cursor-pointer relative text-white/55 hover:text-white hover:bg-white/[0.06] rounded-[6px]"
+          aria-label="Notifications"
+          className="group relative h-8 w-8 rounded-[7px] border border-white/[0.08] bg-white/[0.02] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white hover:border-white/[0.16]"
+          style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}
         >
-          <Bell className="h-5 w-5" />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-[17px]"
+          >
+            <path d="M17.5 9a5.5 5.5 0 0 0-11 0c0 4.8-2.2 6.2-2.2 6.2h15.4S17.5 13.8 17.5 9Z" />
+            <path d="M13.7 18.3a2 2 0 0 1-3.4 0" />
+          </svg>
           {unreadCount > 0 && (
             <span
               className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white ring-2 ring-[#0d0e11]"

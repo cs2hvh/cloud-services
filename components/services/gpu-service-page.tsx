@@ -363,7 +363,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
           </div>
           <Link
             href={gpu.href}
-            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors group-hover:border-[#0095FF] group-hover:bg-[#0095FF] group-hover:text-white`}
+            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white hover:bg-white hover:text-black`}
           >
             Deploy
             <ArrowRight className="h-3.5 w-3.5" />
@@ -474,12 +474,7 @@ export function GpuServicePage(
                             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                             className="max-w-2xl"
                         >
-                            <div className="inline-flex items-center gap-2 border border-white/[0.1] bg-white/[0.03] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/56">
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                                GPU Cloud
-                            </div>
-
-                            <h1 className="mt-6 text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
+                            <h1 className="text-5xl font-semibold leading-[0.95] tracking-[-0.035em] text-white sm:text-6xl lg:text-[80px]">
                                 The AI developer
                                 <br />
                                 <span className="text-white/55">cloud, <span className="text-blue-500">on demand.</span></span>
@@ -575,11 +570,6 @@ export function GpuServicePage(
                 />
                 <Container className="relative z-10">
                     <div className="mx-auto max-w-[760px] text-center">
-                        <p
-                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                        >
-                            The lineup
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
                             Every NVIDIA class,{" "}
                             <span className="text-[#0095FF]">ready to deploy</span>
@@ -605,7 +595,7 @@ export function GpuServicePage(
                         </p>
                         <Link
                             href="/dashboard/services/gpu/enterprise"
-                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity hover:opacity-80`}
+                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                         >
                             Talk to sales
                             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -622,11 +612,6 @@ export function GpuServicePage(
                 />
                 <Container className="relative z-10">
                     <div className="mx-auto max-w-[760px] text-center">
-                        <p
-                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                        >
-                            How it works
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
                             From <span className="text-[#0095FF]">zero to inference</span> in four steps
                         </h2>
@@ -689,12 +674,6 @@ export function GpuServicePage(
             <section className="relative overflow-hidden bg-[#E6E4DC] py-20 text-[#1A1814] sm:py-24 lg:py-32">
                 <Container className="relative z-10">
                     <div className="mx-auto max-w-[760px] text-center">
-                        <p
-                            className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
-                        >
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                            Workloads
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
                             Picked for the work you actually do
                         </h2>
@@ -747,13 +726,8 @@ export function GpuServicePage(
                 />
                 <Container className="relative z-10">
                     <div className="mx-auto max-w-[760px] text-center">
-                        <p
-                            className={`${MONO} mb-5 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                        >
-                            FAQ
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
-                            Common questions
+                            Frequently asked questions
                         </h2>
                     </div>
 
@@ -810,12 +784,6 @@ export function GpuServicePage(
 
                 <Container className="relative z-10">
                     <div className="mx-auto max-w-[760px] text-center">
-                        <p
-                            className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/65`}
-                        >
-                            <NvidiaLogo width={16} height={11} className="opacity-95" />
-                            Ready when you are
-                        </p>
                         <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
                             The AI developer cloud
                         </h2>

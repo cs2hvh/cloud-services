@@ -27,12 +27,6 @@ export default function ObjectStoragePricingSection(_: ObjectStoragePricingSecti
             <Container>
                 {/* Header */}
                 <div className="mx-auto max-w-[720px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Pricing
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-black sm:text-4xl lg:text-[46px]">
                         <span className="text-[#0095FF]">$5</span> a month.{" "}<span className="text-[#0095FF]">250 GB</span> to start.
                     </h2>

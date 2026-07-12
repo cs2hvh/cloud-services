@@ -23,7 +23,7 @@ type HeroImage = {
 
 type ServiceHeroSectionProps = {
   badge: string[];
-  title: string;
+  title: React.ReactNode;
   description: string;
   primaryAction?: HeroAction;
   secondaryAction?: HeroAction;
@@ -183,14 +183,14 @@ export function SolutionsHeroSection({
                     width={100}
                     height={100}
                     src={illustration.src}
-                    alt={illustration.alt ?? title}
+                    alt={illustration.alt ?? ""}
                     className="h-full w-full object-contain"
                     loading={illustration.priority ? "eager" : "lazy"}
                   />
                 ) : (
                   <Image
                     src={illustration.src}
-                    alt={illustration.alt ?? title}
+                    alt={illustration.alt ?? ""}
                     fill
                     priority={illustration.priority}
                     className="object-contain"

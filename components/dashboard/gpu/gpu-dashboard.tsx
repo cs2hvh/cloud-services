@@ -357,11 +357,13 @@ export default function GpuDashboard() {
                             boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-                            e.currentTarget.style.transform = "translateY(-1px)";
+                            e.currentTarget.style.background = "#ffffff";
+                            e.currentTarget.style.color = "#000000";
+                            e.currentTarget.style.transform = "translateY(-2px)";
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                            e.currentTarget.style.color = "#ffffff";
                             e.currentTarget.style.transform = "none";
                         }}
                     >
@@ -732,7 +734,7 @@ function FeaturedGpuCard({
                     </div>
                 )}
                 <span
-                    className={`${MONO} inline-flex items-center gap-1 h-7 px-3 rounded-[5px] text-[10px] uppercase tracking-[0.12em] font-semibold transition-all`}
+                    className={`${MONO} inline-flex items-center gap-1 h-7 px-3 rounded-[5px] text-[10px] uppercase tracking-[0.12em] font-semibold transition-all ${row.requestOnly ? "" : "group-hover:!bg-white group-hover:!bg-none group-hover:!text-black group-hover:-translate-y-0.5"}`}
                     style={
                         row.requestOnly
                             ? {

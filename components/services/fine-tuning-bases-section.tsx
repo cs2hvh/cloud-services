@@ -75,10 +75,7 @@ export default function FineTuningBasesSection() {
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Open-source bases
-              </p>
-              <h2 className="mt-4 text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[2.9rem]">
+              <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[2.9rem]">
                 Train on the models{" "}
                 <span className="text-[#0095FF]">worth training on.</span>
               </h2>

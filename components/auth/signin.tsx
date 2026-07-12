@@ -42,12 +42,19 @@ const PRIMARY_BTN_STYLE: React.CSSProperties = {
 };
 const onBtnEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
   if (e.currentTarget.disabled) return;
-  e.currentTarget.style.filter = "brightness(1.08)";
   e.currentTarget.style.transform = "translateY(-1px)";
+  e.currentTarget.style.background = "#ffffff";
+  e.currentTarget.style.color = "#000000";
+  e.currentTarget.style.boxShadow =
+    "0 14px 34px -12px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6)";
 };
 const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.currentTarget.style.filter = "none";
   e.currentTarget.style.transform = "none";
+  e.currentTarget.style.filter = "none";
+  e.currentTarget.style.background = "linear-gradient(135deg, #1f9dff, #0061c4)";
+  e.currentTarget.style.color = "#ffffff";
+  e.currentTarget.style.boxShadow =
+    "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)";
 };
 
 export function SignInForm() {
@@ -307,7 +314,7 @@ export function SignInForm() {
   }
 
   return (
-    <div className="relative mx-auto mt-3 sm:mt-0 w-full max-w-[480px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#101116]/95 px-7 py-8 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[24px] sm:px-9 sm:py-9">
+    <div className="relative mx-auto mt-3 sm:mt-0 w-full max-w-[420px] overflow-hidden rounded-[18px] border border-white/[0.10] bg-[#101116]/95 px-7 py-10 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[24px] sm:px-10 sm:py-12">
       {/* Ambient accent glow */}
       <div
         aria-hidden
@@ -317,7 +324,7 @@ export function SignInForm() {
       <div className="relative z-10">
       {/* Branding — always visible */}
       <div className="mx-auto mb-1 text-center pt-2 pb-1">
-        <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+        <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="inline-block cursor-pointer text-[24px] leading-[27px] font-bold text-white transition-transform duration-300 ease-out will-change-transform hover:-translate-y-1.5 hover:scale-[1.04]">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
         <p className="mt-3 text-[14px] leading-[16px] text-white">
           <span style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="block text-[14px] leading-[18px] font-normal">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</span>
           <span className="block  text-[14px] leading-[16px] text-white/90">Welcome back! Please Log in to continue.</span>
@@ -335,7 +342,7 @@ export function SignInForm() {
         </div>
       ) : (
         <>
-          <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
+          <div className="mx-auto mt-6 w-full max-w-[340px] flex items-center justify-between gap-4 sm:gap-6">
             <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
               <Icons.gitHub className="h-8 w-8" />
             </button>
@@ -350,7 +357,7 @@ export function SignInForm() {
             </button>
           </div>
 
-          <div className="mx-auto mt-4 w-full max-w-[320px]">
+          <div className="mx-auto mt-6 w-full max-w-[340px]">
             <div className="flex items-center gap-3 text-white/55">
               <div className="h-px flex-1 bg-white/15" />
               <span className="text-xs uppercase tracking-[0.18em]">Or</span>
@@ -359,7 +366,7 @@ export function SignInForm() {
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-3 w-full max-w-[320px] space-y-2">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-6 w-full max-w-[340px] space-y-3.5">
               <FormField
                 control={form.control}
                 name="email"
@@ -422,7 +429,7 @@ export function SignInForm() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`${PRIMARY_BTN} mt-3.5`}
+                className={`${PRIMARY_BTN} mt-5`}
                 style={PRIMARY_BTN_STYLE}
                 onMouseEnter={onBtnEnter}
                 onMouseLeave={onBtnLeave}
@@ -432,7 +439,7 @@ export function SignInForm() {
             </form>
           </Form>
 
-          <p className="mt-4 text-center text-sm text-white">
+          <p className="mt-6 text-center text-sm text-white">
             New here! Create an account{" "}
             <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
               Sign Up

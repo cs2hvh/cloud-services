@@ -201,6 +201,8 @@ export default function GpuStorage() {
                         <button
                             type="button"
                             onClick={() => setShowCreate((s) => !s)}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#000000'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`; e.currentTarget.style.color = '#fff'; e.currentTarget.style.transform = 'none'; }}
                             className={`${MONO} inline-flex h-10 items-center gap-2 px-4 text-[11.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
                             style={{
                                 background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
@@ -274,6 +276,8 @@ export default function GpuStorage() {
                                     type="button"
                                     onClick={onCreate}
                                     disabled={creating}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#000000'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`; e.currentTarget.style.color = '#fff'; e.currentTarget.style.transform = 'none'; }}
                                     className={`${MONO} h-10 inline-flex items-center gap-1.5 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-60`}
                                     style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: "#fff", boxShadow: "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)" }}
                                 >
@@ -308,7 +312,9 @@ export default function GpuStorage() {
                         <button
                             type="button"
                             onClick={() => setShowCreate(true)}
-                            className={`${MONO} relative z-10 mt-4 inline-flex h-9 items-center gap-1.5 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px]`}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#000000'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`; e.currentTarget.style.color = '#fff'; e.currentTarget.style.transform = 'none'; }}
+                            className={`${MONO} relative z-10 mt-4 inline-flex h-9 items-center gap-1.5 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
                             style={{ background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`, color: "#fff", boxShadow: "0 8px 20px rgba(0,149,255,0.20)" }}
                         >
                             <Plus className="h-3.5 w-3.5" />

@@ -132,9 +132,6 @@ export default function AiUseCasesContent() {
             transparent
           />
         </div>
-        <span className="eyebrow">
-          <span className="dot" /> USE CASES · A.I. LABS
-        </span>
         <h1>
           Four patterns. <span className="ital">One API.</span>
           <br />
@@ -198,9 +195,6 @@ export default function AiUseCasesContent() {
             01<span className="bar" />
           </div>
           <div>
-            <span className="section-tag">
-              <span className="pip" /> CHATBOTS &amp; AGENTS
-            </span>
             <h2>
               <span className="blue">Conversational agents</span> that{" "}
               <span className="ital">act,</span> not just answer.
@@ -347,9 +341,6 @@ export default function AiUseCasesContent() {
             02<span className="bar" />
           </div>
           <div>
-            <span className="section-tag">
-              <span className="pip" /> RAG &amp; KNOWLEDGE
-            </span>
             <h2>
               From private docs to{" "}
               <span className="blue">grounded, cited answers.</span>
@@ -379,9 +370,6 @@ export default function AiUseCasesContent() {
             03<span className="bar" />
           </div>
           <div>
-            <span className="section-tag">
-              <span className="pip" /> CODE GENERATION
-            </span>
             <h2>
               Code completion, refactors, and{" "}
               <span className="blue">autonomous</span> commits.
@@ -505,9 +493,6 @@ export default function AiUseCasesContent() {
             04<span className="bar" />
           </div>
           <div>
-            <span className="section-tag">
-              <span className="pip" /> DOCUMENT INTELLIGENCE
-            </span>
             <h2>
               Structured data from{" "}
               <span className="blue">unstructured docs.</span>

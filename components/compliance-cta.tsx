@@ -22,7 +22,7 @@ export function ComplianceCta() {
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
               <Link
                 href="/api-docs"
-                className="inline-flex items-center justify-center gap-2 bg-black px-6 py-3 text-[16px] font-medium text-white hover:bg-black/85 transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 bg-black px-6 py-3 text-[16px] font-medium text-white hover:bg-[#0095FF] hover:text-white transition-colors cursor-pointer"
               >
                 Documentation
                 <ArrowRight className="h-4 w-4" />

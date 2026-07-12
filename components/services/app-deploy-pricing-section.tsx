@@ -82,12 +82,6 @@ export default function AppDeployPricingSection({
             <Container>
                 {/* Header */}
                 <div className="mx-auto max-w-[720px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-black/55`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Pricing
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] sm:text-4xl lg:text-[46px]">
                         Three plans. Pay for <span className="text-[#0095FF]">what you ship.</span>
                     </h2>
@@ -175,7 +169,7 @@ export default function AppDeployPricingSection({
                                   intent="main"
                                   className={`${MONO} inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[5px] text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${
                                     isFeatured
-                                      ? "border border-[#1A1814] bg-[#1A1814] text-[#EEECE4] hover:bg-white hover:border-white hover:text-[#1A1814]"
+                                      ? "border border-[#1A1814] bg-[#1A1814] text-[#EEECE4] hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white"
                                       : "border border-black/15 bg-transparent text-black/80 hover:border-[#0095FF] hover:bg-[#0095FF]/[0.06] hover:text-[#0095FF]"
                                   }`}
                                 >

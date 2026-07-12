@@ -95,12 +95,6 @@ export default function KubernetesFeaturesSection() {
         <section className="relative overflow-hidden bg-[#0D0D0F] py-20 sm:py-24 lg:py-28">
             <Container className="relative z-10">
                 <div className="mx-auto max-w-[760px] text-center">
-                    <p
-                        className={`${MONO} mb-5 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.24em] text-white/50`}
-                    >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#0095FF]" />
-                        Features
-                    </p>
                     <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[46px]">
                         Production-ready,{" "}<span className="text-[#0095FF]">built in</span>
                     </h2>

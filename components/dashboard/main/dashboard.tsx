@@ -233,12 +233,18 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                             "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)",
                     }}
                     onMouseEnter={(e) => {
-                        e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT_BRIGHT}, ${ACCENT})`;
-                        e.currentTarget.style.transform = "translateY(-1px)";
+                        e.currentTarget.style.background = "#ffffff";
+                        e.currentTarget.style.color = "#000000";
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                        e.currentTarget.style.boxShadow =
+                            "0 14px 34px -8px rgba(0,149,255,0.55), inset 0 1px 0 rgba(255,255,255,0.6)";
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                        e.currentTarget.style.color = "#ffffff";
                         e.currentTarget.style.transform = "none";
+                        e.currentTarget.style.boxShadow =
+                            "0 8px 20px rgba(0,149,255,0.20), inset 0 1px 0 rgba(255,255,255,0.15)";
                     }}
                 >
                     <Plus className="h-3.5 w-3.5" />
@@ -511,12 +517,25 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                             </p>
                             <Link
                                 href="/dashboard/services/compute/vps"
-                                className={`${MONO} mt-5 inline-flex h-9 items-center gap-2 px-4 text-[10.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px]`}
+                                className={`${MONO} mt-5 inline-flex h-9 items-center gap-2 px-4 text-[10.5px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all`}
                                 style={{
                                     background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
                                     color: "#ffffff",
                                     boxShadow:
                                         "0 8px 20px rgba(0,149,255,0.20)",
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = "#ffffff";
+                                    e.currentTarget.style.color = "#000000";
+                                    e.currentTarget.style.transform = "translateY(-2px)";
+                                    e.currentTarget.style.boxShadow =
+                                        "0 14px 32px -8px rgba(0,149,255,0.55), inset 0 1px 0 rgba(255,255,255,0.6)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = `linear-gradient(135deg, ${ACCENT}, #0066B3)`;
+                                    e.currentTarget.style.color = "#ffffff";
+                                    e.currentTarget.style.transform = "none";
+                                    e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,149,255,0.20)";
                                 }}
                             >
                                 <Plus className="h-3.5 w-3.5" />
