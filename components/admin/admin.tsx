@@ -2,7 +2,7 @@
 
 // import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Server, Network, Users, Database, Bot, Activity, Globe, Cpu } from 'lucide-react';
+import { Server, Network, Users, Database, Bot, Activity, Globe, Cpu, Cloud } from 'lucide-react';
 
 export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) {
 //   const [isAdmin, setIsAdmin] = useState(false);
@@ -142,6 +142,20 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
                 <div>
                   <h3 className="text-xl font-semibold text-white">GPU Stock</h3>
                   <p className="text-white/60 text-sm mt-1">Enable / disable GPU deployments</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/linode" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-teal-500/10 rounded-lg">
+                  <Cloud className="h-6 w-6 text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Linode</h3>
+                  <p className="text-white/60 text-sm mt-1">Catalog, pricing & instances</p>
                 </div>
               </div>
             </a>

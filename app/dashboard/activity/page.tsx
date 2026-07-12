@@ -40,6 +40,7 @@ const SERVICE_LABEL: Record<AuditServiceType, string> = {
   ai_agent: "AI agent",
   knowledge_base: "Knowledge base",
   domain: "Domain",
+  compute: "Compute",
 };
 
 const ActivitySuspense = async () => {
