@@ -23,6 +23,8 @@ import {
   ensureCustomTemplateOnHost,
 } from "@/lib/services/compute/custom-images";
 import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
+import { getComputeProvider } from "@/lib/admin/platform-settings";
+import { handleLinodeCreate } from "@/lib/services/compute/providers/linode/create";
 
 export const dynamic = "force-dynamic";
 
@@ -400,6 +402,15 @@ export async function POST(req: NextRequest) {
       { ok: false, error: `You have reached the maximum of ${MAX_VMS_PER_USER} active servers. Please delete unused servers first.` },
       { status: 429 }
     );
+  }
+
+  // --- Provider dispatch ---
+  // New deployments go to the backend selected in platform_settings (Linode
+  // resell by default). The inline Proxmox pipeline below stays intact but
+  // dormant until owned hardware returns.
+  const computeProvider = await getComputeProvider();
+  if (computeProvider === "linode") {
+    return handleLinodeCreate({ user, body, supabase, idempComplete });
   }
 
   // --- Smart host selection ---

@@ -16,6 +16,8 @@ import {
   resizeDisk,
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
+import { getLinodeResizeOptions } from "@/lib/services/compute/providers/linode/ops";
+import { startLinodeResizeFlow } from "@/lib/services/compute/providers/linode/flows";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: server } = await supabase
     .from("servers")
-    .select("id, location, cpu_cores, memory_mb, disk_gb, tier, plan_slug, owner_id, status")
+    .select("id, location, cpu_cores, memory_mb, disk_gb, tier, plan_slug, owner_id, status, provider, linode_id")
     .eq("id", serverId)
     .maybeSingle();
 
@@ -58,6 +60,28 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
   if (!server.location) {
     return Response.json({ ok: false, error: "Server is not fully provisioned" }, { status: 422 });
+  }
+
+  // Linode-backed servers: targets come from the synced catalog (per-region
+  // availability + prices) instead of Proxmox host capacity.
+  if (server.provider === "linode") {
+    try {
+      const options = await getLinodeResizeOptions(
+        {
+          id: Number(server.id),
+          linode_id: server.linode_id as number | null,
+          location: server.location as string | null,
+          plan_slug: server.plan_slug as string | null,
+          memory_mb: server.memory_mb as number | null,
+          disk_gb: server.disk_gb as number | null,
+        },
+        supabase
+      );
+      return Response.json({ ok: true, ...options });
+    } catch (e) {
+      console.error("[VM Resize] Linode options failed:", e instanceof Error ? e.message : e);
+      return Response.json({ ok: false, error: "Unable to load resize options" }, { status: 500 });
+    }
   }
 
   const [avail, plans] = await Promise.all([
@@ -158,7 +182,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const { data: server, error: serverErr } = await supabase
     .from("servers")
     .select(
-      "id, vmid, node, location, owner_id, status, cpu_cores, memory_mb, disk_gb, tier, plan_slug, billing_service_id"
+      "id, vmid, node, location, owner_id, status, cpu_cores, memory_mb, disk_gb, tier, plan_slug, billing_service_id, provider, linode_id, details"
     )
     .eq("id", serverId)
     .maybeSingle();
@@ -169,6 +193,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (!server) return Response.json({ ok: false, error: "Server not found" }, { status: 404 });
   if (server.owner_id !== user.id) {
     return Response.json({ ok: false, error: "Not authorized" }, { status: 403 });
+  }
+
+  // ── Linode-backed servers: resize via the Linode API ──
+  // Linode powers the instance off, migrates, and boots it back if it was
+  // running — so both running and stopped servers may start a resize.
+  if (server.provider === "linode") {
+    return handleLinodeResizePost({ supabase, server, serverId, userId: user.id, planSlug });
   }
 
   const status = String(server.status);
@@ -367,5 +398,46 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   });
 
+  return Response.json({ ok: true, status: "resizing" }, { status: 202 });
+}
+
+/**
+ * Linode resize — delegates to the shared flow (also used by the public v1
+ * API) which validates, starts the upstream migration, and re-rates billing
+ * in the background. Only the response envelope lives here.
+ */
+async function handleLinodeResizePost({
+  supabase,
+  server,
+  serverId,
+  userId,
+  planSlug,
+}: {
+  supabase: Awaited<ReturnType<typeof createWorkerClient>>;
+  server: Record<string, unknown>;
+  serverId: number;
+  userId: string;
+  planSlug: string;
+}) {
+  const result = await startLinodeResizeFlow({
+    supabase,
+    server: {
+      id: serverId,
+      status: (server.status as string | null) ?? null,
+      linode_id: (server.linode_id as number | null) ?? null,
+      location: (server.location as string | null) ?? null,
+      plan_slug: (server.plan_slug as string | null) ?? null,
+      memory_mb: (server.memory_mb as number | null) ?? null,
+      disk_gb: (server.disk_gb as number | null) ?? null,
+      details: (server.details as Record<string, unknown> | null) ?? null,
+      billing_service_id: (server.billing_service_id as string | null) ?? null,
+    },
+    userId,
+    planSlug,
+  });
+
+  if (!result.ok) {
+    return Response.json({ ok: false, error: result.message }, { status: result.status });
+  }
   return Response.json({ ok: true, status: "resizing" }, { status: 202 });
 }

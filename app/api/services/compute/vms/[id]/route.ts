@@ -3,6 +3,7 @@ import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
+import { renameLinodeInstance } from "@/lib/services/compute/providers/linode/ops";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const { data: server, error } = await supabase
     .from("servers")
     .select(
-      "id, vmid, node, name, ip, os, cpu_cores, memory_mb, disk_gb, status, hourly_cost, billing_start, created_at, details, location"
+      "id, vmid, node, name, ip, os, cpu_cores, memory_mb, disk_gb, status, hourly_cost, monthly_cost, billing_start, created_at, details, location, provider, linode_id"
     )
     .eq("id", serverId)
     .eq("owner_id", user.id)
@@ -43,18 +44,29 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     return Response.json({ ok: false, error: "Server not found" }, { status: 404 });
   }
 
-  // Fetch host info for region/display data
+  // Fetch region/display data — Linode rows store the Linode region id in
+  // `location`; Proxmox rows reference a proxmox_hosts row.
   let region: string | null = null;
   let displayRegion: string | null = null;
   if (server.location) {
-    const { data: host } = await supabase
-      .from("proxmox_hosts")
-      .select("region, display_region, gateway_ip, dns_primary, dns_secondary, bridge")
-      .eq("id", server.location)
-      .maybeSingle();
-    if (host) {
-      region = host.region;
-      displayRegion = host.display_region;
+    if (server.provider === "linode") {
+      const { data: linodeRegion } = await supabase
+        .from("linode_regions")
+        .select("id, label")
+        .eq("id", server.location)
+        .maybeSingle();
+      region = server.location as string;
+      displayRegion = linodeRegion?.label ?? (server.location as string);
+    } else {
+      const { data: host } = await supabase
+        .from("proxmox_hosts")
+        .select("region, display_region, gateway_ip, dns_primary, dns_secondary, bridge")
+        .eq("id", server.location)
+        .maybeSingle();
+      if (host) {
+        region = host.region;
+        displayRegion = host.display_region;
+      }
     }
   }
 
@@ -103,7 +115,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: server } = await supabase
     .from("servers")
-    .select("id, owner_id")
+    .select("id, owner_id, provider, linode_id, location")
     .eq("id", serverId)
     .maybeSingle();
 
@@ -115,6 +127,22 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { error } = await supabase.from("servers").update({ name: newName }).eq("id", serverId);
   if (error) {
     return Response.json({ ok: false, error: "Failed to rename server" }, { status: 500 });
+  }
+
+  // Push the rename upstream for Linode rows (best-effort — the DB row is the
+  // display truth; a failure here never blocks the rename).
+  if (server.provider === "linode" && server.linode_id) {
+    renameLinodeInstance(
+      {
+        id: Number(server.id),
+        linode_id: server.linode_id as number,
+        location: (server.location as string | null) ?? null,
+        plan_slug: null,
+      },
+      newName
+    ).catch((e) =>
+      console.warn("[VM Rename] upstream label update failed:", e instanceof Error ? e.message : e)
+    );
   }
 
   return Response.json({ ok: true, name: newName });

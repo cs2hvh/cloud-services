@@ -8,6 +8,7 @@ import {
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { getLinodeMetricsResponse } from "@/lib/services/compute/providers/linode/ops";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: server, error: dbError } = await supabase
     .from("servers")
-    .select("id, vmid, node, location, status, owner_id")
+    .select("id, vmid, node, location, status, owner_id, provider, linode_id, memory_mb, details")
     .eq("id", serverId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -103,6 +104,33 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
   if (!server) {
     return Response.json({ ok: false, error: "Server not found" }, { status: 404 });
+  }
+
+  /* ── Linode-backed servers: stats API, adapted to the same wire shape ── */
+  if (server.provider === "linode") {
+    if (server.status === "provisioning" || !server.linode_id) {
+      return Response.json(
+        { ok: false, error: "Server is still provisioning" },
+        { status: 422 }
+      );
+    }
+    try {
+      const response = await getLinodeMetricsResponse({
+        id: Number(server.id),
+        linode_id: server.linode_id as number,
+        location: server.location as string | null,
+        plan_slug: null,
+        memory_mb: server.memory_mb as number | null,
+        details: (server.details as Record<string, unknown> | null) ?? null,
+      });
+      return Response.json(response);
+    } catch (err) {
+      console.error("[VM Metrics] Linode query failed:", err instanceof Error ? err.message : err);
+      return Response.json(
+        { ok: false, error: "Failed to retrieve metrics from infrastructure" },
+        { status: 502 }
+      );
+    }
   }
 
   /* ── Validate prerequisites ───────────────────────── */

@@ -8,6 +8,7 @@ import {
 } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { createVncToken } from "@/lib/vnc-token";
+import { getLinodeConsole } from "@/lib/services/compute/providers/linode/ops";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: srv, error: dbErr } = await supabase
     .from("servers")
-    .select("vmid, node, location, status, owner_id")
+    .select("id, vmid, node, location, status, owner_id, provider, linode_id")
     .eq("id", serverId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -77,6 +78,32 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
       { status: 422 }
     );
   }
+
+  /* ── Linode-backed servers: Lish web console (weblish/glish) ── */
+  if (srv.provider === "linode") {
+    if (!srv.linode_id) {
+      return Response.json(
+        { ok: false, error: "Server is still provisioning" },
+        { status: 422 }
+      );
+    }
+    try {
+      const lish = await getLinodeConsole({
+        id: Number(srv.id),
+        linode_id: srv.linode_id as number,
+        location: srv.location as string | null,
+        plan_slug: null,
+      });
+      return Response.json({ ok: true, console: lish });
+    } catch (err) {
+      console.error("[console] Lish session failed:", err instanceof Error ? err.message : err);
+      return Response.json(
+        { ok: false, error: "Failed to create console session" },
+        { status: 502 }
+      );
+    }
+  }
+
   if (!srv.vmid || !srv.location) {
     return Response.json(
       { ok: false, error: "Server is still provisioning" },

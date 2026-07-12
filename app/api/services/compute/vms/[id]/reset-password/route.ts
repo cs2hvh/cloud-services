@@ -5,7 +5,7 @@
 // password to the owner. The password is never returned to the frontend and
 // never stored — it exists only in the email.
 
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { randomBytes } from "crypto";
 
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
@@ -17,6 +17,7 @@ import {
   type ProxmoxHost,
 } from "@/lib/proxmox-utils";
 import { emailService } from "@/lib/email";
+import { performLinodeResetPassword } from "@/lib/services/compute/providers/linode/ops";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -93,7 +94,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   const supabase = await createWorkerClient();
   const { data: server, error: serverErr } = await supabase
     .from("servers")
-    .select("id, vmid, node, location, owner_id, owner_email, status, os, ip, name, details")
+    .select("id, vmid, node, location, owner_id, owner_email, status, os, ip, name, details, provider, linode_id")
     .eq("id", serverId)
     .maybeSingle();
 
@@ -102,6 +103,13 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   if (server.owner_id !== user.id) {
     return Response.json({ ok: false, error: "Not authorized" }, { status: 403 });
   }
+
+  // ── Linode-backed servers: orchestrated offline reset (shutdown → set →
+  // boot). Takes a few minutes; runs in the background with realtime stages.
+  if (server.provider === "linode") {
+    return handleLinodeResetPassword({ supabase, server, serverId, user });
+  }
+
   if (String(server.status) !== "running") {
     return Response.json(
       { ok: false, error: "The server must be running to reset its password. Start it and try again." },
@@ -185,4 +193,155 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
     message: "Password reset. The new password has been emailed to you.",
     emailedTo: maskEmail(to),
   });
+}
+
+/**
+ * Linode root-password reset. The Linode API requires the instance to be
+ * OFFLINE, so this orchestrates shutdown → set password → boot in the
+ * background (~2-5 min) with details.provisioning stages driving the realtime
+ * UI. The password is generated server-side and emailed — never returned.
+ */
+async function handleLinodeResetPassword({
+  supabase,
+  server,
+  serverId,
+  user,
+}: {
+  supabase: Awaited<ReturnType<typeof createWorkerClient>>;
+  server: Record<string, unknown>;
+  serverId: number;
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> };
+}) {
+  const status = String(server.status);
+  if (status !== "running" && status !== "stopped") {
+    return Response.json(
+      { ok: false, error: "The server must be running or stopped to reset its password." },
+      { status: 409 }
+    );
+  }
+  if (!server.linode_id) {
+    return Response.json({ ok: false, error: "Server configuration is incomplete." }, { status: 422 });
+  }
+
+  const to = user.email || (server.owner_email as string | null) || "";
+  if (!to) {
+    return Response.json(
+      { ok: false, error: "No email address on file to send the new password to." },
+      { status: 422 }
+    );
+  }
+
+  const password = generateVmPassword();
+  const row = {
+    id: serverId,
+    linode_id: server.linode_id as number,
+    location: (server.location as string | null) ?? null,
+    plan_slug: (server.plan_slug as string | null) ?? null,
+  };
+  const linodeDetails =
+    ((server.details as Record<string, unknown> | null)?.linode as Record<string, unknown> | undefined) ?? {};
+  const startedAt = new Date().toISOString();
+
+  await supabase
+    .from("servers")
+    .update({
+      status: "provisioning",
+      details: {
+        linode: linodeDetails,
+        provisioning: {
+          stage: "password_reset",
+          progress: 10,
+          message: "Restarting for password reset…",
+          started_at: startedAt,
+        },
+      },
+    })
+    .eq("id", serverId);
+
+  after(async () => {
+    const svc = await createWorkerClient();
+    const setStage = async (stage: string, progress: number, message: string) => {
+      try {
+        await svc
+          .from("servers")
+          .update({
+            details: {
+              linode: linodeDetails,
+              provisioning: { stage, progress, message, started_at: startedAt, updated_at: new Date().toISOString() },
+            },
+          })
+          .eq("id", serverId);
+      } catch {}
+    };
+
+    try {
+      await performLinodeResetPassword(row, password, setStage);
+
+      await svc
+        .from("servers")
+        .update({
+          status: "running",
+          details: {
+            linode: linodeDetails,
+            provisioning: {
+              stage: "complete",
+              progress: 100,
+              message: "Password reset complete",
+              started_at: startedAt,
+              completed_at: new Date().toISOString(),
+            },
+          },
+        })
+        .eq("id", serverId);
+
+      const recipientName =
+        (user.user_metadata?.name as string | undefined) ||
+        (user.email ? user.email.split("@")[0] : "there");
+      const sent = await emailService.sendTemplate({
+        template: "vpsPasswordReset",
+        to,
+        data: {
+          recipientName,
+          serverName: String(server.name ?? ""),
+          ipAddress: String(server.ip ?? ""),
+          loginUsername: "root",
+          password,
+          protocol: "SSH",
+          port: 22,
+        },
+      });
+      if (!sent.success) {
+        console.error("[vm-reset-password] Linode reset email failed for server", serverId);
+      }
+    } catch (err) {
+      console.error("[vm-reset-password] Linode reset failed:", err instanceof Error ? err.message : err);
+      try {
+        await svc
+          .from("servers")
+          .update({
+            status: status === "stopped" ? "stopped" : "running",
+            details: {
+              linode: linodeDetails,
+              provisioning: {
+                stage: "failed",
+                progress: 100,
+                message: "Password reset failed. Your server was left unchanged.",
+                failed_at: new Date().toISOString(),
+              },
+            },
+          })
+          .eq("id", serverId);
+      } catch {}
+    }
+  });
+
+  return Response.json(
+    {
+      ok: true,
+      message:
+        "Password reset started — the server restarts briefly, then the new root password is emailed to you.",
+      emailedTo: maskEmail(to),
+    },
+    { status: 202 }
+  );
 }

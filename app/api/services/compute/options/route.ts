@@ -10,6 +10,8 @@ import {
   planAllowedInRegion,
   planAllowedOnHost,
 } from "@/lib/pricing/instance-plans";
+import { getComputeProvider } from "@/lib/admin/platform-settings";
+import { getLinodeOptionsResponse } from "@/lib/services/compute/providers/linode/options";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,13 @@ export async function GET() {
     }
 
     const supabase = await createWorkerClient();
+
+    // Provider dispatch: Linode resell serves its own catalog shape (the
+    // deploy form branches on `data.provider`). The Proxmox path below stays
+    // intact but dormant.
+    if ((await getComputeProvider()) === "linode") {
+      return getLinodeOptionsResponse(supabase, user.id);
+    }
 
     // 1. Get active hosts with capacity info
     const { data: hosts, error: hostsErr } = await supabase

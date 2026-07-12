@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { proxmoxAuth, postForm, getDispatcher, type ProxmoxHost } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { linodePower } from "@/lib/services/compute/providers/linode/ops";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createWorkerClient();
   const { data: server, error: serverErr } = await supabase
     .from('servers')
-    .select('id, vmid, node, location, owner_id')
+    .select('id, vmid, node, location, owner_id, provider, linode_id')
     .eq('id', serverId)
     .maybeSingle();
 
@@ -50,6 +51,22 @@ export async function POST(req: NextRequest) {
   // Verify the user owns this server
   if (!server.owner_id || server.owner_id !== user.id) {
     return Response.json({ ok: false, error: "Not authorized" }, { status: 403 });
+  }
+
+  // Linode-backed servers: power via the Linode API; Proxmox path stays below.
+  if (server.provider === 'linode') {
+    try {
+      const result = await linodePower(
+        { id: Number(server.id), linode_id: server.linode_id as number | null, location: server.location as string | null, plan_slug: null },
+        action as 'start' | 'stop' | 'reboot'
+      );
+      await supabase.from('servers').update({ status: result.status }).eq('id', serverId);
+      return Response.json({ ok: true, action, status: result.status });
+    } catch (e) {
+      console.error("[VM Power] Linode action failed:", e instanceof Error ? e.message : e);
+      const actionLabel = action === 'start' ? 'start' : action === 'stop' ? 'shut down' : 'restart';
+      return Response.json({ ok: false, error: `Unable to ${actionLabel} your server. Please try again or contact support.` }, { status: 502 });
+    }
   }
 
   const vmid = server.vmid as number | undefined;

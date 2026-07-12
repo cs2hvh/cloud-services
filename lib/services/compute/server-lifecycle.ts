@@ -37,18 +37,41 @@ export async function destroyServer(serverId: number): Promise<DestroyServerResu
   const supabase = await createWorkerClient();
   const { data: server, error } = await supabase
     .from("servers")
-    .select("id, vmid, node, ip, location, owner_id, status, billing_service_id")
+    .select("id, vmid, node, ip, location, owner_id, status, billing_service_id, provider, linode_id")
     .eq("id", serverId)
     .maybeSingle();
 
   if (error) return { success: false, message: error.message };
   if (!server) return { success: true, alreadyGone: true, message: "Server already deleted" };
 
+  const provider = (server.provider as string | null) ?? "proxmox";
+
+  if (provider === "linode") {
+    // Linode teardown: delete the instance (404-tolerant — already gone is
+    // success). Billing close + row cleanup below are provider-agnostic.
+    const linodeId = server.linode_id as number | null;
+    if (linodeId) {
+      try {
+        const { deleteLinodeInstance } = await import(
+          "@/lib/services/compute/providers/linode/lifecycle"
+        );
+        await deleteLinodeInstance(linodeId);
+      } catch (e) {
+        console.error(
+          "[destroyServer] Linode cleanup failed:",
+          e instanceof Error ? e.message : e
+        );
+        // Continue with billing close + DB cleanup even if Linode failed —
+        // the reconcile job reports any instance left behind.
+      }
+    }
+  }
+
   const vmid = server.vmid as number | undefined;
   const node = server.node as string | undefined;
   const hostId = server.location as string | undefined;
 
-  if (vmid && vmid > 0 && node && hostId) {
+  if (provider === "proxmox" && vmid && vmid > 0 && node && hostId) {
     const { data: host } = await supabase
       .from("proxmox_hosts")
       .select(
