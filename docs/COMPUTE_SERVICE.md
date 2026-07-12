@@ -1,3 +1,5 @@
+> **LEGACY** — this describes the dormant Proxmox/OVH backend. The compute service now resells Linode; see [LINODE_COMPUTE.md](./LINODE_COMPUTE.md).
+
 # Compute / Virtual Servers (VPS) — Service Guide
 
 > Internal engineering documentation. This service is customer‑facing, but the
