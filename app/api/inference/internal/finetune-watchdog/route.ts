@@ -28,7 +28,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { RunPodClient } from "@/lib/services/runpod/client";
-import { chargeFinetuneUsage } from "@/lib/inference/finetune-billing";
+import { chargeFinetuneUsage, computeFinetuneCostCents } from "@/lib/inference/finetune-billing";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,8 +117,7 @@ export async function POST(request: NextRequest) {
           ? Date.parse(row.created_at)
           : now;
       const elapsedSeconds = Math.max(0, Math.round((now - startMs) / 1000));
-      const hourly = Number(row.hourly_cost_cents) || 0;
-      const costCents = hourly > 0 ? Math.ceil((hourly * elapsedSeconds) / 3600) : 0;
+      const costCents = computeFinetuneCostCents(row.hourly_cost_cents, elapsedSeconds);
 
       // Win the terminal transition atomically — only the sweep that flips the
       // job out of a non-terminal state reaps + charges it.
