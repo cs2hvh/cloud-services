@@ -11,6 +11,17 @@
  *      c. Update eval_result row to 'completed' or 'failed'
  *      d. Bump run.heartbeat_at + aggregate counts
  *   5. Mark run as completed with avg_score; or failed on fatal error
+ *
+ * BILLING (on-behalf-of, 2026-07-15): found live — every target-model call
+ * and every llm_judge call authenticated with the static
+ * INFERENCE_PLATFORM_KEY but never asserted X-Ahura-On-Behalf-Of-Org, so
+ * every eval run's real inference cost billed to whichever org owns that
+ * platform key, never the customer who ran the eval — the exact
+ * misattribution bug agent-runner had and fixed on 2026-07-06
+ * (workers/agent-runner/src/gateway.ts), just never backported here. Both
+ * calls now carry the header, and per-case cost_cents (previously hardcoded
+ * to 0) is computed from real token usage × the target/judge models' own
+ * catalog pricing, mirroring agent-runner's priceStep/fetchModelPricing.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Logger } from "pino";
@@ -28,6 +39,39 @@ interface RunContext {
   env: RunnerEnv;
   supabase: SupabaseClient;
   logger: Logger;
+}
+
+interface ModelPricing {
+  input_cents_per_mtok?: number;
+  output_cents_per_mtok?: number;
+}
+
+interface CasePricing {
+  targetPricing: ModelPricing;
+  judgeModel: string | null;
+  judgePricing: ModelPricing | null;
+}
+
+async function fetchModelPricing(supabase: SupabaseClient, modelId: string): Promise<ModelPricing> {
+  const { data } = await supabase
+    .schema("inference")
+    .from("models")
+    .select("pricing")
+    .eq("model_id", modelId)
+    .maybeSingle<{ pricing: ModelPricing }>();
+  return data?.pricing ?? {};
+}
+
+/** Fractional cents from token counts × per-million-token catalog rates —
+ *  same formula as agent-runner's priceStep model branch. */
+function computeCostCents(pricing: ModelPricing, inputTokens: number, outputTokens: number): number {
+  const inRate = pricing.input_cents_per_mtok ?? 0;
+  const outRate = pricing.output_cents_per_mtok ?? 0;
+  return (inputTokens * inRate + outputTokens * outRate) / 1_000_000;
+}
+
+function round4(n: number): number {
+  return Math.round(n * 10_000) / 10_000;
 }
 
 export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
@@ -67,6 +111,15 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
     const evalCases = cases as EvalCase[];
     log.info({ caseCount: evalCases.length }, "loaded cases");
 
+    // ── 2b. Pricing for this run's target + (if used) judge model ───────────────
+    const judgeModel =
+      job.scorerType === "llm_judge" ? ((job.scorerConfig.judge_model as string | undefined) ?? "openai/gpt-4o-mini") : null;
+    const pricing: CasePricing = {
+      targetPricing: await fetchModelPricing(supabase, job.modelId),
+      judgeModel,
+      judgePricing: judgeModel ? await fetchModelPricing(supabase, judgeModel) : null,
+    };
+
     // ── 3. Pre-insert pending result rows ──────────────────────────────────────
     const pendingRows = evalCases.map((c) => ({
       run_id: job.runId,
@@ -85,6 +138,7 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
     let failedCount = 0;
     let totalScore = 0;
     let scoredCount = 0;
+    let totalCostCents = 0;
 
     const batchSize = env.concurrentCases;
     for (let i = 0; i < evalCases.length; i += batchSize) {
@@ -102,17 +156,18 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
       }
 
       const batch = evalCases.slice(i, i + batchSize);
-      await Promise.allSettled(batch.map((c) => processCase(ctx, job, c)));
+      await Promise.allSettled(batch.map((c) => processCase(ctx, job, c, pricing)));
 
       // Re-count from DB after each batch to get accurate numbers
       const { data: counts } = await supabase
         .schema("inference")
         .from("eval_results")
-        .select("status, score")
+        .select("status, score, cost_cents")
         .eq("run_id", job.runId);
 
-      completedCount = 0; failedCount = 0; totalScore = 0; scoredCount = 0;
+      completedCount = 0; failedCount = 0; totalScore = 0; scoredCount = 0; totalCostCents = 0;
       for (const r of counts ?? []) {
+        totalCostCents += Number(r.cost_cents ?? 0);
         if (r.status === "completed") {
           completedCount++;
           if (r.score != null) { totalScore += Number(r.score); scoredCount++; }
@@ -130,11 +185,12 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
           completed_cases: completedCount,
           failed_cases: failedCount,
           avg_score: avgScore,
+          cost_cents: round4(totalCostCents),
           heartbeat_at: new Date().toISOString(),
         })
         .eq("id", job.runId);
 
-      log.info({ completed: completedCount, failed: failedCount, total: evalCases.length, avgScore }, "batch done");
+      log.info({ completed: completedCount, failed: failedCount, total: evalCases.length, avgScore, totalCostCents }, "batch done");
     }
 
     // ── 5. Mark completed ──────────────────────────────────────────────────────
@@ -147,6 +203,7 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
         completed_cases: completedCount,
         failed_cases: failedCount,
         avg_score: finalAvg,
+        cost_cents: round4(totalCostCents),
       })
       .eq("id", job.runId);
 
@@ -163,7 +220,7 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
   }
 }
 
-async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<void> {
+async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase, pricing: CasePricing): Promise<void> {
   const { env, supabase, logger } = ctx;
   const log = logger.child({ runId: job.runId, caseId: c.id });
   const startMs = Date.now();
@@ -174,6 +231,7 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
     const timer = setTimeout(() => controller.abort(), env.caseTimeoutMs);
 
     let output: string;
+    let targetCostCents = 0;
 
     try {
       const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
@@ -181,6 +239,7 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
         headers: {
           "Authorization": `Bearer ${env.inferencePlatformKey}`,
           "Content-Type": "application/json",
+          "X-Ahura-On-Behalf-Of-Org": job.orgId,
         },
         body: JSON.stringify({
           model: job.modelId,
@@ -198,9 +257,14 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
 
       const data = (await res.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
-        usage?: { total_tokens?: number };
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       output = data.choices?.[0]?.message?.content ?? "";
+      targetCostCents = computeCostCents(
+        pricing.targetPricing,
+        data.usage?.prompt_tokens ?? 0,
+        data.usage?.completion_tokens ?? 0
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -209,6 +273,7 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
 
     // Score the output
     let scoreResult;
+    let judgeCostCents = 0;
     switch (job.scorerType) {
       case "exact":
         scoreResult = scoreExact(output, c.expected);
@@ -228,12 +293,16 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
           output,
           c.expected,
           c.input,
-          job.scorerConfig.judge_model ?? "openai/gpt-4o-mini",
-          job.scorerConfig.judge_prompt ?? null,
+          pricing.judgeModel ?? "openai/gpt-4o-mini",
+          (job.scorerConfig.judge_prompt as string | undefined) ?? null,
           env.inferenceBaseUrl,
           env.inferencePlatformKey,
-          env.caseTimeoutMs
+          env.caseTimeoutMs,
+          job.orgId
         );
+        if (scoreResult.usage && pricing.judgePricing) {
+          judgeCostCents = computeCostCents(pricing.judgePricing, scoreResult.usage.inputTokens, scoreResult.usage.outputTokens);
+        }
         break;
     }
 
@@ -247,7 +316,7 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase): Promise<
         scorer_reasoning: scoreResult.reasoning,
         status: "completed",
         latency_ms: latencyMs,
-        cost_cents: 0,
+        cost_cents: round4(targetCostCents + judgeCostCents),
       })
       .eq("run_id", job.runId)
       .eq("case_id", c.id);

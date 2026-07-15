@@ -4,13 +4,20 @@
  * Each scorer receives the model's output and the expected string (may be null)
  * and returns a score in [0, 1] with an optional reasoning string.
  *
- * llm_judge calls our own inference gateway so the judge model is billed
- * through normal usage accounting.
+ * llm_judge calls our own inference gateway. Found live (2026-07-15): this
+ * call authenticated with the static INFERENCE_PLATFORM_KEY but never sent
+ * X-Ahura-On-Behalf-Of-Org, so — exactly the misattribution bug agent-runner
+ * had and fixed on 2026-07-06 (see gateway.ts's header comment there) — every
+ * judge call billed the platform's own org, never the customer running the
+ * eval. Now carries the header; usage tokens are returned so the caller
+ * (lifecycle.ts) can price the judge call the same way it prices the target
+ * model call.
  */
 
 export interface ScoreResult {
   score: number;       // 0.0 (fail) to 1.0 (pass); llm_judge may return fractional
   reasoning: string | null;
+  usage?: { inputTokens: number; outputTokens: number }; // llm_judge only
 }
 
 // ── Deterministic scorers ──────────────────────────────────────────────────────
@@ -100,7 +107,8 @@ export async function scoreLlmJudge(
   judgePromptOverride: string | null | undefined,
   inferenceBaseUrl: string,
   platformKey: string,
-  timeoutMs: number
+  timeoutMs: number,
+  orgId: string
 ): Promise<ScoreResult> {
   const systemPrompt = judgePromptOverride ?? DEFAULT_JUDGE_PROMPT;
 
@@ -119,6 +127,7 @@ export async function scoreLlmJudge(
       headers: {
         "Authorization": `Bearer ${platformKey}`,
         "Content-Type": "application/json",
+        "X-Ahura-On-Behalf-Of-Org": orgId,
       },
       body: JSON.stringify({
         model: judgeModel,
@@ -137,17 +146,24 @@ export async function scoreLlmJudge(
       return { score: 0, reasoning: `Judge call failed (HTTP ${res.status}): ${txt.slice(0, 200)}` };
     }
 
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
     const raw = data.choices?.[0]?.message?.content ?? "";
+    const usage = {
+      inputTokens: data.usage?.prompt_tokens ?? 0,
+      outputTokens: data.usage?.completion_tokens ?? 0,
+    };
 
     // Extract JSON from the judge's response
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return { score: 0, reasoning: `Judge returned unparseable output: ${raw.slice(0, 200)}` };
+    if (!match) return { score: 0, reasoning: `Judge returned unparseable output: ${raw.slice(0, 200)}`, usage };
 
     const parsed = JSON.parse(match[0]) as { score?: unknown; reasoning?: unknown };
     const score = Math.min(1, Math.max(0, Number(parsed.score ?? 0)));
     const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning : null;
-    return { score, reasoning };
+    return { score, reasoning, usage };
   } catch (err) {
     if ((err as Error)?.name === "AbortError") {
       return { score: 0, reasoning: "Judge call timed out" };
