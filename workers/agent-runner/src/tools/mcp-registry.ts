@@ -92,9 +92,27 @@ function makeGuardedFetch(allowPrivate?: boolean) {
 async function persistOAuthState(
   supabase: SupabaseClient,
   row: OAuthTokenRow,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  opts: {
+    /** CAS guard (found live, 2026-07-15): two concurrent runs reading the
+     *  same row both attempt a refresh with the same (soon-to-be-stale)
+     *  refresh token; the winner rotates it and succeeds, the loser's refresh
+     *  call is then rejected by the provider as invalid_grant. Without this
+     *  guard the loser's failure write races the winner's success write and
+     *  can land second, stomping oauth_status back to 'error' on a server
+     *  that is, at that moment, perfectly healthy — a false alarm in the
+     *  management UI (self-heals on the next successful call, but only after
+     *  showing a wrong status in the meantime). Only apply this guard to the
+     *  failure path: two concurrent *successes* racing is harmless either way
+     *  (both wrote valid, if different, tokens). */
+    onlyIfRefreshTokenUnchanged?: boolean;
+  } = {}
 ): Promise<void> {
-  await supabase.schema("agentcore").from("mcp_servers").update(patch).eq("id", row.id);
+  let query = supabase.schema("agentcore").from("mcp_servers").update(patch).eq("id", row.id);
+  if (opts.onlyIfRefreshTokenUnchanged) {
+    query = query.eq("oauth_refresh_token_enc", row.oauth_refresh_token_enc);
+  }
+  await query;
 }
 
 /**
@@ -160,10 +178,15 @@ export async function resolveOAuthToken(
     });
     return tokens.access_token;
   } catch (err) {
-    await persistOAuthState(supabase, row, {
-      oauth_status: "error",
-      oauth_last_error: err instanceof Error ? err.message : "Token refresh failed",
-    });
+    await persistOAuthState(
+      supabase,
+      row,
+      {
+        oauth_status: "error",
+        oauth_last_error: err instanceof Error ? err.message : "Token refresh failed",
+      },
+      { onlyIfRefreshTokenUnchanged: true }
+    );
     return null;
   }
 }

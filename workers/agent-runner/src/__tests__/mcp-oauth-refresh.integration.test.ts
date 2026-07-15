@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createServer, type Server } from "node:http";
-import { resolveRegistryMcpConfig } from "../tools/mcp-registry.js";
+import { resolveRegistryMcpConfig, resolveOAuthToken, type OAuthTokenRow } from "../tools/mcp-registry.js";
 import { encryptMcpToken, decryptMcpToken } from "../tools/mcp-crypto.js";
 
 const DEK = Buffer.alloc(32, 3).toString("base64");
@@ -91,7 +91,14 @@ function fakeSupabase(row: Record<string, unknown>) {
             },
             update(patch: Record<string, unknown>) {
               updates.push(patch);
-              return { eq: () => Promise.resolve({ error: null }) };
+              // Real supabase-js allows chaining multiple .eq() filters after
+              // update() before it resolves (e.g. the CAS guard's second
+              // .eq()) — this stub must accept any number of them, not just one.
+              const builder = {
+                eq: () => builder,
+                then: (resolve: (v: unknown) => void) => resolve({ error: null }),
+              };
+              return builder;
             },
             maybeSingle: () => Promise.resolve({ data: row }),
           };
@@ -100,6 +107,50 @@ function fakeSupabase(row: Record<string, unknown>) {
     },
   };
   return { supabase: supabase as never, updates };
+}
+
+/** A stateful fake that actually honors conditional `.eq()` guards on
+ *  `update()`, so a CAS-guarded write can be proven to no-op when its WHERE
+ *  clause no longer matches — a plain always-apply fake (like the one above)
+ *  can't distinguish a real guard from a no-op guard. */
+function fakeSupabaseStateful(initialRow: Record<string, unknown>) {
+  let storeRow: Record<string, unknown> = { ...initialRow };
+  const supabase = {
+    schema() {
+      return {
+        from() {
+          return {
+            select() {
+              return this;
+            },
+            or() {
+              return this;
+            },
+            eq() {
+              return this;
+            },
+            maybeSingle: () => Promise.resolve({ data: { ...storeRow } }),
+            update(patch: Record<string, unknown>) {
+              const filters: Record<string, unknown> = {};
+              const builder = {
+                eq(col: string, val: unknown) {
+                  filters[col] = val;
+                  return builder;
+                },
+                then(resolve: (v: unknown) => void) {
+                  const matches = Object.entries(filters).every(([k, v]) => storeRow[k] === v);
+                  if (matches) storeRow = { ...storeRow, ...patch };
+                  resolve({ error: null });
+                },
+              };
+              return builder;
+            },
+          };
+        },
+      };
+    },
+  };
+  return { supabase: supabase as never, getRow: () => storeRow };
 }
 
 const baseRow = {
@@ -209,5 +260,43 @@ describe("resolveRegistryMcpConfig — OAuth token resolution + refresh (real pr
 
     const config = await resolveRegistryMcpConfig(supabase, "org-1", "oauth-server", DEK, undefined, true);
     expect(config).toBeNull();
+  });
+
+  // Found live (2026-07-15): two concurrent runs both read the same row
+  // before either had refreshed, both attempt a refresh with the same
+  // (soon-to-be-stale) refresh token. The winner rotates it and succeeds;
+  // the provider then rejects the loser's refresh attempt as invalid_grant.
+  // Before this guard, the loser's failure write would land after the
+  // winner's success write and stomp oauth_status back to 'error' on a
+  // server that is, at that moment, perfectly healthy — a false alarm in the
+  // management UI. Proven here with a real refresh-token rotation against
+  // the real token endpoint, not simulated.
+  it("a losing racer's refresh failure does not clobber a winning racer's success", async () => {
+    issuedAccessTokenCount = 0;
+    currentRefreshToken = "refresh-v1";
+    const staleSnapshot = {
+      ...baseRow,
+      oauth_access_token_enc: await encryptMcpToken("stale-access-token", DEK),
+      oauth_refresh_token_enc: await encryptMcpToken("refresh-v1", DEK),
+      oauth_token_expires_at: new Date(Date.now() - 1000).toISOString(),
+      oauth_authorization_server_url: authServerUrl,
+    } as unknown as OAuthTokenRow;
+    const { supabase, getRow } = fakeSupabaseStateful(staleSnapshot as unknown as Record<string, unknown>);
+
+    // Winner: refreshes first, rotates refresh-v1 -> refresh-v2, persists success.
+    const winnerToken = await resolveOAuthToken(supabase, staleSnapshot, DEK, true);
+    expect(winnerToken).toBe("access-v1");
+    expect(getRow().oauth_status).toBe("connected");
+
+    // Loser: still holds the pre-refresh snapshot (refresh-v1), which the
+    // real auth server now rejects since currentRefreshToken has moved to v2.
+    const loserToken = await resolveOAuthToken(supabase, staleSnapshot, DEK, true);
+    expect(loserToken).toBeNull();
+
+    // The critical assertion: the loser's failure must not have overwritten
+    // the winner's connected state, because the CAS guard's WHERE clause no
+    // longer matches the row's current (already-rotated) refresh token.
+    expect(getRow().oauth_status).toBe("connected");
+    expect(getRow().oauth_last_error).toBeNull();
   });
 });

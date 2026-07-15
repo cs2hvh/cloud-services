@@ -27,7 +27,10 @@
       "WebFetch(domain:railway.com)",
       "WebFetch(domain:www.saasui.design)",
       "Bash(npx next:*)",
-      "Bash(find /c/Users/Administrator/cloud-services -path */app/dashboard/apps/*page.tsx -type f)"
+      "Bash(find /c/Users/Administrator/cloud-services -path */app/dashboard/apps/*page.tsx -type f)",
+      "Bash(curl -s -X POST \"https://xafjjpgazdxhktpfeuri.supabase.co/rest/v1/vector_collections\":*)",
+      "Bash(curl -s -X POST \"https://xafjjpgazdxhktpfeuri.supabase.co/rest/v1/vector_rows\":*)"
+
     ]
   }
 }
