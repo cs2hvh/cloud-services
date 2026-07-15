@@ -112,13 +112,25 @@ export async function runEval(ctx: RunContext, job: EvalJob): Promise<void> {
     log.info({ caseCount: evalCases.length }, "loaded cases");
 
     // ── 2b. Pricing for this run's target + (if used) judge model ───────────────
+    // Fetched in parallel — independent reads, no reason to serialize them
+    // ahead of every case in the run.
     const judgeModel =
       job.scorerType === "llm_judge" ? ((job.scorerConfig.judge_model as string | undefined) ?? "openai/gpt-4o-mini") : null;
-    const pricing: CasePricing = {
-      targetPricing: await fetchModelPricing(supabase, job.modelId),
-      judgeModel,
-      judgePricing: judgeModel ? await fetchModelPricing(supabase, judgeModel) : null,
-    };
+    const [targetPricing, judgePricing] = await Promise.all([
+      fetchModelPricing(supabase, job.modelId),
+      judgeModel ? fetchModelPricing(supabase, judgeModel) : Promise.resolve(null),
+    ]);
+    // A pricing-catalog miss (typo'd judge_model, deactivated model) used to
+    // silently compute $0 cost with nothing to distinguish it from a
+    // genuinely free model — found in review, 2026-07-15. Not fatal (the run
+    // still needs to proceed best-effort), but now at least visible in logs.
+    if (!targetPricing.input_cents_per_mtok && !targetPricing.output_cents_per_mtok) {
+      log.warn({ modelId: job.modelId }, "no pricing found for target model — cost will report as $0");
+    }
+    if (judgeModel && !judgePricing?.input_cents_per_mtok && !judgePricing?.output_cents_per_mtok) {
+      log.warn({ judgeModel }, "no pricing found for judge model — cost will report as $0");
+    }
+    const pricing: CasePricing = { targetPricing, judgeModel, judgePricing };
 
     // ── 3. Pre-insert pending result rows ──────────────────────────────────────
     const pendingRows = evalCases.map((c) => ({
@@ -225,13 +237,21 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase, pricing: 
   const log = logger.child({ runId: job.runId, caseId: c.id });
   const startMs = Date.now();
 
+  // Hoisted above the try block (found in review, 2026-07-15): the target-model
+  // call can succeed — real spend already incurred and attributed via the
+  // on-behalf-of header — and then a *later* step (scoring, the DB write) can
+  // still throw. If these lived inside the try, the catch block below would
+  // have no way to persist the cost that was genuinely already spent, and
+  // eval_runs.cost_cents would permanently under-report actual spend.
+  let targetCostCents = 0;
+  let judgeCostCents = 0;
+
   try {
     // Call target model
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), env.caseTimeoutMs);
 
     let output: string;
-    let targetCostCents = 0;
 
     try {
       const res = await fetch(`${env.inferenceBaseUrl}/chat/completions`, {
@@ -273,7 +293,6 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase, pricing: 
 
     // Score the output
     let scoreResult;
-    let judgeCostCents = 0;
     switch (job.scorerType) {
       case "exact":
         scoreResult = scoreExact(output, c.expected);
@@ -326,10 +345,19 @@ async function processCase(ctx: RunContext, job: EvalJob, c: EvalCase, pricing: 
     const msg = err instanceof Error ? err.message : String(err);
     log.warn({ err: msg }, "case failed");
 
+    // Persist whatever cost was already genuinely incurred (e.g. the
+    // target-model call succeeded and was billed via the on-behalf-of header,
+    // but scoring or this very DB write threw afterward) — a failed case is
+    // not a free one.
     await supabase
       .schema("inference")
       .from("eval_results")
-      .update({ status: "failed", error: msg, latency_ms: Date.now() - startMs })
+      .update({
+        status: "failed",
+        error: msg,
+        latency_ms: Date.now() - startMs,
+        cost_cents: round4(targetCostCents + judgeCostCents),
+      })
       .eq("run_id", job.runId)
       .eq("case_id", c.id);
   }
