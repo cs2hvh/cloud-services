@@ -5,7 +5,7 @@ import { fileSearchTool, reRank } from "../tools/file-search.js";
 import { memoryTool } from "../tools/memory.js";
 import { buildDispatcher } from "../tools/dispatch.js";
 import { codeTool } from "../tools/code.js";
-import { MockSandboxPool } from "../tools/sandbox/pool.js";
+import { MockSandboxPool, type SandboxPool } from "../tools/sandbox/pool.js";
 import { isPrivateAddress, assertSafeWebhookUrl, SsrfBlockedError } from "../tools/ssrf.js";
 import { createHmac } from "node:crypto";
 import type { RunnerEnv } from "../env.js";
@@ -171,6 +171,43 @@ describe("codeTool (S3 gate)", () => {
   it("rejects an empty code string", async () => {
     const r = await codeTool(enabled, new MockSandboxPool()).run({ code: "  " }, ctx);
     expect((r.output as { error: string }).error).toMatch(/non-empty/i);
+  });
+
+  // Found live (2026-07-15, Phase-0 billing audit): this scrub used to be
+  // scrubUpstream alone, which only strips search-provider names (Brave/
+  // Exa) — nothing caught an infra/vendor term in sandbox output, the
+  // highest-leakage surface per doc 00's own risk list. Proves the fix on
+  // both the model-visible output AND the trace detail (two separate call
+  // sites in code.ts).
+  it("scrubs infra/vendor identifiers from sandbox stdout/stderr, not just search-provider names", async () => {
+    const leaky: SandboxPool = {
+      async start() {
+        return {
+          id: "s",
+          async exec() {
+            return {
+              stdout: "Connecting via RunPod pod, see kubectl logs for details",
+              stderr: "OpenRouter upstream error on ghcr.io/ahura/train:latest",
+              exit_code: 1,
+              cpu_seconds: 0.01,
+            };
+          },
+          async stop() {
+            return { cpu_seconds: 0.01 };
+          },
+        };
+      },
+      async dispose() {
+        return { cpu_seconds: 0.01 };
+      },
+    };
+    const r = await codeTool(enabled, leaky).run({ code: "whatever" }, ctx);
+    const out = r.output as { stdout: string; stderr: string };
+    expect(out.stdout).not.toMatch(/runpod|kubectl/i);
+    expect(out.stderr).not.toMatch(/openrouter|ghcr\.io/i);
+    const d = r.detail as { stdout: string; stderr: string };
+    expect(d.stdout).not.toMatch(/runpod|kubectl/i);
+    expect(d.stderr).not.toMatch(/openrouter|ghcr\.io/i);
   });
 
   it("MockSandboxPool accumulates cpu_seconds across execs until stop", async () => {

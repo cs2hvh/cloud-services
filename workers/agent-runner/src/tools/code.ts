@@ -15,6 +15,7 @@
 import type { AgentTool, RunCtx, ToolResult } from "@ahura/agent-core";
 import type { RunnerEnv } from "../env.js";
 import { scrubUpstream } from "./web-search.js";
+import { scrubInfraLeakage } from "./infra-scrub.js";
 import { preview } from "./detail.js";
 import type { SandboxPool } from "./sandbox/pool.js";
 
@@ -52,8 +53,12 @@ export function codeTool(env: RunnerEnv, pool?: SandboxPool): AgentTool {
       try {
         const r = await session.exec(code, { timeoutMs: env.toolTimeoutMs });
         // §11: brand-scrub stdout/stderr before it reaches the model or run_steps.detail.
-        const stdout = scrubUpstream(r.stdout).slice(0, MAX_OUTPUT_CHARS);
-        const stderr = scrubUpstream(r.stderr).slice(0, MAX_OUTPUT_CHARS);
+        // Both scrubs run — scrubUpstream (search-provider names, kept for
+        // parity with every other tool) and scrubInfraLeakage (RunPod/K8s/our
+        // own worker names) — this is arbitrary code execution output, the
+        // highest-leakage surface in the platform per doc 00's own risk list.
+        const stdout = scrubInfraLeakage(scrubUpstream(r.stdout)).slice(0, MAX_OUTPUT_CHARS);
+        const stderr = scrubInfraLeakage(scrubUpstream(r.stderr)).slice(0, MAX_OUTPUT_CHARS);
         return {
           output: { stdout, stderr, exit_code: r.exit_code, ...(r.capped ? { capped: true } : {}) },
           metering: { units: r.cpu_seconds, unitLabel: "cpu_second" },
@@ -69,7 +74,7 @@ export function codeTool(env: RunnerEnv, pool?: SandboxPool): AgentTool {
         };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return err(`code execution failed: ${scrubUpstream(msg)}`);
+        return err(`code execution failed: ${scrubInfraLeakage(scrubUpstream(msg))}`);
       }
     },
   };
