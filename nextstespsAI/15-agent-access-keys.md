@@ -1,6 +1,6 @@
 # Agent Access Keys — private + public per-agent API keys
 
-**Date:** 2026-07-08 · **Companion to:** [11-agent-implementation-plan.md](11-agent-implementation-plan.md) (agentcore) · [14-agent-mcp-implementation.md](14-agent-mcp-implementation.md) (MCP tools) · **Status:** built, unit-tested, typecheck clean, migrations applied. **The §11 live-verification checklist below has still never actually been run end-to-end — see the 2026-07-15 note.**
+**Date:** 2026-07-08 · **Companion to:** [11-agent-implementation-plan.md](11-agent-implementation-plan.md) (agentcore) · [14-agent-mcp-implementation.md](14-agent-mcp-implementation.md) (MCP tools) · **Status:** built, unit-tested, typecheck clean, migrations applied, §11 checklist live-verified end-to-end (2026-07-15), key rotate shipped (2026-07-17, see §10).
 
 > **BUILD STATUS (2026-07-08) — ✅ SHIPPED, not yet migrated.** Full private + public access-key tiers for agentcore agents. 104 inference tests passing (was 89 before this feature), 126 agent-runner tests unaffected, full workspace typecheck clean. Live smoke-tested against the real dev DB pre-migration (routes reachable, fail exactly where expected on the not-yet-existing columns).
 >
@@ -216,9 +216,10 @@ Two takeaways worth remembering, not just decoration: our session-auth-to-manage
 
 ## 10. Deferred, not forgotten
 
-- **Key edit/rotate** — DigitalOcean supports this; a real DX gap, but a separate feature (needs its own semantics for not breaking a live embed mid-rotation).
 - **Per-visitor fairness rate limiting** — a popular public embed shares one RPM bucket across every site visitor. No platform in this research solves this at the single-key layer either; accepted as a known trade-off, not built speculatively.
 - **Legacy `ai-agents` product** — untouched; still has its own, older per-agent-key system, entirely separate from this one.
+
+> **BUILD STATUS (2026-07-17) — Key rotate — ✅ SHIPPED, live-verified, no migration needed.** Closes the gap this section used to list: the only way to replace a key was delete-and-recreate, which breaks a live embed the instant the old key is gone. `POST /api/agents/[id]/keys/[keyId]/rotate` mints a new key with the same tier/origins/caps/rate-limit, then sets the OLD key's `expires_at` to a grace window (default 24h, caller-configurable 0–168h) instead of revoking it immediately — reuses the gateway's existing `lookup_api_key` expiry check (already treats an expired key as invalid), so no new enforcement code or cron was needed. A tighter expiry the customer already set is never loosened by a rotation. Dashboard: a "Rotate" button next to Revoke on the Access Keys tab, same show-once pattern as Create. **Live-verified against the real local stack** (no fakes): rotated a real key — new key inherited settings correctly (`rate_limit_rpm` confirmed), old key's `expires_at` set to exactly the requested grace window; `grace_hours: 0` set an immediate expiry; rotating an already-expired key correctly 409s; rotating a key that already had a tighter customer-set `expires_at` (30 min) with a 24h grace window correctly preserved the tighter deadline rather than loosening it. `key.rotated` audit action (already reserved in the `InferenceAuditAction` union, unused until now) fires with `new_key_id`/`old_key_expires_at`/`grace_hours` metadata — confirmed via a real query against `inference.audit_log`. `tsc --noEmit` and eslint clean on both the route and the UI. No route-level test suite exists for this file family yet (same gap doc 14 notes for the OAuth authorize/callback routes) — live-verification substituted for it, matching this repo's established practice for that specific gap.
 
 ## 11. How to verify once migrations are applied
 

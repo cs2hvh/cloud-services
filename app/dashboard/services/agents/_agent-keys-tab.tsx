@@ -13,7 +13,7 @@
  *    internals redacted (see workers/inference/src/routes/agent-runs.ts).
  */
 import { useEffect, useState } from 'react';
-import { Copy, Key, Plus, Trash2, X } from 'lucide-react';
+import { Copy, Key, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,6 +69,9 @@ export function AgentKeysTab({ agentId }: { agentId: string }) {
   const [newKey, setNewKey] = useState<string | null>(null);
   const [deleteKey, setDeleteKey] = useState<AgentKey | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [rotateTarget, setRotateTarget] = useState<AgentKey | null>(null);
+  const [rotating, setRotating] = useState(false);
+  const [rotateResult, setRotateResult] = useState<{ newKey: string; oldExpiresAt: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -120,6 +123,27 @@ export function AgentKeysTab({ agentId }: { agentId: string }) {
       toast.error(err instanceof Error ? err.message : 'Failed to create access key');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const rotate = async () => {
+    if (!rotateTarget) return;
+    setRotating(true);
+    try {
+      const r = await fetch(`/api/agents/${agentId}/keys/${rotateTarget.id}/rotate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'Failed to rotate key');
+      setRotateResult({ newKey: j.data.new_key.api_key, oldExpiresAt: j.data.old_key_expires_at });
+      setRotateTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to rotate key');
+    } finally {
+      setRotating(false);
     }
   };
 
@@ -193,9 +217,14 @@ export function AgentKeysTab({ agentId }: { agentId: string }) {
                   </div>
                 )}
               </div>
-              <GhostButton onClick={() => setDeleteKey(k)}>
-                <Trash2 className="h-3 w-3" /> Revoke
-              </GhostButton>
+              <div className="flex items-center gap-2">
+                <GhostButton onClick={() => setRotateTarget(k)}>
+                  <RefreshCw className="h-3 w-3" /> Rotate
+                </GhostButton>
+                <GhostButton onClick={() => setDeleteKey(k)}>
+                  <Trash2 className="h-3 w-3" /> Revoke
+                </GhostButton>
+              </div>
             </div>
           ))
         )}
@@ -360,6 +389,67 @@ export function AgentKeysTab({ agentId }: { agentId: string }) {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!rotateTarget} onOpenChange={(open) => { if (!open) setRotateTarget(null); }}>
+        <AlertDialogContent className="border-white/[0.08] bg-[#111216]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white/80`}>
+              Rotate access key
+            </AlertDialogTitle>
+            <AlertDialogDescription className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>
+              Creates a new key for &quot;{rotateTarget?.name}&quot; with the same settings. The current key keeps working for
+              24 hours so nothing using it breaks right away, then stops automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={rotating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={rotate}
+              disabled={rotating}
+              className={`${MONO} h-10 text-[11px] uppercase tracking-[0.12em] font-semibold`}
+            >
+              {rotating ? 'Rotating…' : 'Rotate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!rotateResult} onOpenChange={(open) => { if (!open) setRotateResult(null); }}>
+        <DialogContent className="max-w-md border-white/[0.08] bg-[#111216]">
+          <DialogHeader>
+            <DialogTitle className={`${MONO} text-[12px] uppercase tracking-[0.16em] text-white/80`}>
+              <Key className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5" /> Key rotated
+            </DialogTitle>
+            <DialogDescription className={`${MONO} text-[11px] text-white/45 leading-relaxed`}>
+              Copy the new key now — it will never be shown again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-lg border border-white/[0.1] bg-black/40 px-3 py-2.5">
+            <code className={`${MONO} text-[12px] text-[#66c2ff] break-all flex-1`}>{rotateResult?.newKey}</code>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!rotateResult) return;
+                const ok = await copyToClipboard(rotateResult.newKey);
+                if (ok) toast.success('Copied');
+                else toast.error('Copy failed — select the key and copy manually');
+              }}
+              className="text-white/40 hover:text-white shrink-0"
+              aria-label="Copy key"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
+          {rotateResult && (
+            <p className={`${MONO} text-[10.5px] text-amber-300/70`}>
+              The old key stops working {new Date(rotateResult.oldExpiresAt).toLocaleString()}.
+            </p>
+          )}
+          <DialogFooter>
+            <PrimaryButton onClick={() => setRotateResult(null)}>Done</PrimaryButton>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
