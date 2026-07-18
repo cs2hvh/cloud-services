@@ -14,14 +14,15 @@
 
 // ── Tool declarations (what a customer attaches to an agent) ──────────────────
 
-/** Hosted tools we build & operate, plus the two customer-extensibility channels. */
+/** Hosted tools we build & operate, plus the customer-extensibility channels. */
 export type AgentToolType =
   | "web_search"
   | "file_search"
   | "code"
   | "memory"
   | "function"
-  | "mcp";
+  | "mcp"
+  | "agent";
 
 /** A hosted tool attached by name; extra fields are tool-specific config. */
 export interface HostedToolDecl {
@@ -72,7 +73,28 @@ export interface McpToolDecl {
   allowed_tools?: string[];
 }
 
-export type AgentToolDecl = HostedToolDecl | FunctionToolDecl | McpToolDecl;
+/**
+ * Agent-delegation tool (doc 02 Service G's "A2A" half — scoped narrowly, per
+ * doc 02's own note: "v1 should be internal-only, one of our agents calling
+ * another as a tool," explicitly not full Google A2A protocol compliance.
+ * This agent calls another agent IN THE SAME ORG as a real, independently
+ * traced+billed agentcore.runs row (parent_run_id/depth) — not a wire
+ * protocol. Never cross-org; see agent-delegate.ts for the depth guard.
+ */
+export interface AgentDelegateToolDecl {
+  type: "agent";
+  target_agent_id: string;
+  /** Namespaces the model-facing tool name (agent__{label}) — required because
+   *  an agent may delegate to several sub-agents, each needing a distinct tool
+   *  name; we can't derive one from target_agent_id synchronously at dispatcher-
+   *  build time (same constraint FunctionToolDecl already has for webhook tools). */
+  label: string;
+  /** Model-facing description — what this sub-agent is for. Same reasoning as
+   *  `label`: no synchronous DB read at spec-build time to derive one. */
+  description?: string;
+}
+
+export type AgentToolDecl = HostedToolDecl | FunctionToolDecl | McpToolDecl | AgentDelegateToolDecl;
 
 // ── Agent config (agentcore.agents row) ──────────────────────────────────────
 
@@ -156,7 +178,8 @@ export type StepType =
   | "code"
   | "function"
   | "memory"
-  | "mcp";
+  | "mcp"
+  | "agent";
 
 export type StepStatus = "success" | "error";
 

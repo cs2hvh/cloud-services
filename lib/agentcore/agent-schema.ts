@@ -6,7 +6,7 @@
 import { z } from "zod";
 
 export const toolSchema = z
-  .object({ type: z.enum(["web_search", "file_search", "code", "memory", "function", "mcp"]) })
+  .object({ type: z.enum(["web_search", "file_search", "code", "memory", "function", "mcp", "agent"]) })
   .passthrough();
 
 export const createAgentSchema = z.object({

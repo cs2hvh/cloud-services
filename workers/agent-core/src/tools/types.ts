@@ -41,6 +41,23 @@ export interface RunCtx {
   maxInlineResultBytes?: number;
   /** Abort signal wired to the run's wall-clock / cancel path. */
   signal?: AbortSignal;
+  /** How many agent-delegate hops deep this run is (0 = a top-level run).
+   *  The `agent` tool refuses to delegate past MAX_AGENT_DEPTH — the only
+   *  place this is read. Absent/undefined is treated as 0. */
+  depth?: number;
+  /** The top-level run at the head of this delegation chain. Absent for a
+   *  top-level run itself (it IS its own root — agent-delegate.ts reads
+   *  `ctx.rootRunId ?? ctx.runId`). Used for one indexed query: how much
+   *  has this whole tree spent so far, against the root's own max_cost_cents. */
+  rootRunId?: string;
+  /** Every ancestor run id above this one, root-first (empty/absent for a
+   *  top-level run). Found necessary by a pre-launch scalability review,
+   *  2026-07-17: bumping only the immediate parent's heartbeat while a
+   *  nested delegate call is in flight leaves EVERY run further up the
+   *  chain heartbeat-stale (the reaper's 15-minute staleness cutoff has no
+   *  idea a run is transitively still working) — agent-delegate.ts bumps
+   *  every id in this list on every nested step, not just ctx.runId. */
+  ancestorRunIds?: string[];
 }
 
 /** The result of one tool invocation: the model-visible output + what to bill. */

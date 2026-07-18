@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Plus, Bot, Cpu, Layers, DollarSign, Shield, Wrench, Sparkles, Webhook, Plug } from 'lucide-react';
+import { Loader2, Plus, Bot, Cpu, Layers, DollarSign, Shield, Wrench, Sparkles, Webhook, Plug, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,10 +16,12 @@ import {
   MODEL_OPTIONS, DEFAULT_MODEL, HOSTED_TOOLS, formatCost,
   buildToolsPayload, buildFunctionTools, type FnDef,
   buildMcpTools, type McpDef, buildMcpSlugTools,
+  buildAgentDelegateTools, type AgentDelegateDef,
 } from '../_constants';
 import { KnowledgeBasePicker } from '../_kb-picker';
 import { FunctionToolsEditor, FUNCTION_TOOLS_DESCRIPTION } from '../_function-tools-editor';
 import { McpServersEditor, MCP_SERVERS_DESCRIPTION } from '../_mcp-servers-editor';
+import { AgentDelegatePicker } from '../_agent-delegate-picker';
 
 const LABEL = `${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`;
 const SEL = `w-full h-9 rounded-xl bg-[#0c0d10] border border-white/[0.1] px-3 text-sm text-white/90 ${MONO}`;
@@ -61,6 +63,7 @@ export default function NewAgentPage() {
   const [functions, setFunctions] = useState<FnDef[]>([]);
   const [mcpServers, setMcpServers] = useState<McpDef[]>([]);
   const [mcpSlugs, setMcpSlugs] = useState<string[]>([]);
+  const [delegates, setDelegates] = useState<AgentDelegateDef[]>([]);
   const [saving, setSaving] = useState(false);
 
   const toggle = (t: string) => setTools((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]));
@@ -75,6 +78,8 @@ export default function NewAgentPage() {
     if (fn.error) { toast.error(fn.error); return; }
     const mcp = buildMcpTools(mcpServers);
     if (mcp.error) { toast.error(mcp.error); return; }
+    const delegate = buildAgentDelegateTools(delegates);
+    if (delegate.error) { toast.error(delegate.error); return; }
     setSaving(true);
     try {
       const r = await fetch('/api/agents', {
@@ -87,6 +92,7 @@ export default function NewAgentPage() {
             ...(fn.tools ?? []),
             ...(mcp.tools ?? []),
             ...buildMcpSlugTools(mcpSlugs),
+            ...(delegate.tools ?? []),
           ],
         }),
       });
@@ -194,6 +200,10 @@ export default function NewAgentPage() {
             <Section icon={Plug} title="MCP servers" desc={MCP_SERVERS_DESCRIPTION}>
               <McpServersEditor slugs={mcpSlugs} onSlugsChange={setMcpSlugs} rows={mcpServers} onRowsChange={setMcpServers} />
             </Section>
+
+            <Section icon={Users} title="Agent delegation" desc="Let this agent call another of your agents as a tool — internal-only, not cross-org (nextstespsAI/18-agent-delegation.md).">
+              <AgentDelegatePicker value={delegates} onChange={setDelegates} />
+            </Section>
           </div>
 
           {/* ── Right: live summary + actions (sticky) ─────────────── */}
@@ -209,6 +219,7 @@ export default function NewAgentPage() {
                 <SummaryRow icon={Wrench} label="Tools">{tools.length ? tools.join(', ') : <span className="text-white/30">None</span>}</SummaryRow>
                 <SummaryRow icon={Webhook} label="Functions">{functions.length ? String(functions.length) : <span className="text-white/30">None</span>}</SummaryRow>
                 <SummaryRow icon={Plug} label="MCP servers">{(mcpServers.length + mcpSlugs.length) ? String(mcpServers.length + mcpSlugs.length) : <span className="text-white/30">None</span>}</SummaryRow>
+                <SummaryRow icon={Users} label="Delegates">{delegates.length ? String(delegates.length) : <span className="text-white/30">None</span>}</SummaryRow>
               </div>
             </div>
             <PrimaryButton onClick={create} disabled={saving}>

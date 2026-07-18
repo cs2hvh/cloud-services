@@ -29,7 +29,8 @@ vi.mock("../gateway.js", () => ({
   embedText: async () => ({ embedding: Array(1536).fill(0.01), tokens: 3 }),
 }));
 
-import { runAgentJob, priceStep, type RunContext } from "../lifecycle.js";
+import { runAgentJob, type RunContext } from "../lifecycle.js";
+import { priceStep } from "../run-shared.js";
 import type { AgentJob } from "../scan.js";
 import type { LoopStep } from "@ahura/agent-core";
 

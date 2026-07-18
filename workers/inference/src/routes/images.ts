@@ -18,6 +18,7 @@ import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting, resolvePlatformKey,
   classifyUpstreamError, buildBaseSpan, enqueueTrace,
 } from "../lib/gateway.ts";
+import { stripImageMetadata } from "../lib/image-scrub.ts";
 
 const MAX_PROMPT_LENGTH = 4000;
 const MAX_IMAGES = 4;
@@ -147,7 +148,11 @@ export const imageGenerations: Handler<{ Bindings: Env; Variables: HonoVariables
   }
 
   const responseFormat = req.response_format ?? "b64_json";
-  const data           = items.map((d) => normalizeImage(d.b64_json!, responseFormat));
+  // Strip any identifying metadata (PNG tEXt/iTXt/zTXt/eXIf, JPEG EXIF/APP
+  // segments) the upstream generator wrote into the image bytes themselves
+  // before this file's own "upstream names never leave the gateway" promise
+  // — which used to only cover the JSON wrapper, never the bytes (§Phase-0).
+  const data           = items.map((d) => normalizeImage(stripImageMetadata(d.b64_json!), responseFormat));
   const imageCount     = data.length;
 
   c.executionCtx.waitUntil(enqueueUsage(c.env, buildBaseEvent(auth, req.model, "image", requestId, startedAt, {

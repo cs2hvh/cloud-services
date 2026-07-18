@@ -6,8 +6,8 @@
  * Overview: config at a glance. Runs: history table, each row expands to a
  * per-step trace timeline (tokens / cost / latency / status). Settings: edit + delete.
  */
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ChevronRight, ChevronDown, RotateCw, Trash2, Loader2, Play,
@@ -26,15 +26,17 @@ import {
 } from '@/components/dashboard/inference/chrome';
 import {
   MODEL_OPTIONS, HOSTED_TOOLS, type Agent, type RunListItem, type RunDetail, type RunStep,
-  formatCost, relativeTime, statusKind, finalText, detailRows,
+  formatCost, relativeTime, statusKind, finalText, detailRows, delegateRunLink,
   buildToolsPayload, fileSearchCollectionOf,
   buildFunctionTools, functionToolsOf, type FnDef,
   buildMcpTools, mcpToolsOf, type McpDef,
   mcpSlugsOf, buildMcpSlugTools,
+  buildAgentDelegateTools, agentDelegateToolsOf, type AgentDelegateDef,
 } from '../_constants';
 import { KnowledgeBasePicker } from '../_kb-picker';
 import { FunctionToolsEditor, FUNCTION_TOOLS_DESCRIPTION } from '../_function-tools-editor';
 import { McpServersEditor, MCP_SERVERS_DESCRIPTION } from '../_mcp-servers-editor';
+import { AgentDelegatePicker } from '../_agent-delegate-picker';
 import { AgentKeysTab } from '../_agent-keys-tab';
 
 const AGENTS = '/api/agents';
@@ -42,12 +44,13 @@ const AGENTS = '/api/agents';
 /** Distinguishes tool chips of the same type (an agent can bind several MCP
  *  servers or custom functions — the whole point of the registry, doc 14 §4)
  *  so the Overview tab doesn't just show a wall of identical "mcp" chips. */
-function toolChipLabel(t: { type: string; server_slug?: string; server_url?: string; name?: string }): string {
+function toolChipLabel(t: { type: string; server_slug?: string; server_url?: string; name?: string; label?: string }): string {
   if (t.type === 'mcp') {
     if (t.server_slug) return `mcp: ${t.server_slug}`;
     if (t.server_url) { try { return `mcp: ${new URL(t.server_url).host}`; } catch { /* fall through */ } }
   }
   if (t.type === 'function' && t.name) return `function: ${t.name}`;
+  if (t.type === 'agent' && t.label) return `agent: ${t.label}`;
   return t.type;
 }
 
@@ -153,12 +156,24 @@ function TraceTimeline({ runId }: { runId: string }) {
           <details key={s.step_index} className="group border-b border-white/[0.03]">
             <summary className="cursor-pointer list-none hover:bg-white/[0.02]">{header}</summary>
             <div className="px-5 pb-3 pl-14 space-y-1.5">
-              {rows.map(([label, text]) => (
-                <div key={label}>
-                  <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
-                  <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
-                </div>
-              ))}
+              {rows.map(([label, text]) => {
+                const link = delegateRunLink(s.step_type, label, s.detail);
+                return (
+                  <div key={label}>
+                    <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
+                    {link ? (
+                      <Link
+                        href={link}
+                        className={`${MONO} text-[11px] text-[#33adff] hover:underline bg-black/30 rounded px-2 py-1.5 block break-words`}
+                      >
+                        {text} → view sub-run trace
+                      </Link>
+                    ) : (
+                      <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </details>
         );
@@ -175,17 +190,35 @@ function TraceTimeline({ runId }: { runId: string }) {
 }
 
 export default function AgentDetailPage() {
+  return (
+    <Suspense fallback={<PageCanvas><div className="py-24 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div></PageCanvas>}>
+      <AgentDetailInner />
+    </Suspense>
+  );
+}
+
+const TABS = ['overview', 'runs', 'keys', 'settings'] as const;
+
+function AgentDetailInner() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Deep-link support (added for agent-delegation traces, doc 18): a
+  // delegation step's `sub_run_id` links to `?tab=runs&run={id}` on the
+  // TARGET agent's own page — this is the only consumer of `run`.
+  const deepLinkTab = searchParams.get('tab');
+  const deepLinkRun = searchParams.get('run');
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'overview' | 'runs' | 'keys' | 'settings'>('overview');
+  const [tab, setTab] = useState<'overview' | 'runs' | 'keys' | 'settings'>(
+    (TABS as readonly string[]).includes(deepLinkTab ?? '') ? (deepLinkTab as typeof TABS[number]) : 'overview'
+  );
 
   const [runs, setRuns] = useState<RunListItem[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(deepLinkRun);
   // Found missing during the "whole agent UI" gap review (2026-07-08): once
   // an agent has real public/private key traffic mixed with dashboard
   // testing, a flat unfilterable list gets unscannable fast.
@@ -428,6 +461,58 @@ export default function AgentDetailPage() {
 }
 
 // ── Settings tab (edit form) ──────────────────────────────────────────────────
+function PurgeMemoriesBox({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false);
+  const [purging, setPurging] = useState(false);
+
+  const purge = async () => {
+    setPurging(true);
+    try {
+      const r = await fetch(`${AGENTS}/${agentId}/memories`, { method: 'DELETE' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Failed to purge memories');
+      toast.success(j.purged > 0 ? `Purged ${j.purged} memor${j.purged === 1 ? 'y' : 'ies'}` : 'No memories to purge');
+      setOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to purge memories');
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/[0.03] p-4 flex items-center justify-between">
+        <div>
+          <div className="text-sm text-white/80">Purge stored memories</div>
+          {/* No browse view exists (by design — memory is written/read by the
+             agent itself via the `memory` tool, not meant to be a customer-
+             facing data store) — this is a right-to-erasure control, not a
+             viewer. Found missing entirely from the dashboard during a UI-
+             completeness review (2026-07-18): the purge API has existed
+             since S5, with no button anywhere to reach it. */}
+          <div className="text-[11px] text-white/40">Erases every fact this agent has written to its own long-term memory. Cannot be undone or viewed beforehand.</div>
+        </div>
+        <GhostButton onClick={() => setOpen(true)}><Trash2 className="h-3.5 w-3.5" /> Purge</GhostButton>
+      </div>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Purge this agent&rsquo;s memories?</AlertDialogTitle>
+            <AlertDialogDescription>Deletes every stored memory for this agent. This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={purging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={purging} onClick={(e) => { e.preventDefault(); void purge(); }}>
+              {purging ? 'Purging…' : 'Purge'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () => void; onDelete: () => void }) {
   const [name, setName] = useState(agent.name);
   const [model, setModel] = useState(agent.model);
@@ -449,6 +534,7 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
   const [functions, setFunctions] = useState<FnDef[]>(functionToolsOf(agent.tools as unknown as Record<string, unknown>[]));
   const [mcpServers, setMcpServers] = useState<McpDef[]>(mcpToolsOf(agent.tools as unknown as Record<string, unknown>[]));
   const [mcpSlugs, setMcpSlugs] = useState<string[]>(mcpSlugsOf(agent.tools as unknown as Record<string, unknown>[]));
+  const [delegates, setDelegates] = useState<AgentDelegateDef[]>(agentDelegateToolsOf(agent.tools as unknown as Record<string, unknown>[]));
   const [saving, setSaving] = useState(false);
 
   const toggle = (type: string) => setTools((ts) => ts.includes(type) ? ts.filter((t) => t !== type) : [...ts, type]);
@@ -462,6 +548,8 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
     if (fn.error) { toast.error(fn.error); return; }
     const mcp = buildMcpTools(mcpServers);
     if (mcp.error) { toast.error(mcp.error); return; }
+    const delegate = buildAgentDelegateTools(delegates);
+    if (delegate.error) { toast.error(delegate.error); return; }
     setSaving(true);
     try {
       const r = await fetch(`${AGENTS}/${agent.id}`, {
@@ -473,6 +561,7 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
             ...(fn.tools ?? []),
             ...(mcp.tools ?? []),
             ...buildMcpSlugTools(mcpSlugs),
+            ...(delegate.tools ?? []),
           ],
         }),
       });
@@ -549,11 +638,18 @@ function SettingsTab({ agent, onSaved, onDelete }: { agent: Agent; onSaved: () =
             <div className="text-[11px] text-white/40">{MCP_SERVERS_DESCRIPTION}</div>
             <McpServersEditor slugs={mcpSlugs} onSlugsChange={setMcpSlugs} rows={mcpServers} onRowsChange={setMcpServers} />
           </div>
+
+          <div className="space-y-2">
+            <span className={fieldLabel}>Agent delegation</span>
+            <div className="text-[11px] text-white/40">Let this agent call another of your agents as a tool — internal-only, not cross-org.</div>
+            <AgentDelegatePicker value={delegates} onChange={setDelegates} currentAgentId={agent.id} />
+          </div>
         </div>
         <div className="px-5 py-4 border-t border-white/[0.06] flex justify-end">
           <PrimaryButton onClick={save} disabled={saving}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save changes</PrimaryButton>
         </div>
       </div>
+      <PurgeMemoriesBox agentId={agent.id} />
       <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-4 flex items-center justify-between">
         <div><div className="text-sm text-white/80">Delete this agent</div><div className="text-[11px] text-white/40">Run history is preserved.</div></div>
         <GhostButton onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /> Delete</GhostButton>

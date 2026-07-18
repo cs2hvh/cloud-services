@@ -32,7 +32,7 @@ export interface LoopMessage {
 }
 
 /** The tool `type` a call maps to (never "model"). */
-export type StepTypeToolName = "web_search" | "file_search" | "code" | "function" | "memory" | "mcp";
+export type StepTypeToolName = "web_search" | "file_search" | "code" | "function" | "memory" | "mcp" | "agent";
 
 /** A model-requested tool call (OpenAI-shaped). */
 export interface ToolCall {

@@ -191,6 +191,76 @@ export function buildMcpSlugTools(slugs: string[]): Record<string, unknown>[] {
   return slugs.filter(Boolean).map((server_slug) => ({ type: 'mcp', server_slug }));
 }
 
+// ── Agent delegation ("A2A", scoped narrowly per doc 02 — see nextstespsAI/
+// 18-agent-delegation.md) — one agent calls another of the org's own agents
+// as a tool. Backend shipped 2026-07-17; this UI closes the gap found by a
+// pre-launch review: the feature was fully built server-side but had no way
+// for a customer to actually attach it without hand-crafting API calls. ────
+
+export interface AgentDelegateDef {
+  target_agent_id: string;
+  label: string;
+  description: string;
+}
+
+/** Validate + convert the builder's delegate rows into stored `agent` tool
+ *  objects. Label uniqueness is enforced HERE (client-side, at the one place
+ *  a customer actually configures this) even though the underlying API
+ *  doesn't reject a collision itself (same as `function` tool names never
+ *  being uniqueness-checked) — two decls sharing a label would otherwise
+ *  silently collide on the model-facing tool name (agent__{label}) and the
+ *  dispatcher would just drop one with no error, per spec.ts's registration. */
+export function buildAgentDelegateTools(rows: AgentDelegateDef[]): { tools?: Record<string, unknown>[]; error?: string } {
+  const out: Record<string, unknown>[] = [];
+  const seenLabels = new Set<string>();
+  for (const d of rows) {
+    if (!d.target_agent_id.trim()) continue; // skip empty row
+    const label = (d.label.trim() || d.target_agent_id.slice(0, 8)).toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    if (seenLabels.has(label)) {
+      return { error: `Two delegated agents can't share the label "${label}" — give one a different label` };
+    }
+    seenLabels.add(label);
+    out.push({
+      type: 'agent',
+      target_agent_id: d.target_agent_id,
+      label,
+      ...(d.description.trim() ? { description: d.description.trim() } : {}),
+    });
+  }
+  return { tools: out };
+}
+
+/** Read stored `agent` delegate tools back into editable builder rows. */
+export function agentDelegateToolsOf(tools: Record<string, unknown>[]): AgentDelegateDef[] {
+  return (tools ?? [])
+    .filter((t) => t.type === 'agent' && t.target_agent_id)
+    .map((t) => ({
+      target_agent_id: String(t.target_agent_id ?? ''),
+      label: String(t.label ?? ''),
+      description: String(t.description ?? ''),
+    }));
+}
+
+export interface DelegatableAgentSummary {
+  id: string;
+  name: string;
+  model: string;
+  is_active: boolean;
+}
+
+/** The org's own agents, for the "delegate to" picker — reuses the existing
+ *  GET /api/agents list route (no new endpoint needed). */
+export async function fetchDelegatableAgents(): Promise<DelegatableAgentSummary[]> {
+  try {
+    const r = await fetch('/api/agents');
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.data ?? []) as DelegatableAgentSummary[];
+  } catch {
+    return [];
+  }
+}
+
 /** Read the file_search collection_id back out of an agent's stored tools. */
 export function fileSearchCollectionOf(tools: { type: string; collection_id?: string }[]): string {
   return tools.find((t) => t.type === 'file_search')?.collection_id ?? '';
@@ -264,6 +334,17 @@ export function detailRows(detail?: Record<string, unknown> | null): [string, st
       const v = (detail as Record<string, unknown>)[k];
       return [k, typeof v === 'string' ? v : JSON.stringify(v, null, v && typeof v === 'object' ? 1 : 0)] as [string, string];
     });
+}
+
+/** For an `agent`-type step's `sub_run_id` row, the URL to that sub-run's own
+ *  trace (deep-links the target agent's Runs tab + auto-expands it) — null
+ *  for every other row, so callers can fall back to the plain <pre> render. */
+export function delegateRunLink(stepType: string, label: string, detail?: Record<string, unknown> | null): string | null {
+  if (stepType !== 'agent' || label !== 'sub_run_id' || !detail) return null;
+  const targetId = detail.target_agent_id;
+  const subRunId = detail.sub_run_id;
+  if (typeof targetId !== 'string' || typeof subRunId !== 'string') return null;
+  return `/dashboard/services/agents/${targetId}?tab=runs&run=${subRunId}`;
 }
 
 export function formatCost(cents: number): string {

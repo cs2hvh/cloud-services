@@ -46,6 +46,14 @@ export interface RunnerEnv extends CoreRunnerEnv {
   sandboxCpus: string;
   sandboxPidsLimit: number;
   sandboxRuntime: string | null;
+  // Wall-clock cap on one delegated sub-agent call (nextstespsAI/18-agent-
+  // delegation.md). Found necessary by a pre-launch scalability review,
+  // 2026-07-17: a delegate call runs the WHOLE nested agent loop in-process,
+  // inline, holding the parent's one BullMQ concurrency slot for the entire
+  // duration — a hung/runaway sub-agent would otherwise hold that slot
+  // hostage far longer than toolTimeoutMs (meant for a single webhook/
+  // tool call, not a whole nested multi-step loop) is designed for.
+  agentDelegateTimeoutMs: number;
 }
 
 export function loadEnv(): RunnerEnv {
@@ -70,5 +78,6 @@ export function loadEnv(): RunnerEnv {
     sandboxCpus: optional("SANDBOX_CPUS", "1"),
     sandboxPidsLimit: optionalInt("SANDBOX_PIDS_LIMIT", 128),
     sandboxRuntime: process.env.SANDBOX_RUNTIME?.trim() || null,
+    agentDelegateTimeoutMs: optionalInt("AGENT_DELEGATE_TIMEOUT_MS", 5 * 60_000),
   };
 }

@@ -9,6 +9,7 @@
  */
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Play, Loader2, RotateCw, CheckCircle2, XCircle, Clock, Ban, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import {
   PageCanvas, Hero, PrimaryButton, GhostButton, MONO, StatusLabel,
 } from '@/components/dashboard/inference/chrome';
-import { formatCost, detailRows } from '../_constants';
+import { formatCost, detailRows, delegateRunLink } from '../_constants';
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'expired']);
 
@@ -281,12 +282,24 @@ function PlaygroundInner() {
                     <details key={s.step_index} className="group">
                       <summary className="cursor-pointer list-none hover:bg-white/[0.02]">{header}</summary>
                       <div className="px-4 pb-3 pl-12 space-y-1.5">
-                        {rows.map(([label, text]) => (
-                          <div key={label}>
-                            <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
-                            <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
-                          </div>
-                        ))}
+                        {rows.map(([label, text]) => {
+                          const link = delegateRunLink(s.step_type, label, s.detail);
+                          return (
+                            <div key={label}>
+                              <div className={`${MONO} text-[9px] uppercase tracking-[0.14em] text-white/30 mb-0.5`}>{label}</div>
+                              {link ? (
+                                <Link
+                                  href={link}
+                                  className={`${MONO} text-[11px] text-[#33adff] hover:underline bg-black/30 rounded px-2 py-1.5 block break-words`}
+                                >
+                                  {text} → view sub-run trace
+                                </Link>
+                              ) : (
+                                <pre className={`${MONO} text-[11px] text-white/70 whitespace-pre-wrap break-words bg-black/30 rounded px-2 py-1.5 max-h-52 overflow-auto`}>{text}</pre>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </details>
                   );

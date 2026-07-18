@@ -41,6 +41,10 @@ import { PersistedSandboxPool } from "./tools/sandbox/persisted-pool.js";
 import { searchMemories, hasAnyMemories } from "./tools/memory.js";
 import { preview } from "./tools/detail.js";
 import { reportToolUsage } from "./tool-usage-report.js";
+import {
+  fetchModelPricing, fetchToolRates, priceStep, insertRunStep, isRunCancelled,
+  finalizeRunCompleted, finalizeRunFailed,
+} from "./run-shared.js";
 
 export interface RunContext {
   env: RunnerEnv;
@@ -78,14 +82,6 @@ interface RuntimeConfig {
   guardrail: string | null;
 }
 
-interface ModelPricing {
-  input_cents_per_mtok?: number;
-  output_cents_per_mtok?: number;
-}
-
-/** cents-per-unit for each hosted-tool unit_label (from the agent/* catalog rows). */
-export type ToolRates = Record<string, number>;
-
 const DEFAULT_MAX_STEPS = 12;
 
 export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void> {
@@ -117,8 +113,8 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
     const cfg = await resolveConfig(ctx, run);
 
     // ── 3. Model + tool pricing for the per-step ceiling guard ─────────────────
-    const pricing = await fetchModelPricing(ctx, cfg.model);
-    const toolRates = await fetchToolRates(ctx);
+    const pricing = await fetchModelPricing(ctx.supabase, cfg.model);
+    const toolRates = await fetchToolRates(ctx.supabase);
 
     const messages = await buildMessages(ctx, run, cfg);
     const zdr = await fetchOrgZdr(ctx, run.org_id); // ZDR orgs must not persist OR auto-recall memory
@@ -246,7 +242,7 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
 
     // ── 5. Finalize ────────────────────────────────────────────────────────────
     if (result.stopReason === "final_answer") {
-      await finalizeCompleted(ctx, run, result.finalText, {
+      await finalizeRunCompleted(ctx.supabase, run.id, result.finalText, {
         inputTokensTotal,
         outputTokensTotal,
         steps: result.stepsUsed,
@@ -255,7 +251,7 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
       log.info({ steps: result.stepsUsed, costCents: result.costCents }, "agent run completed");
     } else {
       // max_steps_exceeded | max_cost_exceeded
-      await finalizeFailed(ctx, run.id, result.stopReason, result.costCents, result.stepsUsed);
+      await finalizeRunFailed(ctx.supabase, run.id, result.stopReason, result.costCents, result.stepsUsed);
       log.warn({ reason: result.stopReason }, "agent run stopped by guard");
     }
     } finally {
@@ -270,7 +266,7 @@ export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void>
     }
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err: msg }, "agent run failed");
-    await finalizeFailed(ctx, run.id, msg, null, null);
+    await finalizeRunFailed(ctx.supabase, run.id, msg, null, null);
   }
 }
 
@@ -430,94 +426,13 @@ async function fetchOrgZdr(ctx: RunContext, orgId: string): Promise<boolean> {
   return data?.zdr_default ?? false;
 }
 
-async function fetchModelPricing(ctx: RunContext, model: string): Promise<ModelPricing> {
-  const { data } = await ctx.supabase
-    .schema("inference")
-    .from("models")
-    .select("pricing")
-    .eq("model_id", model)
-    .maybeSingle<{ pricing: ModelPricing }>();
-  return data?.pricing ?? {};
-}
-
-/** Maps a hosted-tool pricing row's `cents_per_*` key to its metering unit_label. */
-const TOOL_PRICE_KEY_TO_LABEL: Record<string, string> = {
-  cents_per_web_search: "web_search",
-  cents_per_function_call: "function_call",
-  cents_per_cpu_second: "cpu_second",
-  cents_per_file_search: "file_search",
-  cents_per_memory_write: "memory_write",
-  cents_per_memory_search: "memory_search",
-  cents_per_mcp_call: "mcp_call",
-};
-
-/**
- * Load per-unit tool rates from the internal `agent/*` catalog rows so tool steps
- * count toward the mid-run cost ceiling (§9). Placeholder rates PENDING_FINANCE —
- * but the guard must sum tool spend regardless, else an agent that only calls
- * expensive tools (never re-invoking the model) could run past its budget.
- */
-async function fetchToolRates(ctx: RunContext): Promise<ToolRates> {
-  const { data } = await ctx.supabase
-    .schema("inference")
-    .from("models")
-    .select("pricing")
-    .like("model_id", "agent/%");
-  const rates: ToolRates = {};
-  for (const row of (data ?? []) as Array<{ pricing: Record<string, number> | null }>) {
-    for (const [key, cents] of Object.entries(row.pricing ?? {})) {
-      const label = TOOL_PRICE_KEY_TO_LABEL[key];
-      if (label && typeof cents === "number") rates[label] = cents;
-    }
-  }
-  return rates;
-}
-
-/** Fractional cents for one step — model steps by token pricing, tool steps by
- *  `units × per-unit rate`. Kept precise for the ceiling comparison; the
- *  authoritative billed amount comes from the usage pipeline later.
- *  Exported for unit testing the tool-cost path. */
-export function priceStep(step: LoopStep, pricing: ModelPricing, toolRates: ToolRates): number {
-  if (step.stepType === "model") {
-    const inRate = pricing.input_cents_per_mtok ?? 0;
-    const outRate = pricing.output_cents_per_mtok ?? 0;
-    return (
-      ((step.inputTokens ?? 0) * inRate) / 1_000_000 +
-      ((step.outputTokens ?? 0) * outRate) / 1_000_000
-    );
-  }
-  // Tool step: price by its metering (units × per-unit-label rate).
-  const label = step.metering?.unitLabel;
-  const units = step.metering?.units ?? 0;
-  const rate = label ? toolRates[label] ?? 0 : 0;
-  return units * rate;
-}
-
 // ── persistence ───────────────────────────────────────────────────────────────
 
 async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Promise<void> {
-  const { error: stepErr } = await ctx.supabase.schema("agentcore").from("run_steps").insert({
-    run_id: run.id,
-    org_id: run.org_id,
-    step_index: step.stepIndex,
-    step_type: step.stepType,
-    tool_name: step.toolName ?? null,
-    input_tokens: step.inputTokens ?? null,
-    output_tokens: step.outputTokens ?? null,
-    units: step.metering?.units ?? null,
-    unit_label: step.metering?.unitLabel ?? null,
-    cost_cents: round4(step.costCents ?? 0),
-    latency_ms: step.latencyMs ?? null,
-    status: step.status,
-    // Tool steps carry a small brand-scrubbed detail preview (set by the adapter,
-    // already upstream-scrubbed, §11); model steps have none (output → runs.output).
-    detail: step.detail ?? null,
-  });
-  // A failed step insert must NOT be silent — it means a lost trace + lost
-  // per-step usage while the run still looks "completed". Throw so the run
-  // fails loudly (caught → finalizeFailed). This defect was found by live E2E:
-  // a missing sequence grant made every run_steps insert fail unnoticed.
-  if (stepErr) throw new Error(`persist run_step ${step.stepIndex} failed: ${stepErr.message}`);
+  // Tool steps carry a small brand-scrubbed detail preview (set by the adapter,
+  // already upstream-scrubbed, §11); model steps have none (output → runs.output).
+  // Throws on failure (see run-shared.ts) — caught by runAgentJob → finalizeFailed.
+  await insertRunStep(ctx.supabase, run.id, run.org_id, step);
 
   // Heartbeat + progress so the reaper doesn't treat a live run as stale.
   await ctx.supabase
@@ -547,75 +462,6 @@ async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Pr
   }
 }
 
-async function finalizeCompleted(
-  ctx: RunContext,
-  run: ClaimedRun,
-  finalText: string,
-  totals: { inputTokensTotal: number; outputTokensTotal: number; steps: number; costCents: number }
-): Promise<void> {
-  const output = {
-    id: run.id,
-    object: "response",
-    status: "completed",
-    output: [
-      { type: "message", content: [{ type: "output_text", text: finalText }] },
-    ],
-    usage: {
-      input_tokens: totals.inputTokensTotal,
-      output_tokens: totals.outputTokensTotal,
-      tools: {},
-    },
-    steps: totals.steps,
-    x_ahura_cost_cents: round4(totals.costCents),
-  };
-
-  // Guard against clobbering a cancellation that landed mid-flight. Found
-  // live (2026-07-08, testing the new dashboard Cancel button): assertNotCancelled
-  // only gates the START of each model turn — for a single-step run (the
-  // common case) there's no re-check between "model call in flight" and
-  // "write completed", so a cancel arriving during that one in-flight call
-  // previously got silently overwritten back to "completed" the moment the
-  // model responded. Per-step cost/trace is already durable via persistStep
-  // regardless of whether this summary write lands, so no billing accuracy
-  // is lost by skipping it here — only the status field's correctness.
-  await ctx.supabase
-    .schema("agentcore")
-    .from("runs")
-    .update({
-      status: "completed",
-      output,
-      step_count: totals.steps,
-      cost_cents: round4(totals.costCents),
-    })
-    .eq("id", run.id)
-    .eq("status", "running");
-}
-
-async function finalizeFailed(
-  ctx: RunContext,
-  runId: string,
-  error: string,
-  costCents: number | null,
-  steps: number | null
-): Promise<void> {
-  const update: Record<string, unknown> = { status: "failed", error };
-  if (costCents != null) update.cost_cents = round4(costCents);
-  if (steps != null) update.step_count = steps;
-  // Same guard as finalizeCompleted — a run cancelled mid-flight must not
-  // get silently flipped to "failed" once the in-flight call errors out.
-  await ctx.supabase.schema("agentcore").from("runs").update(update).eq("id", runId).eq("status", "running");
-}
-
 async function assertNotCancelled(ctx: RunContext, runId: string): Promise<void> {
-  const { data } = await ctx.supabase
-    .schema("agentcore")
-    .from("runs")
-    .select("status")
-    .eq("id", runId)
-    .maybeSingle<{ status: string }>();
-  if (data?.status === "cancelled") throw new RunCancelledError();
-}
-
-function round4(n: number): number {
-  return Math.round(n * 10_000) / 10_000;
+  if (await isRunCancelled(ctx.supabase, runId)) throw new RunCancelledError();
 }

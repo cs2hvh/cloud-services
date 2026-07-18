@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Env, UsageEvent } from "../types.ts";
 
-interface ModelPricing {
+export interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
@@ -44,9 +44,14 @@ interface ModelOffPeak {
   discount_pct?: number;
 }
 
-interface PricingInfo {
+export interface PricingInfo {
   pricing: ModelPricing;
   off_peak: ModelOffPeak | null;
+  // What OR actually charges us (scripts/sync-or-model-pricing.ts), separate
+  // from `pricing` (what we charge the customer, curated, includes markup).
+  // null until synced for a given model, or for pseudo-catalog agent/* rows
+  // that were never meant to carry one — see computeCost's fallback below.
+  upstreamPricing: ModelPricing | null;
 }
 
 export async function handleUsageBatch(
@@ -65,7 +70,7 @@ export async function handleUsageBatch(
   const { data: modelRows, error: modelErr } = await supabase
     .schema("inference")
     .from("models")
-    .select("model_id, pricing, off_peak")
+    .select("model_id, pricing, off_peak, upstream_pricing")
     .in("model_id", modelIds);
 
   if (modelErr) {
@@ -86,6 +91,7 @@ export async function handleUsageBatch(
     pricingMap.set(m.model_id as string, {
       pricing: (m.pricing ?? {}) as ModelPricing,
       off_peak: (m.off_peak ?? null) as ModelOffPeak | null,
+      upstreamPricing: (m.upstream_pricing ?? null) as ModelPricing | null,
     });
   }
 
@@ -96,7 +102,7 @@ export async function handleUsageBatch(
   const rows = batch.messages.map((msg) => {
     const event = normalizeNumUnits(msg.body);
     const info = pricingMap.get(event.modelId);
-    const { costCents, isOffPeak } = computeCost(event, info);
+    const { costCents, isOffPeak, upstreamCostCents } = computeCost(event, info);
 
     return {
       org_id: event.orgId,
@@ -112,9 +118,14 @@ export async function handleUsageBatch(
       num_units: event.numUnits,
       unit_label: event.unitLabel,
       cost_cents: costCents,
-      // For Phase 1 the pass-through cost == billed cost (0% markup).
-      // Phase 2 introduces markup logic; upstream_cost stays as the raw rate.
-      upstream_cost_cents: costCents,
+      // Real margin once upstream_pricing is synced for this model
+      // (scripts/sync-or-model-pricing.ts); falls back to costCents — the
+      // old Phase-1 pass-through — for any model that isn't synced yet, or
+      // was never meant to carry one (agent/* pseudo-catalog rows). That
+      // fallback is deliberate: reporting upstream_cost_cents=0 for an
+      // unmeasured model would show 100% margin, a worse lie than 0% for a
+      // number nobody has verified either way.
+      upstream_cost_cents: upstreamCostCents,
       is_off_peak: isOffPeak,
       latency_ms: event.latencyMs,
       ttft_ms: event.ttftMs,
@@ -210,36 +221,66 @@ export async function handleUsageBatch(
  *   moderation:   ceil(items / 1000 * cents_per_1k_moderation)
  *   No off-peak discount applies (flat rate).
  *
+ * Also returns upstreamCostCents (found broken live, 2026-07-15 Phase-0
+ * audit — used to unconditionally equal costCents, so margin reporting read
+ * exactly $0 forever): the same formula run against `upstream_pricing`
+ * instead of `pricing`, NEVER off-peak-discounted (that discount is ours to
+ * give, not a change in what the upstream provider bills us). Falls back to
+ * costCents when a model has no synced upstream_pricing yet — a deliberate
+ * "unmeasured, not free" default; the alternative (0) would read as 100%
+ * margin, a worse lie for a number nobody has actually verified.
+ *
  * Rounded UP so micro-amounts don't round to zero and undercount.
  */
-function computeCost(
-  event: UsageEvent,
-  info: PricingInfo | undefined
-): { costCents: number; isOffPeak: boolean } {
-  // Don't charge for non-success requests or unknown models
-  if (!info || event.status !== "success") {
-    return { costCents: 0, isOffPeak: false };
-  }
-
-  // Per-unit modalities bypass the token-based path entirely.
-  if (isPerUnitLabel(event.unitLabel)) {
-    return { costCents: computeUnitCost(event, info.pricing), isOffPeak: false };
-  }
-
-  const p = info.pricing;
+/** Raw (pre-discount) token cost in cents against a given rate card —
+ *  shared by the customer-facing computation (off-peak-discounted below)
+ *  and the upstream one (never discounted; the off-peak promotion is ours,
+ *  it doesn't change what the upstream provider actually charges us). */
+function rawTokenCostCents(pricing: ModelPricing, event: UsageEvent): number {
   const input = event.inputTokens ?? 0;
   const output = event.outputTokens ?? 0;
   const cached = event.cachedTokens ?? 0;
   const billableInput = Math.max(0, input - cached);
 
-  const inputRate = p.input_cents_per_mtok ?? 0;
-  const outputRate = p.output_cents_per_mtok ?? 0;
-  const cachedRate = p.cached_cents_per_mtok ?? inputRate;
+  const inputRate = pricing.input_cents_per_mtok ?? 0;
+  const outputRate = pricing.output_cents_per_mtok ?? 0;
+  const cachedRate = pricing.cached_cents_per_mtok ?? inputRate;
 
-  const rawCents =
+  return (
     (billableInput * inputRate) / 1_000_000 +
     (cached * cachedRate) / 1_000_000 +
-    (output * outputRate) / 1_000_000;
+    (output * outputRate) / 1_000_000
+  );
+}
+
+/** True if a pricing object actually carries at least one real rate — used
+ *  to tell "upstream_pricing not synced yet" apart from "synced, all-zero"
+ *  (which would be a genuine data bug worth NOT silently swallowing into
+ *  the same 0-means-unmeasured fallback). */
+function hasAnyRate(pricing: ModelPricing | null): pricing is ModelPricing {
+  if (!pricing) return false;
+  return Object.values(pricing).some((v) => typeof v === "number" && v > 0);
+}
+
+export function computeCost(
+  event: UsageEvent,
+  info: PricingInfo | undefined
+): { costCents: number; isOffPeak: boolean; upstreamCostCents: number } {
+  // Don't charge for non-success requests or unknown models
+  if (!info || event.status !== "success") {
+    return { costCents: 0, isOffPeak: false, upstreamCostCents: 0 };
+  }
+
+  // Per-unit modalities bypass the token-based path entirely.
+  if (isPerUnitLabel(event.unitLabel)) {
+    const costCents = computeUnitCost(event, info.pricing);
+    const upstreamCostCents = hasAnyRate(info.upstreamPricing)
+      ? computeUnitCost(event, info.upstreamPricing)
+      : costCents; // not synced / not applicable to this row — see PricingInfo doc comment
+    return { costCents, isOffPeak: false, upstreamCostCents };
+  }
+
+  const rawCents = rawTokenCostCents(info.pricing, event);
 
   let discountPct = 0;
   let isOffPeak = false;
@@ -271,7 +312,14 @@ function computeCost(
   }
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
-  return { costCents: finalCents, isOffPeak };
+
+  // Never discounted — off-peak is a promotion on what WE charge, not a
+  // change in what the upstream provider bills us for the same tokens.
+  const upstreamCostCents = hasAnyRate(info.upstreamPricing)
+    ? Math.ceil(rawTokenCostCents(info.upstreamPricing, event))
+    : finalCents; // not synced yet — see PricingInfo doc comment
+
+  return { costCents: finalCents, isOffPeak, upstreamCostCents };
 }
 
 /**

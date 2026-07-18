@@ -42,6 +42,19 @@ import { ocr } from "./routes/ocr.ts";
 import { responses, createAgentRun } from "./routes/responses.ts";
 import { getAgentRun, streamAgentRun, cancelAgentRun } from "./routes/agent-runs.ts";
 import { agentToolUsage } from "./routes/agent-tool-usage.ts";
+import {
+  listAgents, createAgent, getAgent, updateAgent, deleteAgent,
+  listAgentKeys, createAgentKey, revokeAgentKey, rotateAgentKey,
+  purgeAgentMemories,
+} from "./routes/agent-management.ts";
+import {
+  listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer,
+} from "./routes/mcp-servers.ts";
+import {
+  listCollections, getCollection, queryCollection, upsertRows,
+  listRows, bulkDeleteRows, getRow, deleteRow,
+} from "./routes/vector-collections.ts";
+import { agentManagementAuthMiddleware } from "./middleware/agent-management-auth.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
 import { handleTraceBatch } from "./consumers/trace.ts";
@@ -161,6 +174,70 @@ v1.get("/key", keyInfo);
 v1.post("/messages", messagesShim);
 
 app.route("/v1", v1);
+
+// Agent MANAGEMENT surface (create/list/get/update/delete an agent; mint/
+// list/revoke/rotate its keys; MCP server + knowledge-base CRUD —
+// routes/agent-management.ts, mcp-servers.ts, vector-collections.ts).
+//
+// This is a SEPARATE Hono() instance for code organization only — mounting
+// it as a second `app.route("/v1", ...)` does NOT give it an isolated
+// middleware scope. Found live (2026-07-18): Hono's `.route()` flattens a
+// sub-app's routes (including its `.use("*", ...)` registrations) into the
+// parent's one shared routing table, so the ORIGINAL `v1` group's
+// authMiddleware/agentScopeMiddleware/originCheckMiddleware/
+// spendCheckMiddleware/rateLimitMiddleware ALL still match every path
+// registered here too, regardless of which instance the route was declared
+// on. That's fine for auth/agentScope/originCheck/rateLimit (see below),
+// but spendCheckMiddleware needed an explicit fix — see its own file:
+// hitting the org's hard cap must never lock a customer out of deleting a
+// runaway agent or revoking a leaking key, the one thing that would let
+// them fix it, so it now recognizes these paths and skips itself for them.
+//
+// authMiddleware: kept here too even though `v1`'s copy already runs first
+// in practice (registration order) — cheap, and keeps this group correct
+// on its own rather than silently depending on that ordering.
+// agentManagementAuthMiddleware: the one thing genuinely new — private,
+// unrestricted keys only (narrower than agentScopeMiddleware/
+// originCheckMiddleware's already-bled-through checks, which no-op for
+// such a key anyway).
+// rateLimitMiddleware: deliberately NOT re-declared — `v1`'s copy already
+// applies via the bleed-through above; declaring it again here would
+// double-charge the token bucket for every request.
+const v1Management = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+v1Management.use("*", authMiddleware);
+v1Management.use("*", agentManagementAuthMiddleware);
+
+v1Management.get("/agents", listAgents);
+v1Management.post("/agents", createAgent);
+v1Management.get("/agents/:id/keys", listAgentKeys);
+v1Management.post("/agents/:id/keys", createAgentKey);
+v1Management.delete("/agents/:id/keys/:keyId", revokeAgentKey);
+v1Management.post("/agents/:id/keys/:keyId/rotate", rotateAgentKey);
+v1Management.get("/agents/:id", getAgent);
+v1Management.patch("/agents/:id", updateAgent);
+v1Management.delete("/agents/:id", deleteAgent);
+v1Management.delete("/agents/:id/memories", purgeAgentMemories);
+
+// MCP server registry (routes/mcp-servers.ts) — same auth/skip-spend
+// reasoning as the agent-CRUD routes above.
+v1Management.get("/mcp-servers", listMcpServers);
+v1Management.post("/mcp-servers", createMcpServer);
+v1Management.patch("/mcp-servers/:id", updateMcpServer);
+v1Management.delete("/mcp-servers/:id", deleteMcpServer);
+
+// Knowledge base / vector collections (routes/vector-collections.ts) — list/
+// get/query/upsert/rows only; collection create/delete stay dashboard-only
+// (credit-ledger — see that file's header for why).
+v1Management.get("/vector/collections", listCollections);
+v1Management.get("/vector/collections/:id", getCollection);
+v1Management.post("/vector/collections/:id/query", queryCollection);
+v1Management.post("/vector/collections/:id/upsert", upsertRows);
+v1Management.get("/vector/collections/:id/rows", listRows);
+v1Management.delete("/vector/collections/:id/rows", bulkDeleteRows);
+v1Management.get("/vector/collections/:id/rows/:rowId", getRow);
+v1Management.delete("/vector/collections/:id/rows/:rowId", deleteRow);
+
+app.route("/v1", v1Management);
 
 // Agent tool-usage ingress (S1/S2 billing bridge) — auth only, deliberately
 // outside the v1 group: this reports cost already incurred by a completed

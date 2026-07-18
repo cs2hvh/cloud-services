@@ -15,7 +15,7 @@
  *   • DYNAMIC tools — customer-supplied, name/schema derived per declaration
  *     (inline `function` webhooks now; `mcp` server tools in S4).
  */
-import type { AgentTool, AgentToolDecl, FunctionToolDecl, StepType } from "@ahura/agent-core";
+import type { AgentDelegateToolDecl, AgentTool, AgentToolDecl, FunctionToolDecl, StepType } from "@ahura/agent-core";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RunnerEnv } from "../env.js";
 import { webSearchTool } from "./web-search.js";
@@ -23,6 +23,7 @@ import { fileSearchTool, type FileSearchDecl } from "./file-search.js";
 import { functionTool } from "./function.js";
 import { codeTool } from "./code.js";
 import { memoryTool } from "./memory.js";
+import { agentDelegateTool } from "./agent-delegate.js";
 import { DockerSandboxPool } from "./sandbox/docker-pool.js";
 import type { SandboxPool } from "./sandbox/pool.js";
 
@@ -160,6 +161,42 @@ export function dynamicToolSpec(decl: AgentToolDecl): ToolSpec | null {
           timeoutMs: deps.env.toolTimeoutMs,
           allowPrivateWebhooks: deps.env.allowPrivateWebhooks,
         }),
+    };
+  }
+  if (decl.type === "agent") {
+    const ad = decl as AgentDelegateToolDecl;
+    if (!ad.target_agent_id || !ad.label) return null; // skip malformed delegate decls
+    return {
+      type: "agent",
+      name: `agent__${ad.label}`,
+      // Rewritten 2026-07-17 after comparing against how real providers coach
+      // this exact handoff — Anthropic's own multi-agent research system
+      // (anthropic.com/engineering/multi-agent-research-system) found that
+      // "simple, short instructions... led to duplicate work and misaligned
+      // efforts," and fixed it by having their lead agent give every
+      // subagent "an objective, an output format, guidance on tools/sources,
+      // and clear task boundaries" — not a one-line prompt. The description
+      // below is that same coaching, applied to a single `input` string
+      // (not a multi-field schema) to keep the common case low-friction.
+      // It also states the scope explicitly (bounded subtask, not a
+      // conversation handoff) and nudges against unnecessary delegation —
+      // Anthropic's orchestrator prompt does the same with explicit
+      // scaling rules ("simple fact-finding: 1 agent... complex: many").
+      description:
+        ad.description ??
+        "Delegate ONE bounded subtask to another of your agents — use this only when the task genuinely needs that agent's specialization, not for things you can already answer yourself. The delegated agent sees ONLY the `input` text, nothing else from this conversation, and does not take over — you stay in control and use its answer to continue.",
+      parameters: {
+        type: "object",
+        properties: {
+          input: {
+            type: "string",
+            description:
+              "A complete, self-contained task — vague topics produce vague, misaligned work. Include: (1) the specific objective, not a general subject; (2) any boundaries (what's out of scope); (3) the output format you need (e.g. a short answer, a list, a yes/no with reasoning).",
+          },
+        },
+        required: ["input"],
+      },
+      create: (_d, deps) => agentDelegateTool(ad, { env: deps.env, supabase: deps.supabase }),
     };
   }
   // mcp: dynamic tool discovery from a hosted MCP server lands in S4.
