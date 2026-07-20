@@ -7,6 +7,13 @@
  * racing the idle reaper) can never double-charge, because only one caller wins
  * the row transition.
  *
+ * ⚠️ This settle formula is duplicated (not shared) in
+ * app/api/agents/internal/session-reaper/route.ts because that route runs in
+ * the separate Next.js deployable, which cannot import from workers/agent-runner
+ * (excluded from the root tsconfig; no cross-deployable import path exists —
+ * same boundary doc 14 §2b documents for MCP). If you change this formula,
+ * change it there too.
+ *
  * ⚠️ Money-moving is intentionally DEFERRED. Doc 13 MUST §5 requires this to
  * "sit on Phase-0 hardened billing RPCs" and the cents_per_cpu_second rate is
  * still PENDING_FINANCE (20260701000003_agentcore_tool_pricing.sql). So this

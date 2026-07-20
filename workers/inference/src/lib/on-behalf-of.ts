@@ -10,6 +10,7 @@
  * against a real inference.orgs row rather than trusted blindly.
  */
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import type { Env } from "../types.ts";
 
 /** AuthContext.keyId for every on-behalf-of request is `obo:{orgId}` — unique
@@ -33,10 +34,10 @@ export function isOnBehalfOf(keyId: string): boolean {
  *  agent-runner-attributed usage from a real customer API key's traffic. */
 export const OBO_API_KEY_ID = "00000000-0000-0000-0000-0000000000a9";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuidSchema = z.string().uuid();
 
 export function isValidUuid(value: string): boolean {
-  return UUID_RE.test(value);
+  return uuidSchema.safeParse(value).success;
 }
 
 export interface OrgBilling {

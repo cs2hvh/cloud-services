@@ -10,7 +10,7 @@
 import type { AgentTool, RunCtx, ToolResult } from "@ahura/agent-core";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RunnerEnv } from "../env.js";
-import { embedText } from "../gateway.js";
+import { embedText, rerankDocuments } from "../gateway.js";
 import { preview } from "./detail.js";
 
 export interface FileSearchDecl {
@@ -63,6 +63,34 @@ export function reRank(rows: VectorRow[], query: string): VectorRow[] {
     .map((x) => x.r);
 }
 
+/**
+ * Real cross-encoder rerank (doc 11 §12: "file_search is materially better
+ * once the reranking endpoint ships — slot rerank as a tool in S3 if
+ * available"). The endpoint shipped separately (Phase 1, ahura/rerank-m3) and
+ * was never wired here — this closes that gap. Best-effort: any failure
+ * (disabled, timeout, model unavailable) falls back to the local heuristic
+ * `reRank` above rather than failing the tool call — same discipline as every
+ * other best-effort dependency in this file (embeddings, the vector RPC).
+ */
+async function rerankOrFallback(
+  env: RunnerEnv,
+  orgId: string,
+  rows: VectorRow[],
+  query: string
+): Promise<VectorRow[]> {
+  if (!env.fileSearchRerankEnabled || rows.length < 2) return reRank(rows, query);
+  try {
+    const scored = await rerankDocuments(env, env.fileSearchRerankModel, query, rows.map((r) => r.content), orgId);
+    if (scored.length === 0) return reRank(rows, query);
+    return scored
+      .filter((s) => rows[s.index] !== undefined)
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .map((s) => rows[s.index]);
+  } catch {
+    return reRank(rows, query); // one bad rerank call never fails file_search
+  }
+}
+
 export function fileSearchTool(
   decl: FileSearchDecl,
   env: RunnerEnv,
@@ -108,7 +136,7 @@ export function fileSearchTool(
         if (error) throw new Error(error.message);
 
         const rows = (data as unknown as VectorRow[] | null) ?? [];
-        const ranked = reRank(rows, query).slice(0, topK);
+        const ranked = (await rerankOrFallback(env, ctx.orgId, rows, query)).slice(0, topK);
         const results = ranked.map((r, i) => ({
           index: i + 1,
           content: r.content,

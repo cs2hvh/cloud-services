@@ -93,7 +93,9 @@ describe("PersistedSandboxPool", () => {
   // would otherwise get its still-live session falsely reaped mid-run.
   it("bumps idle_deadline forward on every start() reuse, not just the first insert", async () => {
     const supabase = makeFakeSupabase();
-    const pool = new PersistedSandboxPool(new MockSandboxPool(), supabase, 0.06, 1000); // 1s idle window
+    // bumpThrottleMs: 0 — isolate the "does it bump on reuse" behavior from
+    // the separate throttle behavior covered by the test below.
+    const pool = new PersistedSandboxPool(new MockSandboxPool(), supabase, 0.06, 1000, 0);
     const ctx = { runId: "run_bump", orgId: "org_1" };
 
     await pool.start(ctx);
@@ -105,6 +107,25 @@ describe("PersistedSandboxPool", () => {
 
     expect(Date.parse(secondDeadline)).toBeGreaterThan(Date.parse(firstDeadline));
     expect(supabase._table).toHaveLength(1); // still one row — bump, not a new insert
+  });
+
+  // Regression guard for the opposite failure mode: without a throttle, a run
+  // with many quick `code` calls in a row writes to Postgres on every single
+  // one for no correctness gain (idleMs is minutes-scale; the deadline only
+  // needs to stay meaningfully ahead of "now", not be re-stamped every call).
+  it("throttles idle_deadline bumps — a rapid second start() within the throttle window is a no-op write", async () => {
+    const supabase = makeFakeSupabase();
+    const pool = new PersistedSandboxPool(new MockSandboxPool(), supabase, 0.06, 15 * 60_000, 60_000);
+    const ctx = { runId: "run_throttle", orgId: "org_1" };
+
+    await pool.start(ctx);
+    const firstDeadline = supabase._table[0].idle_deadline as string;
+
+    await pool.start(ctx); // immediate 2nd invocation — well within the 60s throttle window
+    const secondDeadline = supabase._table[0].idle_deadline as string;
+
+    expect(secondDeadline).toBe(firstDeadline); // no bump — throttled
+    expect(supabase._table).toHaveLength(1);
   });
 
   it("dispose() settles the row: state -> stopped, stopped_at set", async () => {

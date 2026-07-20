@@ -24,14 +24,22 @@ import { settleSandboxSession } from "./settle.js";
  *  never races a live, slow-but-working run. */
 const IDLE_MS_DEFAULT = 15 * 60_000;
 
+/** Bump throttle: skip the idle_deadline write if the last bump is still this
+ *  fresh — a run with many quick `code` calls in a row would otherwise write
+ *  to Postgres on every single one for no behavioral gain (the deadline only
+ *  needs to stay meaningfully ahead of "now", not be re-stamped every call). */
+const BUMP_THROTTLE_MS_DEFAULT = 60_000;
+
 export class PersistedSandboxPool implements SandboxPool {
   private sessionRowId: string | null = null;
+  private lastBumpAt = 0;
 
   constructor(
     private readonly inner: SandboxPool,
     private readonly supabase: SupabaseClient,
     private readonly perSecCents: number,
-    private readonly idleMs: number = IDLE_MS_DEFAULT
+    private readonly idleMs: number = IDLE_MS_DEFAULT,
+    private readonly bumpThrottleMs: number = BUMP_THROTTLE_MS_DEFAULT
   ) {}
 
   async start(ctx: { runId: string; orgId: string }): Promise<SandboxSession> {
@@ -61,14 +69,17 @@ export class PersistedSandboxPool implements SandboxPool {
         console.error(`[sandbox session] row insert failed for run ${ctx.runId}: ${error.message}`);
       } else {
         this.sessionRowId = data?.id ?? null;
+        this.lastBumpAt = Date.now();
       }
-    } else {
-      // Bump idle_deadline forward on every REUSE too — otherwise this is a
-      // fixed session-age cutoff, not an idle timeout: a run with several
-      // code calls spanning >idleMs total (no code call individually slow,
-      // just many of them across a long-running agent loop) would have its
-      // still-live session falsely reaped mid-run (doc 13's "idle reaper"
+    } else if (Date.now() - this.lastBumpAt >= this.bumpThrottleMs) {
+      // Bump idle_deadline forward on every REUSE too (throttled) — otherwise
+      // this is a fixed session-age cutoff, not an idle timeout: a run with
+      // several code calls spanning >idleMs total (no code call individually
+      // slow, just many of them across a long-running agent loop) would have
+      // its still-live session falsely reaped mid-run (doc 13's "idle reaper"
       // requirement means time-since-LAST-activity, not time-since-start).
+      // Throttled to at most once per bumpThrottleMs: idleMs is minutes-scale,
+      // so a write far more often than that buys no correctness, just DB load.
       // Best-effort: a failed bump must not break code execution either.
       const { error } = await this.supabase
         .schema("agentcore")
@@ -78,6 +89,8 @@ export class PersistedSandboxPool implements SandboxPool {
         .in("state", ["provisioning", "running"]);
       if (error) {
         console.error(`[sandbox session] idle_deadline bump failed for ${this.sessionRowId}: ${error.message}`);
+      } else {
+        this.lastBumpAt = Date.now();
       }
     }
     return session;

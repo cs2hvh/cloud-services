@@ -39,6 +39,14 @@ export interface RunnerEnv extends CoreRunnerEnv {
   // follow-up) — updates status/last_error/tool_schemas. 0 disables the loop
   // (useful for tests / a minimal deploy that doesn't need this yet).
   mcpSchemaRefreshIntervalMs: number;
+  // file_search's second-stage reranker (nextstespsAI/11-agent-implementation-
+  // plan.md §12: "file_search is materially better once the reranking endpoint
+  // ships — slot rerank as a tool in S3 if available"). The endpoint (/v1/rerank,
+  // ahura/rerank-m3) already shipped as part of Phase 1 — this just wires
+  // file_search to use it. Best-effort: a failed/disabled rerank call falls back
+  // to the existing local heuristic re-rank, never fails the tool call.
+  fileSearchRerankEnabled: boolean;
+  fileSearchRerankModel: string;
   // Docker sandbox config (used only when sandboxEnabled). runtime="runsc" opts
   // into gVisor when the node has it; empty = default docker runtime (dev only).
   sandboxImage: string;
@@ -73,6 +81,8 @@ export function loadEnv(): RunnerEnv {
     sandboxEnabled: optional("SANDBOX_ENABLED", "false").toLowerCase() === "true",
     mcpTokenDek: process.env.BYOK_DEK?.trim() || null,
     mcpSchemaRefreshIntervalMs: optionalInt("MCP_SCHEMA_REFRESH_INTERVAL_MS", 30 * 60_000),
+    fileSearchRerankEnabled: optional("FILE_SEARCH_RERANK_ENABLED", "true").toLowerCase() === "true",
+    fileSearchRerankModel: optional("FILE_SEARCH_RERANK_MODEL", "ahura/rerank-m3"),
     sandboxImage: optional("SANDBOX_IMAGE", "python:3.12-slim"),
     sandboxMemory: optional("SANDBOX_MEMORY", "256m"),
     sandboxCpus: optional("SANDBOX_CPUS", "1"),

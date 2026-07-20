@@ -197,3 +197,43 @@ export async function embedText(
     clearTimeout(timer);
   }
 }
+
+/** Rerank documents via the gateway's /v1/rerank (catalog model ahura/rerank-m3,
+ *  cohere/rerank-v3.5 upstream, brand-hidden). Used by file_search as a
+ *  second-stage relevance filter over the vector-search candidate pool — the
+ *  reranking endpoint doc 11 §12 flagged file_search as waiting on; it shipped
+ *  separately (Phase 1) and was never wired to file_search until now. Billed
+ *  per document scored (rerank_unit) on the gateway side, same on-behalf-of
+ *  attribution as every other agent-runner→gateway call. */
+export async function rerankDocuments(
+  env: RunnerEnv,
+  model: string,
+  query: string,
+  documents: string[],
+  orgId: string
+): Promise<{ index: number; relevanceScore: number }[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.toolTimeoutMs);
+  try {
+    const res = await fetch(`${env.inferenceBaseUrl}/rerank`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.inferencePlatformKey}`,
+        "Content-Type": "application/json",
+        "X-Ahura-On-Behalf-Of-Org": orgId,
+      },
+      body: JSON.stringify({ model, query, documents }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`rerank returned HTTP ${res.status}: ${txt.slice(0, 150)}`);
+    }
+    const data = (await res.json()) as {
+      results?: Array<{ index: number; relevance_score: number }>;
+    };
+    return (data.results ?? []).map((r) => ({ index: r.index, relevanceScore: r.relevance_score }));
+  } finally {
+    clearTimeout(timer);
+  }
+}

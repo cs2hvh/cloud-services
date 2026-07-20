@@ -376,6 +376,59 @@ describe("fileSearchTool", () => {
     const r = await fileSearchTool({ type: "file_search", collection_id: "col_1" }, env, mockSupabase(collection, [])).run({ query: "  " }, ctx);
     expect((r.output as { error: string }).error).toMatch(/non-empty/i);
   });
+
+  // ── real rerank wiring (doc 11 §12 gap closure) ──────────────────────────
+  const rerankEnv = { ...env, fileSearchRerankEnabled: true, fileSearchRerankModel: "ahura/rerank-m3",
+    inferenceBaseUrl: "https://api.test/v1", inferencePlatformKey: "pk_test" } as RunnerEnv;
+
+  /** embed always succeeds; /rerank's behavior is injected per-test. */
+  const mockEmbedAndRerankFetch = (rerankBehavior: () => Promise<{ ok: boolean; status: number; body: unknown }>) =>
+    (global.fetch = vi.fn(async (url: unknown) => {
+      if (String(url).endsWith("/rerank")) {
+        const { ok, status, body } = await rerankBehavior();
+        return { ok, status, headers: { get: () => "application/json" }, json: async () => body, text: async () => JSON.stringify(body) };
+      }
+      return {
+        ok: true, status: 200, headers: { get: () => "application/json" },
+        json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { prompt_tokens: 5 } }),
+        text: async () => "",
+      };
+    }) as unknown as typeof fetch);
+
+  it("uses the real rerank endpoint's order over the raw vector-similarity order", async () => {
+    // doc2 (index 1) has the LOWER raw similarity (0.78 < 0.91) but the rerank
+    // model scores it higher — proving the real score decided the order, not
+    // vector similarity or the local keyword heuristic.
+    mockEmbedAndRerankFetch(async () => ({
+      ok: true, status: 200,
+      body: { results: [{ index: 1, relevance_score: 0.99 }, { index: 0, relevance_score: 0.10 }] },
+    }));
+    const r = await fileSearchTool({ type: "file_search", collection_id: "col_1" }, rerankEnv, mockSupabase(collection, rows)).run({ query: "tech sector" }, ctx);
+    const out = r.output as { results: { index: number; source: string | null }[] };
+    expect(out.results[0].source).toBe("doc2");
+    expect(out.results[1].source).toBe("geo.md");
+  });
+
+  it("falls back to the local heuristic re-rank if the rerank call fails", async () => {
+    mockEmbedAndRerankFetch(async () => ({ ok: false, status: 500, body: { error: "boom" } }));
+    const r = await fileSearchTool({ type: "file_search", collection_id: "col_1" }, rerankEnv, mockSupabase(collection, rows)).run({ query: "pune" }, ctx);
+    const out = r.output as { results: unknown[] };
+    expect(out.results).toHaveLength(2); // still returns results — one bad rerank call never fails file_search
+  });
+
+  it("never calls /rerank when the feature is disabled", async () => {
+    const fetchSpy = vi.fn(async (url: unknown) => {
+      expect(String(url).endsWith("/rerank")).toBe(false);
+      return {
+        ok: true, status: 200, headers: { get: () => "application/json" },
+        json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }], usage: { prompt_tokens: 5 } }),
+        text: async () => "",
+      };
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    await fileSearchTool({ type: "file_search", collection_id: "col_1" }, env, mockSupabase(collection, rows)).run({ query: "pune" }, ctx);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // only the embed call
+  });
 });
 
 // ── agent memory (S5) ─────────────────────────────────────────────────────────

@@ -21,6 +21,11 @@
  * as a production (real microVM pool) requirement, not a dev-executor one.
  *
  * Auth: header `X-Ahura-Internal-Token` — identical trust boundary as run-reaper.
+ *
+ * ⚠️ The settle-charge formula below (seconds elapsed × per_sec_cents) is
+ * duplicated from workers/agent-runner/src/tools/sandbox/settle.ts's
+ * settleSandboxSession — this Next.js route can't import that package (see
+ * settle.ts's own note). If you change this formula, change it there too.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
