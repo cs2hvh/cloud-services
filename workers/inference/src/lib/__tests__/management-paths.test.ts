@@ -29,7 +29,6 @@ describe("isManagementRequest — recognized (spend-check exempt)", () => {
     ["DELETE", `/v1/mcp-servers/${AGENT}`],
     ["GET", "/v1/vector/collections"],
     ["GET", `/v1/vector/collections/${AGENT}`],
-    ["POST", `/v1/vector/collections/${AGENT}/query`],
     ["POST", `/v1/vector/collections/${AGENT}/upsert`],
     ["GET", `/v1/vector/collections/${AGENT}/rows`],
     ["DELETE", `/v1/vector/collections/${AGENT}/rows`],
@@ -50,6 +49,16 @@ describe("isManagementRequest — spend-generating paths must NEVER be exempt", 
     ["POST", "/v1/chat/completions"],
     ["POST", "/v1/embeddings"],
     ["POST", "/v1/images/generations"],
+    // nextstespsAI/04-rag-data-platform.md, 2026-07-20 — regression guard for
+    // the exact bug this file's header warns about: /query used to be pure,
+    // free vector math (correctly exempt), but now supports `rerank:true`
+    // and always auto-embeds — both real, metered upstream calls. It was
+    // removed from the allowlist above; this assertion is what would have
+    // caught the bypass before it shipped. /answer (new, same doc) must
+    // never be added to the allowlist either — it's the priciest route in
+    // this file (embed + retrieve + rerank + a full chat completion).
+    ["POST", `/v1/vector/collections/${AGENT}/query`],
+    ["POST", `/v1/vector/collections/${AGENT}/answer`],
   ])("%s %s", (method, path) => {
     expect(isManagementRequest(method, path)).toBe(false);
   });

@@ -47,7 +47,16 @@ const MANAGEMENT_ROUTES: Route[] = [
   { method: "DELETE", pattern: new RegExp(`^/v1/mcp-servers/${UUID}$`) },
   { method: "GET", pattern: new RegExp(`^/v1/vector/collections$`) },
   { method: "GET", pattern: new RegExp(`^/v1/vector/collections/${UUID}$`) },
-  { method: "POST", pattern: new RegExp(`^/v1/vector/collections/${UUID}/query$`) },
+  // POST .../query is deliberately NOT here (nextstespsAI/04-rag-data-
+  // platform.md, 2026-07-20): it used to be pure vector math (genuinely
+  // free), which is why it was originally allowlisted — but it now supports
+  // `rerank:true` (real money: calls the rerank model) and auto-embed on
+  // every call (real money: an upstream embeddings call), so it must go
+  // through the normal spend-cap gate like any other paid route. Exempting
+  // it would be exactly the "false positive" this file's own header warns
+  // against — an over-cap org could otherwise spam reranked search forever.
+  // POST .../answer (the new grounded-generation endpoint, same doc) was
+  // never added here either, for the same reason.
   { method: "POST", pattern: new RegExp(`^/v1/vector/collections/${UUID}/upsert$`) },
   { method: "GET", pattern: new RegExp(`^/v1/vector/collections/${UUID}/rows$`) },
   { method: "DELETE", pattern: new RegExp(`^/v1/vector/collections/${UUID}/rows$`) },

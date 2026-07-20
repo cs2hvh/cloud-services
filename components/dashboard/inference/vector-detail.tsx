@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, RotateCw, Search, Sparkles, Trash2 } from "lucide-react";
+import { ChevronLeft, MessageCircleQuestion, RotateCw, Search, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,9 +20,11 @@ import {
 
 import {
   ACCENT,
+  ACCENT_DIM,
   ColHead,
   DataTable,
   EmptyState,
+  FilterChip,
   GhostButton,
   Hero,
   MONO,
@@ -34,6 +37,39 @@ import {
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+
+type SearchMode = "vector" | "hybrid";
+
+interface Citation {
+  marker: number;
+  document_id: string;
+  source: string | null;
+  snippet: string;
+  score: number;
+}
+
+/** Renders answer text with [n] citation markers as small badges the eye
+ *  catches, instead of raw bracket text. */
+function AnswerText({ text }: { text: string }) {
+  const parts = text.split(/(\[\d+\])/g);
+  return (
+    <p className={`${MONO} text-[12.5px] text-white/85 leading-relaxed whitespace-pre-wrap`}>
+      {parts.map((part, i) => {
+        const m = part.match(/^\[(\d+)\]$/);
+        if (!m) return <span key={i}>{part}</span>;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 mx-0.5 rounded-[3px] text-[9.5px] font-bold align-super"
+            style={{ background: ACCENT_DIM, color: ACCENT }}
+          >
+            {m[1]}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
 
 export interface VectorCollectionRecord {
   id: string;
@@ -96,10 +132,24 @@ export function VectorCollectionDetail({
   // Query test box
   const [queryText, setQueryText] = useState("");
   const [topK, setTopK] = useState(5);
+  const [queryMode, setQueryMode] = useState<SearchMode>("vector");
+  const [queryRerank, setQueryRerank] = useState(false);
   const [querying, setQuerying] = useState(false);
   const [queryResults, setQueryResults] = useState<QueryResult[] | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [queryMs, setQueryMs] = useState<number | null>(null);
+
+  // Ask-a-question box (grounded generation with citations)
+  const [askQuery, setAskQuery] = useState("");
+  const [askModel, setAskModel] = useState("anthropic/claude-haiku-4.5");
+  const [askTopK, setAskTopK] = useState(6);
+  const [askMode, setAskMode] = useState<SearchMode>("hybrid");
+  const [askRerank, setAskRerank] = useState(true);
+  const [asking, setAsking] = useState(false);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askCitations, setAskCitations] = useState<Citation[]>([]);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [askMs, setAskMs] = useState<number | null>(null);
 
   const reloadRows = useCallback(
     async (opts?: { offset?: number; search?: string }) => {
@@ -168,7 +218,7 @@ export function VectorCollectionDetail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ text: queryText.trim(), top_k: topK }),
+        body: JSON.stringify({ text: queryText.trim(), top_k: topK, mode: queryMode, rerank: queryRerank }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? `Failed (${r.status})`);
@@ -181,6 +231,48 @@ export function VectorCollectionDetail({
       toast.error(msg);
     } finally {
       setQuerying(false);
+    }
+  };
+
+  const runAsk = async () => {
+    if (!askQuery.trim()) {
+      toast.error("Enter a question");
+      return;
+    }
+    if (!askModel.trim()) {
+      toast.error("Enter a model id");
+      return;
+    }
+    setAsking(true);
+    setAskError(null);
+    setAskAnswer(null);
+    setAskCitations([]);
+    const startedAt = performance.now();
+    try {
+      const r = await fetch(`/api/inference/vector/collections/${collection.id}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          query: askQuery.trim(),
+          model: askModel.trim(),
+          top_k: askTopK,
+          mode: askMode,
+          rerank: askRerank,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? `Failed (${r.status})`);
+      setAskAnswer(data.answer ?? "");
+      setAskCitations(data.citations ?? []);
+      setAskMs(Math.round(performance.now() - startedAt));
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "Generation failed";
+      const msg = customerSafeErrorMessage(raw) || "Generation failed";
+      setAskError(msg);
+      toast.error(msg);
+    } finally {
+      setAsking(false);
     }
   };
 
@@ -286,6 +378,21 @@ export function VectorCollectionDetail({
           </div>
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <FilterChip active={queryMode === "vector"} label="Vector" onClick={() => setQueryMode("vector")} />
+            <FilterChip active={queryMode === "hybrid"} label="Hybrid" onClick={() => setQueryMode("hybrid")} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Switch checked={queryRerank} onCheckedChange={setQueryRerank} />
+            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/55`}>Rerank</span>
+          </label>
+          <span className={`${MONO} text-[10px] text-white/35`}>
+            {queryMode === "hybrid" ? "Meaning + exact-keyword match, fused" : "Meaning-based similarity only"}
+            {queryRerank ? " · re-scored by a cross-encoder" : ""}
+          </span>
+        </div>
+
         {queryError && (
           <p className={`${MONO} mt-3 text-[11px] text-red-400`}>{queryError}</p>
         )}
@@ -330,6 +437,111 @@ export function VectorCollectionDetail({
           <p className={`${MONO} mt-3 text-[11px] text-white/45`}>
             No matches above the similarity threshold.
           </p>
+        )}
+      </div>
+
+      {/* ─── Ask a question (grounded generation with citations) ──── */}
+      <SectionHead
+        eyebrow="Generate"
+        title="Ask"
+        accent="grounded answer with citations"
+        rightMeta={askMs !== null ? `last answer ${askMs}ms` : undefined}
+      />
+
+      <div className="rounded-[6px] border border-white/[0.06] bg-[#0f1014] p-5">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-3">
+          <div>
+            <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+              Question
+            </Label>
+            <Input
+              value={askQuery}
+              onChange={(e) => setAskQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void runAsk();
+                }
+              }}
+              placeholder="e.g. what's the refund policy?"
+              className="bg-white/[0.02] border-white/[0.08]"
+            />
+          </div>
+          <div>
+            <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
+              Model
+            </Label>
+            <Input
+              value={askModel}
+              onChange={(e) => setAskModel(e.target.value)}
+              placeholder="e.g. anthropic/claude-haiku-4.5"
+              className={`${MONO} text-[11.5px] bg-white/[0.02] border-white/[0.08]`}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <FilterChip active={askMode === "vector"} label="Vector" onClick={() => setAskMode("vector")} />
+            <FilterChip active={askMode === "hybrid"} label="Hybrid" onClick={() => setAskMode("hybrid")} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Switch checked={askRerank} onCheckedChange={setAskRerank} />
+            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/55`}>Rerank</span>
+          </label>
+          <div className="flex items-center gap-1.5">
+            <span className={`${MONO} text-[10.5px] uppercase tracking-[0.12em] text-white/55`}>top_k</span>
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={askTopK}
+              onChange={(e) => setAskTopK(Math.min(20, Math.max(1, Number.parseInt(e.target.value, 10) || 6)))}
+              className="w-16 h-7 px-2 bg-white/[0.02] border-white/[0.08] text-[11px]"
+            />
+          </div>
+          <div className="ml-auto">
+            <PrimaryButton onClick={runAsk} disabled={asking || !askQuery.trim() || !askModel.trim() || total === 0}>
+              <MessageCircleQuestion className="h-3.5 w-3.5" />
+              {asking ? "Thinking…" : "Ask"}
+            </PrimaryButton>
+          </div>
+        </div>
+
+        {askError && <p className={`${MONO} mt-3 text-[11px] text-red-400`}>{askError}</p>}
+
+        {askAnswer !== null && (
+          <div className="mt-5 rounded-[5px] border border-white/[0.06] bg-white/[0.015] p-4">
+            <AnswerText text={askAnswer} />
+
+            {askCitations.length > 0 ? (
+              <div className="mt-4 pt-4 border-t border-white/[0.06] space-y-2">
+                <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40 mb-2`}>
+                  Sources cited
+                </p>
+                {askCitations.map((c) => (
+                  <div key={c.marker} className="flex items-start gap-2.5">
+                    <span
+                      className="inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 mt-0.5 rounded-[3px] text-[9.5px] font-bold shrink-0"
+                      style={{ background: ACCENT_DIM, color: ACCENT }}
+                    >
+                      {c.marker}
+                    </span>
+                    <div className="min-w-0">
+                      <code className={`${MONO} text-[11px] text-white/70`}>{c.source ?? c.document_id}</code>
+                      <p className={`${MONO} text-[10.5px] text-white/45 leading-relaxed line-clamp-2`}>
+                        {c.snippet}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className={`${MONO} mt-3 text-[10.5px] text-white/35 italic`}>
+                No sources cited — the answer wasn&apos;t grounded in a specific retrieved document.
+              </p>
+            )}
+          </div>
         )}
       </div>
 

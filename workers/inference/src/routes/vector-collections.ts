@@ -40,16 +40,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Handler } from "hono";
 import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
-import { gatewayError } from "../lib/gateway.ts";
+import { buildBaseEvent, enqueueUsage, gatewayError } from "../lib/gateway.ts";
 import { isValidUuid } from "../lib/on-behalf-of.ts";
 import { makeSupabase, enqueueAudit, readJson } from "../lib/route-helpers.ts";
+import { rerankCandidates } from "../lib/rag-rerank.ts";
 
 const MAX_VECTORS_PER_ORG = 1_000_000;
 
 /** Server-side auto-embed via OpenRouter (platform key) — Workers-native
  *  port of lib/inference/embeddings.ts's embedText: same upstream, same
  *  request shape, just fetch() instead of Node's global fetch shim. */
-async function embedText(env: Env, text: string, modelId: string): Promise<{ embedding: number[]; inputTokens: number | null }> {
+export async function embedText(env: Env, text: string, modelId: string): Promise<{ embedding: number[]; inputTokens: number | null }> {
   const r = await fetch("https://openrouter.ai/api/v1/embeddings", {
     method: "POST",
     headers: {
@@ -100,7 +101,7 @@ interface CollectionRow {
 const COLLECTION_SELECT_COLS =
   "id, name, description, dimensions, distance_metric, embedding_model_id, index_type, index_params, row_count, size_bytes, created_at, updated_at";
 
-async function fetchCollection<T extends { id: string; dimensions: number; embedding_model_id: string | null } = { id: string; dimensions: number; embedding_model_id: string | null }>(
+export async function fetchCollection<T extends { id: string; dimensions: number; embedding_model_id: string | null } = { id: string; dimensions: number; embedding_model_id: string | null }>(
   supabase: SupabaseClient,
   orgId: string,
   id: string,
@@ -171,6 +172,15 @@ export const querySchema = z
     top_k: z.number().int().positive().max(100).default(10),
     min_similarity: z.number().min(0).max(1).default(0),
     filter: z.record(z.string(), z.unknown()).optional(),
+    // nextstespsAI/04-rag-data-platform.md — hybrid = dense vector + sparse
+    // full-text (BM25-style) fused via RRF (inference.hybrid_search RPC,
+    // migration 20260720000001). Falls back to pure-vector fusion when no
+    // `text` is given (nothing to full-text-match against).
+    mode: z.enum(["vector", "hybrid"]).default("vector"),
+    // Real cross-encoder rerank (ahura/rerank-m3) over an over-fetched
+    // candidate pool, same pattern as the agent file_search tool. Optional
+    // and best-effort — see lib/rag-rerank.ts.
+    rerank: z.boolean().default(false),
   })
   .refine((d) => !!d.embedding || !!d.text, { message: "Must provide either `embedding` or `text`" });
 
@@ -186,6 +196,7 @@ interface SearchRow {
 export const queryCollection: Handler<{ Bindings: Env; Variables: HonoVariables }> = async (c) => {
   const auth = c.get("auth");
   const requestId = c.get("requestId");
+  const startedAt = Date.now();
   const id = c.req.param("id");
   if (!id || !isValidUuid(id)) {
     return c.json(gatewayError("Invalid collection id", "invalid_request_error", "invalid_request", requestId), 400);
@@ -228,7 +239,21 @@ export const queryCollection: Handler<{ Bindings: Env; Variables: HonoVariables 
       );
     }
     try {
-      queryEmbedding = (await embedText(c.env, parsed.data.text, collection.embedding_model_id)).embedding;
+      const embedResult = await embedText(c.env, parsed.data.text, collection.embedding_model_id);
+      queryEmbedding = embedResult.embedding;
+      // Was silently unbilled before this slice (nextstespsAI/04-rag-data-
+      // platform.md, 2026-07-20) — every auto-embed call here hits a real,
+      // metered upstream (OpenRouter) regardless of whether the customer is
+      // ever charged for it. Bill it like any other embedding call.
+      void enqueueUsage(
+        c.env,
+        buildBaseEvent(auth, collection.embedding_model_id, "embedding", requestId, startedAt, {
+          inputTokens: embedResult.inputTokens,
+          outputTokens: 0,
+          numUnits: 1,
+          unitLabel: "embedding",
+        }),
+      );
     } catch {
       return c.json(gatewayError("Auto-embed failed. Try again, or pass a pre-computed `embedding` array.", "server_error", "embed_failed", requestId), 502);
     }
@@ -240,19 +265,39 @@ export const queryCollection: Handler<{ Bindings: Env; Variables: HonoVariables 
     );
   }
 
-  const { data, error } = await supabase.schema("inference").rpc("search_vectors", {
-    p_collection_id: collection.id,
-    p_query_embedding: JSON.stringify(queryEmbedding),
-    p_distance_metric: collection.distance_metric,
-    p_limit: parsed.data.top_k,
-    p_min_similarity: parsed.data.min_similarity,
-    ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
-  });
+  // Reranking needs a wider candidate pool to reorder over — re-ranking only
+  // the final top_k would barely change anything (same reasoning as the
+  // agent file_search tool's over-fetch).
+  const fetchLimit = parsed.data.rerank ? Math.min(Math.max(parsed.data.top_k * 4, 20), 100) : parsed.data.top_k;
+
+  const { data, error } =
+    parsed.data.mode === "hybrid"
+      ? await supabase.schema("inference").rpc("hybrid_search", {
+          p_collection_id: collection.id,
+          p_query_embedding: JSON.stringify(queryEmbedding),
+          p_query_text: parsed.data.text ?? "",
+          p_distance_metric: collection.distance_metric,
+          p_limit: fetchLimit,
+          p_min_similarity: parsed.data.min_similarity,
+          ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
+        })
+      : await supabase.schema("inference").rpc("search_vectors", {
+          p_collection_id: collection.id,
+          p_query_embedding: JSON.stringify(queryEmbedding),
+          p_distance_metric: collection.distance_metric,
+          p_limit: fetchLimit,
+          p_min_similarity: parsed.data.min_similarity,
+          ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
+        });
 
   if (error) {
     return c.json(gatewayError("Vector search failed", "server_error", "vector_search_failed", requestId), 500);
   }
-  const rows = (data as unknown as SearchRow[] | null) ?? [];
+  let rows = (data as unknown as SearchRow[] | null) ?? [];
+  if (parsed.data.rerank && parsed.data.text) {
+    rows = await rerankCandidates(c.env, auth, requestId, parsed.data.text, rows);
+  }
+  rows = rows.slice(0, parsed.data.top_k);
   return c.json({
     object: "list" as const,
     data: rows.map((r) => ({ id: r.id, external_id: r.external_id, content: r.content, metadata: r.metadata, similarity: r.similarity })),

@@ -31,6 +31,29 @@ describe("querySchema", () => {
     const r = querySchema.safeParse({ text: "x", filter: { tenant: "acme" } });
     expect(r.success).toBe(true);
   });
+
+  // nextstespsAI/04-rag-data-platform.md — hybrid search + rerank
+  it("defaults mode=vector and rerank=false (no behavior change for existing callers)", () => {
+    const r = querySchema.safeParse({ text: "x" });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.mode).toBe("vector");
+      expect(r.data.rerank).toBe(false);
+    }
+  });
+
+  it("accepts mode:hybrid and rerank:true", () => {
+    const r = querySchema.safeParse({ text: "x", mode: "hybrid", rerank: true });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.mode).toBe("hybrid");
+      expect(r.data.rerank).toBe(true);
+    }
+  });
+
+  it("rejects an unknown mode", () => {
+    expect(querySchema.safeParse({ text: "x", mode: "bm25" }).success).toBe(false);
+  });
 });
 
 describe("upsertSchema", () => {

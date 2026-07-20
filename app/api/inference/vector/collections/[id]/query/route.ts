@@ -14,6 +14,13 @@
  *     filter?: object  — JSONB containment filter on row metadata, e.g.
  *                        { "tenant": "acme", "lang": "en" } returns only rows
  *                        whose metadata contains those pairs (multi-tenant RAG)
+ *     mode?: "vector" | "hybrid" (default "vector") — hybrid fuses dense vector
+ *            search with sparse full-text search via RRF (inference.hybrid_search,
+ *            nextstespsAI/04-rag-data-platform.md). No behavior change for
+ *            existing callers.
+ *     rerank?: boolean (default false) — real cross-encoder rerank over an
+ *            over-fetched candidate pool. Best-effort: a rerank failure falls
+ *            back to the original order, never errors the request.
  *   }
  *
  * Returns top-k most similar rows ordered by similarity descending.
@@ -25,6 +32,7 @@ import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { embedText } from "@/lib/inference/embeddings";
+import { rerankCandidates } from "@/lib/inference/rerank";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 const querySchema = z
@@ -35,6 +43,8 @@ const querySchema = z
     min_similarity: z.number().min(0).max(1).default(0),
     // Optional JSONB containment filter on row metadata (multi-tenant RAG).
     filter: z.record(z.string(), z.unknown()).optional(),
+    mode: z.enum(["vector", "hybrid"]).default("vector"),
+    rerank: z.boolean().default(false),
   })
   .refine((d) => !!d.embedding || !!d.text, {
     message: "Must provide either `embedding` or `text`",
@@ -142,20 +152,33 @@ export async function POST(
     );
   }
 
-  const { data, error } = await supabase
-    .schema("inference")
-    .rpc("search_vectors", {
-      p_collection_id: collection.id,
-      // pgvector accepts JSON-stringified array
-      p_query_embedding: JSON.stringify(queryEmbedding),
-      p_distance_metric: collection.distance_metric,
-      p_limit: parsed.data.top_k,
-      p_min_similarity: parsed.data.min_similarity,
-      // Only pass the filter when present, so unfiltered queries still match
-      // the pre-migration 5-arg function — safe to deploy before the migration
-      // is applied; only the filter feature itself needs the new 6-arg version.
-      ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
-    });
+  // Reranking needs a wider candidate pool to reorder over — matches the
+  // gateway's exact over-fetch reasoning (workers/inference's queryCollection).
+  const fetchLimit = parsed.data.rerank ? Math.min(Math.max(parsed.data.top_k * 4, 20), 100) : parsed.data.top_k;
+
+  const { data, error } =
+    parsed.data.mode === "hybrid"
+      ? await supabase.schema("inference").rpc("hybrid_search", {
+          p_collection_id: collection.id,
+          p_query_embedding: JSON.stringify(queryEmbedding),
+          p_query_text: parsed.data.text ?? "",
+          p_distance_metric: collection.distance_metric,
+          p_limit: fetchLimit,
+          p_min_similarity: parsed.data.min_similarity,
+          ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
+        })
+      : await supabase.schema("inference").rpc("search_vectors", {
+          p_collection_id: collection.id,
+          // pgvector accepts JSON-stringified array
+          p_query_embedding: JSON.stringify(queryEmbedding),
+          p_distance_metric: collection.distance_metric,
+          p_limit: fetchLimit,
+          p_min_similarity: parsed.data.min_similarity,
+          // Only pass the filter when present, so unfiltered queries still match
+          // the pre-migration 5-arg function — safe to deploy before the migration
+          // is applied; only the filter feature itself needs the new 6-arg version.
+          ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
+        });
 
   if (error) {
     console.error("[Inference Vector] query error:", error);
@@ -167,7 +190,11 @@ export async function POST(
 
   // Supabase's generated RPC types are over-strict for SETOF RETURNS TABLE
   // functions; cast through unknown to the row shape we declared.
-  const rows = (data as unknown as SearchRow[] | null) ?? [];
+  let rows = (data as unknown as SearchRow[] | null) ?? [];
+  if (parsed.data.rerank && parsed.data.text) {
+    rows = await rerankCandidates(parsed.data.text, rows);
+  }
+  rows = rows.slice(0, parsed.data.top_k);
 
   return NextResponse.json({
     success: true,

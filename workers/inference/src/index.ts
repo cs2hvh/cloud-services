@@ -54,6 +54,7 @@ import {
   listCollections, getCollection, queryCollection, upsertRows,
   listRows, bulkDeleteRows, getRow, deleteRow,
 } from "./routes/vector-collections.ts";
+import { answerFromCollection } from "./routes/vector-answer.ts";
 import { agentManagementAuthMiddleware } from "./middleware/agent-management-auth.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
@@ -231,6 +232,7 @@ v1Management.delete("/mcp-servers/:id", deleteMcpServer);
 v1Management.get("/vector/collections", listCollections);
 v1Management.get("/vector/collections/:id", getCollection);
 v1Management.post("/vector/collections/:id/query", queryCollection);
+v1Management.post("/vector/collections/:id/answer", answerFromCollection);
 v1Management.post("/vector/collections/:id/upsert", upsertRows);
 v1Management.get("/vector/collections/:id/rows", listRows);
 v1Management.delete("/vector/collections/:id/rows", bulkDeleteRows);
