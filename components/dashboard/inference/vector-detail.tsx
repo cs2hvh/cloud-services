@@ -100,6 +100,26 @@ interface QueryResult {
   content: string | null;
   metadata: Record<string, unknown>;
   similarity: number;
+  // Present only when mode:"hybrid" (RRF fusion score) / rerank:true
+  // (cross-encoder relevance) respectively — see the query route for why.
+  rrf_score?: number;
+  rerank_score?: number;
+}
+
+/** The score that actually decided a row's position, plus how to display it —
+ *  found live, 2026-07-21: this panel always showed raw vector `similarity`
+ *  even when hybrid fusion or reranking had reordered the rows, so toggling
+ *  either control visibly changed nothing on screen even though the
+ *  underlying ranking had. Reranking (a cross-encoder pass, a real 0-1
+ *  relevance probability) is the most specific signal when present, then RRF
+ *  fusion, then plain vector similarity. RRF's fused score is NOT a
+ *  proportion (it's a sum of 1/(k+rank) terms, typically << 1) — rendering
+ *  it as a percentage would misleadingly read as "low confidence", so only
+ *  the two real 0-1 scores are percentage-formatted. */
+function effectiveScore(r: QueryResult): { value: number; label: string; asPercent: boolean } {
+  if (r.rerank_score !== undefined) return { value: r.rerank_score, label: "Relevance", asPercent: true };
+  if (r.rrf_score !== undefined) return { value: r.rrf_score, label: "Fused", asPercent: false };
+  return { value: r.similarity, label: "Similarity", asPercent: true };
 }
 
 const PAGE_SIZE = 25;
@@ -334,11 +354,15 @@ export function VectorCollectionDetail({
       <SectionHead
         eyebrow="Search"
         title="Query"
-        accent="by similarity"
+        // Same "found live, 2026-07-21" issue as effectiveScore below, one
+        // level up: this used to hardcode "by similarity" regardless of mode,
+        // so the section caption was ALSO wrong once hybrid/rerank reordered
+        // results by a different score.
+        accent={queryRerank ? "by relevance (reranked)" : queryMode === "hybrid" ? "by fused rank" : "by similarity"}
         rightMeta={queryMs !== null ? `last query ${queryMs}ms` : undefined}
       />
 
-      <div className="rounded-[6px] border border-white/[0.06] bg-[#0f1014] p-5">
+      <div className="mb-14 rounded-[6px] border border-white/[0.06] bg-[#111216] p-5">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3">
           <div>
             <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
@@ -399,38 +423,46 @@ export function VectorCollectionDetail({
 
         {queryResults && queryResults.length > 0 && (
           <div className="mt-5 space-y-2">
-            {queryResults.map((r, i) => (
-              <div
-                key={r.id}
-                className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] p-3"
-              >
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
+            {queryResults.map((r, i) => {
+              const score = effectiveScore(r);
+              return (
+                <div
+                  key={r.id}
+                  className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] p-3"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        style={SERIF_STYLE}
+                        className="text-[12px] tabular-nums text-white/45 w-5"
+                      >
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <code className={`${MONO} text-[11.5px] text-white/75 truncate`}>
+                        {r.external_id}
+                      </code>
+                    </div>
                     <span
                       style={SERIF_STYLE}
-                      className="text-[12px] tabular-nums text-white/45 w-5"
+                      className="text-[13px] font-bold tabular-nums shrink-0 flex items-center gap-1.5"
+                      title={`${score.label}: ${score.value} · Similarity: ${r.similarity}`}
                     >
-                      {String(i + 1).padStart(2, "0")}
+                      <span className={`${MONO} text-[9px] font-normal uppercase tracking-[0.1em] text-white/35`}>
+                        {score.label}
+                      </span>
+                      <span style={{ color: ACCENT }}>
+                        {score.asPercent ? `${(score.value * 100).toFixed(1)}%` : score.value.toFixed(4)}
+                      </span>
                     </span>
-                    <code className={`${MONO} text-[11.5px] text-white/75 truncate`}>
-                      {r.external_id}
-                    </code>
                   </div>
-                  <span
-                    style={SERIF_STYLE}
-                    className="text-[13px] font-bold tabular-nums shrink-0"
-                    title={`Similarity: ${r.similarity}`}
-                  >
-                    <span style={{ color: ACCENT }}>{(r.similarity * 100).toFixed(1)}%</span>
-                  </span>
+                  {r.content && (
+                    <p className={`${MONO} text-[11px] text-white/60 leading-relaxed line-clamp-3`}>
+                      {r.content}
+                    </p>
+                  )}
                 </div>
-                {r.content && (
-                  <p className={`${MONO} text-[11px] text-white/60 leading-relaxed line-clamp-3`}>
-                    {r.content}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {queryResults && queryResults.length === 0 && !queryError && (
@@ -448,7 +480,7 @@ export function VectorCollectionDetail({
         rightMeta={askMs !== null ? `last answer ${askMs}ms` : undefined}
       />
 
-      <div className="rounded-[6px] border border-white/[0.06] bg-[#0f1014] p-5">
+      <div className="mb-14 rounded-[6px] border border-white/[0.06] bg-[#111216] p-5">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-3">
           <div>
             <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>

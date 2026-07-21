@@ -55,6 +55,10 @@ interface SearchRow {
   content: string | null;
   metadata: Record<string, unknown>;
   similarity: number;
+  // Present only when mode:"hybrid" / rerank:true respectively — see the
+  // sibling query/route.ts for why these exist.
+  rrf_score?: number;
+  rerank_score?: number;
 }
 
 interface Citation {
@@ -71,7 +75,11 @@ function buildContext(rows: SearchRow[]): { block: string; citations: Citation[]
     document_id: r.external_id,
     source: (r.metadata?.source as string | undefined) ?? r.external_id,
     snippet: (r.content ?? "").slice(0, 240),
-    score: Number(r.similarity.toFixed(4)),
+    // The score that actually decided this row's position — found live,
+    // 2026-07-21: citations always showed pre-rerank/pre-fusion `similarity`,
+    // giving no visible signal that reranking/hybrid fusion had reordered
+    // the rows a citation's [n] marker points at.
+    score: Number((r.rerank_score ?? r.rrf_score ?? r.similarity).toFixed(4)),
   }));
   const block = rows
     .map((r, i) => `[${i + 1}] ${(r.content ?? "").slice(0, MAX_CONTEXT_CHARS_PER_CHUNK)}`)

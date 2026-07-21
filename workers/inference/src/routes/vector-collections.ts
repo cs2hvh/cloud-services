@@ -190,6 +190,12 @@ interface SearchRow {
   content: string | null;
   metadata: Record<string, unknown>;
   similarity: number;
+  // Present only when mode:"hybrid" (inference.hybrid_search's RRF fusion
+  // score) — undefined for plain vector-mode (search_vectors) results.
+  rrf_score?: number;
+  // Present only when rerank:true and the rerank call succeeded — attached
+  // by rerankCandidates (rag-rerank.ts).
+  rerank_score?: number;
 }
 
 // POST /v1/vector/collections/:id/query
@@ -300,7 +306,15 @@ export const queryCollection: Handler<{ Bindings: Env; Variables: HonoVariables 
   rows = rows.slice(0, parsed.data.top_k);
   return c.json({
     object: "list" as const,
-    data: rows.map((r) => ({ id: r.id, external_id: r.external_id, content: r.content, metadata: r.metadata, similarity: r.similarity })),
+    // rrf_score/rerank_score surface the score that actually decided a row's
+    // position when it differs from raw vector similarity — found live,
+    // 2026-07-21: mode:"hybrid"/rerank:true reorder rows but the response
+    // used to only ever return the pre-fusion/pre-rerank `similarity`.
+    data: rows.map((r) => ({
+      id: r.id, external_id: r.external_id, content: r.content, metadata: r.metadata, similarity: r.similarity,
+      ...(r.rrf_score !== undefined ? { rrf_score: r.rrf_score } : {}),
+      ...(r.rerank_score !== undefined ? { rerank_score: r.rerank_score } : {}),
+    })),
   });
 };
 

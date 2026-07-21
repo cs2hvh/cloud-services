@@ -35,6 +35,13 @@ interface RerankResponse {
  * upstream error, timeout) the ORIGINAL order is returned unchanged —
  * a rerank failure must never fail the caller's search/answer request,
  * same discipline as every other best-effort dependency in this gateway.
+ *
+ * Attaches `rerank_score` to each returned row — found live, 2026-07-21: the
+ * two callers (queryCollection, answerFromCollection) only ever surfaced the
+ * pre-rerank `similarity` in their response, so a caller could enable
+ * `rerank:true` and get correctly reordered rows back with NO visible signal
+ * that reordering happened at all (the displayed score didn't match the new
+ * order). Returning the actual score the reorder was based on closes that.
  */
 export async function rerankCandidates<T extends RerankableCandidate>(
   env: Env,
@@ -42,7 +49,7 @@ export async function rerankCandidates<T extends RerankableCandidate>(
   requestId: string,
   query: string,
   candidates: T[],
-): Promise<T[]> {
+): Promise<(T & { rerank_score?: number })[]> {
   const scorable = candidates.filter((c) => c.content && c.content.trim().length > 0);
   if (scorable.length < 2) return candidates;
 
@@ -78,8 +85,8 @@ export async function rerankCandidates<T extends RerankableCandidate>(
 
     const reordered = [...results]
       .sort((a, b) => b.relevance_score - a.relevance_score)
-      .map((r) => scorable[r.index])
-      .filter((c): c is T => c !== undefined);
+      .map((r) => (scorable[r.index] ? { ...scorable[r.index], rerank_score: r.relevance_score } : undefined))
+      .filter((c): c is T & { rerank_score: number } => c !== undefined);
     const unscored = candidates.filter((c) => !scorable.includes(c));
     return [...reordered, ...unscored];
   } catch {

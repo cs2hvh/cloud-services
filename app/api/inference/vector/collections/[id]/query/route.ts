@@ -60,6 +60,13 @@ interface SearchRow {
   content: string | null;
   metadata: Record<string, unknown>;
   similarity: number;
+  // Present only when mode:"hybrid" (inference.hybrid_search's RRF fusion
+  // score) — not part of the declared search_vectors row shape, so this is
+  // undefined for plain vector-mode results.
+  rrf_score?: number;
+  // Present only when rerank:true and the rerank call succeeded — attached
+  // by rerankCandidates.
+  rerank_score?: number;
 }
 
 export async function POST(
@@ -204,6 +211,13 @@ export async function POST(
       content: r.content,
       metadata: r.metadata,
       similarity: r.similarity,
+      // The score that actually decided this row's position, when it differs
+      // from raw vector similarity — found live, 2026-07-21: mode:"hybrid"
+      // and rerank:true both reorder rows, but the response only ever
+      // surfaced the pre-fusion/pre-rerank `similarity`, so a caller (or the
+      // dashboard) had no visible signal that reordering had happened at all.
+      ...(r.rrf_score !== undefined ? { rrf_score: r.rrf_score } : {}),
+      ...(r.rerank_score !== undefined ? { rerank_score: r.rerank_score } : {}),
     })),
     count: rows.length,
   });
