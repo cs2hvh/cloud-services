@@ -68,6 +68,38 @@ describe("createConnectorSchema (gateway)", () => {
     expect(r.success).toBe(false);
   });
 
+  it("rejects a non-http(s) S3 endpoint and webhook URL at create time", () => {
+    expect(
+      createConnectorSchema.safeParse({
+        kind: "s3",
+        display_name: "x",
+        config: { bucket: "b", endpoint: "ftp://storage.example.com" },
+        credential: { access_key_id: "a", secret_access_key: "b" },
+      }).success
+    ).toBe(false);
+
+    expect(
+      createConnectorSchema.safeParse({
+        kind: "web_crawl",
+        display_name: "x",
+        config: { seed_url: "https://docs.example.com" },
+        webhook_url: "ftp://hooks.example.com/sync",
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts http(s) S3-compatible endpoints and webhook URLs", () => {
+    expect(
+      createConnectorSchema.safeParse({
+        kind: "s3",
+        display_name: "r2",
+        config: { bucket: "b", endpoint: "https://account.r2.cloudflarestorage.com" },
+        credential: { access_key_id: "a", secret_access_key: "b" },
+        webhook_url: "https://hooks.example.com/sync",
+      }).success
+    ).toBe(true);
+  });
+
   it("rejects an unknown kind", () => {
     const r = createConnectorSchema.safeParse({
       kind: "gdrive",
@@ -101,6 +133,10 @@ describe("updateConnectorSchema (gateway)", () => {
 
   it("accepts webhook_url: null to clear it", () => {
     expect(updateConnectorSchema.safeParse({ webhook_url: null }).success).toBe(true);
+  });
+
+  it("rejects non-http(s) webhook_url patches", () => {
+    expect(updateConnectorSchema.safeParse({ webhook_url: "ftp://hooks.example.com/sync" }).success).toBe(false);
   });
 
   it("accepts a credential replacement", () => {
@@ -157,6 +193,10 @@ describe("validateConfigForKind (PATCH config re-validation)", () => {
 
   it("rejects a non-http(s) seed_url", () => {
     expect(validateConfigForKind("web_crawl", { seed_url: "file:///etc/passwd" }).ok).toBe(false);
+  });
+
+  it("rejects a non-http(s) S3 endpoint", () => {
+    expect(validateConfigForKind("s3", { bucket: "acme", endpoint: "ftp://storage.example.com" }).ok).toBe(false);
   });
 
   it("accepts a valid crawl config and fills the defaults", () => {

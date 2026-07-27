@@ -10,16 +10,21 @@
  */
 import { z } from "zod";
 
+const httpUrlSchema = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL");
+
 const s3ConfigSchema = z.object({
   bucket: z.string().min(1).max(255),
   region: z.string().min(1).max(64).optional(),
-  endpoint: z.string().url().optional(),
+  endpoint: httpUrlSchema.optional(),
   prefix: z.string().max(1024).optional(),
   max_documents: z.number().int().positive().max(100_000).optional(),
 });
 
 const webCrawlConfigSchema = z.object({
-  seed_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL"),
+  seed_url: httpUrlSchema,
   max_pages: z.number().int().positive().max(1000).optional().default(50),
   max_depth: z.number().int().nonnegative().max(5).optional().default(2),
   max_documents: z.number().int().positive().max(100_000).optional(),
@@ -44,7 +49,7 @@ export const createConnectorSchema = z.discriminatedUnion("kind", [
     display_name: z.string().min(1).max(100),
     config: s3ConfigSchema,
     credential: s3CredentialSchema,
-    webhook_url: z.string().url().optional(),
+    webhook_url: httpUrlSchema.optional(),
     webhook_secret: webhookSecretSchema.optional(),
     sync_schedule: scheduleSchema.optional().default("manual"),
   }),
@@ -53,7 +58,7 @@ export const createConnectorSchema = z.discriminatedUnion("kind", [
     collection_id: z.string().uuid(),
     display_name: z.string().min(1).max(100),
     config: webCrawlConfigSchema,
-    webhook_url: z.string().url().optional(),
+    webhook_url: httpUrlSchema.optional(),
     webhook_secret: webhookSecretSchema.optional(),
     sync_schedule: scheduleSchema.optional().default("manual"),
   }),
@@ -64,7 +69,7 @@ export const updateConnectorSchema = z
     display_name: z.string().min(1).max(100).optional(),
     config: z.record(z.string(), z.unknown()).optional(), // re-validated per kind in the handler
     credential: s3CredentialSchema.optional(),
-    webhook_url: z.string().url().nullable().optional(),
+    webhook_url: httpUrlSchema.nullable().optional(),
     // null clears the secret (webhook goes back to unsigned); omitted keeps it.
     webhook_secret: webhookSecretSchema.nullable().optional(),
     sync_schedule: scheduleSchema.optional(),

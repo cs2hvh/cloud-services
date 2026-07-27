@@ -141,7 +141,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .select(CONNECTOR_COLS)
     .maybeSingle<ConnectorRow>();
 
-  if (error) return NextResponse.json({ error: "Failed to update connector" }, { status: 400 });
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ error: "A connector with that name already exists on this collection" }, { status: 409 });
+    }
+    return NextResponse.json({ error: "Failed to update connector" }, { status: 400 });
+  }
   if (!data) return NextResponse.json({ error: "Connector not found" }, { status: 404 });
 
   const ctx = auditContextFrom(request);
@@ -189,13 +194,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Prefix-delete every vector_row this connector produced (external_id =
     // "conn-{connectorId}-...") in ONE query — scales to any doc count, unlike
     // an IN-list of thousands of external_ids which would overflow the URL.
-    // Best-effort: a failure still lets the connector be deleted below.
-    await supabase
+    // A purge failure ABORTS the delete: dropping the connector row anyway
+    // would orphan its vector rows with no id left to find them by.
+    const { error: purgeError } = await supabase
       .schema("inference")
       .from("vector_rows")
       .delete()
       .eq("collection_id", conn.collection_id)
       .like("external_id", `conn-${id}-%`);
+    if (purgeError) return NextResponse.json({ error: "Failed to purge connector rows" }, { status: 500 });
   }
 
   const { error } = await supabase.schema("inference").from("connectors").delete().eq("org_id", org.org_id).eq("id", id);

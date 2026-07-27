@@ -30,6 +30,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     auth: { persistSession: false },
   });
 
+  const { data: connector, error: connectorError } = await supabase
+    .schema("inference")
+    .from("connectors")
+    .select("id")
+    .eq("id", id)
+    .eq("org_id", org.org_id)
+    .maybeSingle<{ id: string }>();
+  if (connectorError) return NextResponse.json({ error: "Failed to load connector" }, { status: 500 });
+  if (!connector) return NextResponse.json({ error: "Connector not found" }, { status: 404 });
+
   const { data, error } = await supabase
     .schema("inference")
     .from("connector_documents")

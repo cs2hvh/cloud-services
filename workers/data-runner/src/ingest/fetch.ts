@@ -86,6 +86,26 @@ export function pinnedLookup(ip: string) {
   };
 }
 
+/**
+ * Tear down a per-request Agent once its response body has been consumed.
+ *
+ * The pin lives on the Agent, so every request needs its own — but an Agent
+ * left open holds a keep-alive socket pool, and a 1000-page crawl leaks one
+ * per page (found by review). close() is the graceful form: it waits for the
+ * in-flight body the caller is still streaming, THEN drops the sockets. A
+ * caller that never reads the body (fetchPage throws on a non-2xx before
+ * touching it) would leave that wait pending forever, so a timer escalates to
+ * destroy(). unref'd, so it never holds the process open by itself.
+ */
+function releaseWhenIdle(dispatcher: Agent): void {
+  const timer = setTimeout(() => void dispatcher.destroy().catch(() => {}), FETCH_TIMEOUT_MS);
+  timer.unref?.();
+  void dispatcher.close().then(
+    () => clearTimeout(timer),
+    () => clearTimeout(timer)
+  );
+}
+
 /** Fetch pinning the TCP connection to the pre-validated IP (blocks DNS
  *  rebinding), following redirects manually with re-validation each hop. */
 export async function pinnedFetch(rawUrl: string, allowPrivate = false, init: RequestInit = {}): Promise<Response> {
@@ -101,22 +121,31 @@ export async function pinnedFetch(rawUrl: string, allowPrivate = false, init: Re
         },
       },
     });
-    const res = (await undiciFetch(url, {
-      ...init,
-      dispatcher,
-      redirect: "manual",
-      signal,
-      headers: {
-        "User-Agent": "AhuraCloudKnowledgeBaseBot/1.0",
-        ...(init.headers ?? {}),
-      },
-    })) as unknown as Response;
+
+    let res: Response;
+    try {
+      res = (await undiciFetch(url, {
+        ...init,
+        dispatcher,
+        redirect: "manual",
+        signal,
+        headers: {
+          "User-Agent": "AhuraCloudKnowledgeBaseBot/1.0",
+          ...(init.headers ?? {}),
+        },
+      })) as unknown as Response;
+    } catch (err) {
+      void dispatcher.destroy().catch(() => {}); // network error/abort — nothing to drain
+      throw err;
+    }
 
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
+      void dispatcher.destroy().catch(() => {}); // a redirect's body is never read
       current = new URL(location, url).toString();
       continue;
     }
+    releaseWhenIdle(dispatcher);
     return res;
   }
 }

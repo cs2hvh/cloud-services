@@ -73,6 +73,28 @@ describe("createConnectorSchema (dashboard)", () => {
       }).success
     ).toBe(false);
   });
+
+  it("rejects a non-http(s) S3 endpoint and webhook URL at create time", () => {
+    expect(
+      createConnectorSchema.safeParse({
+        kind: "s3",
+        collection_id,
+        display_name: "x",
+        config: { bucket: "b", endpoint: "ftp://storage.example.com" },
+        credential: { access_key_id: "a", secret_access_key: "b" },
+      }).success
+    ).toBe(false);
+
+    expect(
+      createConnectorSchema.safeParse({
+        kind: "web_crawl",
+        collection_id,
+        display_name: "x",
+        config: { seed_url: "https://e.com" },
+        webhook_url: "ftp://hooks.example.com/sync",
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("updateConnectorSchema (dashboard)", () => {
@@ -81,6 +103,9 @@ describe("updateConnectorSchema (dashboard)", () => {
   });
   it("accepts a partial patch", () => {
     expect(updateConnectorSchema.safeParse({ sync_schedule: "daily" }).success).toBe(true);
+  });
+  it("rejects non-http(s) webhook_url patches", () => {
+    expect(updateConnectorSchema.safeParse({ webhook_url: "ftp://hooks.example.com/sync" }).success).toBe(false);
   });
 });
 
@@ -158,6 +183,10 @@ describe("validateConfigForKind (PATCH config re-validation)", () => {
 
   it("rejects a non-http(s) seed_url", () => {
     expect(validateConfigForKind("web_crawl", { seed_url: "file:///etc/passwd" }).ok).toBe(false);
+  });
+
+  it("rejects a non-http(s) S3 endpoint", () => {
+    expect(validateConfigForKind("s3", { bucket: "acme", endpoint: "ftp://storage.example.com" }).ok).toBe(false);
   });
 
   it("accepts a valid crawl config and fills the defaults", () => {

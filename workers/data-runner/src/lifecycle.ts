@@ -287,7 +287,9 @@ async function ingestDoc(
     .eq("source_uri", doc.sourceUri)
     .maybeSingle<DocLedgerRow>();
 
-  // Cheap etag skip — no fetch, no embed (mainly an S3 win).
+  // Cheap etag skip — no fetch, no embed (mainly an S3 win). Also covers the
+  // text-less documents recorded by recordEmptyDoc below (chunk_count 0), which
+  // is what stops them being re-downloaded and re-OCR'd every single sync.
   if (existing?.status === "indexed" && existing.source_etag && doc.etag && existing.source_etag === doc.etag) {
     await markSeen(ctx, existing.id, syncRunId);
     return "skipped";
@@ -295,7 +297,14 @@ async function ingestDoc(
 
   const { chunks, contentSha256 } = await doc.load();
   if (chunks.length === 0) {
-    // Nothing to index — if it was indexed before, let the reconcile tombstone it.
+    // The document IS still in the source — it just yields no indexable text (a
+    // logo that OCR'd to nothing, an empty file). Record it as seen, with its
+    // etag, rather than leaving it unseen: an unseen doc gets tombstoned by the
+    // reconcile, and because the etag skip only matches 'indexed' rows the NEXT
+    // sync would download and OCR it all over again — a per-sync OCR bill, on an
+    // hourly connector forever, for a document that can never produce a chunk
+    // (found by review). Any rows it owned when it DID have content are purged.
+    await recordEmptyDoc(ctx, conn, doc, contentSha256, existing, syncRunId);
     return "skipped";
   }
 
@@ -436,6 +445,37 @@ async function loadCollection(ctx: RunnerCtx, collectionId: string): Promise<Col
     .maybeSingle<CollectionRow>();
   if (error || !data) throw new Error("Knowledge base not found for this connector.");
   return data;
+}
+
+/**
+ * Ledger entry for a document that is present in the source but produced no
+ * text. Kept as 'indexed' with chunk_count 0 — not 'removed' (it hasn't gone
+ * anywhere, and 'removed' rows are outside the etag skip, which is the whole
+ * point) and not 'failed' (nothing went wrong; re-trying can't help). The
+ * `error` note is what the dashboard shows the customer. If it ever gains real
+ * content its etag changes, so the skip misses and it ingests normally.
+ */
+async function recordEmptyDoc(
+  ctx: RunnerCtx,
+  conn: ConnectorRow,
+  doc: SourceDoc,
+  contentSha256: string,
+  existing: DocLedgerRow | null | undefined,
+  syncRunId: string
+): Promise<void> {
+  if (existing?.row_external_ids?.length) {
+    await ctx.supabase.schema("inference").from("vector_rows").delete()
+      .eq("collection_id", conn.collection_id).in("external_id", existing.row_external_ids);
+  }
+  await ctx.supabase.schema("inference").from("connector_documents").upsert(
+    {
+      connector_id: conn.id, collection_id: conn.collection_id, org_id: conn.org_id,
+      source_uri: doc.sourceUri, content_sha256: contentSha256, source_etag: doc.etag,
+      row_external_ids: [], chunk_count: 0, status: "indexed",
+      error: "No indexable text found in this document.", last_seen_sync: syncRunId,
+    },
+    { onConflict: "connector_id,source_uri" }
+  );
 }
 
 async function markSeen(ctx: RunnerCtx, docId: string, syncRunId: string): Promise<void> {

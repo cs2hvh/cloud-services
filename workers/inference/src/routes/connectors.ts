@@ -24,16 +24,21 @@ import { fetchCollection } from "./vector-collections.ts";
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
+const httpUrlSchema = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL");
+
 const s3ConfigSchema = z.object({
   bucket: z.string().min(1).max(255),
   region: z.string().min(1).max(64).optional(),
-  endpoint: z.string().url().optional(), // for R2/MinIO/etc.; SSRF-guarded at sync time (C3)
+  endpoint: httpUrlSchema.optional(), // for R2/MinIO/etc.; SSRF-guarded at sync time (C3)
   prefix: z.string().max(1024).optional(),
   max_documents: z.number().int().positive().max(100_000).optional(),
 });
 
 const webCrawlConfigSchema = z.object({
-  seed_url: z.string().url().refine((u) => u.startsWith("http://") || u.startsWith("https://"), "must be an http(s) URL"),
+  seed_url: httpUrlSchema,
   max_pages: z.number().int().positive().max(1000).optional().default(50),
   max_depth: z.number().int().nonnegative().max(5).optional().default(2),
   max_documents: z.number().int().positive().max(100_000).optional(),
@@ -57,7 +62,7 @@ export const createConnectorSchema = z.discriminatedUnion("kind", [
     display_name: z.string().min(1).max(100),
     config: s3ConfigSchema,
     credential: s3CredentialSchema, // S3 requires a credential
-    webhook_url: z.string().url().optional(),
+    webhook_url: httpUrlSchema.optional(),
     webhook_secret: webhookSecretSchema.optional(),
     sync_schedule: scheduleSchema.optional().default("manual"),
   }),
@@ -65,7 +70,7 @@ export const createConnectorSchema = z.discriminatedUnion("kind", [
     kind: z.literal("web_crawl"),
     display_name: z.string().min(1).max(100),
     config: webCrawlConfigSchema,
-    webhook_url: z.string().url().optional(),
+    webhook_url: httpUrlSchema.optional(),
     webhook_secret: webhookSecretSchema.optional(),
     sync_schedule: scheduleSchema.optional().default("manual"),
   }),
@@ -80,7 +85,7 @@ export const updateConnectorSchema = z
     display_name: z.string().min(1).max(100).optional(),
     config: z.record(z.string(), z.unknown()).optional(), // re-validated per kind in the handler
     credential: s3CredentialSchema.optional(),
-    webhook_url: z.string().url().nullable().optional(),
+    webhook_url: httpUrlSchema.nullable().optional(),
     // null clears the secret (webhook goes back to unsigned); omitted keeps it.
     webhook_secret: webhookSecretSchema.nullable().optional(),
     sync_schedule: scheduleSchema.optional(),
@@ -415,6 +420,12 @@ export const updateConnector: Handler<{ Bindings: Env; Variables: HonoVariables 
     .maybeSingle<ConnectorDbRow>();
 
   if (error) {
+    if (error.code === "23505") {
+      return c.json(
+        gatewayError("A connector with that name already exists on this collection", "invalid_request_error", "duplicate_name", requestId),
+        409
+      );
+    }
     return c.json(gatewayError(error.message, "server_error", "connector_update_failed", requestId), 400);
   }
   if (!data) {
@@ -471,14 +482,18 @@ export const deleteConnector: Handler<{ Bindings: Env; Variables: HonoVariables 
     // external_id = "conn-{connectorId}-...", so a prefix match removes them in
     // ONE query that scales to any doc count — unlike an IN-list of thousands
     // of external_ids, which would overflow PostgREST's URL length (414) and
-    // silently fail to purge. Best-effort: a failure still lets the connector
-    // be deleted below. (id is a validated UUID — no LIKE metacharacters.)
-    await supabase
+    // silently fail to purge. A purge failure ABORTS the delete: dropping the
+    // connector row anyway would orphan its vector rows with no id left to find
+    // them by. (id is a validated UUID — no LIKE metacharacters.)
+    const { error: purgeError } = await supabase
       .schema("inference")
       .from("vector_rows")
       .delete()
       .eq("collection_id", conn.collection_id)
       .like("external_id", `conn-${id}-%`);
+    if (purgeError) {
+      return c.json(gatewayError("Failed to purge connector rows", "server_error", "connector_purge_failed", requestId), 500);
+    }
   }
 
   const { error } = await supabase
@@ -535,6 +550,9 @@ export const syncConnector: Handler<{ Bindings: Env; Variables: HonoVariables }>
     if (!existing) {
       return c.json(gatewayError("Connector not found", "invalid_request_error", "connector_not_found", requestId), 404);
     }
+    if (existing.status === "disabled") {
+      return c.json(gatewayError("Connector is disabled", "invalid_request_error", "connector_disabled", requestId), 409);
+    }
     return c.json(toConnectorResponse(existing), 202); // already in flight — idempotent
   }
 
@@ -552,6 +570,20 @@ export const listConnectorDocuments: Handler<{ Bindings: Env; Variables: HonoVar
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50) || 50, 1), 200);
   const offset = Math.max(Number(c.req.query("offset") ?? 0) || 0, 0);
   const supabase = makeSupabase(c.env);
+
+  const { data: connector, error: connectorError } = await supabase
+    .schema("inference")
+    .from("connectors")
+    .select("id")
+    .eq("id", id)
+    .eq("org_id", auth.orgId)
+    .maybeSingle<{ id: string }>();
+  if (connectorError) {
+    return c.json(gatewayError("Failed to load connector", "server_error", "connector_load_failed", requestId), 500);
+  }
+  if (!connector) {
+    return c.json(gatewayError("Connector not found", "invalid_request_error", "connector_not_found", requestId), 404);
+  }
 
   // org-scope via the denormalized org_id column (RLS-equivalent app-side check).
   const { data, error } = await supabase

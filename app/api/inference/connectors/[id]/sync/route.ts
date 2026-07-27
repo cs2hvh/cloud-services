@@ -60,5 +60,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq("id", id)
     .maybeSingle<ConnectorRow>();
   if (!existing) return NextResponse.json({ error: "Connector not found" }, { status: 404 });
+  if (existing.status === "disabled") {
+    return NextResponse.json({ error: "Connector is disabled" }, { status: 409 });
+  }
   return NextResponse.json({ success: true, data: toConnectorResponse(existing) }, { status: 202 });
 }
