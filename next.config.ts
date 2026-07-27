@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzerInit from "@next/bundle-analyzer";
+import path from "node:path";
 
 // Bundle analyzer — only active when ANALYZE=true so normal builds are unaffected.
 // Usage: `ANALYZE=true npm run build` → opens treemaps under .next/analyze/.
@@ -47,6 +48,7 @@ const contentSecurityPolicy = cspDirectives.join("; ");
 const nextConfig: NextConfig = {
   // Produces a self-contained build under .next/standalone for Docker
   output: 'standalone',
+  outputFileTracingRoot: path.resolve(process.cwd()),
   // Keep native Node.js modules out of the webpack bundle
   serverExternalPackages: ["ssh2", "ioredis", "bullmq", "pdfjs-dist", "mammoth", "undici", "@modelcontextprotocol/sdk"],
 

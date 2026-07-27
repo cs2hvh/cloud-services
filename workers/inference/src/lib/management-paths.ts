@@ -62,6 +62,19 @@ const MANAGEMENT_ROUTES: Route[] = [
   { method: "DELETE", pattern: new RegExp(`^/v1/vector/collections/${UUID}/rows$`) },
   { method: "GET", pattern: new RegExp(`^/v1/vector/collections/${UUID}/rows/${UUID}$`) },
   { method: "DELETE", pattern: new RegExp(`^/v1/vector/collections/${UUID}/rows/${UUID}$`) },
+  // RAG connectors (routes/connectors.ts) — control-plane CRUD + sync trigger.
+  // None spends money inline: create/edit/delete are pure metadata, and the
+  // sync trigger only flips the connector to 'queued' — the actual ingest
+  // embedding spend happens out of band in workers/data-runner, metered via
+  // the normal on-behalf-of /v1/embeddings pipeline (which IS spend-gated per
+  // call there). So, unlike .../query and .../answer, these are safe to exempt.
+  { method: "GET", pattern: new RegExp(`^/v1/vector/collections/${UUID}/connectors$`) },
+  { method: "POST", pattern: new RegExp(`^/v1/vector/collections/${UUID}/connectors$`) },
+  { method: "GET", pattern: new RegExp(`^/v1/connectors/${UUID}$`) },
+  { method: "PATCH", pattern: new RegExp(`^/v1/connectors/${UUID}$`) },
+  { method: "DELETE", pattern: new RegExp(`^/v1/connectors/${UUID}$`) },
+  { method: "POST", pattern: new RegExp(`^/v1/connectors/${UUID}/sync$`) },
+  { method: "GET", pattern: new RegExp(`^/v1/connectors/${UUID}/documents$`) },
 ];
 
 /** Deliberately excludes /v1/agents/:id/runs (POST) and /v1/agents/runs/*

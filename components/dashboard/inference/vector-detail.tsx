@@ -37,6 +37,7 @@ import {
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { VectorConnectors } from "@/components/dashboard/inference/vector-connectors";
 
 type SearchMode = "vector" | "hybrid";
 
@@ -575,6 +576,11 @@ export function VectorCollectionDetail({
             )}
           </div>
         )}
+      </div>
+
+      {/* ─── Connectors (auto-sync sources) ──────────────────────── */}
+      <div className="mb-14">
+        <VectorConnectors collectionId={collection.id} canMutate={canMutate} />
       </div>
 
       {/* ─── Rows table ────────────────────────────────────────── */}

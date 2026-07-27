@@ -55,6 +55,10 @@ import {
   listRows, bulkDeleteRows, getRow, deleteRow,
 } from "./routes/vector-collections.ts";
 import { answerFromCollection } from "./routes/vector-answer.ts";
+import {
+  listConnectors, createConnector, getConnector, updateConnector,
+  deleteConnector, syncConnector, listConnectorDocuments,
+} from "./routes/connectors.ts";
 import { agentManagementAuthMiddleware } from "./middleware/agent-management-auth.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
@@ -239,6 +243,18 @@ v1Management.delete("/vector/collections/:id/rows", bulkDeleteRows);
 v1Management.get("/vector/collections/:id/rows/:rowId", getRow);
 v1Management.delete("/vector/collections/:id/rows/:rowId", deleteRow);
 
+// RAG connectors (routes/connectors.ts) — control-plane CRUD + sync trigger.
+// The sync work + its embedding spend happen out of band in workers/data-runner
+// (metered via the on-behalf-of /v1/embeddings pipeline), so the trigger itself
+// is a management route. Doc: nextstespsAI/20-rag-connectors-and-data-runner.md.
+v1Management.get("/vector/collections/:id/connectors", listConnectors);
+v1Management.post("/vector/collections/:id/connectors", createConnector);
+v1Management.get("/connectors/:id", getConnector);
+v1Management.patch("/connectors/:id", updateConnector);
+v1Management.delete("/connectors/:id", deleteConnector);
+v1Management.post("/connectors/:id/sync", syncConnector);
+v1Management.get("/connectors/:id/documents", listConnectorDocuments);
+
 app.route("/v1", v1Management);
 
 // Agent tool-usage ingress (S1/S2 billing bridge) — auth only, deliberately
@@ -362,6 +378,10 @@ export default {
       // S3 counterpart: reap orphaned sandbox sessions (runner died before its
       // dispose() finally-block settled the session row) past idle_deadline.
       ctx.waitUntil(runAgentSessionReaper(env, event));
+      // RAG connectors: enqueue scheduled connectors that are due, and reap
+      // syncs whose data-runner died mid-flight (stale heartbeat).
+      ctx.waitUntil(runConnectorScheduler(env, event));
+      ctx.waitUntil(runIngestWatchdog(env, event));
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
@@ -435,6 +455,24 @@ async function runAgentSessionReaper(env: Env, event: ScheduledEvent): Promise<v
     event,
     "/api/agents/internal/session-reaper",
     "agent session-reaper"
+  );
+}
+
+async function runConnectorScheduler(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/connector-scheduler",
+    "connector scheduler"
+  );
+}
+
+async function runIngestWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/ingest-watchdog",
+    "ingest watchdog"
   );
 }
 
