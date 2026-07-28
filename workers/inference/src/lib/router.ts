@@ -92,9 +92,38 @@ export function isAutoModel(modelId: string): boolean {
   return modelId in POLICIES;
 }
 
-/** The virtual ids we accept, for error messages and docs. */
-export function autoModelIds(): string[] {
-  return Object.keys(POLICIES);
+/**
+ * Catalog entries for the virtual router ids, so `GET /v1/models` advertises
+ * them. They are not rows in inference.models — nothing to route TO if they
+ * were — but a feature a customer cannot discover may as well not exist.
+ *
+ * `pricing` is deliberately null: the price is whatever the resolved model
+ * costs, and quoting a single number here would be wrong for every request.
+ * Capabilities are the UNION the router can satisfy — it only ever picks a
+ * model that meets the request's actual requirements.
+ */
+export function virtualRouterModels(): Array<{
+  id: string;
+  display_name: string;
+  description: string;
+}> {
+  return [
+    {
+      id: "ahura/auto",
+      display_name: "Auto (balanced)",
+      description:
+        "Picks a model per request: the most cost-effective curated model that meets the " +
+        "request's requirements (tools, vision, JSON mode, context length). The resolved " +
+        "model is returned in the X-Ahura-Model response header and is what you are billed for.",
+    },
+    {
+      id: "ahura/auto-cheap",
+      display_name: "Auto (cheapest)",
+      description:
+        "Picks the cheapest model that can satisfy the request. Same capability guarantees " +
+        "as ahura/auto, weighted almost entirely toward cost.",
+    },
+  ];
 }
 
 /**
