@@ -15,12 +15,74 @@ const OPAQUE_USAGE_KEYS = new Set(["cost", "is_byok", "cost_details", "reasoning
 /** Keys inside error.metadata that expose the upstream provider. */
 const BRAND_META_KEYS = new Set(["provider_name", "provider", "model_id", "model"]);
 
+/**
+ * Strip routing-infrastructure identifiers out of free text.
+ *
+ * Dropping the `provider` KEY was never enough: upstream puts its own name in
+ * the error MESSAGE, which was copied through verbatim. A real example that
+ * reached a customer — "Grok 4 is deprecated. xAI recommends switching to Grok
+ * 4.3 (https://openrouter.ai/x-ai/grok-4.3)" — names the gateway we proxy
+ * through and links to it.
+ *
+ * Vocabulary deliberately matches stripInfraIdentifiers in
+ * lib/inference/error-messages.ts so the Worker and the Next app describe the
+ * same thing the same way; it is duplicated rather than imported because the
+ * gateway is a separate deployable (the discipline data-runner follows too).
+ *
+ * Model VENDOR names (openai, anthropic, google…) are deliberately NOT
+ * scrubbed. We publish them ourselves — catalog ids are "openai/gpt-4o-mini"
+ * and /v1/models reports owned_by "openai" — and scrubbing them would corrupt
+ * legitimate messages like `"google/gemini-3-pro is not a valid model ID"`,
+ * which names OUR id back to the caller. The secret is who ROUTES the call,
+ * not who made the model.
+ */
+export function stripInfraFromText(text: string): string {
+  return text
+    // URLs first: a bare domain replacement would leave a dangling path.
+    // The trailing character class deliberately excludes closing brackets and
+    // quotes — `\S*` swallowed the `)` in "...(https://openrouter.ai/x-ai/grok-4.3)"
+    // and shipped a message with an unbalanced paren to the customer.
+    // A URL may CONTAIN "." or "," mid-path but must never END on sentence
+    // punctuation, so the path group is required to finish on a non-punctuation
+    // character. Without this, "…/grok-4.3)" ate the paren and "…/docs," ate
+    // the comma, both of which shipped malformed sentences to the customer.
+    .replace(/https?:\/\/(?:www\.)?openrouter\.ai(?:[^\s)\]}"'>]*[^\s)\]}"'>.,;:!?])?/gi, "the model gateway")
+    .replace(
+      /https?:\/\/[^\s)\]}"'>]*?(?:runpod\.[a-z]+|workers\.dev|supabase\.co)(?:[^\s)\]}"'>]*[^\s)\]}"'>.,;:!?])?/gi,
+      "[internal]"
+    )
+    .replace(/\bopenrouter\.ai\b/gi, "model gateway")
+    .replace(/\bOpenRouter\b/gi, "model gateway")
+    .replace(/\bRunPod\b/gi, "GPU compute")
+    .replace(/\bUpstash\b/gi, "cache")
+    .replace(/\bCloudflare\b/gi, "edge")
+    .replace(/\bvLLM\b/gi, "serving runtime")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Recursively scrub string values inside error.metadata (upstream nests the
+ *  provider's own error JSON under `raw`, which is free text we must clean). */
+function scrubMetaValue(v: unknown): unknown {
+  if (typeof v === "string") return stripInfraFromText(v);
+  if (Array.isArray(v)) return v.map(scrubMetaValue);
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (BRAND_META_KEYS.has(k)) continue;
+      out[k] = scrubMetaValue(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 function cleanErrorMetadata(meta: unknown): unknown {
   if (!meta || typeof meta !== "object") return meta;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(meta as Record<string, unknown>)) {
     if (BRAND_META_KEYS.has(k)) continue;
-    out[k] = v;
+    out[k] = scrubMetaValue(v);
   }
   return out;
 }
@@ -32,6 +94,8 @@ function cleanError(err: unknown): unknown {
   for (const [k, v] of Object.entries(e)) {
     if (k === "provider" || k === "model") continue;
     if (k === "metadata") { out[k] = cleanErrorMetadata(v); continue; }
+    // The message is free text written by the upstream — scrub it, don't trust it.
+    if (typeof v === "string") { out[k] = stripInfraFromText(v); continue; }
     out[k] = v;
   }
   return out;
