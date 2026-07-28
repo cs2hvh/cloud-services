@@ -69,11 +69,31 @@ interface Citation {
   score: number;
 }
 
+/**
+ * The human-readable origin of a row, for its citation. Twin of
+ * citationSource in workers/inference/src/routes/vector-answer.ts — keep the
+ * key order identical.
+ *
+ * Each ingest path spelled this differently — connector sync writes
+ * `source_uri`, ingest-url writes `source_url`, ingest-file writes
+ * `source_file` — while this reader only ever looked at `source`, which only
+ * a customer's own upsert sets. So every citation over a document WE ingested
+ * fell back to the opaque `external_id` (found live, 2026-07-27). Reading all
+ * four spellings also fixes rows already in the table, so no backfill.
+ */
+function citationSource(metadata: Record<string, unknown> | null | undefined, externalId: string): string {
+  for (const key of ["source", "source_uri", "source_url", "source_file"]) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return externalId;
+}
+
 function buildContext(rows: SearchRow[]): { block: string; citations: Citation[] } {
   const citations = rows.map((r, i) => ({
     marker: i + 1,
     document_id: r.external_id,
-    source: (r.metadata?.source as string | undefined) ?? r.external_id,
+    source: citationSource(r.metadata, r.external_id),
     snippet: (r.content ?? "").slice(0, 240),
     // The score that actually decided this row's position — found live,
     // 2026-07-21: citations always showed pre-rerank/pre-fusion `similarity`,

@@ -58,9 +58,73 @@ interface DocLedgerRow {
 
 const HEARTBEAT_THROTTLE_MS = 15_000;
 
+// Per-org vector storage cap. Mirrors lib/inference/vector-quota.ts and the
+// gateway's copy in workers/inference/src/routes/vector-collections.ts — a
+// pure DB read + comparison, safe to duplicate under the same vendoring
+// discipline as crypto.ts / fetch.ts.
+const MAX_VECTORS_PER_ORG = 1_000_000;
+
 interface DocOutcome {
   sourceUri: string;
   outcome: "added" | "updated" | "skipped" | "failed";
+}
+
+/**
+ * The org is out of vector storage. Like a spend-cap 402 this stops the whole
+ * sync rather than failing document-by-document — there is no point listing
+ * 9,000 more objects that all hit the same wall.
+ */
+class VectorQuotaError extends Error {
+  readonly isQuotaExceeded = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "VectorQuotaError";
+  }
+}
+
+/**
+ * Running budget against MAX_VECTORS_PER_ORG for one sync.
+ *
+ * Every other path that writes vector_rows checks this cap before embedding
+ * (upsert, ingest-url, ingest-file, the gateway upsert); connector sync — the
+ * one path DESIGNED to write ten thousand documents at a time — did not, so a
+ * single bucket could walk an org past the limit (found by review; doc 20 §9
+ * claims this guard exists). Counting is done once up front and then tracked
+ * in memory: a COUNT per document would mean thousands of extra queries per
+ * sync. Conservative in the safe direction — a re-ingested document's chunks
+ * are counted as new even though the upsert replaces rows in place.
+ */
+export interface VectorBudget {
+  /** Reserve rows, or throw VectorQuotaError if they'd exceed the cap. */
+  take(rowCount: number): void;
+}
+
+/** The pure half, split out so the cap behaviour is unit-testable without a DB. */
+export function makeVectorBudget(alreadyUsed: number): VectorBudget {
+  let used = alreadyUsed;
+  return {
+    take(rowCount: number): void {
+      if (used + rowCount > MAX_VECTORS_PER_ORG) {
+        throw new VectorQuotaError(
+          `Vector storage limit reached (${MAX_VECTORS_PER_ORG.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`
+        );
+      }
+      used += rowCount;
+    },
+  };
+}
+
+async function loadVectorBudget(ctx: RunnerCtx, orgId: string): Promise<VectorBudget> {
+  const { data, error } = await ctx.supabase
+    .schema("inference")
+    .from("vector_collections")
+    .select("row_count")
+    .eq("org_id", orgId);
+  if (error) throw new Error("Could not verify this organisation's vector storage quota.");
+  // row_count is maintained by the trg_vector_rows_stats trigger, so it also
+  // reflects rows previous connector syncs wrote directly.
+  const used = (data ?? []).reduce((sum, c) => sum + (Number((c as { row_count: number | null }).row_count) || 0), 0);
+  return makeVectorBudget(used);
 }
 
 class FatalBatchError extends Error {
@@ -108,6 +172,10 @@ export async function runSync(ctx: RunnerCtx, job: SyncJob): Promise<void> {
       throw new Error("This is a bring-your-own-embeddings collection — connectors need server-side auto-embed.");
     }
 
+    // Loaded before the first document so an already-full org fails fast,
+    // without spending on a single embed call.
+    const budget = await loadVectorBudget(ctx, conn.org_id);
+
     source = await buildSource(ctx, conn);
 
     let lastBeat = Date.now();
@@ -121,7 +189,7 @@ export async function runSync(ctx: RunnerCtx, job: SyncJob): Promise<void> {
       batch.push(doc);
       if (batch.length >= ctx.env.fetchConcurrency) {
         try {
-          const counts = await processDocBatch(ctx, conn, collection, batch, syncRunId);
+          const counts = await processDocBatch(ctx, conn, collection, batch, syncRunId, budget);
           added += counts.added;
           updated += counts.updated;
           failed += counts.failed;
@@ -141,7 +209,7 @@ export async function runSync(ctx: RunnerCtx, job: SyncJob): Promise<void> {
     }
     if (batch.length > 0) {
       try {
-        const counts = await processDocBatch(ctx, conn, collection, batch, syncRunId);
+        const counts = await processDocBatch(ctx, conn, collection, batch, syncRunId, budget);
         added += counts.added;
         updated += counts.updated;
         failed += counts.failed;
@@ -191,15 +259,16 @@ async function processDocBatch(
   conn: ConnectorRow,
   collection: CollectionRow,
   docs: SourceDoc[],
-  syncRunId: string
+  syncRunId: string,
+  budget: VectorBudget
 ): Promise<{ added: number; updated: number; failed: number }> {
-  const results = await Promise.allSettled(docs.map((doc) => processOneDoc(ctx, conn, collection, doc, syncRunId)));
+  const results = await Promise.allSettled(docs.map((doc) => processOneDoc(ctx, conn, collection, doc, syncRunId, budget)));
   let added = 0, updated = 0, failed = 0;
   let fatal: unknown;
 
   for (const result of results) {
     if (result.status === "rejected") {
-      if (isSpendBlocked(result.reason) && !fatal) fatal = result.reason;
+      if (isFatalForSync(result.reason) && !fatal) fatal = result.reason;
       else {
         failed++;
         ctx.logger.warn({ connectorId: conn.id, err: customerSafe(result.reason) }, "connector: doc ingest failed unexpectedly");
@@ -220,17 +289,19 @@ async function processOneDoc(
   conn: ConnectorRow,
   collection: CollectionRow,
   doc: SourceDoc,
-  syncRunId: string
+  syncRunId: string,
+  budget: VectorBudget
 ): Promise<DocOutcome> {
   try {
-    const outcome = await ingestDoc(ctx, conn, collection, doc, syncRunId);
+    const outcome = await ingestDoc(ctx, conn, collection, doc, syncRunId, budget);
     return { sourceUri: doc.sourceUri, outcome };
   } catch (err) {
-    // A spend-cap 402 mid-sync means the org is out of budget — stop the whole
-    // sync cleanly rather than hammering the gateway per doc. Both embeddings
-    // and OCR can raise it (EmbedError / OcrError), so match on the shared
-    // isSpendBlocked shape rather than one concrete class.
-    if (isSpendBlocked(err)) throw err;
+    // A spend-cap 402 mid-sync means the org is out of budget, and a vector
+    // quota rejection means it is out of storage — either way, stop the whole
+    // sync cleanly rather than hammering the gateway once per document. Both
+    // embeddings and OCR can raise the 402 (EmbedError / OcrError), so match
+    // on the shared duck-typed shape rather than one concrete class.
+    if (isFatalForSync(err)) throw err;
     await recordDocFailure(ctx, conn, doc.sourceUri, customerSafe(err), syncRunId);
     ctx.logger.warn({ connectorId: conn.id, sourceUri: doc.sourceUri, err: customerSafe(err) }, "connector: doc ingest failed");
     return { sourceUri: doc.sourceUri, outcome: "failed" };
@@ -275,7 +346,8 @@ async function ingestDoc(
   conn: ConnectorRow,
   collection: CollectionRow,
   doc: SourceDoc,
-  syncRunId: string
+  syncRunId: string,
+  budget: VectorBudget
 ): Promise<"added" | "updated" | "skipped"> {
   const { supabase } = ctx;
 
@@ -316,7 +388,9 @@ async function ingestDoc(
     return "skipped";
   }
 
-  // New or changed → embed + upsert.
+  // New or changed → embed + upsert. Reserve the rows BEFORE embedding, so an
+  // org at its storage cap fails without paying for the embed call.
+  budget.take(chunks.length);
   const embeddings = await embedTexts(ctx.env, collection.embedding_model_id!, chunks, conn.org_id);
   if (embeddings.some((e) => e.length !== collection.dimensions)) {
     throw new Error(`embedding dimension mismatch (expected ${collection.dimensions})`);
@@ -550,6 +624,21 @@ function isSpendBlocked(err: unknown): boolean {
     err !== null &&
     (err as { isSpendBlocked?: unknown }).isSpendBlocked === true
   );
+}
+
+/** True for an error that means "org is out of vector storage". */
+function isQuotaExceeded(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { isQuotaExceeded?: unknown }).isQuotaExceeded === true
+  );
+}
+
+/** Errors that must abort the WHOLE sync rather than mark one document failed:
+ *  every remaining document would hit the same wall. */
+function isFatalForSync(err: unknown): boolean {
+  return isSpendBlocked(err) || isQuotaExceeded(err);
 }
 
 /** Truncate + strip known internal identifiers from an error before it's

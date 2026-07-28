@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { answerSchema, buildContext, usedCitations } from "../vector-answer.ts";
+import { answerSchema, buildContext, citationSource, usedCitations } from "../vector-answer.ts";
 
 // Doc: nextstespsAI/04-rag-data-platform.md service #5 — grounded generation
 // with citations. Same test-convention as this route family (schema +
@@ -46,6 +46,33 @@ describe("buildContext", () => {
       { marker: 1, document_id: "faq-1", source: "faq.md", snippet: "Refunds are issued within 5 days.", score: 0.9 },
       { marker: 2, document_id: "faq-2", source: "faq-2", snippet: "Shipping normally takes 3 business days.", score: 0.7 },
     ]);
+  });
+});
+
+// Every ingest path spells the origin differently; the citation must resolve
+// all of them instead of falling back to the opaque external_id (found live,
+// 2026-07-27: a connector-synced KB cited "conn-<uuid>-<hash>-0").
+describe("citationSource — every ingest path's spelling resolves", () => {
+  const cases: Array<[string, Record<string, unknown>, string]> = [
+    ["customer upsert", { source: "faq.md" }, "faq.md"],
+    ["connector sync", { source_uri: "s3://acme-docs/handbook.pdf" }, "s3://acme-docs/handbook.pdf"],
+    ["ingest-url", { source_url: "https://docs.example.com/pricing" }, "https://docs.example.com/pricing"],
+    ["ingest-file", { source_file: "handbook.docx" }, "handbook.docx"],
+  ];
+  for (const [label, metadata, expected] of cases) {
+    it(`resolves ${label}`, () => {
+      expect(citationSource(metadata, "conn-abc-0")).toBe(expected);
+    });
+  }
+
+  it("prefers an explicit `source` when several are present", () => {
+    expect(citationSource({ source: "a.md", source_uri: "s3://b" }, "ext")).toBe("a.md");
+  });
+
+  it("falls back to external_id when metadata carries no origin", () => {
+    expect(citationSource({}, "ext-1")).toBe("ext-1");
+    expect(citationSource(null, "ext-2")).toBe("ext-2");
+    expect(citationSource({ source: "   " }, "ext-3")).toBe("ext-3");
   });
 });
 
