@@ -19,6 +19,7 @@ import {
 import { scrubJson, scrubSsePassthrough } from "../lib/brand-scrub.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { isAutoModel, requirementsFromRequest, resolveAutoModel } from "../lib/router.ts";
+import { assertModelAvailable } from "../lib/gateway.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -302,17 +303,12 @@ export const chatCompletions: Handler<{
   //     BYO models go to per-deployment serving endpoints — disabled in
   //     v1; user serves them on their own rented GPU pod.
   const routing = await lookupModelRouting(c.env, effectiveModel);
-  if (routing && !routing.is_active) {
-    return c.json(
-      errorBody(
-        `Model "${effectiveModel}" is not currently available.`,
-        "invalid_request_error",
-        "model_unavailable",
-        requestId
-      ),
-      503
-    );
-  }
+  // Shared with the other nine modality routes (see assertModelAvailable):
+  // rejects both an unknown id and a disabled one. Previously this only caught
+  // the disabled case, so an unknown model was proxied upstream — returning the
+  // upstream's own error text to the customer and still writing a usage row.
+  const unavailable = assertModelAvailable(routing, effectiveModel, requestId);
+  if (unavailable) return c.json(unavailable, 503);
 
   // 5. Apply routing preset (already resolved above for the model check)
   let outgoingBody: Record<string, unknown> = {

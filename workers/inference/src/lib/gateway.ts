@@ -128,18 +128,53 @@ export type RoutingResult =
   | { ok: true; upstreamModelId: string; capabilities: Record<string, unknown> | null }
   | { ok: false; error: ReturnType<typeof gatewayError> };
 
+/**
+ * The two checks EVERY modality needs: the model exists in the catalog, and it
+ * is enabled. Returns an error body to send (503, as every route here does), or
+ * null when the model is usable.
+ *
+ * Shared deliberately. chat-completions used to inline its own weaker copy —
+ * `if (routing && !routing.is_active)` — which silently skipped the not-found
+ * case, so an id absent from the catalog fell through and was proxied upstream.
+ * The customer then got the UPSTREAM's error text (leaking that a third party
+ * is behind us) and a junk row was still written to inference.usage. Nine other
+ * routes went through resolveRouting and behaved correctly; chat, the highest
+ * traffic route of them all, was the one exception.
+ *
+ * NOTE this deliberately does NOT require upstream_model_id. That requirement
+ * belongs to resolveRouting, not here: chat forwards the catalog id as-is, and
+ * four active chat rows (the gpt-4o / gpt-4.1 family) legitimately carry a NULL
+ * upstream_model_id and work fine. Folding that check in here would break them.
+ */
+export function assertModelAvailable(
+  routing: { is_active: boolean } | null,
+  modelId: string,
+  requestId: string,
+): ReturnType<typeof gatewayError> | null {
+  if (!routing) {
+    return gatewayError(
+      `Model "${modelId}" not found`,
+      "invalid_request_error",
+      "model_not_found",
+      requestId,
+    );
+  }
+  if (!routing.is_active) {
+    return gatewayError(
+      `Model "${modelId}" is not currently available`,
+      "invalid_request_error",
+      "model_unavailable",
+      requestId,
+    );
+  }
+  return null;
+}
+
 export async function resolveRouting(env: Env, modelId: string, requestId: string): Promise<RoutingResult> {
   const routing = await lookupModelRouting(env, modelId);
-  if (!routing || !routing.is_active) {
-    return {
-      ok: false,
-      error: gatewayError(
-        routing ? `Model "${modelId}" is not currently available` : `Model "${modelId}" not found`,
-        "invalid_request_error",
-        "model_unavailable",
-        requestId,
-      ),
-    };
+  const unavailable = assertModelAvailable(routing, modelId, requestId);
+  if (unavailable || !routing) {
+    return { ok: false, error: unavailable ?? gatewayError(`Model "${modelId}" not found`, "invalid_request_error", "model_not_found", requestId) };
   }
   if (!routing.upstream_model_id) {
     return {
