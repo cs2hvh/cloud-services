@@ -18,6 +18,7 @@ import {
 } from "../lib/openrouter.ts";
 import { scrubJson, scrubSsePassthrough } from "../lib/brand-scrub.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
+import { isAutoModel, requirementsFromRequest, resolveAutoModel } from "../lib/router.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -162,7 +163,7 @@ export const chatCompletions: Handler<{
     }
   }
 
-  const effectiveModel = req.model ?? presetConfig?.models[0];
+  let effectiveModel = req.model ?? presetConfig?.models[0];
   if (!effectiveModel) {
     return c.json(
       errorBody(
@@ -173,6 +174,33 @@ export const chatCompletions: Handler<{
       ),
       400
     );
+  }
+
+  // 2b. Smart routing — `ahura/auto*` is virtual; resolve it to a concrete
+  //     catalog model HERE, before anything else reads effectiveModel, so the
+  //     scope check, model lookup, usage event, trace span and X-Ahura-Model
+  //     header all describe the model that actually ran. Doc 07 Slice 2.
+  if (isAutoModel(effectiveModel)) {
+    const routed = await resolveAutoModel(
+      c.env,
+      effectiveModel,
+      requirementsFromRequest(req as Record<string, unknown>),
+      auth.allowedModels
+    );
+    if (!routed) {
+      return c.json(
+        errorBody(
+          `No available model satisfies this request (tools/vision/json/context requirements) for "${effectiveModel}".`,
+          "invalid_request_error",
+          "no_model_available",
+          requestId
+        ),
+        400
+      );
+    }
+    c.header("X-Ahura-Router-Policy", routed.policy);
+    c.header("X-Ahura-Router-Considered", String(routed.consideredCount));
+    effectiveModel = routed.model;
   }
 
   // 3. Scope check — does this key allow this model?
