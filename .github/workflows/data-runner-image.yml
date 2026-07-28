@@ -7,7 +7,7 @@ name: data-runner image
 # context so the file: dependency on runner-core resolves.
 on:
   push:
-    branches: [ai, master, dev, "feature/ai-phase-5-ai-agent-work-3.0"]
+    branches: [ai, master, dev, "feature/ai-phase-5-ai-agent-work-3.0", "feature/s3-doc-fetch-ai-pahse-6"]
     paths:
       - "workers/data-runner/**"
       - "workers/runner-core/**"

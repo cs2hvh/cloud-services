@@ -95,21 +95,19 @@ spec:
       protocol: TCP
       name: health
 
-# ── Secret template (create once, never commit real values) ────────────────────
+# ── Secret ────────────────────────────────────────────────────────────────────
 #
-# kubectl create secret generic ahura-data-runner-secrets \
-#   --namespace ahura \
-#   --from-literal=REDIS_URL="redis://:password@redis-host:6379/0" \
-#   --from-literal=SUPABASE_URL="https://xxx.supabase.co" \
-#   --from-literal=SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
-#   --from-literal=INFERENCE_PLATFORM_KEY="ahu_live_..." \
-#   --from-literal=INFERENCE_BASE_URL="https://api.ahurasense.com/v1" \
-#   --from-literal=BYOK_DEK="<base64 32-byte key, same as the app's BYOK_DEK>" \
-#   --from-literal=FETCH_CONCURRENCY="8" \
-#   --from-literal=EMBED_BATCH="96" \
-#   --from-literal=OCR_ENABLED="true" \
-#   --from-literal=OCR_MODEL="ahura/ocr-doc" \
-#   --from-literal=OCR_MIN_CHARS="20" \
-#   --from-literal=S3_ENDPOINT_ALLOW_PRIVATE="false" \
-#   --from-literal=MAX_CONCURRENT_JOBS="2" \
-#   --from-literal=CLAIM_POLL_INTERVAL_MS="5000"
+# Do NOT hand-create this. It comes from ./secret.yaml.template, rendered with
+# values from ~/.ahura-lke.env (outside the repo) by the same script that
+# applies every other runner:
+#
+#   export KUBECONFIG=$HOME/.kube/lke-ahura.yaml
+#   set -a; source ~/.ahura-lke.env; set +a
+#   bash infra/k8s/lke/02-apply-all.sh
+#
+# NOTE: `image:` above is pinned to :latest, and .github/workflows/data-runner-image.yml
+# only tags :latest on a push to dev/master — a feature-branch build publishes
+# :<branch> and :sha-<short> instead. Deploying from a feature branch therefore
+# needs an explicit image override, or the tag will not exist. There is also no
+# auto-rollout (docs/PRODUCTION.md §5): after a new image is pushed, run
+#   kubectl -n ahura rollout restart deploy/ahura-data-runner

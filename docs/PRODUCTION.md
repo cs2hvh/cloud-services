@@ -234,9 +234,14 @@ Linode Kubernetes (LKE), namespace `ahura`. Full runbook:
 | `redis` | in-cluster BullMQ broker (10GB PVC, `noeviction`) | `redis:7-alpine` |
 | `ft-runner` (×2) | claims queued fine-tuning jobs → RunPod training pods, monitors heartbeats | `ghcr.io/cs2hvh/ahura-ft-runner:latest` |
 | `deploy-runner` (×2) | claims BYO deployments → RunPod Serverless endpoints | `ghcr.io/cs2hvh/ahura-deploy-runner:latest` |
+| `eval-runner` | claims queued eval jobs → runs cases through the gateway | `ghcr.io/cs2hvh/ahura-eval-runner:latest` |
+| `data-runner` | claims queued RAG connectors → syncs S3 / web-crawl sources into their vector collection. No GPU — only calls our own `/v1/embeddings` + `/v1/ocr`. Local dev + test: [workers/data-runner/README.md](../workers/data-runner/README.md) | `ghcr.io/cs2hvh/ahura-data-runner:latest` |
 
-Both runners use a **DB-poll + BullMQ hybrid**: Postgres is the source of truth
+All of these use a **DB-poll + BullMQ hybrid**: Postgres is the source of truth
 (claimer polls every ~5s); BullMQ just removes the poll latency.
+
+`agent-runner` is deployed separately — it has a `k8s/secret.yaml.template` but
+is **not** yet applied by `02-apply-all.sh`.
 
 ### Bring-up
 ```bash

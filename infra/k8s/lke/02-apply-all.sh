@@ -95,7 +95,25 @@ kubectl apply -f workers/eval-runner/k8s/deployment.yaml
 echo "  waiting for eval-runner to be Ready..."
 kubectl -n ahura rollout status deployment/ahura-eval-runner --timeout=180s
 
-# ── 6. Final status ──────────────────────────────────────────────────
+# ── 6. data-runner ───────────────────────────────────────────────────
+# RAG connector syncs (S3 + web crawl). Like eval-runner: no GPU, only HTTP
+# calls to our own gateway for embeddings/OCR.
+# Doc: nextstespsAI/20-rag-connectors-and-data-runner.md
+echo ""
+for v in INFERENCE_PLATFORM_KEY INFERENCE_BASE_URL BYOK_DEK; do
+  if [[ -z "${!v:-}" ]]; then
+    echo "ERROR: $v is required for data-runner — add it to ~/.ahura-lke.env" >&2
+    exit 1
+  fi
+done
+echo "→ Applying data-runner Secret..."
+envsubst < workers/data-runner/k8s/secret.yaml.template | kubectl apply -f -
+echo "→ Applying data-runner Deployment..."
+kubectl apply -f workers/data-runner/k8s/deployment.yaml
+echo "  waiting for data-runner to be Ready..."
+kubectl -n ahura rollout status deployment/ahura-data-runner --timeout=180s
+
+# ── 7. Final status ──────────────────────────────────────────────────
 echo ""
 echo "✅ All resources applied."
 echo ""
@@ -106,3 +124,4 @@ echo "Tail logs with:"
 echo "  kubectl -n ahura logs -f deploy/ahura-ft-runner"
 echo "  kubectl -n ahura logs -f deploy/ahura-deploy-runner"
 echo "  kubectl -n ahura logs -f deploy/ahura-eval-runner"
+echo "  kubectl -n ahura logs -f deploy/ahura-data-runner"
