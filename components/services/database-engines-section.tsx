@@ -133,7 +133,10 @@ export default function DatabaseEnginesSection() {
             </p>
           </div>
 
-          <div className="mt-12 grid gap-3 lg:grid-cols-4">
+          {/* Mobile: horizontal scroll-snap strip keeps the engine selector a single
+              compact row directly above the detail panel — selection and detail share
+              one viewport. sm+ restores the 2-up / 4-up grid. */}
+          <div className="mt-12 -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4">
             {ENGINES.map((engine) => {
               const isActive = engine.key === active.key;
 
@@ -142,7 +145,7 @@ export default function DatabaseEnginesSection() {
                   key={engine.key}
                   type="button"
                   onClick={() => setActiveKey(engine.key)}
-                  className={`group relative overflow-hidden border text-left transition-all duration-300 ${
+                  className={`group relative w-[72%] shrink-0 snap-start overflow-hidden border text-left transition-all duration-300 sm:w-auto ${
                     isActive
                       ? "border-white/16 bg-white/[0.07] shadow-[0_18px_40px_rgba(0,0,0,0.34)]"
                       : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.14] hover:bg-white/[0.04]"

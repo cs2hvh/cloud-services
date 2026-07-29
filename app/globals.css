@@ -1,6 +1,10 @@
+/* URL imports must come FIRST: Turbopack inlines the tailwindcss import
+   below, and any @import that lands after expanded rules is a CSS parse
+   error (webpack was lenient; Turbopack is spec-strict).
+   TODO: self-host Sansation via next/font/local and drop this CDN fetch. */
+@import url("https://fonts.cdnfonts.com/css/sansation");
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url("https://fonts.cdnfonts.com/css/sansation");
 
 @custom-variant dark (&:is(.dark *));
 

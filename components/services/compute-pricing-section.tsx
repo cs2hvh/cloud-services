@@ -638,8 +638,11 @@ export default function ComputePricingSection({
           </div>
         </div>
 
+        {/* Mobile: horizontal scroll-snap tab strip so the family selector stays a
+            single compact row directly above the plan table — categories and
+            pricing share one viewport. sm+ restores the full card grid. */}
         <div className="mt-8">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-6">
             {categories.map((category) => {
               const isActive = category.key === activeKey;
               const meta = getCategoryMeta(category);
@@ -649,20 +652,20 @@ export default function ComputePricingSection({
                   key={category.key}
                   type="button"
                   onClick={() => setActiveKey(category.key)}
-                  className={`group relative flex min-h-[90px] items-start gap-3 border px-4 py-3 text-left transition-all duration-300 ${
+                  className={`group relative flex shrink-0 snap-start items-center gap-3 whitespace-nowrap rounded-full border px-4 py-2.5 text-left transition-all duration-300 sm:min-h-[90px] sm:shrink sm:items-start sm:whitespace-normal sm:rounded-none sm:px-4 sm:py-3 ${
                     isActive
                       ? "cursor-pointer border-[#0095FF] bg-[linear-gradient(135deg,#ffffff_0%,#eef6ff_100%)] text-black shadow-[0_18px_50px_rgba(0,149,255,0.18)]"
                       : "cursor-pointer border-white/[0.1] bg-[#0f1012] hover:-translate-y-0.5 hover:border-[#0095FF]/35 hover:bg-[#15171b]"
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute inset-y-3 left-2 w-[3px] bg-[#0095FF]" />
+                    <div className="absolute inset-y-3 left-2 hidden w-[3px] bg-[#0095FF] sm:block" />
                   )}
-                  <div className={`min-w-0 ${isActive ? "pl-3" : ""}`}>
-                    <div className={`text-[14px] font-medium leading-snug ${isActive ? "text-black" : "text-white/88"}`}>
+                  <div className={`min-w-0 ${isActive ? "sm:pl-3" : ""}`}>
+                    <div className={`text-[13px] font-medium leading-snug sm:text-[14px] ${isActive ? "text-black" : "text-white/88"}`}>
                       {category.label}
                     </div>
-                    <div className={`mt-1 text-[11px] leading-snug ${isActive ? "text-black/58" : "text-white/42"}`}>
+                    <div className={`mt-1 hidden text-[11px] leading-snug sm:block ${isActive ? "text-black/58" : "text-white/42"}`}>
                       {meta.cpuProfile}
                     </div>
                   </div>

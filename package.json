@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=\"--max-http-header-size=65536 --max-old-space-size=8192\" tsx watch server.ts",
     "dev:next": "next dev",
+    "dev:fast": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" next dev --turbopack",
     "build": "npm run generate:openapi && cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" next build",
     "start": "cross-env NODE_OPTIONS=\"--max-http-header-size=65536 --max-old-space-size=8192\" tsx server.ts",
     "start:next": "next start",

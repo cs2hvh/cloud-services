@@ -201,8 +201,8 @@ export default function ModelHostingFormatsSection() {
 
         {/* ─── Tab selector + content ─── */}
         <div className="mt-16 lg:mt-20">
-          {/* Tab bar */}
-          <div className="mx-auto flex max-w-2xl items-center justify-center gap-2">
+          {/* Tab bar — stacked full-width on mobile so nothing clips, row at sm+ */}
+          <div className="mx-auto flex max-w-2xl flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
             {FORMATS.map((f, i) => {
               const TabIcon = f.icon;
               const selected = i === activeTab;
@@ -210,7 +210,7 @@ export default function ModelHostingFormatsSection() {
                 <button
                   key={f.id}
                   onClick={() => setActiveTab(i)}
-                  className="group relative flex items-center gap-2.5 rounded-[10px] border px-5 py-3 font-mono text-[11.5px] uppercase tracking-[0.16em] transition-all duration-400"
+                  className="group relative flex items-center justify-center gap-2.5 rounded-[10px] border px-5 py-3 font-mono text-[11.5px] uppercase tracking-[0.16em] transition-all duration-400"
                   style={{
                     borderColor: selected
                       ? `${f.accent}55`

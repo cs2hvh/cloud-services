@@ -48,6 +48,22 @@ const nextConfig: NextConfig = {
   // Keep native Node.js modules out of the webpack bundle
   serverExternalPackages: ["ssh2", "ioredis", "bullmq"],
 
+  // Rewrite barrel imports (`import { X } from 'lucide-react'`) to deep
+  // imports so the bundler never parses the whole library. Big dev-compile
+  // win for this app's icon/chart/date libraries — applies to webpack AND
+  // Turbopack. Next already optimizes some of these by default; listing them
+  // explicitly is idempotent.
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "@tabler/icons-react",
+      "react-icons",
+      "hugeicons-react",
+      "date-fns",
+      "recharts",
+    ],
+  },
+
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,
 

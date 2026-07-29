@@ -102,6 +102,12 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["Docker", "CI/CD", "Auto Deploy", "GitHub", "GitLab"],
   },
   {
+    label: "Game Servers",
+    desc: "DDoS-protected game hosting, online in a minute",
+    href: "/services/games",
+    tags: ["Minecraft", "Rust", "CS2", "FiveM"],
+  },
+  {
     label: "Domains",
     desc: "Register, transfer, and manage domains",
     href: "/services/domain",

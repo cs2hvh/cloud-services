@@ -69,12 +69,16 @@ export default function InferencePrivateHostingSection() {
           </motion.h2>
         </div>
 
-        {/* ─── MIDDLE: wide isolation illustration ─── */}
+        {/* ─── MIDDLE: wide data-path illustration (tablet / laptop / desktop) ───
+            Hidden on phones — the numbered steps below carry the same story in
+            text form. On md+ the full 1920×516 diagram renders uncropped with
+            object-contain, so the whole flowchart stays visible and nothing
+            clips at any width. */}
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className="relative mt-12 lg:mt-16"
+          className="relative mt-12 hidden md:block lg:mt-16"
         >
           {/* Soft brand-blue wash behind the image */}
           <div
@@ -85,22 +89,33 @@ export default function InferencePrivateHostingSection() {
                 "radial-gradient(55% 60% at 50% 50%, rgba(0,149,255,0.22), transparent 70%)",
             }}
           />
-          {/* raod.png is a wide 1920×516 canvas with the diagram in its left ~third.
-              Crop the empty right and center it so it reads as a balanced graphic. */}
-          <div className="relative mx-auto aspect-[16/10] w-full max-w-[620px] overflow-hidden">
-            <Image
-              src={assetUrl("/ailabs/raod.png")}
-              alt="Single-tenant request path — your traffic stays in your lane"
-              fill
-              priority={false}
-              className="object-cover object-left"
-              sizes="(min-width: 1280px) 620px, 92vw"
-            />
+          {/* raod.png is a wide 1920×516 flowchart that spans nearly the full
+              canvas (source cluster → path → destination node). Render it at its
+              native aspect ratio with object-contain so the whole diagram stays
+              visible and never clips at any width. Break it out of the text
+              column (w-screen, centered) so the wide banner reads at a larger
+              size; the section is overflow-clip, so this never scrolls the page. */}
+          <div className="relative left-1/2 w-screen -translate-x-1/2">
+            <div className="mx-auto w-[92%] max-w-[1360px]">
+              <div className="relative aspect-[1920/516] w-full">
+                <Image
+                  src={assetUrl("/ailabs/raod.png")}
+                  alt="Single-tenant request path — your traffic stays in your lane"
+                  fill
+                  priority={false}
+                  className="object-contain"
+                  sizes="(min-width: 1024px) 1360px, 92vw"
+                />
+              </div>
+            </div>
           </div>
         </motion.div>
 
-        {/* ─── BOTTOM: features row ─── */}
-        <div className="mt-12 grid gap-px border-t border-white/[0.06] sm:grid-cols-3 lg:mt-16">
+        {/* ─── BOTTOM: the data path as text ───
+            On phones (where the diagram is hidden) these read as a numbered,
+            connected step sequence — the request path in words. At md+ they lay
+            out as the divider row beneath the illustration. */}
+        <div className="mt-10 grid gap-px border-t border-white/[0.06] md:mt-14 md:grid-cols-3">
           {FEATURES.map((f, i) => (
             <motion.div
               key={f.label}
@@ -111,14 +126,25 @@ export default function InferencePrivateHostingSection() {
                 ease: [0.16, 1, 0.3, 1],
                 delay: 0.25 + i * 0.08,
               }}
-              className="border-b border-white/[0.06] py-6 sm:border-b-0 sm:border-r sm:pr-6 sm:pl-0 sm:last:border-r-0 [&:not(:first-child)]:sm:pl-6"
+              className="relative flex gap-4 py-5 md:block md:gap-0 md:border-r md:border-white/[0.06] md:py-6 md:pr-6 md:pl-0 md:last:border-r-0 [&:not(:first-child)]:md:pl-6"
             >
-              <p className="text-[14.5px] font-semibold text-[#0095FF]">
-                {f.label}
-              </p>
-              <p className="mt-1.5 text-[13px] leading-[1.6] text-white/50">
-                {f.body}
-              </p>
+              {/* Step index + connector — phones only (replaces the diagram) */}
+              <div className="flex flex-col items-center md:hidden" aria-hidden>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#0095FF]/40 bg-[#0095FF]/10 text-[12px] font-semibold text-[#33adff]">
+                  {i + 1}
+                </span>
+                {i < FEATURES.length - 1 && (
+                  <span className="mt-1.5 w-px flex-1 bg-gradient-to-b from-[#0095FF]/35 to-white/[0.05]" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[14.5px] font-semibold text-[#0095FF]">
+                  {f.label}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-[1.6] text-white/50">
+                  {f.body}
+                </p>
+              </div>
             </motion.div>
           ))}
         </div>

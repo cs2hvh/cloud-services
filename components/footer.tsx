@@ -40,15 +40,17 @@ const FOOTER_LINKS = [
       { label: "Kubernetes", href: "/services/kubernetes" },
       { label: "Object Storage", href: "/services/object-storage" },
       { label: "App Deploy", href: "/services/app-deployment" },
+      { label: "Game Servers", href: "/services/games" },
     ],
   },
   {
     heading: "Legal",
     links: [
-      { label: "Terms of Service", href: "/terms" },
-      { label: "Privacy Policy", href: "/privacy" },
-      { label: "Cookies Policy", href: "/cookies" },
-      { label: "Data Processing", href: "/dpa" },
+      { label: "Terms & Services", href: "/terms" },
+      { label: "Privacy & Data", href: "/privacy" },
+      { label: "Acceptable Use", href: "/acceptable-use" },
+      { label: "Service Level Agreement", href: "/sla" },
+      { label: "Trust & Compliance", href: "/trust" },
     ],
   },
 ];
