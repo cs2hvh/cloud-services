@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { safeAuthCookies } from "./safe-cookies";
 import { createClient as clientWorker } from "@supabase/supabase-js";
 
 import { Database } from "./types";
@@ -17,7 +18,7 @@ export async function createClient() {
       },
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return safeAuthCookies(cookieStore.getAll());
         },
         setAll(cookiesToSet) {
           try {
@@ -50,7 +51,7 @@ export async function createSSRClient() {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return safeAuthCookies(cookieStore.getAll());
         },
         setAll(cookiesToSet) {
           try {

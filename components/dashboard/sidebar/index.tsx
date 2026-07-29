@@ -461,6 +461,11 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket, matchPrefix: true },
             { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
             { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
+            { label: "AI Model Pricing", href: "/dashboard/admin/inference-pricing", icon: BadgeDollarSign, matchPrefix: true },
+            { label: "Inference Agents", href: "/dashboard/admin/inference-agents", icon: Bot, matchPrefix: true },
+            { label: "Inference Orgs", href: "/dashboard/admin/inference-orgs", icon: Users, matchPrefix: true },
+            { label: "Inference Usage", href: "/dashboard/admin/inference-usage", icon: Activity, matchPrefix: true },
+            { label: "Inference Audit", href: "/dashboard/admin/inference-audit", icon: ShieldCheck, matchPrefix: true },
             { label: "Domains", href: "/dashboard/admin/domains", icon: Globe, matchPrefix: true },
         ],
     };
