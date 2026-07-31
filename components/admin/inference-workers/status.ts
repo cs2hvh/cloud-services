@@ -101,6 +101,35 @@ export function unknownMeaning(probeable: boolean, probingEnabled: boolean): str
   );
 }
 
+/**
+ * How a row should read once "is this expected?" is taken into account.
+ *
+ * A runner that is deliberately paused and a runner that should be up and is
+ * not are the same `not_deployed` underneath, and must not look the same on
+ * screen. Five permanently-red-ish rows train an operator to stop reading the
+ * page — the same reason `unused` capabilities are muted in feature-health.ts.
+ *
+ * On-hold only reframes states that mean "we did not see it". A paused runner
+ * with STUCK JOBS is still a real problem, so degraded/backed_up/not_ticking
+ * are never softened.
+ */
+export function presentationFor(status: FleetStatus, onHold: string | null): StatusPresentation {
+  const base = STATUS[status];
+  const softenable = status === "not_deployed" || status === "unknown" || status === "down";
+  if (!onHold || !softenable) return base;
+  return {
+    label: "On hold",
+    tone: "muted",
+    meaning: onHold,
+    action: null,
+  };
+}
+
+/** On-hold rows are expected to be absent, so they never demand attention. */
+export function needsAttentionRow(status: FleetStatus, onHold: string | null): boolean {
+  return needsAttention(presentationFor(status, onHold).label === "On hold" ? "unknown" : status);
+}
+
 /** Tailwind classes per tone, matching the dark-glass admin styling. */
 export const TONE_CLASS: Record<Tone, string> = {
   good: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",

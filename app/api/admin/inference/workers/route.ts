@@ -177,6 +177,8 @@ export async function GET(req: NextRequest) {
         purpose: entry?.spec.purpose ?? "",
         source: entry ? `${entry.spec.schema}.${entry.spec.table}` : null,
         has_heartbeat: !!entry?.spec.heartbeat_column,
+        /** Non-null = deliberately paused, so "not deployed" is expected, not an incident. */
+        on_hold: entry?.spec.on_hold ?? null,
         /** False when there is no /health service at all — a permanent fact
          *  about the runner, not a property of this check. */
         probeable: entry ? probeTargetFor(entry.spec, process.env) !== null : false,

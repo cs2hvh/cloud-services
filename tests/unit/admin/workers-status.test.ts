@@ -7,6 +7,7 @@ import {
   humanMs,
   humanSince,
   needsAttention,
+  presentationFor,
   probeVantageWarning,
   unconfirmedCount,
   unknownMeaning,
@@ -239,5 +240,47 @@ describe("humanSince", () => {
   it("a future timestamp does not render as negative", () => {
     // Clock skew between the DB and the browser must not print "-3s ago".
     expect(humanSince("2026-07-30T12:00:05Z", NOW)).toBe("0ms ago");
+  });
+});
+
+describe("on-hold runners must not read as incidents", () => {
+  // Five of six runners are deliberately undeployed. Without this they render as
+  // `not_deployed` forever — one useful row out of six — and the page teaches an
+  // operator to stop reading it. Same reasoning that keeps `unused` capabilities
+  // muted in feature-health.ts.
+  const HOLD = "Evals are on hold — the runner is built but not deployed.";
+
+  it("reframes 'not deployed' as 'On hold' with the reason as its meaning", () => {
+    const p = presentationFor("not_deployed", HOLD);
+    expect(p.label).toBe("On hold");
+    expect(p.tone).toBe("muted");
+    expect(p.meaning).toBe(HOLD);
+    expect(p.action).toBeNull();
+  });
+
+  it("also covers 'down' and 'unknown' — a paused runner fails a probe too", () => {
+    for (const s of ["down", "unknown"] as const) {
+      expect(presentationFor(s, HOLD).label, s).toBe("On hold");
+    }
+  });
+
+  it("NEVER softens a queue-derived problem, even on a paused runner", () => {
+    // Stuck jobs are read from the database, not from a probe. A paused runner
+    // holding stuck work is still a real problem someone must clear.
+    for (const s of ["degraded", "backed_up", "not_ticking"] as const) {
+      expect(presentationFor(s, HOLD).label, s).toBe(STATUS[s].label);
+      expect(presentationFor(s, HOLD).tone, s).toBe(STATUS[s].tone);
+    }
+  });
+
+  it("leaves a runner with no hold reason exactly as it was", () => {
+    expect(presentationFor("not_deployed", null)).toEqual(STATUS.not_deployed);
+    expect(presentationFor("idle", null)).toEqual(STATUS.idle);
+  });
+
+  it("does not soften a genuinely healthy row into 'On hold'", () => {
+    // A paused runner that somehow answers is news, and must keep saying so.
+    expect(presentationFor("idle", HOLD).label).toBe(STATUS.idle.label);
+    expect(presentationFor("working", HOLD).label).toBe(STATUS.working.label);
   });
 });

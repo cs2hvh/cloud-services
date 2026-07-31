@@ -35,6 +35,7 @@ import {
   humanMs,
   humanSince,
   needsAttention,
+  presentationFor,
   probeVantageWarning,
   unconfirmedCount,
   unknownMeaning,
@@ -48,6 +49,8 @@ interface RunnerRow extends FleetVerdict {
   has_heartbeat: boolean;
   /** False when the runner has no /health service at all (e.g. media). */
   probeable: boolean;
+  /** Non-null = deliberately paused; absence is expected, not an incident. */
+  on_hold: string | null;
   read_error: string | null;
   last_job_activity: string | null;
 }
@@ -68,8 +71,8 @@ interface Payload {
   runners: RunnerRow[];
 }
 
-function StatusBadge({ status }: { status: FleetStatus }) {
-  const p = STATUS[status];
+function StatusBadge({ status, onHold }: { status: FleetStatus; onHold?: string | null }) {
+  const p = presentationFor(status, onHold ?? null);
   return (
     <span
       className={cn(
@@ -104,9 +107,15 @@ function RunnerDetail({
   windowHours: number;
   probingEnabled: boolean;
 }) {
-  const p = STATUS[row.status];
+  const p = presentationFor(row.status, row.on_hold);
   // "Not checked" has two different causes and the static text only fits one.
-  const meaning = row.status === "unknown" ? unknownMeaning(row.probeable, probingEnabled) : p.meaning;
+  // An on-hold runner already explains itself, so it keeps its own wording.
+  const meaning =
+    row.on_hold && p.label === "On hold"
+      ? p.meaning
+      : row.status === "unknown"
+        ? unknownMeaning(row.probeable, probingEnabled)
+        : p.meaning;
   return (
     <div className="space-y-3 border-t border-white/5 bg-black/20 px-4 py-4 text-sm">
       <div className="flex flex-wrap gap-x-8 gap-y-2">
@@ -212,7 +221,11 @@ export default function InferenceWorkersAdmin() {
   const suspect = data ? vantageSuspect(statuses, data.probing.enabled) : false;
   const attention =
     data?.runners.filter(
-      (r) => needsAttention(r.status) && !(suspect && (r.status === "down" || r.status === "not_deployed"))
+      (r) =>
+        needsAttention(r.status) &&
+        // A paused runner being absent is expected, not something to act on.
+        !(r.on_hold && (r.status === "down" || r.status === "not_deployed" || r.status === "unknown")) &&
+        !(suspect && (r.status === "down" || r.status === "not_deployed"))
     ) ?? [];
   const unconfirmed = data ? unconfirmedCount(statuses, data.probing.enabled) : 0;
 
@@ -452,7 +465,7 @@ export default function InferenceWorkersAdmin() {
                             <p className="mt-0.5 text-xs text-neutral-500">{row.purpose}</p>
                           </TableCell>
                           <TableCell>
-                            <StatusBadge status={row.status} />
+                            <StatusBadge status={row.status} onHold={row.on_hold} />
                           </TableCell>
                           <TableCell className="text-right">
                             <Count n={row.queued} tone="warn" />

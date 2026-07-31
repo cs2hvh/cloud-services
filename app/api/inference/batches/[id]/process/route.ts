@@ -32,6 +32,7 @@ import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { downloadText, uploadBytes } from "@/lib/inference/batch-storage";
 import { type BatchRow, type BatchStatus } from "@/lib/inference/batches";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { usageApiKeyId } from "@/lib/inference/usage-attribution";
 
 function isBatchId(s: string): boolean {
   return /^batch_[a-z0-9]+$/i.test(s);
@@ -322,7 +323,11 @@ export async function POST(
       try {
         await supabase.schema("inference").from("usage").insert({
           org_id: batch.org_id,
-          api_key_id: null,
+          // inference.usage.api_key_id is NOT NULL and a batch has no key of its
+          // own (inference.batches has no api_key_id column), so `null` here made
+          // every usage insert throw 23502 into the catch below — the batch
+          // completed and was never billed. Same shape as the media-job watchdog.
+          api_key_id: usageApiKeyId(null),
           user_id: batch.created_by,
           model_id: modelId,
           modality:

@@ -42,6 +42,17 @@ export interface RunnerSpec {
   extra_columns?: string[];
   /** In-cluster health Service (unreachable today — see fleet.ts on LKE). */
   health_url: string;
+  /**
+   * Why this runner is not expected to be up right now, or null when it should be.
+   *
+   * Without this every undeployed runner reads as `not_deployed` forever, and a
+   * page that is five parts noise to one part signal teaches an operator to stop
+   * looking — the exact failure feature-health.ts avoids by refusing to paint
+   * `unused` capabilities red. A deliberately paused runner is a product fact;
+   * a runner that should be up and is not is an incident. They must not look
+   * the same.
+   */
+  on_hold: string | null;
 }
 
 /**
@@ -71,6 +82,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: "last_heartbeat_at",
     time_column: "created_at",
     health_url: "http://ahura-ft-runner-health.ahura.svc.cluster.local:8080/health",
+    on_hold: "Fine-tuning is on hold — no runner deployed, and the last 27 jobs predate the pause."
   },
   {
     service: "data-runner",
@@ -86,6 +98,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: "heartbeat_at",
     time_column: "updated_at",
     health_url: "http://ahura-data-runner-health.ahura.svc.cluster.local:8080/health",
+    on_hold: "Connector syncs are on hold — the runner is built and imaged but not deployed; manual sync via the API still works."
   },
   {
     service: "eval-runner",
@@ -101,6 +114,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: "heartbeat_at",
     time_column: "created_at",
     health_url: "http://ahura-eval-runner-health.ahura.svc.cluster.local:8080/health",
+    on_hold: "Evals are on hold — the runner is built and imaged but not deployed."
   },
   {
     service: "deploy-runner",
@@ -126,6 +140,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: null, // table has no heartbeat column
     time_column: "created_at",
     health_url: "http://ahura-deploy-runner-health.ahura.svc.cluster.local:8080/health",
+    on_hold: "BYO deployments are on hold — never used by any customer (0 rows ever)."
   },
   {
     service: "agent-runner",
@@ -141,6 +156,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: "heartbeat_at",
     time_column: "created_at",
     health_url: "http://ahura-agent-runner-health.ahura.svc.cluster.local:8080/health",
+    on_hold: "Agents cannot be deployed yet: there is no CI image workflow for this runner, unlike the other four. Runs will queue indefinitely until one exists."
   },
   {
     service: "media",
@@ -159,6 +175,7 @@ export const RUNNERS: RunnerSpec[] = [
     heartbeat_column: "heartbeat_at",
     time_column: "created_at",
     health_url: "", // no dedicated deployable — see the note above
+    on_hold: null, // not a deployable at all — the gateway settles these inline
   },
 ];
 

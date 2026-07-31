@@ -19,13 +19,15 @@
  *   concurrent sweeps skip rows already processed.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient }              from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { usageApiKeyId } from "@/lib/inference/usage-attribution";
 
 export const dynamic  = "force-dynamic";
 export const revalidate = 0;
 
 const HEARTBEAT_STALE_MS = 5 * 60 * 1000; // 5 min with no heartbeat = Worker died
 const SWEEP_LIMIT        = 50;             // max rows per pass to keep sweeps bounded
+
 
 interface MediaJobRow {
   id:              string;
@@ -36,6 +38,67 @@ interface MediaJobRow {
   heartbeat_at:    string | null;
   deadline_at:     string | null;
   request_params:  Record<string, unknown>;
+  api_key_id:      string | null;
+}
+
+/**
+ * Write the usage row a recovered job never got.
+ *
+ * Mirrors the gateway's computeUnitCost for the one unit label this route can
+ * produce (video_second → cents_per_media_second). Deliberately NOT a general
+ * pricing engine: the recovery path only ever settles video jobs, and a second
+ * half-copy of the full price table is how the two drift apart.
+ *
+ * Returns 1 if a usage row was written, 0 otherwise. Never throws — a billing
+ * hiccup must not abort the sweep and leave later jobs unrecovered (same
+ * reasoning as the batch processor's usage insert).
+ */
+async function billRecoveredJob(
+  supabase: SupabaseClient,
+  row: MediaJobRow,
+  durationSeconds: number
+): Promise<number> {
+  try {
+    const { data: model } = await supabase
+      .schema("inference")
+      .from("models")
+      .select("pricing")
+      .eq("model_id", row.model_id)
+      .maybeSingle<{ pricing: Record<string, number> | null }>();
+
+    const perSecond = Number(model?.pricing?.cents_per_media_second ?? 0);
+    // Math.ceil matches the gateway so a recovered job costs exactly what the
+    // same job would have cost had the customer kept polling.
+    const costCents = Math.ceil(durationSeconds * perSecond);
+
+    const { error } = await supabase.schema("inference").from("usage").insert({
+      org_id:       row.org_id,
+      api_key_id:   usageApiKeyId(row.api_key_id),
+      model_id:     row.model_id,
+      modality:     "video",
+      request_id:   `watchdog-${row.id}`,
+      billed_to:    "platform",
+      num_units:    durationSeconds,
+      unit_label:   "video_second",
+      cost_cents:   costCents,
+      status:       "success",
+      is_batch:     false,
+    });
+    if (error) {
+      console.error(JSON.stringify({
+        level: "error", event: "media_job.bill_failed",
+        jobId: row.id, orgId: row.org_id, err: error.message,
+      }));
+      return 0;
+    }
+    return 1;
+  } catch (err) {
+    console.error(JSON.stringify({
+      level: "error", event: "media_job.bill_failed",
+      jobId: row.id, orgId: row.org_id, err: String(err),
+    }));
+    return 0;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -52,7 +115,7 @@ export async function POST(request: NextRequest) {
   );
 
   const nowIso  = new Date().toISOString();
-  const summary = { reaped: 0, recovered: 0, still_running: 0, errors: 0 };
+  const summary = { reaped: 0, recovered: 0, billed: 0, still_running: 0, errors: 0 };
 
   // ── Pass 1: Reaper ────────────────────────────────────────────────────────
   // Any job that is still queued or running but has blown past its deadline.
@@ -97,7 +160,7 @@ export async function POST(request: NextRequest) {
   const { data: stale, error: staleErr } = await supabase
     .schema("inference")
     .from("media_jobs")
-    .select("id, org_id, model_id, status, upstream_job_id, heartbeat_at, deadline_at, request_params")
+    .select("id, org_id, model_id, status, upstream_job_id, heartbeat_at, deadline_at, request_params, api_key_id")
     .eq("status", "running")
     .not("upstream_job_id", "is", null)
     .gt("deadline_at", nowIso)          // still within deadline
@@ -132,7 +195,7 @@ export async function POST(request: NextRequest) {
 
       if (pollData.status === "completed" && pollData.unsigned_urls?.[0]) {
         const duration = Number(row.request_params?.duration ?? 5);
-        await supabase.schema("inference").from("media_jobs")
+        const { data: settled } = await supabase.schema("inference").from("media_jobs")
           .update({
             status:      "completed",
             output_url:  pollData.unsigned_urls[0],
@@ -140,10 +203,25 @@ export async function POST(request: NextRequest) {
             unit_label:  "video_second",
           })
           .eq("id", row.id)
-          .eq("status", "running"); // idempotency gate
+          .eq("status", "running") // idempotency gate
+          .select("id");
+
+        // BILL IT. The gateway charges at every one of its own settle points
+        // (video-generations.ts calls enqueueUsage three times), but this
+        // recovery path only flipped the status — so a job the customer stopped
+        // polling was delivered FREE. Latent until now only because this route
+        // 404s in production and has never actually recovered a job.
+        //
+        // The `.select()` above is what makes this safe to run repeatedly: the
+        // idempotency gate means a second sweep updates zero rows, so no usage
+        // row is written twice.
+        const didSettle = (settled?.length ?? 0) > 0;
+        if (didSettle) {
+          summary.billed += await billRecoveredJob(supabase, row, duration);
+        }
 
         summary.recovered++;
-        console.log(JSON.stringify({ level: "info", event: "media_job.recovered", jobId: row.id, orgId: row.org_id }));
+        console.log(JSON.stringify({ level: "info", event: "media_job.recovered", jobId: row.id, orgId: row.org_id, billed: didSettle }));
 
       } else if (
         pollData.status === "failed" ||
@@ -177,6 +255,7 @@ export async function POST(request: NextRequest) {
     scanned:      (timedOut?.length ?? 0) + (stale?.length ?? 0),
     reaped:       summary.reaped,
     recovered:    summary.recovered,
+    billed:       summary.billed,
     still_running: summary.still_running,
     errors:       summary.errors,
   });
