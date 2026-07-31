@@ -21,6 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Handler } from "hono";
 import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
+import { isOnBehalfOf } from "../lib/on-behalf-of.ts";
 import {
   gatewayError, buildBaseEvent, enqueueUsage, checkModelScope, resolveRouting,
   resolvePlatformKey, classifyUpstreamError, buildBaseSpan, enqueueTrace,
@@ -156,12 +157,22 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
   const supabase = makeSupabase(c.env);
   const deadline = new Date(Date.now() + 10 * 60 * 1000);
 
-  const { data: job, error: insertErr } = await supabase
-    .schema("inference")
-    .from("media_jobs")
-    .insert({
+  const jobRow = {
       org_id:         auth.orgId,
-      api_key_id:     auth.keyId,
+      // NULL on the on-behalf-of path, not the OBO sentinel.
+      //
+      // Unlike inference.usage and agentcore.runs — plain UUID columns where the
+      // sentinel is the right value — media_jobs.api_key_id carries a REAL foreign
+      // key to inference.api_keys (20260623000001), so the sentinel is rejected
+      // too. There is no customer API key behind an on-behalf-of request; org_id
+      // already carries the attribution, and the column is nullable by design.
+      //
+      // Both failures were found live 2026-07-31, and both were expensive: the
+      // insert runs AFTER OpenRouter has accepted and begun billing the
+      // generation, so each failure orphaned a paid-for video (orJobIds
+      // DZhKJV54Lqdiycl5Zxk2, 42J4y2t6vRI1Ln3DCf8O) — upstream charged us, no row
+      // written, caller got a 503, customer never billed.
+      api_key_id:     isOnBehalfOf(auth.keyId) ? null : auth.usageApiKeyId,
       modality:       "video",
       model_id:       req.model,
       status:         "running",
@@ -174,13 +185,59 @@ export const createVideoJob: Handler<{ Bindings: Env; Variables: HonoVariables }
         ...(req.image_url ? { image_url: req.image_url } : {}),
       },
       deadline_at: deadline.toISOString(),
-    })
+  };
+
+  let { data: job, error: insertErr } = await supabase
+    .schema("inference")
+    .from("media_jobs")
+    .insert(jobRow)
     .select("id")
     .single<{ id: string }>();
 
+  // FALLBACK — never lose a generation OpenRouter has already accepted.
+  //
+  // By this point OR is generating and billing us. Dropping the row means the
+  // customer never gets the video AND is never charged, which is the worst of
+  // both. So if the full insert is rejected, retry once with only the columns
+  // the job genuinely needs to be tracked and settled, discarding the optional
+  // annotations most likely to have caused the rejection (a bad api_key_id FK,
+  // an oversized request_params). A thinner row beats no row.
   if (insertErr || !job) {
-    console.error(JSON.stringify({ level: "error", scope: "video", requestId, message: "DB insert failed after OR acceptance", orJobId, err: String(insertErr?.message) }));
-    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream", { reason: "db_insert_failed" }));
+    console.error(JSON.stringify({
+      level: "warn", scope: "video", requestId,
+      message: "media_jobs insert rejected — retrying minimal row",
+      orJobId, err: String(insertErr?.message),
+    }));
+    const minimal = {
+      org_id:          auth.orgId,
+      modality:        "video",
+      model_id:        req.model,
+      status:          "running",
+      claimed_at:      new Date().toISOString(),
+      heartbeat_at:    new Date().toISOString(),
+      upstream_job_id: orJobId,
+      deadline_at:     deadline.toISOString(),
+    };
+    ({ data: job, error: insertErr } = await supabase
+      .schema("inference")
+      .from("media_jobs")
+      .insert(minimal)
+      .select("id")
+      .single<{ id: string }>());
+  }
+
+  if (insertErr || !job) {
+    // Both attempts failed: the generation is now ORPHANED — paid for upstream,
+    // untracked here. Logged with the upstream id under a stable, greppable
+    // marker so it can be reconciled or refunded rather than silently lost.
+    console.error(JSON.stringify({
+      level: "error", scope: "video", requestId,
+      event: "media_job.orphaned_upstream",
+      message: "DB insert failed after OR acceptance — upstream job is billed but untracked",
+      orJobId, orgId: auth.orgId, model: req.model, durationSeconds: req.duration,
+      err: String(insertErr?.message),
+    }));
+    void enqueueTrace(c.env, buildBaseSpan(auth, traceId, requestId, req.model, "gen_ai.video", startedAt, "error_upstream", { reason: "db_insert_failed", orphaned_upstream_job: orJobId }));
     return c.json(gatewayError(
       "Video generation service is temporarily unavailable. Please try again.",
       "server_error", "service_unavailable", requestId,

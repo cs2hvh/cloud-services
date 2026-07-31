@@ -139,7 +139,12 @@ async function enqueueRun(
     .insert({
       org_id: auth.orgId,
       agent_id: input.agentId,
-      api_key_id: auth.keyId,
+      // `usageApiKeyId`, never `keyId` — see the rule on AuthContext in types.ts.
+      // keyId is `obo:{orgId}` on the on-behalf-of path (a rate-limiting bucket,
+      // deliberately not a UUID); agentcore.runs.api_key_id is a UUID column, so
+      // the raw marker made Postgres reject the insert with 22P02 and EVERY agent
+      // run created through an internal-service key failed with a bare 500.
+      api_key_id: auth.usageApiKeyId,
       billing_user_id: payer,
       previous_response_id: input.previousResponseId,
       status: "queued",
@@ -150,6 +155,22 @@ async function enqueueRun(
     .single<{ id: string }>();
 
   if (error || !run) {
+    // The customer response stays generic — the DB error can name internal
+    // columns — but swallowing it entirely left a 500 with no way to find the
+    // cause from logs. Server-side it is recorded in full.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "agent_run.create_failed",
+        requestId,
+        orgId: auth.orgId,
+        agentId: input.agentId,
+        code: error?.code ?? null,
+        message: error?.message ?? "insert returned no row",
+        details: error?.details ?? null,
+        hint: error?.hint ?? null,
+      })
+    );
     return {
       ok: false,
       status: 500,
