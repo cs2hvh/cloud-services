@@ -41,6 +41,28 @@ describe("isUsableAuthValue", () => {
   it("leaves non-base64 (legacy/plain) values alone", () => {
     expect(isUsableAuthValue('{"access_token":"x"}')).toBe(true);
   });
+
+  it("keeps a session whose JSON contains multi-byte UTF-8", () => {
+    // A display name with an accent or CJK must not be mistaken for corruption.
+    // The old escape()-based fallback mangled these; atob + TextDecoder does not.
+    const unicode = { access_token: "x", user: { name: "café ✓ 日本語 — Ωmega" } };
+    const value = "base64-" + Buffer.from(JSON.stringify(unicode)).toString("base64url");
+    expect(isUsableAuthValue(value)).toBe(true);
+  });
+
+  it("decodes without depending on legacy globals", () => {
+    // Guards the Edge path: this file runs on every request through middleware,
+    // so a ReferenceError here would fail the whole site, not one login.
+    const value = "base64-" + Buffer.from(JSON.stringify({ a: 1 })).toString("base64url");
+    const original = globalThis.Buffer;
+    try {
+      // @ts-expect-error — simulate a runtime with no Buffer (Edge/worker).
+      delete (globalThis as { Buffer?: unknown }).Buffer;
+      expect(isUsableAuthValue(value)).toBe(true);
+    } finally {
+      globalThis.Buffer = original;
+    }
+  });
 });
 
 describe("safeAuthCookies", () => {

@@ -44,14 +44,29 @@ function chunkIndex(name: string): number {
   return m ? Number(m[1]) : 0;
 }
 
+/**
+ * Decode a base64url payload to text, in both runtimes.
+ *
+ * This function runs on EVERY request — middleware.ts's matcher covers all but
+ * static assets — so it must not depend on anything that might be absent. An
+ * earlier version fell back to `decodeURIComponent(escape(atob(...)))`, and
+ * `escape` is a legacy global: on any runtime lacking BOTH `Buffer` and
+ * `escape` that line throws ReferenceError inside the cookie adapter, which
+ * would fail every request rather than just one login. `atob` + TextDecoder is
+ * standard in Node 18+, Edge and browsers, and is also correct for multi-byte
+ * UTF-8 (a user's display name with an accent), which `escape` mangles.
+ */
 function decodeBase64Url(payload: string): string | null {
   if (!/^[A-Za-z0-9_-]+=*$/.test(payload)) return null;
   try {
     const normalised = payload.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalised.padEnd(Math.ceil(normalised.length / 4) * 4, "=");
-    return typeof Buffer !== "undefined"
-      ? Buffer.from(padded, "base64").toString("utf-8")
-      : decodeURIComponent(escape(atob(padded)));
+    if (typeof Buffer !== "undefined") return Buffer.from(padded, "base64").toString("utf-8");
+
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
   } catch {
     return null;
   }

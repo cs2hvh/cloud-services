@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Building2, KeyRound, RefreshCw, Search, ShieldAlert, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +31,13 @@ function CapBadge({ state }: { state: OrgView["summary"]["cap_state"] }) {
  * org_id, so the org is the unit that carries quotas, caps and bills.
  */
 export default function InferenceOrgsAdmin() {
+  const params = useSearchParams();
   const [data, setData] = useState<OrgsPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  // Seeded from ?q= so other admin pages can deep-link a specific customer here.
+  // The existing filter already matches on id, name and slug, so an org uuid in
+  // the URL lands on exactly one row instead of an unfiltered list.
+  const [search, setSearch] = useState(params.get("q") ?? "");
   const [selected, setSelected] = useState<OrgView | null>(null);
 
   const load = useCallback(async () => {
