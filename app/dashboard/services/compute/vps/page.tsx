@@ -33,6 +33,7 @@ import { ServerStackIcon } from '@/components/dashboard/compute/vps/section-icon
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
 import { RegionFlag } from '@/components/ui/region-flag';
 import { useConfirm } from '@/components/ui/confirm';
+import { formatPlanSlug } from '@/lib/pricing/plan-display';
 
 // ─── Design tokens ─────────────────────────────────────────────────
 
@@ -781,7 +782,9 @@ function ServerRow({
     const provisioning = server.details?.provisioning;
     const progress = provisioning?.progress ?? 10;
     const memGB = Math.round(server.memory_mb / 1024);
-    const planLabel = server.plan_slug ?? `${server.cpu_cores}c · ${memGB}g`;
+    // plan_slug is namespaced internally ("linode:g6-standard-1") — strip it
+    // before display so the provider name never reaches a customer.
+    const planLabel = formatPlanSlug(server.plan_slug) ?? `${server.cpu_cores}c · ${memGB}g`;
     const status =
         STATUS_META[server.status] ??
         { dot: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.45)', label: server.status };
@@ -811,7 +814,7 @@ function ServerRow({
             const res = await fetch('/api/services/compute/vms/power', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: server.id, action }),
+                body: JSON.stringify({ serverId: server.id, action }),
             });
             const data = await res.json();
             if (!res.ok || !data.ok) throw new Error(data.error || `${action} failed`);

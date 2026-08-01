@@ -39,6 +39,7 @@ import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
 import { deleteLinodeInstance, pollLinodeInstance } from "./lifecycle";
+import { sanitizeProviderMessage } from "./errors";
 
 const PROVISION_TIMEOUT_MS = 10 * 60_000;
 const LINODE_PLAN_SLUG_PREFIX = "linode:";
@@ -87,7 +88,16 @@ function mapLinodeErrorToResponse(le: LinodeError): Response {
                 { status: 409 }
             );
         case "INVALID":
-            return Response.json({ ok: false, error: le.message }, { status: 400 });
+            return Response.json(
+                {
+                    ok: false,
+                    error: sanitizeProviderMessage(
+                        le.message,
+                        "We couldn't create your server with those settings. Please review and try again."
+                    ),
+                },
+                { status: 400 }
+            );
         case "RATE_LIMIT":
             return Response.json(
                 { ok: false, error: "The provisioning service is busy. Please try again in a moment." },

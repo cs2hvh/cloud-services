@@ -9,6 +9,7 @@ import { Loader2, Check, AlertTriangle, RefreshCw, PowerOff } from 'lucide-react
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { type ServerData } from './types';
+import { formatPlanSlug } from '@/lib/pricing/plan-display';
 
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 const ACCENT = '#0095FF';
@@ -207,7 +208,7 @@ export function VpsResizeSection({
               Current
             </span>
             <span className={`${MONO} text-[11.5px] text-white/80 tabular-nums`}>
-              {data?.current.planSlug ? `${data.current.planSlug} · ` : ''}
+              {formatPlanSlug(data?.current.planSlug) ? `${formatPlanSlug(data?.current.planSlug)} · ` : ''}
               {data?.current.vcpu} vCPU
               <span className="text-white/25"> · </span>
               {ramGb(data?.current.memoryMB ?? 0)} GB

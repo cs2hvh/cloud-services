@@ -66,6 +66,23 @@ export function LinodeBackupsTab({ server }: { server: ServerData }) {
     fetchBackups();
   }, [fetchBackups]);
 
+  // Snapshots and restores run for several minutes upstream. The payload is
+  // fetched once on mount, so without this the tab sits on "Snapshot in
+  // progress…" indefinitely and only updates if the user reloads by hand.
+  const operationRunning =
+    !!data?.backups?.snapshot?.in_progress ||
+    (data?.backups?.automatic ?? []).some(
+      (b) => b.status === 'pending' || b.status === 'running'
+    );
+
+  useEffect(() => {
+    if (!operationRunning) return;
+    const timer = setInterval(() => {
+      void fetchBackups();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [operationRunning, fetchBackups]);
+
   const act = async (action: string, extra?: Record<string, unknown>, success?: string) => {
     setActing(action);
     try {

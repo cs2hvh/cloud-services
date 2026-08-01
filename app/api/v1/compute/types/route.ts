@@ -7,6 +7,7 @@
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { createWorkerClient } from "@/lib/supabase/server";
 import { getLinodeCatalog, resolveLinodePlanPrice } from "@/lib/pricing/linode-catalog";
+import { formatPlanLabel } from "@/lib/pricing/plan-display";
 
 export const GET = withV1Auth("compute:types:list", async () => {
   try {
@@ -18,7 +19,9 @@ export const GET = withV1Auth("compute:types:list", async () => {
         const base = resolveLinodePlanPrice(plan, "");
         return {
           id: plan.id,
-          label: plan.label,
+          // Upstream labels are the provider's product names ("Linode 2GB") —
+          // same rewrite the dashboard applies, since this API is customer-facing.
+          label: formatPlanLabel(plan.label),
           class: plan.class,
           vcpus: plan.vcpus,
           memory_mb: plan.memoryMB,

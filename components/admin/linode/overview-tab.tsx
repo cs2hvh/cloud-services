@@ -24,7 +24,13 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
 interface Status {
     ok: boolean;
-    token: { valid: boolean; accountEmail?: string; error?: string };
+    token: {
+        valid: boolean;
+        accountEmail?: string;
+        username?: string;
+        restricted?: boolean;
+        error?: string;
+    };
     catalog: {
         regions: number;
         types: number;
@@ -287,9 +293,10 @@ export default function OverviewTab() {
                             <span className="text-white/80">
                                 {token.valid ? "API token valid" : "API token invalid"}
                             </span>
-                            {token.valid && token.accountEmail && (
+                            {token.valid && (token.accountEmail || token.username) && (
                                 <span className={`${MONO} text-[12px] text-white/45`}>
-                                    {token.accountEmail}
+                                    {token.accountEmail ?? token.username}
+                                    {token.restricted && " · restricted"}
                                 </span>
                             )}
                         </div>

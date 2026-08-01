@@ -21,6 +21,7 @@ import {
     type LinodeCatalog,
 } from "@/lib/pricing/linode-catalog";
 import { getLinodeInstance, pollLinodeInstance } from "./lifecycle";
+import { formatPlanLabel } from "@/lib/pricing/plan-display";
 
 export const LINODE_PLAN_SLUG_PREFIX = "linode:";
 
@@ -143,7 +144,7 @@ export async function getLinodeResizeOptions(
             }
             return {
                 slug: `${LINODE_PLAN_SLUG_PREFIX}${p.id}`,
-                name: p.label,
+                name: formatPlanLabel(p.label),
                 tier: tierForClass(p.class),
                 vcpu: p.vcpus,
                 memoryMB: p.memoryMB,
@@ -314,10 +315,16 @@ export async function getLinodeMetricsResponse(
     const [instance, stats] = await Promise.all([
         getLinodeInstance(linodeId),
         LinodeClient.get<LinodeInstanceStats>(`/linode/instances/${linodeId}/stats`).catch((e) => {
-            // Stats 400s while an instance is fresh/offline — degrade to zeros.
+            // Stats are optional decoration — never fail the whole metrics
+            // response over them. Linode 400s while an instance is fresh,
+            // offline, or has collected no samples yet, and that particular
+            // reason ("Stats are unavailable at this time.") trips the client's
+            // capacity heuristic on the word "unavailable", so it arrives here
+            // tagged CAPACITY rather than INVALID. Degrade on everything except
+            // a dead token, which the instance fetch above surfaces anyway.
             const le = e as LinodeError;
-            if (le.code === "INVALID" || le.code === "NOT_FOUND") return null;
-            throw le;
+            if (le.code === "AUTH") throw le;
+            return null;
         }),
     ]);
 
@@ -448,6 +455,31 @@ export async function startLinodeRebuild(
             : {}),
     });
     return { imageLabel: image.label };
+}
+
+/**
+ * A restore runs `running → restoring → offline` — Linode does NOT boot the
+ * instance back up afterwards. The instance also keeps its pre-restore status
+ * for a few seconds before flipping, so wait for it to *enter* `restoring`
+ * first; polling straight for a terminal status would resolve instantly
+ * against the stale one and report the restore finished before it began.
+ * Missing the transient window is harmless — the second poll still governs.
+ */
+export async function waitForLinodeRestore(linodeId: number) {
+    await pollLinodeInstance(linodeId, {
+        until: new Set(["restoring"]),
+        timeoutMs: 2 * 60_000,
+        fastIntervalMs: 5_000,
+        fastWindowMs: 60_000,
+        slowIntervalMs: 10_000,
+    });
+    return pollLinodeInstance(linodeId, {
+        until: new Set(["offline", "running"]),
+        timeoutMs: 30 * 60_000,
+        fastIntervalMs: 10_000,
+        fastWindowMs: 2 * 60_000,
+        slowIntervalMs: 15_000,
+    });
 }
 
 export async function waitForLinodeRebuild(linodeId: number) {

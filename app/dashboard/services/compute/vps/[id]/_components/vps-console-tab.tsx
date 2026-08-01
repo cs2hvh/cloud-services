@@ -100,6 +100,7 @@ export function VpsConsoleTab({
         <LinodeWeblish
           wsUrl={consoleLishUrl}
           serverName={server.name}
+          onReconnect={onLaunchConsole}
           onDisconnect={(clean, reason) => {
             if (!clean) {
               console.warn('[console] weblish disconnected:', reason);

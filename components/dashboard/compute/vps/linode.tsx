@@ -426,7 +426,7 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
                         <Section
                             num="02"
                             title="Operating system"
-                            desc="Clean distribution images, maintained upstream. Custom images are coming to Linode-backed servers soon."
+                            desc="Clean distribution images, maintained upstream. Custom images are coming soon."
                             status={imageStatus}
                             statusLabel={selectedImageInfo?.label ?? "Choose image"}
                         >

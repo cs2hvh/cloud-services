@@ -4,7 +4,7 @@ import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
 import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
-import { limitByUser } from "@/lib/cooldown/userbased";
+import { limitByUser, releaseUserLimit } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
@@ -410,7 +410,16 @@ export async function POST(req: NextRequest) {
   // dormant until owned hardware returns.
   const computeProvider = await getComputeProvider();
   if (computeProvider === "linode") {
-    return handleLinodeCreate({ user, body, supabase, idempComplete });
+    const res = await handleLinodeCreate({ user, body, supabase, idempComplete });
+    // The limiter above consumes a slot before we know whether the request was
+    // even valid. A rejected create provisioned nothing, so refund the slot —
+    // otherwise five mistyped root passwords lock deploys for five minutes
+    // with "Too many servers created recently", having created none. 429 is
+    // excluded: that response never consumed a slot of its own.
+    if (res.status >= 400 && res.status !== 429) {
+      await releaseUserLimit(user.id, { prefix: "rl:vm-create", windowMs: 300_000 });
+    }
+    return res;
   }
 
   // --- Smart host selection ---

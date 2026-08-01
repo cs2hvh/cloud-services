@@ -20,6 +20,14 @@ const supabaseWs = supabaseUrl.replace("https://", "wss://");
 const inferenceApiOrigin =
   process.env.NEXT_PUBLIC_INFERENCE_API_ORIGIN ?? "https://api.ahurasense.com";
 
+// Web console (serial console for virtual servers). The browser opens a
+// WebSocket straight to the upstream console host — the app only mints the
+// short-lived session URL — so the host has to be in connect-src or the
+// browser refuses the connection before any socket is created (no JS error,
+// no socket event: the terminal just sits there and reports "Reconnect").
+// Weblish is :8181, glish is :8080; the region prefix varies per datacenter.
+const consoleWsOrigin = "wss://*.webconsole.linode.com:8181 wss://*.webconsole.linode.com:8080";
+
 // Content-Security-Policy: restrict script sources and data exfiltration targets.
 // 'unsafe-inline' is required because Next.js injects inline scripts for hydration.
 // connect-src is the key defense: even if XSS runs, stolen cookies cannot be sent
@@ -33,7 +41,7 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com https://payment.zx.xyz",
   "font-src 'self'",
-  `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin}`,
+  `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin} ${consoleWsOrigin}`,
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",

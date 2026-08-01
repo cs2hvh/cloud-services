@@ -16,6 +16,7 @@ import {
     type LinodeCatalogPlan,
 } from "@/lib/pricing/linode-catalog";
 import { getLinodeDeployEnabled } from "@/lib/admin/platform-settings";
+import { formatPlanLabel } from "@/lib/pricing/plan-display";
 
 interface PlanPriceWire {
     hourlyUSD: number;
@@ -90,7 +91,7 @@ export async function getLinodeOptionsResponse(
         }
         return {
             id: plan.id,
-            label: plan.label,
+            label: formatPlanLabel(plan.label),
             class: plan.class,
             vcpus: plan.vcpus,
             memoryMB: plan.memoryMB,
