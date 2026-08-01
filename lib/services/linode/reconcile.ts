@@ -34,6 +34,30 @@ const PANEL_TAG = "panel";
  */
 const RECONCILE_GRACE_MS = 15 * 60_000;
 
+/**
+ * Refuse the orphan pass when this share of tracked rows looks orphaned at
+ * once — see the safety valve below. Tuned to never trip on real drift (which
+ * arrives a row at a time) while catching a fleet-wide visibility loss.
+ */
+const ORPHAN_ABORT_RATIO = 0.5;
+/** …but only once there are enough rows for the ratio to mean anything. */
+const ORPHAN_ABORT_MIN = 3;
+
+/**
+ * Whether an orphan sweep looks like real drift or like lost visibility.
+ * Exported so the threshold is covered by tests rather than only by the live
+ * job, where the dangerous case is precisely the one you cannot rehearse.
+ */
+export function shouldAbortOrphanPass(
+    candidateCount: number,
+    trackedRowCount: number
+): boolean {
+    return (
+        candidateCount >= ORPHAN_ABORT_MIN &&
+        candidateCount >= trackedRowCount * ORPHAN_ABORT_RATIO
+    );
+}
+
 export interface UntrackedLinodeInstance {
     linodeId: number;
     label: string;
@@ -56,6 +80,14 @@ export interface ReconcileReport {
     orphanedRows: number[];
     /** Orphaned rows whose status update or billing close threw (needs a human). */
     orphanedRowErrors: number;
+    /**
+     * True when the orphan pass was skipped because implausibly many rows
+     * looked orphaned at once — almost always a token/visibility problem
+     * rather than a vanished fleet. Nothing was mutated; investigate.
+     */
+    orphanPassAborted: boolean;
+    /** How many rows *would* have been flagged, reported even when aborted. */
+    orphanCandidates: number;
     durationMs: number;
 }
 
@@ -120,11 +152,31 @@ export async function reconcileLinodeInstances(): Promise<ReconcileReport> {
     const orphanedRows: number[] = [];
     let orphanedRowErrors = 0;
 
-    for (const row of rows) {
-        if (row.linode_id == null) continue;
-        if (liveInstanceIds.has(Number(row.linode_id))) continue;
-        if (!olderThanGrace(row.created_at, now)) continue; // in-flight create race
+    const orphanCandidates = rows.filter(
+        (row) =>
+            row.linode_id != null &&
+            !liveInstanceIds.has(Number(row.linode_id)) &&
+            olderThanGrace(row.created_at, now) // in-flight create race
+    );
 
+    // Safety valve. Every tracked row looks orphaned whenever the *input* is
+    // wrong rather than the fleet: a rotated or re-scoped token that can no
+    // longer see the instances it created, or an upstream page that came back
+    // short. Acting on that closes every customer's meter and marks every
+    // server errored in a single run — a billing incident that is tedious to
+    // unwind. Genuine drift is a trickle; a flood means don't trust the input.
+    const floodedWithOrphans = shouldAbortOrphanPass(orphanCandidates.length, rows.length);
+
+    if (floodedWithOrphans) {
+        console.error(
+            `[linode-reconcile] ABORTED orphan pass: ${orphanCandidates.length} of ${rows.length} ` +
+            `tracked rows appear orphaned (>= ${Math.round(ORPHAN_ABORT_RATIO * 100)}%). ` +
+            `Refusing to close meters en masse — verify LINODE_TOKEN still sees the fleet ` +
+            `(instances returned: ${instances.length}).`
+        );
+    }
+
+    for (const row of floodedWithOrphans ? [] : orphanCandidates) {
         try {
             const { error: updateError } = await supabase
                 .from("servers")
@@ -162,6 +214,8 @@ export async function reconcileLinodeInstances(): Promise<ReconcileReport> {
         untracked,
         orphanedRows,
         orphanedRowErrors,
+        orphanPassAborted: floodedWithOrphans,
+        orphanCandidates: orphanCandidates.length,
         durationMs: Date.now() - startedAt,
     };
 
