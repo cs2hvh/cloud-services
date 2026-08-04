@@ -18,6 +18,8 @@ export interface OrgRow {
   billing_user_id: string | null;
   hard_cap_cents: number | null;
   monthly_budget_cents: number | null;
+  /** Per-org vector ceiling; null = platform default (migration 20260804000001). */
+  vector_quota: number | null;
   zdr_default: boolean | null;
   region_pin: string | null;
   deleted_at: string | null;

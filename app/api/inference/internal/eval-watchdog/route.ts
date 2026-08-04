@@ -30,6 +30,7 @@
  * Returns: { scanned, reaped, errors, errors_detail }.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/inference/cron-heartbeat";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ interface StuckRow {
   org_id: string;
 }
 
-export async function POST(request: NextRequest) {
+async function sweep(request: NextRequest) {
   const token = request.headers.get("x-ahura-internal-token");
   const expected = process.env.BATCH_PROCESSOR_TOKEN;
   if (!expected || !token || token !== expected) {
@@ -120,4 +121,10 @@ export async function POST(request: NextRequest) {
     errors,
     errors_detail: errDetails,
   });
+}
+
+// Heartbeat wrapper. Without it this sweep's only trace is a Cloudflare log line,
+// which no admin page can read — see lib/inference/cron-heartbeat.ts.
+export async function POST(request: NextRequest) {
+  return withCronRun("eval-watchdog", () => sweep(request));
 }

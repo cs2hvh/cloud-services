@@ -1,9 +1,11 @@
 // GET /api/admin/inference/rag — vector storage, connectors and documents per org.
 //
 // §3 of nextstespsAI/21-admin-platform.md lists vector collections as having no
-// operator surface at all. This is the `see` half; the `limit` (quota) lever still
-// requires a code change in three files — the response says so rather than
-// implying an admin can raise a quota today.
+// operator surface at all. This is the `see` half; the `limit` (quota) lever
+// landed on 2026-08-04 — `inference.orgs.vector_quota` (migration
+// 20260804000001) is set via PUT /api/admin/inference/orgs, and all three
+// enforcement points read it. Each org's row now reports ITS ceiling, not the
+// platform default.
 //
 // The quota figure is the SUM OF `vector_collections.row_count`, because that is
 // what lib/inference/vector-quota.ts compares against. Counting vector_rows would
@@ -12,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { inferenceAdminClient } from "@/lib/admin/inference-client";
 import {
-  ENFORCED_VECTOR_QUOTA,
+  DEFAULT_VECTOR_QUOTA,
   rollupByOrg,
   sortByRisk,
   summarize,
@@ -56,7 +58,11 @@ export async function GET(req: NextRequest) {
       )
       .returns<ConnectorRow[]>(),
     inf().from("connector_documents").select("connector_id, status, chunk_count").returns<DocumentRow[]>(),
-    inf().from("orgs").select("id, name").is("deleted_at", null).returns<Array<{ id: string; name: string | null }>>(),
+    inf()
+      .from("orgs")
+      .select("id, name, vector_quota")
+      .is("deleted_at", null)
+      .returns<Array<{ id: string; name: string | null; vector_quota: number | null }>>(),
   ]);
 
   const firstError = colRes.error ?? connRes.error ?? docRes.error ?? orgRes.error;
@@ -66,7 +72,13 @@ export async function GET(req: NextRequest) {
   const connectors = connRes.data ?? [];
   const documents = docRes.data ?? [];
   const orgNames: Record<string, string> = {};
-  for (const o of orgRes.data ?? []) orgNames[o.id] = o.name ?? "(unnamed)";
+  // Each org's OWN ceiling, so the page reports the number that will actually
+  // refuse this customer rather than the platform default.
+  const quotaByOrg: Record<string, number | null> = {};
+  for (const o of orgRes.data ?? []) {
+    orgNames[o.id] = o.name ?? "(unnamed)";
+    quotaByOrg[o.id] = o.vector_quota;
+  }
 
   // Drift check: page through vector_rows so a PostgREST cap cannot silently
   // under-count and invent drift that does not exist.
@@ -93,24 +105,24 @@ export async function GET(req: NextRequest) {
     if (verifyTruncated) actual = null;
   }
 
-  const orgs = sortByRisk(rollupByOrg(collections, connectors, documents, orgNames, actual));
+  const orgs = sortByRisk(rollupByOrg(collections, connectors, documents, orgNames, actual, quotaByOrg));
 
   return NextResponse.json({
     quota: {
-      per_org: ENFORCED_VECTOR_QUOTA,
+      default_per_org: DEFAULT_VECTOR_QUOTA,
       /** Where the number the gate reads comes from. */
       enforced_from: "sum of inference.vector_collections.row_count",
       /**
-       * Stated plainly: the customer-facing error invites them to contact support,
-       * and support cannot act. Raising the ceiling means editing three files and
-       * redeploying, so no admin control is offered here rather than a fake one.
+       * True since migration 20260804000001. The customer-facing error has always
+       * said "contact support to raise your limit"; support can now actually do it.
        */
-      adjustable: false,
+      adjustable: true,
       adjustable_note:
-        "The quota is hardcoded in lib/inference/vector-quota.ts, workers/data-runner/src/lifecycle.ts " +
-        "and workers/inference/src/routes/vector-collections.ts. The error customers see says " +
-        "'contact support to raise your limit', but there is no per-org override to set — raising it " +
-        "requires a code change in all three files plus a redeploy.",
+        "Set an org's ceiling with PUT /api/admin/inference/orgs { org_id, vector_quota }. " +
+        "Null clears the override and returns the org to the platform default. All three " +
+        "enforcement points (lib/inference/vector-quota.ts, workers/data-runner, the gateway) " +
+        "read the per-org value and fall back to the default.",
+      adjust_endpoint: "/api/admin/inference/orgs",
     },
     verify: {
       requested: verify,

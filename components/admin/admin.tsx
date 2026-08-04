@@ -148,6 +148,20 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
           </Card>
 
           <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-jobs" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-amber-500/10 rounded-lg">
+                  <Boxes className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">AI Jobs</h3>
+                  <p className="text-white/60 text-sm mt-1">Per-job view, with retry & cancel</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
             <a href="/dashboard/admin/inference-orgs" className="block p-6">
               <div className="flex items-center gap-4 mb-3">
                 <div className="p-3 bg-blue-500/10 rounded-lg">

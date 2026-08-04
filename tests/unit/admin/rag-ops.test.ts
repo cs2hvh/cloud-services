@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_VECTOR_QUOTA,
   ENFORCED_VECTOR_QUOTA,
   humanBytes,
   quotaState,
@@ -231,5 +232,53 @@ describe("humanBytes", () => {
 
   it("never renders a negative or NaN size", () => {
     expect(humanBytes(-5)).toBe("0 B");
+  });
+});
+
+describe("per-org quota resolution — the bug live testing caught", () => {
+  // `Number(null)` is 0, not NaN. An earlier version coerced first and then
+  // checked `Number.isFinite(n) && n >= 0`, so an org with NO override — the
+  // normal case for every org — resolved to a quota of ZERO. The admin reported
+  // every customer as "full", and the two vendored copies of this logic (the
+  // gateway and the data-runner) would have refused every vector write and every
+  // connector sync on the platform. No unit test caught it; a live run did.
+  const collection = (orgId: string, rows: number) => ({
+    id: `c-${orgId}`,
+    name: "c",
+    org_id: orgId,
+    row_count: rows,
+    size_bytes: 0,
+    dimensions: 1536,
+    embedding_model_id: "m",
+    index_type: "hnsw",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  });
+  const roll = (quotas: Record<string, number | null | undefined>) =>
+    rollupByOrg([collection("org-1", 10)], [], [], { "org-1": "Acme" }, null, quotas);
+
+  it("no entry at all falls back to the platform default", () => {
+    expect(roll({})[0].quota).toBe(DEFAULT_VECTOR_QUOTA);
+  });
+
+  it("an explicit NULL means 'no override', not 'zero'", () => {
+    expect(roll({ "org-1": null })[0].quota).toBe(DEFAULT_VECTOR_QUOTA);
+    expect(roll({ "org-1": null })[0].quota_state).not.toBe("full");
+  });
+
+  it("undefined behaves the same as absent", () => {
+    expect(roll({ "org-1": undefined })[0].quota).toBe(DEFAULT_VECTOR_QUOTA);
+  });
+
+  it("a real override IS honoured, including a deliberate zero", () => {
+    expect(roll({ "org-1": 5 })[0].quota).toBe(5);
+    expect(roll({ "org-1": 5 })[0].quota_state).toBe("full");
+    // 0 set on purpose is a valid ceiling — "this org may store nothing".
+    expect(roll({ "org-1": 0 })[0].quota).toBe(0);
+  });
+
+  it("nonsense values fall back rather than refusing the customer", () => {
+    expect(roll({ "org-1": Number.NaN })[0].quota).toBe(DEFAULT_VECTOR_QUOTA);
+    expect(roll({ "org-1": -1 })[0].quota).toBe(DEFAULT_VECTOR_QUOTA);
   });
 });

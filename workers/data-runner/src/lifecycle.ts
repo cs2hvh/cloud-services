@@ -62,7 +62,12 @@ const HEARTBEAT_THROTTLE_MS = 15_000;
 // gateway's copy in workers/inference/src/routes/vector-collections.ts — a
 // pure DB read + comparison, safe to duplicate under the same vendoring
 // discipline as crypto.ts / fetch.ts.
-const MAX_VECTORS_PER_ORG = 1_000_000;
+//
+// Since 2026-08-04 this is only the FALLBACK: an org may carry its own
+// `inference.orgs.vector_quota`, set from the admin console, and loadVectorBudget
+// below resolves it. Support can now raise a customer's limit, which is what the
+// quota error has always told customers to ask for.
+const DEFAULT_VECTOR_QUOTA = 1_000_000;
 
 interface DocOutcome {
   sourceUri: string;
@@ -83,7 +88,7 @@ class VectorQuotaError extends Error {
 }
 
 /**
- * Running budget against MAX_VECTORS_PER_ORG for one sync.
+ * Running budget against the org's vector quota for one sync.
  *
  * Every other path that writes vector_rows checks this cap before embedding
  * (upsert, ingest-url, ingest-file, the gateway upsert); connector sync — the
@@ -100,13 +105,13 @@ export interface VectorBudget {
 }
 
 /** The pure half, split out so the cap behaviour is unit-testable without a DB. */
-export function makeVectorBudget(alreadyUsed: number): VectorBudget {
+export function makeVectorBudget(alreadyUsed: number, quota: number = DEFAULT_VECTOR_QUOTA): VectorBudget {
   let used = alreadyUsed;
   return {
     take(rowCount: number): void {
-      if (used + rowCount > MAX_VECTORS_PER_ORG) {
+      if (used + rowCount > quota) {
         throw new VectorQuotaError(
-          `Vector storage limit reached (${MAX_VECTORS_PER_ORG.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`
+          `Vector storage limit reached (${quota.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`
         );
       }
       used += rowCount;
@@ -115,16 +120,24 @@ export function makeVectorBudget(alreadyUsed: number): VectorBudget {
 }
 
 async function loadVectorBudget(ctx: RunnerCtx, orgId: string): Promise<VectorBudget> {
-  const { data, error } = await ctx.supabase
-    .schema("inference")
-    .from("vector_collections")
-    .select("row_count")
-    .eq("org_id", orgId);
+  const [{ data, error }, org] = await Promise.all([
+    ctx.supabase.schema("inference").from("vector_collections").select("row_count").eq("org_id", orgId),
+    ctx.supabase.schema("inference").from("orgs").select("vector_quota").eq("id", orgId).maybeSingle(),
+  ]);
   if (error) throw new Error("Could not verify this organisation's vector storage quota.");
+  // Any doubt about the override falls back to the default — a failed quota
+  // LOOKUP must not abort a customer's sync.
+  //
+  // NULL IS CHECKED BEFORE COERCION: `Number(null)` is 0, not NaN, so coercing
+  // first turned "no override" into a quota of ZERO and would have failed every
+  // sync with a quota error. Caught live 2026-08-04.
+  const raw = (org.data as { vector_quota: number | null } | null)?.vector_quota;
+  const override = raw === null || raw === undefined ? NaN : Number(raw);
+  const quota = Number.isFinite(override) && override >= 0 ? override : DEFAULT_VECTOR_QUOTA;
   // row_count is maintained by the trg_vector_rows_stats trigger, so it also
   // reflects rows previous connector syncs wrote directly.
   const used = (data ?? []).reduce((sum, c) => sum + (Number((c as { row_count: number | null }).row_count) || 0), 0);
-  return makeVectorBudget(used);
+  return makeVectorBudget(used, quota);
 }
 
 class FatalBatchError extends Error {

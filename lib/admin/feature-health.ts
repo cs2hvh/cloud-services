@@ -114,7 +114,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     org_column: "org_id",
     status_column: "status",
     failure_statuses: ["error"],
-    admin_path: "/dashboard/admin/inference-rag",
+    admin_path: "/dashboard/admin/inference-jobs?service=data-runner",
     degraded_above_pct: 20,
   },
   {
@@ -127,7 +127,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     org_column: "org_id",
     status_column: "status",
     failure_statuses: ["failed", "cancelled"],
-    admin_path: "/dashboard/admin/inference-agents",
+    admin_path: "/dashboard/admin/inference-jobs?service=agent-runner",
     degraded_above_pct: 20,
   },
   {
@@ -140,7 +140,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     org_column: "org_id",
     status_column: "status",
     failure_statuses: ["failed", "cancelled"],
-    admin_path: null,
+    admin_path: "/dashboard/admin/inference-jobs?service=eval-runner",
     degraded_above_pct: 20,
   },
   {
@@ -153,7 +153,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     org_column: "org_id",
     status_column: "status",
     failure_statuses: ["failed", "cancelled"],
-    admin_path: "/dashboard/admin/inference-workers",
+    admin_path: "/dashboard/admin/inference-jobs?service=ft-runner",
     degraded_above_pct: 25,
   },
   {
@@ -166,7 +166,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     org_column: "org_id",
     status_column: "status",
     failure_statuses: ["failed"],
-    admin_path: "/dashboard/admin/inference-workers",
+    admin_path: "/dashboard/admin/inference-jobs?service=deploy-runner",
     degraded_above_pct: 25,
   },
   {
@@ -180,7 +180,7 @@ export const CAPABILITIES: CapabilitySpec[] = [
     status_column: "status",
     // One-L 'canceled' per the CHECK constraint in 20260623000001.
     failure_statuses: ["failed", "canceled"],
-    admin_path: "/dashboard/admin/inference-workers",
+    admin_path: "/dashboard/admin/inference-jobs?service=media",
     degraded_above_pct: 20,
   },
   {

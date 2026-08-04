@@ -29,7 +29,10 @@ export type AdminAuditAction =
   | "admin.model_activation_changed"
   | "admin.org_limits_updated"
   | "admin.key_updated"
-  | "admin.key_revoked";
+  | "admin.key_revoked"
+  | "admin.job_retried"
+  | "admin.job_cancelled"
+  | "admin.feature_switch_changed";
 
 export interface AdminAuditEntry {
   action: AdminAuditAction;
@@ -135,6 +138,54 @@ export function keyEntry(
     target_type: "api_key",
     target_id: keyId,
     metadata: { changes },
+  };
+}
+
+/**
+ * Retrying or cancelling one customer's job.
+ *
+ * `from`/`to` are both recorded because a job action is only reconstructable
+ * from the pair — "cancelled" alone does not say whether an operator killed a
+ * live run or tidied up a row that had already failed. Scoped to the customer's
+ * org, unlike the catalog actions, because this acted on their work.
+ */
+export function jobActionEntry(
+  action: "retry" | "cancel",
+  service: string,
+  source: string,
+  jobId: string,
+  orgId: string | null,
+  from: string,
+  to: string
+): AdminAuditEntry {
+  return {
+    action: action === "retry" ? "admin.job_retried" : "admin.job_cancelled",
+    org_id: orgId,
+    target_type: service,
+    target_id: jobId,
+    metadata: { source, status_from: from, status_to: to },
+  };
+}
+
+/**
+ * Flipping a platform capability on or off.
+ *
+ * The single highest-consequence admin action there is — turning `ai_inference`
+ * off stops every customer request on the platform — so it records the reason
+ * the operator gave alongside the change.
+ */
+export function featureSwitchEntry(
+  key: string,
+  enabled: boolean,
+  previous: boolean,
+  reason: string | null
+): AdminAuditEntry {
+  return {
+    action: "admin.feature_switch_changed",
+    org_id: null,
+    target_type: "feature_switch",
+    target_id: key,
+    metadata: { enabled, was: previous, reason },
   };
 }
 

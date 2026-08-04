@@ -747,3 +747,307 @@ connector finds the customer that owns it, rather than returning nothing. Verifi
 `ahurasense-site` (a connector) and `3-large` (an embedding model) each narrow to
 the right org, and a non-match shows an empty state explaining what is searchable.
 
+
+---
+
+## 11. Operations, not just observation (2026-08-04)
+
+The console could see almost everything and change almost nothing. §10's own
+closing note said it plainly: *"Operations: almost none. Pricing can edit and
+bulk-reprice; Orgs can change limits and revoke keys. There is still no
+kill/retry/reap, no quota lever, no feature switches."* This closes that list,
+plus one gap none of the ten previous sections had noticed.
+
+### 11.1 The gap nothing was watching — scheduled sweeps
+
+Nine cron sweeps recover the platform's stuck work: media jobs whose upstream
+never called back, fine-tunes whose runner died, connectors due to sync, BYO
+deployment minutes that go unbilled. They are fired by the gateway Worker's cron
+(`[triggers] crons = ["* * * * *"]`) which POSTs each control-plane endpoint.
+
+**Their only output was `console.log` into Cloudflare.** Nothing was written
+anywhere an admin page could read, so a sweep that stopped running was invisible
+— and six of these endpoints returned 404 in production for roughly two months
+after a stale deploy while the AI Overview reported the platform healthy. It
+could not have reported otherwise: the overview counts rows customers created,
+and a recovery that never happens creates nothing.
+
+`inference.cron_runs` + `lib/inference/cron-heartbeat.ts` +
+`lib/admin/cron-registry.ts`, surfaced on the AI Overview. 13 tests.
+
+Three design choices worth keeping:
+
+- **Judged on the AGE of the last heartbeat, not on what the last run said.** A
+  404, a token mismatch, a Worker that was never deployed and a crashed handler
+  all surface identically — as silence. That is the point.
+- **"Not running" outranks "reporting an error."** A job that errors is still
+  being fired; a job with no heartbeat is the silent case, and it is the one
+  that cost two months. Asserted by test.
+- **401s are not recorded.** An unauthenticated caller must not be able to mark a
+  healthy job as failing; a genuine token mismatch already surfaces as staleness.
+
+One row per job, upserted — not an append-only history, which would need its own
+retention job to stay bounded. `consecutive_failures` is incremented by the
+writer because it cannot be derived from a table that keeps no history.
+
+### 11.2 A4's missing half — retry and cancel
+
+§8.11 recorded the fleet view as read-only, so recovering the 17 failed
+fine-tunes and the 3 media jobs stuck for 31 days meant hand-written SQL.
+
+`/dashboard/admin/inference-jobs` — one screen for all six job kinds, driven by
+the existing `runner-registry.ts` rather than six near-identical routes (which is
+exactly how `canceled`-with-one-L gets written as `cancelled` in five of them).
+`lib/admin/jobs-ops.ts`, 23 tests, including a test that every status any action
+writes exists in that table's migration.
+
+**The rule is "refuse, with a reason."** Three distinct refusals, which a boolean
+`canRetry` would have collapsed into one unhelpful greyed-out button:
+
+1. the kind has no such action — **media has no real retry**, because nothing
+   claims `media_jobs` (the gateway settles them inline), so flipping a row back
+   to `queued` would report success and strand the job forever. The page says so
+   and points at `POST /v1/videos/{id}/retry`, which re-submits upstream under
+   the customer's own key;
+2. the row is in the wrong state — a running job cannot be retried;
+3. legal, but with a consequence: **every retry that re-bills the customer says
+   so in the confirmation**, before the click. An eval retry re-runs *every* case
+   including ones that already scored — checked against the runner's own
+   `lifecycle.ts`, not assumed.
+
+Writes are conditional on the status that was read, so a runner settling the job
+between page load and click means the update matches no rows and the operator is
+told, rather than a live job being yanked. Agent-run retries push `expires_at`
+forward, or the run-reaper would undo the retry within five minutes and it would
+read as "the button did nothing".
+
+### 11.3 A5 — kill switches that are actually enforced
+
+`gpu_deploy_enabled` was the only switch on the platform. Five more, on the same
+`public.platform_settings` pattern: inference, agents, media, connector syncs,
+fine-tuning.
+
+**A switch nobody checks is worse than no switch** — an operator flips it,
+believes the bleeding stopped, and it did not. So each one names its enforcement
+point in the registry, and each has one: `workers/inference/src/middleware/
+feature-gate.ts` for the three gateway capabilities, the connector scheduler and
+the fine-tune create route for the other two.
+
+- **Fail OPEN.** A missing row, an unreachable DB or a malformed value all mean
+  enabled. A kill switch that takes the platform down when its own storage
+  hiccups is a bigger outage than the one it contains.
+- **Gates the spending routes only.** Most of `feature-gate.test.ts` asserts what
+  is *not* gated: polling a video already paid for, cancelling an agent run,
+  deleting a runaway agent, querying vectors that already exist. Same reasoning
+  `spend.ts` had to be corrected for on 2026-07-18, arrived at deliberately this
+  time rather than in production.
+- **Turning something OFF requires a typed reason; turning it back ON is one
+  click.** Recovery must never be the friction-heavy direction. A switch found
+  off six weeks later with no explanation is how an outage gets prolonged by
+  someone afraid to turn it back on.
+
+### 11.4 §5.5 discharged — the vector quota is data now
+
+`MAX_VECTORS_PER_ORG` was a constant in three files while the error customers see
+says *"contact support to raise your limit"*. Support had no lever short of a
+redeploy, and the RAG route's own header admitted it.
+
+`inference.orgs.vector_quota` (NULL = platform default, so the default stays a
+one-line change rather than a data migration), read by all three enforcement
+points, set via `PUT /api/admin/inference/orgs`. The RAG page now reports each
+org's OWN ceiling — the number that will actually refuse that customer.
+
+### 11.5 Navigation
+
+Ten AI entries had accumulated interleaved with infrastructure, and two of them
+— "AI Agents" and "Inference Agents" — read as near-duplicates while pointing at
+different products. The admin group is now sectioned (Infrastructure / AI
+Platform / Business) using the `NavSectionHeader` the sidebar already supported,
+and the legacy screen is labelled **"AI Agents (legacy)"** so nobody debugs a
+customer issue on a page reading the retired `agents` schema. Nothing was
+removed; the §1.5 retirement question stays open and separate.
+
+### 11.6 Blind spots this did NOT close
+
+Stated rather than left to be rediscovered:
+
+- **No refund or credit adjustment for AI.** The usage explorer answers "where
+  did the money go" and there is still no adjustment path — which matters more
+  since `87bcfcf5` made recovered media jobs billable. "Billed for a job that
+  failed" remains a support case with no admin answer.
+- **Batches, prompts, files and BYOK still have no page.** Deliberate: the
+  overview reports all four idle for 33–67 days. Building surfaces for them would
+  be chasing the roadmap rather than closing a gap.
+- **Guardrail policies** are visible only as a trace side-effect. Also
+  deliberate — zero rows have ever existed.
+- **No route-level tests**, still. Only the pure modules are covered.
+
+### 11.7 The one thing that was reviewed back out — hot-path cost
+
+The kill-switch middleware was first written the obvious way: `await` the
+setting, cache it in the isolate for 10 seconds. Reviewed for cost before
+merging, that turned out to be a bad trade paid every day for a capability used
+almost never.
+
+Cloudflare recycles isolates constantly, and this platform does ~1,700 inference
+requests per 30 days. At that volume almost every request lands in a COLD
+isolate, so the cache would rarely hit and a Supabase round trip — tens of
+milliseconds, edge to Postgres — would be added to essentially every chat
+completion, permanently, to support a switch flipped perhaps twice a year.
+
+It now answers from memory and refreshes BEHIND the request
+(`executionCtx.waitUntil`): fresh → no I/O; stale → serve the last known value
+and refresh; cold → serve "enabled" and refresh. Added latency in every path is
+zero.
+
+The trade that buys, stated in the file and in the admin UI rather than left as a
+surprise: for ~30 seconds after a flip, each edge isolate lets through roughly one
+request before it catches up. That is correct for a kill switch — it stops a
+flood or a bleeding upstream, it is not a security boundary, and it was already
+fail-open by design. Anything needing hard immediate enforcement belongs in
+authMiddleware's KV path, not here.
+
+### 11.8 Runbook — when to use a switch, and when not to
+
+Untested incident tooling is worse than none: it fails at the worst moment, or it
+is forgotten and never used at all. So the switches ship with a stated use and a
+rehearsal, not just a UI.
+
+**The lever you should reach for FIRST is still per-model `is_active`**, on
+`/dashboard/admin/inference-pricing`. It is enforced at the gateway for every
+modality (`assertModelAvailable`, lib/gateway.ts) and it is surgical: one bad
+upstream model, one row, everyone else unaffected. `scripts/health-check-models.ts
+--apply` already does this automatically for models the upstream rejects.
+
+Reach for a **switch** only when the answer to "which models?" is "all of them",
+or when the capability has no per-model concept at all:
+
+| Situation | Lever |
+|---|---|
+| One model 404s / errors upstream | `is_active` on that model |
+| A provider is down across many models | `ai_inference_enabled` or `ai_media_enabled` |
+| Media spend spiking from one customer | that org's `hard_cap_cents`, not a switch |
+| An agent loop is burning tool calls platform-wide | `ai_agents_enabled` (no per-model equivalent exists) |
+| A connector is hammering a customer's S3 | that connector's `sync_schedule`, not a switch |
+| Ingestion is overloading the embeddings path | `ai_connector_sync_enabled` |
+| A fine-tune bug is provisioning bad GPUs | `ai_finetuning_enabled` |
+
+Rows 3 and 5 are there deliberately: reaching for a platform-wide switch to solve
+one customer's problem is the most likely way this feature gets misused.
+
+**Turning one off**
+
+1. AI Overview → Capability switches → *Turn off*. A reason is required; it lands
+   in `inference.audit_log` as `admin.feature_switch_changed` with the before
+   value.
+2. Wait ~30s. Edge isolates refresh behind requests (§11.7), so a few in-flight
+   calls still get through — that is expected, not a failure.
+3. Confirm from the customer side, not the admin: a gated call should return
+   **503 `feature_disabled`** with `Retry-After`, and **no usage row** should be
+   written for it.
+4. Turning it back on is one click and needs no reason. Recovery is never the
+   friction-heavy direction.
+
+**Rehearsal — do this once after the migration is applied, then twice a year**
+
+The whole point of the drill is that the switch is exercised while nothing is on
+fire. Use `ai_media_enabled` (lowest traffic), not `ai_inference_enabled`:
+
+```
+# 1. baseline — should succeed
+curl -sS -XPOST $GW/v1/ocr -H "Authorization: Bearer $KEY" ... -o /dev/null -w '%{http_code}\n'
+
+# 2. flip ai_media_enabled OFF in the admin
+#
+#    TIMING, measured 2026-08-04 — the edge caches the PREVIOUS value and holds
+#    it for the full 30s window before it even schedules a refresh, then serves
+#    ONE more request while that refresh runs behind it. So: wait 30s, spend one
+#    call, and assert on the call after that. Two calls, not one.
+sleep 31
+curl -sS -XPOST $GW/v1/ocr -H "Authorization: Bearer $KEY" ... -o /dev/null   # warms the refresh
+
+# 3. should now be 503 with code=feature_disabled
+curl -sS -XPOST $GW/v1/ocr -H "Authorization: Bearer $KEY" ... | jq .error.code
+
+# 4. the things that must KEEP working while media is off
+curl -sS $GW/v1/videos/$EXISTING_JOB_ID -H "Authorization: Bearer $KEY"   # 200 — polling a paid job
+curl -sS $GW/v1/models -H "Authorization: Bearer $KEY"                    # 200 — catalog
+curl -sS -XPOST $GW/v1/chat/completions ...                               # 200 — a DIFFERENT capability
+
+# 5. flip back ON, wait 31s + one spent call, re-run step 1
+# 6. check no inference.usage row was written for the refused calls
+# 7. check the audit log recorded both flips, with your reason
+```
+
+Step 4 is the one that matters. The dangerous failure of this feature is not "a
+request got through" — it is gating something that should have stayed up.
+
+**What is covered by automated tests, and what is not**
+
+- `feature-gate.test.ts` (16) — which paths are gated, which are deliberately
+  NOT, and the cache decision that keeps this off the hot path.
+- `feature-switches.test.ts` (9) — the cross-deploy-unit check: the gateway's
+  keys, the admin registry and the migration seed must agree, every switch must
+  name a real enforcement point, and the migration must seed everything ENABLED.
+  This is the drift that nothing was checking, across three units that ship
+  independently.
+- **Not covered:** the admin route itself, and the live behaviour above. That is
+  what the rehearsal is for.
+
+### 11.9 Live verification (2026-08-04)
+
+Migration applied, then everything below run against the real stack: Next on
+`:3055`, the gateway on `:8787` (`wrangler dev`), the shared Supabase project,
+signed in as a real admin through the real login form. Test rows were named
+`zz-claude-*` and deleted; a residue check confirms zero left behind and all five
+switches back ON.
+
+**Migration** — `cron_runs` present and service-role readable; `orgs.vector_quota`
+present and NULL everywhere (no accidental backfill); five switches seeded `true`;
+the audit enum accepts `admin.feature_switch_changed` (probe row inserted and
+deleted).
+
+**Cron heartbeats** — all nine sweeps POSTed with the real token: all 200, all
+wrote a row carrying their own result JSON and duration. `runs_total` increments
+across repeats. An **unauthenticated** POST returned 401 and wrote **nothing**,
+confirming a prober cannot mark a healthy job as failing. Failure accounting was
+exercised on a throwaway job name: 1 failure → `consecutive_failures` 1 with
+`last_ok_at` still null, 2nd → 2, then a success → back to 0 with `last_ok_at`
+set and the error cleared. `run-reaper` reaped a genuinely stale agent run while
+we were at it.
+
+The panel then proved itself unprompted: the two 1-minute sweeps flipped to
+**Stalled** sixteen minutes later while the 5-minute ones stayed green — which is
+precisely the signal that was missing for two months.
+
+**Jobs** — all six services list real rows (media 33, fine-tunes 27, evals 14,
+connectors 2, agent runs 330, deployments 0). A media retry was refused 409 with
+the real reason; a cancel wrote the one-L `canceled`, persisted, and a second
+cancel was refused 409 rather than silently re-applied. A synthetic failed
+fine-tune retried to `queued` with the stale `runpod_job_id` and error cleared,
+and the response carried the runner's on-hold note. Both actions wrote audit rows
+with `status_from`/`status_to` and the operator's email.
+
+**Switches, against the real gateway** — flipped `ai_media_enabled` off; `/v1/ocr`,
+`/v1/images/generations`, `/v1/videos` and `/v1/audio/speech` all returned **503
+`feature_disabled`** with `Retry-After`, while `/v1/models`, `/v1/key`, chat
+completions and polling an existing video job were untouched. **No `inference.usage`
+row was written for any refused request.** An unauthenticated call still 401s at
+auth, never at the gate. Flipping back on restored service.
+
+#### Two bugs this found
+
+1. **`state=all` silently meant `state=open`.** The route wrote
+   `statusesFor[state] ?? statusesFor.open`, and `??` treats the deliberate
+   `null` ("do not filter") exactly like an unknown key. The media page reported
+   **0 rows against a table holding 33**, and every unit test passed because they
+   tested the pure module, not the lookup. Fixed with `state in statusesFor`, and
+   pinned by a test that asserts the `??` form would have been wrong.
+
+2. **The switch takes longer to propagate than first documented.** The first
+   rehearsal script flipped the switch and asserted after ~1.5s; it failed. The
+   cause is not a bug but the design working as written — the edge holds the
+   PREVIOUS value for the full 30s window before it even schedules a refresh, then
+   serves ONE more request while that refresh runs behind it. Measured, then
+   corrected in the runbook and in the admin UI, which had been promising a
+   faster flip than the system delivers.

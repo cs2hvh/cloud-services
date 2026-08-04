@@ -60,15 +60,21 @@ export interface DocumentRow {
 export type ActualCounts = Record<string, number>;
 
 /**
- * The enforced ceiling. Mirrors MAX_VECTORS_PER_ORG in lib/inference/vector-quota.ts.
+ * The DEFAULT ceiling — what an org gets with no explicit override. Mirrors
+ * DEFAULT_VECTOR_QUOTA in lib/inference/vector-quota.ts and its two vendored
+ * copies (workers/data-runner's lifecycle.ts, workers/inference's
+ * vector-collections.ts).
  *
- * It is hardcoded in THREE places today — that file, workers/data-runner's
- * lifecycle.ts, and workers/inference's vector-collections.ts — while the error
- * customers see says "contact support to raise your limit". Support has no lever:
- * raising it means editing three files and redeploying. This constant exists here
- * so the admin at least reports the real ceiling instead of a fourth guess.
+ * This used to be the WHOLE story: the ceiling was a constant in three files
+ * while the error customers saw said "contact support to raise your limit", and
+ * support had no lever short of a redeploy. Since migration 20260804000001 an org
+ * can carry `inference.orgs.vector_quota`, so `rollupByOrg` takes the real
+ * per-org values and falls back to this only where none is set.
  */
-export const ENFORCED_VECTOR_QUOTA = 1_000_000;
+export const DEFAULT_VECTOR_QUOTA = 1_000_000;
+
+/** @deprecated Kept for existing imports — it is now only the default. */
+export const ENFORCED_VECTOR_QUOTA = DEFAULT_VECTOR_QUOTA;
 
 export type QuotaState = "ok" | "watch" | "near" | "full";
 
@@ -127,7 +133,13 @@ export function rollupByOrg(
   documents: DocumentRow[],
   orgNames: Record<string, string>,
   actual: ActualCounts | null,
-  quota = ENFORCED_VECTOR_QUOTA
+  /**
+   * Each org's own ceiling, keyed by org id. A missing entry means "no override",
+   * which is the same thing the enforcement path does — so the admin reports the
+   * number that will actually refuse the customer, not a fourth guess.
+   */
+  quotaByOrg: Record<string, number | null | undefined> = {},
+  defaultQuota = DEFAULT_VECTOR_QUOTA
 ): OrgRag[] {
   const connByCollection = new Map<string, string[]>();
   for (const c of connectors) {
@@ -157,6 +169,12 @@ export function rollupByOrg(
 
   const out: OrgRag[] = [];
   for (const [orgId, { cols, conns }] of byOrg) {
+    // `Number(null)` is 0, NOT NaN — so coercing first would turn "no override"
+    // (the normal case for every org) into a quota of ZERO and report every
+    // customer as full. Caught live 2026-08-04. Check for absence FIRST.
+    const raw = quotaByOrg[orgId];
+    const n = raw === null || raw === undefined ? NaN : Number(raw);
+    const quota = Number.isFinite(n) && n >= 0 ? n : defaultQuota;
     const views: CollectionView[] = cols.map((c) => {
       const counted = Number(c.row_count) || 0;
       const act = actual ? actual[c.id] ?? 0 : null;

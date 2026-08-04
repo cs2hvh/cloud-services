@@ -25,6 +25,7 @@ import {
   resolveHuggingFaceId,
 } from "@/lib/inference/ft-base-models";
 import { checkHuggingFaceAccess } from "@/lib/inference/hf-access";
+import { isFeatureEnabled } from "@/lib/admin/feature-switches";
 
 const createSchema = z.object({
   name: z
@@ -160,6 +161,19 @@ export async function POST(request: NextRequest) {
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+
+  // Kill switch, checked before any validation or GPU reservation so a refused
+  // job never touches RunPod. Fails OPEN — see lib/admin/feature-switches.ts.
+  if (!(await isFeatureEnabled("ai_finetuning_enabled"))) {
+    return NextResponse.json(
+      {
+        error:
+          "Fine-tuning is temporarily unavailable while we work on the platform. No charge is made for refused requests.",
+        code: "feature_disabled",
+      },
+      { status: 503, headers: { "Retry-After": "300" } }
+    );
+  }
 
   const body = await request.json();
   const parsed = createSchema.safeParse(body);

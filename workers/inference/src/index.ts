@@ -26,6 +26,7 @@ import { agentScopeMiddleware } from "./middleware/agent-scope.ts";
 import { originCheckMiddleware } from "./middleware/origin-check.ts";
 import { spendCheckMiddleware } from "./middleware/spend.ts";
 import { rateLimitMiddleware } from "./middleware/rate-limit.ts";
+import { featureGateMiddleware } from "./middleware/feature-gate.ts";
 import { chatCompletions } from "./routes/chat-completions.ts";
 import { embeddings } from "./routes/embeddings.ts";
 import { listModels } from "./routes/models.ts";
@@ -135,6 +136,11 @@ v1.use("*", agentScopeMiddleware);
 v1.use("*", originCheckMiddleware);
 v1.use("*", spendCheckMiddleware);
 v1.use("*", rateLimitMiddleware);
+// Per-capability kill switches. LAST of the gates on purpose: a request refused
+// here must still have been authenticated and rate-limited, so a disabled
+// capability can't be used as an unmetered probe of which keys are valid. Only
+// spending routes are gated — see middleware/feature-gate.ts.
+v1.use("*", featureGateMiddleware);
 
 // Core inference surface — OpenAI compatible
 v1.post("/chat/completions", chatCompletions);

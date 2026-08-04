@@ -31,6 +31,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios/axios";
+import CronHealthPanel from "./cron-health";
+import FeatureSwitchesPanel from "./feature-switches";
 import type { CapabilityHealth, PlatformSummary, Verdict } from "@/lib/admin/feature-health";
 
 interface Payload {
@@ -287,6 +289,12 @@ export default function InferenceOverviewAdmin() {
           </p>
         </>
       )}
+
+      {/* The two things the capability table above structurally cannot show.
+          Both load independently, so a failure in either still leaves the rest
+          of the page usable. */}
+      <CronHealthPanel />
+      <FeatureSwitchesPanel />
     </div>
   );
 }

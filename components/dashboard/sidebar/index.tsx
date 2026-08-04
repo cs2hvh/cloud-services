@@ -21,6 +21,7 @@ import {
     ChevronDown,
     FileCode,
     FlaskConical,
+    ListChecks,
     LogOut,
     Menu,
     Plug,
@@ -445,32 +446,49 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         label: "Admin Console",
         icon: Settings,
         href: "/dashboard/admin",
+        // Grouped into sections on 2026-08-04: the AI platform had grown to ten
+        // entries interleaved with infrastructure, and two of them ("AI Agents"
+        // and "Inference Agents") read as near-duplicates while pointing at
+        // different products. Sections make the split visible without removing
+        // anything — the retirement question for the legacy page is still open.
         children: [
+            { kind: "section", label: "Infrastructure" },
             { label: "Proxmox Hosts", href: "/dashboard/admin/hosts", icon: Network, matchPrefix: true },
             { label: "All Servers", href: "/dashboard/admin/servers", icon: Server, matchPrefix: true },
-            { label: "Users", href: "/dashboard/admin/users", icon: Users, matchPrefix: true },
-            { label: "Support", href: "/dashboard/admin/support", icon: HelpCircle, matchPrefix: true },
             { label: "Databases", href: "/dashboard/admin/databases", icon: Database, matchPrefix: true },
             { label: "Object Storage", href: "/dashboard/admin/object-storage", icon: Archive, matchPrefix: true },
             { label: "DDoS", href: "/dashboard/admin/network-ddos", icon: Shield, matchPrefix: true },
             { label: "Kubernetes", href: "/dashboard/admin/kubernetes", icon: KubernetesIcon, matchPrefix: true },
             { label: "Cluster Monitor", href: "/dashboard/admin/cluster-monitor", icon: Activity, matchPrefix: true },
             { label: "Platform Apps", href: "/dashboard/admin/platform-apps", icon: Rocket, matchPrefix: true },
-            { label: "Plan Pricing", href: "/dashboard/admin/pricing/plans", icon: BadgeDollarSign, matchPrefix: true },
             { label: "GPU Stock", href: "/dashboard/admin/gpu", icon: GpuCloudIcon, matchPrefix: true },
+            { label: "Domains", href: "/dashboard/admin/domains", icon: Globe, matchPrefix: true },
+
+            // AI Overview first: it is the front door — what customers use, what
+            // is broken, which sweeps are running, and the kill switches.
+            { kind: "section", label: "AI Platform" },
+            { label: "AI Overview", href: "/dashboard/admin/inference-overview", icon: Activity, matchPrefix: true },
+            { label: "AI Jobs", href: "/dashboard/admin/inference-jobs", icon: ListChecks, matchPrefix: true },
+            { label: "Worker Fleet", href: "/dashboard/admin/inference-workers", icon: Server, matchPrefix: true },
+            { label: "Agents", href: "/dashboard/admin/inference-agents", icon: Bot, matchPrefix: true },
+            { label: "Vector Storage", href: "/dashboard/admin/inference-rag", icon: Database, matchPrefix: true },
+            { label: "Model Pricing", href: "/dashboard/admin/inference-pricing", icon: BadgeDollarSign, matchPrefix: true },
+            { label: "AI Customers", href: "/dashboard/admin/inference-orgs", icon: Users, matchPrefix: true },
+            { label: "AI Usage", href: "/dashboard/admin/inference-usage", icon: Activity, matchPrefix: true },
+            { label: "Observability", href: "/dashboard/admin/inference-traces", icon: Activity, matchPrefix: true },
+            { label: "AI Audit", href: "/dashboard/admin/inference-audit", icon: ShieldCheck, matchPrefix: true },
+            // Reads the retired `agents` schema (last write 2026-06-04), NOT the
+            // live agentcore platform above. Labelled so nobody debugs a customer
+            // issue on the wrong screen; kept because removing a working page is
+            // a product call (doc 21 §4).
+            { label: "AI Agents (legacy)", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
+
+            { kind: "section", label: "Business" },
+            { label: "Users", href: "/dashboard/admin/users", icon: Users, matchPrefix: true },
+            { label: "Support", href: "/dashboard/admin/support", icon: HelpCircle, matchPrefix: true },
+            { label: "Plan Pricing", href: "/dashboard/admin/pricing/plans", icon: BadgeDollarSign, matchPrefix: true },
             { label: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket, matchPrefix: true },
             { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
-            { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
-            { label: "AI Overview", href: "/dashboard/admin/inference-overview", icon: Activity, matchPrefix: true },
-            { label: "AI Model Pricing", href: "/dashboard/admin/inference-pricing", icon: BadgeDollarSign, matchPrefix: true },
-            { label: "Inference Agents", href: "/dashboard/admin/inference-agents", icon: Bot, matchPrefix: true },
-            { label: "Inference Orgs", href: "/dashboard/admin/inference-orgs", icon: Users, matchPrefix: true },
-            { label: "Inference Usage", href: "/dashboard/admin/inference-usage", icon: Activity, matchPrefix: true },
-            { label: "Worker Fleet", href: "/dashboard/admin/inference-workers", icon: Server, matchPrefix: true },
-            { label: "Vector Storage", href: "/dashboard/admin/inference-rag", icon: Database, matchPrefix: true },
-            { label: "Observability", href: "/dashboard/admin/inference-traces", icon: Activity, matchPrefix: true },
-            { label: "Inference Audit", href: "/dashboard/admin/inference-audit", icon: ShieldCheck, matchPrefix: true },
-            { label: "Domains", href: "/dashboard/admin/domains", icon: Globe, matchPrefix: true },
         ],
     };
 

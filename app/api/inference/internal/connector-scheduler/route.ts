@@ -12,16 +12,25 @@
  * Doc: nextstespsAI/20-rag-connectors-and-data-runner.md (§7, Slice C2).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/inference/cron-heartbeat";
+import { isFeatureEnabled } from "@/lib/admin/feature-switches";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function POST(request: NextRequest) {
+async function sweep(request: NextRequest) {
   const token = request.headers.get("x-ahura-internal-token");
   const expected = process.env.BATCH_PROCESSOR_TOKEN;
   if (!expected || !token || token !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Kill switch. Checked HERE rather than by not firing the cron, so the sweep
+  // still heartbeats while syncs are paused — a paused capability must not look
+  // like a dead watchdog on the admin's cron page.
+  if (!(await isFeatureEnabled("ai_connector_sync_enabled"))) {
+    return NextResponse.json({ enqueued: 0, skipped: "connector syncs are disabled by an admin switch" });
   }
 
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -53,4 +62,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Scan failed" }, { status: 500 });
   }
   return NextResponse.json({ enqueued: (neverSynced.data?.length ?? 0) + (pastDue.data?.length ?? 0) });
+}
+
+// Heartbeat wrapper. Without it this sweep's only trace is a Cloudflare log line,
+// which no admin page can read — see lib/inference/cron-heartbeat.ts.
+export async function POST(request: NextRequest) {
+  return withCronRun("connector-scheduler", () => sweep(request));
 }

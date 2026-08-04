@@ -45,7 +45,10 @@ import { isValidUuid } from "../lib/on-behalf-of.ts";
 import { makeSupabase, enqueueAudit, readJson } from "../lib/route-helpers.ts";
 import { rerankCandidates } from "../lib/rag-rerank.ts";
 
-const MAX_VECTORS_PER_ORG = 1_000_000;
+/** Ceiling for an org with no explicit override — mirrors DEFAULT_VECTOR_QUOTA
+ *  in lib/inference/vector-quota.ts. Since 2026-08-04 an org can carry its own
+ *  `orgs.vector_quota`; this is only the fallback. */
+const DEFAULT_VECTOR_QUOTA = 1_000_000;
 
 /** Server-side auto-embed via OpenRouter (platform key) — Workers-native
  *  port of lib/inference/embeddings.ts's embedText: same upstream, same
@@ -75,10 +78,24 @@ export async function embedText(env: Env, text: string, modelId: string): Promis
  *  lib/inference/vector-quota.ts (pure DB read + comparison, no billing
  *  system involved — safe to duplicate, unlike the reservation flow above). */
 async function checkVectorQuota(supabase: SupabaseClient, orgId: string, incomingRowCount: number): Promise<string | null> {
-  const { data } = await supabase.schema("inference").from("vector_collections").select("row_count").eq("org_id", orgId);
-  const current = (data ?? []).reduce((sum, c) => sum + (Number((c as { row_count: number | null }).row_count) || 0), 0);
-  if (current + incomingRowCount > MAX_VECTORS_PER_ORG) {
-    return `Vector storage limit reached (${MAX_VECTORS_PER_ORG.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`;
+  const [collections, org] = await Promise.all([
+    supabase.schema("inference").from("vector_collections").select("row_count").eq("org_id", orgId),
+    supabase.schema("inference").from("orgs").select("vector_quota").eq("id", orgId).maybeSingle(),
+  ]);
+  // Any doubt about the override — missing row, unreadable column, nonsense
+  // value — falls back to the default. Refusing writes because the QUOTA
+  // lookup failed would turn a DB hiccup into apparent data loss.
+  //
+  // NULL IS CHECKED BEFORE COERCION, deliberately: `Number(null)` is 0, not NaN,
+  // so coercing first turned "no override" — the normal case for every org —
+  // into a quota of ZERO, which would have refused every vector write on the
+  // platform. Caught by live testing 2026-08-04, not by any unit test.
+  const raw = (org.data as { vector_quota: number | null } | null)?.vector_quota;
+  const override = raw === null || raw === undefined ? NaN : Number(raw);
+  const quota = Number.isFinite(override) && override >= 0 ? override : DEFAULT_VECTOR_QUOTA;
+  const current = (collections.data ?? []).reduce((sum, c) => sum + (Number((c as { row_count: number | null }).row_count) || 0), 0);
+  if (current + incomingRowCount > quota) {
+    return `Vector storage limit reached (${quota.toLocaleString()} vectors per org). Delete unused vectors, or contact support to raise your limit.`;
   }
   return null;
 }
