@@ -86,6 +86,38 @@ export async function GET(req: NextRequest) {
 
   const rows = data ?? [];
 
+  /**
+   * Counts across the WHOLE table, not the current filter.
+   *
+   * The summary cards used to be computed from the rows on screen, which made
+   * "Failed: 0" appear whenever the filter was "queued & running" — always, by
+   * construction. A card that reads zero because of the filter, not because
+   * nothing failed, is worse than no card. Exact head counts, so nothing is
+   * inferred from a capped page.
+   */
+  const countWhere = async (statuses: string[]) => {
+    let q = supabase
+      .schema(spec.schema)
+      .from(spec.table)
+      .select("*", { count: "exact", head: true })
+      .in("status", statuses);
+    if (orgId) q = q.eq("org_id", orgId);
+    const res = await q;
+    return res.error ? null : (res.count ?? 0);
+  };
+  const [queued, inFlight, done, failedCount, totalAll] = await Promise.all([
+    countWhere(spec.claimable),
+    countWhere(spec.in_flight),
+    countWhere(spec.done),
+    countWhere(spec.failed),
+    (async () => {
+      let q = supabase.schema(spec.schema).from(spec.table).select("*", { count: "exact", head: true });
+      if (orgId) q = q.eq("org_id", orgId);
+      const res = await q;
+      return res.error ? null : (res.count ?? 0);
+    })(),
+  ]);
+
   // Resolve org names so the table is not a wall of UUIDs. One extra query, on
   // the ids actually on this page.
   const orgIds = [...new Set(rows.map((r) => r.org_id).filter((v): v is string => typeof v === "string"))];
@@ -114,8 +146,24 @@ export async function GET(req: NextRequest) {
       detail_columns: spec.jobs.detail_columns,
     },
     services: RUNNERS.map((r) => ({ service: r.service, label: r.label })),
-    page: { index: page, size: pageSize, total: count ?? null, has_more: (count ?? 0) > (page + 1) * pageSize },
+    page: {
+      index: page,
+      size: pageSize,
+      /** Rows matching the CURRENT filter — what pagination walks. */
+      total: count ?? null,
+      has_more: (count ?? 0) > (page + 1) * pageSize,
+      /** 1-based range of this page, so the UI never recomputes it. */
+      from: (count ?? 0) === 0 ? 0 : page * pageSize + 1,
+      to: Math.min((page + 1) * pageSize, count ?? 0),
+    },
     filters: { state, org_id: orgId },
+    /** The whole table, regardless of filter. Drives the cards. */
+    totals: { queued, in_flight: inFlight, completed: done, failed: failedCount, all: totalAll },
+    /**
+     * `stuck` cannot be an exact database count — it depends on heartbeat age,
+     * which PostgREST cannot express — so it is measured over THIS PAGE only and
+     * says so, rather than implying it covers the table.
+     */
     summary: summarizeJobs(spec, jobs),
     jobs,
   });

@@ -121,13 +121,16 @@ export default function CronHealthPanel() {
           <Table>
             <TableHeader className="[&_tr]:border-white/10">
               <TableRow>
-                <TableHead className="min-w-[180px]">Job</TableHead>
+                {/* Six columns, not seven. "What happens if it stops" is static
+                    context and moved under the job name; the LIVE diagnosis —
+                    the thing an operator acts on — was the column being pushed
+                    off the right edge. */}
+                <TableHead className="min-w-[300px]">Job</TableHead>
                 <TableHead className="min-w-[110px]">State</TableHead>
                 <TableHead className="text-right">Last run</TableHead>
                 <TableHead className="text-right">Every</TableHead>
                 <TableHead className="text-right">Runs</TableHead>
-                <TableHead className="min-w-[260px]">What happens if it stops</TableHead>
-                <TableHead className="min-w-[240px]">Detail</TableHead>
+                <TableHead className="min-w-[320px]">What&apos;s happening</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -135,26 +138,30 @@ export default function CronHealthPanel() {
                 const v = VERDICT[job.verdict];
                 return (
                   <TableRow key={job.job} className="border-white/5 hover:bg-white/[0.03]">
-                    <TableCell>
+                    <TableCell className="align-top">
                       <p className="font-medium text-white">{job.label}</p>
                       <p className="mt-0.5 font-mono text-[11px] text-neutral-500">{job.path}</p>
+                      <p className="mt-1 max-w-[300px] whitespace-normal text-xs text-neutral-500">
+                        If it stops: {job.protects}
+                      </p>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium", v.tone)}>
                         <v.icon className="h-3 w-3" />
                         {v.label}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-neutral-300">{lastRun(job)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-neutral-500">{job.interval_minutes}m</TableCell>
-                    <TableCell className="text-right tabular-nums text-neutral-500">
+                    <TableCell className="text-right align-top tabular-nums text-neutral-300">{lastRun(job)}</TableCell>
+                    <TableCell className="text-right align-top tabular-nums text-neutral-500">{job.interval_minutes}m</TableCell>
+                    <TableCell className="text-right align-top tabular-nums text-neutral-500">
                       {job.runs_total}
                       {job.consecutive_failures > 0 && (
                         <span className="text-red-400"> · {job.consecutive_failures} failing</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-neutral-400">{job.protects}</TableCell>
-                    <TableCell className="text-xs text-neutral-400">{job.detail}</TableCell>
+                    <TableCell className="max-w-[320px] whitespace-normal align-top text-xs text-neutral-400">
+                      {job.detail}
+                    </TableCell>
                   </TableRow>
                 );
               })}

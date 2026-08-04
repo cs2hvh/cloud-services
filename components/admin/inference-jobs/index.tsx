@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Info,
   ListChecks,
@@ -59,8 +61,9 @@ interface Payload {
     detail_columns: string[];
   };
   services: Array<{ service: string; label: string }>;
-  page: { index: number; size: number; total: number | null; has_more: boolean };
+  page: { index: number; size: number; total: number | null; has_more: boolean; from: number; to: number };
   filters: { state: string; org_id: string | null };
+  totals: { queued: number | null; in_flight: number | null; completed: number | null; failed: number | null; all: number | null };
   summary: JobsSummary;
   jobs: JobView[];
 }
@@ -97,13 +100,14 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
   const [loading, setLoading] = useState(true);
   const [service, setService] = useState(initialService || "media");
   const [state, setState] = useState("open");
+  const [pageIndex, setPageIndex] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [working, setWorking] = useState(false);
 
-  const load = useCallback(async (svc: string, st: string) => {
+  const load = useCallback(async (svc: string, st: string, pg: number) => {
     setLoading(true);
     try {
-      const res = await api.get(`/admin/inference/jobs?service=${svc}&state=${st}`);
+      const res = await api.get(`/admin/inference/jobs?service=${svc}&state=${st}&page=${pg}`);
       setData(res.data);
     } catch {
       toast.error("Failed to load jobs");
@@ -113,8 +117,13 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
   }, []);
 
   useEffect(() => {
-    void load(service, state);
-  }, [load, service, state]);
+    void load(service, state, pageIndex);
+  }, [load, service, state, pageIndex]);
+
+  /** Changing what is listed must return to page 1, or page 4 of the old list
+   *  becomes page 4 of the new one — usually empty, and reads as "no jobs". */
+  const changeService = (v: string) => { setPageIndex(0); setService(v); };
+  const changeState = (v: string) => { setPageIndex(0); setState(v); };
 
   const apply = async () => {
     if (!pending) return;
@@ -132,7 +141,7 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
         res.data.note ? { description: res.data.note, duration: 10_000 } : undefined
       );
       setPending(null);
-      await load(service, state);
+      await load(service, state, pageIndex);
     } catch (err) {
       const message =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -161,7 +170,7 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={service} onValueChange={setService}>
+          <Select value={service} onValueChange={changeService}>
             <SelectTrigger className="h-9 w-[200px] border-white/10 bg-black/40">
               <SelectValue />
             </SelectTrigger>
@@ -173,7 +182,7 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
               ))}
             </SelectContent>
           </Select>
-          <Select value={state} onValueChange={setState}>
+          <Select value={state} onValueChange={changeState}>
             <SelectTrigger className="h-9 w-[180px] border-white/10 bg-black/40">
               <SelectValue />
             </SelectTrigger>
@@ -189,7 +198,7 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
             variant="outline"
             size="sm"
             className="border-white/10"
-            onClick={() => void load(service, state)}
+            onClick={() => void load(service, state, pageIndex)}
             disabled={loading}
           >
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loading && "animate-spin")} />
@@ -213,23 +222,45 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
         </div>
       ) : (
         <>
+          {/* Counts are for the WHOLE table, never the current filter. Computing
+              them from the rows on screen made "Failed: 0" appear whenever the
+              filter was "queued & running" — always, by construction. Clicking a
+              card filters to it, so a number is also the way to reach the rows. */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Queued", value: s.queued, tone: "text-white", hint: "waiting to be claimed" },
-              { label: "Running", value: s.in_flight, tone: "text-blue-400", hint: "a worker holds these" },
+              { label: "Queued", value: data.totals.queued, tone: "text-white", hint: "waiting to be claimed", jump: "open" },
+              { label: "Running", value: data.totals.in_flight, tone: "text-blue-400", hint: "a worker holds these", jump: "open" },
               {
                 label: "Stuck",
                 value: s.stuck,
                 tone: s.stuck > 0 ? "text-red-400" : "text-emerald-400",
-                hint: "running, no heartbeat for 30m+",
+                // Heartbeat age is not expressible as a database count, so this
+                // one is honest about covering only the rows on screen.
+                hint: "no heartbeat 30m+ · this page only",
+                jump: null,
               },
-              { label: "Failed", value: s.failed, tone: s.failed > 0 ? "text-amber-400" : "text-neutral-400", hint: "in this view" },
+              {
+                label: "Failed",
+                value: data.totals.failed,
+                tone: (data.totals.failed ?? 0) > 0 ? "text-amber-400" : "text-neutral-400",
+                hint: "all time",
+                jump: "failed",
+              },
             ].map((card) => (
-              <div key={card.label} className="rounded-2xl border border-white/10 bg-black/40 p-5 backdrop-blur-xl">
+              <button
+                key={card.label}
+                type="button"
+                disabled={!card.jump || card.value === 0}
+                onClick={() => card.jump && changeState(card.jump)}
+                className={cn(
+                  "rounded-2xl border border-white/10 bg-black/40 p-5 text-left backdrop-blur-xl transition-colors",
+                  card.jump && card.value !== 0 ? "hover:border-white/25 hover:bg-white/[0.04]" : "cursor-default"
+                )}
+              >
                 <p className="text-xs text-neutral-400">{card.label}</p>
-                <p className={cn("mt-1 text-2xl font-semibold tabular-nums", card.tone)}>{card.value}</p>
+                <p className={cn("mt-1 text-2xl font-semibold tabular-nums", card.tone)}>{card.value ?? "—"}</p>
                 <p className="mt-0.5 text-xs text-neutral-500">{card.hint}</p>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -266,14 +297,35 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
                       </TableHead>
                     ))}
                     <TableHead className="min-w-[220px]">Error</TableHead>
-                    <TableHead className="min-w-[170px] text-right">Actions</TableHead>
+                    {/* Pinned right. agent-runner declares seven detail columns,
+                        which pushed Actions off the edge entirely — the operator
+                        could see a stuck job and not reach the button. */}
+                    <TableHead className="sticky right-0 z-10 min-w-[170px] bg-neutral-950 text-right shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.9)]">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.jobs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6 + svc.detail_columns.length} className="py-12 text-center text-sm text-neutral-400">
-                        No {STATE_LABELS[state].toLowerCase()} jobs for {svc.label.toLowerCase()}.
+                      <TableCell colSpan={6 + svc.detail_columns.length} className="py-12 text-center">
+                        <p className="text-sm text-neutral-300">
+                          No {STATE_LABELS[state].toLowerCase()} jobs for {svc.label.toLowerCase()}.
+                        </p>
+                        {/* An empty page with 330 rows one dropdown away reads as
+                            "this feature is broken". Say where they are, and go. */}
+                        {state !== "all" && (data.totals.all ?? 0) > 0 && (
+                          <p className="mt-2 text-sm text-neutral-400">
+                            {data.totals.all} job(s) exist in other states.{" "}
+                            <button
+                              type="button"
+                              onClick={() => changeState("all")}
+                              className="text-purple-300 underline underline-offset-2 hover:text-purple-200"
+                            >
+                              Show all
+                            </button>
+                          </p>
+                        )}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -302,39 +354,73 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-neutral-400">{age(job.age_ms)}</TableCell>
                         {svc.detail_columns.map((c) => (
-                          <TableCell key={c} className="max-w-[200px] truncate text-xs text-neutral-400">
+                          <TableCell key={c} className="max-w-[200px] truncate text-xs text-neutral-400" title={cell(job.details[c])}>
                             {cell(job.details[c])}
                           </TableCell>
                         ))}
+                        {/* Wraps rather than clipping. This is the one column an
+                            operator is actually reading when a job failed, and it
+                            was being cut off under the pinned Actions column —
+                            "Pod p…", "Coul…". Two lines inline, the rest on hover. */}
                         <TableCell className="max-w-[280px] text-xs text-neutral-400">
-                          {job.error ? <span className="text-amber-300/90">{job.error}</span> : "—"}
+                          {job.error ? (
+                            <span
+                              className="line-clamp-2 whitespace-normal break-words text-amber-300/90"
+                              title={job.error}
+                            >
+                              {job.error}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {(["retry", "cancel"] as JobAction[]).map((action) => {
-                              const a = job.actions[action];
-                              const Icon = action === "retry" ? RotateCcw : Ban;
+                        <TableCell className="sticky right-0 z-10 bg-neutral-950 text-right shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.9)]">
+                          {/* Only ACTIONABLE buttons are rendered. Showing both
+                              always meant 175 of 200 controls on a page were
+                              dead — half-dimmed but still drawing the eye — and
+                              the handful of rows an operator could act on were
+                              lost in them. A row with nothing to do shows a dash
+                              carrying the reason, so "why not" is still one hover
+                              away. */}
+                          {(() => {
+                            const available = (["retry", "cancel"] as JobAction[]).filter(
+                              (a) => job.actions[a].allowed
+                            );
+                            if (available.length === 0) {
+                              const why = [job.actions.retry.reason, job.actions.cancel.reason]
+                                .filter(Boolean)
+                                .join(" · ");
                               return (
-                                <Button
-                                  key={action}
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={!a.allowed}
-                                  // A refused action explains itself on hover
-                                  // rather than being an inert grey box.
-                                  title={a.reason ?? a.warning ?? undefined}
-                                  className={cn(
-                                    "h-7 border-white/10 px-2 text-xs",
-                                    action === "cancel" && a.allowed && "text-red-300 hover:text-red-200"
-                                  )}
-                                  onClick={() => setPending({ job, action })}
-                                >
-                                  <Icon className="mr-1 h-3 w-3" />
-                                  {action === "retry" ? "Retry" : "Cancel"}
-                                </Button>
+                                <span className="cursor-help text-xs text-neutral-600" title={why || undefined}>
+                                  —
+                                </span>
                               );
-                            })}
-                          </div>
+                            }
+                            return (
+                              <div className="flex items-center justify-end gap-1.5">
+                                {available.map((action) => {
+                                  const a = job.actions[action];
+                                  const Icon = action === "retry" ? RotateCcw : Ban;
+                                  return (
+                                    <Button
+                                      key={action}
+                                      size="sm"
+                                      variant="outline"
+                                      title={a.warning ?? undefined}
+                                      className={cn(
+                                        "h-7 border-white/10 px-2 text-xs",
+                                        action === "cancel" && "text-red-300 hover:text-red-200"
+                                      )}
+                                      onClick={() => setPending({ job, action })}
+                                    >
+                                      <Icon className="mr-1 h-3 w-3" />
+                                      {action === "retry" ? "Retry" : "Cancel"}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))
@@ -344,11 +430,44 @@ export default function InferenceJobsAdmin({ initialService }: { initialService?
             </div>
           </div>
 
-          <p className="text-xs text-neutral-500">
-            Showing {data.jobs.length} of {data.page.total ?? "?"} {STATE_LABELS[state].toLowerCase()} job(s).
-            {data.page.has_more && " More exist than fit on this page."} A job is “stuck” when a worker
-            claimed it and stopped sending heartbeats for over 30 minutes.
-          </p>
+          {/* Pagination. The first version printed "More exist than fit on this
+              page" and stopped there — a dead end that hid 230 of 330 agent runs
+              with no way to reach them. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-neutral-500">
+              {data.page.total === 0
+                ? `No ${STATE_LABELS[state].toLowerCase()} jobs.`
+                : `Showing ${data.page.from}–${data.page.to} of ${data.page.total ?? "?"} ${STATE_LABELS[state].toLowerCase()} job(s).`}{" "}
+              A job is “stuck” when a worker claimed it and stopped sending heartbeats for over 30 minutes.
+            </p>
+            {(data.page.index > 0 || data.page.has_more) && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-white/10 text-xs"
+                  disabled={data.page.index === 0 || loading}
+                  onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+                  Previous
+                </Button>
+                <span className="text-xs tabular-nums text-neutral-400">
+                  Page {data.page.index + 1} of {Math.max(1, Math.ceil((data.page.total ?? 0) / data.page.size))}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-white/10 text-xs"
+                  disabled={!data.page.has_more || loading}
+                  onClick={() => setPageIndex((p) => p + 1)}
+                >
+                  Next
+                  <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
 
