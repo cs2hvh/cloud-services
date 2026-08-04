@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { inferenceAdminClient } from "@/lib/admin/inference-client";
+import { readAllPaged } from "@/lib/admin/paged-read";
 import { actionCounts, summarize, type AuditRow } from "@/lib/admin/audit-view";
 
 export const dynamic = "force-dynamic";
@@ -25,17 +26,21 @@ export async function GET(req: NextRequest) {
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
   const supabase = inferenceAdminClient();
-  const { data, error } = await supabase
-    .schema("inference")
-    .from("audit_log")
-    .select("id, org_id, actor_user_id, actor_api_key_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(ROW_LIMIT)
-    .returns<AuditRow[]>();
+  const { rows, truncated, error } = await readAllPaged<AuditRow>(
+    (from, to) =>
+      supabase
+        .schema("inference")
+        .from("audit_log")
+        .select("id, org_id, actor_user_id, actor_api_key_id, action, target_type, target_id, metadata, ip_address, user_agent, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+        .returns<AuditRow[]>(),
+    { maxRows: ROW_LIMIT }
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const rows = data ?? [];
+  if (error) return NextResponse.json({ error }, { status: 500 });
+  
 
   // Resolve actors and orgs so the table reads as names, not UUIDs. Both are
   // best-effort: a deleted user or org must not blank out the row.
@@ -52,7 +57,10 @@ export async function GET(req: NextRequest) {
   const orgName = new Map((orgsRes.data ?? []).map((o) => [o.id, o.name ?? o.slug]));
 
   return NextResponse.json({
-    window: { days, rows: rows.length, limit: ROW_LIMIT, truncated: rows.length >= ROW_LIMIT },
+    // `truncated` comes from the pager, which knows whether ROW_LIMIT was
+    // genuinely reached. The old `rows.length >= ROW_LIMIT` could never fire:
+    // PostgREST caps at 1,000, so the length never reached 2,000.
+    window: { days, rows: rows.length, limit: ROW_LIMIT, truncated },
     summary: summarize(rows),
     actions: actionCounts(rows),
     rows: rows.map((row) => ({

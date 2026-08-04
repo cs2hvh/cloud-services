@@ -1051,3 +1051,79 @@ auth, never at the gate. Flipping back on restored service.
    serves ONE more request while that refresh runs behind it. Measured, then
    corrected in the runbook and in the admin UI, which had been promising a
    faster flip than the system delivers.
+
+### 11.10 Indexes, and a wrong assumption they exposed (2026-08-04)
+
+**The finding.** Every index on the AI tables was built for the CUSTOMER path and
+leads with `org_id` — `idx_usage_org_time`, `idx_trace_spans_org_time`,
+`idx_agentcore_runs_org`. The admin console asks the opposite question
+("everything on the platform, in this window, newest first"), which a
+leading-`org_id` index cannot serve. Those reads had no usable index at all.
+
+**Scoped by measurement, not instinct.** Row counts first: usage 2,042,
+trace_spans 1,579, agentcore.runs 330 — then a cliff to media_jobs 33, finetunes
+27, eval_runs 14, connectors 2, deployments 0. Indexing a 30-row table is write
+overhead for a scan Postgres does in microseconds, and the planner would ignore
+it. So only the tables that grow with traffic were indexed, and the migration
+says so rather than leaving the omission to look like an oversight.
+
+**The assumption that was wrong.** 20260804000002 excluded `inference.audit_log`
+because it is partitioned by `created_at`, reasoning that partition pruning
+already serves the query. Post-migration testing produced a failing insert naming
+the partition `usage_y2026m08` — which revealed that **`usage` and `trace_spans`
+are partitioned exactly the same way**. Partitioning could not be a reason to
+treat audit_log differently; and pruning narrows the FILTER, while these paged
+reads are bottlenecked on the ORDER BY. On a partitioned table the index buys a
+MergeAppend over already-ordered partitions instead of Append + Sort, plus early
+termination when paging. 20260804000003 adds the missing index and records the
+correction; the applied migration carries a pointer to it, comments only, no DDL
+touched.
+
+**Verified live (24 checks).** The audit read matches an independent
+page-through (279 rows in a 30-day window, 400 across a 365-day one), a year-long
+window spanning **four partitions** comes back correctly ordered, raw inserts
+still work, and a real admin mutation — a feature-switch flip — still wrote its
+audit row with the operator's reason, proving the index did not break the write
+path. usage, traces and jobs all still match ground truth exactly.
+
+**What is NOT verified.** Whether the planner actually chooses these indexes.
+That needs `EXPLAIN` and a direct Postgres connection this environment does not
+have. At 330–2,000 rows a sequential scan may well remain the correct plan — the
+indexes exist for when these tables are two orders of magnitude larger, which is
+also why adding them now was cheap. To confirm:
+
+```sql
+select indexname, tablename from pg_indexes
+where indexname in ('idx_usage_created_at','idx_trace_spans_created_at',
+                    'idx_agentcore_runs_created_at','idx_audit_log_created_at');
+
+explain (analyze, buffers)
+select id, created_at from agentcore.runs order by created_at desc limit 100;
+```
+
+### 11.11 The silent truncation this work uncovered
+
+Measuring for the indexes turned up a live bug worth more than the indexes.
+`.limit(20000)` on the usage query returned exactly **1,000 rows**: PostgREST
+caps a response without erroring, and the route's own check was
+`rows.length >= 20000`, which can never fire.
+
+**The AI Usage page was under-reporting platform spend by 34%** — 1,090 cents
+against 1,662 actual — while reporting `truncated: false`. Total spend, margin,
+by-model, by-org and by-day were all computed from a short array.
+
+Four reads in this programme had it, now fixed behind one `lib/admin/paged-read.ts`
+(9 tests) rather than four patches:
+
+| Route | Was | Now |
+|---|---|---|
+| usage | 1,000 of 1,572 rows | 1,572 — spend matches ground truth to the cent |
+| orgs (spend roll-up) | 1,000 rows | 2,042 |
+| audit | capped at 1,000, could never report it | pages to its real 2,000 bound |
+| workers | backstop at 5,000 that could never fire | real backstop + `rows_truncated` |
+
+Two were already right and were left alone: traces pages deliberately, and the
+overview sets its sample to exactly 1,000 so its `>= ORG_SAMPLE` check genuinely
+detects the cap. The rule is now stated in one place — never `.limit(n)` with
+n > 1,000 when you mean to read them all; page, and report truncation from the
+bound you chose, never from the length of what came back.

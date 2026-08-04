@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { inferenceAdminClient } from "@/lib/admin/inference-client";
 import { RUNNERS, probeTargetFor, type RunnerSpec } from "@/lib/admin/runner-registry";
+import { readAllPaged } from "@/lib/admin/paged-read";
 import {
   RECENT_HOURS,
   STUCK_AFTER_MS,
@@ -111,20 +112,29 @@ export async function GET(req: NextRequest) {
       // would eventually truncate and the page would silently under-report, or
       // miss queued work entirely, with nothing to indicate it.
       const openStatuses = [...spec.claimable, ...spec.in_flight];
-      const { data, error } = await supabase
-        .schema(spec.schema)
-        .from(spec.table)
-        .select(columns)
-        .or(`status.in.(${openStatuses.join(",")}),${spec.time_column}.gte.${recentCutoffIso}`)
-        .limit(MAX_ROWS_PER_RUNNER)
-        .returns<JobRow[]>();
+      // PAGED, not `.limit(MAX_ROWS_PER_RUNNER)`. The backstop below is meant to
+      // surface a runaway queue rather than truncate it silently — but PostgREST
+      // caps a response at 1,000 rows without erroring, so a 5,000-row limit
+      // could never be reached and the "truncated" report could never fire. The
+      // guard was guarding nothing. See lib/admin/paged-read.ts.
+      const { rows, truncated, error } = await readAllPaged<JobRow>(
+        (from, to) =>
+          supabase
+            .schema(spec.schema)
+            .from(spec.table)
+            .select(columns)
+            .or(`status.in.(${openStatuses.join(",")}),${spec.time_column}.gte.${recentCutoffIso}`)
+            .range(from, to)
+            .returns<JobRow[]>(),
+        { maxRows: MAX_ROWS_PER_RUNNER }
+      );
       if (error) {
         // A missing table must not blank the whole page — report the runner as
         // unreadable and carry on with the rest of the fleet.
-        return { spec, snapshot: undefined as QueueSnapshot | undefined, error: error.message };
+        return { spec, snapshot: undefined as QueueSnapshot | undefined, error };
       }
 
-      const snapshot = snapshotOf(spec, data ?? [], now);
+      const snapshot = snapshotOf(spec, rows, now);
 
       // `last_job_activity` must reflect the WHOLE table, not the filtered window
       // — verdictFor uses it to tell "down" from "never deployed", and the UI
@@ -139,7 +149,7 @@ export async function GET(req: NextRequest) {
       const newestAt = newest?.[0]?.[spec.time_column];
       if (typeof newestAt === "string") snapshot.last_job_activity = newestAt;
 
-      return { spec, snapshot, error: null as string | null };
+      return { spec, snapshot, error: null as string | null, truncated };
     })
   );
 
@@ -183,6 +193,8 @@ export async function GET(req: NextRequest) {
          *  about the runner, not a property of this check. */
         probeable: entry ? probeTargetFor(entry.spec, process.env) !== null : false,
         read_error: entry?.error ?? null,
+        /** True only when the real backstop was hit — a genuinely runaway queue. */
+        rows_truncated: entry?.truncated ?? false,
         last_job_activity: entry?.snapshot?.last_job_activity ?? null,
       };
     }),

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { inferenceAdminClient } from "@/lib/admin/inference-client";
 import { actorContext, diffFields, orgLimitsEntry, recordAdminAudit } from "@/lib/admin/audit";
+import { readAllPaged } from "@/lib/admin/paged-read";
 import {
   keyIdleDays,
   keyRisks,
@@ -41,17 +42,37 @@ export async function GET() {
     inf().from("org_members").select("org_id, user_id, role, status, joined_at, invited_at").returns<OrgMemberRow[]>(),
     inf().from("api_keys").select("id, org_id, name, key_prefix, key_last_four, key_tier, is_internal_service, rate_limit_rpm, hard_cap_cents, monthly_budget_cents, allowed_models, revoked_at, expires_at, last_used_at, created_at").returns<ApiKeyRow[]>(),
     inf().from("byok_keys").select("id, org_id, provider, name, key_last_four, is_valid, last_verified_at, last_verify_error").returns<ByokKeyRow[]>(),
-    inf().from("usage").select("org_id, cost_cents, created_at").order("created_at", { ascending: false }).limit(USAGE_LIMIT).returns<UsageRow[]>(),
+    // NOT `.limit(USAGE_LIMIT)` — PostgREST caps a response at 1,000 without
+    // erroring, so every org's spend roll-up was computed from the newest 1,000
+    // rows platform-wide. See lib/admin/paged-read.ts.
+    readAllPaged<UsageRow>(
+      (from, to) =>
+        inf()
+          .from("usage")
+          .select("org_id, cost_cents, created_at")
+          .order("created_at", { ascending: false })
+          .range(from, to)
+          .returns<UsageRow[]>(),
+      { maxRows: USAGE_LIMIT }
+    ),
   ]);
 
-  const firstError = orgsRes.error || membersRes.error || keysRes.error || byokRes.error || usageRes.error;
-  if (firstError) return NextResponse.json({ error: firstError.message }, { status: 500 });
+  // The paged read reports its error as a plain string; the rest are
+  // PostgrestErrors. Normalise so one failing read reports the same way as any
+  // other rather than surfacing "undefined".
+  const firstError =
+    orgsRes.error?.message ||
+    membersRes.error?.message ||
+    keysRes.error?.message ||
+    byokRes.error?.message ||
+    usageRes.error;
+  if (firstError) return NextResponse.json({ error: firstError }, { status: 500 });
 
   const orgs = orgsRes.data ?? [];
   const members = membersRes.data ?? [];
   const keys = keysRes.data ?? [];
   const byok = byokRes.data ?? [];
-  const usage = usageRes.data ?? [];
+  const usage = usageRes.rows;
 
   // Resolve people for display. A missing profile is normal (invited but never
   // signed in), so it must render as the raw id rather than breaking the row.
@@ -67,7 +88,7 @@ export async function GET() {
 
   return NextResponse.json({
     overview: overview(orgs, members, keys),
-    usage_window: { rows: usage.length, limit: USAGE_LIMIT },
+    usage_window: { rows: usage.length, limit: USAGE_LIMIT, truncated: usageRes.truncated },
     orgs: orgs.map((org) => ({
       ...org,
       summary: rollupOrg(org, members, keys, byok, usage, now),
