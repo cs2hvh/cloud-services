@@ -83,11 +83,14 @@ describe('validateRootPassword', () => {
   });
 
   it('accepts exactly 128 characters', () => {
-    expect(validateRootPassword('A1' + 'a'.repeat(126))).toBeNull();
+    // Built from a repeating 4-char cycle rather than one repeated character:
+    // the validator now rejects 4+ identical characters in a row, because the
+    // provider refuses repetitive passwords even when length and classes pass.
+    expect(validateRootPassword('A1' + 'abc1'.repeat(31) + 'ab')).toBeNull();
   });
 
   it('rejects passwords longer than 128 characters', () => {
-    expect(validateRootPassword('A1' + 'a'.repeat(127))).toMatch(/11-128/); // 129 chars
+    expect(validateRootPassword('A1' + 'abc1'.repeat(31) + 'abc')).toMatch(/11-128/); // 129 chars
   });
 
   it('rejects a single-class password (lowercase only)', () => {

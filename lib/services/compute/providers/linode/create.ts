@@ -77,6 +77,14 @@ export function validateRootPassword(pass: string): string | null {
     if (classes < 2) {
         return "Root password must contain at least two of: uppercase letters, lowercase letters, numbers, punctuation.";
     }
+    // The provider runs its own strength check on top of length and character
+    // classes, and rejects repetitive passwords. "Qa1!aaaaaaaaaa" satisfies
+    // every rule above — and the deploy form's own hints — yet is refused
+    // upstream, so the customer only finds out after a full round trip.
+    // Catch the obvious case here instead.
+    if (/(.)\1{3,}/.test(pass)) {
+        return "Root password must not repeat the same character four or more times in a row.";
+    }
     return null;
 }
 

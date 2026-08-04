@@ -244,6 +244,10 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
         lower: PASSWORD_PATTERNS.hasLowerCase.test(rootPass),
         number: PASSWORD_PATTERNS.hasNumbers.test(rootPass),
         special: PASSWORD_PATTERNS.hasSpecialChar.test(rootPass),
+        // The provider rejects repetitive passwords on top of the rules above,
+        // so "Qa1!aaaaaaaaaa" satisfies every other check here and still fails
+        // at deploy time. Surface it while the customer is still typing.
+        noRepeats: rootPass.length > 0 && !/(.)\1{3,}/.test(rootPass),
     };
     const classCount = [
         passwordChecks.upper,
@@ -252,7 +256,10 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
         passwordChecks.special,
     ].filter(Boolean).length;
     const passwordValid =
-        passwordChecks.length && classCount >= 3 && rootPass === rootPassConfirm;
+        passwordChecks.length &&
+        classCount >= 3 &&
+        passwordChecks.noRepeats &&
+        rootPass === rootPassConfirm;
     const formValid =
         !!selectedRegion &&
         !!selectedImage &&
@@ -702,6 +709,7 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
                                 <ReqCheck ok={passwordChecks.lower}>Lowercase letter</ReqCheck>
                                 <ReqCheck ok={passwordChecks.number}>Number</ReqCheck>
                                 <ReqCheck ok={passwordChecks.special}>Special character</ReqCheck>
+                                <ReqCheck ok={passwordChecks.noRepeats}>No 4+ repeats</ReqCheck>
                                 <ReqCheck ok={rootPass.length > 0 && rootPass === rootPassConfirm}>
                                     Passwords match
                                 </ReqCheck>

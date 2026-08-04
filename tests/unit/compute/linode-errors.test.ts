@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitizeProviderMessage } from "@/lib/services/compute/providers/linode/errors";
+import { validateRootPassword } from "@/lib/services/compute/providers/linode/create";
 
 const FALLBACK = "Something went wrong. Please try again.";
 
@@ -51,6 +52,26 @@ describe("sanitizeProviderMessage", () => {
         it("softens not-found", () => {
             expect(sanitizeProviderMessage("Not found", FALLBACK)).toMatch(/no longer available/i);
         });
+
+        it("explains a rejected password without leaking internal field names", () => {
+            // Real upstream text: our validator accepts passwords the provider's
+            // strength check rejects, and the raw reason names API fields.
+            const raw =
+                "root_pass: Password does not meet strength requirement.; Must provide valid root_pass, authorized_keys, or authorized_users";
+            const out = sanitizeProviderMessage(raw, FALLBACK);
+            expect(out).toMatch(/strong enough/i);
+            expect(out).not.toMatch(/authorized_keys|authorized_users|root_pass/);
+        });
+
+        it("hides a reseller billing problem from the customer", () => {
+            const out = sanitizeProviderMessage(
+                "Cannot create new Linodes with an outstanding balance on your account",
+                FALLBACK
+            );
+            expect(out).not.toMatch(/outstanding balance/i);
+            expect(out.toLowerCase()).not.toContain("linode");
+            expect(out).toMatch(/try again later|contact support/i);
+        });
     });
 
     describe("fallback", () => {
@@ -62,5 +83,30 @@ describe("sanitizeProviderMessage", () => {
             const clean = "Root password must be 11-128 characters long.";
             expect(sanitizeProviderMessage(clean, FALLBACK)).toBe(clean);
         });
+    });
+});
+
+describe("validateRootPassword", () => {
+    // The deploy form accepts anything meeting length + character classes, but
+    // the provider also rejects repetitive passwords — so a password the wizard
+    // shows as valid could still fail after a full provisioning round trip.
+    it("rejects a password that repeats one character", () => {
+        expect(validateRootPassword("Qa1!aaaaaaaaaa")).toMatch(/four or more times/i);
+    });
+
+    it.each(["Qa1!Xk29vTbz4mQw", "Str0ng&Passw0rd!x", "aB3$kLm9qRt2"])(
+        "accepts %s",
+        (pass) => {
+            expect(validateRootPassword(pass)).toBeNull();
+        }
+    );
+
+    it("still enforces length and character classes", () => {
+        expect(validateRootPassword("short")).toMatch(/11-128/);
+        expect(validateRootPassword("aaaaaaaaaaaaaa")).toMatch(/at least two of|four or more/i);
+    });
+
+    it("allows up to three repeats, which providers accept", () => {
+        expect(validateRootPassword("Qa1!aaabbbccc")).toBeNull();
     });
 });

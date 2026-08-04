@@ -1079,6 +1079,10 @@ function ActionMenu({
                     setOpen(!open);
                 }}
                 disabled={!!busy}
+                // The list renders as divs, not a table, so there is no row
+                // element to target. Expose a stable hook so tests can open a
+                // specific server's action menu instead of guessing geometry.
+                data-server-menu
                 className="h-7 w-7 text-white/45 hover:bg-white/[0.06] hover:text-white inline-flex items-center justify-center transition-colors disabled:opacity-40 rounded-[4px]"
                 title="Actions"
             >

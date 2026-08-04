@@ -18,6 +18,22 @@ const PROVIDER_NAMES: Array<[RegExp, string]> = [
 /** Known upstream reasons → copy a customer can act on. */
 const TRANSLATIONS: Array<[RegExp, string]> = [
     [
+        // Our own validateRootPassword only enforces length + two character
+        // classes, but the provider additionally runs a strength check, so a
+        // password the wizard accepts ("Qa1!aaaaaaaaaa") can still be refused
+        // here. The raw reason also tacks on internal field names
+        // ("authorized_keys, or authorized_users") that mean nothing to a
+        // customer, so replace the whole thing.
+        /password does not meet strength|password.*strength requirement/i,
+        "That root password isn't strong enough. Use a longer one that mixes upper and lower case, numbers and symbols, and avoid repeated characters.",
+    ],
+    [
+        // Billing problem on the reseller account — nothing the customer can do,
+        // and the raw text would tell them our supplier is unpaid.
+        /outstanding balance/i,
+        "We can't provision new servers right now. Please try again later or contact support.",
+    ],
+    [
         /busy/i,
         "This server is busy with another operation. Please wait for it to finish, then try again.",
     ],

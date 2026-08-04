@@ -93,7 +93,10 @@ async function authenticateUser(browser: any, baseURL: string, authFile: string)
     console.log('[Global Setup] Password filled');
 
     // Find the submit button and click it
-    const submitButton = page.locator('button[type="submit"]:has-text("Sign in")').first();
+    // Match the form's submit button, not its label: the button currently reads
+    // "Log In", and pinning the copy meant a wording change silently broke
+    // authentication for every e2e suite.
+    const submitButton = page.locator('form button[type="submit"]').first();
     await submitButton.waitFor({ state: 'visible', timeout: 10000 });
     console.log('[Global Setup] Submit button found, clicking...');
     

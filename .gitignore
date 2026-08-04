@@ -79,3 +79,6 @@ infra/jenkins/data/
 workers/*/.wrangler/
 workers/*/dist/
 workers/*/test/load-result.json
+
+# Playwright writes this on an e2e auth failure — a debug artifact, not source.
+auth-failure-screenshot.png
