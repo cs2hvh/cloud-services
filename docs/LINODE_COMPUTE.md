@@ -193,6 +193,16 @@ both routes and written to the audit log by the admin route
 - **Label suffix** — Linode labels are unique per account, so every customer
   label gets a random 5-char suffix (`myserver-ab12x`). Customers see their
   chosen name in the dashboard; the suffixed label appears only upstream.
+- **The web console discloses the provider — accepted exception.** The
+  terminal is a direct browser→provider WebSocket, so `next.config.ts` must
+  list `wss://*.webconsole.linode.com` in the CSP `connect-src`, and the
+  connection itself appears in any customer's network tab. The Lish banner
+  also prints `Linode Shell (lish)` and the instance id. Nothing in our code
+  can hide this: it is inherent to not proxying the socket. The rest of the
+  no-provider-naming rule still holds everywhere else (plan labels, error
+  copy, the v1 API, the catalog tables). Closing this gap would mean
+  terminating the WebSocket on our own domain and relaying it — real work,
+  and a deliberate decision rather than an oversight.
 - **Single shared token** — all customers ride one Linode account; a
   compromised `LINODE_TOKEN` exposes the whole fleet. Rotate on staff churn.
 

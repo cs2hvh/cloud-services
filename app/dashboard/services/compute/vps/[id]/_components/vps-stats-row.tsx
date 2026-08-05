@@ -66,15 +66,26 @@ export function VpsStatsRow({
           warn: metrics.cpu > 80,
           live: true,
         },
-        {
-          label: 'Memory',
-          value: formatBytes(metrics.mem_used).split(' ')[0],
-          unit: ' ' + formatBytes(metrics.mem_used).split(' ')[1],
-          bar: metrics.mem_pct,
-          sub: { left: `of ${formatBytes(metrics.mem_total)}`, right: `${metrics.mem_pct.toFixed(0)}%` },
-          warn: metrics.mem_pct > 85,
-          live: true,
-        },
+        // Linode-backed servers never report memory usage. Showing "0 B of
+        // 2.0 GB — 0%" on a working server is actively misleading, so surface
+        // the allocation (which we do know) and say the usage isn't measured.
+        server.provider === 'linode'
+          ? {
+              label: 'Memory',
+              value: formatBytes(metrics.mem_total).split(' ')[0],
+              unit: ' ' + formatBytes(metrics.mem_total).split(' ')[1],
+              sub: { left: 'Allocated · usage not reported' },
+              live: false,
+            }
+          : {
+              label: 'Memory',
+              value: formatBytes(metrics.mem_used).split(' ')[0],
+              unit: ' ' + formatBytes(metrics.mem_used).split(' ')[1],
+              bar: metrics.mem_pct,
+              sub: { left: `of ${formatBytes(metrics.mem_total)}`, right: `${metrics.mem_pct.toFixed(0)}%` },
+              warn: metrics.mem_pct > 85,
+              live: true,
+            },
         {
           label: 'Network',
           value: formatBytes(metrics.net_out).split(' ')[0],

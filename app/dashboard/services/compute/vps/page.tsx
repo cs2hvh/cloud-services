@@ -33,6 +33,7 @@ import { ServerStackIcon } from '@/components/dashboard/compute/vps/section-icon
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
 import { RegionFlag } from '@/components/ui/region-flag';
 import { useConfirm } from '@/components/ui/confirm';
+import { formatPlanSlug } from '@/lib/pricing/plan-display';
 
 // ─── Design tokens ─────────────────────────────────────────────────
 
@@ -781,7 +782,9 @@ function ServerRow({
     const provisioning = server.details?.provisioning;
     const progress = provisioning?.progress ?? 10;
     const memGB = Math.round(server.memory_mb / 1024);
-    const planLabel = server.plan_slug ?? `${server.cpu_cores}c · ${memGB}g`;
+    // plan_slug is namespaced internally ("linode:g6-standard-1") — strip it
+    // before display so the provider name never reaches a customer.
+    const planLabel = formatPlanSlug(server.plan_slug) ?? `${server.cpu_cores}c · ${memGB}g`;
     const status =
         STATUS_META[server.status] ??
         { dot: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.45)', label: server.status };
@@ -811,7 +814,7 @@ function ServerRow({
             const res = await fetch('/api/services/compute/vms/power', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: server.id, action }),
+                body: JSON.stringify({ serverId: server.id, action }),
             });
             const data = await res.json();
             if (!res.ok || !data.ok) throw new Error(data.error || `${action} failed`);
@@ -1076,6 +1079,10 @@ function ActionMenu({
                     setOpen(!open);
                 }}
                 disabled={!!busy}
+                // The list renders as divs, not a table, so there is no row
+                // element to target. Expose a stable hook so tests can open a
+                // specific server's action menu instead of guessing geometry.
+                data-server-menu
                 className="h-7 w-7 text-white/45 hover:bg-white/[0.06] hover:text-white inline-flex items-center justify-center transition-colors disabled:opacity-40 rounded-[4px]"
                 title="Actions"
             >

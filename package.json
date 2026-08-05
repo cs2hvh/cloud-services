@@ -23,7 +23,9 @@
     "test:e2e:platform-apps": "playwright test tests/e2e/platform-apps/",
     "test:e2e:report": "playwright show-report",
     "test:e2e:auth": "npx ts-node tests/e2e/global-setup.ts",
-    "test:e2e:clean": "rimraf test-results playwright-report tests/e2e/.auth"
+    "test:e2e:clean": "rimraf test-results playwright-report tests/e2e/.auth",
+    "test:e2e:compute": "playwright test tests/e2e/compute/compute-api.spec.ts",
+    "test:e2e:compute:full": "cross-env RUN_COMPUTE_LIFECYCLE=1 playwright test tests/e2e/compute/"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",

@@ -22,6 +22,7 @@ import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
 import { AuditLogService } from "@/lib/audit";
 import { validateRootPassword } from "./create";
+import { sanitizeProviderMessage } from "./errors";
 import {
     cancelLinodeBackups,
     enableLinodeBackups,
@@ -34,6 +35,7 @@ import {
     takeLinodeSnapshot,
     waitForLinodeRebuild,
     waitForLinodeResize,
+    waitForLinodeRestore,
 } from "./ops";
 
 /** Non-HTTP failure shape — callers translate into their own envelope. */
@@ -43,7 +45,7 @@ export type LinodeFlowFailure = { ok: false; status: number; message: string };
 export function mapLinodeFlowError(e: unknown, fallback: string): LinodeFlowFailure {
     const le = e as LinodeError;
     if (le?.code === "INVALID" && le.message) {
-        return { ok: false, status: 400, message: le.message };
+        return { ok: false, status: 400, message: sanitizeProviderMessage(le.message, fallback) };
     }
     console.error("[Linode Flow]", fallback, le?.message ?? e);
     return { ok: false, status: 502, message: fallback };
@@ -627,6 +629,92 @@ export async function runLinodeBackupsAction({
         const overwriteFinal = overwrite !== false; // default true (restore in place)
         await restoreLinodeBackup(row, backupId, overwriteFinal);
         audit("backups.restore", { backupId, overwrite: overwriteFinal });
+
+        // A restore takes the disk offline for minutes and leaves the instance
+        // powered OFF. Without this the row keeps its pre-restore status, so
+        // the dashboard shows "running" over a stopped server and the realtime
+        // channel has nothing to broadcast. Mirror the resize/rebuild idiom:
+        // park the row in `provisioning`, then reconcile the real status.
+        const restoreLinodeId = server.linode_id;
+        // Park the row in `provisioning` ONLY when there is an instance to poll.
+        // Without an id the background reconcile below never runs, so setting
+        // it anyway would strand the row in `provisioning` with nothing left to
+        // move it out. (restoreLinodeBackup above already requires the id, so
+        // this is belt-and-braces rather than a reachable path.)
+        const restoreStartedAt = new Date().toISOString();
+        if (restoreLinodeId) {
+            await supabase
+                .from("servers")
+                .update({
+                    status: "provisioning",
+                    details: {
+                        linode: linodeDetails,
+                        provisioning: {
+                            stage: "restoring",
+                            progress: 10,
+                            message: "Restoring your backup…",
+                            started_at: restoreStartedAt,
+                        },
+                    },
+                })
+                .eq("id", serverId);
+
+            after(async () => {
+                const svc = await createWorkerClient();
+                try {
+                    const poll = await waitForLinodeRestore(restoreLinodeId);
+                    if (!poll.ok || !poll.instance) {
+                        throw new Error(
+                            poll.timedOut ? "Restore timed out upstream." : "Restore failed upstream."
+                        );
+                    }
+                    // Linode leaves the instance off after a restore; surface
+                    // that honestly so the customer knows to start it.
+                    const finalStatus = poll.instance.status === "running" ? "running" : "stopped";
+                    await svc
+                        .from("servers")
+                        .update({
+                            status: finalStatus,
+                            details: {
+                                linode: linodeDetails,
+                                provisioning: {
+                                    stage: "complete",
+                                    progress: 100,
+                                    message:
+                                        finalStatus === "stopped"
+                                            ? "Backup restored — start the server when you're ready."
+                                            : "Backup restored.",
+                                    started_at: restoreStartedAt,
+                                    completed_at: new Date().toISOString(),
+                                },
+                            },
+                        })
+                        .eq("id", serverId);
+                } catch (e) {
+                    console.error(
+                        "[Linode Restore] post-restore sync failed for server",
+                        serverId,
+                        e instanceof Error ? e.message : e
+                    );
+                    await svc
+                        .from("servers")
+                        .update({
+                            status: "error",
+                            details: {
+                                linode: linodeDetails,
+                                provisioning: {
+                                    stage: "failed",
+                                    progress: 0,
+                                    message: "Restore did not complete. Contact support.",
+                                    started_at: restoreStartedAt,
+                                    failed_at: new Date().toISOString(),
+                                },
+                            },
+                        })
+                        .eq("id", serverId);
+                }
+            });
+        }
         try {
             await NotificationService.create(
                 createServiceNotification({

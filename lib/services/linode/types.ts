@@ -191,3 +191,13 @@ export interface LinodeAccount {
     company?: string;
     euuid?: string;
 }
+
+/**
+ * `GET /profile` — readable by every token shape, including least-privilege
+ * tokens that lack the `account` scope. Used as the liveness probe.
+ */
+export interface LinodeProfile {
+    username: string;
+    email?: string;
+    restricted?: boolean;
+}

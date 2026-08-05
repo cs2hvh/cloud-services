@@ -43,7 +43,14 @@ export async function checkIdempotency(
     const existing = await redis.get(redisKey);
 
     if (existing) {
-      const data = JSON.parse(existing as string);
+      // @upstash/redis deserializes JSON values on read, so `get` hands back an
+      // object here — not the string that was written. Calling JSON.parse on it
+      // throws (`"[object Object]" is not valid JSON`), which fell into the
+      // catch below and failed OPEN, so every retry re-ran the operation: two
+      // clicks on Deploy meant two servers and two bills. Accept both shapes.
+      const data = (
+        typeof existing === "string" ? JSON.parse(existing) : existing
+      ) as { status?: string; result?: unknown };
 
       if (data.status === "in-progress") {
         return {

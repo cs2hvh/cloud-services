@@ -40,6 +40,11 @@ export function ServiceTabBar({
             <button
               key={tab.value}
               type="button"
+              // Labels are uppercased by CSS and collide with sidebar entries
+              // ("Console" vs "Admin Console"), so expose the stable value for
+              // tests and automation to target.
+              data-tab={tab.value}
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => onChange(tab.value)}
               className={`${MONO} group relative inline-flex items-center gap-2 rounded-[7px] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.13em] transition-all duration-200 whitespace-nowrap`}
               style={{
