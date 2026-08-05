@@ -78,6 +78,26 @@ export const ENFORCED_VECTOR_QUOTA = DEFAULT_VECTOR_QUOTA;
 
 export type QuotaState = "ok" | "watch" | "near" | "full";
 
+/**
+ * The quota block the RAG admin route returns.
+ *
+ * Declared HERE, and imported by both the route and the component, because the
+ * admin components hand-write their own response interfaces and TypeScript
+ * cannot link them to the route. Renaming `per_org` to `default_per_org` when
+ * the quota became per-org compiled clean, passed an API-level E2E, and threw
+ * `Cannot read properties of undefined` in the browser. One shared type makes
+ * that a build error instead.
+ */
+export interface RagQuotaInfo {
+  /** Platform default. An org with an override reports its own in `OrgRag.quota`. */
+  default_per_org: number;
+  /** Where the enforced number is summed from. */
+  enforced_from: string;
+  adjustable: boolean;
+  adjustable_note: string;
+  adjust_endpoint: string;
+}
+
 /** Thresholds chosen so "watch" appears long before a customer is refused. */
 export function quotaState(used: number, quota: number): QuotaState {
   if (quota <= 0) return "full";

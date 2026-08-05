@@ -22,6 +22,7 @@ import {
   type CollectionRow,
   type ConnectorRow,
   type DocumentRow,
+  type RagQuotaInfo,
 } from "@/lib/admin/rag-ops";
 
 export const dynamic = "force-dynamic";
@@ -107,23 +108,27 @@ export async function GET(req: NextRequest) {
 
   const orgs = sortByRisk(rollupByOrg(collections, connectors, documents, orgNames, actual, quotaByOrg));
 
+  // Typed, so a field rename here breaks the component's build rather than its
+  // render. See RagQuotaInfo in lib/admin/rag-ops.ts.
+  const quota: RagQuotaInfo = {
+    default_per_org: DEFAULT_VECTOR_QUOTA,
+    /** Where the number the gate reads comes from. */
+    enforced_from: "sum of inference.vector_collections.row_count",
+    /**
+     * True since migration 20260804000001. The customer-facing error has always
+     * said "contact support to raise your limit"; support can now actually do it.
+     */
+    adjustable: true,
+    adjustable_note:
+      "Set an org's ceiling with PUT /api/admin/inference/orgs { org_id, vector_quota }. " +
+      "Null clears the override and returns the org to the platform default. All three " +
+      "enforcement points (lib/inference/vector-quota.ts, workers/data-runner, the gateway) " +
+      "read the per-org value and fall back to the default.",
+    adjust_endpoint: "/api/admin/inference/orgs",
+  };
+
   return NextResponse.json({
-    quota: {
-      default_per_org: DEFAULT_VECTOR_QUOTA,
-      /** Where the number the gate reads comes from. */
-      enforced_from: "sum of inference.vector_collections.row_count",
-      /**
-       * True since migration 20260804000001. The customer-facing error has always
-       * said "contact support to raise your limit"; support can now actually do it.
-       */
-      adjustable: true,
-      adjustable_note:
-        "Set an org's ceiling with PUT /api/admin/inference/orgs { org_id, vector_quota }. " +
-        "Null clears the override and returns the org to the platform default. All three " +
-        "enforcement points (lib/inference/vector-quota.ts, workers/data-runner, the gateway) " +
-        "read the per-org value and fall back to the default.",
-      adjust_endpoint: "/api/admin/inference/orgs",
-    },
+    quota,
     verify: {
       requested: verify,
       /** Null actual counts mean drift could not be established, not that it is zero. */

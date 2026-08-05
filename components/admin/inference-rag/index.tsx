@@ -19,10 +19,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios/axios";
-import { humanBytes, type OrgRag, type QuotaState, type RagSummary } from "@/lib/admin/rag-ops";
+import {
+  humanBytes,
+  type OrgRag,
+  type QuotaState,
+  type RagQuotaInfo,
+  type RagSummary,
+} from "@/lib/admin/rag-ops";
 
 interface Payload {
-  quota: { per_org: number; enforced_from: string; adjustable: boolean; adjustable_note: string };
+  /** Imported, not re-declared — see RagQuotaInfo for why. */
+  quota: RagQuotaInfo;
   verify: { requested: boolean; counted: boolean; truncated: boolean; note: string };
   summary: RagSummary;
   orgs: OrgRag[];
@@ -291,17 +298,22 @@ export default function InferenceRagAdmin() {
             />
           </div>
 
-          {/* The quota is real and enforced, but not adjustable from here. Saying so
-              beats a disabled button with no explanation. */}
+          {/* The quota used to be a constant in three files, and this banner said
+              so. It is per-org data now (migration 20260804000001), so the banner
+              states the DEFAULT and points at the lever — and the per-customer
+              ceiling lives in each org's row, because that is the number that
+              actually refuses them. */}
           <div className="flex items-start gap-3 rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 backdrop-blur-xl">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
             <div className="space-y-1 text-sm text-blue-100">
               <p>
-                Quota is <strong>{s.vectors_used.toLocaleString()}</strong> of{" "}
-                <strong>{data.quota.per_org.toLocaleString()}</strong> vectors per org, enforced from the{" "}
-                <span className="font-mono text-xs">{data.quota.enforced_from}</span>.
+                <strong>{s.vectors_used.toLocaleString()}</strong> vectors stored across all customers.
+                The default ceiling is <strong>{data.quota.default_per_org.toLocaleString()}</strong> per
+                org, enforced from the{" "}
+                <span className="font-mono text-xs">{data.quota.enforced_from}</span>. Each row below shows
+                that customer&apos;s own limit, which may be an override.
               </p>
-              {!data.quota.adjustable && <p className="text-xs text-blue-200/80">{data.quota.adjustable_note}</p>}
+              <p className="text-xs text-blue-200/80">{data.quota.adjustable_note}</p>
             </div>
           </div>
 
@@ -401,7 +413,18 @@ export default function InferenceRagAdmin() {
                             <span className={cn("rounded-full border px-2 py-0.5 text-xs", QUOTA_TONE[o.quota_state])}>
                               {QUOTA_LABEL[o.quota_state]}
                             </span>
-                            <p className="mt-0.5 text-[10px] text-neutral-500">{o.quota_pct.toFixed(o.quota_pct < 1 ? 3 : 1)}%</p>
+                            {/* The org's OWN ceiling, and a marker when it is an
+                                override. Support's first question is "what is
+                                this customer actually limited to" — a state badge
+                                and a percentage never answered it. */}
+                            <p className="mt-0.5 text-[10px] text-neutral-500">
+                              {o.quota_pct.toFixed(o.quota_pct < 1 ? 3 : 1)}% of {o.quota.toLocaleString()}
+                            </p>
+                            {o.quota !== data.quota.default_per_org && (
+                              <p className="text-[10px] font-medium text-purple-300" title="This org has a per-org override; the platform default does not apply.">
+                                custom limit
+                              </p>
+                            )}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{o.vectors_used}</TableCell>
                           <TableCell className="text-right tabular-nums text-neutral-400">
