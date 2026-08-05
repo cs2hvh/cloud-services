@@ -30,6 +30,7 @@ function StatusBadge({ status }: { status: string }) {
 
 /** Agents with the tools they're configured with, and how they've actually run. */
 export function AgentsTable({ agents }: { agents: AgentWithStats[] }) {
+  const paged = usePagedRows(agents, 25);
   if (agents.length === 0) return <Empty>No agents defined.</Empty>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
@@ -46,7 +47,7 @@ export function AgentsTable({ agents }: { agents: AgentWithStats[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {agents.map((agent) => (
+          {paged.pageRows.map((agent) => (
             <TableRow
               key={agent.id}
               className={`border-white/5 hover:bg-white/[0.03] ${agent.is_active ? "" : "opacity-60"}`}
@@ -92,12 +93,14 @@ export function AgentsTable({ agents }: { agents: AgentWithStats[] }) {
           ))}
         </TableBody>
       </Table>
+      <TablePagination paged={paged} noun="agent" className="px-4 pb-3" />
     </div>
   );
 }
 
 /** Per-tool reliability — which tool is failing, how slow, how expensive. */
 export function ToolsTable({ tools }: { tools: ToolStat[] }) {
+  const paged = usePagedRows(tools, 25);
   if (tools.length === 0) return <Empty>No tool calls recorded in this window.</Empty>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
@@ -113,7 +116,7 @@ export function ToolsTable({ tools }: { tools: ToolStat[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tools.map((tool) => (
+          {paged.pageRows.map((tool) => (
             <TableRow key={tool.tool} className="border-white/5 hover:bg-white/[0.03]">
               <TableCell className="font-mono text-xs">{tool.tool}</TableCell>
               <TableCell>
@@ -139,6 +142,7 @@ export function ToolsTable({ tools }: { tools: ToolStat[] }) {
           ))}
         </TableBody>
       </Table>
+      <TablePagination paged={paged} noun="tool" className="px-4 pb-3" />
     </div>
   );
 }
@@ -194,6 +198,7 @@ export function RunsTable({ runs }: { runs: RunRow[] }) {
 
 /** Sandboxes still open — the platform's most direct per-second money leak. */
 export function SandboxTable({ sandboxes }: { sandboxes: OpenSandbox[] }) {
+  const paged = usePagedRows(sandboxes, 25);
   if (sandboxes.length === 0) return <Empty>No open sandbox sessions.</Empty>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
@@ -209,7 +214,7 @@ export function SandboxTable({ sandboxes }: { sandboxes: OpenSandbox[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sandboxes.map((s) => (
+          {paged.pageRows.map((s) => (
             <TableRow key={s.id} className="border-white/5 hover:bg-white/[0.03]">
               <TableCell className="font-mono text-[10px]">{s.id.slice(0, 8)}</TableCell>
               <TableCell className="text-xs">{s.kind ?? "—"}</TableCell>
@@ -223,12 +228,14 @@ export function SandboxTable({ sandboxes }: { sandboxes: OpenSandbox[] }) {
           ))}
         </TableBody>
       </Table>
+      <TablePagination paged={paged} noun="sandbox" className="px-4 pb-3" />
     </div>
   );
 }
 
 /** MCP servers — a broken one silently removes a tool from every agent using it. */
 export function McpTable({ servers }: { servers: McpServerView[] }) {
+  const paged = usePagedRows(servers, 25);
   if (servers.length === 0) return <Empty>No MCP servers registered.</Empty>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
@@ -244,7 +251,7 @@ export function McpTable({ servers }: { servers: McpServerView[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {servers.map((server) => (
+          {paged.pageRows.map((server) => (
             <TableRow key={server.id} className="border-white/5 hover:bg-white/[0.03]">
               <TableCell>
                 <div className="font-medium">{server.display_name ?? server.slug}</div>
@@ -265,6 +272,7 @@ export function McpTable({ servers }: { servers: McpServerView[] }) {
           ))}
         </TableBody>
       </Table>
+      <TablePagination paged={paged} noun="server" className="px-4 pb-3" />
     </div>
   );
 }

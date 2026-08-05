@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { TablePagination, usePagedRows } from "@/components/admin/table-pagination";
 import api from "@/lib/axios/axios";
 import { OrgDetailDialog } from "./org-detail-dialog";
 import type { OrgView, OrgsPayload } from "./types";
@@ -65,6 +66,9 @@ export default function InferenceOrgsAdmin() {
       .filter((o) => !term || `${o.name ?? ""} ${o.slug ?? ""} ${o.id}`.toLowerCase().includes(term))
       .sort((a, b) => b.summary.spend_cents - a.summary.spend_cents);
   }, [data, search]);
+
+  // Grows with every customer that touches the AI platform.
+  const paged = usePagedRows(visible, 25, search);
 
   const cards = data
     ? [
@@ -162,7 +166,7 @@ export default function InferenceOrgsAdmin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visible.map((org) => (
+                {paged.pageRows.map((org) => (
                   <TableRow
                     key={org.id}
                     className={cn("border-white/5 hover:bg-white/[0.03]", org.deleted_at && "opacity-50")}
@@ -197,6 +201,7 @@ export default function InferenceOrgsAdmin() {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination paged={paged} noun="customer" className="px-4 pb-3" />
           </div>
 
           <p className="text-xs text-neutral-500">

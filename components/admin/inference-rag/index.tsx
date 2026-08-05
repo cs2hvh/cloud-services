@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { TablePagination, usePagedRows } from "@/components/admin/table-pagination";
 import api from "@/lib/axios/axios";
 import {
   humanBytes,
@@ -223,6 +224,10 @@ export default function InferenceRagAdmin() {
     );
   }, [data, search]);
 
+  // The org list grows with the customer base. Same shared pager as the other
+  // admin tables; keyed on the search so narrowing never strands the operator.
+  const pagedOrgs = usePagedRows(visibleOrgs, 25, search);
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -364,7 +369,7 @@ export default function InferenceRagAdmin() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleOrgs.map((o) => {
+                  {pagedOrgs.pageRows.map((o) => {
                     const isOpen = open === o.org_id;
                     const problems = o.broken_connectors + o.failed_documents;
                     return (
@@ -452,6 +457,7 @@ export default function InferenceRagAdmin() {
                   })}
                 </TableBody>
               </Table>
+              <TablePagination paged={pagedOrgs} noun="customer" className="px-4 pb-3" />
             </div>
             {visibleOrgs.length === 0 && (
               <p className="p-10 text-center text-sm text-neutral-400">
