@@ -635,25 +635,30 @@ export async function runLinodeBackupsAction({
         // the dashboard shows "running" over a stopped server and the realtime
         // channel has nothing to broadcast. Mirror the resize/rebuild idiom:
         // park the row in `provisioning`, then reconcile the real status.
-        const restoreStartedAt = new Date().toISOString();
-        await supabase
-            .from("servers")
-            .update({
-                status: "provisioning",
-                details: {
-                    linode: linodeDetails,
-                    provisioning: {
-                        stage: "restoring",
-                        progress: 10,
-                        message: "Restoring your backup…",
-                        started_at: restoreStartedAt,
-                    },
-                },
-            })
-            .eq("id", serverId);
-
         const restoreLinodeId = server.linode_id;
+        // Park the row in `provisioning` ONLY when there is an instance to poll.
+        // Without an id the background reconcile below never runs, so setting
+        // it anyway would strand the row in `provisioning` with nothing left to
+        // move it out. (restoreLinodeBackup above already requires the id, so
+        // this is belt-and-braces rather than a reachable path.)
+        const restoreStartedAt = new Date().toISOString();
         if (restoreLinodeId) {
+            await supabase
+                .from("servers")
+                .update({
+                    status: "provisioning",
+                    details: {
+                        linode: linodeDetails,
+                        provisioning: {
+                            stage: "restoring",
+                            progress: 10,
+                            message: "Restoring your backup…",
+                            started_at: restoreStartedAt,
+                        },
+                    },
+                })
+                .eq("id", serverId);
+
             after(async () => {
                 const svc = await createWorkerClient();
                 try {

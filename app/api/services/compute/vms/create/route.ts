@@ -5,6 +5,7 @@ import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 import { addHostRoute, writeCloudInitSnippet } from "@/lib/proxmox-utils";
 import { buildCiCustomValue, buildVmNetworkPlan } from "@/lib/proxmox-network";
 import { limitByUser, releaseUserLimit } from "@/lib/cooldown/userbased";
+
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 import { BillingCredits } from "@/lib/billing/credits";
@@ -29,6 +30,12 @@ import { handleLinodeCreate } from "@/lib/services/compute/providers/linode/crea
 export const dynamic = "force-dynamic";
 
 const MAX_VMS_PER_USER = 25;
+
+/**
+ * Redis bucket for the VM-create limiter. Both the consume and the refund read
+ * this so the two can never drift onto different keys.
+ */
+const VM_CREATE_RATE_LIMIT = { prefix: "rl:vm-create", windowMs: 300_000 } as const;
 
 // Type definitions
 interface ProxmoxResponse<T = unknown> {
@@ -345,12 +352,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
   }
 
-  // Rate limit: max 5 VM creations per 5 minutes per user
-  const rl = await limitByUser(user.id, {
-    prefix: "rl:vm-create",
-    limit: 5,
-    windowMs: 300_000,
-  });
+  // Rate limit: max 5 VM creations per 5 minutes per user.
+  // The refund below must target the SAME key — a mismatch would silently
+  // no-op against a different bucket and quietly restore the old behaviour
+  // where rejected requests burned the caller's quota. Share one definition.
+  const rl = await limitByUser(user.id, { limit: 5, ...VM_CREATE_RATE_LIMIT });
   if (!rl.allowed) {
     return Response.json(
       { ok: false, error: "Too many servers created recently. Please try again later.", retryAfterSec: rl.retryAfterSec },
@@ -417,7 +423,7 @@ export async function POST(req: NextRequest) {
     // with "Too many servers created recently", having created none. 429 is
     // excluded: that response never consumed a slot of its own.
     if (res.status >= 400 && res.status !== 429) {
-      await releaseUserLimit(user.id, { prefix: "rl:vm-create", windowMs: 300_000 });
+      await releaseUserLimit(user.id, VM_CREATE_RATE_LIMIT);
     }
     return res;
   }

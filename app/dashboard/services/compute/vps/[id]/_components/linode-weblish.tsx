@@ -10,12 +10,6 @@ import '@xterm/xterm/css/xterm.css';
 const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
 
 /**
- * Lish multiplexes control frames onto the same socket as terminal output, as
- * bare JSON (`{"type":"error","reason":"Your session has expired."}`). Writing
- * those straight to the terminal dumps raw JSON at the customer, so pick them
- * out and report them as status instead.
- */
-/**
  * Session URLs we have already auto-renewed once, keyed by the (unique, single
  * use) token URL.
  *
@@ -25,12 +19,37 @@ const MONO = 'font-[var(--font-geist-mono),ui-monospace,monospace]';
  * renew forever. Keyed by URL, each token can trigger at most one renewal.
  */
 const autoRenewedUrls = new Set<string>();
-/** Keep the set from growing without bound over a long-lived page. */
+
+/**
+ * Per-URL is not a ceiling on its own: a renewal mints a NEW url, so an
+ * upstream handing back already-expired tokens would renew forever, one url at
+ * a time, hammering both our API and the provider's. Cap the total renewals in
+ * a rolling window as well; past that the user gets the manual Reconnect
+ * button, which is the correct place to stop trying automatically.
+ */
+const MAX_AUTO_RENEWALS = 5;
+const AUTO_RENEW_WINDOW_MS = 5 * 60_000;
+let renewTimestamps: number[] = [];
+
+function canAutoRenew(url: string): boolean {
+  if (autoRenewedUrls.has(url)) return false;
+  const now = Date.now();
+  renewTimestamps = renewTimestamps.filter((t) => now - t < AUTO_RENEW_WINDOW_MS);
+  return renewTimestamps.length < MAX_AUTO_RENEWALS;
+}
+
 function markAutoRenewed(url: string): void {
   if (autoRenewedUrls.size > 50) autoRenewedUrls.clear();
   autoRenewedUrls.add(url);
+  renewTimestamps.push(Date.now());
 }
 
+/**
+ * Lish multiplexes control frames onto the same socket as terminal output, as
+ * bare JSON (`{"type":"error","reason":"Your session has expired."}`). Writing
+ * those straight to the terminal dumps raw JSON at the customer, so pick them
+ * out and report them as status instead.
+ */
 function parseLishControl(raw: string): { expired: boolean; reason: string } | null {
   if (!raw.startsWith('{') || !raw.includes('"type"')) return null;
   try {
@@ -165,7 +184,7 @@ export function LinodeWeblish({
         // tab, or one returned to after a while, always dies here. Renew once
         // automatically instead of stranding the user on a dead terminal that
         // only a manual click can revive.
-        if (expiredRef.current && onReconnectRef.current && !autoRenewedUrls.has(wsUrl)) {
+        if (expiredRef.current && onReconnectRef.current && canAutoRenew(wsUrl)) {
           markAutoRenewed(wsUrl);
           expiredRef.current = false;
           setConnState('connecting');
