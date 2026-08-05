@@ -10,6 +10,7 @@ import { isTokenBilled, priceTone } from "@/lib/admin/inference-pricing";
 import { FilterBar } from "./filter-bar";
 import { EditPriceDialog } from "./edit-price-dialog";
 import { PricingTable } from "./pricing-table";
+import { TablePagination, usePagedRows } from "@/components/admin/table-pagination";
 import { RepriceDialog } from "./reprice-dialog";
 import { SummaryCards } from "./summary-cards";
 import type {
@@ -140,6 +141,11 @@ export default function InferencePricingAdmin() {
     });
   }, [rows, search, status, provider, shape, tone, sort]);
 
+  // 86 models today and the catalog only grows; every one of them was rendered
+  // at once. Keyed on every filter, so narrowing the list never strands the
+  // operator on an empty page.
+  const paged = usePagedRows(visible, 50, `${tone}|${search}|${status}|${provider}|${shape}|${sort}`);
+
   const clearFilters = () => {
     setSearch("");
     setStatus("active");
@@ -221,12 +227,14 @@ export default function InferencePricingAdmin() {
       />
 
       <PricingTable
-        rows={visible}
+        rows={paged.pageRows}
         savingId={savingId}
         onEdit={setEditing}
         onToggleActive={(row, next) => void toggleActive(row, next)}
         loading={loading}
       />
+
+      <TablePagination paged={paged} noun="model" />
 
       <EditPriceDialog
         row={editing}

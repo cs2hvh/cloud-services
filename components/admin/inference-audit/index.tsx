@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { TablePagination, usePagedRows } from "@/components/admin/table-pagination";
 import api from "@/lib/axios/axios";
 import {
   actorKind,
@@ -89,6 +90,11 @@ export default function InferenceAuditAdmin() {
       search,
     }) as Row[];
   }, [data, scope, action, sensitiveOnly, search]);
+
+  // 401 entries today, up to 2,000 on a 365-day window — all of them went into
+  // the DOM. The filter token resets paging so narrowing the list never strands
+  // the operator on an empty page.
+  const paged = usePagedRows(visible, 50, `${days}|${scope}|${action}|${sensitiveOnly}|${search}`);
 
   const s = data?.summary;
   const cards = s
@@ -239,7 +245,7 @@ export default function InferenceAuditAdmin() {
                     </TableCell>
                   </TableRow>
                 )}
-                {visible.map((row) => {
+                {paged.pageRows.map((row) => {
                   const changes = changesOf(row);
                   const staff = eventScope(row) === "admin";
                   return (
@@ -283,6 +289,8 @@ export default function InferenceAuditAdmin() {
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination paged={paged} noun="event" />
 
           <p className="text-xs text-neutral-500">
             {data.window.rows} event(s) in the last {data.window.days} days

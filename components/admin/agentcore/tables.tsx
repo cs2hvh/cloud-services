@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination, usePagedRows } from "@/components/admin/table-pagination";
 import type { AgentWithStats, McpServerView, OpenSandbox, RunRow, ToolStat } from "./types";
 
 const money = (cents: number | null) => `$${((cents ?? 0) / 100).toFixed(2)}`;
@@ -142,8 +143,15 @@ export function ToolsTable({ tools }: { tools: ToolStat[] }) {
   );
 }
 
-/** Recent runs, newest first. Errors are shown, not hidden behind a click. */
+/**
+ * Recent runs, newest first. Errors are shown, not hidden behind a click.
+ *
+ * Paged: the route returns up to RUN_LIMIT (500) and every one of them used to
+ * go into the DOM — 330 rows on this platform today, and the table has an
+ * expandable error cell per row.
+ */
 export function RunsTable({ runs }: { runs: RunRow[] }) {
+  const paged = usePagedRows(runs, 50);
   if (runs.length === 0) return <Empty>No runs yet.</Empty>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl">
@@ -160,7 +168,7 @@ export function RunsTable({ runs }: { runs: RunRow[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {runs.map((run) => (
+          {paged.pageRows.map((run) => (
             <TableRow key={run.id} className="border-white/5 hover:bg-white/[0.03]">
               <TableCell className="font-mono text-[10px]">{run.id.slice(0, 8)}</TableCell>
               <TableCell>
@@ -179,6 +187,7 @@ export function RunsTable({ runs }: { runs: RunRow[] }) {
           ))}
         </TableBody>
       </Table>
+      <TablePagination paged={paged} noun="run" className="px-4 pb-3" />
     </div>
   );
 }
