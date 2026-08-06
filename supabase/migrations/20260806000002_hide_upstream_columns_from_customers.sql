@@ -1,0 +1,119 @@
+-- Close direct customer access to the `inference` schema.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- WHAT IS WRONG
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Any LOGGED-IN customer can read `inference` tables directly through PostgREST,
+-- column for column, using the public anon key plus their own session. No
+-- elevated access, no service role. Verified live 2026-08-06:
+--
+--     inference.models
+--       upstream_provider   : openrouter        ← which upstream we proxy to
+--       upstream_model_id   : anthropic/claude-opus-4.7
+--       pricing             : {"input_cents_per_mtok":1500, ...}
+--       upstream_pricing    : {"input_cents_per_mtok":500,  ...}  ← our cost basis
+--
+--     inference.media_jobs
+--       output_url          : https://openrouter.ai/api/v1/videos/…  (20 of 20)
+--
+--     inference.usage
+--       upstream_cost_cents : populated on 1,748 of 2,042 rows   ← cost per call
+--
+-- Cause: `GRANT SELECT ON ALL TABLES IN SCHEMA inference TO authenticated`
+-- (20260523000001 line 777), combined with RLS policies whose intent was to let
+-- customers read their own rows. The policies work as designed — a policy filters
+-- ROWS. Nobody restricted the COLUMNS, so "your own usage row" also means "our
+-- margin on it".
+--
+-- Two distinct harms:
+--
+--   1. BRAND. The platform's stated constraint is that upstream provider names
+--      are never customer-visible — 00-MASTER-PLAN §5 makes "grep all new write
+--      paths for upstream names" a per-slice checklist item. The application
+--      layer honours this meticulously: `customerSafeErrorMessage` scrubs
+--      RunPod / OpenRouter / Cloudflare / R2 out of every error, notification,
+--      webhook and downloaded training log. The table underneath hands the real
+--      answer to anyone who asks it directly.
+--
+--   2. MARGIN. `upstream_pricing` beside `pricing`, and `upstream_cost_cents`
+--      beside `cost_cents`, make our cost basis a subtraction. Today's catalog
+--      shows 67% on Opus input and 50% across the rest.
+--
+-- SCOPE, PRECISELY: `anon` is NOT affected — it has no USAGE on this schema, so
+-- an unauthenticated request is refused before RLS is consulted. An earlier draft
+-- of this migration claimed the data was world-readable; that was wrong, and came
+-- from a test that reused a client which had already signed in. The exposure is
+-- to every registered account, which is serious enough without overstating it.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- WHY A BLANKET REVOKE, AND NOT COLUMN GRANTS
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- The first version of this migration revoked table SELECT and handed back a
+-- column list for `models` and `media_jobs`. Checking it against the running
+-- system before applying showed it would not have worked:
+--
+--   • PARTITIONS ARE SEPARATELY REACHABLE. `inference.usage`, `trace_spans` and
+--     `audit_log` are partitioned, and a customer can query
+--     `inference.usage_y2026m08` directly — confirmed by querying it. A grant on
+--     the parent leaves every partition open, and new partitions appear every
+--     month (20260729000001 added twelve for 2027 alone).
+--
+--   • THE LIST WAS INCOMPLETE. It covered two tables. `usage.upstream_cost_cents`
+--     leaks the same cost basis per request, and `finetunes.runpod_job_id` /
+--     `deployments.runpod_endpoint_id` name our GPU substrate. Finding three more
+--     on the first re-check is a good sign there is a fourth.
+--
+--   • IT WOULD NEED PERPETUAL MAINTENANCE. Every new column and every new
+--     partition is exposed by default until someone remembers to amend the list.
+--
+-- So this addresses the root cause instead: `authenticated` should not be able to
+-- read this schema at all.
+--
+-- THE EVIDENCE THAT THIS IS SAFE — every read was traced before writing it:
+--
+--   • 271 reads of `schema("inference")` across app/, lib/ and components/.
+--     EVERY ONE constructs a service-role client. Service-role bypasses these
+--     grants entirely, so the gateway, all server routes, the dashboard pages,
+--     the admin console, four k8s runners and both maintenance scripts are
+--     untouched.
+--   • 0 browser-side components query the schema.
+--   • 0 routes query it with the SSR (cookie / `authenticated`) client.
+--   • 0 `select("*")` calls that a column grant could have broken.
+--
+-- The dashboard already works the way this migration assumes: it renders the
+-- model catalog from server components holding a service-role key, never from the
+-- browser. Nothing in the product depends on direct customer table access.
+--
+-- WHAT THIS DOES NOT DO: it does not touch `service_role`, and it does not drop
+-- the RLS policies. Those become inert rather than wrong, and are worth keeping —
+-- if direct customer reads are ever wanted, restoring them should be a
+-- deliberate, narrow GRANT on named columns of one named table, never the blanket
+-- schema grant this replaces.
+
+-- ── Revoke table access ──────────────────────────────────────────────────────
+-- Covers parents AND partitions in one statement, including the `usage`,
+-- `trace_spans` and `audit_log` partitions a column grant would have missed.
+REVOKE SELECT ON ALL TABLES IN SCHEMA inference FROM authenticated, anon;
+
+-- ── Stop future tables and partitions being exposed by default ───────────────
+-- Without this, the next CREATE TABLE in this schema — including next month's
+-- partitions — is readable again and the leak silently returns. This is the half
+-- that makes the fix stay fixed.
+ALTER DEFAULT PRIVILEGES IN SCHEMA inference REVOKE SELECT ON TABLES FROM authenticated, anon;
+
+-- ── Keep the RPCs customers legitimately call ────────────────────────────────
+-- USAGE on the schema is deliberately NOT revoked. `inference.is_org_member` and
+-- `is_org_admin` are referenced by RLS policies on other schemas and must stay
+-- callable, and the `status_*` functions power the public status page. They take
+-- no arguments and expose no upstream detail. Removing schema USAGE would break
+-- those without closing anything the table revoke above has not already closed.
+GRANT EXECUTE ON FUNCTION inference.is_org_member, inference.is_org_admin TO authenticated;
+
+COMMENT ON SCHEMA inference IS
+  'Platform-internal. Customer reads go through the API on a service-role client, never directly from the browser: these tables carry upstream provider names and our cost basis. See migration 20260806000002 before granting anything here to authenticated or anon.';
+
+-- VERIFY with: npx tsx scripts/verify-upstream-column-grants.ts
+-- It probes with the PUBLIC anon key — a service-role client would prove nothing,
+-- because it bypasses every grant this migration writes.
