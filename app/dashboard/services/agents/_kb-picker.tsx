@@ -9,7 +9,7 @@
  *
  * Seeding sources: pasted text; URLs (server fetches + extracts readable
  * paragraphs via /ingest-url — see lib/inference/url-ingest.ts); and files —
- * PDF/DOCX/TXT/MD, extracted server-side via /ingest-file — see
+ * PDF/DOCX/TXT/MD/HTML/JSON, extracted server-side via /ingest-file — see
  * lib/inference/doc-ingest.ts.
  */
 import { useEffect, useState } from 'react';
@@ -80,7 +80,7 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
         seeded = true;
       }
 
-      // Seed from uploaded documents (PDF/DOCX/TXT/MD) if provided — server
+      // Seed from uploaded documents (PDF/DOCX/TXT/MD/HTML/JSON) if provided — server
       // extracts text per file type and chunks it the same way as pasted
       // text / URL ingest.
       if (files.length > 0) {
@@ -138,7 +138,7 @@ export function KnowledgeBasePicker({ value, onChange }: { value: string; onChan
             placeholder="Or add hosted URLs to fetch + ingest, one per line (optional, max 5) — e.g. https://docs.example.com/shipping" />
           <div>
             <input
-              type="file" multiple accept=".pdf,.docx,.txt,.md"
+              type="file" multiple accept=".pdf,.docx,.txt,.md,.html,.htm,.json"
               onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))}
               className={`w-full text-[11px] text-white/55 ${MONO} file:mr-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2.5 file:py-1 file:text-[11px] file:text-white/80 hover:file:bg-white/15`}
             />

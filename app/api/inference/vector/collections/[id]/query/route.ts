@@ -18,6 +18,10 @@
  *            search with sparse full-text search via RRF (inference.hybrid_search,
  *            nextstespsAI/04-rag-data-platform.md). No behavior change for
  *            existing callers.
+ *     full_text_weight?: number (0-10, default 1) — hybrid only, RRF bias toward
+ *            exact/keyword matches.
+ *     semantic_weight?: number (0-10, default 1) — hybrid only, RRF bias toward
+ *            meaning. Equal defaults reproduce the previous behaviour exactly.
  *     rerank?: boolean (default false) — real cross-encoder rerank over an
  *            over-fetched candidate pool. Best-effort: a rerank failure falls
  *            back to the original order, never errors the request.
@@ -45,6 +49,14 @@ const querySchema = z
     filter: z.record(z.string(), z.unknown()).optional(),
     mode: z.enum(["vector", "hybrid"]).default("vector"),
     rerank: z.boolean().default(false),
+    // RRF fusion weights, hybrid mode only. The SQL function has accepted these
+    // since 20260720000001; they were simply never exposed. Bias toward exact
+    // matches for a product-SKU corpus (full_text_weight > semantic_weight), or
+    // toward meaning for a general FAQ. Defaults 1.0/1.0 = equal, which is the
+    // behaviour every existing caller already gets.
+    full_text_weight: z.number().min(0).max(10).default(1),
+    semantic_weight: z.number().min(0).max(10).default(1),
+
   })
   .refine((d) => !!d.embedding || !!d.text, {
     message: "Must provide either `embedding` or `text`",
@@ -172,6 +184,8 @@ export async function POST(
           p_distance_metric: collection.distance_metric,
           p_limit: fetchLimit,
           p_min_similarity: parsed.data.min_similarity,
+          p_full_text_weight: parsed.data.full_text_weight,
+          p_semantic_weight: parsed.data.semantic_weight,
           ...(parsed.data.filter ? { p_metadata_filter: parsed.data.filter } : {}),
         })
       : await supabase.schema("inference").rpc("search_vectors", {

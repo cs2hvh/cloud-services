@@ -118,8 +118,15 @@ Every real step now bills correctly: the embedding call, the rerank call, and th
 
 - **Not** the full doc 04 product — no connectors (S3/Drive/Notion/crawl), no versioned datasets, no synthetic data generation, no RAG-specific evals (recall@k/MRR/faithfulness), no async ingestion pipeline
 - **No caching** — every `/answer` call re-embeds and re-generates fresh, even for an identical repeated question. A real cost consideration at scale, a known v1 simplification
-- **No guardrails/BYOK on `/answer`'s LLM call** — it's a direct, minimal proxy call, not the full `/v1/chat/completions` feature set (no prompt-injection guardrail, no semantic cache, always platform-billed)
-- **`full_text_weight`/`semantic_weight`** exist in the database function (for later tuning: bias a product-SKU-heavy KB toward exact matches, or a general-FAQ KB toward meaning) but aren't yet exposed on the customer-facing API
+- ~~**No guardrails/BYOK on `/answer`'s LLM call**~~ — **CORRECTED 2026-08-06.** Guardrails
+  DID land: `vector-answer.ts` runs the same per-org engine `/v1/chat/completions`
+  uses (`lib/guardrail.ts`) over the constructed prompt. Still true: no semantic
+  cache and always platform-billed, so BYOK does not apply to this call
+- ~~**`full_text_weight`/`semantic_weight`** … aren't yet exposed~~ — **CLOSED 2026-08-06.**
+  Both are now accepted on `/query` (0–10, default 1.0 each) on the gateway and the
+  control plane, and passed straight through to `inference.hybrid_search`. Equal
+  defaults reproduce the previous behaviour exactly, so no existing caller changes.
+  Bias toward exact matches for a product-SKU corpus, toward meaning for a general FAQ
 
 ---
 

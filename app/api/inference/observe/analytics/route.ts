@@ -13,6 +13,14 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+// Generic PostgREST pager. It lives under lib/admin because that is where the
+// 1,000-row cap was first measured, but nothing about it is admin-specific —
+// the trap it avoids applies to every read in the codebase.
+import { readAllPaged } from "@/lib/admin/paged-read";
+
+/** Bounded read — a busy org's window is unbounded and this page must stay fast.
+ *  Reached by PAGING to this number, never by asking the server for it. */
+const SPAN_LIMIT = 20_000;
 
 type Period = "24h" | "7d" | "30d";
 type GroupBy = "model" | "prompt_version" | "name" | "key";
@@ -76,18 +84,28 @@ export async function GET(request: NextRequest) {
     { auth: { persistSession: false } }
   );
 
-  const { data, error } = await supabase
-    .schema("inference")
-    .from("trace_spans")
-    .select("model_id, name, api_key_id, prompt_version, cost_cents, latency_ms, status, guardrail_action, created_at")
-    .eq("org_id", org.org_id)
-    .gte("created_at", cutoff)
-    .order("created_at", { ascending: false })
-    .limit(2000);
+  // PAGED, NOT LIMITED. `.limit(2000)` does not do what it looks like: PostgREST
+  // caps a response at 1,000 rows and returns them without an error or a flag.
+  // Every figure below — spend, p50/p95 latency, error rate, the per-model
+  // breakdown — is an aggregate over these rows, so a silent truncation would
+  // not fail, it would just quietly start reporting a customer's own analytics
+  // from the newest 1,000 spans while looking complete. The identical bug was
+  // measured on the admin usage page and under-stated spend by 34%.
+  const { rows, truncated, error } = await readAllPaged<SpanRow>(
+    (from, to) =>
+      supabase
+        .schema("inference")
+        .from("trace_spans")
+        .select("model_id, name, api_key_id, prompt_version, cost_cents, latency_ms, status, guardrail_action, created_at")
+        .eq("org_id", org.org_id)
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+        .returns<SpanRow[]>(),
+    { maxRows: SPAN_LIMIT }
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const rows = (data ?? []) as SpanRow[];
+  if (error) return NextResponse.json({ error }, { status: 500 });
 
   // ── Totals ────────────────────────────────────────────────────────────────
   let totalCost = 0, totalLatency = 0, latencyCount = 0, blocked = 0, errors = 0;
@@ -167,7 +185,11 @@ export async function GET(request: NextRequest) {
     period,
     group_by: groupBy,
     sampled: rows.length,
-    capped: rows.length === 2000,
+    // Was `rows.length === 2000`, which could never be true: PostgREST returned
+    // at most 1,000, so the customer was always told their analytics covered the
+    // whole window even when it did not. This now comes from the pager, which
+    // knows whether the real bound was reached.
+    capped: truncated,
     totals: {
       requests: rows.length,
       cost_cents: Math.round(totalCost * 100) / 100,

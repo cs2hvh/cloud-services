@@ -272,3 +272,27 @@ describe("state filter — the bug live testing caught", () => {
     expect(resolve("all")).toBeNull();                                            // the fix
   });
 });
+
+describe("detail columns must not show a value nothing writes", () => {
+  // Verified against the live database 2026-08-06:
+  //   media_jobs      20 completed,   0 with cost_cents > 0   ← never written
+  //   finetunes        7 completed,   6 with cost_cents > 0   ← written
+  //   agentcore.runs 292 completed, 315 with cost_cents > 0   ← written
+  //
+  // Media bills through inference.usage, not the job row, so the column put a
+  // permanent "0" in front of an operator asking what a video cost.
+  it("media does NOT offer cost_cents, because media_jobs never records it", () => {
+    expect(findRunner("media")!.jobs.detail_columns).not.toContain("cost_cents");
+  });
+
+  it("media still shows the billable QUANTITY, which the row does record", () => {
+    const cols = findRunner("media")!.jobs.detail_columns;
+    expect(cols).toContain("num_units");
+    expect(cols).toContain("unit_label");
+  });
+
+  it("the kinds that DO record cost keep showing it", () => {
+    expect(findRunner("ft-runner")!.jobs.detail_columns).toContain("cost_cents");
+    expect(findRunner("agent-runner")!.jobs.detail_columns).toContain("cost_cents");
+  });
+});

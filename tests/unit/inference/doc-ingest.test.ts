@@ -5,6 +5,8 @@
 // production route handler runs in. Scoped here instead of changing the
 // global config since every other suite is fine under jsdom.
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chunkPlainText, isSupportedFilename, extractDocumentText } from "@/lib/inference/doc-ingest";
 
 // Doc: covers the file-upload RAG feature added to
@@ -137,5 +139,54 @@ describe("extractDocumentText — DOCX", () => {
 
     const { paragraphs } = await extractDocumentText("policy.docx", buffer);
     expect(paragraphs.some((p: string) => p.includes("Refunds are accepted within thirty days"))).toBe(true);
+  });
+});
+
+describe("the two ingestion paths must accept the same file types", () => {
+  // A dashboard upload and a connector sync are the same product to a customer.
+  // They disagreed: a .html file synced from an S3 bucket indexed fine, while
+  // uploading the identical file was rejected as an unsupported type. Nothing
+  // linked the two lists, so nothing caught it.
+  //
+  // This reads the runner's list from source rather than restating it, so the
+  // check cannot rot into a copy that agrees with itself.
+  const runnerSource = readFileSync(
+    join(process.cwd(), "workers/data-runner/src/ingest/extract.ts"),
+    "utf8"
+  );
+  const runnerTextExtensions = (runnerSource.match(/TEXT_EXTENSIONS = \[([^\]]*)\]/) ?? ["", ""])[1]
+    .split(",")
+    .map((s) => s.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+
+  it("the runner's list was actually parsed (guards against a silent regex miss)", () => {
+    expect(runnerTextExtensions.length).toBeGreaterThan(3);
+    expect(runnerTextExtensions).toContain(".pdf");
+  });
+
+  it("every text type the runner can ingest is also accepted on upload", () => {
+    for (const ext of runnerTextExtensions) {
+      expect(isSupportedFilename(`file${ext}`), `${ext} accepted by the runner but not on upload`).toBe(true);
+    }
+  });
+
+  it("html is tag-stripped rather than indexed as raw markup", async () => {
+    const html = `<html><body><nav>Home About Contact</nav><p>${"The Pro plan includes a 99.9% uptime guarantee measured monthly. ".repeat(2)}</p></body></html>`;
+    const { paragraphs } = await extractDocumentText("terms.html", Buffer.from(html, "utf-8"));
+    expect(paragraphs.join(" ")).not.toContain("<p>");
+    expect(paragraphs.join(" ")).toContain("uptime guarantee");
+  });
+
+  it("json is accepted and kept verbatim", async () => {
+    const body = JSON.stringify({ note: "x".repeat(60), other: "y".repeat(60) }, null, 2);
+    const { paragraphs } = await extractDocumentText("data.json", Buffer.from(body, "utf-8"));
+    expect(paragraphs.length).toBeGreaterThan(0);
+  });
+
+  it("a text-less document tells the customer where OCR IS available", async () => {
+    // The remaining difference between the paths is deliberate — the control
+    // plane has no platform key to call /v1/ocr with — so the error has to
+    // point at the path that does, instead of dead-ending.
+    await expect(extractDocumentText("scan.txt", Buffer.from("", "utf-8"))).rejects.toThrow(/connector/i);
   });
 });

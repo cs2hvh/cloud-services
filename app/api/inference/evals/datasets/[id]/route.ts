@@ -7,6 +7,10 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { readAllPaged } from "@/lib/admin/paged-read";
+
+/** Bounded read. Reached by PAGING, never by asking PostgREST for it. */
+const CASE_LIMIT = 20_000;
 
 function makeSupabase() {
   return createClient(
@@ -44,15 +48,27 @@ export async function GET(
 
   if (!ds) return NextResponse.json({ error: "Dataset not found" }, { status: 404 });
 
-  const { data: cases } = await supabase
-    .schema("inference")
-    .from("eval_cases")
-    .select("id, input, expected, tags, created_at")
-    .eq("dataset_id", id)
-    .order("created_at", { ascending: true })
-    .limit(1000);
+  // PAGED, NOT LIMITED. This one sat exactly ON PostgREST's 1,000-row ceiling,
+  // which is the worst place to be: a dataset with more than 1,000 cases returned
+  // precisely 1,000 and there was no way — not even in principle — to tell a full
+  // read from a truncated one. See lib/admin/paged-read.ts.
+  const { rows: cases, truncated } = await readAllPaged<Record<string, unknown>>(
+    (from, to) =>
+      supabase
+        .schema("inference")
+        .from("eval_cases")
+        .select("id, input, expected, tags, created_at")
+        .eq("dataset_id", id)
+        .order("created_at", { ascending: true })
+        .range(from, to)
+        .returns<Record<string, unknown>[]>(),
+    { maxRows: CASE_LIMIT }
+  );
 
-  return NextResponse.json({ success: true, data: { ...ds, cases: cases ?? [] } });
+  return NextResponse.json({
+    success: true,
+    data: { ...ds, cases, cases_truncated: truncated, cases_limit: CASE_LIMIT },
+  });
 }
 
 export async function DELETE(

@@ -316,7 +316,26 @@ export const RUNNERS: RunnerSpec[] = [
     jobs: {
       error_column: "error_code",
       label_column: "model_id",
-      detail_columns: ["modality", "num_units", "unit_label", "cost_cents", "output_url"],
+      // `cost_cents` is DELIBERATELY ABSENT, unlike every other job kind here.
+      //
+      // The column exists on `media_jobs` and no code path ever writes it —
+      // verified 2026-08-06: 20 completed jobs, every one still 0, while those
+      // same 20 jobs have correct usage rows totalling real money. Media bills
+      // through `inference.usage` (the gateway enqueues a usage event, the
+      // consumer prices it from the model's pricing JSONB); the job row only
+      // ever records the QUANTITY. Showing the column anyway put a permanent
+      // "0" in front of an operator asking "what did this cost?", and a wrong
+      // number is worse than no number.
+      //
+      // Populating it instead would mean teaching the gateway to price a job,
+      // duplicating pricing logic that lives in the usage consumer — the exact
+      // drift behind every other bug this registry has had. So the quantity is
+      // shown (`num_units` + `unit_label` = "4 video_second") and cost is left
+      // to the Usage page, which reads the ledger that actually has it.
+      //
+      // fine-tunes (6 of 7 completed) and agent runs (315 of 330) DO write
+      // theirs, which is why they keep the column.
+      detail_columns: ["modality", "num_units", "unit_label", "output_url"],
       // NOT RETRYABLE FROM HERE, and this is the honest answer rather than a
       // missing feature. Nothing claims `media_jobs` from the queue — the
       // gateway settles them inline — so flipping a row back to 'queued' would

@@ -7,6 +7,10 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { readAllPaged } from "@/lib/admin/paged-read";
+
+/** Bounded read. Reached by PAGING, never by asking PostgREST for it. */
+const RESULT_LIMIT = 20_000;
 
 function makeSupabase() {
   return createClient(
@@ -48,19 +52,34 @@ export async function GET(
 
   if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
 
-  const { data: results } = await supabase
-    .schema("inference")
-    .from("eval_results")
-    .select(`
-      id, case_id, output, score, passed, scorer_reasoning, status,
-      latency_ms, cost_cents, error, created_at,
-      eval_cases!inner(input, expected, tags)
-    `)
-    .eq("run_id", id)
-    .order("created_at", { ascending: true })
-    .limit(2000);
+  // PAGED, NOT LIMITED. `.limit(2000)` reads as "give me up to 2,000 results",
+  // but PostgREST caps a response at 1,000 and says nothing. An eval run with
+  // more than 1,000 cases would have shown the customer a silently truncated
+  // report — the pass/fail counts they read off it simply wrong, with no
+  // indication. See lib/admin/paged-read.ts.
+  const { rows: results, truncated } = await readAllPaged<Record<string, unknown>>(
+    (from, to) =>
+      supabase
+        .schema("inference")
+        .from("eval_results")
+        .select(`
+          id, case_id, output, score, passed, scorer_reasoning, status,
+          latency_ms, cost_cents, error, created_at,
+          eval_cases!inner(input, expected, tags)
+        `)
+        .eq("run_id", id)
+        .order("created_at", { ascending: true })
+        .range(from, to)
+        .returns<Record<string, unknown>[]>(),
+    { maxRows: RESULT_LIMIT }
+  );
 
-  return NextResponse.json({ success: true, data: { ...run, results: results ?? [] } });
+  return NextResponse.json({
+    success: true,
+    // `results_truncated` is reported rather than left implicit: a run big enough
+    // to hit the bound is exactly the one where a missing tail changes the answer.
+    data: { ...run, results, results_truncated: truncated, results_limit: RESULT_LIMIT },
+  });
 }
 
 export async function DELETE(

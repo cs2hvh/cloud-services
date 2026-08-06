@@ -437,3 +437,30 @@ Per the repo standard: migration applied to a branch DB · runner atomic-claim +
 - **Incremental sync = content-hash (SHA-256) + ETag skip + tombstone deletion** is the current consensus pattern — [Unstructured: incremental & continuous ingestion](https://unstructured.io/insights/incremental-data-ingestion-strategies-for-continuous-pipelines), [RagFlow ETag-based S3 incremental ingestion (PR #14677)](https://github.com/infiniflow/ragflow/pull/14677), [Amestris: RAG deletion workflows & the right to be forgotten](https://amestris.com.au/blog/rag-deletion-workflows.html).
 - **S3-as-source, sync-on-change** matches the Bedrock/Pinecone knowledge-base model — [Pinecone × Amazon Bedrock](https://docs.pinecone.io/integrations/amazon-bedrock).
 - **Connectors own auth, pagination, delta detection, error recovery** as a discrete layer — [Unstructured: data connectors for multi-source ingestion](https://unstructured.io/insights/using-data-connectors-for-efficient-multi-source-ingestion).
+
+
+---
+
+## 14. Format parity between the two ingestion paths (2026-08-06)
+
+A dashboard upload and a connector sync are the same product to a customer, and
+they disagreed. The data-runner accepted `.pdf .docx .txt .md .html .htm .json`
+(plus OCR for scanned PDFs and images); the dashboard upload path accepted only
+`.pdf .docx .txt .md`. So an `.html` file synced from an S3 bucket indexed fine,
+while uploading that identical file was rejected as an unsupported type. Nothing
+linked the two lists, so nothing caught the drift.
+
+`lib/inference/doc-ingest.ts` now covers the runner's full text set, reusing the
+same `extractParagraphs` tag-stripper the URL-ingest path uses so an HTML file
+and the page it came from chunk identically. A test reads the runner's
+`TEXT_EXTENSIONS` **from source** and asserts the upload path accepts every one —
+verified by reverting the change and watching it fail, so it cannot rot into a
+copy that agrees with itself.
+
+**One difference remains, and it is deliberate:** the runner can OCR a scanned
+PDF or an image; the dashboard upload cannot. OCR means calling the gateway's
+`/v1/ocr`, and the control plane has no platform key to call it with — wiring one
+in is real work, not a copy-paste. What changed is the *error*: a text-less
+document used to dead-end at "it may be empty, scanned, or image-only". It now
+points the customer at the path that does OCR, so they are not turned away from a
+capability they are already paying for.
