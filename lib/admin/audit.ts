@@ -32,7 +32,8 @@ export type AdminAuditAction =
   | "admin.key_revoked"
   | "admin.job_retried"
   | "admin.job_cancelled"
-  | "admin.feature_switch_changed";
+  | "admin.feature_switch_changed"
+  | "admin.billing_meter_closed";
 
 export interface AdminAuditEntry {
   action: AdminAuditAction;
@@ -186,6 +187,27 @@ export function featureSwitchEntry(
     target_type: "feature_switch",
     target_id: key,
     metadata: { enabled, was: previous, reason },
+  };
+}
+
+/**
+ * Closing an orphaned billing meter — a live customer charge for a resource
+ * that no longer exists. Records what was being charged, because the next
+ * question after "you stopped it" is always "how much were we taking, and for
+ * how long".
+ */
+export function billingMeterClosedEntry(
+  serviceId: string,
+  orgId: string | null,
+  monthlyCents: number | null,
+  reason: string
+): AdminAuditEntry {
+  return {
+    action: "admin.billing_meter_closed",
+    org_id: orgId,
+    target_type: "billing.active_inference_vector",
+    target_id: serviceId,
+    metadata: { monthly_cents: monthlyCents, reason, kind: "orphaned_meter" },
   };
 }
 

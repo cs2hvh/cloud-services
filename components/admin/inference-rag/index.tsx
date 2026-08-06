@@ -15,6 +15,16 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -22,6 +32,7 @@ import { TablePagination, usePagedRows } from "@/components/admin/table-paginati
 import api from "@/lib/axios/axios";
 import {
   humanBytes,
+  type BillingIntegrity,
   type OrgRag,
   type QuotaState,
   type RagQuotaInfo,
@@ -31,6 +42,7 @@ import {
 interface Payload {
   /** Imported, not re-declared — see RagQuotaInfo for why. */
   quota: RagQuotaInfo;
+  billing_integrity: BillingIntegrity;
   verify: { requested: boolean; counted: boolean; truncated: boolean; note: string };
   summary: RagSummary;
   orgs: OrgRag[];
@@ -189,6 +201,11 @@ export default function InferenceRagAdmin() {
   // The only page in the AI admin with no way to find anything. Fine at 11
   // collections, unusable the moment a real customer base exists.
   const [search, setSearch] = useState("");
+  // Stopping a charge is a money mutation, so it goes through a confirmation
+  // with a typed reason — the same discipline as the capability switches.
+  const [closing, setClosing] = useState<BillingIntegrity["issues"][number] | null>(null);
+  const [closeReason, setCloseReason] = useState("");
+  const [closingBusy, setClosingBusy] = useState(false);
 
   const load = useCallback(async (verify: boolean) => {
     setLoading(true);
@@ -227,6 +244,28 @@ export default function InferenceRagAdmin() {
   // The org list grows with the customer base. Same shared pager as the other
   // admin tables; keyed on the search so narrowing never strands the operator.
   const pagedOrgs = usePagedRows(visibleOrgs, 25, search);
+
+  const stopCharge = async () => {
+    if (!closing) return;
+    setClosingBusy(true);
+    try {
+      const res = await api.post("/admin/inference/rag", {
+        service_id: closing.id,
+        reason: closeReason.trim(),
+      });
+      toast.success(res.data.note ?? "Meter closed", { duration: 9_000 });
+      setClosing(null);
+      setCloseReason("");
+      await load(false);
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Could not close the meter";
+      toast.error(message);
+    } finally {
+      setClosingBusy(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
@@ -321,6 +360,112 @@ export default function InferenceRagAdmin() {
               <p className="text-xs text-blue-200/80">{data.quota.adjustable_note}</p>
             </div>
           </div>
+
+          {/* Billing integrity. Creating a collection registers a meter; deleting
+              one is supposed to close it, but that close is best-effort and its
+              failure only reaches a console.warn. This is the only place the
+              resulting drift is visible — and it drifts in both directions. */}
+          {!data.billing_integrity.checked ? (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 backdrop-blur-xl">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <p className="text-sm text-amber-100">
+                <strong>Billing integrity could not be checked.</strong> {data.billing_integrity.error} — this is
+                not the same as &ldquo;no problems found&rdquo;.
+              </p>
+            </div>
+          ) : data.billing_integrity.issues.length > 0 ? (
+            <div className="space-y-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 backdrop-blur-xl">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                <p className="text-sm text-red-100">
+                  <strong>
+                    {data.billing_integrity.orphaned_meters > 0
+                      ? `${data.billing_integrity.orphaned_meters} customer(s) are being charged for collections that no longer exist`
+                      : `${data.billing_integrity.unbilled_collections} collection(s) are stored without a billing meter`}
+                    .
+                  </strong>{" "}
+                  {data.billing_integrity.wrongly_charged_monthly_cents > 0 && (
+                    <>
+                      That is{" "}
+                      <strong>
+                        ${(data.billing_integrity.wrongly_charged_monthly_cents / 100).toFixed(2)}/month
+                      </strong>{" "}
+                      billed for nothing.{" "}
+                    </>
+                  )}
+                  Comparing {data.billing_integrity.meters_active} active meter(s) against{" "}
+                  {data.billing_integrity.collections} collection(s).
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/30">
+                <Table>
+                  <TableHeader className="[&_tr]:border-white/10">
+                    <TableRow>
+                      <TableHead className="min-w-[150px]">Problem</TableHead>
+                      <TableHead className="min-w-[240px]">Id</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="min-w-[300px]">What it means</TableHead>
+                      <TableHead className="text-right">Fix</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.billing_integrity.issues.map((issue) => (
+                      <TableRow key={`${issue.kind}-${issue.id}`} className="border-white/5">
+                        <TableCell>
+                          <span
+                            className={cn(
+                              "rounded-full border px-2 py-0.5 text-xs",
+                              issue.kind === "orphaned_meter"
+                                ? "border-red-500/30 bg-red-500/15 text-red-200"
+                                : "border-amber-500/30 bg-amber-500/15 text-amber-200"
+                            )}
+                          >
+                            {issue.kind === "orphaned_meter" ? "Charging for nothing" : "Not billed"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-mono text-[11px] text-neutral-400">{issue.id}</p>
+                          {issue.name && <p className="text-xs text-neutral-300">{issue.name}</p>}
+                          {issue.org_name && <p className="text-[11px] text-neutral-500">{issue.org_name}</p>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {issue.monthly_cents === null ? (
+                            <span className="text-neutral-600">—</span>
+                          ) : (
+                            <span className="text-red-300">${(issue.monthly_cents / 100).toFixed(2)}/mo</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-normal text-xs text-neutral-400">{issue.detail}</TableCell>
+                        <TableCell className="text-right">
+                          {/* Only the charging-for-nothing side is fixable from here.
+                              Registering a missing meter would start charging a
+                              customer who has never been billed for that collection —
+                              a decision, not a cleanup. */}
+                          {issue.kind === "orphaned_meter" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 border-white/10 px-2 text-xs text-red-300 hover:text-red-200"
+                              onClick={() => setClosing(issue)}
+                            >
+                              Stop charge
+                            </Button>
+                          ) : (
+                            <span
+                              className="cursor-help text-xs text-neutral-600"
+                              title="Registering a meter would start charging a customer who has not been billed for this collection. That is a pricing decision, not a cleanup — do it deliberately."
+                            >
+                              manual
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
 
           {verified && s.drifted_collections > 0 && (
             <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 backdrop-blur-xl">
@@ -473,6 +618,70 @@ export default function InferenceRagAdmin() {
           </p>
         </>
       )}
+
+      <AlertDialog
+        open={closing !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setClosing(null);
+            setCloseReason("");
+          }
+        }}
+      >
+        <AlertDialogContent className="border-white/10 bg-neutral-950">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-300">
+              <AlertTriangle className="h-4 w-4" />
+              Stop this charge?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-neutral-300">
+                <p>
+                  Closes the billing meter for{" "}
+                  <span className="font-mono text-xs text-white">{closing?.id}</span>, whose collection no
+                  longer exists.
+                  {closing?.monthly_cents != null && (
+                    <>
+                      {" "}
+                      This stops a{" "}
+                      <strong className="text-white">
+                        ${(closing.monthly_cents / 100).toFixed(2)}/month
+                      </strong>{" "}
+                      charge.
+                    </>
+                  )}
+                </p>
+                {/* Say the limit out loud. An operator who thinks this refunds
+                    the customer will not go on to raise the credit. */}
+                <p className="text-xs text-amber-200/90">
+                  This stops future charges only. Anything already billed is not refunded — issue that
+                  separately if the customer is owed it.
+                </p>
+                <Input
+                  autoFocus
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  placeholder="Why are you closing this? (recorded in the audit log)"
+                  className="border-white/10 bg-black/40"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 bg-transparent">Back</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={closeReason.trim().length < 3 || closingBusy}
+              className="bg-red-600 hover:bg-red-500"
+              onClick={(e) => {
+                e.preventDefault();
+                void stopCharge();
+              }}
+            >
+              {closingBusy ? "Closing…" : "Stop charge"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

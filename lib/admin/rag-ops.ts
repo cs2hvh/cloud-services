@@ -317,3 +317,158 @@ export function humanBytes(bytes: number): string {
   const value = bytes / Math.pow(1024, i);
   return `${value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
 }
+
+// ── Billing integrity ────────────────────────────────────────────────────────
+//
+// A collection is a billed resource: creating one inserts a row into
+// `billing.active_inference_vector`, and deleting one is supposed to close it.
+// The delete route does call `closeActiveBilling`, but a failure there is
+// swallowed into a `console.warn` — so the collection goes, the meter stays, and
+// the only record is a log line nobody reads.
+//
+// Found live 2026-08-05: 20 active enrolments against 11 collections. Eleven of
+// them billed $8/month each for collections that no longer existed, and two
+// collections stored vectors with no enrolment at all. Money leaking in BOTH
+// directions, invisible because this page loaded collections and never the
+// meters beside them.
+//
+// This is the reconciliation. It is pure set arithmetic over the two lists — the
+// hard part was never the logic, it was that nobody was comparing them.
+
+/** One row of `billing.active_inference_vector`. */
+export interface VectorBillingRow {
+  service_id: string;
+  user_id: string | null;
+  hourly_rate: number | string | null;
+  status: string | null;
+}
+
+export type BillingIssueKind =
+  /** Billed, but the collection is gone — the customer is paying for nothing. */
+  | "orphaned_meter"
+  /** The collection exists and stores vectors, but nothing meters it. */
+  | "unbilled_collection";
+
+export interface BillingIssue {
+  kind: BillingIssueKind;
+  /** Collection id — the `service_id` for a meter, the row id for a collection. */
+  id: string;
+  org_id: string | null;
+  org_name: string | null;
+  /** Collection name, when we still have one. An orphan by definition does not. */
+  name: string | null;
+  /** Monthly cost of an orphan, or the un-metered revenue of an unbilled one. */
+  monthly_cents: number | null;
+  detail: string;
+}
+
+/** Hourly rates arrive as NUMERIC — a string over the wire. Never coerce blindly. */
+function hourlyToMonthlyCents(rate: number | string | null): number | null {
+  if (rate === null || rate === undefined) return null;
+  const n = Number(rate);
+  if (!Number.isFinite(n)) return null;
+  // The `active_*` tables store dollars per hour; 720h is the platform's
+  // month, matching bill_service_cycle_atomic.
+  return Math.round(n * 720 * 100);
+}
+
+/**
+ * Compare the meters against the collections.
+ *
+ * Only `status='active'` meters count as orphans: a closed row is history, not
+ * a live charge, and flagging it would bury the real ones.
+ */
+export function findBillingIssues(
+  collections: Array<Pick<CollectionRow, "id" | "name" | "org_id" | "row_count">>,
+  meters: VectorBillingRow[],
+  orgNames: Record<string, string> = {}
+): BillingIssue[] {
+  const liveCollections = new Map(collections.map((c) => [c.id, c]));
+  const activeMeters = meters.filter((m) => (m.status ?? "active") === "active");
+  const meteredIds = new Set(activeMeters.map((m) => m.service_id));
+
+  const issues: BillingIssue[] = [];
+
+  for (const m of activeMeters) {
+    if (liveCollections.has(m.service_id)) continue;
+    const monthly = hourlyToMonthlyCents(m.hourly_rate);
+    issues.push({
+      kind: "orphaned_meter",
+      id: m.service_id,
+      org_id: null, // the meter is keyed by payer, not org — the collection is gone
+      org_name: null,
+      name: null,
+      monthly_cents: monthly,
+      detail:
+        `Still billing${monthly === null ? "" : ` $${(monthly / 100).toFixed(2)}/month`}` +
+        ` for a collection that no longer exists. Closing the meter stops the charge.`,
+    });
+  }
+
+  for (const c of collections) {
+    if (meteredIds.has(c.id)) continue;
+    issues.push({
+      kind: "unbilled_collection",
+      id: c.id,
+      org_id: c.org_id,
+      org_name: orgNames[c.org_id] ?? null,
+      name: c.name,
+      monthly_cents: null,
+      detail:
+        `Stores ${c.row_count ?? 0} vector(s) with no billing meter, so its storage is free. ` +
+        `Usually means the meter failed to register when the collection was created.`,
+    });
+  }
+
+  // Money being wrongly charged outranks money not being charged: one is a
+  // refund conversation with a customer, the other is our own revenue.
+  const rank = (k: BillingIssueKind) => (k === "orphaned_meter" ? 0 : 1);
+  return issues.sort(
+    (a, b) => rank(a.kind) - rank(b.kind) || (b.monthly_cents ?? 0) - (a.monthly_cents ?? 0)
+  );
+}
+
+export interface BillingIntegrity {
+  checked: boolean;
+  /** Null when the billing table could not be read — never silently "0 issues". */
+  error: string | null;
+  meters_active: number;
+  collections: number;
+  orphaned_meters: number;
+  unbilled_collections: number;
+  /** Total being charged for collections that do not exist. */
+  wrongly_charged_monthly_cents: number;
+  issues: BillingIssue[];
+}
+
+export function summarizeBillingIntegrity(
+  collections: Array<Pick<CollectionRow, "id" | "name" | "org_id" | "row_count">>,
+  meters: VectorBillingRow[] | null,
+  orgNames: Record<string, string> = {},
+  error: string | null = null
+): BillingIntegrity {
+  if (meters === null || error) {
+    return {
+      checked: false,
+      error: error ?? "billing.active_inference_vector could not be read",
+      meters_active: 0,
+      collections: collections.length,
+      orphaned_meters: 0,
+      unbilled_collections: 0,
+      wrongly_charged_monthly_cents: 0,
+      issues: [],
+    };
+  }
+  const issues = findBillingIssues(collections, meters, orgNames);
+  const orphans = issues.filter((i) => i.kind === "orphaned_meter");
+  return {
+    checked: true,
+    error: null,
+    meters_active: meters.filter((m) => (m.status ?? "active") === "active").length,
+    collections: collections.length,
+    orphaned_meters: orphans.length,
+    unbilled_collections: issues.length - orphans.length,
+    wrongly_charged_monthly_cents: orphans.reduce((n, i) => n + (i.monthly_cents ?? 0), 0),
+    issues,
+  };
+}

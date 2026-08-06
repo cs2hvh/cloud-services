@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { inferenceAdminClient } from "@/lib/admin/inference-client";
+import { actorContext, billingMeterClosedEntry, recordAdminAudit } from "@/lib/admin/audit";
 import {
   DEFAULT_VECTOR_QUOTA,
   rollupByOrg,
@@ -22,7 +23,9 @@ import {
   type CollectionRow,
   type ConnectorRow,
   type DocumentRow,
+  summarizeBillingIntegrity,
   type RagQuotaInfo,
+  type VectorBillingRow,
 } from "@/lib/admin/rag-ops";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +68,15 @@ export async function GET(req: NextRequest) {
       .is("deleted_at", null)
       .returns<Array<{ id: string; name: string | null; vector_quota: number | null }>>(),
   ]);
+
+  // The billing meters, read beside the collections they are supposed to track.
+  // A failure here must NOT fail the page — the rest of the RAG view is still
+  // useful — but it must also never be reported as "no issues found".
+  const meterRes = await supabase
+    .schema("billing")
+    .from("active_inference_vector")
+    .select("service_id, user_id, hourly_rate, status")
+    .returns<VectorBillingRow[]>();
 
   const firstError = colRes.error ?? connRes.error ?? docRes.error ?? orgRes.error;
   if (firstError) return NextResponse.json({ error: firstError.message }, { status: 500 });
@@ -128,6 +140,18 @@ export async function GET(req: NextRequest) {
   };
 
   return NextResponse.json({
+    /**
+     * Are the meters and the collections in step? Creating a collection inserts
+     * a billing row; deleting one is supposed to close it, but that close is
+     * best-effort and its failure only reaches a console.warn. This is the check
+     * that makes the resulting drift visible — in both directions.
+     */
+    billing_integrity: summarizeBillingIntegrity(
+      collections,
+      meterRes.error ? null : (meterRes.data ?? []),
+      orgNames,
+      meterRes.error?.message ?? null
+    ),
     quota,
     verify: {
       requested: verify,
@@ -140,5 +164,93 @@ export async function GET(req: NextRequest) {
     },
     summary: summarize(orgs),
     orgs,
+  });
+}
+
+
+/**
+ * POST /api/admin/inference/rag — close an orphaned billing meter.
+ *
+ * The one mutation this page owns, and it stops a live customer charge: a
+ * `billing.active_inference_vector` row still `status='active'` for a collection
+ * that no longer exists. See migration 20260806000001 for how they arise.
+ *
+ * REFUSES TO CLOSE A METER WHOSE COLLECTION IS ALIVE. That is the whole safety
+ * property: an operator clicking the wrong row must not silently stop billing a
+ * customer we should be charging. The check is re-run here against the database
+ * rather than trusted from the page, because the page may be minutes stale.
+ */
+export async function POST(req: NextRequest) {
+  const adminCheck = await requireAdmin();
+  if (!adminCheck.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const serviceId = body?.service_id;
+  const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  if (!serviceId || typeof serviceId !== "string") {
+    return NextResponse.json({ error: "service_id is required" }, { status: 400 });
+  }
+  if (reason.length < 3) {
+    return NextResponse.json({ error: "A reason is required — this stops a customer charge" }, { status: 400 });
+  }
+
+  const supabase = inferenceAdminClient();
+
+  // Re-verify against the database. The page's view is a snapshot; a collection
+  // could have been recreated with the same id since it rendered.
+  const { data: liveCollection } = await supabase
+    .schema("inference")
+    .from("vector_collections")
+    .select("id")
+    .eq("id", serviceId)
+    .maybeSingle<{ id: string }>();
+  if (liveCollection) {
+    return NextResponse.json(
+      {
+        error:
+          "That collection still exists, so its meter is correct. Closing it would give the customer free storage.",
+        code: "collection_alive",
+      },
+      { status: 409 }
+    );
+  }
+
+  const { data: meter } = await supabase
+    .schema("billing")
+    .from("active_inference_vector")
+    .select("service_id, user_id, hourly_rate, status")
+    .eq("service_id", serviceId)
+    .maybeSingle<{ service_id: string; user_id: string | null; hourly_rate: number | string | null; status: string | null }>();
+  if (!meter) return NextResponse.json({ error: "No billing meter with that id" }, { status: 404 });
+  if ((meter.status ?? "active") !== "active") {
+    return NextResponse.json({ error: "That meter is already closed", code: "already_closed" }, { status: 409 });
+  }
+
+  const { error: delErr } = await supabase
+    .schema("billing")
+    .from("active_inference_vector")
+    .delete()
+    .eq("service_id", serviceId);
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  const monthlyCents =
+    meter.hourly_rate === null || !Number.isFinite(Number(meter.hourly_rate))
+      ? null
+      : Math.round(Number(meter.hourly_rate) * 720 * 100);
+
+  void recordAdminAudit(
+    billingMeterClosedEntry(serviceId, null, monthlyCents, reason),
+    { userId: adminCheck.userId, email: adminCheck.email },
+    actorContext(req)
+  );
+
+  return NextResponse.json({
+    service_id: serviceId,
+    closed: true,
+    stopped_monthly_cents: monthlyCents,
+    note:
+      monthlyCents === null
+        ? "Meter closed."
+        : `Meter closed — this stops a $${(monthlyCents / 100).toFixed(2)}/month charge. Any amount already billed is not refunded automatically.`,
   });
 }

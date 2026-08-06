@@ -1,0 +1,24 @@
+-- Audit vocabulary for closing an orphaned billing meter.
+--
+-- WHY THIS ACTION EXISTS. A vector collection is a billed resource: creating one
+-- inserts into `billing.active_inference_vector`, deleting one is supposed to
+-- close that row. The delete route does call `closeActiveBilling`, but a failure
+-- there is swallowed:
+--
+--     } catch (billingErr) {
+--       console.warn("[Inference Vector] billing close failed on delete:", billingErr);
+--     }
+--
+-- So the collection goes, the meter stays `status='active'`, and the customer
+-- keeps paying. Found live on 2026-08-05: 20 active meters against 11
+-- collections — eleven of them charging $8/month each for collections that no
+-- longer existed, and two collections metered by nothing at all.
+--
+-- The admin can now close such a meter from the Vector Storage page. That stops
+-- a real customer charge, so like every other admin mutation it is audited with
+-- a reason (doc 21 §5.2). It is `org_id`-scoped where we can still resolve the
+-- payer, and NULL where the collection is gone and only the meter remains.
+ALTER TYPE inference.audit_action ADD VALUE IF NOT EXISTS 'admin.billing_meter_closed';
+
+-- NOTE: `ALTER TYPE ... ADD VALUE` cannot be used by a statement in the SAME
+-- transaction that adds it. Nothing here reads the new value, so this is safe.
