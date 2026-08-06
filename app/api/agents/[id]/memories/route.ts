@@ -6,23 +6,18 @@
  * agent with no memories returns { purged: 0 }.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { AgentcoreAgents, AgentcoreMemories } from "@/lib/supabase/queries/agentcore";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
 
@@ -38,9 +33,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const auditContext = getAuditContext(request);
     await AuditLogService.create({
-      user_id: auth.user!.id,
+      user_id: (await actingUserId(auth))!,
       user_role: "user",
-      user_email: auth.user!.email,
+      user_email: auth.email ?? undefined,
       action: "delete",
       service_type: "agentcore_agent",
       service_id: id,

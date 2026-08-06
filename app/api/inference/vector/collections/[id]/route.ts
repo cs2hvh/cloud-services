@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { billableActionRefusal, resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { closeActiveBilling } from "@/config/billing-flow";
 import { BillingCredits } from "@/lib/billing/credits";
@@ -19,13 +20,24 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const org = { org_id: authResult.auth.orgId };
+
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
-
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,21 +63,44 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  // Accepts an `ahu_` key as well as a session — deleting closes a credit meter,
+  // and that billing code lives here in Next. See lib/inference/api-key-auth.ts.
+  const resolved = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!resolved.ok) return resolved.response;
+  const auth = resolved.auth;
+
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  if (auth.apiKey) {
+    const refusal = billableActionRefusal(auth.apiKey);
+    if (refusal) return NextResponse.json({ error: refusal, code: "key_not_permitted" }, { status: 403 });
+  }
+
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-delete",
     limit: 10,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role !== "owner" && org.role !== "admin") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  // Role gates the SESSION path only. A key has no org role (see ControlPlaneAuth)
+  // — its authority is its tier and scope, already checked above. Applying the
+  // owner/admin test to a null role would reject every API caller.
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin") {
     return NextResponse.json(
       { error: "Only org owners and admins can delete collections" },
       { status: 403 }
@@ -106,11 +141,13 @@ export async function DELETE(
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    // Null for an API key — no human in the request. The key id in metadata is
+    // the useful attribution.
+    actorUserId: auth.userId,
     action: "collection.deleted",
     targetType: "vector_collection",
     targetId: id,
-    metadata: { name: existing?.name },
+    metadata: { name: existing?.name, via: auth.via, api_key_id: auth.apiKey?.keyId ?? null },
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
   });
@@ -145,7 +182,12 @@ export async function DELETE(
         .select("billing_user_id, owner_user_id")
         .eq("id", org.org_id)
         .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
-      const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+      // The org names its payer; `auth.userId` is the fallback and is null for
+      // an API key. If none of the three resolves there is nobody to credit the
+      // proration to, so skip the close rather than throw — the reconciliation
+      // on the Vector Storage admin page will surface the leftover meter.
+      const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.userId;
+      if (!payerUserId) throw new Error("no billing owner for this org");
       await closeActiveBilling({
         userId: payerUserId,
         serviceId: id,

@@ -35,6 +35,7 @@ import { z } from "zod";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { embedText } from "@/lib/inference/embeddings";
 import { rerankCandidates } from "@/lib/inference/rerank";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
@@ -85,13 +86,26 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-query",
     limit: 120,
     windowMs: 60_000,
@@ -107,8 +121,7 @@ export async function POST(
     );
   }
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

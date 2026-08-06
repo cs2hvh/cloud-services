@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 
 const messageSchema = z.object({
   role: z.enum(["system", "user", "assistant"]),
@@ -40,15 +39,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:evals-cases-add", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:evals-cases-add", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try { org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? ""); }
-  catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 }); }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   let body: unknown;
   try { body = await request.json(); }
@@ -98,18 +96,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:evals-cases-del", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:evals-cases-del", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const caseId = request.nextUrl.searchParams.get("caseId");
   if (!caseId) return NextResponse.json({ error: "Missing caseId" }, { status: 400 });
 
-  let org;
-  try { org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? ""); }
-  catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 }); }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = makeSupabase();
 

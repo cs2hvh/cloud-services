@@ -8,14 +8,14 @@
  * it ever reaches the DB → mask on every read (auth_token_enc is NEVER
  * returned, only a `has_token` boolean — see AgentcoreMcpServers.list/create).
  *
- * Same auth pattern as the rest of /api/agents (Bearer-capable
- * authenticateUserFromHeader + getOrBootstrapOrgForUser), not byok-keys'
- * cookie-only authenticateUser — this is an agentcore-family endpoint.
+ * Auth: controlPlaneAuth with the same session credential /api/agents always
+ * used (a bearer token, not byok-keys' cookie-only path), plus an `ahu_` key.
+ * `requireOrgKey` because a registered MCP server is org-wide configuration —
+ * an agent-scoped or public key has no business adding one.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreMcpServers } from "@/lib/supabase/queries/agentcore";
 import { createMcpServerSchema } from "@/lib/agentcore/agent-schema";
 import { encryptAesGcm, bytesToPostgresBytea } from "@/lib/inference/crypto";
@@ -27,18 +27,14 @@ function canWrite(role: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:mcp-servers-list", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:mcp-servers-list", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   try {
     const servers = await AgentcoreMcpServers.list(org.org_id);
@@ -50,19 +46,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:mcp-servers-create", limit: 10, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:mcp-servers-create", limit: 10, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (!canWrite(org.role)) {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -123,7 +115,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "mcp_server.registered",
     targetType: "mcp_server",
     targetId: result.data!.id,

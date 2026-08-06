@@ -2,9 +2,16 @@
  * GET  /api/agents/runs — list the org's recent runs
  * POST /api/agents/runs — enqueue a run from the dashboard (playground)
  *
- * Session-authed, org-scoped sibling of the api-key gateway (/v1/responses).
- * The dashboard uses this so a user can run an agent without minting an API key;
- * the agent-runner then executes the queued run exactly the same way.
+ * Org-scoped sibling of the api-key gateway (/v1/responses). The dashboard uses
+ * this so a user can run an agent without minting an API key; the agent-runner
+ * then executes the queued run exactly the same way.
+ *
+ * GET also accepts an `ahu_` key, because the gateway can fetch ONE run by id
+ * (GET /v1/agents/runs/:id) but cannot LIST them. An API customer who fires runs
+ * asynchronously and loses an id, or who wants "what did my agent do today",
+ * previously had to open a browser to find out. POST stays session-only on
+ * purpose: the gateway already enqueues runs (POST /v1/agents/:id/runs), and a
+ * second way to spend money is not worth the risk of the two drifting.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -13,6 +20,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreAgents, AgentcoreRuns, orgPayer, orgHardCapReached } from "@/lib/supabase/queries/agentcore";
 import { createRunSchema } from "@/lib/agentcore/agent-schema";
+import { resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 
 /** Which credential started each run, resolved in one batch query — an agent
  *  bound to both a private backend key and a public widget key needs to tell
@@ -39,21 +47,44 @@ async function resolveKeyLabels(orgId: string, apiKeyIds: string[]): Promise<Map
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId, email) => {
+      // getOrBootstrapOrgForUser THROWS rather than returning null. Uncaught,
+      // that escapes as a bare framework 500 with no JSON body — which is what
+      // these routes used to catch themselves before the org resolution moved
+      // in here. Swallow it to null and let the resolver answer normally.
+      try {
+        const o = await getOrBootstrapOrgForUser(userId, email);
+        return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+      } catch {
+        return null;
+      }
+    },
+    undefined,
+    true // agent-scoped keys allowed: the handler pins them to their own agent
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  // An agent-scoped key sees ONLY its own agent's runs. The filter is FORCED,
+  // not defaulted: honouring `?agent_id=` from such a key would let a key minted
+  // for one agent read every other agent's run history — including their inputs
+  // and outputs — across the whole org. The query param is only obeyed for
+  // credentials that speak for the org.
+  const requested = request.nextUrl.searchParams.get("agent_id") ?? undefined;
+  const agentId = auth.apiKey?.agentId ?? requested;
 
-  const agentId = request.nextUrl.searchParams.get("agent_id") ?? undefined;
   try {
-    const runs = await AgentcoreRuns.list(org.org_id, { agentId });
+    const runs = await AgentcoreRuns.list(auth.orgId, { agentId });
     const keyIds = Array.from(new Set(runs.map((r) => r.api_key_id).filter((v): v is string => !!v)));
-    const keyLabels = await resolveKeyLabels(org.org_id, keyIds);
+    const keyLabels = await resolveKeyLabels(auth.orgId, keyIds);
     const data = runs.map((r) => ({
       ...r,
       // A revoked/since-deleted key still shows the run — key_name falls
@@ -61,7 +92,7 @@ export async function GET(request: NextRequest) {
       key_name: r.api_key_id ? (keyLabels.get(r.api_key_id)?.name ?? null) : null,
       key_tier: r.api_key_id ? (keyLabels.get(r.api_key_id)?.tier ?? null) : null,
     }));
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data, scoped_to_agent: auth.apiKey?.agentId ?? null });
   } catch (err) {
     console.error("[agents] runs list error:", err);
     return NextResponse.json({ error: "Failed to list runs" }, { status: 500 });
@@ -81,6 +112,8 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
   }
+  // No `auth.via` guard here: this handler is session-only by design (the
+  // gateway owns run creation), so the caller is always a person with a role.
   if (org.role === "viewer") {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }

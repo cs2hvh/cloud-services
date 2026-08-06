@@ -19,6 +19,7 @@ import { z } from "zod";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 function isUuid(s: string): boolean {
@@ -33,21 +34,33 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-rows-list",
     limit: 60,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const url = new URL(request.url);
   const limit = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
@@ -109,22 +122,34 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-rows-delete",
     limit: 20,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot delete rows" }, { status: 403 });
   }
 
@@ -171,11 +196,15 @@ export async function DELETE(
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    // Null for an API key — there is no human in the request. `via` and
+    // `api_key_id` below are what make the entry attributable instead.
+    actorUserId: auth.userId,
     action: "vector_rows.deleted",
     targetType: "vector_collection",
     targetId: collection.id,
     metadata: {
+      via: auth.via,
+      api_key_id: auth.apiKey?.keyId ?? null,
       collection_name: collection.name,
       deleted: count ?? 0,
       requested: parsed.data.external_ids.length,

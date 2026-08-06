@@ -7,21 +7,20 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid connector id" }, { status: 400 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") ?? 50) || 50, 1), 200);
   const offset = Math.max(Number(request.nextUrl.searchParams.get("offset") ?? 0) || 0, 0);

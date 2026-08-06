@@ -17,12 +17,18 @@
  *
  * Body: { name?: string, description?: string, text?: string, urls?: string[] }
  * At least one of `text` / `urls` is required.
+ *
+ * Accepts an `ahu_` API key as well as a session. This endpoint forwards the
+ * CALLER'S OWN Authorization header to the three vector routes it orchestrates,
+ * so widening those (lib/inference/api-key-auth.ts) is what made an API key work
+ * end-to-end here — the only thing still refusing one was this front door.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { billableActionRefusal, resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { AgentcoreAgents, type AgentToolDecl } from "@/lib/supabase/queries/agentcore";
 
 const bodySchema = z
@@ -42,12 +48,42 @@ function slugify(name: string): string {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId, email) => {
+      // getOrBootstrapOrgForUser THROWS rather than returning null. Uncaught,
+      // that escapes as a bare framework 500 with no JSON body — which is what
+      // these routes used to catch themselves before the org resolution moved
+      // in here. Swallow it to null and let the resolver answer normally.
+      try {
+        const o = await getOrBootstrapOrgForUser(userId, email);
+        return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+      } catch {
+        return null;
+      }
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id: agentId } = await params;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agent-kb-create", limit: 5, windowMs: 60_000 });
+  // Step 1 below creates a vector collection, which starts a recurring credit
+  // meter. Refuse up front rather than letting the forwarded call fail deep
+  // inside step "create" — same rule, but a clear message instead of a nested
+  // one about a collection the caller never asked for by name.
+  if (auth.apiKey) {
+    const refusal = billableActionRefusal(auth.apiKey);
+    if (refusal) return NextResponse.json({ error: refusal, code: "key_not_permitted" }, { status: 403 });
+  }
+
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agent-kb-create", limit: 5, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const body = await request.json().catch(() => ({}));
@@ -56,20 +92,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Validation error", details: parsed.error.issues }, { status: 400 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  // Role gates the session path only — a key has no org role.
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot create a knowledge base" }, { status: 403 });
   }
 
   const agent = await AgentcoreAgents.get(org.org_id, agentId);
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
 
-  const authHeader = request.headers.get("authorization")!;
+  // Forwarded verbatim to the vector routes below — an `ahu_` key or a session
+  // bearer, whichever the caller used. Non-null: both paths above required one.
+  const authHeader = request.headers.get("authorization") ?? "";
   const origin = request.nextUrl.origin;
   const collectionName = `${slugify(parsed.data.name ?? agent.name)}-${Date.now().toString(36)}`;
 

@@ -8,27 +8,33 @@
  * (found during the "whole agent UI" gap review, 2026-07-08).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { agentScopeMismatch } from "@/lib/inference/api-key-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreRuns } from "@/lib/supabase/queries/agentcore";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", allowAgentScoped: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agents-run-cancel", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agents-run-cancel", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   try {
+    // cancel() goes straight to an UPDATE, so there is no row to check against
+    // — read the run first, or an agent-scoped key could cancel any run in the
+    // org just by guessing an id.
+    if (auth.apiKey?.agentId) {
+      const run = await AgentcoreRuns.getWithSteps(org.org_id, id);
+      if (!run || agentScopeMismatch(auth, run.agent_id)) {
+        return NextResponse.json({ error: "Run not found" }, { status: 404 });
+      }
+    }
+
     const result = await AgentcoreRuns.cancel(org.org_id, id);
     if (!result.success) return NextResponse.json({ error: "Run not found" }, { status: 404 });
     return NextResponse.json({ success: true, id, status: result.status });

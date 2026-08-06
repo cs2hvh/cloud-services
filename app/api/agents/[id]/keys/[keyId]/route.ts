@@ -6,9 +6,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 function canWrite(role: string): boolean {
@@ -23,24 +22,20 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; keyId: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id: agentId, keyId } = await params;
   if (!isUuid(keyId)) {
     return NextResponse.json({ error: "Invalid key id" }, { status: 400 });
   }
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agent-keys-delete", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agent-keys-delete", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (!canWrite(org.role)) {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -72,7 +67,7 @@ export async function DELETE(
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "key.revoked",
     targetType: "api_key",
     targetId: keyId,

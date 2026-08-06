@@ -8,9 +8,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { modelScopeRefusal } from "@/lib/inference/api-key-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 
 const createSchema = z.object({
   name:       z.string().min(1).max(120),
@@ -41,15 +41,14 @@ function makeSupabase() {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:evals-runs-list", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:evals-runs-list", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try { org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? ""); }
-  catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 }); }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = makeSupabase();
 
@@ -80,15 +79,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:evals-runs-create", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:evals-runs-create", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try { org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? ""); }
-  catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 }); }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   let body: unknown;
   try { body = await request.json(); }
@@ -99,6 +97,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
     }, { status: 400 });
+  }
+
+  // `allowed_models` governs every control-plane field naming a model the
+  // platform will bill against — not just chat. A restricted key must not be
+  // able to reach a model through an eval or a fine-tune that it could not
+  // reach through the gateway.
+  if (auth.apiKey) {
+    const refusal = modelScopeRefusal(auth.apiKey, parsed.data.model_id);
+    if (refusal) return NextResponse.json({ error: refusal, code: "model_not_allowed" }, { status: 403 });
   }
 
   const supabase = makeSupabase();
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest) {
       scorer_type:    parsed.data.scorer_type,
       scorer_config:  scorerConfig,
       total_cases:    caseCount,
-      created_by:     auth.user!.id,
+      created_by:     auth.userId,
     })
     .select("id, name, model_id, scorer_type, status, total_cases, created_at")
     .single();

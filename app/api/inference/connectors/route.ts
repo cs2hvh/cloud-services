@@ -11,9 +11,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { bytesToPostgresBytea, encryptAesGcm } from "@/lib/inference/crypto";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import {
@@ -35,10 +34,11 @@ function isUuid(s: string): boolean {
 
 // ── GET (list by collection) ────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:inf-conn-list", limit: 60, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:inf-conn-list", limit: 60, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const collectionId = request.nextUrl.searchParams.get("collection_id");
@@ -46,8 +46,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "collection_id (uuid) query param required" }, { status: 400 });
   }
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = service();
   const { data, error } = await supabase
@@ -68,10 +67,11 @@ export async function GET(request: NextRequest) {
 
 // ── POST (create) ───────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:inf-conn-create", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:inf-conn-create", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const body = await request.json().catch(() => null);
@@ -81,9 +81,8 @@ export async function POST(request: NextRequest) {
   }
   const d = parsed.data;
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") return NextResponse.json({ error: "Viewers cannot create connectors" }, { status: 403 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") return NextResponse.json({ error: "Viewers cannot create connectors" }, { status: 403 });
 
   const supabase = service();
 
@@ -134,7 +133,7 @@ export async function POST(request: NextRequest) {
       webhook_url: d.webhook_url ?? null,
       webhook_secret_enc: webhookSecretEnc,
       sync_schedule: d.sync_schedule,
-      created_by: auth.user!.id,
+      created_by: auth.userId,
     })
     .select(CONNECTOR_COLS)
     .single<ConnectorRow>();
@@ -150,7 +149,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "connector.created",
     targetType: "connector",
     targetId: data.id,

@@ -6,11 +6,10 @@
  * Phase 1 scope: list only. Invite flow + role change + remove ship via the
  * /[id] route. Full email-based invite (with token + accept page) is Phase 7.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 
 interface MemberRow {
   id: string;
@@ -29,11 +28,12 @@ interface AuthUser {
   created_at?: string;
 }
 
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-members",
     limit: 30,
     windowMs: 60_000,
@@ -42,8 +42,7 @@ export async function GET() {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -111,7 +110,7 @@ export async function GET() {
         status: m.status,
         invited_at: m.invited_at,
         joined_at: m.joined_at,
-        is_you: m.user_id === auth.user!.id,
+        is_you: m.user_id === auth.userId,
       };
     }),
   });

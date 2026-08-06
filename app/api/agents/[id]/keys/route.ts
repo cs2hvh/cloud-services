@@ -14,9 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreAgents } from "@/lib/supabase/queries/agentcore";
 import { generateApiKey } from "@/lib/inference/api-key-crypto";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
@@ -67,20 +66,16 @@ function supabaseService() {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id: agentId } = await params;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agent-keys-list", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agent-keys-list", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const agent = await AgentcoreAgents.get(org.org_id, agentId);
   if (!agent) return NextResponse.json({ error: "Agent not found" }, { status: 404 });
@@ -119,21 +114,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id: agentId } = await params;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agent-keys-create", limit: 10, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agent-keys-create", limit: 10, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (!canWrite(org.role)) {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -170,7 +161,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from("api_keys")
     .insert({
       org_id: org.org_id,
-      created_by_user_id: auth.user!.id,
+      created_by_user_id: (await actingUserId(auth))!,
       agent_id: agentId,
       name: d.name,
       key_prefix: keyPrefix,
@@ -198,7 +189,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "key.created",
     targetType: "api_key",
     targetId: data.id,

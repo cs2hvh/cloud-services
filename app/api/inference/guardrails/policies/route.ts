@@ -9,9 +9,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { kvPutGuardrailPolicy } from "@/lib/inference/cf-kv";
 import { ruleSchema } from "@/lib/inference/guardrail-rules";
@@ -22,19 +21,15 @@ const createSchema = z.object({
   rules: z.array(ruleSchema).min(1).max(20),
 });
 
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:guardrail-list", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:guardrail-list", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,10 +53,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:guardrail-create", limit: 10, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:guardrail-create", limit: 10, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const body = await request.json();
@@ -70,13 +66,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Validation error", details: parsed.error.issues }, { status: 400 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (org.role !== "owner" && org.role !== "admin" && org.role !== "developer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin" && org.role !== "developer") {
     return NextResponse.json({ error: "Viewers cannot create guardrail policies" }, { status: 403 });
   }
 
@@ -94,7 +85,7 @@ export async function POST(request: NextRequest) {
       name: parsed.data.name,
       mode: parsed.data.mode,
       rules: parsed.data.rules,
-      created_by: auth.user!.id,
+      created_by: auth.userId,
     })
     .select("id, name, mode, rules, created_at, updated_at")
     .single();
@@ -113,7 +104,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "org.updated",
     targetType: "guardrail_policy",
     targetId: data.id,

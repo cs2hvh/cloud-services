@@ -7,9 +7,9 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { modelScopeRefusal } from "@/lib/inference/api-key-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreAgents } from "@/lib/supabase/queries/agentcore";
 import { createAgentSchema } from "@/lib/agentcore/agent-schema";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -51,25 +51,25 @@ async function keyCountsByAgent(orgId: string): Promise<Map<string, { total: num
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap" });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agents-list", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agents-list", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   try {
     const [agents, keyCounts] = await Promise.all([
       AgentcoreAgents.list(org.org_id),
       keyCountsByAgent(org.org_id),
     ]);
-    const data = agents.map((a) => ({
+    // An agent-scoped key gets a one-element list, not the org's roster. The
+    // filter is applied here rather than passed to the query so there is no
+    // path where forgetting a parameter widens it back out.
+    const visible = auth.apiKey?.agentId ? agents.filter((a) => a.id === auth.apiKey!.agentId) : agents;
+    const data = visible.map((a) => ({
       ...a,
       access_key_count: keyCounts.get(a.id)?.total ?? 0,
       has_public_key: (keyCounts.get(a.id)?.public ?? 0) > 0,
@@ -82,20 +82,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agents-create", limit: 10, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agents-create", limit: 10, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
-  if (!canWrite(org.role)) {
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -115,6 +111,14 @@ export async function POST(request: NextRequest) {
   }
   const d = parsed.data;
 
+  // A key can be restricted to specific models; the gateway refuses anything
+  // outside that list (checkModelScope). Same rule here or the restriction only
+  // holds on one of the two surfaces.
+  if (auth.apiKey) {
+    const refusal = modelScopeRefusal(auth.apiKey, d.model);
+    if (refusal) return NextResponse.json({ error: refusal, code: "model_not_allowed" }, { status: 403 });
+  }
+
   if (!(await AgentcoreAgents.modelExists(d.model))) {
     return NextResponse.json({ error: `Unknown or inactive model: ${d.model}` }, { status: 400 });
   }
@@ -129,7 +133,7 @@ export async function POST(request: NextRequest) {
     guardrail: d.guardrail ?? "warn",
     max_steps: d.max_steps ?? 12,
     max_cost_cents: d.max_cost_cents ?? 100,
-    created_by: auth.user!.id,
+    created_by: (await actingUserId(auth))!,
   });
 
   if (!result.success) {
@@ -141,9 +145,9 @@ export async function POST(request: NextRequest) {
 
   const auditContext = getAuditContext(request);
   await AuditLogService.create({
-    user_id: auth.user!.id,
+    user_id: (await actingUserId(auth))!,
     user_role: "user",
-    user_email: auth.user!.email,
+    user_email: auth.email ?? undefined,
     action: "create",
     service_type: "agentcore_agent",
     service_id: result.data?.id,
@@ -157,7 +161,7 @@ export async function POST(request: NextRequest) {
 
   await NotificationService.create(
     createServiceNotification({
-      userId: auth.user!.id,
+      userId: (await actingUserId(auth))!,
       serviceType: "agentcore_agent",
       action: "created",
       serviceName: d.name,

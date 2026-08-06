@@ -6,9 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 const patchSchema = z.object({
@@ -40,11 +39,12 @@ const patchSchema = z.object({
     .optional(),
 });
 
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-org-get",
     limit: 60,
     windowMs: 60_000,
@@ -53,15 +53,7 @@ export async function GET() {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   // Pull richer fields + counts for the settings page
   const supabase = createClient(
@@ -122,7 +114,7 @@ export async function GET() {
       slug: org.org_slug,
       name: row?.name ?? org.org_name,
       role: org.role,
-      zdr_default: row?.zdr_default ?? org.zdr_default,
+      zdr_default: row?.zdr_default ?? false,
       region_pin: row?.region_pin ?? null,
       owner_user_id: row?.owner_user_id ?? null,
       monthly_budget_cents: row?.monthly_budget_cents ?? null,
@@ -141,10 +133,11 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-org-patch",
     limit: 20,
     windowMs: 60_000,
@@ -153,16 +146,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
-  if (org.role !== "owner" && org.role !== "admin") {
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin") {
     return NextResponse.json(
       { error: "Only org owners and admins can update settings" },
       { status: 403 }
@@ -210,7 +195,7 @@ export async function PATCH(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: capChanged ? "org.spend_cap_updated" : "org.updated",
     targetType: "org",
     targetId: org.org_id,

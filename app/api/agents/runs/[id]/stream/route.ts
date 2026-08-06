@@ -7,8 +7,8 @@
  * (The api-key gateway equivalent is GET /v1/agents/runs/:id/stream.)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { agentScopeMismatch } from "@/lib/inference/api-key-auth";
 import { AgentcoreRuns } from "@/lib/supabase/queries/agentcore";
 
 export const dynamic = "force-dynamic";
@@ -19,19 +19,20 @@ const MAX_ITERS = 400; // ~6 min cap; client reconnects/falls back for longer ru
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", allowAgentScoped: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   // Verify the run is this org's before opening the stream (org-scoped, no IDOR).
   const initial = await AgentcoreRuns.getWithSteps(org.org_id, id);
   if (!initial) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+  // Same rule as ../trace: an agent-scoped key may only tail its own agent's
+  // runs. Checked on the INITIAL read, before any SSE frame is written.
+  if (agentScopeMismatch(auth, initial.agent_id)) {
+    return NextResponse.json({ error: "Run not found" }, { status: 404 });
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

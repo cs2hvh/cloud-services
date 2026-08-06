@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { embedText } from "@/lib/inference/embeddings";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 import { extractDocumentText, isSupportedFilename, MAX_FILE_BYTES, SUPPORTED_EXTENSIONS } from "@/lib/inference/doc-ingest";
@@ -40,13 +41,29 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  // Accepts an `ahu_` key. Stays on the control plane because pdfjs/mammoth are
+  // Node libraries the Worker cannot run — so widening the credential here is
+  // what makes document upload reachable by API.
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-ingest-file",
     limit: 10,
     windowMs: 60_000,
@@ -81,9 +98,9 @@ export async function POST(
     }
   }
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  // Role gates the session path only — a key has no org role.
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot upsert" }, { status: 403 });
   }
 

@@ -4,9 +4,9 @@
  * DELETE /api/agents/:id — delete an agent   (RBAC: developer+)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { agentScopeMismatch, modelScopeRefusal } from "@/lib/inference/api-key-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { AgentcoreAgents } from "@/lib/supabase/queries/agentcore";
 import { updateAgentSchema } from "@/lib/agentcore/agent-schema";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -17,14 +17,16 @@ function canWrite(role: string): boolean {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap" });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+
+  // 404, not 403: telling an agent-scoped key that some OTHER agent exists
+  // turns this route into a way to enumerate the org's agents.
+  if (agentScopeMismatch(auth, id)) {
+    return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
   try {
@@ -39,19 +41,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agents-update", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agents-update", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (!canWrite(org.role)) {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -70,6 +68,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
+  // A key can be restricted to specific models; the gateway refuses anything
+  // outside that list (checkModelScope). Same rule here or the restriction only
+  // holds on one of the two surfaces.
+  if (auth.apiKey) {
+    const refusal = modelScopeRefusal(auth.apiKey, parsed.data.model);
+    if (refusal) return NextResponse.json({ error: refusal, code: "model_not_allowed" }, { status: 403 });
+  }
+
   if (parsed.data.model && !(await AgentcoreAgents.modelExists(parsed.data.model))) {
     return NextResponse.json({ error: `Unknown or inactive model: ${parsed.data.model}` }, { status: 400 });
   }
@@ -83,9 +89,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const auditContext = getAuditContext(request);
   await AuditLogService.create({
-    user_id: auth.user!.id,
+    user_id: (await actingUserId(auth))!,
     user_role: "user",
-    user_email: auth.user!.email,
+    user_email: auth.email ?? undefined,
     action: "update",
     service_type: "agentcore_agent",
     service_id: id,
@@ -102,19 +108,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "header", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:agents-delete", limit: 20, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:agents-delete", limit: 20, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Org error" }, { status: 500 });
-  }
-  if (!canWrite(org.role)) {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && !canWrite(org.role ?? "")) {
     return NextResponse.json({ error: "Insufficient role — developer or higher required" }, { status: 403 });
   }
 
@@ -128,9 +130,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   const auditContext = getAuditContext(request);
   await AuditLogService.create({
-    user_id: auth.user!.id,
+    user_id: (await actingUserId(auth))!,
     user_role: "user",
-    user_email: auth.user!.email,
+    user_email: auth.email ?? undefined,
     action: "delete",
     service_type: "agentcore_agent",
     service_id: id,

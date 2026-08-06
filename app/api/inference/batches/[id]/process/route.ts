@@ -26,8 +26,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { downloadText, uploadBytes } from "@/lib/inference/batch-storage";
 import { type BatchRow, type BatchStatus } from "@/lib/inference/batches";
@@ -89,11 +88,11 @@ export async function POST(
 
   let orgIdFromUser: string | null = null;
   if (!isServiceCall) {
-    const auth = await authenticateUser();
-    if (!auth.authenticated) return auth.response;
-    const org = await getActiveOrgForUser(auth.user!.id);
-    if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-    if (org.role === "viewer") {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+    if (auth.via === "session" && org.role === "viewer") {
       return NextResponse.json({ error: "Viewers cannot trigger batches" }, { status: 403 });
     }
     orgIdFromUser = org.org_id;

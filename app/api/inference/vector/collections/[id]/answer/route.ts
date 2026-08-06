@@ -28,6 +28,7 @@ import { z } from "zod";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { modelScopeRefusal, resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { embedText } from "@/lib/inference/embeddings";
 import { rerankCandidates } from "@/lib/inference/rerank";
 import { resolveChatUpstreamModelId, callChatCompletion } from "@/lib/inference/chat";
@@ -116,13 +117,26 @@ function usedCitations(answer: string, all: Citation[]): Citation[] {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  const authResult = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    }
+  );
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid collection id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, { prefix: "rl:inf-vec-answer", limit: 30, windowMs: 60_000 });
+  const rl = await limitByUser(auth.subject, { prefix: "rl:inf-vec-answer", limit: 30, windowMs: 60_000 });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
   const body = await request.json();
@@ -132,8 +146,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const req = parsed.data;
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -158,6 +171,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
       { status: 400 }
     );
+  }
+
+  // A key can be restricted to specific models; the gateway refuses anything
+  // outside that list (checkModelScope). Same rule here or the restriction only
+  // holds on one of the two surfaces.
+  if (auth.apiKey) {
+    const refusal = modelScopeRefusal(auth.apiKey, req.model);
+    if (refusal) return NextResponse.json({ error: refusal, code: "model_not_allowed" }, { status: 403 });
   }
 
   const upstreamModelId = await resolveChatUpstreamModelId(req.model);

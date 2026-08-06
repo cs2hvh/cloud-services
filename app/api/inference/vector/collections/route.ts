@@ -8,8 +8,8 @@ import { z } from "zod";
 import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
+import { billableActionRefusal, resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
-import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 import { reserveProvision, settleProvision, releaseProvision } from "@/config/billing-flow";
 import { getRatesForInferenceVector } from "@/config/pricing";
 import { BillingCredits } from "@/lib/billing/credits";
@@ -34,30 +34,40 @@ const createSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  // Reads are open to any valid key — listing your own collections costs
+  // nothing, so no billable-action refusal here.
+  const resolved = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId, email) => {
+      // Throws rather than returning null; uncaught it becomes a bare 500
+      // with no JSON body. Swallow to null so the resolver answers normally.
+      try {
+        const o = await getOrBootstrapOrgForUser(userId, email);
+        return { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug };
+      } catch {
+        return null;
+      }
+    }
+  );
+  if (!resolved.ok) return resolved.response;
+  const auth = resolved.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-list",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    console.error("[Inference Vector] org resolution failed:", err);
-    return NextResponse.json(
-      {
-        error: customerSafeErrorMessage(
-          err instanceof Error ? err.message : "Org resolution failed"
-        ) || "Org resolution failed",
-      },
-      { status: 500 }
-    );
-  }
+  // Org resolution (and its failure handling) now lives inside
+  // resolveControlPlaneAuth, so by here it is settled either way.
+  const org = { org_id: auth.orgId };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,16 +91,49 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    org: { id: org.org_id, slug: org.org_slug, name: org.org_name, role: org.role },
+    org: { id: auth.orgId, slug: auth.orgSlug, name: auth.orgName, role: auth.orgRole },
     data: data ?? [],
   });
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUserFromHeader(request);
-  if (!auth.authenticated) return auth.response;
+  // Accepts an `ahu_` API key as well as a browser session. Creating a
+  // collection starts a credit meter, and that billing code lives here in
+  // Next — so rather than move it to the gateway, the door widens. See
+  // lib/inference/api-key-auth.ts for why that is the safe direction.
+  const resolved = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUserFromHeader(request);
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId, email) => {
+      // Throws rather than returning null; uncaught it becomes a bare 500
+      // with no JSON body. Swallow to null so the resolver answers normally.
+      try {
+        const o = await getOrBootstrapOrgForUser(userId, email);
+        return { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug };
+      } catch {
+        return null;
+      }
+    }
+  );
+  if (!resolved.ok) return resolved.response;
+  const auth = resolved.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  // A public-tier or agent-scoped key must not start a meter — see
+  // billableActionRefusal for the two distinct reasons.
+  if (auth.apiKey) {
+    const refusal = billableActionRefusal(auth.apiKey);
+    if (refusal) return NextResponse.json({ error: refusal, code: "key_not_permitted" }, { status: 403 });
+  }
+
+  // Rate-limited by KEY id for an API caller, so one script cannot spend
+  // another key's budget on the same org — and revoking the key drops its
+  // history with it.
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-vec-create",
     limit: 10,
     windowMs: 60_000,
@@ -106,21 +149,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    console.error("[Inference Vector] org resolution failed:", err);
-    return NextResponse.json(
-      {
-        error: customerSafeErrorMessage(
-          err instanceof Error ? err.message : "Org resolution failed"
-        ) || "Org resolution failed",
-      },
-      { status: 500 }
-    );
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot create collections" }, { status: 403 });
   }
 
@@ -191,7 +221,17 @@ export async function POST(request: NextRequest) {
     .select("billing_user_id, owner_user_id")
     .eq("id", org.org_id)
     .maybeSingle<{ billing_user_id: string | null; owner_user_id: string | null }>();
-  const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+  // The org names its payer. `auth.userId` is the last-resort fallback and is
+  // null for an API key — there is no human in that request — so a key on an org
+  // with neither a billing nor an owner user is refused rather than billed to
+  // nobody.
+  const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.userId;
+  if (!payerUserId) {
+    return NextResponse.json(
+      { error: "This organisation has no billing owner, so a collection cannot be created against it." },
+      { status: 409 }
+    );
+  }
 
   const vectorRates = await getRatesForInferenceVector();
 
@@ -247,7 +287,10 @@ export async function POST(request: NextRequest) {
     const ctx = auditContextFrom(request);
     void recordAudit({
       orgId: org.org_id,
-      actorUserId: auth.user!.id,
+      // Null for an API key. The audit row still records WHICH key acted, in
+      // metadata below — "created by key ahu_live_xxxx" is more useful to an
+      // operator than attributing it to whoever happened to mint that key.
+      actorUserId: auth.userId,
       action: "collection.created",
       targetType: "vector_collection",
       targetId: data.id,
@@ -255,6 +298,10 @@ export async function POST(request: NextRequest) {
         name: data.name,
         dimensions: data.dimensions,
         embedding_model_id: data.embedding_model_id,
+        // How this was created, so the trail distinguishes a dashboard click
+        // from a script — and names the key when it was a script.
+        via: auth.via,
+        api_key_id: auth.apiKey?.keyId ?? null,
       },
       ipAddress: ctx.ipAddress,
       userAgent: ctx.userAgent,
