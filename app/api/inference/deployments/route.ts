@@ -14,9 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDeployment } from "@/lib/inference/deploy-validate";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
@@ -55,22 +54,18 @@ const createSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-deploy-list",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const statusFilter = request.nextUrl.searchParams.get("status");
 
@@ -113,10 +108,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-deploy-create",
     limit: 5,
     windowMs: 60_000,
@@ -132,13 +128,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json(
       { error: "Viewers cannot create deployments" },
       { status: 403 }
@@ -249,7 +240,7 @@ export async function POST(request: NextRequest) {
     .from("deployments")
     .insert({
       org_id: org.org_id,
-      created_by_user_id: auth.user!.id,
+      created_by_user_id: (await actingUserId(auth))!,
       name: parsed.data.name,
       source: parsed.data.source,
       source_ref: parsed.data.source_ref,
@@ -280,7 +271,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "deployment.created",
     targetType: "deployment",
     targetId: data.id,

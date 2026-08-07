@@ -22,7 +22,7 @@ export interface OpenRouterForwardOptions {
   env: Env;
   body: unknown;
   upstreamKey: string;           // either env.OPENROUTER_PLATFORM_KEY or caller's BYOK
-  path: "/chat/completions" | "/embeddings" | "/completions";
+  path: "/chat/completions" | "/embeddings" | "/completions" | "/rerank";
   signal?: AbortSignal;          // tied to client AbortController for cancel propagation
   extraHeaders?: Record<string, string>;
 }

@@ -18,9 +18,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { uploadBytes, BATCH_BUCKET, fileKey, deleteObject } from "@/lib/inference/batch-storage";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
@@ -37,18 +36,18 @@ const purposeQuerySchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-files-list",
     limit: 60,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const url = new URL(request.url);
   const purposeFilter = url.searchParams.get("purpose");
@@ -91,19 +90,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-files-upload",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot upload files" }, { status: 403 });
   }
 
@@ -184,7 +183,7 @@ export async function POST(request: NextRequest) {
     .insert({
       id: fileId,
       org_id: org.org_id,
-      created_by: auth.user!.id,
+      created_by: auth.userId,
       purpose,
       filename,
       bytes: body.length,
@@ -216,7 +215,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "file.uploaded",
     targetType: "file",
     targetId: fileId,

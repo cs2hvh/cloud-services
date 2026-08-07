@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeAuthCookies } from "./safe-cookies";
 
 /**
  * Supabase Session Middleware
@@ -25,7 +26,7 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return safeAuthCookies(request.cookies.getAll());
         },
         setAll(cookiesToSet) {
           // This is called when the session is refreshed

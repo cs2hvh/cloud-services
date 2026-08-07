@@ -1,3 +1,5 @@
+import type { TraceSpan } from "./lib/trace.ts";
+
 /**
  * Bindings exposed to the edge gateway by wrangler.toml.
  * Keep this in sync with the [vars], [[kv_namespaces]], [[queues.producers]],
@@ -8,6 +10,14 @@ export interface Env {
   API_KEYS: KVNamespace;
   SPEND: KVNamespace;
   L1_CACHE: KVNamespace;
+  /** Phase 3 S3: prompt template cache. Key: "prompt:{orgId}:{name}:{label}" */
+  PROMPTS: KVNamespace;
+  /** Phase 3 S2: per-org guardrail policy cache. Key: "guardrail:{orgId}:{name}" */
+  GUARDRAILS: KVNamespace;
+
+  // R2
+  /** Phase 3 S2: sampled span payloads. Key: spans/{orgId}/{traceId}/{requestId}.json */
+  PAYLOAD_BUCKET: R2Bucket;
 
   // Durable Objects
   RATE_LIMITER: DurableObjectNamespace;
@@ -15,6 +25,8 @@ export interface Env {
   // Queues
   AUDIT_EVENTS: Queue<AuditEvent>;
   USAGE_EVENTS: Queue<UsageEvent>;
+  /** Phase 3 S1: trace span events → inference.trace_spans */
+  TRACE_EVENTS: Queue<TraceSpan>;
 
   // Public vars
   OPENROUTER_BASE_URL: string;
@@ -50,8 +62,32 @@ export interface Env {
  * present without re-querying KV.
  */
 export interface AuthContext {
+  // Rate-limit bucket identity + the on-behalf-of route guard (isOnBehalfOf).
+  // For a normal customer key this is the real key id (a UUID). For an
+  // on-behalf-of request it's `obo:{orgId}` — a STRING, not a UUID, so it
+  // stays per-org for fair rate-limiting instead of one shared global bucket.
   keyId: string;
+  // What every route must stamp on UsageEvent.apiKeyId. inference.usage.api_key_id
+  // is a plain UUID column — for a normal key this equals `keyId`; for
+  // on-behalf-of it's the OBO_API_KEY_ID sentinel (never `keyId` directly,
+  // which would fail the INSERT: found live, 2026-07-06 — `obo:{orgId}` isn't
+  // a valid UUID and the usage-consumer's insert silently failed/retried).
+  usageApiKeyId: string;
   orgId: string;
+  // Agent-scope restriction (doc: manager ask 2026-07-08 — per-agent access
+  // keys). Null = unrestricted (today's default, and always null for an
+  // on-behalf-of identity). Set = agentScopeMiddleware + the agent-run
+  // routes restrict this key to running/reading only that one agent.
+  agentId: string | null;
+  // Public/private tier (doc: manager ask 2026-07-08 — public access keys).
+  // "private" (default, and always private for on-behalf-of) = server-to-
+  // server, full trace/cost visibility. "public" = safe to embed in a
+  // customer's website JS: originCheckMiddleware requires a matching Origin,
+  // and agent-runs.ts redacts cost_cents/steps from every response.
+  keyTier: "private" | "public";
+  // Required (non-null, non-empty) when keyTier is "public" — the DB CHECK
+  // constraint (chk_public_key_has_origins) guarantees this at write time.
+  allowedOrigins: string[] | null;
   allowedModels: string[] | null; // null = unrestricted
   allowedIpCidrs: string[] | null;
   zdrEnabled: boolean;
@@ -97,7 +133,22 @@ export interface UsageEvent {
   apiKeyId: string;
   userId: string | null;
   modelId: string;
-  modality: "chat" | "completion" | "embedding" | "image" | "audio_stt" | "audio_tts" | "video" | "rerank";
+  modality:
+    | "chat"
+    | "completion"
+    | "embedding"
+    | "image"
+    | "audio_stt"
+    | "audio_tts"
+    | "tts"
+    | "stt"
+    | "video"
+    | "music"
+    | "ocr"
+    | "rerank"
+    | "moderation"
+    | "realtime"
+    | "agent_tool";
   requestId: string;
   billedTo: "platform" | "byok";
   inputTokens: number | null;

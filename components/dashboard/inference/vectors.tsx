@@ -300,7 +300,7 @@ export function VectorCollections({
                 </span>
               </div>
               <span className={`${MONO} text-[11px] text-white/55`}>
-                {new Date(c.created_at).toLocaleDateString(undefined, {
+                {new Date(c.created_at).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })}

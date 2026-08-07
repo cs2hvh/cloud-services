@@ -60,8 +60,9 @@ interface PlatformModel {
   display_name: string;
   provider: string;
   description: string | null;
-  input_cost_per_million: number;
-  output_cost_per_million: number;
+  /** Null when the model has no price in inference.models — withheld from customers. */
+  input_cost_per_million: number | null;
+  output_cost_per_million: number | null;
   context_window: number;
   supports_vision: boolean;
   supports_function_calling: boolean;
@@ -218,8 +219,6 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
     display_name: '',
     provider: 'openai',
     description: '',
-    input_cost_per_million: 0,
-    output_cost_per_million: 0,
     context_window: 128000,
     supports_vision: false,
     supports_function_calling: true,
@@ -324,8 +323,6 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       display_name: '',
       provider: 'openai',
       description: '',
-      input_cost_per_million: 0,
-      output_cost_per_million: 0,
       context_window: 128000,
       supports_vision: false,
       supports_function_calling: true,
@@ -372,8 +369,6 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       display_name: model.display_name,
       provider: model.provider,
       description: model.description || '',
-      input_cost_per_million: model.input_cost_per_million,
-      output_cost_per_million: model.output_cost_per_million,
       context_window: model.context_window,
       supports_vision: model.supports_vision,
       supports_function_calling: model.supports_function_calling,
@@ -394,8 +389,6 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
         display_name: formData.display_name,
         provider: formData.provider,
         description: formData.description || null,
-        input_cost_per_million: formData.input_cost_per_million,
-        output_cost_per_million: formData.output_cost_per_million,
         context_window: formData.context_window,
         supports_vision: formData.supports_vision,
         supports_function_calling: formData.supports_function_calling,
@@ -556,36 +549,21 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
             />
           </div>
 
-          {/* Pricing */}
+          {/* Pricing — read-only pointer, not an input. */}
           <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-2">
               <DollarSign className="h-4 w-4 text-green-400" />
-              <span className="font-medium text-white">Pricing (per million tokens)</span>
+              <span className="font-medium text-white">Pricing</span>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="input_cost">Input Cost ($)</Label>
-                <Input
-                  id="input_cost"
-                  type="number"
-                  step="0.001"
-                  value={formData.input_cost_per_million}
-                  onChange={(e) => setFormData({ ...formData, input_cost_per_million: parseFloat(e.target.value) || 0 })}
-                  className="bg-slate-900 border-slate-700"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="output_cost">Output Cost ($)</Label>
-                <Input
-                  id="output_cost"
-                  type="number"
-                  step="0.001"
-                  value={formData.output_cost_per_million}
-                  onChange={(e) => setFormData({ ...formData, output_cost_per_million: parseFloat(e.target.value) || 0 })}
-                  className="bg-slate-900 border-slate-700"
-                />
-              </div>
-            </div>
+            <p className="text-sm text-slate-400">
+              Set in <span className="text-slate-200">Admin → Inference Pricing</span>, which shows
+              upstream cost and margin side by side and blocks a below-cost price.
+              This table is the catalogue — which models are offered — not the price list.
+            </p>
+            <p className="text-sm text-slate-500 mt-2">
+              A model with no price there is withheld from customers and shown as
+              <span className="text-slate-300"> — </span> in the list below.
+            </p>
           </div>
 
           {/* Context Window */}
@@ -1203,12 +1181,12 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
                       </td>
                       <td className="py-3 px-4">
                         <span className="text-green-400 font-mono text-sm">
-                          ${model.input_cost_per_million}/M
+                          {model.input_cost_per_million == null ? "—" : `$${model.input_cost_per_million}/M`}
                         </span>
                       </td>
                       <td className="py-3 px-4">
                         <span className="text-orange-400 font-mono text-sm">
-                          ${model.output_cost_per_million}/M
+                          {model.output_cost_per_million == null ? "—" : `$${model.output_cost_per_million}/M`}
                         </span>
                       </td>
                       <td className="py-3 px-4">

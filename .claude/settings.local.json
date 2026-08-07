@@ -49,7 +49,9 @@
       "Bash(git -C /c/cloud-services branch -a)",
       "Bash(git -C /c/cloud-services shortlog -sn --since=\"3 months ago\")",
       "Bash(git -C /c/cloud-services log --oneline master..dev)",
-      "Bash(git -C /c/cloud-services diff --stat master..dev)"
+      "Bash(git -C /c/cloud-services diff --stat master..dev)",
+"Bash(curl -s -X POST \"https://xafjjpgazdxhktpfeuri.supabase.co/rest/v1/vector_collections\":*)",
+      "Bash(curl -s -X POST \"https://xafjjpgazdxhktpfeuri.supabase.co/rest/v1/vector_rows\":*)"
     ]
   }
 }

@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 const EVENTS = [
@@ -48,11 +47,11 @@ const DEFAULT_SETTINGS = {
   webhook_secret: null as string | null,
 };
 
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,19 +81,19 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-notif-config",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role !== "owner" && org.role !== "admin") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin") {
     return NextResponse.json(
       { error: "Only owners and admins can change notification settings" },
       { status: 403 }
@@ -166,7 +165,7 @@ export async function PUT(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "notifications.config_updated",
     targetType: "notification_settings",
     targetId: org.org_id,

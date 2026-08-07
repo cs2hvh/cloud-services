@@ -5,6 +5,7 @@ on:
     branches: [ai, master, dev]
     paths:
       - "workers/deploy-runner/**"
+      - "workers/runner-core/**"
       - ".github/workflows/deploy-runner-image.yml"
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
       - name: Build + push
         uses: docker/build-push-action@v6
         with:
-          context: ./workers/deploy-runner
+          context: ./workers
           file: ./workers/deploy-runner/Dockerfile
           push: true
           platforms: linux/amd64

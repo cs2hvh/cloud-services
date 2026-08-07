@@ -1,0 +1,9 @@
+
+# local dev launcher (contains secrets)
+.run-local.sh
+# ...and the env file it sources (SUPABASE_SERVICE_ROLE_KEY, BYOK_DEK, …).
+# The pattern above does NOT cover it — it was staged for commit once already.
+.run-local.sh.env
+.env
+.env.local
+.env.*.local

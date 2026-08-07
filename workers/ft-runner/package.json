@@ -15,6 +15,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@ahura/runner-core": "file:../runner-core",
     "@supabase/supabase-js": "^2.55.0",
     "@upstash/redis": "^1.34.0",
     "axios": "^1.7.0",

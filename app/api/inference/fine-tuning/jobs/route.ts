@@ -11,20 +11,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
+import { modelScopeRefusal } from "@/lib/inference/api-key-auth";
 import { BillingCredits } from "@/lib/billing/credits";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { preflightDataset } from "@/lib/inference/finetune-validate";
 import { enqueueFinetuneJob } from "@/lib/inference/finetune-queue";
-import { internalError, tooManyRequests } from "@/lib/inference/api-errors";
+import { internalError } from "@/lib/inference/api-errors";
 import {
   ftBaseGpuFit,
   ftBaseIsGated,
   resolveHuggingFaceId,
 } from "@/lib/inference/ft-base-models";
 import { checkHuggingFaceAccess } from "@/lib/inference/hf-access";
+import { isFeatureEnabled } from "@/lib/admin/feature-switches";
 
 const createSchema = z.object({
   name: z
@@ -95,22 +96,18 @@ const ALLOWED_FT_BASE_MODELS = new Set([
 ]);
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-ft-list",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const statusFilter = request.nextUrl.searchParams.get("status");
 
@@ -151,15 +148,29 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-ft-create",
     limit: 5,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
+
+  // Kill switch, checked before any validation or GPU reservation so a refused
+  // job never touches RunPod. Fails OPEN — see lib/admin/feature-switches.ts.
+  if (!(await isFeatureEnabled("ai_finetuning_enabled"))) {
+    return NextResponse.json(
+      {
+        error:
+          "Fine-tuning is temporarily unavailable while we work on the platform. No charge is made for refused requests.",
+        code: "feature_disabled",
+      },
+      { status: 503, headers: { "Retry-After": "300" } }
+    );
+  }
 
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
@@ -168,6 +179,16 @@ export async function POST(request: NextRequest) {
       { error: "Validation error", details: parsed.error.issues },
       { status: 400 }
     );
+  }
+
+
+  // `allowed_models` governs every control-plane field naming a model the
+  // platform will bill against — not just chat. A restricted key must not be
+  // able to reach a model through an eval or a fine-tune that it could not
+  // reach through the gateway.
+  if (auth.apiKey) {
+    const refusal = modelScopeRefusal(auth.apiKey, parsed.data.base_model_id);
+    if (refusal) return NextResponse.json({ error: refusal, code: "model_not_allowed" }, { status: 403 });
   }
 
   // Base model must be an open-weight model we can actually fine-tune on
@@ -180,13 +201,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot create fine-tuning jobs" }, { status: 403 });
   }
 
@@ -315,7 +331,7 @@ export async function POST(request: NextRequest) {
     (preflight.estimated_cost_cents ?? 0) / 100,
     MIN_FT_BALANCE_USD
   );
-  let payerUserId = auth.user!.id;
+  let payerUserId: string | null = auth.userId;
   {
     const { data: orgRow } = await supabase
       .schema("inference")
@@ -323,7 +339,13 @@ export async function POST(request: NextRequest) {
       .select("billing_user_id, owner_user_id")
       .eq("id", org.org_id)
       .maybeSingle();
-    payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+    payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.userId;
+  }
+  if (!payerUserId) {
+    return NextResponse.json(
+      { error: "This organisation has no billing owner, so a fine-tune cannot be charged to anyone.", code: "no_billing_owner" },
+      { status: 409 }
+    );
   }
   const funded = await BillingCredits.hasSufficientBalance(payerUserId, requiredUsd);
   if (!funded) {
@@ -342,7 +364,7 @@ export async function POST(request: NextRequest) {
     .from("finetunes")
     .insert({
       org_id: org.org_id,
-      created_by_user_id: auth.user!.id,
+      created_by_user_id: (await actingUserId(auth))!,
       name: parsed.data.name,
       base_model_id: parsed.data.base_model_id,
       method: parsed.data.method,
@@ -366,7 +388,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "finetune.created",
     targetType: "finetune",
     targetId: data.id,

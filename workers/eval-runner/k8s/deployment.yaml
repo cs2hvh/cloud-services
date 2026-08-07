@@ -1,0 +1,111 @@
+# ahura-eval-runner Deployment
+#
+# Processes queued inference.eval_runs by calling the inference gateway for
+# each test case and scoring the output. Unlike ft-runner, this runner needs
+# NO GPU — it only makes HTTP calls to our own /v1/chat/completions endpoint.
+#
+# Single replica is safe for v1: CONCURRENT_CASES controls per-run parallelism
+# within the process. If you need to run multiple datasets in parallel, raise
+# replicas — the claim is atomic (UPDATE WHERE status='queued') so two replicas
+# won't pick the same run.
+#
+# Required secret: ahura-eval-runner-secrets (see bottom of this file for the
+# full list of env vars to put in that secret).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ahura-eval-runner
+  namespace: ahura
+  labels:
+    app: ahura-eval-runner
+    tier: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ahura-eval-runner
+  template:
+    metadata:
+      labels:
+        app: ahura-eval-runner
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: runner
+          image: ghcr.io/cs2hvh/ahura-eval-runner:latest
+          imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: ahura-eval-runner-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahura-eval-runner-health
+  namespace: ahura
+spec:
+  type: ClusterIP
+  selector:
+    app: ahura-eval-runner
+  ports:
+    - port: 8080
+      targetPort: health
+      protocol: TCP
+      name: health
+
+# ── Secret template (create once, never commit real values) ────────────────────
+#
+# kubectl create secret generic ahura-eval-runner-secrets \
+#   --namespace ahura \
+#   --from-literal=REDIS_URL="redis://:password@redis-host:6379/0" \
+#   --from-literal=SUPABASE_URL="https://xxx.supabase.co" \
+#   --from-literal=SUPABASE_SERVICE_ROLE_KEY="eyJ..." \
+#   --from-literal=INFERENCE_PLATFORM_KEY="sk-ahura-platform-..." \
+#   --from-literal=INFERENCE_BASE_URL="https://api.ahurasense.com/v1" \
+#   --from-literal=CONCURRENT_CASES="4" \
+#   --from-literal=CASE_TIMEOUT_MS="60000" \
+#   --from-literal=MAX_CONCURRENT_JOBS="2" \
+#   --from-literal=CLAIM_POLL_INTERVAL_MS="5000"

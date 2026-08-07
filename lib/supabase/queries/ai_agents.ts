@@ -1176,6 +1176,116 @@ export const AgentApiKeys = {
 // PLATFORM MODELS (OpenRouter)
 // ============================================================
 
+
+/**
+ * Customer prices, dollars per million tokens, for the models asked about.
+ *
+ * inference.models.pricing is the one price list — it is what the rest of the
+ * platform bills at, read here at request time rather than copied. Prices are
+ * stored there in cents per million, hence /100.
+ *
+ * A model missing from the map has no price, and callers must not invent one:
+ * the legacy stack used to fall back to `agents.platform_models`, which held our
+ * upstream COST, and to a hardcoded table that had drifted below cost. Both
+ * quietly undercharged for months.
+ */
+async function pricesFor(modelIds: string[]): Promise<Map<string, { input: number; output: number }>> {
+  const out = new Map<string, { input: number; output: number }>();
+  if (modelIds.length === 0) return out;
+
+  const supabase = await createServiceClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .schema('inference')
+    .from('models')
+    .select('model_id, pricing')
+    .in('model_id', modelIds);
+
+  // A failed query is NOT "these models have no price". Swallowing it would
+  // hide every paid model from the catalogue and answer every chat with
+  // "model unavailable", while the logs blamed missing configuration. Callers
+  // already turn a throw into a 500/503, which is what a database failure is.
+  if (error) {
+    throw new Error(`[Pricing] could not read inference.models: ${error.message}`);
+  }
+
+  for (const row of data ?? []) {
+    const p = row.pricing;
+    if (p?.input_cents_per_mtok != null && p?.output_cents_per_mtok != null) {
+      out.set(row.model_id, { input: p.input_cents_per_mtok / 100, output: p.output_cents_per_mtok / 100 });
+    }
+  }
+  return out;
+}
+
+/**
+ * Billing price for one model, or null if we cannot price it — in which case
+ * the caller must refuse the run rather than bill zero.
+ *
+ * FREE MODELS ARE PRICED, NOT UNPRICED. A catalogue entry flagged `is_free`
+ * costs nothing by design, and zero is a real price. Without this, an agent on
+ * a free model would be refused for "no price configured" — which is what
+ * happened to a live agent here: `openai/gpt-oss-120b:free` has no row in
+ * inference.models, because there is no price to record.
+ *
+ * The catalogue is only consulted on a miss, so the common path stays one query.
+ */
+export async function modelPriceUsdPerMillion(
+  modelId: string
+): Promise<{ input: number; output: number } | null> {
+  const price = (await pricesFor([modelId])).get(modelId);
+  if (price) return price;
+
+  try {
+    const db = await getAgentsDb();
+    const { data } = await db
+      .from('platform_models')
+      .select('is_free')
+      .eq('model_id', modelId)
+      .maybeSingle();
+    if (data?.is_free) return { input: 0, output: 0 };
+  } catch (err) {
+    console.error('[Pricing] could not check the catalogue for a free model:', err);
+  }
+
+  console.error(`[Pricing] "${modelId}" has no price in inference.models and is not a free catalogue model.`);
+  return null;
+}
+
+/**
+ * Attach prices to catalogue rows for display.
+ *
+ * `agents.platform_models` answers "which models do we offer and what can they
+ * do". It does not answer "what does it cost" — its own price columns held our
+ * cost basis and are no longer read.
+ *
+ * A paid model we cannot price is dropped, so it is never offered at cost.
+ * `keepUnpriced` is for the admin table, where an operator has to see the
+ * models that need a price before they can be offered.
+ */
+async function withPlatformPricing(
+  rows: PlatformModel[],
+  opts: { keepUnpriced?: boolean } = {}
+): Promise<PlatformModel[]> {
+  if (rows.length === 0) return rows;
+  const prices = await pricesFor(rows.map((r) => r.model_id));
+
+  const out: PlatformModel[] = [];
+  for (const row of rows) {
+    const p = prices.get(row.model_id);
+    if (p) {
+      out.push({ ...row, input_cost_per_million: p.input, output_cost_per_million: p.output });
+    } else if (row.is_free) {
+      out.push({ ...row, input_cost_per_million: 0, output_cost_per_million: 0 });
+    } else if (opts.keepUnpriced) {
+      out.push({ ...row, input_cost_per_million: null as unknown as number, output_cost_per_million: null as unknown as number });
+    } else {
+      console.error(`[PlatformModels] "${row.model_id}" has no price in inference.models — withheld rather than sold at cost.`);
+    }
+  }
+  return out;
+}
+
 export const PlatformModels = {
   /**
    * Get all active platform models (for user selection)
@@ -1185,7 +1295,11 @@ export const PlatformModels = {
       const db = await getAgentsDb();
       const { data, error } = await db
         .from('platform_models')
-        .select('*')
+        // Catalogue columns only. The two *_cost_per_million columns are NOT
+        // read: price is not stored here, it is resolved from
+        // inference.models by withPlatformPricing below. Selecting them would
+        // put a stale number one typo away from being billed.
+        .select('id, model_id, display_name, provider, description, context_window, supports_vision, supports_function_calling, supports_streaming, is_active, is_free, sort_order, created_at, updated_at')
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
@@ -1193,7 +1307,7 @@ export const PlatformModels = {
         console.error('[PlatformModels] Error listing:', error.message);
         return [];
       }
-      return (data || []) as PlatformModel[];
+      return await withPlatformPricing((data || []) as PlatformModel[]);
     } catch (err) {
       console.error('[PlatformModels] Error listing:', err);
       return [];
@@ -1209,14 +1323,18 @@ export const PlatformModels = {
       const { data, error } = await supabase
         .schema('agents')
         .from('platform_models')
-        .select('*')
+        // Catalogue columns only, same as list_active — the admin table showed
+        // the stored number as "price", and that number was our cost.
+        .select('id, model_id, display_name, provider, description, context_window, supports_vision, supports_function_calling, supports_streaming, is_active, is_free, sort_order, created_at, updated_at')
         .order('sort_order', { ascending: true });
 
       if (error) {
         console.error('[PlatformModels] Error listing all:', error.message);
         return [];
       }
-      return (data || []) as PlatformModel[];
+      // keepUnpriced: an operator must see the models customers can't be
+      // offered — those are the ones needing a price in inference.models.
+      return await withPlatformPricing((data || []) as PlatformModel[], { keepUnpriced: true });
     } catch (err) {
       console.error('[PlatformModels] Error listing all:', err);
       return [];
@@ -1232,7 +1350,9 @@ export const PlatformModels = {
       const { data, error } = await supabase
         .schema('agents')
         .from('platform_models')
-        .select('*')
+        // Catalogue columns only — the table's own price columns are stale and
+        // must never reach a caller, admin or not.
+        .select('id, model_id, display_name, provider, description, context_window, supports_vision, supports_function_calling, supports_streaming, is_active, is_free, sort_order, created_at, updated_at')
         .eq('id', id)
         .single();
 
@@ -1240,11 +1360,42 @@ export const PlatformModels = {
         console.error('[PlatformModels] Error getting:', error.message);
         return null;
       }
-      return data as PlatformModel;
+      // keepUnpriced: an admin has to SEE a model that needs a price before
+      // they can fix it, so it comes back with null rather than disappearing.
+      return (await withPlatformPricing([data as PlatformModel], { keepUnpriced: true }))[0] ?? null;
     } catch (err) {
       console.error('[PlatformModels] Error getting:', err);
       return null;
     }
+  },
+
+
+  /**
+   * Raw catalogue row by model_id, with NO pricing applied.
+   *
+   * `get_by_model_id` is the customer-facing lookup and deliberately returns
+   * null for a paid model we cannot price, so it is never sold at cost. That
+   * makes it wrong for asking "does this row exist" — an unpriced model would
+   * read as absent, and the admin duplicate check would wave through an insert
+   * the database then rejects with a unique violation. Existence is a question
+   * about the catalogue, not about price.
+   */
+  exists_in_catalogue: async (model_id: string): Promise<boolean> => {
+    const db = await getAgentsDb();
+    const { data, error } = await db
+      .from('platform_models')
+      .select('id')
+      .eq('model_id', model_id)
+      .maybeSingle();
+
+    // Deliberately no catch returning false: "we could not check" is not "it
+    // does not exist". Swallowing it would report a healthy catalogue as empty
+    // and send the caller into an insert on the strength of a failed read —
+    // the same mistake pricesFor() used to make one function up.
+    if (error) {
+      throw new Error(`[PlatformModels] could not check the catalogue: ${error.message}`);
+    }
+    return !!data;
   },
 
   /**
@@ -1255,7 +1406,8 @@ export const PlatformModels = {
       const db = await getAgentsDb();
       const { data, error } = await db
         .from('platform_models')
-        .select('*')
+        // Catalogue columns only — see list_active.
+        .select('id, model_id, display_name, provider, description, context_window, supports_vision, supports_function_calling, supports_streaming, is_active, is_free, sort_order, created_at, updated_at')
         .eq('model_id', model_id)
         .single();
 
@@ -1263,7 +1415,10 @@ export const PlatformModels = {
         console.error('[PlatformModels] Error getting by model_id:', error.message);
         return null;
       }
-      return data as PlatformModel;
+      // Same repricing as list_active — this is the path that BILLS, so it is
+      // the one that must not fall back to the cost basis. A model we cannot
+      // price returns null, and the caller charges nothing rather than cost.
+      return (await withPlatformPricing([data as PlatformModel]))[0] ?? null;
     } catch (err) {
       console.error('[PlatformModels] Error getting by model_id:', err);
       return null;
@@ -1273,13 +1428,24 @@ export const PlatformModels = {
   /**
    * Create a new platform model (admin only)
    */
-  create: async (payload: PlatformModelInsert): Promise<{ success: boolean; data?: PlatformModel; error?: string }> => {
+  create: async (
+    payload: Omit<PlatformModelInsert, 'input_cost_per_million' | 'output_cost_per_million'>
+  ): Promise<{ success: boolean; data?: PlatformModel; error?: string }> => {
     try {
       const supabase = await createServiceClient();
       const { data, error } = await supabase
         .schema('agents')
         .from('platform_models')
-        .insert(payload)
+        .insert({
+          ...payload,
+          // These columns are NOT NULL in a table that predates the split, but
+          // nothing reads them any more — price is resolved from
+          // inference.models at request time. Zero is written as a neutral
+          // placeholder rather than a number someone might later mistake for a
+          // real price, which is exactly how the cost basis got billed before.
+          input_cost_per_million: 0,
+          output_cost_per_million: 0,
+        })
         .select()
         .single();
 
@@ -1365,12 +1531,4 @@ export const PlatformModels = {
     }
   },
 
-  /**
-   * Calculate cost for token usage
-   */
-  calculate_cost: (model: PlatformModel, input_tokens: number, output_tokens: number): number => {
-    const inputCost = (input_tokens / 1_000_000) * model.input_cost_per_million;
-    const outputCost = (output_tokens / 1_000_000) * model.output_cost_per_million;
-    return inputCost + outputCost;
-  },
 };

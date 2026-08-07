@@ -22,8 +22,8 @@ export interface AIModel {
   name: string;
   provider: ModelProvider;
   contextWindow: number;
-  inputCostPer1k: number;
-  outputCostPer1k: number;
+  // No price here on purpose: inference.models.pricing is the single source,
+  // read at request time. A copy in code is a copy that drifts.
   supportsStreaming: boolean;
   supportsVision?: boolean;
   supportsFunctionCalling?: boolean;

@@ -19,14 +19,29 @@
  * The org KV counter itself is INCRBY'd from the usage-events consumer
  * once a request completes. We accept a small race at the boundary;
  * tightenable to a Durable Object reservation later if we cross ~10k RPS.
+ *
+ * Exemption (found live, 2026-07-18): agent-management operations (create/
+ * list/update/delete an agent, mint/rotate/revoke its keys, MCP server and
+ * knowledge-base CRUD) don't spend money themselves — only RUNNING an agent
+ * does. An org that hit its hard cap must still be able to delete a
+ * runaway agent or revoke a leaking key — the one thing that would let
+ * them fix it — not get locked out of that too. See management-paths.ts
+ * for why this can't just be "put those routes in a separate group"
+ * instead — Hono doesn't scope `.use("*", ...)` per sub-app.
  */
 import type { MiddlewareHandler } from "hono";
 import type { Env, HonoVariables } from "../types.ts";
+import { isManagementRequest } from "../lib/management-paths.ts";
 
 export const spendCheckMiddleware: MiddlewareHandler<{
   Bindings: Env;
   Variables: HonoVariables;
 }> = async (c, next) => {
+  if (isManagementRequest(c.req.method, new URL(c.req.url).pathname)) {
+    await next();
+    return;
+  }
+
   const auth = c.get("auth");
   const keyCap = auth.hardCapCents;
   const orgCap = auth.orgHardCapCents;
