@@ -16,8 +16,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'GPT-4o',
     provider: 'openai',
     contextWindow: 128000,
-    inputCostPer1k: 0.005,
-    outputCostPer1k: 0.015,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -27,8 +25,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'GPT-4o Mini',
     provider: 'openai',
     contextWindow: 128000,
-    inputCostPer1k: 0.00015,
-    outputCostPer1k: 0.0006,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -38,8 +34,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'GPT-4 Turbo',
     provider: 'openai',
     contextWindow: 128000,
-    inputCostPer1k: 0.01,
-    outputCostPer1k: 0.03,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -51,8 +45,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Claude 3.5 Sonnet',
     provider: 'anthropic',
     contextWindow: 200000,
-    inputCostPer1k: 0.003,
-    outputCostPer1k: 0.015,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -62,8 +54,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Claude 3 Opus',
     provider: 'anthropic',
     contextWindow: 200000,
-    inputCostPer1k: 0.015,
-    outputCostPer1k: 0.075,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -73,8 +63,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Claude 3 Haiku',
     provider: 'anthropic',
     contextWindow: 200000,
-    inputCostPer1k: 0.00025,
-    outputCostPer1k: 0.00125,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -86,8 +74,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Llama 3.1 70B Instruct',
     provider: 'openrouter',
     contextWindow: 131072,
-    inputCostPer1k: 0.00052,
-    outputCostPer1k: 0.00075,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -97,8 +83,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Llama 3.1 8B Instruct',
     provider: 'openrouter',
     contextWindow: 131072,
-    inputCostPer1k: 0.00006,
-    outputCostPer1k: 0.00006,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -110,8 +94,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Mistral Large',
     provider: 'openrouter',
     contextWindow: 128000,
-    inputCostPer1k: 0.002,
-    outputCostPer1k: 0.006,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -121,8 +103,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Mistral Small',
     provider: 'openrouter',
     contextWindow: 128000,
-    inputCostPer1k: 0.0002,
-    outputCostPer1k: 0.0006,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -132,8 +112,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Mixtral 8x7B',
     provider: 'openrouter',
     contextWindow: 32768,
-    inputCostPer1k: 0.00024,
-    outputCostPer1k: 0.00024,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -145,8 +123,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Gemini Pro 1.5',
     provider: 'openrouter',
     contextWindow: 2097152,
-    inputCostPer1k: 0.00125,
-    outputCostPer1k: 0.005,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -156,8 +132,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'Gemini Flash 1.5',
     provider: 'openrouter',
     contextWindow: 1000000,
-    inputCostPer1k: 0.000075,
-    outputCostPer1k: 0.0003,
     supportsStreaming: true,
     supportsVision: true,
     supportsFunctionCalling: true,
@@ -169,8 +143,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'DeepSeek Chat',
     provider: 'openrouter',
     contextWindow: 64000,
-    inputCostPer1k: 0.00014,
-    outputCostPer1k: 0.00028,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -180,8 +152,6 @@ export const AVAILABLE_MODELS: AIModel[] = [
     name: 'DeepSeek R1',
     provider: 'openrouter',
     contextWindow: 64000,
-    inputCostPer1k: 0.00055,
-    outputCostPer1k: 0.00219,
     supportsStreaming: true,
     supportsVision: false,
     supportsFunctionCalling: true,
@@ -200,19 +170,12 @@ export function getModelsByProvider(provider: ModelProvider): AIModel[] {
   return AVAILABLE_MODELS.filter(m => m.provider === provider);
 }
 
-export function calculateCost(
-  modelId: string,
-  promptTokens: number,
-  completionTokens: number
-): number {
-  const model = getModelById(modelId);
-  if (!model) return 0;
-  
-  const inputCost = (promptTokens / 1000) * model.inputCostPer1k;
-  const outputCost = (completionTokens / 1000) * model.outputCostPer1k;
-  
-  return inputCost + outputCost;
-}
+// calculateCost() used to live here and priced the legacy chat/playground
+// fallbacks from the hardcoded table below. Checked 2026-08-06 against
+// inference.models, that table had drifted: gpt-4o-mini was our COST, and
+// deepseek-r1 was BELOW cost. It is gone; pricing comes from
+// inference.models.pricing via modelPriceUsdPerMillion(). The entries below are
+// capability metadata only and deliberately carry NO price.
 
 export function getDefaultModel(): AIModel {
   return AVAILABLE_MODELS.find(m => m.id === 'openai/gpt-4o-mini')!;
