@@ -33,6 +33,13 @@ export function getOAuthStateSecret(
  * Validates a returnTo path, restricting it to internal /dashboard routes only.
  * Rejects anything that could be used for open redirect (external URLs, protocol-relative paths).
  */
+/**
+ * Git-provider OAuth flows are started from — and belong back on — the
+ * Connections tab of settings. The ?tab= is part of the default so callbacks
+ * that fall back to it still land the user where they started.
+ */
+export const DEFAULT_OAUTH_RETURN_TO = "/dashboard/settings?tab=account";
+
 export function sanitizeReturnTo(path: unknown): string {
   if (
     typeof path === "string" &&
@@ -41,7 +48,7 @@ export function sanitizeReturnTo(path: unknown): string {
   ) {
     return path;
   }
-  return "/dashboard/settings";
+  return DEFAULT_OAUTH_RETURN_TO;
 }
 
 /**

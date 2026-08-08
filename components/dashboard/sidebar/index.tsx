@@ -403,7 +403,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             { label: "All Agents", href: "/dashboard/services/ai-agents", icon: Bot },
             { label: "New Agent", href: "/dashboard/services/ai-agents/new", icon: Plus },
             { label: "Knowledge", href: "/dashboard/services/ai-agents/knowledge-bases", icon: BookOpen, matchPrefix: true },
-            { label: "API Keys", href: "/dashboard/services/ai-agents/settings", icon: Key, matchPrefix: true },
+            { label: "Settings", href: "/dashboard/services/ai-agents/settings", icon: Settings, matchPrefix: true },
         ],
     };
 
@@ -728,7 +728,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             <div className="border-t border-white/[0.06] p-2">
                 <div className="flex items-center gap-2">
                     <Link
-                        href="/dashboard/nav/profile"
+                        href="/dashboard/settings"
                         className="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-[5px] hover:bg-white/[0.03] transition-colors"
                     >
                         <div
