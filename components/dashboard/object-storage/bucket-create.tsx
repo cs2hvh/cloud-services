@@ -72,7 +72,10 @@ const BucketCreate = ({
     const [isLoading, setIsLoading] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
-    const [storagePrice, setStoragePrice] = useState<number>(0);
+    // null = we could not read the catalog. Distinct from 0, which genuinely
+    // means free — conflating the two made a failed price fetch advertise
+    // "Free" storage on a paid bucket.
+    const [storagePrice, setStoragePrice] = useState<number | null>(0);
     const [loadingPrice, setLoadingPrice] = useState(true);
     const [isCheckingName, setIsCheckingName] = useState(false);
     const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
@@ -101,7 +104,7 @@ const BucketCreate = ({
                 }
             } catch (err) {
                 console.error("Error fetching storage price:", err);
-                setStoragePrice(0);
+                setStoragePrice(null);
             } finally {
                 setLoadingPrice(false);
             }
@@ -930,7 +933,10 @@ const BucketCreate = ({
                                     Monthly cost
                                 </p>
                                 <div className="flex items-baseline gap-1">
-                                    {loadingPrice ? (
+                                    {/* Not-yet-known and could-not-be-known read
+                                        the same to the customer; only a real 0
+                                        from the catalog may say "Free". */}
+                                    {loadingPrice || storagePrice === null ? (
                                         <span
                                             style={SERIF_STYLE}
                                             className="text-[28px] font-bold text-white/35 leading-none"
