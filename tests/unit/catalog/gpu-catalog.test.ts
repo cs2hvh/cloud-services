@@ -155,13 +155,36 @@ describe('getPublicGpuCatalog — stock honesty', () => {
 });
 
 describe('getPublicGpuCatalog — snapshot selection', () => {
-  it('uses the newest reading per GPU', async () => {
-    const older = new Date(NOW - 10 * 60_000).toISOString();
+  it('prefers a fresh reading over a stale one, whatever the price', async () => {
+    // Freshness outranks price: a cheap stale row must not win.
     const cat = await getPublicGpuCatalog(
       db({
         catalog: [CAT()],
         pricing: [PRICE()],
-        snapshots: [SNAP({ on_demand_per_hr: 9.99, observed_at: older }), SNAP({ on_demand_per_hr: 3.29 })],
+        snapshots: [
+          SNAP({ on_demand_per_hr: 0.5, observed_at: STALE }),
+          SNAP({ on_demand_per_hr: 3.29, observed_at: FRESH }),
+        ],
+      }),
+      NOW
+    );
+    expect(cat.gpus[0].observedAt).toBe(FRESH);
+    expect(cat.gpus[0].stock).not.toBe('unknown');
+  });
+
+  it('picks the cheapest among fresh readings, not the newest', async () => {
+    // Several cloud types report the same GPU at different rates. The rule is
+    // deliberately "cheapest fresh", so a NEWER but pricier row must lose —
+    // otherwise the public price follows whichever row the sync wrote last.
+    const newerButPricier = new Date(NOW - 30_000).toISOString();
+    const cat = await getPublicGpuCatalog(
+      db({
+        catalog: [CAT()],
+        pricing: [PRICE(), PRICE({ cloud_type: 'COMMUNITY' })],
+        snapshots: [
+          SNAP({ cloud_type: 'SECURE', on_demand_per_hr: 9.99, observed_at: newerButPricier }),
+          SNAP({ cloud_type: 'COMMUNITY', on_demand_per_hr: 3.29, observed_at: FRESH }),
+        ],
       }),
       NOW
     );

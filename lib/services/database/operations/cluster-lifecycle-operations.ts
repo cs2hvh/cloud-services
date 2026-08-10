@@ -33,6 +33,45 @@ import type {
 import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
+
+/**
+ * Tear down a cluster the provider created but we failed to record.
+ *
+ * Retried, because this fires seconds after create and DigitalOcean rejects a
+ * delete while a cluster is still `creating` — a single attempt would almost
+ * always fail and fall through to "delete it by hand", leaving a paid resource
+ * nobody owns. Backs off to give the cluster time to reach a deletable state.
+ */
+async function deleteOrphanCluster(clusterId: string): Promise<void> {
+  const DELAYS_MS = [0, 5_000, 15_000, 30_000];
+  let lastError: unknown = null;
+
+  for (const delay of DELAYS_MS) {
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    try {
+      await axios.delete(`https://api.digitalocean.com/v2/databases/${clusterId}`, {
+        headers: getDigitalOceanHeaders(),
+      });
+      console.error(`[createCluster] orphan cluster ${clusterId} deleted`);
+      return;
+    } catch (err) {
+      lastError = err;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      // 404 means it is already gone — nothing left to clean up.
+      if (status === 404) return;
+    }
+  }
+
+  // Every attempt failed. This is a live, billable cluster owned by nobody, so
+  // make it findable rather than leaving it in a stack trace.
+  console.error(
+    `[createCluster] ORPHAN CLEANUP FAILED after ${DELAYS_MS.length} attempts for cluster ${clusterId} — ` +
+      `it is still running and billable. Delete it with: ` +
+      `DELETE https://api.digitalocean.com/v2/databases/${clusterId}`,
+    lastError instanceof Error ? lastError.message : lastError
+  );
+}
+
 export const clusterLifecycleOperations = {
   async createCluster(
     request: CreateDatabaseClusterRequest,
@@ -151,18 +190,7 @@ export const clusterLifecycleOperations = {
           supabaseData.error
         );
         if (orphanId) {
-          try {
-            await axios.delete(`https://api.digitalocean.com/v2/databases/${orphanId}`, {
-              headers: getDigitalOceanHeaders(),
-            });
-            console.error(`[createCluster] orphan cluster ${orphanId} deleted`);
-          } catch (cleanupErr) {
-            // Surface loudly: this is a paid resource nobody owns.
-            console.error(
-              `[createCluster] ORPHAN CLEANUP FAILED for cluster ${orphanId} — it is still running and billable, delete it by hand:`,
-              cleanupErr instanceof Error ? cleanupErr.message : cleanupErr
-            );
-          }
+          await deleteOrphanCluster(orphanId);
         }
         // Give the reservation back; nothing was provisioned for the customer.
         await releaseProvision(reservationResult.reservation).catch(() => {});

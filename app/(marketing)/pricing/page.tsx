@@ -87,15 +87,19 @@ async function PricingContent() {
     ...rest,
   ];
 
-  if (pricingData.length === 0) return <PricingUnavailable />;
+  // Every source failed — no catalog and no database. The placeholders above
+  // would still render two empty tabs, which is a worse answer than saying so.
+  if (!compute && !gpu && rest.length === 0) return <PricingUnavailable />;
 
   return <PricingClient categories={pricingData} />;
 }
 
 /**
- * Shown when neither the catalog nor the database could be read. Deliberately
- * has no numbers: this page previously fell back to a hardcoded table that
- * disagreed with checkout on every compute plan.
+ * Shown only when the catalog AND the database both fail. A single failing
+ * category renders an inline placeholder instead — see above.
+ *
+ * Deliberately has no numbers: this page previously fell back to a hardcoded
+ * table that disagreed with checkout on every compute plan.
  */
 function PricingUnavailable() {
   return (

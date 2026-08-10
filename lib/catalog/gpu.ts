@@ -170,18 +170,18 @@ export async function getPublicGpuCatalog(
     }
 
     let hourlyUSD: number | null = null;
-    const pricing = snap ? priceBy.get(`${c.id}:${snap.cloud_type}`) : undefined;
+    const pricingRow = snap ? priceBy.get(`${c.id}:${snap.cloud_type}`) : undefined;
     // No pricing row means we do not know our own markup. Publishing the
     // provider's rate would advertise the GPU at cost, so report no price —
     // same as having no snapshot at all.
-    if (snap?.on_demand_per_hr != null && snap.on_demand_per_hr > 0 && pricing) {
+    if (snap?.on_demand_per_hr != null && snap.on_demand_per_hr > 0 && pricingRow) {
       // markup_pct below 1 would price under cost and computeResalePerHour
       // rejects it outright; clamp rather than throw on a malformed row.
-      const markupPct = Math.max(Number(pricing.markup_pct ?? 1), 1);
+      const markupPct = Math.max(Number(pricingRow.markup_pct ?? 1), 1);
       hourlyUSD = computeResalePerHour({
         observedPerHr: snap.on_demand_per_hr,
         markupPct,
-        floorPerHour: Math.max(Number(pricing.floor_per_hour_usd ?? 0), 0),
+        floorPerHour: Math.max(Number(pricingRow.floor_per_hour_usd ?? 0), 0),
         gpuCount: 1,
       });
     }
