@@ -180,19 +180,18 @@ export default {
 
   /**
    * Cron-triggered sweeps. Cloudflare fires this for every entry in
-   * wrangler.toml's [triggers.crons]. Today we only have one schedule
-   * (`* * * * *`) which fires every minute. Inside the handler we
-   * dispatch by what's due:
+   * wrangler.toml's [triggers.crons]. There is one schedule (`* * * * *`),
+   * firing every minute; this handler dispatches by what is due.
    *
-   *   - Every minute → serving-pod watchdog (reap idle hosted-serving
-   *     instances past their auto_stop_at).
-   *   - Once per hour (minute == 0) → semantic cache GC (delete rows
-   *     past the TTL so the table doesn't grow unbounded).
+   * The provider syncs here were added after every one of them was found
+   * stale: linode_types had not refreshed in 6 days, gpu_inventory_snapshots
+   * in 2.5, gpu_catalog in 41 — while the deploy wizard and every pricing page
+   * presented that data as current. They were guarded by CRON_SECRET and
+   * simply never invoked. See lib/api/internal-cron-auth.ts.
    *
-   * Failures don't retry (Workers cron has no automatic retry); we log
-   * + rely on the next firing to catch up. Both sweeps are idempotent
-   * (watchdog: state flip conditional on state='running'; GC: DELETE
-   * by time predicate), so over-firing is safe.
+   * Failures don't retry (Workers cron has no automatic retry); we log and
+   * rely on the next firing to catch up. Every sweep here is idempotent and
+   * most are Redis-single-flighted, so over-firing is safe.
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runServingPodWatchdog(env, event));
@@ -206,12 +205,36 @@ export default {
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
+    // GPU stock and price move continuously at the provider, and the deploy
+    // wizard reads the newest snapshot. Its own docstring asks for a ~45s
+    // cadence from a credit-system-cron worker that was never built, so
+    // nothing ran it and snapshots went 2.5 days stale while every page
+    // presented them as current. Per-minute is the finest this scheduler
+    // offers, and the sweep is Redis-single-flighted.
+    ctx.waitUntil(runGpuInventorySync(env, event));
+
     // GC once per hour to keep noise out of logs + bound Supabase
     // RPC pressure. The query-time freshness filter keeps stale
     // rows invisible to callers between sweeps, so frequency is
     // purely about storage, not correctness.
     if (minuteOfHour === 0) {
       ctx.waitUntil(runSemanticCacheGc(env, event));
+    }
+    // Linode's catalog moves on the order of weeks, but it had not refreshed
+    // in six days, so every compute price on the site came from a stale table.
+    // Its docstring asks for roughly hourly; the sync is an idempotent upsert.
+    if (minuteOfHour === 7) {
+      ctx.waitUntil(runLinodeCatalogSync(env, event));
+    }
+    // Drift detection against the provider. The GPU one also closes billing
+    // for pods that vanished upstream — without it a deleted pod keeps its
+    // meter, which is exactly how phantom meters accumulate.
+    if (minuteOfHour % 5 === 0) {
+      ctx.waitUntil(runGpuReconcile(env, event));
+    }
+    // Six-hourly, matching what docs/LINODE_COMPUTE.md already prescribes.
+    if (minuteOfHour === 15 && new Date(event.scheduledTime).getUTCHours() % 6 === 0) {
+      ctx.waitUntil(runLinodeReconcile(env, event));
     }
   },
 };
@@ -232,6 +255,22 @@ async function runFinetuneWatchdog(env: Env, event: ScheduledEvent): Promise<voi
     "/api/inference/internal/finetune-watchdog",
     "finetune watchdog"
   );
+}
+
+async function runGpuInventorySync(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(env, event, "/api/internal/gpu/sync", "gpu inventory sync");
+}
+
+async function runLinodeCatalogSync(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(env, event, "/api/internal/linode/sync", "linode catalog sync");
+}
+
+async function runLinodeReconcile(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(env, event, "/api/internal/linode/reconcile", "linode reconcile");
+}
+
+async function runGpuReconcile(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(env, event, "/api/internal/gpu/reconcile", "gpu reconcile");
 }
 
 async function runDeploymentMeter(env: Env, event: ScheduledEvent): Promise<void> {

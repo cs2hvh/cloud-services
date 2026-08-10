@@ -4,20 +4,9 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { createClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import { sendSupportTicketCreatedEmail } from "@/lib/support/email";
+import { describeGpuInquiry, type GpuInquiryBody } from "@/lib/support/gpu-inquiry";
 
 export const dynamic = "force-dynamic";
-
-interface InquiryBody {
-    planType?: string;
-    gpus?: unknown;
-    gpuCount?: number;
-    duration?: string;
-    workload?: string;
-    budget?: string | null;
-    region?: string | null;
-    contactPref?: string;
-    extra?: string | null;
-}
 
 const ALLOWED_PLAN_TYPES = new Set([
     "reserved",
@@ -45,27 +34,6 @@ function clamp(n: unknown, lo: number, hi: number): number {
 function safeString(v: unknown, max = 4000): string {
     if (typeof v !== "string") return "";
     return v.slice(0, max);
-}
-
-function describeBody(body: InquiryBody, userEmail: string | null): string {
-    const lines = [
-        `**Plan type:** ${body.planType}`,
-        `**GPUs of interest:** ${
-            Array.isArray(body.gpus) ? body.gpus.join(", ") : "—"
-        }`,
-        `**Target GPU count:** ${body.gpuCount}`,
-        `**Duration:** ${body.duration}`,
-        body.region ? `**Region preference:** ${body.region}` : null,
-        body.budget ? `**Budget:** ${body.budget}` : null,
-        `**Submitted by:** ${userEmail || "unknown"}`,
-        "",
-        "---",
-        "",
-        "**Workload:**",
-        body.workload || "—",
-        body.extra ? `\n**Additional notes:**\n${body.extra}` : "",
-    ].filter(Boolean);
-    return lines.join("\n");
 }
 
 /**
@@ -104,7 +72,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const raw = (await req.json().catch(() => ({}))) as InquiryBody;
+    const raw = (await req.json().catch(() => ({}))) as GpuInquiryBody;
     const planType = safeString(raw.planType, 32);
     if (!ALLOWED_PLAN_TYPES.has(planType)) {
         return NextResponse.json(
@@ -141,7 +109,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const sanitized: InquiryBody = {
+    const sanitized: GpuInquiryBody = {
         planType,
         gpus: gpusArr,
         gpuCount: clamp(raw.gpuCount, 1, 4096),
@@ -160,7 +128,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const description = describeBody(sanitized, user.email ?? null);
+    const description = describeGpuInquiry(sanitized, user.email ?? null);
     const subject = `GPU ${planType} inquiry — ${sanitized.gpuCount}× ${gpusArr[0]}`.slice(0, 200);
 
     try {

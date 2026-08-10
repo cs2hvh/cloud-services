@@ -1,38 +1,19 @@
-import { timingSafeEqual } from "crypto";
 import { NextRequest } from "next/server";
 
 import { RunPodService } from "@/lib/services/runpod-service";
+import { authorizeInternalCron } from "@/lib/api/internal-cron-auth";
 
 export const dynamic = "force-dynamic";
 
 const LOCK_TTL_SECONDS = 120;
 const LOCK_KEY = "lock:gpu-inventory-sync";
 
-function getCronSecret(): string {
-    const s = process.env.CRON_SECRET;
-    if (!s) throw new Error("CRON_SECRET is not configured");
-    return s;
-}
 
 /**
  * Constant-time compare of `Authorization: Bearer <secret>` against the
  * CRON_SECRET env var. Matches the convention used by the existing
  * domain-contact-sync and domain-transfer-poll cron endpoints.
  */
-function authorize(req: NextRequest): boolean {
-    const header = req.headers.get("authorization") || "";
-    const match = /^Bearer\s+(.+)$/i.exec(header);
-    if (!match) return false;
-    const provided = match[1];
-    let expected: string;
-    try {
-        expected = getCronSecret();
-    } catch {
-        return false;
-    }
-    if (provided.length === 0 || provided.length !== expected.length) return false;
-    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-}
 
 /**
  * POST /api/internal/gpu/sync
@@ -44,7 +25,7 @@ function authorize(req: NextRequest): boolean {
  * double-poll RunPod at the same moment.
  */
 export async function POST(req: NextRequest) {
-    if (!authorize(req)) {
+    if (!authorizeInternalCron(req)) {
         return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
     }
 

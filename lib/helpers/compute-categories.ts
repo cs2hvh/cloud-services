@@ -1,5 +1,6 @@
-import type React from "react";
-import { Products } from "@/lib/supabase/queries/products";
+import { getPublicComputeCatalog } from "@/lib/catalog/compute";
+import { BARE_METAL_SKUS } from "@/lib/catalog/bare-metal";
+import { createServiceClient } from "@/lib/supabase/server";
 
 interface VirtualPlan {
   vcpu: number;
@@ -22,7 +23,6 @@ interface BareMetalPlan {
 export interface ComputeCategory {
   key: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
   tagline: string;
   description: string;
   features: string[];
@@ -31,25 +31,84 @@ export interface ComputeCategory {
 }
 
 /**
- * Fetches compute categories from the database.
- * This is a server-side only function.
- * Falls back to component's FALLBACK_CATEGORIES if no data is found or on error.
+ * The compute tiers and prices shown on the marketing pricing page.
+ *
+ * This used to query featured products by service type "kubernetes" — the
+ * wrong table for a compute page — and then return null unconditionally, so
+ * the page always fell through to a hand-written table in the component. That
+ * table disagreed with the deploy wizard on every single plan ($6 vs $5.40,
+ * $12 vs $12.96, $24 vs $25.92, $48 vs $51.84) and advertised two tiers,
+ * "Compute Optimized" and "Storage Optimized", that are not Linode classes at
+ * all — so nothing behind them could ever be bought.
+ *
+ * It now reads the same catalog and runs the same price resolver as the deploy
+ * wizard, so the page and the checkout cannot disagree. To change a price,
+ * change linode_pricing.markup_pct or floor_per_hour_usd.
+ *
+ * Note there is no icon field: this crosses a server -> client boundary, and
+ * React cannot serialize a component function across it. The section renders
+ * its own icons.
+ *
+ * Returns null when the catalog cannot be read. The caller must render a
+ * "pricing unavailable" state rather than substituting numbers — stale prices
+ * on a public page are what this whole change exists to stop.
  */
 export async function getComputeCategories(): Promise<ComputeCategory[] | null> {
   try {
-    // Fetch featured compute products
-    const products = await Products.get_featured_by_service_type("kubernetes");
-    
-    if (products.length === 0) {
-      return null; // Use component fallback
-    }
-    
-    // Map products to categories structure
-    // In a real implementation, you'd have more sophisticated mapping logic
-    // For now, we return null to use fallback data in the component
-    return null;
+    const supabase = await createServiceClient();
+    const catalog = await getPublicComputeCatalog(supabase);
+    if (catalog.tiers.length === 0) return null;
+
+    const virtual = catalog.tiers.map((tier) => ({
+      key: tier.key,
+      label: tier.label,
+      tagline:
+        tier.fromMonthlyUSD === null
+          ? "Contact us"
+          : `From $${tier.fromMonthlyUSD.toFixed(2).replace(/\.00$/, "")}/mo`,
+      description: tier.blurb,
+      features: tier.features,
+      plans: tier.plans.map((p) => ({
+        vcpu: p.vcpus,
+        ram: `${p.memoryGB} GB`,
+        storage: `${p.diskGB} GB`,
+        bandwidth: `${p.transferTB} TB`,
+        price: p.monthlyUSD,
+      })),
+    }));
+
+    // Bare metal is a separate lineup with no provider behind it — see
+    // lib/catalog/bare-metal. Appending it keeps the tab that existed before
+    // this page moved onto the Linode catalog; dropping it silently removed a
+    // product from the site.
+    const cheapestBareMetal = Math.min(...BARE_METAL_SKUS.map((s) => s.priceMonthly));
+    const bareMetal: ComputeCategory = {
+      key: "baremetal",
+      label: "Bare Metal",
+      tagline: `From $${cheapestBareMetal}/mo`,
+      description:
+        "Dedicated physical hardware with no hypervisor layer — full control of the machine.",
+      features: [
+        "Single-tenant physical servers",
+        "No virtualization overhead",
+        "Custom disk and RAID layouts",
+        "Deployed on request",
+      ],
+      isBareMetalCategory: true,
+      plans: BARE_METAL_SKUS.map((sku) => ({
+        processor: sku.cpu.model,
+        cores: `${sku.cpu.cores} cores / ${sku.cpu.threads} threads`,
+        ram: `${sku.ramGb} GB ${sku.ramType}`,
+        storage: sku.storage,
+        bandwidth: sku.bandwidth,
+        network: `${sku.uplinkGbps} Gbps`,
+        price: sku.priceMonthly,
+      })),
+    };
+
+    return [...virtual, bareMetal];
   } catch (error) {
-    console.error("Error fetching compute categories:", error);
+    console.error("[compute-categories] catalog read failed:", error);
     return null;
   }
 }

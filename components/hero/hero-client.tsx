@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 import PixelBlast from "./pixel-blast-lazy";
+import type { PublicStock } from "@/lib/catalog/gpu";
 
 const BRAND = "#0095FF";
 
@@ -153,79 +154,46 @@ function HeroMark({
     }
 }
 
-type GpuRow = {
+export type GpuRow = {
     id: string;
     name: string;
     memory: number;
     gen: string;
-    price: number;
-    stock: "high" | "low";
+    /** Live resale price per GPU-hour; null when there is no current reading. */
+    price: number | null;
+    /** Live availability. "unknown" when the stock reading is stale. */
+    stock: PublicStock;
     href: string;
     tone: string; // tier accent color
     tier: string; // e.g. Hopper / Blackwell
 };
 
-const GPU_PRICING: GpuRow[] = [
-    {
-        id: "b300",
-        name: "B300",
-        memory: 288,
-        gen: "HBM3e",
-        price: 6.99,
-        stock: "low",
-        href: "/dashboard/services/gpu/deploy?gpu=b300-288",
-        tone: "#fbbf24", // amber — newest flagship
-        tier: "Blackwell",
-    },
-    {
-        id: "b200",
-        name: "B200",
-        memory: 180,
-        gen: "HBM3e",
-        price: 5.49,
-        stock: "low",
-        href: "/dashboard/services/gpu/deploy?gpu=b200-180",
-        tone: "#a78bfa", // violet — Blackwell
-        tier: "Blackwell",
-    },
-    {
-        id: "h200",
-        name: "H200",
-        memory: 141,
-        gen: "HBM3e",
-        price: 3.99,
-        stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
-        tone: "#4ade80", // green — Hopper
-        tier: "Hopper",
-    },
-    {
-        id: "h100",
-        name: "H100",
-        memory: 80,
-        gen: "HBM3",
-        price: 2.99,
-        stock: "high",
-        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
-        tone: "#22d3ee", // cyan — Hopper
-        tier: "Hopper",
-    },
-];
 
-function GpuPricingRail() {
+function GpuPricingRail({ gpus }: { gpus: GpuRow[] }) {
+    // Catalog unavailable: render nothing rather than an empty padded band.
+    if (gpus.length === 0) return null;
+
     return (
         <div className="relative z-20">
             {/* Card row — horizontal scroll on mobile, 4-col grid on desktop */}
             <div className="overflow-x-auto pb-4 pt-3 sm:overflow-visible sm:pb-5 sm:pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="mx-auto max-w-[1440px] px-5 sm:px-8">
                     <div className="flex w-max gap-3 sm:grid sm:w-auto sm:grid-cols-4">
-                        {GPU_PRICING.map((gpu) => {
+                        {gpus.map((gpu) => {
                             const stockBg =
-                                gpu.stock === "high"
+                                gpu.stock === "available"
                                     ? "bg-emerald-400"
-                                    : "bg-amber-400";
+                                    : gpu.stock === "limited"
+                                        ? "bg-amber-400"
+                                        : "bg-white/30";
                             const stockText =
-                                gpu.stock === "high" ? "In stock" : "Limited";
+                                gpu.stock === "available"
+                                    ? "In stock"
+                                    : gpu.stock === "limited"
+                                        ? "Limited"
+                                        : gpu.stock === "unavailable"
+                                            ? "Out of stock"
+                                            : "Check availability";
                             return (
                                 <Link
                                     key={gpu.id}
@@ -285,7 +253,7 @@ function GpuPricingRail() {
                                                 from
                                             </p>
                                             <p className="mt-1 font-mono text-[24px] font-semibold leading-none tabular-nums text-white">
-                                                ${gpu.price.toFixed(2)}
+                                                {gpu.price === null ? "\u2014" : `$${gpu.price.toFixed(2)}`}
                                                 <span className="ml-1 text-[10.5px] font-normal text-white/55">
                                                     /hr/gpu
                                                 </span>
@@ -307,7 +275,7 @@ function GpuPricingRail() {
     );
 }
 
-export default function HeroClient() {
+export default function HeroClient({ gpus }: { gpus: GpuRow[] }) {
     return (
         <section
             className="relative isolate min-h-[100svh] w-full overflow-hidden bg-[#04060a] text-white lg:h-[100svh] lg:min-h-[820px]"
@@ -416,7 +384,7 @@ export default function HeroClient() {
                 </div>
             </div>
 
-            <GpuPricingRail />
+            <GpuPricingRail gpus={gpus} />
         </section>
     );
 }

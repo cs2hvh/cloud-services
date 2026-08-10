@@ -12,6 +12,7 @@ import {
 
 import { Container } from "@/components/ui/container";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
+import { BARE_METAL_SKUS } from "@/lib/catalog/bare-metal";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 
@@ -33,57 +34,59 @@ type Server = {
     featured?: boolean;
 };
 
-const SERVERS: Server[] = [
+// Editorial framing only — which three machines to feature and how to pitch
+// them. Specs and price come from lib/catalog/bare-metal, the same lineup the
+// dashboard lists.
+//
+// This used to restate both, and the two had drifted apart badly: the Xeon
+// E-2388G was advertised at $99 against the dashboard's $199, and the EPYC 9354
+// at $549 against $1090. A visitor read one number here and found another once
+// signed in.
+const FEATURED: Array<{ skuId: string; badge: string; subtitle: string; useCase: string; featured?: boolean }> = [
     {
-        id: "01",
+        skuId: "bm-xeon-e2388g",
         badge: "Starter",
-        title: "Intel Xeon E-2388G",
         subtitle: "Entry-tier production",
-        processor: "Intel",
-        specs: [
-            { icon: Cpu, label: "8 cores / 16 threads", detail: "Boost 5.1 GHz" },
-            { icon: MemoryStick, label: "32 GB DDR4 ECC" },
-            { icon: HardDrive, label: "2× 512 GB NVMe", detail: "Hardware RAID 1" },
-            { icon: Network, label: "1 Gbps uplink", detail: "10 TB egress / mo" },
-        ],
-        price: 99,
         useCase:
             "Web and app tiers, single-instance Postgres or MySQL, CI runners, and lightweight Kubernetes nodes.",
     },
     {
-        id: "02",
+        skuId: "bm-ryzen-hf",
         badge: "Most popular",
-        featured: true,
-        title: "AMD Ryzen 9 7950X",
         subtitle: "High-clock production",
-        processor: "AMD",
-        specs: [
-            { icon: Cpu, label: "16 cores / 32 threads", detail: "Boost 5.7 GHz" },
-            { icon: MemoryStick, label: "64 GB DDR5" },
-            { icon: HardDrive, label: "2× 1 TB NVMe Gen4", detail: "Software RAID" },
-            { icon: Network, label: "1 Gbps uplink", detail: "20 TB egress / mo" },
-        ],
-        price: 179,
+        featured: true,
         useCase:
-            "Real-time SaaS backends, multiplayer game servers, parallel build farms, and video transcoding pipelines.",
+            "Latency-sensitive APIs, game servers, and build farms that reward single-thread speed.",
     },
     {
-        id: "03",
+        skuId: "bm-epyc-9354",
         badge: "Enterprise",
-        title: "AMD EPYC 9354P",
         subtitle: "Scale-out enterprise",
-        processor: "AMD",
-        specs: [
-            { icon: Cpu, label: "32 cores / 64 threads", detail: "Boost 3.8 GHz" },
-            { icon: MemoryStick, label: "256 GB DDR5 ECC" },
-            { icon: HardDrive, label: "2× 3.84 TB NVMe", detail: "Hardware RAID 10" },
-            { icon: Network, label: "10 Gbps uplink", detail: "50 TB egress / mo" },
-        ],
-        price: 549,
         useCase:
-            "Multi-tenant SaaS platforms, OLAP and analytics clusters, in-house ML inference, and large multiplayer fleets.",
+            "Dense virtualization, large in-memory datasets, and multi-tenant platforms.",
     },
 ];
+
+const SERVERS: Server[] = FEATURED.flatMap((f, idx) => {
+    const sku = BARE_METAL_SKUS.find((s) => s.id === f.skuId);
+    if (!sku) return [];
+    return [{
+        id: String(idx + 1).padStart(2, "0"),
+        badge: f.badge,
+        title: sku.cpu.model,
+        subtitle: f.subtitle,
+        processor: sku.vendor === "amd" ? "AMD" : "Intel",
+        specs: [
+            { icon: Cpu, label: `${sku.cpu.cores} cores / ${sku.cpu.threads} threads`, detail: `Boost ${sku.cpu.boostGhz} GHz` },
+            { icon: MemoryStick, label: `${sku.ramGb} GB ${sku.ramType}` },
+            { icon: HardDrive, label: sku.storage },
+            { icon: Network, label: `${sku.uplinkGbps} Gbps uplink`, detail: sku.bandwidth },
+        ],
+        price: sku.priceMonthly,
+        useCase: f.useCase,
+        featured: f.featured,
+    }];
+});
 
 const PLATFORM_HIGHLIGHTS: Array<{ icon: LucideIcon; text: string }> = [
     { icon: Zap, text: "Provisioned in 30 minutes" },

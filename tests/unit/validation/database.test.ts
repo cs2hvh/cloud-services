@@ -222,22 +222,37 @@ describe('Database Validation Schemas', () => {
   });
 
   describe('validateEngineVersion', () => {
+    // These mirror DigitalOcean's GET /v2/databases/options. They previously
+    // asserted MySQL 8, PostgreSQL 13/14 and MongoDB 4/5 — versions the
+    // provider no longer offers — which is why the create endpoint rejected
+    // the MySQL 8.4 the wizard was offering.
     it('should validate MySQL versions', () => {
-      expect(validateEngineVersion('mysql', '8')).toBe(true);
-      expect(validateEngineVersion('mysql', '5.7')).toBe(false); // 5.7 is not in supported versions
+      expect(validateEngineVersion('mysql', '8.4')).toBe(true);
+      expect(validateEngineVersion('mysql', '8')).toBe(false); // retired at the provider
+      expect(validateEngineVersion('mysql', '5.7')).toBe(false);
       expect(validateEngineVersion('mysql', '14')).toBe(false);
     });
 
     it('should validate PostgreSQL versions', () => {
-      expect(validateEngineVersion('pg', '14')).toBe(true);
-      expect(validateEngineVersion('pg', '13')).toBe(true);
+      expect(validateEngineVersion('pg', '18')).toBe(true);
+      expect(validateEngineVersion('pg', '15')).toBe(true);
+      expect(validateEngineVersion('pg', '14')).toBe(false); // retired at the provider
       expect(validateEngineVersion('pg', '8')).toBe(false);
     });
 
     it('should validate MongoDB versions', () => {
-      expect(validateEngineVersion('mongodb', '5')).toBe(true);
-      expect(validateEngineVersion('mongodb', '4')).toBe(true); // '4' is supported, not '4.4'
-      expect(validateEngineVersion('mongodb', '2')).toBe(false); // version 2 is not supported
+      // The format matters as much as the number — the provider says '8.0'.
+      expect(validateEngineVersion('mongodb', '8.0')).toBe(true);
+      expect(validateEngineVersion('mongodb', '7.0')).toBe(true);
+      expect(validateEngineVersion('mongodb', '8')).toBe(false);
+      expect(validateEngineVersion('mongodb', '5')).toBe(false);
+      expect(validateEngineVersion('mongodb', '2')).toBe(false);
+    });
+
+    it('should validate Kafka versions', () => {
+      expect(validateEngineVersion('kafka', '4.1')).toBe(true);
+      expect(validateEngineVersion('kafka', '3.9')).toBe(true);
+      expect(validateEngineVersion('kafka', '3.8')).toBe(false); // retired at the provider
     });
 
     it('should validate Redis versions', () => {

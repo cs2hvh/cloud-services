@@ -5,13 +5,7 @@ import { useState } from "react";
 import Image from "next/image";
 import {
   ArrowRight,
-  CircuitBoard,
-  Cpu,
   Globe,
-  HardDrive,
-  MemoryStick,
-  Server,
-  Zap,
 } from "lucide-react";
 import {
   IconFlameFilled,
@@ -46,7 +40,6 @@ interface BareMetalPlan {
 interface ComputeCategory {
   key: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
   tagline: string;
   description: string;
   features: string[];
@@ -117,20 +110,17 @@ const CATEGORY_META: Record<
     cpuProfile: "Guaranteed dedicated AMD threads",
     summary: "Consistent compute for steady traffic and predictable performance.",
   },
-  compute: {
-    audience: "CI/CD runners, game servers, and latency-sensitive jobs",
-    cpuProfile: "High clock-speed Ryzen cores",
-    summary: "CPU-heavy instances optimized for high single-thread performance.",
-  },
-  memory: {
+  // Keys match the real Linode classes in COMPUTE_TIERS. They previously
+  // described "compute", "memory" and "storage" tiers that do not exist.
+  highmem: {
     audience: "Redis, Postgres, Elasticsearch, analytics",
     cpuProfile: "High RAM-to-vCPU ratio",
     summary: "Memory-dense profiles for caches, databases, and in-memory systems.",
   },
-  storage: {
-    audience: "Backups, media processing, data-heavy pipelines",
-    cpuProfile: "NVMe-heavy storage nodes",
-    summary: "Higher local NVMe capacity for data-intensive services.",
+  premium: {
+    audience: "Latency-sensitive production workloads",
+    cpuProfile: "Newest-generation AMD EPYC™",
+    summary: "Highest single-thread throughput with a guaranteed baseline.",
   },
   baremetal: {
     audience: "High-density workloads, virtualization, custom stacks",
@@ -210,184 +200,16 @@ const BARE_METAL_PLAN_NAMES = [
   "Max Density",
 ];
 
-const FALLBACK_CATEGORIES: ComputeCategory[] = [
-  {
-    key: "shared",
-    label: "Shared CPU",
-    icon: Cpu,
-    tagline: "From $6/mo",
-    description:
-      "Burstable performance for development, staging, and low-traffic workloads. Ideal when you need a server fast without breaking the bank.",
-    features: [
-      "Burstable AMD vCPU cores",
-      "Best price/performance for dev and test",
-      "Full root access and SSH",
-      "Free snapshots and backups",
-    ],
-    plans: [
-      { vcpu: 1, ram: "1 GB", storage: "25 GB", bandwidth: "1 TB", price: 6 },
-      { vcpu: 1, ram: "2 GB", storage: "50 GB", bandwidth: "2 TB", price: 12 },
-      { vcpu: 2, ram: "4 GB", storage: "80 GB", bandwidth: "4 TB", price: 24 },
-      { vcpu: 4, ram: "8 GB", storage: "160 GB", bandwidth: "5 TB", price: 48 },
-      { vcpu: 8, ram: "16 GB", storage: "320 GB", bandwidth: "6 TB", price: 96 },
-    ],
-  },
-  {
-    key: "dedicated",
-    label: "Dedicated CPU",
-    icon: Server,
-    tagline: "From $48/mo",
-    description:
-      "Guaranteed CPU resources with no noisy neighbors. Built for production APIs, SaaS platforms, and always-on services.",
-    features: [
-      "Dedicated AMD EPYC threads",
-      "Guaranteed baseline performance",
-      "Up to 128 GB DDR5 RAM",
-      "10 Gbit/s network interface",
-    ],
-    plans: [
-      { vcpu: 2, ram: "8 GB", storage: "50 GB", bandwidth: "4 TB", price: 48 },
-      { vcpu: 4, ram: "16 GB", storage: "100 GB", bandwidth: "5 TB", price: 96 },
-      { vcpu: 8, ram: "32 GB", storage: "200 GB", bandwidth: "6 TB", price: 192 },
-      { vcpu: 16, ram: "64 GB", storage: "400 GB", bandwidth: "8 TB", price: 384 },
-      { vcpu: 32, ram: "128 GB", storage: "800 GB", bandwidth: "10 TB", price: 768 },
-    ],
-  },
-  {
-    key: "compute",
-    label: "Compute Optimized",
-    icon: Zap,
-    tagline: "From $42/mo",
-    description:
-      "High clock-speed AMD Ryzen 9 processors tuned for single-thread performance. Perfect for CI/CD runners, game servers, and batch jobs.",
-    features: [
-      "Ryzen 9 up to 5.7 GHz boost",
-      "Optimized for single-thread performance",
-      "Low-latency NVMe I/O path",
-      "Ideal for CI/CD and game servers",
-    ],
-    plans: [
-      { vcpu: 2, ram: "4 GB", storage: "50 GB", bandwidth: "4 TB", price: 42 },
-      { vcpu: 4, ram: "8 GB", storage: "100 GB", bandwidth: "5 TB", price: 84 },
-      { vcpu: 8, ram: "16 GB", storage: "200 GB", bandwidth: "6 TB", price: 168 },
-      { vcpu: 16, ram: "32 GB", storage: "400 GB", bandwidth: "8 TB", price: 336 },
-      { vcpu: 32, ram: "64 GB", storage: "800 GB", bandwidth: "10 TB", price: 672 },
-    ],
-  },
-  {
-    key: "memory",
-    label: "Memory Optimized",
-    icon: MemoryStick,
-    tagline: "From $84/mo",
-    description:
-      "High RAM-to-CPU ratio with DDR5 ECC memory. Designed for in-memory databases, Redis clusters, Elasticsearch, and real-time analytics.",
-    features: [
-      "Up to 256 GB DDR5 ECC RAM",
-      "8:1 RAM-to-vCPU ratio",
-      "Tuned for Redis, Postgres, and Elastic",
-      "Low-latency memory bus",
-    ],
-    plans: [
-      { vcpu: 2, ram: "16 GB", storage: "50 GB", bandwidth: "4 TB", price: 84 },
-      { vcpu: 4, ram: "32 GB", storage: "100 GB", bandwidth: "5 TB", price: 168 },
-      { vcpu: 8, ram: "64 GB", storage: "200 GB", bandwidth: "6 TB", price: 336 },
-      { vcpu: 16, ram: "128 GB", storage: "400 GB", bandwidth: "8 TB", price: 672 },
-      { vcpu: 32, ram: "256 GB", storage: "800 GB", bandwidth: "10 TB", price: 1344 },
-    ],
-  },
-  {
-    key: "storage",
-    label: "Storage Optimized",
-    icon: HardDrive,
-    tagline: "From $65/mo",
-    description:
-      "Massive NVMe volumes for data-heavy workloads. Ideal for log aggregation, media processing, data lakes, and backup infrastructure.",
-    features: [
-      "Up to 4.8 TB NVMe per instance",
-      "7 GB/s sequential read speeds",
-      "3-node replication for durability",
-      "S3-compatible block attach",
-    ],
-    plans: [
-      { vcpu: 2, ram: "8 GB", storage: "300 GB", bandwidth: "4 TB", price: 65 },
-      { vcpu: 4, ram: "16 GB", storage: "600 GB", bandwidth: "5 TB", price: 130 },
-      { vcpu: 8, ram: "32 GB", storage: "1.2 TB", bandwidth: "6 TB", price: 260 },
-      { vcpu: 16, ram: "64 GB", storage: "2.4 TB", bandwidth: "8 TB", price: 520 },
-      { vcpu: 32, ram: "128 GB", storage: "4.8 TB", bandwidth: "10 TB", price: 1040 },
-    ],
-  },
-  {
-    key: "baremetal",
-    label: "Bare Metal",
-    icon: CircuitBoard,
-    tagline: "From $99/mo",
-    description:
-      "Dedicated physical servers with no virtualization layer. Full hardware access for maximum performance, custom OS installations, and raw compute power.",
-    features: [
-      "No hypervisor and 100% hardware access",
-      "IPMI and KVM remote management",
-      "Hardware RAID options",
-      "Custom OS and ISO support",
-    ],
-    isBareMetalCategory: true,
-    plans: [
-      {
-        processor: "Intel Xeon E-2388G",
-        cores: "8c / 16t",
-        ram: "32 GB DDR4 ECC",
-        storage: "2x 512 GB NVMe",
-        bandwidth: "10 TB",
-        network: "1 Gbit/s",
-        price: 99,
-      },
-      {
-        processor: "AMD Ryzen 9 7950X",
-        cores: "16c / 32t",
-        ram: "64 GB DDR5",
-        storage: "2x 1 TB NVMe",
-        bandwidth: "20 TB",
-        network: "1 Gbit/s",
-        price: 179,
-      },
-      {
-        processor: "AMD EPYC 7443P",
-        cores: "24c / 48t",
-        ram: "128 GB DDR4 ECC",
-        storage: "2x 1.92 TB NVMe",
-        bandwidth: "30 TB",
-        network: "10 Gbit/s",
-        price: 329,
-      },
-      {
-        processor: "AMD EPYC 9354P",
-        cores: "32c / 64t",
-        ram: "256 GB DDR5 ECC",
-        storage: "2x 3.84 TB NVMe",
-        bandwidth: "50 TB",
-        network: "10 Gbit/s",
-        price: 549,
-      },
-      {
-        processor: "2x AMD EPYC 9654",
-        cores: "2x96c / 384t",
-        ram: "512 GB DDR5 ECC",
-        storage: "4x 3.84 TB NVMe",
-        bandwidth: "100 TB",
-        network: "25 Gbit/s",
-        price: 1299,
-      },
-      {
-        processor: "2x AMD EPYC 9754",
-        cores: "2x128c / 512t",
-        ram: "1 TB DDR5 ECC",
-        storage: "8x 3.84 TB NVMe",
-        bandwidth: "Unmetered",
-        network: "25 Gbit/s",
-        price: 2499,
-      },
-    ],
-  },
-];
+// The hand-written plan table that used to live here has been removed.
+//
+// It disagreed with the deploy wizard on every plan ($6 vs $5.40, $12 vs
+// $12.96, $24 vs $25.92, $48 vs $51.84) and advertised "Compute Optimized" and
+// "Storage Optimized" tiers that are not Linode classes, so nothing behind
+// them could be bought. Prices now come from getComputeCategories(), which
+// runs the same resolver as checkout.
+//
+// There is deliberately no fallback: if the catalog cannot be read the section
+// says so, because a stale price on a public page is the bug this replaced.
 
 interface ComputePricingSectionProps {
   categories?: ComputeCategory[];
@@ -408,7 +230,10 @@ function getCategoryMeta(category: ComputeCategory) {
 }
 
 function formatHourlyPrice(monthlyPrice: number) {
-  const hourly = monthlyPrice / 730;
+  // 720, matching HOURS_PER_MONTH in lib/pricing/linode-catalog.ts. This said
+  // 730, so the hourly figure shown here never matched the one the wizard
+  // quotes or the cron charges.
+  const hourly = monthlyPrice / 720;
   const decimals = hourly >= 1 ? 2 : hourly >= 0.1 ? 3 : 4;
   return hourly.toFixed(decimals);
 }
@@ -527,9 +352,41 @@ function BareMetalPlanCard({ plan, index }: { plan: BareMetalPlan; index: number
 }
 
 export default function ComputePricingSection({
-  categories = FALLBACK_CATEGORIES,
+  categories,
 }: ComputePricingSectionProps) {
   const [activeKey, setActiveKey] = useState("shared");
+
+  // No catalog means the read failed. Say so rather than substituting numbers:
+  // a plausible-looking wrong price is worse than an honest gap, and is exactly
+  // what the removed fallback table did for months.
+  if (!categories || categories.length === 0) {
+    return (
+      <section className="relative z-10 py-16 lg:py-24">
+        <Container>
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl">
+              Pricing is briefly unavailable
+            </h2>
+            <p className="mt-4 text-[15px] leading-relaxed text-white/55">
+              We could not load live plan pricing just now. Please refresh in a
+              moment, or see current prices in the deploy wizard.
+            </p>
+            <div className="mt-8 flex justify-center">
+              <AuthAwareServiceCta
+                service="compute"
+                intent="new"
+                className="inline-flex h-11 items-center gap-2 rounded-[5px] bg-white px-6 text-[13px] font-semibold text-black transition-colors hover:bg-white/90"
+              >
+                Open the deploy wizard
+                <ArrowRight className="h-4 w-4" />
+              </AuthAwareServiceCta>
+            </div>
+          </div>
+        </Container>
+      </section>
+    );
+  }
+
   const active = categories.find((category) => category.key === activeKey) ?? categories[0];
   const isBareMetalCategory = !!active.isBareMetalCategory;
   const activeMeta = getCategoryMeta(active);

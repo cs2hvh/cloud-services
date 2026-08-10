@@ -16,7 +16,7 @@ const TABS = [
     description:
       "H100, H200, and B200 accelerators on demand. Reserve a single GPU or a multi-node cluster across 12 regions — provisioned in under 90 seconds, billed by the second, with persistent volumes that follow your workload between sessions.",
     bullets: [
-      "NVIDIA H100 SXM · H200 SXM · B200 — from $2.59/hr",
+      "NVIDIA H100 SXM · H200 SXM · B200",
       "Sub-90-second provisioning · per-second billing",
       "Persistent network volumes · region-pinned snapshots",
       "CUDA 12.4, PyTorch 2.x, JAX, vLLM pre-installed",
