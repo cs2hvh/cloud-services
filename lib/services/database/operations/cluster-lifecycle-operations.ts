@@ -140,6 +140,32 @@ export const clusterLifecycleOperations = {
 
       const supabaseData = await Database_Clusters.create(sendData);
       if (!supabaseData.success) {
+        // The cluster already exists at the provider — it was created several
+        // statements ago. Returning here without tearing it down leaves it
+        // running on our account, untracked and therefore never billed to
+        // anyone, never surfaced in any list, and never cleaned up. The Linode
+        // compute path already does this teardown; this one did not.
+        const orphanId = database.data?.database?.id as string | undefined;
+        console.error(
+          `[createCluster] DB insert failed after the provider created cluster ${orphanId} — removing it`,
+          supabaseData.error
+        );
+        if (orphanId) {
+          try {
+            await axios.delete(`https://api.digitalocean.com/v2/databases/${orphanId}`, {
+              headers: getDigitalOceanHeaders(),
+            });
+            console.error(`[createCluster] orphan cluster ${orphanId} deleted`);
+          } catch (cleanupErr) {
+            // Surface loudly: this is a paid resource nobody owns.
+            console.error(
+              `[createCluster] ORPHAN CLEANUP FAILED for cluster ${orphanId} — it is still running and billable, delete it by hand:`,
+              cleanupErr instanceof Error ? cleanupErr.message : cleanupErr
+            );
+          }
+        }
+        // Give the reservation back; nothing was provisioned for the customer.
+        await releaseProvision(reservationResult.reservation).catch(() => {});
         return {
           success: false,
           error: "Failed to save database cluster to database",

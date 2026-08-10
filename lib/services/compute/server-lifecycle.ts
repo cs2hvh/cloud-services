@@ -32,6 +32,10 @@ export interface DestroyServerResult {
  * grace path is system-driven). Best-effort upstream: a Proxmox failure is
  * logged but billing-close + DB cleanup still proceed (so a stuck Proxmox host
  * can't leave a phantom meter billing forever).
+ *
+ * Step 4 is conditional on step 3. A failed billing close used to be logged and
+ * swallowed, and the row deleted regardless — which is precisely how a phantom
+ * meter DOES get left billing forever, just from the other direction.
  */
 export async function destroyServer(serverId: number): Promise<DestroyServerResult> {
   const supabase = await createWorkerClient();
@@ -147,6 +151,14 @@ export async function destroyServer(serverId: number): Promise<DestroyServerResu
   }
 
   // Settle billing: prorate the final partial period and remove the meter row.
+  //
+  // Whether this SUCCEEDED decides if the servers row may be hard-deleted
+  // below. The meter in billing.active_compute is keyed by billing_service_id
+  // and has no foreign key back here, so deleting the row after a failed close
+  // strands the meter: it keeps accruing every cron tick with nothing left to
+  // trace it to, and no path that would ever close it. Five such meters were
+  // found running this way, one at $120/hr since June.
+  let billingSettled = false;
   if (server.billing_service_id && server.owner_id) {
     try {
       await closeActiveBilling({
@@ -156,15 +168,31 @@ export async function destroyServer(serverId: number): Promise<DestroyServerResu
         closeActive: () =>
           BillingCredits.closeActiveCompute({ serviceId: server.billing_service_id as string }),
       });
+      billingSettled = true;
     } catch (billErr) {
-      console.warn("[destroyServer] billing close failed:", billErr);
+      console.error("[destroyServer] billing close FAILED — keeping the servers row so the meter stays traceable:", billErr);
     }
+  } else {
+    // Nothing to close against. Safe to drop the row: a meter is keyed by
+    // billing_service_id, so without one there is nothing that could be left
+    // stranded.
+    billingSettled = true;
   }
 
   await supabase
     .from("servers")
     .update({ status: "destroyed", billing_end: new Date().toISOString() })
     .eq("id", serverId);
+
+  if (!billingSettled) {
+    // The upstream resource is gone and the row is marked destroyed, so it is
+    // out of every customer-facing list and every quota count. Keeping it is
+    // what makes the stranded meter findable and re-closable.
+    return {
+      success: true,
+      message: "Server deleted; final billing could not be settled and is pending review.",
+    };
+  }
 
   const { error: deleteErr } = await supabase.from("servers").delete().eq("id", serverId);
   if (deleteErr) return { success: false, message: deleteErr.message };
