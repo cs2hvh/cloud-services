@@ -40,6 +40,7 @@ import {
 import { RegionFlag } from "@/components/ui/region-flag";
 import { OsImg } from "./os-icons";
 import type { LinodeComputeOptions, LinodePlanWire } from "@/lib/services/compute/providers/linode/options";
+import { COMPUTE_TIERS } from "@/lib/catalog/compute";
 
 export const GENERIC_DEPLOY_ERROR =
     "Something went wrong while creating your server.";
@@ -88,32 +89,16 @@ const PASSWORD_PATTERNS = {
 const PASSWORD_MIN_LENGTH = 11; // Linode policy: 11-128 chars
 
 // ─── Plan class tabs ─────────────────────────────────────────────
-const CLASS_TABS: Array<{ id: string; label: string; classes: string[]; blurb: string }> = [
-    {
-        id: "shared",
-        label: "Shared CPU",
-        classes: ["nanode", "standard"],
-        blurb: "Balanced instances on shared cores — the right default for most workloads.",
-    },
-    {
-        id: "dedicated",
-        label: "Dedicated CPU",
-        classes: ["dedicated"],
-        blurb: "Full-duty workloads needing consistent, dedicated physical cores.",
-    },
-    {
-        id: "highmem",
-        label: "High Memory",
-        classes: ["highmem"],
-        blurb: "RAM-heavy instances for in-memory databases and caches.",
-    },
-    {
-        id: "premium",
-        label: "Premium CPU",
-        classes: ["premium"],
-        blurb: "Latest-generation AMD EPYC™ hardware with guaranteed baseline performance.",
-    },
-];
+// Sourced from lib/catalog/compute so the wizard's tabs and the public pricing
+// page describe the same products. This was a second hand-written copy, which
+// is how the marketing page came to advertise "Compute Optimized" and "Storage
+// Optimized" tiers that do not exist.
+const CLASS_TABS = COMPUTE_TIERS.map((t) => ({
+    id: t.key,
+    label: t.label,
+    classes: t.classes as readonly string[],
+    blurb: t.blurb,
+}));
 
 // Continent grouping for the region dropdown.
 const REGION_GROUPS: Array<{ label: string; countries: Set<string> }> = [
