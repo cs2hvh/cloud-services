@@ -129,17 +129,28 @@ export async function getPublicGpuCatalog(
       .limit(4000),
   ]);
 
-  // Newest snapshot per catalog id, preferring the cheapest live on-demand rate
-  // when several cloud types report at the same freshness.
+  // Best reading per catalog id.
+  //
+  // A GPU is offered on several cloud types at different rates, so "which row
+  // wins" decides the public price. Take the cheapest FRESH reading rather than
+  // the newest: an earlier tiebreak required two rows to share an exact
+  // observed_at string, which never happens across cloud types, so the price
+  // silently followed whichever row the sync happened to write last.
+  //
+  // Freshness is judged per row; a stale row only wins if nothing fresh exists,
+  // and publicStock() then reports it as unknown.
   const newest = new Map<string, SnapshotRow>();
+  const isFresh = (r: SnapshotRow) => now - new Date(r.observed_at).getTime() <= STOCK_FRESHNESS_MS;
+  const rank = (r: SnapshotRow): [number, number] => [
+    isFresh(r) ? 0 : 1,
+    r.on_demand_per_hr != null && r.on_demand_per_hr > 0 ? r.on_demand_per_hr : Infinity,
+  ];
   for (const row of (snapshots ?? []) as SnapshotRow[]) {
     const seen = newest.get(row.gpu_catalog_id);
     if (!seen) { newest.set(row.gpu_catalog_id, row); continue; }
-    const newerFirst = new Date(row.observed_at) > new Date(seen.observed_at);
-    const cheaper =
-      row.observed_at === seen.observed_at &&
-      (row.on_demand_per_hr ?? Infinity) < (seen.on_demand_per_hr ?? Infinity);
-    if (newerFirst || cheaper) newest.set(row.gpu_catalog_id, row);
+    const [rf, rp] = rank(row);
+    const [sf, sp] = rank(seen);
+    if (rf < sf || (rf === sf && rp < sp)) newest.set(row.gpu_catalog_id, row);
   }
 
   // On-demand, non-interruptible is what the public page quotes.
@@ -159,15 +170,18 @@ export async function getPublicGpuCatalog(
     }
 
     let hourlyUSD: number | null = null;
-    if (snap?.on_demand_per_hr != null && snap.on_demand_per_hr > 0) {
-      const p = priceBy.get(`${c.id}:${snap.cloud_type}`);
+    const pricing = snap ? priceBy.get(`${c.id}:${snap.cloud_type}`) : undefined;
+    // No pricing row means we do not know our own markup. Publishing the
+    // provider's rate would advertise the GPU at cost, so report no price —
+    // same as having no snapshot at all.
+    if (snap?.on_demand_per_hr != null && snap.on_demand_per_hr > 0 && pricing) {
       // markup_pct below 1 would price under cost and computeResalePerHour
-      // rejects it; default to 1 rather than throwing on a bad row.
-      const markupPct = Math.max(Number(p?.markup_pct ?? 1), 1);
+      // rejects it outright; clamp rather than throw on a malformed row.
+      const markupPct = Math.max(Number(pricing.markup_pct ?? 1), 1);
       hourlyUSD = computeResalePerHour({
         observedPerHr: snap.on_demand_per_hr,
         markupPct,
-        floorPerHour: Math.max(Number(p?.floor_per_hour_usd ?? 0), 0),
+        floorPerHour: Math.max(Number(pricing.floor_per_hour_usd ?? 0), 0),
         gpuCount: 1,
       });
     }

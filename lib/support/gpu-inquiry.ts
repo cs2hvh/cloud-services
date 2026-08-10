@@ -41,7 +41,7 @@ function block(label: string, value: string): string {
 
 /**
  * Support ticket bodies are rendered as sanitized HTML, not Markdown — see
- * sanitizeSupportRichText, whose allowlist covers <strong>/<hr>/<br> and which
+ * sanitizeSupportRichText, whose allowlist covers <p>/<strong>/<hr>/<br> and which
  * otherwise escapes the text as-is. Emitting `**bold**` here therefore reached
  * the reader (and the notification email, which shares the sanitizer) with the
  * asterisks intact. Build the markup the renderer actually understands.

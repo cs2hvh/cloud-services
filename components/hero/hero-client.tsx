@@ -170,6 +170,9 @@ export type GpuRow = {
 
 
 function GpuPricingRail({ gpus }: { gpus: GpuRow[] }) {
+    // Catalog unavailable: render nothing rather than an empty padded band.
+    if (gpus.length === 0) return null;
+
     return (
         <div className="relative z-20">
             {/* Card row — horizontal scroll on mobile, 4-col grid on desktop */}

@@ -60,15 +60,16 @@ describe('BucketCreate — monthly cost', () => {
     expect(block).not.toHaveTextContent('Free');
   });
 
-  it('does not advertise "Free" when the catalog returns an error payload', async () => {
+  it('does not advertise "Free" when the catalog returns a malformed payload', async () => {
+    // A 200 with no products array leaves the price unset. The initial state
+    // used to be 0, which renders "Free" — the exact bug, reached without any
+    // error being thrown.
     vi.mocked(axios.get).mockResolvedValue({ data: { error: 'boom' } });
 
     const block = await priceText();
 
-    // No products array — price stays at its initial value rather than being
-    // read from a malformed body. Either way it must not claim a paid bucket
-    // is free once a real catalog price exists.
-    await waitFor(() => expect(block).toBeInTheDocument());
+    await waitFor(() => expect(block).toHaveTextContent('—'));
+    expect(block).not.toHaveTextContent('Free');
     expect(block).not.toHaveTextContent('NaN');
   });
 

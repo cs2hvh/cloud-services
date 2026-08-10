@@ -9,6 +9,11 @@ import { ClustersSection } from "@/components/clusters-section";
 import { ComputeSection } from "@/components/compute-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 import HomePopup from "@/components/home-popup";
+
+// The hero rail reads live GPU price and stock. Without this the page is
+// prerendered at build time and would serve frozen numbers — the same class
+// of staleness this work removed. Matches /services/gpu.
+export const revalidate = 300;
 // import FeatureSection from "@/components/feature-section";
 
 const HOME_TITLE = `${siteConfig.name} — AI Inference, GPUs & Cloud Infrastructure`;

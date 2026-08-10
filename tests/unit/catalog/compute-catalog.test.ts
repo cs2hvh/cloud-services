@@ -10,7 +10,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { getPublicComputeCatalog, COMPUTE_TIERS } from '@/lib/catalog/compute';
+import { getPublicComputeCatalog } from '@/lib/catalog/compute';
+import { COMPUTE_TIERS } from '@/lib/catalog/compute-tiers';
 import { resolveLinodePlanPrice } from '@/lib/pricing/linode-catalog';
 
 vi.mock('@/lib/pricing/linode-catalog', async (importOriginal) => {

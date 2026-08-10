@@ -29,8 +29,7 @@ export async function Hero() {
                 id: live.id,
                 name: live.name,
                 memory: live.memoryGB,
-                // Memory generation is a fixed property of the silicon.
-                gen: live.memoryGB >= 141 ? "HBM3e" : "HBM3",
+                gen: accent.memoryType,
                 price: live.hourlyUSD,
                 stock: live.stock,
                 href: live.href,

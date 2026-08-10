@@ -1,4 +1,5 @@
 import { getPublicComputeCatalog } from "@/lib/catalog/compute";
+import { BARE_METAL_SKUS } from "@/lib/catalog/bare-metal";
 import { createServiceClient } from "@/lib/supabase/server";
 
 interface VirtualPlan {
@@ -58,7 +59,7 @@ export async function getComputeCategories(): Promise<ComputeCategory[] | null> 
     const catalog = await getPublicComputeCatalog(supabase);
     if (catalog.tiers.length === 0) return null;
 
-    return catalog.tiers.map((tier) => ({
+    const virtual = catalog.tiers.map((tier) => ({
       key: tier.key,
       label: tier.label,
       tagline:
@@ -75,6 +76,37 @@ export async function getComputeCategories(): Promise<ComputeCategory[] | null> 
         price: p.monthlyUSD,
       })),
     }));
+
+    // Bare metal is a separate lineup with no provider behind it — see
+    // lib/catalog/bare-metal. Appending it keeps the tab that existed before
+    // this page moved onto the Linode catalog; dropping it silently removed a
+    // product from the site.
+    const cheapestBareMetal = Math.min(...BARE_METAL_SKUS.map((s) => s.priceMonthly));
+    const bareMetal: ComputeCategory = {
+      key: "baremetal",
+      label: "Bare Metal",
+      tagline: `From $${cheapestBareMetal}/mo`,
+      description:
+        "Dedicated physical hardware with no hypervisor layer — full control of the machine.",
+      features: [
+        "Single-tenant physical servers",
+        "No virtualization overhead",
+        "Custom disk and RAID layouts",
+        "Deployed on request",
+      ],
+      isBareMetalCategory: true,
+      plans: BARE_METAL_SKUS.map((sku) => ({
+        processor: sku.cpu.model,
+        cores: `${sku.cpu.cores} cores / ${sku.cpu.threads} threads`,
+        ram: `${sku.ramGb} GB ${sku.ramType}`,
+        storage: sku.storage,
+        bandwidth: sku.bandwidth,
+        network: `${sku.uplinkGbps} Gbps`,
+        price: sku.priceMonthly,
+      })),
+    };
+
+    return [...virtual, bareMetal];
   } catch (error) {
     console.error("[compute-categories] catalog read failed:", error);
     return null;

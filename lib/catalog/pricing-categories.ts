@@ -12,11 +12,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getPublicComputeCatalog } from "@/lib/catalog/compute";
+import { HOURS_PER_MONTH } from "@/lib/pricing/linode-catalog";
 import { getPublicGpuCatalog } from "@/lib/catalog/gpu";
 import { GPU_EDITORIAL } from "@/lib/catalog/gpu-editorial";
 import type { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
-
-const HOURS_PER_MONTH = 720;
 
 /** Plan names, cheapest first — the page expects a human label per tier. */
 const PLAN_NAMES = ["Starter", "Basic", "Growth", "Scale", "Power", "Max"];

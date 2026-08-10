@@ -75,7 +75,7 @@ const BucketCreate = ({
     // null = we could not read the catalog. Distinct from 0, which genuinely
     // means free — conflating the two made a failed price fetch advertise
     // "Free" storage on a paid bucket.
-    const [storagePrice, setStoragePrice] = useState<number | null>(0);
+    const [storagePrice, setStoragePrice] = useState<number | null>(null);
     const [loadingPrice, setLoadingPrice] = useState(true);
     const [isCheckingName, setIsCheckingName] = useState(false);
     const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);

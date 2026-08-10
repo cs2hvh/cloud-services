@@ -39,9 +39,9 @@ export const GPU_EDITORIAL: Record<
 // service page said $7.00 and a pod was actually charged $9.24, and its stock
 // was a literal "high"/"low" that could never reflect reality. Two pages
 // disagreeing with each other was the reported bug.
-export const HERO_GPU_ACCENTS: Array<{ id: string; tone: string; tier: string }> = [
-    { id: "b300-sxm6-ac-288", tone: "#fbbf24", tier: "Blackwell" },
-    { id: "b200-180", tone: "#a78bfa", tier: "Blackwell" },
-    { id: "h200-141", tone: "#0095FF", tier: "Hopper" },
-    { id: "h100-sxm-80", tone: "#4ade80", tier: "Hopper" },
+export const HERO_GPU_ACCENTS: Array<{ id: string; tone: string; tier: string; memoryType: string }> = [
+    { id: "b300-sxm6-ac-288", memoryType: "HBM3e", tone: "#fbbf24", tier: "Blackwell" },
+    { id: "b200-180", memoryType: "HBM3e", tone: "#a78bfa", tier: "Blackwell" },
+    { id: "h200-141", memoryType: "HBM3e", tone: "#0095FF", tier: "Hopper" },
+    { id: "h100-sxm-80", memoryType: "HBM3", tone: "#4ade80", tier: "Hopper" },
 ];

@@ -15,7 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LinodeRegionPrice, LinodeTypeClass } from "@/lib/services/linode/types";
 
 const CACHE_TTL_MS = 60_000;
-const HOURS_PER_MONTH = 720;
+export const HOURS_PER_MONTH = 720;
 
 /** Plan classes the compute service does NOT resell. */
 export const EXCLUDED_LINODE_CLASSES: ReadonlySet<string> = new Set(["gpu", "accelerated"]);

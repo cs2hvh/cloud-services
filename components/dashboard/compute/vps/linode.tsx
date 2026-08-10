@@ -40,7 +40,7 @@ import {
 import { RegionFlag } from "@/components/ui/region-flag";
 import { OsImg } from "./os-icons";
 import type { LinodeComputeOptions, LinodePlanWire } from "@/lib/services/compute/providers/linode/options";
-import { COMPUTE_TIERS } from "@/lib/catalog/compute";
+import { COMPUTE_TIERS } from "@/lib/catalog/compute-tiers";
 
 export const GENERIC_DEPLOY_ERROR =
     "Something went wrong while creating your server.";
