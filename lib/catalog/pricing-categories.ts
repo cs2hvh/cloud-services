@@ -31,9 +31,12 @@ export async function buildComputePricingCategory(
   const catalog = await getPublicComputeCatalog(supabase);
   if (catalog.tiers.length === 0) return null;
 
+  // Three per tier. Four tiers x six was up to 24 cards in one category — a
+  // very different page from the five the layout was built for. The wizard
+  // lists every plan.
+  const PER_TIER = 3;
   const tiers: PricingTier[] = catalog.tiers.flatMap((tier) =>
-    // Six per tier keeps the page readable; the wizard lists them all.
-    tier.plans.slice(0, 6).map((plan, i) => ({
+    tier.plans.slice(0, PER_TIER).map((plan, i) => ({
       id: plan.id,
       name: `${tier.label} · ${PLAN_NAMES[i] ?? `Plan ${i + 1}`}`,
       shortDescription: tier.blurb,
@@ -58,15 +61,28 @@ export async function buildComputePricingCategory(
     }))
   );
 
+  // The page sorts by isFeatured and renders that card larger with a ribbon.
+  // Every block this replaced had exactly one; with none set the grid goes
+  // flat. Feature the cheapest dedicated plan — the usual "right default for
+  // production" recommendation.
+  const featured =
+    tiers.find((t) => t.subType === "dedicated") ?? tiers[0];
+  if (featured) featured.isFeatured = true;
+
   return {
     id: "compute",
     label: "Compute",
     description:
       "General-purpose instances for web apps, APIs, workers, and backend services.",
-    startingPriceLabel:
-      catalog.tiers[0].fromMonthlyUSD !== null
-        ? `From $${catalog.tiers[0].fromMonthlyUSD.toFixed(2)}/mo`
-        : undefined,
+    // Cheapest across every tier. tiers[0] is merely the first that survived
+    // filtering, so if shared ever has no sellable plan it would quote a
+    // dedicated price as the entry point.
+    startingPriceLabel: (() => {
+      const lows = catalog.tiers
+        .map((t) => t.fromMonthlyUSD)
+        .filter((v): v is number => v !== null);
+      return lows.length > 0 ? `From $${Math.min(...lows).toFixed(2)}/mo` : undefined;
+    })(),
     tiers,
   };
 }
@@ -126,6 +142,10 @@ export async function buildGpuPricingCategory(
       ctaLink: `/dashboard/services/gpu/deploy?gpu=${encodeURIComponent(g.id)}`,
     };
   });
+
+  const featuredGpu =
+    tiers.find((t) => GPU_EDITORIAL[t.id ?? ""]?.featured) ?? tiers[0];
+  if (featuredGpu) featuredGpu.isFeatured = true;
 
   return {
     id: "gpu-instance",

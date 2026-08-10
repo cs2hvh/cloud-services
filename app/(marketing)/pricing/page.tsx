@@ -48,17 +48,21 @@ async function PricingContent() {
   // come from a FALLBACK_PRICING_DATA constant in this file — compute at $79/mo
   // for 8 vCPU/32GB against a real $51.84, and GPU replaced with that static
   // block even when the database had data.
+  // allSettled, not all: a compute failure must not also remove GPU.
   let compute: ServiceCategory | null = null;
   let gpu: ServiceCategory | null = null;
   try {
     const supabase = await createServiceClient();
-    [compute, gpu] = await Promise.all([
+    const [c, g] = await Promise.allSettled([
       buildComputePricingCategory(supabase),
       buildGpuPricingCategory(supabase),
     ]);
+    if (c.status === "fulfilled") compute = c.value;
+    else console.error("[pricing] compute catalog read failed:", c.reason);
+    if (g.status === "fulfilled") gpu = g.value;
+    else console.error("[pricing] gpu catalog read failed:", g.reason);
   } catch (error) {
     console.error("[pricing] catalog read failed:", error);
-    // Omit the category rather than substitute numbers.
   }
 
   // Drop any database or legacy entry for these two; the catalog is canonical.
@@ -66,9 +70,20 @@ async function PricingContent() {
     (c) => !["compute", "gpu", "gpu-instance"].includes(c.id)
   );
 
+  // A category that failed to build is shown as unavailable rather than
+  // dropped. Silently omitting it leaves a visitor on a pricing page with no
+  // compute and nothing saying why — worse than an explicit gap.
+  const placeholder = (id: string, label: string): ServiceCategory => ({
+    id,
+    label,
+    description:
+      "Live pricing is briefly unavailable. Current prices are quoted in the dashboard before you deploy.",
+    tiers: [],
+  });
+
   const pricingData: ServiceCategory[] = [
-    ...(compute ? [compute] : []),
-    ...(gpu ? [gpu] : []),
+    compute ?? placeholder("compute", "Compute"),
+    gpu ?? placeholder("gpu-instance", "GPU Instances"),
     ...rest,
   ];
 

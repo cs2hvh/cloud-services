@@ -194,7 +194,9 @@ describe('no page hardcodes a GPU price', () => {
     const src = fs.readFileSync(
       path.join(process.cwd(), 'app/(marketing)/pricing/page.tsx'), 'utf8'
     );
-    expect(src).not.toContain('FALLBACK_PRICING_DATA:');
+    // Match the identifier itself: 'FALLBACK_PRICING_DATA:' only catches a
+    // reintroduction that carries a type annotation.
+    expect(src).not.toMatch(/const\s+FALLBACK_PRICING_DATA\b/);
     const code = src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(code).not.toMatch(/monthly:\s*\d+\s*,\s*yearly:\s*\d+/);
   });
