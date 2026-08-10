@@ -28,20 +28,38 @@ export const VALID_DATABASE_ENGINES = [
   'kafka'      // Apache Kafka
 ] as const;
 
+// Engine versions the provider will actually accept on a create.
+//
+// These mirror DigitalOcean's GET /v2/databases/options. They drifted badly:
+// the lists below said MySQL 8, MongoDB 4-8 and Kafka 3.5-3.8, while the
+// provider offers MySQL 8.4, MongoDB 7.0/8.0 and Kafka 3.9/4.1. The wizard is
+// fed from the database_types table, which had been kept current — so the
+// picker offered MySQL 8.4, the customer configured a whole cluster, and the
+// create call rejected it with "Version 8.4 isn't available for the selected
+// engine". The table was right; this file was three releases stale.
+//
+// Note the format matters as much as the number: MongoDB is '7.0', not '7'.
+//
+// When DigitalOcean adds or retires a version, update these AND the
+// database_types rows. /api/database-types reconciles the two at read time and
+// logs any drift, so a mismatch shows up in the logs instead of at checkout.
+
 // Valid PostgreSQL versions
-export const VALID_PG_VERSIONS = ['12', '13', '14', '15', '16', '17'] as const;
+export const VALID_PG_VERSIONS = ['15', '16', '17', '18'] as const;
 
 // Valid MySQL versions
-export const VALID_MYSQL_VERSIONS = ['8'] as const;
+export const VALID_MYSQL_VERSIONS = ['8.4'] as const;
 
-// Valid Redis versions
+// Valid Redis versions. DigitalOcean has retired Redis in favour of Valkey and
+// no longer lists it under /v2/databases/options; kept for existing rows until
+// the catalog moves over.
 export const VALID_REDIS_VERSIONS = ['6', '7'] as const;
 
 // Valid MongoDB versions
-export const VALID_MONGODB_VERSIONS = ['4', '5', '6', '7', '8'] as const;
+export const VALID_MONGODB_VERSIONS = ['7.0', '8.0'] as const;
 
 // Valid Kafka versions
-export const VALID_KAFKA_VERSIONS = ['3.5', '3.6', '3.7', '3.8'] as const;
+export const VALID_KAFKA_VERSIONS = ['3.9', '4.1'] as const;
 
 // Valid database cluster size patterns (regex-based validation)
 // - db-s-* : Basic tier (shared CPU)
