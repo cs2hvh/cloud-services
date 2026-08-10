@@ -345,6 +345,29 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Proxm
 }
 
 export async function POST(req: NextRequest) {
+  // An unhandled throw below escapes to Next's HTML error page, which the
+  // dashboard then tries to JSON.parse — that is where the customer-facing
+  // `Unexpected token '<', "<!DOCTYPE"...` came from. Worse, it skips every
+  // fail() path, so the idempotency key stays reserved and each retry answers
+  // 409 for the rest of the TTL. Catch here, answer in JSON, and let the
+  // handler publish its release hook so the reservation still gets dropped.
+  const guard: { abort: (() => Promise<void>) | null } = { abort: null };
+  try {
+    return await createServer(req, guard);
+  } catch (e) {
+    await guard.abort?.().catch(() => {});
+    console.error("[VM Create] unhandled error:", e);
+    return Response.json(
+      { ok: false, error: "Something went wrong while creating your server. Please try again." },
+      { status: 500 }
+    );
+  }
+}
+
+async function createServer(
+  req: NextRequest,
+  guard: { abort: (() => Promise<void>) | null }
+): Promise<Response> {
   // Authenticate the user via session cookie
   const supabaseAuth = await createClient();
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
@@ -367,6 +390,7 @@ export async function POST(req: NextRequest) {
   // Idempotency check — prevent duplicate VM creates from double-clicks or retries
   const idempKey = getIdempotencyKey(req.headers);
   let idempComplete: ((data: unknown) => Promise<void>) | null = null;
+  let idempAbort: (() => Promise<void>) | null = null;
   if (idempKey) {
     const idemp = await checkIdempotency(`vm-create:${user.id}:${idempKey}`);
     if (idemp.status === "completed") {
@@ -387,12 +411,25 @@ export async function POST(req: NextRequest) {
       );
     }
     idempComplete = idemp.complete;
+    idempAbort = idemp.abort;
+    guard.abort = idemp.abort;
   }
+
+  // Releasing the reservation is not optional on the failure paths. The key is
+  // reserved for the full 24h TTL before we know whether the request is even
+  // valid, and the dashboard holds one key for the lifetime of the page — so a
+  // single rejected deploy used to pin that key and turn every subsequent click
+  // into 409 "This request is already being processed", with nothing created
+  // and no way out but a reload. Every early exit below goes through fail().
+  const fail = async (body: unknown, init: ResponseInit): Promise<Response> => {
+    await idempAbort?.().catch(() => {});
+    return Response.json(body, init);
+  };
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const region = String(body.region || "");
-  if (!region) return Response.json({ ok: false, error: "region is required" }, { status: 400 });
+  if (!region) return fail({ ok: false, error: "region is required" }, { status: 400 });
 
   const supabase = await createWorkerClient();
 
@@ -404,7 +441,7 @@ export async function POST(req: NextRequest) {
     .in("status", ["provisioning", "running", "stopped", "suspended"]);
 
   if ((existingVMs || 0) >= MAX_VMS_PER_USER) {
-    return Response.json(
+    return fail(
       { ok: false, error: `You have reached the maximum of ${MAX_VMS_PER_USER} active servers. Please delete unused servers first.` },
       { status: 429 }
     );
@@ -417,6 +454,12 @@ export async function POST(req: NextRequest) {
   const computeProvider = await getComputeProvider();
   if (computeProvider === "linode") {
     const res = await handleLinodeCreate({ user, body, supabase, idempComplete });
+    // handleLinodeCreate owns ~20 failure exits of its own and only settles the
+    // idempotency key on success, so release the reservation here rather than
+    // threading an abort callback through all of them.
+    if (res.status >= 400) {
+      await idempAbort?.().catch(() => {});
+    }
     // The limiter above consumes a slot before we know whether the request was
     // even valid. A rejected create provisioned nothing, so refund the slot —
     // otherwise five mistyped root passwords lock deploys for five minutes
@@ -438,16 +481,16 @@ export async function POST(req: NextRequest) {
 
   if (regionErr) {
     console.error("[VM Create] Region query failed:", regionErr.message);
-    return Response.json({ ok: false, error: "Unable to check available regions. Please try again later." }, { status: 500 });
+    return fail({ ok: false, error: "Unable to check available regions. Please try again later." }, { status: 500 });
   }
   if (!regionHosts || regionHosts.length === 0) {
-    return Response.json({ ok: false, error: "This region is currently unavailable. Please select a different region." }, { status: 404 });
+    return fail({ ok: false, error: "This region is currently unavailable. Please select a different region." }, { status: 404 });
   }
 
   const rawHostname = body.hostname ? String(body.hostname) : `vm-${Date.now()}`;
   // Strict hostname validation — alphanumeric, hyphens, 1-63 chars
   if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(rawHostname)) {
-    return Response.json({ ok: false, error: "Server name must only contain letters, numbers, and hyphens (1-63 characters)." }, { status: 400 });
+    return fail({ ok: false, error: "Server name must only contain letters, numbers, and hyphens (1-63 characters)." }, { status: 400 });
   }
   const hostname = rawHostname;
   const sshPassword = body.sshPassword as string | undefined;
@@ -469,14 +512,14 @@ export async function POST(req: NextRequest) {
   if (planSlug) {
     const plan = await findPlanBySlug(supabase, planSlug);
     if (!plan) {
-      return Response.json({ ok: false, error: `Unknown plan: ${planSlug}` }, { status: 400 });
+      return fail({ ok: false, error: `Unknown plan: ${planSlug}` }, { status: 400 });
     }
     if (!plan.isActive) {
-      return Response.json({ ok: false, error: `Plan ${planSlug} is no longer available` }, { status: 400 });
+      return fail({ ok: false, error: `Plan ${planSlug} is no longer available` }, { status: 400 });
     }
     // Enforce region whitelist if the plan has one
     if (plan.allowedRegions && plan.allowedRegions.length > 0 && !plan.allowedRegions.includes(region)) {
-      return Response.json({
+      return fail({
         ok: false,
         error: `Plan ${planSlug} is not available in this region.`,
       }, { status: 400 });
@@ -495,9 +538,9 @@ export async function POST(req: NextRequest) {
     diskGB = body.diskGB ? Number(body.diskGB) : undefined;
 
     // Validate spec ranges (only enforced on free-form path; plans are validated at admin write time)
-    if (cpuCores < 1 || cpuCores > 32) return Response.json({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
-    if (memoryMB < 512 || memoryMB > 262144) return Response.json({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
-    if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return Response.json({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
+    if (cpuCores < 1 || cpuCores > 32) return fail({ ok: false, error: "CPU cores must be between 1 and 32." }, { status: 400 });
+    if (memoryMB < 512 || memoryMB > 262144) return fail({ ok: false, error: "Memory must be between 512 MB and 256 GB." }, { status: 400 });
+    if (diskGB !== undefined && (diskGB < 10 || diskGB > 2000)) return fail({ ok: false, error: "Disk size must be between 10 GB and 2 TB." }, { status: 400 });
   }
   const os = body.os || "Ubuntu 24.04 LTS";
 
@@ -508,15 +551,15 @@ export async function POST(req: NextRequest) {
   const usesRDP = isWindows || isDesktop;
 
   // Windows/Desktop-specific minimums
-  if ((isWindows || isDesktop) && memoryMB < 2048) return Response.json({ ok: false, error: `${isWindows ? "Windows" : "Desktop"} servers require at least 2 GB of memory.` }, { status: 400 });
-  if (isWindows && diskGB !== undefined && diskGB < 40) return Response.json({ ok: false, error: "Windows servers require at least 40 GB of disk space." }, { status: 400 });
-  if (isDesktop && !isWindows && diskGB !== undefined && diskGB < 25) return Response.json({ ok: false, error: "Desktop servers require at least 25 GB of disk space." }, { status: 400 });
+  if ((isWindows || isDesktop) && memoryMB < 2048) return fail({ ok: false, error: `${isWindows ? "Windows" : "Desktop"} servers require at least 2 GB of memory.` }, { status: 400 });
+  if (isWindows && diskGB !== undefined && diskGB < 40) return fail({ ok: false, error: "Windows servers require at least 40 GB of disk space." }, { status: 400 });
+  if (isDesktop && !isWindows && diskGB !== undefined && diskGB < 25) return fail({ ok: false, error: "Desktop servers require at least 25 GB of disk space." }, { status: 400 });
 
-  if (!sshPassword) return Response.json({ ok: false, error: "Password is required." }, { status: 400 });
+  if (!sshPassword) return fail({ ok: false, error: "Password is required." }, { status: 400 });
 
   // Password validation — enforce strong passwords especially for Windows RDP
   if (sshPassword.length < 12) {
-    return Response.json({ ok: false, error: "Password must be at least 12 characters" }, { status: 400 });
+    return fail({ ok: false, error: "Password must be at least 12 characters" }, { status: 400 });
   }
   if (usesRDP) {
     const hasUpper = /[A-Z]/.test(sshPassword);
@@ -525,7 +568,7 @@ export async function POST(req: NextRequest) {
     const hasSpecial = /[^A-Za-z0-9]/.test(sshPassword);
     const complexityCount = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
     if (complexityCount < 3) {
-      return Response.json({
+      return fail({
         ok: false,
         error: "Password must include at least 3 of: uppercase letter, lowercase letter, number, special character."
       }, { status: 400 });
@@ -722,7 +765,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (candidates.length === 0) {
-    return Response.json({
+    return fail({
       ok: false,
       error: "This region is currently at capacity. Please try a different region or a smaller configuration."
     }, { status: 409 });
@@ -759,7 +802,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!selected || !allocatedIp) {
-    return Response.json({
+    return fail({
       ok: false,
       error: "This region is currently at capacity. Please try a different region or a smaller configuration."
     }, { status: 409 });
@@ -787,7 +830,7 @@ export async function POST(req: NextRequest) {
       if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("[VM Create] On-demand vMAC failed:", errMsg);
-      return Response.json({
+      return fail({
         ok: false,
         error:
           `Could not allocate a vMAC for ${ipPrimary}: ${errMsg}. ` +
@@ -799,7 +842,7 @@ export async function POST(req: NextRequest) {
   const modeWithoutRequiredMac = new Set(["ovh_hg_scale_routed", "ovh_advance_gen3_routed", "ovh_vrack_block"]);
   if (!macAddress && !modeWithoutRequiredMac.has(String(cfg.network_mode || "legacy_public_gateway"))) {
     console.error("[VM Create] No MAC address for IP:", ipPrimary);
-    return Response.json({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
+    return fail({ ok: false, error: "Network configuration error. Please contact support." }, { status: 500 });
   }
 
   const allowInsecure = !!cfg.allow_insecure_tls;
@@ -833,7 +876,7 @@ export async function POST(req: NextRequest) {
   const reservation = reservationResult.reservation;
   if (!reservationResult.ok) {
     if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
-    return Response.json(
+    return fail(
       { ok: false, error: `Insufficient balance. You need at least $${minimumBalance.toFixed(2)} to create this server.` },
       { status: 402 }
     );
@@ -857,7 +900,7 @@ export async function POST(req: NextRequest) {
   if (storagePick.reason === "fallback-no-fit") {
     if (ipLockKey) { try { await redis.del(ipLockKey); } catch { /* ignore */ } }
     await releaseProvision(reservation);
-    return Response.json({
+    return fail({
       ok: false,
       error: `No storage with ${requestedDiskGB} GB free on the selected host. Please reduce the disk size or try a different region.`,
     }, { status: 409 });
@@ -882,7 +925,7 @@ export async function POST(req: NextRequest) {
       // Release IP lock since we can't use this IP
       if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
       await releaseProvision(reservation);
-      return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
+      return fail({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
     }
 
     const billingStart = new Date();
@@ -924,9 +967,9 @@ export async function POST(req: NextRequest) {
       await releaseProvision(reservation);
       db.error = insertErr.message;
       if (insertErr.message?.toLowerCase().includes("duplicate") || (insertErr as unknown as Record<string, unknown>).code === "23505") {
-        return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
+        return fail({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
       }
-      return Response.json({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
+      return fail({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
     }
     reservationId = (inserted as Record<string, unknown>)?.id as number ?? null;
     billingServiceId = ((inserted as Record<string, unknown>)?.billing_service_id as string) ?? null;
@@ -941,7 +984,7 @@ export async function POST(req: NextRequest) {
     const error = e instanceof Error ? e : new Error(String(e));
     db.error = error?.message || String(e);
     console.error("[VM Create] DB reservation failed:", db.error);
-    return Response.json({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
+    return fail({ ok: false, error: "Unable to reserve your server. Please try again later." }, { status: 500 });
   }
 
   // Determine connection type for immediate response

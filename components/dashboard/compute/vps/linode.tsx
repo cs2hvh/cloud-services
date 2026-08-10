@@ -41,6 +41,34 @@ import { RegionFlag } from "@/components/ui/region-flag";
 import { OsImg } from "./os-icons";
 import type { LinodeComputeOptions, LinodePlanWire } from "@/lib/services/compute/providers/linode/options";
 
+export const GENERIC_DEPLOY_ERROR =
+    "Something went wrong while creating your server.";
+
+/**
+ * Turn a thrown value into something worth showing the customer.
+ *
+ * The API's own `error` strings are written for end users, so they pass
+ * through. Anything that reads like plumbing — a network failure, or a
+ * JSON/syntax error from a response that was not JSON at all — is replaced:
+ * those leaked to the dashboard as toasts like
+ * `Unexpected token '<', "<!DOCTYPE"... is not valid JSON`.
+ */
+export function deployErrorMessage(err: unknown, fallback = GENERIC_DEPLOY_ERROR): string {
+    const raw = err instanceof Error ? err.message : "";
+    const isPlumbing =
+        !raw ||
+        raw.length >= 220 ||
+        raw.includes("fetch") ||
+        raw.includes("ECONNREFUSED") ||
+        // Parser noise from a non-JSON body, in the shapes the major engines
+        // phrase it: V8/Chrome, Firefox and Safari all differ.
+        err instanceof SyntaxError ||
+        raw.includes("not valid JSON") ||
+        raw.includes("Unexpected token") ||
+        raw.includes("JSON.parse");
+    return isPlumbing ? fallback : raw;
+}
+
 // ─── Design tokens (shared with simple.tsx) ──────────────────────
 const SERIF_STYLE: React.CSSProperties = {
     fontFamily: "var(--font-nunito), system-ui, sans-serif",
@@ -302,17 +330,23 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
                 },
                 body: JSON.stringify(payload),
             });
-            const json = await res.json();
-            if (!res.ok || !json.ok) {
-                throw new Error(json.error || "Something went wrong while creating your server.");
+            // Not every response on this path is JSON: a proxy 502/504 or an
+            // unhandled server error answers with an HTML page, and parsing
+            // that threw `Unexpected token '<', "<!DOCTYPE"...` — a message
+            // short enough to pass isCustomerFacing() and get shown to the
+            // customer verbatim. Treat unparseable bodies as a generic failure
+            // and let the status code carry the meaning.
+            const json = await res.json().catch(() => null);
+            if (!res.ok || !json?.ok) {
+                throw new Error(
+                    json?.error || "Something went wrong while creating your server."
+                );
             }
             toast.success(`Deploying "${label.trim()}"…`);
             router.push("/dashboard/services/compute/vps");
             return;
         } catch (err) {
-            const raw = err instanceof Error ? err.message : "";
-            const friendly = raw && raw.length < 220 && !raw.includes("fetch") && !raw.includes("ECONNREFUSED");
-            const msg = friendly ? raw : "Something went wrong while creating your server.";
+            const msg = deployErrorMessage(err);
             setError(msg);
             toast.error(msg);
         } finally {
@@ -1174,8 +1208,10 @@ function AddSshKeyDialog({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ label: label.trim(), public_key: publicKey }),
             });
-            const json = await res.json();
-            if (!res.ok || !json.ok) throw new Error(json.error || "Failed to save SSH key");
+            // Same trap as the deploy path: a non-JSON response (proxy error
+            // page) would throw a parser error that lands in setError below.
+            const json = await res.json().catch(() => null);
+            if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed to save SSH key");
             toast.success(`SSH key "${label.trim()}" added`);
             onAdded({
                 id: String(json.data.id),
@@ -1183,7 +1219,7 @@ function AddSshKeyDialog({
                 fingerprint: String(json.data.fingerprint_sha256),
             });
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to save SSH key");
+            setError(deployErrorMessage(e, "Failed to save SSH key."));
         } finally {
             setSaving(false);
         }
