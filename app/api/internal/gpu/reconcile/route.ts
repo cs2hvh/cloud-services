@@ -1,33 +1,14 @@
-import { timingSafeEqual } from "crypto";
 import { NextRequest } from "next/server";
 
 import { RunPodService } from "@/lib/services/runpod-service";
+import { authorizeInternalCron } from "@/lib/api/internal-cron-auth";
 
 export const dynamic = "force-dynamic";
 
 const LOCK_TTL_SECONDS = 240;
 const LOCK_KEY = "lock:gpu-pod-reconcile";
 
-function getCronSecret(): string {
-    const s = process.env.CRON_SECRET;
-    if (!s) throw new Error("CRON_SECRET is not configured");
-    return s;
-}
 
-function authorize(req: NextRequest): boolean {
-    const header = req.headers.get("authorization") || "";
-    const match = /^Bearer\s+(.+)$/i.exec(header);
-    if (!match) return false;
-    const provided = match[1];
-    let expected: string;
-    try {
-        expected = getCronSecret();
-    } catch {
-        return false;
-    }
-    if (provided.length === 0 || provided.length !== expected.length) return false;
-    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-}
 
 /**
  * POST /api/internal/gpu/reconcile
@@ -39,7 +20,7 @@ function authorize(req: NextRequest): boolean {
  * Single-flighted via Redis NX lock.
  */
 export async function POST(req: NextRequest) {
-    if (!authorize(req)) {
+    if (!authorizeInternalCron(req)) {
         return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
     }
 
