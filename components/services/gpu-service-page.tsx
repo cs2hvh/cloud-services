@@ -14,9 +14,7 @@ import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
 import PixelBlast from "@/components/hero/pixel-blast";
 import { ClustersSection } from "@/components/clusters-section";
-import type { Tables } from "@/lib/supabase/types";
-
-type Product = Tables<"products">;
+import type { PublicStock } from "@/lib/catalog/gpu";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const BRAND = "#0095FF";
@@ -31,106 +29,14 @@ type GpuRow = {
     memoryType: string;
     perfFp8: string;
     bandwidth: string;
-    pricePerHour: number;
-    stock: "available" | "limited" | "request";
+    /** Live resale price per GPU-hour; null when we have no current reading. */
+    pricePerHour: number | null;
+    /** Live availability. "unknown" when the stock reading is stale. */
+    stock: PublicStock;
     href: string;
     featured?: boolean;
 };
 
-const GPUS: GpuRow[] = [
-    {
-        id: "b300",
-        name: "B300",
-        arch: "Blackwell Ultra",
-        archTier: "blackwell",
-        memory: "288 GB",
-        memoryType: "HBM3e",
-        perfFp8: "14 PFLOPS",
-        bandwidth: "8 TB/s",
-        pricePerHour: 7.0,
-        stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=b300-288",
-        featured: true,
-    },
-    {
-        id: "b200",
-        name: "B200",
-        arch: "Blackwell",
-        archTier: "blackwell",
-        memory: "192 GB",
-        memoryType: "HBM3e",
-        perfFp8: "10 PFLOPS",
-        bandwidth: "8 TB/s",
-        pricePerHour: 5.49,
-        stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=b200-180",
-    },
-    {
-        id: "h200-sxm",
-        name: "H200 SXM",
-        arch: "Hopper",
-        archTier: "hopper",
-        memory: "141 GB",
-        memoryType: "HBM3e",
-        perfFp8: "3,958 TFLOPS",
-        bandwidth: "4.8 TB/s",
-        pricePerHour: 3.99,
-        stock: "limited",
-        href: "/dashboard/services/gpu/deploy?gpu=h200-141",
-    },
-    {
-        id: "h100-sxm",
-        name: "H100 SXM",
-        arch: "Hopper",
-        archTier: "hopper",
-        memory: "80 GB",
-        memoryType: "HBM3",
-        perfFp8: "3,958 TFLOPS",
-        bandwidth: "3.35 TB/s",
-        pricePerHour: 2.99,
-        stock: "available",
-        href: "/dashboard/services/gpu/deploy?gpu=h100-sxm-80",
-    },
-    {
-        id: "h100-nvl",
-        name: "H100 NVL",
-        arch: "Hopper",
-        archTier: "hopper",
-        memory: "94 GB",
-        memoryType: "HBM3",
-        perfFp8: "3,958 TFLOPS",
-        bandwidth: "3.9 TB/s",
-        pricePerHour: 2.59,
-        stock: "available",
-        href: "/dashboard/services/gpu/deploy?gpu=h100-nvl-94",
-    },
-    {
-        id: "a100",
-        name: "A100 SXM",
-        arch: "Ampere",
-        archTier: "ampere",
-        memory: "80 GB",
-        memoryType: "HBM2e",
-        perfFp8: "312 TFLOPS bf16",
-        bandwidth: "2 TB/s",
-        pricePerHour: 1.89,
-        stock: "available",
-        href: "/dashboard/services/gpu/deploy?gpu=a100-80",
-    },
-    {
-        id: "l40s",
-        name: "L40S",
-        arch: "Ada Lovelace",
-        archTier: "ada",
-        memory: "48 GB",
-        memoryType: "GDDR6",
-        perfFp8: "733 TFLOPS",
-        bandwidth: "864 GB/s",
-        pricePerHour: 1.49,
-        stock: "available",
-        href: "/dashboard/services/gpu/deploy?gpu=l40s-48",
-    },
-];
 
 const ARCH_TONE: Record<GpuRow["archTier"], string> = {
     blackwell: "#a78bfa",
@@ -139,13 +45,13 @@ const ARCH_TONE: Record<GpuRow["archTier"], string> = {
     ada: "#fbbf24",
 };
 
-const STOCK_META: Record<
-    GpuRow["stock"],
-    { color: string; label: string }
-> = {
+const STOCK_META: Record<GpuRow["stock"], { color: string; label: string }> = {
     available: { color: "#4ade80", label: "In stock" },
     limited: { color: "#fbbf24", label: "Limited" },
-    request: { color: "#a78bfa", label: "On request" },
+    unavailable: { color: "rgba(255,255,255,0.35)", label: "Out of stock" },
+    // Shown when the reading is older than the freshness window. Claiming
+    // "In stock" from a stale snapshot sends people into a deploy that fails.
+    unknown: { color: "#a78bfa", label: "Check availability" },
 };
 
 // ─── Workload categories (for the cream section) ──────────────
@@ -342,7 +248,7 @@ function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
             <p
               className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}
             >
-              ${gpu.pricePerHour.toFixed(2)}
+              {gpu.pricePerHour === null ? "\u2014" : `$${gpu.pricePerHour.toFixed(2)}`}
               <span className="ml-1 text-[11px] font-normal text-white/55">
                 /GPU·hr
               </span>
@@ -431,16 +337,15 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
 
 // ─── Main page ────────────────────────────────────────────────
 
-export function GpuServicePage(
-//     {
-//     featuredProducts: _featuredProducts,
-// }: {
-//     featuredProducts?: Product[];
-// }
-) {
-    //commented out featuredProducts for now since the GPU lineup is curated from real SKUs and doesn't need to be overridden from the database. Can re-add as a prop if we want to do limited-time promotions or highlight specific SKUs in the future, but for now it's simpler to keep the source of truth for the lineup in this component.
-    // featuredProducts kept in signature for backwards-compat with the page route;
-    // current lineup is curated from real GPU presets shipped in the dashboard.
+export function GpuServicePage({ gpus }: { gpus: GpuRow[] }) {
+    // The lineup arrives from the server, priced and stocked by lib/catalog/gpu.
+    // It used to be a constant in this file with fixed prices and fixed "In
+    // stock" strings, which is why this page and the deploy wizard disagreed.
+    //
+    // The strapline quotes the cheapest live price rather than a literal: it
+    // read "$1.49 / GPU·hr" while the cheapest card was $1.24.
+    const prices = gpus.map((g) => g.pricePerHour).filter((p): p is number => p !== null);
+    const fromPrice = prices.length > 0 ? Math.min(...prices) : null;
 
     return (
         <main className="bg-[#04060a] text-white">
@@ -575,14 +480,15 @@ export function GpuServicePage(
                             <span className="text-[#0095FF]">ready to deploy</span>
                         </h2>
                         <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
-                            From Ada Lovelace inference at $1.49 / GPU·hr to Blackwell Ultra
-                            B300 for frontier training — every node is NVLink-capable,
-                            NVMe-backed, and billed by the second.
+                            {fromPrice === null
+                                ? "From Ada Lovelace inference to Blackwell Ultra B300 for frontier training"
+                                : `From Ada Lovelace inference at $${fromPrice.toFixed(2)} / GPU\u00b7hr to Blackwell Ultra B300 for frontier training`}
+                            {" "}— every node is NVLink-capable, NVMe-backed, and billed by the second.
                         </p>
                     </div>
 
                     <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-                        {GPUS.map((gpu, i) => (
+                        {gpus.map((gpu, i) => (
                             <GpuCard key={gpu.id} gpu={gpu} index={i} />
                         ))}
                     </div>
