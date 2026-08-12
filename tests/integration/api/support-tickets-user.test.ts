@@ -192,8 +192,6 @@ describe("Support Ticket User APIs", () => {
 
       const payload = {
         topic: "kubernetes",
-        subTopic: "cluster_health",
-        tertiaryTopic: "node_not_ready",
         subject: "Node readiness issue",
         affectedResourceType: "kubernetes",
         affectedResourceId: "cluster-1",
@@ -216,8 +214,7 @@ describe("Support Ticket User APIs", () => {
         expect.objectContaining({
           ownerId: "user-1",
           topic: "kubernetes",
-          subTopic: "cluster_health",
-          tertiaryTopic: "node_not_ready",
+          subject: "Node readiness issue",
         })
       );
       expect(sendSupportTicketCreatedEmail).toHaveBeenCalledTimes(1);
@@ -226,8 +223,6 @@ describe("Support Ticket User APIs", () => {
     it("should reject unsupported file extensions", async () => {
       const formData = new FormData();
       formData.append("topic", "kubernetes");
-      formData.append("subTopic", "cluster_health");
-      formData.append("tertiaryTopic", "node_not_ready");
       formData.append("subject", "Node readiness issue");
       formData.append("description", "<p>Nodes are stuck for more than 20 minutes.</p>");
       formData.append("attachments", new File(["binary"], "malware.exe", { type: "application/octet-stream" }));
@@ -244,8 +239,6 @@ describe("Support Ticket User APIs", () => {
     it("should reject when attachments exceed configured maximum", async () => {
       const formData = new FormData();
       formData.append("topic", "kubernetes");
-      formData.append("subTopic", "cluster_health");
-      formData.append("tertiaryTopic", "node_not_ready");
       formData.append("subject", "Node readiness issue");
       formData.append("description", "<p>Nodes are stuck for more than 20 minutes.</p>");
 

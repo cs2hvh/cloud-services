@@ -11,7 +11,7 @@ import { MessageSquarePlus, Search } from "lucide-react";
 import {
     SUPPORT_STATUS_LABELS,
     SupportTicketStatus,
-    getSupportTopicLabels,
+    getSupportTopicLabel,
 } from "@/lib/support/catalog";
 import { SupportTicketSummary } from "@/lib/supabase/queries/support_tickets";
 
@@ -264,11 +264,8 @@ export default function SupportTicketList({
                     </div>
 
                     {tickets.map((ticket) => {
-                        const labels = getSupportTopicLabels(
-                            ticket.topic,
-                            ticket.sub_topic,
-                            ticket.tertiary_topic,
-                        );
+                        const topicLabel =
+                            getSupportTopicLabel(ticket.topic) ?? ticket.topic;
                         const status = statusMeta(ticket.status);
                         return (
                             <Link
@@ -300,9 +297,7 @@ export default function SupportTicketList({
                                         <div
                                             className={`${MONO} mt-0.5 text-[10.5px] text-white/40 truncate`}
                                         >
-                                            {labels
-                                                ? `${labels.topicLabel} · ${labels.subTopicLabel} · ${labels.tertiaryTopicLabel}`
-                                                : `${ticket.topic} · ${ticket.sub_topic} · ${ticket.tertiary_topic}`}
+                                            {topicLabel}
                                         </div>
                                     </div>
 

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   SUPPORT_STATUS_LABELS,
   SupportTicketStatus,
-  getSupportTopicLabels,
+  getSupportTopicLabel,
 } from "@/lib/support/catalog";
 import { AdminSupportTicketDetail, SupportTicketAttachment } from "@/lib/supabase/queries/support_tickets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,9 +59,9 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
 
-  const topicLabels = useMemo(
-    () => getSupportTopicLabels(ticket.topic, ticket.sub_topic, ticket.tertiary_topic),
-    [ticket.topic, ticket.sub_topic, ticket.tertiary_topic]
+  const topicLabel = useMemo(
+    () => getSupportTopicLabel(ticket.topic) ?? ticket.topic,
+    [ticket.topic]
   );
 
   const ownerName =
@@ -165,12 +165,8 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
               <h2 className="text-sm font-medium text-white mb-4">Issue Details</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs text-neutral-500 uppercase tracking-wider">Topic Path</p>
-                  <p className="mt-1 text-sm text-neutral-200">
-                    {topicLabels
-                      ? `${topicLabels.topicLabel} / ${topicLabels.subTopicLabel} / ${topicLabels.tertiaryTopicLabel}`
-                      : `${ticket.topic} / ${ticket.sub_topic} / ${ticket.tertiary_topic}`}
-                  </p>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wider">Topic</p>
+                  <p className="mt-1 text-sm text-neutral-200">{topicLabel}</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-500 uppercase tracking-wider">Affected Resource</p>

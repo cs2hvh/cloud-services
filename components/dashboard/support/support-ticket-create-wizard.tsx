@@ -31,12 +31,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
-    ALLOWED_SUPPORT_FILE_EXTENSIONS,
     SUPPORT_FILE_MAX_SIZE_BYTES,
     SUPPORT_MAX_ATTACHMENTS,
     SUPPORT_TOPICS,
     SupportResourceOption,
-    getFileExtension,
     isAllowedSupportFile,
 } from "@/lib/support/catalog";
 import { plainTextFromRichText } from "@/lib/support/richtext";
@@ -54,8 +52,6 @@ export default function SupportTicketCreateWizard() {
     const router = useRouter();
 
     const [topic, setTopic] = useState("");
-    const [subTopic, setSubTopic] = useState("");
-    const [tertiaryTopic, setTertiaryTopic] = useState("");
     const [subject, setSubject] = useState("");
     const [affectedResourceId, setAffectedResourceId] = useState("general");
     const [description, setDescription] = useState("");
@@ -72,15 +68,12 @@ export default function SupportTicketCreateWizard() {
         () => SUPPORT_TOPICS.find((item) => item.id === topic) || null,
         [topic],
     );
-    const selectedSubTopic = useMemo(
-        () =>
-            selectedTopic?.subTopics.find((item) => item.id === subTopic) ||
-            null,
-        [selectedTopic, subTopic],
-    );
-    const tertiaryOptions = selectedSubTopic?.tertiaryTopics || [];
     const selectedResource =
         resources.find((r) => r.id === affectedResourceId) || null;
+    // The API always prepends a generic "General <topic> issue" entry. With
+    // nothing else to pick from, the dropdown is a dead control — hide it and
+    // let the ticket fall back to that generic resource.
+    const hasPickableResources = resources.some((r) => r.id !== "general");
 
     useEffect(() => {
         if (!topic) {
@@ -174,16 +167,10 @@ export default function SupportTicketCreateWizard() {
     // Validation
     const topicOk = !!topic;
     const subjectOk = subject.trim().length >= 4;
-    const subTopicOk = !!subTopic && !!tertiaryTopic;
     const resourceOk = !!affectedResourceId;
     const descriptionOk = plainTextFromRichText(description).length >= 10;
     const canSubmit =
-        topicOk &&
-        subTopicOk &&
-        subjectOk &&
-        resourceOk &&
-        descriptionOk &&
-        !submitting;
+        topicOk && subjectOk && resourceOk && descriptionOk && !submitting;
 
     async function submitTicket() {
         if (!canSubmit) {
@@ -199,8 +186,6 @@ export default function SupportTicketCreateWizard() {
         try {
             const formData = new FormData();
             formData.append("topic", topic);
-            formData.append("subTopic", subTopic);
-            formData.append("tertiaryTopic", tertiaryTopic);
             formData.append("subject", subject.trim());
             formData.append(
                 "affectedResourceType",
@@ -267,44 +252,15 @@ export default function SupportTicketCreateWizard() {
 
             {/* Topic */}
             <Section num="01" title="Topic">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <StyledSelect
-                        value={topic}
-                        onChange={(v) => {
-                            setTopic(v);
-                            setSubTopic("");
-                            setTertiaryTopic("");
-                        }}
-                        placeholder="Topic"
-                        options={SUPPORT_TOPICS.map((t) => ({
-                            value: t.id,
-                            label: t.label,
-                        }))}
-                    />
-                    <StyledSelect
-                        value={subTopic}
-                        onChange={(v) => {
-                            setSubTopic(v);
-                            setTertiaryTopic("");
-                        }}
-                        disabled={!selectedTopic}
-                        placeholder="Sub-topic"
-                        options={(selectedTopic?.subTopics || []).map((s) => ({
-                            value: s.id,
-                            label: s.label,
-                        }))}
-                    />
-                    <StyledSelect
-                        value={tertiaryTopic}
-                        onChange={setTertiaryTopic}
-                        disabled={!selectedSubTopic}
-                        placeholder="Tertiary"
-                        options={tertiaryOptions.map((t) => ({
-                            value: t.id,
-                            label: t.label,
-                        }))}
-                    />
-                </div>
+                <StyledSelect
+                    value={topic}
+                    onChange={setTopic}
+                    placeholder="What is this about?"
+                    options={SUPPORT_TOPICS.map((t) => ({
+                        value: t.id,
+                        label: t.label,
+                    }))}
+                />
             </Section>
 
             {/* Subject + resource */}
@@ -315,25 +271,18 @@ export default function SupportTicketCreateWizard() {
                         onChange={(e) => setSubject(e.target.value)}
                         placeholder="Subject"
                     />
-                    <StyledSelect
-                        value={affectedResourceId}
-                        onChange={setAffectedResourceId}
-                        disabled={resourcesLoading}
-                        placeholder="Affected resource"
-                        options={
-                            resources.length === 0
-                                ? [
-                                      {
-                                          value: "general",
-                                          label: "General issue",
-                                      },
-                                  ]
-                                : resources.map((r) => ({
-                                      value: r.id,
-                                      label: r.name,
-                                  }))
-                        }
-                    />
+                    {hasPickableResources && (
+                        <StyledSelect
+                            value={affectedResourceId}
+                            onChange={setAffectedResourceId}
+                            disabled={resourcesLoading}
+                            placeholder="Affected resource"
+                            options={resources.map((r) => ({
+                                value: r.id,
+                                label: r.name,
+                            }))}
+                        />
+                    )}
                     {resourcesError && (
                         <p
                             className={`${MONO} inline-flex items-center gap-1 text-[10.5px] text-red-400`}

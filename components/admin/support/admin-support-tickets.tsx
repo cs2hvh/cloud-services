@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { SUPPORT_STATUS_LABELS, SUPPORT_TOPICS, SupportTicketStatus, getSupportTopicLabels } from "@/lib/support/catalog";
+import { SUPPORT_STATUS_LABELS, SUPPORT_TOPICS, SupportTicketStatus, getSupportTopicLabel } from "@/lib/support/catalog";
 import { AdminSupportTicketSummary } from "@/lib/supabase/queries/support_tickets";
 
 interface AdminSupportTicketsProps {
@@ -286,11 +286,7 @@ export default function AdminSupportTickets({
 
                   {!loading &&
                     tickets.map((ticket) => {
-                      const topicLabels = getSupportTopicLabels(
-                        ticket.topic,
-                        ticket.sub_topic,
-                        ticket.tertiary_topic
-                      );
+                      const topicLabel = getSupportTopicLabel(ticket.topic) ?? ticket.topic;
                       const ownerName =
                         ticket.owner?.display_name || ticket.owner?.username || ticket.owner?.email || "Unknown user";
 
@@ -320,9 +316,7 @@ export default function AdminSupportTickets({
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-neutral-300">
-                              {topicLabels
-                                ? `${topicLabels.topicLabel} / ${topicLabels.subTopicLabel}`
-                                : `${ticket.topic} / ${ticket.sub_topic}`}
+                              {topicLabel}
                             </div>
                             <div className="text-xs text-neutral-500 mt-0.5">
                               {ticket.affected_resource_name || "General issue"}

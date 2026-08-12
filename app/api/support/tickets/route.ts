@@ -126,8 +126,6 @@ export async function POST(request: NextRequest) {
       const formData = await request.formData();
       payloadInput = {
         topic: formData.get("topic"),
-        subTopic: formData.get("subTopic"),
-        tertiaryTopic: formData.get("tertiaryTopic"),
         subject: formData.get("subject"),
         affectedResourceType: normalizeNullableField(formData.get("affectedResourceType")),
         affectedResourceId: normalizeNullableField(formData.get("affectedResourceId")),
@@ -172,8 +170,6 @@ export async function POST(request: NextRequest) {
     const created = await SupportTickets.create({
       ownerId: auth.user.id,
       topic: payload.topic,
-      subTopic: payload.subTopic,
-      tertiaryTopic: payload.tertiaryTopic,
       subject: payload.subject,
       description: sanitizeSupportRichText(payload.description),
       affectedResourceType: payload.affectedResourceType ?? null,

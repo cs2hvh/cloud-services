@@ -205,8 +205,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const updated = await SupportTickets.updateByUser(auth.user.id, ticketId, {
       topic: payload.topic,
-      subTopic: payload.subTopic,
-      tertiaryTopic: payload.tertiaryTopic,
       subject: payload.subject,
       description: sanitizedDescription,
       affectedResourceType: payload.affectedResourceType,

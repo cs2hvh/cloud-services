@@ -9,7 +9,8 @@ import { Spectrum_Apps } from "./spectrum_apps";
 import {
   SUPPORT_OPEN_STATUSES,
   getSupportTopicById,
-  getSupportTopicLabels,
+  getSupportTopicLabel,
+  SUPPORT_TOPIC_DETAIL_PLACEHOLDER,
   SupportResourceOption,
   SupportTicketStatus,
 } from "@/lib/support/catalog";
@@ -98,8 +99,6 @@ export interface SupportTicketAdminListResult {
 export interface SupportTicketCreateInput {
   ownerId: string;
   topic: string;
-  subTopic: string;
-  tertiaryTopic: string;
   subject: string;
   description: string;
   affectedResourceType?: string | null;
@@ -109,8 +108,6 @@ export interface SupportTicketCreateInput {
 
 export interface SupportTicketUpdateInput {
   topic?: string;
-  subTopic?: string;
-  tertiaryTopic?: string;
   subject?: string;
   description?: string;
   affectedResourceType?: string | null;
@@ -536,8 +533,8 @@ export const SupportTickets = {
         owner_id: input.ownerId,
         status: "open",
         topic: input.topic,
-        sub_topic: input.subTopic,
-        tertiary_topic: input.tertiaryTopic,
+        sub_topic: SUPPORT_TOPIC_DETAIL_PLACEHOLDER,
+        tertiary_topic: SUPPORT_TOPIC_DETAIL_PLACEHOLDER,
         subject: input.subject,
         description: input.description,
         affected_resource_type: input.affectedResourceType ?? null,
@@ -584,8 +581,6 @@ export const SupportTickets = {
     const updatePayload: Record<string, string | null> = {};
 
     if (patch.topic !== undefined) updatePayload.topic = patch.topic;
-    if (patch.subTopic !== undefined) updatePayload.sub_topic = patch.subTopic;
-    if (patch.tertiaryTopic !== undefined) updatePayload.tertiary_topic = patch.tertiaryTopic;
     if (patch.subject !== undefined) updatePayload.subject = patch.subject;
     if (patch.description !== undefined) updatePayload.description = patch.description;
     if (patch.affectedResourceType !== undefined) updatePayload.affected_resource_type = patch.affectedResourceType;
@@ -785,11 +780,7 @@ export const SupportTickets = {
     }
   },
 
-  getTopicPathLabel(ticket: Pick<SupportTicketSummary, "topic" | "sub_topic" | "tertiary_topic">): string {
-    const labels = getSupportTopicLabels(ticket.topic, ticket.sub_topic, ticket.tertiary_topic);
-    if (!labels) {
-      return `${ticket.topic} / ${ticket.sub_topic} / ${ticket.tertiary_topic}`;
-    }
-    return `${labels.topicLabel} / ${labels.subTopicLabel} / ${labels.tertiaryTopicLabel}`;
+  getTopicPathLabel(ticket: Pick<SupportTicketSummary, "topic">): string {
+    return getSupportTopicLabel(ticket.topic) ?? ticket.topic;
   },
 };
