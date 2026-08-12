@@ -22,7 +22,7 @@ import {
   SupportResourceOption,
   SupportTicketStatus,
   canSupportStatusBeReopened,
-  getSupportTopicLabels,
+  getSupportTopicLabel,
   isSupportOpenStatus,
 } from "@/lib/support/catalog";
 import { plainTextFromRichText, sanitizeSupportRichText } from "@/lib/support/richtext";
@@ -152,8 +152,6 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const [actionLoading, setActionLoading] = useState(false);
 
   const [topic, setTopic] = useState(ticket.topic);
-  const [subTopic, setSubTopic] = useState(ticket.sub_topic);
-  const [tertiaryTopic, setTertiaryTopic] = useState(ticket.tertiary_topic);
   const [subject, setSubject] = useState(ticket.subject);
   const [description, setDescription] = useState(ticket.description);
   const [affectedResourceId, setAffectedResourceId] = useState(ticket.affected_resource_id || "general");
@@ -171,13 +169,10 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
     () => SUPPORT_TOPICS.find((entry) => entry.id === topic) || null,
     [topic]
   );
-  const selectedSubTopic = useMemo(
-    () => selectedTopic?.subTopics.find((entry) => entry.id === subTopic) || null,
-    [selectedTopic, subTopic]
-  );
-  const tertiaryOptions = selectedSubTopic?.tertiaryTopics || [];
   const selectedResource = resources.find((entry) => entry.id === affectedResourceId) || null;
-  const topicLabels = getSupportTopicLabels(ticket.topic, ticket.sub_topic, ticket.tertiary_topic);
+  // Mirrors the create form: the generic "General <topic> issue" entry alone is
+  // not worth a dropdown.
+  const hasPickableResources = resources.some((entry) => entry.id !== "general");
 
   const canEdit = isSupportOpenStatus(ticket.status);
   const canReopen = canSupportStatusBeReopened(ticket.status);
@@ -220,8 +215,8 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
       setFormError("Description must be at least 10 characters.");
       return;
     }
-    if (!topic || !subTopic || !tertiaryTopic) {
-      setFormError("Please complete topic, sub-topic, and tertiary-topic.");
+    if (!topic) {
+      setFormError("Please select a topic.");
       return;
     }
 
@@ -234,8 +229,6 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic,
-          subTopic,
-          tertiaryTopic,
           subject: subject.trim(),
           description,
           affectedResourceType: selectedTopic?.resourceType || null,
@@ -260,8 +253,6 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
 
   function resetForm() {
     setTopic(ticket.topic);
-    setSubTopic(ticket.sub_topic);
-    setTertiaryTopic(ticket.tertiary_topic);
     setSubject(ticket.subject);
     setDescription(ticket.description);
     setAffectedResourceId(ticket.affected_resource_id || "general");
@@ -357,9 +348,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
     }
   }
 
-  const topicPath = topicLabels
-    ? `${topicLabels.topicLabel} / ${topicLabels.subTopicLabel} / ${topicLabels.tertiaryTopicLabel}`
-    : `${ticket.topic} / ${ticket.sub_topic} / ${ticket.tertiary_topic}`;
+  const topicPath = getSupportTopicLabel(ticket.topic) ?? ticket.topic;
 
   // Title treatment shared with the list page: last word in brand blue, no trailing period.
   const titleWords = ticket.subject.trim().split(/\s+/);
@@ -479,66 +468,25 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
               </div>
             ) : (
               <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                      Topic
-                    </label>
-                    <select
-                      value={topic}
-                      onChange={(event) => {
-                        const nextTopic = event.target.value;
-                        setTopic(nextTopic);
-                        setSubTopic("");
-                        setTertiaryTopic("");
-                        void loadResources(nextTopic);
-                      }}
-                      className={SELECT_CLASS_NAME}
-                    >
-                      {SUPPORT_TOPICS.map((entry) => (
-                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
-                          {entry.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                      Sub-topic
-                    </label>
-                    <select
-                      value={subTopic}
-                      onChange={(event) => {
-                        setSubTopic(event.target.value);
-                        setTertiaryTopic("");
-                      }}
-                      className={SELECT_CLASS_NAME}
-                    >
-                      <option style={SELECT_OPTION_STYLE} value="">Select sub-topic</option>
-                      {(selectedTopic?.subTopics || []).map((entry) => (
-                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
-                          {entry.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                      Tertiary
-                    </label>
-                    <select
-                      value={tertiaryTopic}
-                      onChange={(event) => setTertiaryTopic(event.target.value)}
-                      className={SELECT_CLASS_NAME}
-                    >
-                      <option style={SELECT_OPTION_STYLE} value="">Select tertiary-topic</option>
-                      {tertiaryOptions.map((entry) => (
-                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
-                          {entry.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                    Topic
+                  </label>
+                  <select
+                    value={topic}
+                    onChange={(event) => {
+                      const nextTopic = event.target.value;
+                      setTopic(nextTopic);
+                      void loadResources(nextTopic);
+                    }}
+                    className={SELECT_CLASS_NAME}
+                  >
+                    {SUPPORT_TOPICS.map((entry) => (
+                      <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -552,28 +500,25 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                   />
                 </div>
 
-                <div>
-                  <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
-                    Affected resource
-                  </label>
-                  <select
-                    value={affectedResourceId}
-                    onChange={(event) => setAffectedResourceId(event.target.value)}
-                    className={SELECT_CLASS_NAME}
-                    disabled={resourcesLoading}
-                  >
-                    {resources.length === 0 && (
-                      <option style={SELECT_OPTION_STYLE} value="general">
-                        General issue
-                      </option>
-                    )}
-                    {resources.map((entry) => (
-                      <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
-                        {entry.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {hasPickableResources && (
+                  <div>
+                    <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>
+                      Affected resource
+                    </label>
+                    <select
+                      value={affectedResourceId}
+                      onChange={(event) => setAffectedResourceId(event.target.value)}
+                      className={SELECT_CLASS_NAME}
+                      disabled={resourcesLoading}
+                    >
+                      {resources.map((entry) => (
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className={`${MONO} mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-white/45`}>

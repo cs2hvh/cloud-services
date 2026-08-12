@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSupportTopicById, isValidSupportTopicSelection } from "@/lib/support/catalog";
+import { getSupportTopicById, isValidSupportTopic } from "@/lib/support/catalog";
 import { getSupportRichTextLength } from "@/lib/support/richtext";
 
 export const supportTicketStatusSchema = z.enum([
@@ -35,73 +35,42 @@ export const supportResourcesQuerySchema = z.object({
     .refine((value) => Boolean(getSupportTopicById(value)), { message: "Invalid topic" }),
 });
 
-export const createSupportTicketSchema = z
-  .object({
-    topic: z.string().trim().min(1, "Topic is required"),
-    subTopic: z.string().trim().min(1, "Sub-topic is required"),
-    tertiaryTopic: z.string().trim().min(1, "Tertiary-topic is required"),
-    subject: z
-      .string()
-      .trim()
-      .min(4, "Subject must be at least 4 characters")
-      .max(160, "Subject cannot exceed 160 characters"),
-    affectedResourceType: optionalNullableTrimmedString,
-    affectedResourceId: optionalNullableTrimmedString,
-    affectedResourceName: optionalNullableTrimmedString,
-    description: descriptionSchema,
-  })
-  .superRefine((data, ctx) => {
-    if (!isValidSupportTopicSelection(data.topic, data.subTopic, data.tertiaryTopic)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["tertiaryTopic"],
-        message: "Invalid topic selection",
-      });
-    }
-  });
+export const createSupportTicketSchema = z.object({
+  topic: z
+    .string()
+    .trim()
+    .min(1, "Topic is required")
+    .refine(isValidSupportTopic, { message: "Invalid topic" }),
+  subject: z
+    .string()
+    .trim()
+    .min(4, "Subject must be at least 4 characters")
+    .max(160, "Subject cannot exceed 160 characters"),
+  affectedResourceType: optionalNullableTrimmedString,
+  affectedResourceId: optionalNullableTrimmedString,
+  affectedResourceName: optionalNullableTrimmedString,
+  description: descriptionSchema,
+});
 
-export const updateSupportTicketSchema = z
-  .object({
-    topic: z.string().trim().min(1, "Topic is required").optional(),
-    subTopic: z.string().trim().min(1, "Sub-topic is required").optional(),
-    tertiaryTopic: z.string().trim().min(1, "Tertiary-topic is required").optional(),
-    subject: z
-      .string()
-      .trim()
-      .min(4, "Subject must be at least 4 characters")
-      .max(160, "Subject cannot exceed 160 characters")
-      .optional(),
-    description: descriptionSchema.optional(),
-    affectedResourceType: optionalNullableTrimmedString,
-    affectedResourceId: optionalNullableTrimmedString,
-    affectedResourceName: optionalNullableTrimmedString,
-    action: z.literal("reopen").optional(),
-  })
-  .superRefine((data, ctx) => {
-    const topicFieldsProvided =
-      data.topic !== undefined || data.subTopic !== undefined || data.tertiaryTopic !== undefined;
-
-    if (!topicFieldsProvided) {
-      return;
-    }
-
-    if (!data.topic || !data.subTopic || !data.tertiaryTopic) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["topic"],
-        message: "Topic, sub-topic, and tertiary-topic must be updated together",
-      });
-      return;
-    }
-
-    if (!isValidSupportTopicSelection(data.topic, data.subTopic, data.tertiaryTopic)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["tertiaryTopic"],
-        message: "Invalid topic selection",
-      });
-    }
-  });
+export const updateSupportTicketSchema = z.object({
+  topic: z
+    .string()
+    .trim()
+    .min(1, "Topic is required")
+    .refine(isValidSupportTopic, { message: "Invalid topic" })
+    .optional(),
+  subject: z
+    .string()
+    .trim()
+    .min(4, "Subject must be at least 4 characters")
+    .max(160, "Subject cannot exceed 160 characters")
+    .optional(),
+  description: descriptionSchema.optional(),
+  affectedResourceType: optionalNullableTrimmedString,
+  affectedResourceId: optionalNullableTrimmedString,
+  affectedResourceName: optionalNullableTrimmedString,
+  action: z.literal("reopen").optional(),
+});
 
 export const supportAttachmentDeleteSchema = z.object({
   attachmentId: z.string().trim().min(1, "attachmentId is required"),

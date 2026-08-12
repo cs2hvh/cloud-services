@@ -5,17 +5,19 @@ import {
   getSupportTopicById,
   isAllowedSupportFile,
   isSupportOpenStatus,
-  isValidSupportTopicSelection,
+  getSupportTopicLabel,
+  isValidSupportTopic,
 } from "@/lib/support/catalog";
 
 describe("Support catalog helpers", () => {
-  it("should validate the configured topic/sub-topic/tertiary path", () => {
-    expect(
-      isValidSupportTopicSelection("kubernetes", "cluster_health", "node_not_ready")
-    ).toBe(true);
-    expect(
-      isValidSupportTopicSelection("kubernetes", "cluster_health", "unknown_tertiary")
-    ).toBe(false);
+  it("should validate configured topics", () => {
+    expect(isValidSupportTopic("kubernetes")).toBe(true);
+    expect(isValidSupportTopic("unknown_topic")).toBe(false);
+  });
+
+  it("should expose the topic label, or null for unknown topics", () => {
+    expect(getSupportTopicLabel("billing")).toBe("Billing & Transactions");
+    expect(getSupportTopicLabel("unknown_topic")).toBeNull();
   });
 
   it("should return topic metadata for known topics", () => {

@@ -135,8 +135,6 @@ export async function POST(req: NextRequest) {
         const created = await SupportTickets.create({
             ownerId: user.id,
             topic: "gpu",
-            subTopic: "enterprise",
-            tertiaryTopic: planType,
             subject,
             description,
             affectedResourceType: "gpu_inquiry",
