@@ -1,11 +1,14 @@
 "use client";
 
 // User settings — editorial canvas, pill tab nav (Profile /
-// Connections / Security / API Keys), tab content sits directly on
-// the canvas. Matches the rest of the dashboard's design language.
+// Connections / Security), tab content sits directly on the canvas.
+// This is the canonical home for account settings; /dashboard/nav/profile
+// and /dashboard/nav/account redirect here. The active tab is mirrored in
+// ?tab= so those redirects (and the back button) can land on the right one.
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     ArrowUpRight,
     CreditCard,
@@ -30,6 +33,12 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 
 type SettingsTab = "profile" | "account" | "security";
+
+const SETTINGS_TABS: SettingsTab[] = ["profile", "account", "security"];
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+    return !!value && (SETTINGS_TABS as string[]).includes(value);
+}
 
 const SECTION_META: Record<
     SettingsTab,
@@ -104,7 +113,30 @@ const QUICK_LINKS: Array<{
 ];
 
 const SettingsPage = () => {
-    const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get("tab");
+
+    const [activeTab, setActiveTab] = useState<SettingsTab>(
+        isSettingsTab(tabParam) ? tabParam : "profile",
+    );
+
+    // The URL is the source of truth, so redirects, shared links, and the back
+    // button all land on the right tab (no ?tab= means Profile).
+    useEffect(() => {
+        setActiveTab(isSettingsTab(tabParam) ? tabParam : "profile");
+    }, [tabParam]);
+
+    const selectTab = useCallback(
+        (tab: SettingsTab) => {
+            setActiveTab(tab);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("tab", tab);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        },
+        [pathname, router, searchParams],
+    );
 
     const activeSection = useMemo(() => SECTION_META[activeTab], [activeTab]);
 
@@ -142,7 +174,7 @@ const SettingsPage = () => {
                 />
             </div>
 
-            <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+            <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10">
                 {/* Hero */}
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Account{" "}
@@ -161,7 +193,7 @@ const SettingsPage = () => {
                 </p>
 
                 {/* Quick access — related account destinations on their own routes */}
-                <div className="mb-10 grid gap-3 sm:grid-cols-3">
+                <div className="mb-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {QUICK_LINKS.map((link) => {
                         const Icon = link.icon;
                         return (
@@ -197,7 +229,7 @@ const SettingsPage = () => {
                                 <button
                                     key={t.value}
                                     type="button"
-                                    onClick={() => setActiveTab(t.value)}
+                                    onClick={() => selectTab(t.value)}
                                     className={`${MONO} relative inline-flex items-center gap-2 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap`}
                                     style={{
                                         color: isActive

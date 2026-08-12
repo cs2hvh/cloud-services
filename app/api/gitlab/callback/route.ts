@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
-import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
+import { DEFAULT_OAUTH_RETURN_TO, getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
+import { withReturnToParam } from "@/lib/api/return-to";
 
 /**
  * GitLab OAuth callback handler
@@ -75,14 +76,14 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state");
     
     if (!code || !state) {
-      return NextResponse.redirect(`${domain}/dashboard/settings?error=missing_code`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(DEFAULT_OAUTH_RETURN_TO, "error", "missing_code")}`);
     }
 
     // Verify HMAC-signed state and extract userId + returnTo
     const statePayload = verifySignedState(state);
     if (!statePayload) {
       console.error('[GitLab Callback] Invalid or expired state parameter');
-      return NextResponse.redirect(`${domain}/dashboard/settings?error=invalid_state`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(DEFAULT_OAUTH_RETURN_TO, "error", "invalid_state")}`);
     }
     const { userId, returnTo } = statePayload;
     
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user || user.id !== userId) {
-      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_user`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`);
     }
 
     const clientId = process.env.GITLAB_CLIENT_ID;
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
 
     if (!clientId || !clientSecret) {
       console.error('GitLab OAuth credentials not configured');
-      return NextResponse.redirect(`${domain}${returnTo}?error=config_error`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "config_error")}`);
     }
 
     // Exchange code for access token
@@ -122,14 +123,14 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error('GitLab token exchange failed with status:', tokenResponse.status);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_exchange_failed")}`);
     }
 
     const tokenData = await tokenResponse.json();
     
     if (tokenData.error) {
       console.error('GitLab token error:', tokenData.error);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_exchange_failed")}`);
     }
 
     const accessToken = tokenData.access_token;
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     
     if (!accessToken) {
       console.error('No access token received from GitLab');
-      return NextResponse.redirect(`${domain}${returnTo}?error=no_token`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "no_token")}`);
     }
 
     // Get GitLab user info to store username
@@ -151,7 +152,7 @@ export async function GET(request: NextRequest) {
 
     if (!userResponse.ok) {
       console.error('Failed to get GitLab user info');
-      return NextResponse.redirect(`${domain}${returnTo}?error=user_info_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "user_info_failed")}`);
     }
 
     const gitlabUser = await userResponse.json();
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
 
     if (insertError) {
       console.error('Failed to store GitLab token:', insertError);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_storage_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_storage_failed")}`);
     }
 
     if (!refreshToken) {
@@ -187,11 +188,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirect back to the return path with success
-    const separator = returnTo.includes('?') ? '&' : '?';
-    return NextResponse.redirect(`${domain}${returnTo}${separator}gitlab_connected=true`);
+    return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "gitlab_connected", "true")}`);
 
   } catch (error) {
     console.error("[GitLab Callback] Error:", error);
-    return NextResponse.redirect(`${domain}/dashboard/settings?error=unknown`);
+    return NextResponse.redirect(`${domain}${withReturnToParam(DEFAULT_OAUTH_RETURN_TO, "error", "unknown")}`);
   }
 }

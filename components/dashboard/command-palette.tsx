@@ -65,7 +65,7 @@ const DESTINATIONS: Dest[] = [
     { label: "Transfer Domain", href: "/dashboard/domains/transfer", group: "Domains", icon: Globe },
 
     { label: "Billing", href: "/dashboard/nav/billing", group: "Account", icon: CreditCard, keywords: "credits balance invoice payment" },
-    { label: "Profile", href: "/dashboard/nav/profile", group: "Account", icon: User },
+    { label: "Profile", href: "/dashboard/settings?tab=profile", group: "Account", icon: User },
     { label: "Settings", href: "/dashboard/settings", group: "Account", icon: Settings },
     { label: "Support", href: "/dashboard/support", group: "Account", icon: LifeBuoy, keywords: "help ticket" },
 ];

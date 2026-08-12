@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard, CreditCard,
+  Menu, X, ChevronDown, LogOut, Settings, LayoutDashboard, CreditCard,
   ArrowRight, Activity, LifeBuoy, ExternalLink,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -433,12 +433,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       <p className="px-3 pt-2 pb-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] uppercase tracking-[0.18em] text-white/30">
                         Personal
                       </p>
-                      <UserMenuItem
-                        icon={User}
-                        label="Profile"
-                        active={pathname?.startsWith("/dashboard/nav/profile")}
-                        onClick={() => { router.push("/dashboard/nav/profile"); setDropdownOpen(false); }}
-                      />
                       <UserMenuItem
                         icon={Settings}
                         label="Settings"
