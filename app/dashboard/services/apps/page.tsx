@@ -157,13 +157,12 @@ export default function ApplicationDeploymentPage() {
   const { buildInfo, buildLogs, logsLoading, logsError, fetchBuildLogs } =
     useAppBuildState(deployedApps);
 
+  // Counts must agree with the per-app badge, which renders `app.status`
+  // verbatim. Treating "has a serving build" as healthy made the summary
+  // disagree with the cards — it reported 4/4 healthy while every card read
+  // "Failed", because a serving build number survives an app going unhealthy.
   const runningApps = deployedApps.filter(
-    (app) =>
-      !buildInfo[app.name]?.building &&
-      (app.status === "running" ||
-        (app.serving_build_number != null &&
-          app.status !== "deleting" &&
-          app.status !== "building")),
+    (app) => !buildInfo[app.name]?.building && app.status === "running",
   ).length;
   const buildingApps = deployedApps.filter(
     (app) => app.status === "building" || buildInfo[app.name]?.building,

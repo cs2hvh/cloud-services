@@ -620,6 +620,36 @@ export class KubernetesInfoService {
   }
 
   /**
+   * Readiness for every app deployment in a namespace, in ONE API call.
+   *
+   * Keyed by app name (the `-app` suffix is stripped), so callers can look up
+   * by the name stored on the app row. Use this instead of calling
+   * getDeploymentInfo() per app when reconciling a list — N sequential reads
+   * against the API server is what made list-wide status sync too slow to do.
+   *
+   * Throws if the API is unreachable. A caller that cannot distinguish
+   * "unreachable" from "empty" would mark every app failed, so this
+   * deliberately does not swallow the error.
+   */
+  static async listDeploymentReadiness(
+    namespace = 'default'
+  ): Promise<Map<string, { replicas: number; readyReplicas: number }>> {
+    const { apps } = this.getApis();
+    const response = await apps.listNamespacedDeployment({ namespace });
+
+    const out = new Map<string, { replicas: number; readyReplicas: number }>();
+    for (const d of response.items || []) {
+      const name = d.metadata?.name;
+      if (!name || !name.endsWith('-app')) continue;
+      out.set(name.slice(0, -'-app'.length), {
+        replicas: d.spec?.replicas ?? 0,
+        readyReplicas: d.status?.readyReplicas ?? 0,
+      });
+    }
+    return out;
+  }
+
+  /**
    * Get container images from the Deployment spec (what Kubernetes is configured to run)
    */
   static async getDeploymentImages(appName: string, namespace = 'default'): Promise<ContainerImageInfo[]> {
@@ -773,8 +803,19 @@ export class KubernetesInfoService {
 
   /**
    * Get deployment information
+   *
+   * @param rethrowTransport When true, an error that is NOT a 404 is rethrown
+   *   instead of being flattened to `null`. Callers that must distinguish
+   *   "the deployment is genuinely absent" from "we could not reach the API"
+   *   should pass this — returning `null` for both makes a connectivity
+   *   failure indistinguishable from a deleted app. Defaults to false so
+   *   existing callers keep their current behaviour.
    */
-  static async getDeploymentInfo(appName: string, namespace = 'default'): Promise<DeploymentInfo | null> {
+  static async getDeploymentInfo(
+    appName: string,
+    namespace = 'default',
+    rethrowTransport = false
+  ): Promise<DeploymentInfo | null> {
     try {
       const { apps } = this.getApis();
       const deploymentName = `${appName}-app`;
@@ -805,6 +846,14 @@ export class KubernetesInfoService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('[KubernetesInfoService] getDeploymentInfo error:', errorMessage);
+      // A 404 is a real answer: the deployment does not exist. Anything else
+      // (timeout, TLS failure, unreachable API server) says nothing about the
+      // deployment, and must not be reported as absence.
+      const code = (error as { code?: number; statusCode?: number; response?: { statusCode?: number } });
+      const status = code?.code ?? code?.statusCode ?? code?.response?.statusCode;
+      if (rethrowTransport && status !== 404) {
+        throw error;
+      }
       return null;
     }
   }
